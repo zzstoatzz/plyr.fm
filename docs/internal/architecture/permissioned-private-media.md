@@ -196,7 +196,8 @@ that credential before using a verified mirror. Issued private R2 URLs default t
 The generic client exposes:
 
 - `list_spaces` on the user's PDS;
-- `list_space_repos` on the authority host;
+- `list_space_repos` calls `listWriters` on the authority host and preserves
+  its `repo`, `latest`, `spaceRev` and cursor fields;
 - `list_space_records` and `list_space_repo_ops` on each writer's repo host;
 - ranged `open_space_blob` reads on the writer's repo host.
 

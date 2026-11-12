@@ -28,6 +28,7 @@ from backend._internal.atproto.spaces.client import (
     delete_space_record,
     get_space_credential,
     list_space_repo_ops,
+    list_space_repos,
 )
 from backend._internal.atproto.spaces.mac import (
     ACCEPT_SIGNATURE_HEADER,
@@ -206,6 +207,13 @@ async def test_private_track_upload_playback_and_delete_live_zds(
             )
             assert ops["commit"]["space"] == parsed.space
             assert ops["commit"]["repo"] == parsed.author_did
+
+            writers = await list_space_repos(session, parsed.space, limit=1)
+            assert writers["repos"]
+            for writer in writers["repos"]:
+                assert isinstance(writer["repo"], str)
+                assert isinstance(writer["spaceRev"], str)
+                assert isinstance(writer["latest"], dict)
 
             ranged = await http.get(
                 f"/audio/{track['file_id']}",

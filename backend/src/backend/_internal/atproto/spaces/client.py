@@ -584,7 +584,7 @@ async def list_space_repos(
         auth_session,
         host_url=await _space_host_url(space),
         audience=parse_space_uri(space).owner_did,
-        endpoint="com.atproto.space.listRepos",
+        endpoint="com.atproto.space.listWriters",
         space=space,
         params=params,
     )

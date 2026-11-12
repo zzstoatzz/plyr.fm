@@ -334,3 +334,45 @@ def test_signed_malformed_commit_metadata_is_rejected(
     )
     with pytest.raises(mac.SpaceMacError):
         mac.verify_commit_mac(exchange, commit, headers, space=SPACE, repo=WRITER)
+
+
+async def test_writer_discovery_uses_current_rpc_and_preserves_writer_metadata(
+    monkeypatch: pytest.MonkeyPatch, credential: None
+) -> None:
+    response = {
+        "repos": [
+            {
+                "repo": WRITER,
+                "latest": {
+                    "$type": "com.atproto.space.defs#repoWrite",
+                    "rev": "3mwcj3b6uak2f",
+                    "data": _commit()["data"],
+                },
+                "spaceRev": "3mwcj3b6uak2f",
+            }
+        ],
+        "cursor": "3mwcj3b6uak2f",
+    }
+    request = AsyncMock(return_value=httpx.Response(200, json=response))
+    monkeypatch.setattr(space_client, "_space_token_request", request)
+    monkeypatch.setattr(
+        space_client,
+        "_space_host_url",
+        AsyncMock(return_value="https://authority.test"),
+    )
+    result = await space_client.list_space_repos(
+        _session(), SPACE, limit=1, cursor="3mwcj3b6uak2e"
+    )
+    assert result == response
+    args = request.await_args
+    assert args is not None
+    assert args.args[:3] == (
+        "https://authority.test",
+        "GET",
+        "com.atproto.space.listWriters",
+    )
+    assert args.kwargs["params"] == {
+        "space": SPACE,
+        "limit": 1,
+        "cursor": "3mwcj3b6uak2e",
+    }

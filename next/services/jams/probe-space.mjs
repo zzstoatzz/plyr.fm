@@ -5,8 +5,7 @@ import { createRequire } from 'node:module';
 const load = createRequire(new URL('../../app/package.json', import.meta.url));
 const { P256Keypair } = load('@atproto/crypto');
 const {
-  createSpaceSigHeaders, encapsulate, formatWantMacHeader, parseMacHeader, verifyRecord,
-  MAC_HEADER, RECORD_MAC_TYPE, WANT_MAC_HEADER,
+  createSpaceSigHeaders, encapsulate, formatMacRequest, verifyRecord, RECORD_MAC_PROFILE,
 } = load('@atproto/space');
 
 const hostPds = 'http://localhost:5297';
@@ -60,9 +59,10 @@ async function credential(account, space) {
 }
 
 async function signed(key, issued, audience) {
-  return createSpaceSigHeaders(key, {
+  return (await createSpaceSigHeaders({
+    keypair: key,
     authorization: `Atproto-Space-Credential ${issued}`, audience,
-  });
+  })).headers;
 }
 
 async function readVerified(credentials, space, writer, collection, rkey) {
@@ -75,13 +75,13 @@ async function readVerified(credentials, space, writer, collection, rkey) {
   const headers = await signed(credentials.key, ok(credentials.issued, 'credential').credential, writer.did);
   const read = await xrpc(writer.pds, 'com.atproto.space.getRecord', {
     query: { space, repo: writer.did, collection, rkey },
-    headers: { ...headers, [WANT_MAC_HEADER]: formatWantMacHeader(RECORD_MAC_TYPE, keyShare) },
+    headers: { ...headers, 'accept-signature': formatMacRequest(RECORD_MAC_PROFILE, keyShare) },
   });
   const record = ok(read, 'read remote record');
   const uri = `${space}/${writer.did}/${collection}/${rkey}`;
-  const mac = parseMacHeader(read.headers.get(MAC_HEADER) ?? undefined, RECORD_MAC_TYPE);
-  assert(await verifyRecord(record, { uri, mac, sharedSecret }), 'record CID and MAC verify');
-  assert.equal(await verifyRecord({ ...record, value: { ...record.value, injected: true } }, { uri, mac, sharedSecret }), false);
+  const proof = { uri, keyShare, sharedSecret, headers: read.headers };
+  await verifyRecord(record, proof);
+  await assert.rejects(verifyRecord({ ...record, value: { ...record.value, injected: true } }, proof));
   return record.value;
 }
 
@@ -94,7 +94,7 @@ async function put(account, space, collection, rkey, fields, repo = account.did)
 const host = await account(hostPds, 'plyrjamhost.test');
 const guest = await account(guestPds, 'plyrjamguest.test');
 assert.notEqual(host.did, guest.did);
-const { uri: space } = ok(await xrpc(host.pds, 'com.atproto.space.createSpace', {
+const { space } = ok(await xrpc(host.pds, 'com.atproto.space.createSpace', {
   token: host.token,
   body: {
     spaceType: type, skey: `fixture-${Date.now()}`,
@@ -129,11 +129,11 @@ try {
   const began = performance.now();
   let repos;
   while (performance.now() - began < 15_000) {
-    repos = ok(await xrpc(host.pds, 'com.atproto.space.listRepos', { query: { space }, headers }), 'discover writers').repos;
-    if (repos.some((repo) => repo.did === guest.did)) break;
+    repos = ok(await xrpc(host.pds, 'com.atproto.space.listWriters', { query: { space }, headers }), 'discover writers').repos;
+    if (repos.some((repo) => repo.repo === guest.did)) break;
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
-  assert(repos?.some((repo) => repo.did === guest.did), 'guest PDS write reached the host writer set');
+  assert(repos?.some((repo) => repo.repo === guest.did), 'guest PDS write reached the host writer set');
   const discoveryMs = Math.round(performance.now() - began);
   assert.deepEqual(await readVerified(guestCredential, space, host, stateCollection, 'self'), { $type: stateCollection, ...state });
   const command = await readVerified(hostCredential, space, guest, commandCollection, 'pause');
