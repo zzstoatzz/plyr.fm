@@ -6,6 +6,30 @@ finish line. This is execution evidence, not another parity inventory.
 
 ## shipped to Next
 
+- #2537 at `d1ca5c5e` adds public downloads after refreshing effective access,
+  verified preference and playback URI/CID. `ask` offers optional support;
+  unknown, off, supporter and protected cases fail closed. Deployment
+  `43246370787` passed all eight published phone/desktop, light/dark and enlarged
+  fixture cases with exact saved bytes. Rebuilt iOS simulator More → Download →
+  Save to Files saved 16,044 fixture bytes and cleared its temporary directory.
+  Native distribution, physical devices, Android runtime and protected downloads
+  remain unverified. Public files and saved copies cannot be revoked by changing
+  an application preference.
+- #2533 at `d64d734f` adds durable processing generation/lease ownership, source
+  plus output reservation, fenced callbacks, retained originals and published-only
+  rendition/original/manifest routes. Next Zig `43247143541`, audio Worker
+  `43247143610` and staging `43247143557` deployments passed with processing
+  disabled. Legacy staging integration `43247585011` subsequently passed 22 suite
+  tests and one large-FLAC capacity test; it is not Next processing acceptance.
+- #2540 at `71c7ec3f` prepares the client transport/model for processing state,
+  recipe/budget binding and verified MP3 metadata without adding an upload option
+  or enabling processing. Web deployment `43249433383` passed. #2543 at `adac109b`
+  adds cloud-only processing acceptance to the existing disposable fixture;
+  audio deployment `43250849296` passed. Its 23 local checks include actual small
+  MP3 encode/decode, original hashing, manifests, ranges and safe failure retention.
+  Configured cloud processing has not run: failure/metadata dependencies,
+  reviewed staging wiring, small acceptance and then full-size processing proof
+  remain required. The raw 1.5 GiB transfer below does not establish transcoding.
 - #2517: the public/open large-upload client ships at `48f2bd50`. Existing
   service-owned multipart bytes retain client-owned canonical publication and
   exact-key recovery. Manual deployed acceptance `43237788036` passed the actual
@@ -23,11 +47,12 @@ finish line. This is execution evidence, not another parity inventory.
   treating a public playback URL as download authorization. Historical catalog
   reconciliation `43239042552` finished with 461 verified, one absent, 16 retryable
   and two rejected outcomes; its temporary machine was cleaned up. Rejected
-  outcomes are still being classified. Complete backfill and the dependent
-  download client are not yet accepted.
+  outcomes are still being classified. Complete backfill is not established;
+  the public download client shipped separately in #2537 and refuses unknown data.
 - #2526 at `555c6adf` adds the staged processing executor with execution disabled.
-  It is a prerequisite, not an enabled end-to-end upload/transcode path; durable
-  ownership, integration and deployed processing acceptance remain open.
+  It is a prerequisite, not an enabled end-to-end upload/transcode path. Durable
+  ownership subsequently shipped disabled in #2533; configured integration and
+  deployed processing acceptance remain open.
 - #2531 at `61897fea` adds cloud-only full-size acceptance using the actual
   client transport, bounded generated WAV chunks, a deliberately lost part
   acknowledgement, resume and streamed download SHA-256 verification. The single
@@ -247,6 +272,8 @@ radio handoff cleared personal metadata and command handlers. These checks used
 an inspected MediaRemote sender through LLDB, not lock-screen button presses.
 Physical interruptions, audio-route changes, lock-screen/headset interaction and
 authenticated native Jam/remote-output transitions still need device acceptance.
+Download-preference editing (#2539) and original-file download client (#2544)
+remain pending their native/dependency gates; they are not shipped acceptance.
 
 Publishing remains a substantial gap: production supports 1.5 GiB uploads,
 staging/transcoding, protected audio and explicit storage fallback consent.
@@ -259,7 +286,8 @@ passed in `43244675993`. The earlier failed fixture
 recovery reservation; the separate 1.5 GiB reservation released its quota after
 successful recovery. Large and protected replacements, enabled transcoding,
 access/download-policy management,
-historical download-policy backfill and download-client acceptance remain open.
+historical download-policy backfill and protected/original download acceptance
+remain open. Public download acceptance is recorded under #2537 above.
 Private metadata editing also
 requires conditional-write support absent from the current Spaces API; a
 preliminary read is not an atomic revision check.
