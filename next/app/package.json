@@ -11,7 +11,8 @@
     "check": "tsc --noEmit",
     "audit:ui": "node scripts/check-ui-consistency.cjs",
     "build:web": "expo export --platform web && node --experimental-strip-types scripts/write-oauth-metadata.mts",
-    "test": "node --experimental-strip-types --test tests/*.test.ts"
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "postinstall": "patch-package --error-on-fail"
   },
   "dependencies": {
     "@atcute/atproto": "^4.0.4",
@@ -27,7 +28,7 @@
     "@react-native-community/slider": "5.2.1",
     "core-js": "^3.51.0",
     "expo": "~58.0.23",
-    "expo-audio": "~58.0.11",
+    "expo-audio": "58.0.11",
     "expo-constants": "~58.0.15",
     "expo-crypto": "~58.0.7",
     "expo-document-picker": "~58.0.4",
@@ -53,6 +54,7 @@
     "@types/node": "^22.20.5",
     "@types/react": "~19.3.0",
     "axe-core": "^4.14.0",
+    "patch-package": "^8.0.1",
     "typescript": "~6.0.3"
   },
   "overrides": {

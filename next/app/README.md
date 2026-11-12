@@ -45,6 +45,8 @@ with large artwork beside the controls.
 
 Native keeps a local React Native Modal and hardware-Back handling and never
 pushes the web-only route. Native exports validate bundles, not gestures.
+The iOS player requires the [pinned native audio patch](patches/README.md);
+changing it requires rebuilding the native app.
 
 Browser regressions for the player are the `check-player-*` scripts, run after
 `npm run build:web`. They use real fixture audio and block real API and PDS

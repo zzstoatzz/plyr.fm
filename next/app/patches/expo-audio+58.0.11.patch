@@ -1,0 +1,46 @@
+diff --git a/node_modules/expo-audio/build/AudioModule.types.d.ts b/node_modules/expo-audio/build/AudioModule.types.d.ts
+index 0d63c9b..6704eb3 100644
+--- a/node_modules/expo-audio/build/AudioModule.types.d.ts
++++ b/node_modules/expo-audio/build/AudioModule.types.d.ts
+@@ -218,6 +218,7 @@ export type AudioSampleChannel = {
+  * Use `player.addListener()` to subscribe to these events.
+  */
+ export type AudioEvents = {
++  remoteTrackCommand(event: { command: "next" | "previous" }): void;
+     /** Fired when the player's status changes (play/pause/seek/load and so on.). */
+     playbackStatusUpdate(status: AudioStatus): void;
+     /** Fired when audio sampling is enabled and new sample data is available. */
+diff --git a/node_modules/expo-audio/ios/AudioPlayer.swift b/node_modules/expo-audio/ios/AudioPlayer.swift
+index 0f68a52..0102de3 100644
+--- a/node_modules/expo-audio/ios/AudioPlayer.swift
++++ b/node_modules/expo-audio/ios/AudioPlayer.swift
+@@ -82,6 +82,17 @@ public class AudioPlayer: SharedRef<AVPlayer>, Playable, LockScreenPlayable {
+     ref
+   }
+ 
++  var supportsNextTrack: Bool { true }
++  var supportsPreviousTrack: Bool { true }
++
++  func nextTrack() {
++    emit(event: "remoteTrackCommand", payload: ["command": "next"])
++  }
++
++  func previousTrack() {
++    emit(event: "remoteTrackCommand", payload: ["command": "previous"])
++  }
++
+   var currentOffsetFromLive: Double? {
+     // currentDate() blocks until the item has loaded, and a still-loading item looks live too.
+     guard let item = ref.currentItem, item.status == .readyToPlay, item.duration.isIndefinite,
+diff --git a/node_modules/expo-audio/src/AudioModule.types.ts b/node_modules/expo-audio/src/AudioModule.types.ts
+index 3194a8e..2a07644 100644
+--- a/node_modules/expo-audio/src/AudioModule.types.ts
++++ b/node_modules/expo-audio/src/AudioModule.types.ts
+@@ -277,6 +277,7 @@ export type AudioSampleChannel = {
+  * Use `player.addListener()` to subscribe to these events.
+  */
+ export type AudioEvents = {
++  remoteTrackCommand(event: { command: "next" | "previous" }): void;
+   /** Fired when the player's status changes (play/pause/seek/load and so on.). */
+   playbackStatusUpdate(status: AudioStatus): void;
+   /** Fired when audio sampling is enabled and new sample data is available. */
