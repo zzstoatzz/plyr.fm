@@ -38,6 +38,9 @@ any new feature keeps its data.
   choice.
 - One codebase for web, iOS and Android. Use cross-platform primitives and
   keep web-only code behind a small named seam.
+- Next uses client-owned OAuth through its browser/native SDK adapters, unlike
+  the legacy app's HttpOnly session cookies. Keep credentials inside those
+  adapters; do not add auth tokens to app storage or localStorage.
 - Production is the reference for look, lowercase voice, toasts, resume and
   media controls. Match it where it is good; do not redesign it.
 
@@ -53,7 +56,8 @@ any new feature keeps its data.
 - Signed-in behaviour is testable without a PDS account through the queue
   fixture, which generates identities and runs local coordinators against the
   compose Redis and Postgres.
-- The API only allows the production origin. To see a local build in iOS
-  Safari, point its API URL at a loopback proxy that forwards to the Next API.
+- The API allows the configured Next origins and `http://127.0.0.1:5174`,
+  not arbitrary LAN origins. For a local build on a phone, use a proxy to the
+  Next API instead of broadening deployed CORS.
 - An open tab keeps the build it loaded. Reload after a deploy before judging
   a fix.
