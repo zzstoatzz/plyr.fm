@@ -18,7 +18,7 @@ async function fixture(context: test.TestContext, failure?: 'mac' | 'value' | 'm
   const value = { $type: 'fm.plyr.track', audioBlob: { $type: 'blob', ref: blob, mimeType: 'audio/wav', size: 4 } };
   const cid = await cidForCbor(encode(value));
   let mints = 0, blobReads = 0;
-  const auth: Auth = { did, ready: true, handle: null, rpc: null, jamSpace: true, accountSync: true, privatePublishing: false, error: null, scopeRejected: false,
+  const auth: Auth = { did, ready: true, handle: null, rpc: null, jamSpace: true, accountSync: true, privatePublishing: false, privateDeleting: false, error: null, scopeRejected: false,
     agent: { async handle() { return Response.json({ token: 'fixture-delegation' }); } } };
   context.mock.method(globalThis, 'fetch', async () => Response.json({ verificationMethod: [{ id: `${did}#atproto_kem`, publicKeyMultibase: kem.did().slice('did:key:'.length) }], service: [{ id: `${did}#atproto_pds`, serviceEndpoint: 'https://audio-pds.fixture.test' }] }));
   const transport = {

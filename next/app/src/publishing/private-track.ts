@@ -35,3 +35,10 @@ export function editPrivateQueue(tracks: Track[], index: number, edit: { action:
       : edit.action === 'clear' ? queue.clearPicks(state) : queue.shufflePicks(state);
   return next.entries.map(entry => entry.track);
 }
+
+export function withoutPrivateTrack(tracks: Track[], index: number, uri: string) {
+  const currentRemoved = tracks[index]?.record.uri === uri;
+  const before = tracks.slice(0, index).filter(track => track.record.uri === uri).length;
+  const queue = tracks.filter(track => track.record.uri !== uri);
+  return { queue, index: queue.length ? Math.min(Math.max(0, index - before), queue.length - 1) : -1, currentRemoved };
+}

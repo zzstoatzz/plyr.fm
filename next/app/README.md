@@ -126,3 +126,26 @@ This is source evidence, not a new live-service privacy acceptance claim.
 lost-response recovery, current-SDK signed playback, public/private handoff and
 session replacement with real external mutations blocked. Set `PRIVATE_SCALE=1.4`
 for enlarged-text checks and `PLAYER_DIST` for an isolated web export.
+
+### private deletion and remaining editing gap
+
+Owners can explicitly delete the current private track at its URI. Confirmation
+covers intervening edits: this is not a conditional delete of the displayed CID.
+After sending once, the client checks the authoritative record. An ambiguous
+response permits read-only checks before another explicit attempt, never an
+automatic repeat. Finish any creation recovery for the same URI before deleting,
+so an unresolved creation cannot be resumed accidentally. Confirmed removal stops
+that current audio source, releases it, and removes every occurrence from the
+local private queue; other tracks remain paused.
+
+Conflict-safe private metadata/tag editing remains required and unimplemented.
+ZDS v0.9.0/default branch `ebb84af92d75d7a531c7ba7a321989e491ff4690`
+(`src/atproto/space.zig:635,735`, `src/storage/store.zig:376,5056`) has no
+expected-CID/revision parameter for Space putRecord, deleteRecord or applyWrites.
+Its transaction serializes unconditional writes; it does not prevent stale
+updates. Upstream atproto permissioned-data branch
+`79271658633bdc4768c52a7a45ea54771677dd64` likewise defines no condition in
+`lexicons/com/atproto/space/putRecord.json` or `deleteRecord.json`.
+Editing needs an upstream atomic conditional-write contract plus discoverable
+support, or another protocol-supported concurrency mechanism. Reading before a
+write and sending an ignored public-repo swapRecord field are not substitutes.

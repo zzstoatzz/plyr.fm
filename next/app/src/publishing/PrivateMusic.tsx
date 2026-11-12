@@ -1,3 +1,4 @@
+import { PrivateTrackDelete } from './PrivateTrackDelete';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { View } from 'react-native';
@@ -73,7 +74,13 @@ function AccountPrivateMusic({ auth }: { auth: Auth }) {
     </View>)}
     <Heading>your private tracks</Heading>
     {loading ? <Copy>loading private music…</Copy> : error ? <><Copy live>{error}</Copy><Action label="Retry private music" onPress={() => void refresh()} /></> : !tracks.length ? <Copy>no private tracks yet.</Copy> : null}
-    {tracks.map(track => <View key={track.record.uri} style={{ gap: 6 }}><Action label={`Play ${track.metadata.title}`} onPress={() => player.play(track, tracks)} /><Copy>{track.metadata.artist_name}</Copy></View>)}
+    {tracks.map(track => <View key={track.record.uri} style={{ gap: 6 }}><Action label={`Play ${track.metadata.title}`} onPress={() => player.play(track, tracks)} /><Copy>{track.metadata.artist_name}</Copy>
+      <PrivateTrackDelete track={track} auth={auth} deletion={pds.deletion} pending={pending.some(operation => operation.uri === track.record.uri)} deleted={() => {
+        if (getAuth().did !== auth.did || getAuth().rpc !== auth.rpc) return;
+        player.forgetPrivateTrack(track.record.uri);
+        if (live.current) setTracks(values => values.filter(item => item.record.uri !== track.record.uri));
+      }} />
+    </View>)}
     {cursor && <Action label="Load more private tracks" disabled={busy} onPress={() => void run(async () => {
       const version = generation.current, next = await pds.list(cursor);
       if (current() && generation.current === version) { setTracks(values => [...values, ...next.tracks.filter(track => !values.some(item => item.record.uri === track.record.uri))]); setCursor(next.cursor); }
