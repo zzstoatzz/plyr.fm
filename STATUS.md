@@ -1,6 +1,21 @@
 # plyr.fm - status
 
-Start here for the next agent: [November 12 Next handoff](docs/research/2026-11-12-next-handoff.md).
+Start here for the next agent: [November 12 daily-driver checkpoint](docs/research/2026-11-12-next-daily-driver-checkpoint.md).
+
+## Next daily-driver work (2026-11-12)
+
+#2490–#2494, #2496 and #2497 are deployed to Next: faster composed reads with
+bounded broken-connection recovery, clearer catalog/Search/Library journeys,
+session-isolated uploads, a simpler creator portal and recoverable profile edits.
+Actual iOS simulator playback now starts, survives navigation/backgrounding and
+pauses/resumes. Physical-device controls and real-account consent/sync acceptance
+remain open; fixture PDS checks do not prove them. Production was not promoted.
+
+The [MVP goal](docs/plans/2026-11-12-next-daily-driver.md) fixes the scope;
+the [checkpoint](docs/research/2026-11-12-next-daily-driver-checkpoint.md)
+records evidence, publishing gaps, profile-link/AI-label research and the concrete
+guide/screenshot changes required at cutover. The earlier entries below describe
+their respective checkpoints, not the latest native acceptance.
 
 ## Next phone client and account state (2026-11-12)
 

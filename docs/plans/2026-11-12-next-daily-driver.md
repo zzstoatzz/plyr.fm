@@ -98,4 +98,8 @@ run against production. Docs for the eventual cutover stay staged until then.
   Screenshot matrices were inspected. Fixtures establish UI behavior, not real
   account authorization. Native bundle exports are not device acceptance.
 - Backend measurements and their scope are in `next/backend/docs/perf.md`.
-  The existing dead-connection read failure (#2319) remains separate from caching.
+  The dead-connection read failure was subsequently addressed in #2493 with
+  disposable PostgreSQL fault injection and bounded read-only recovery.
+- Further shipped slices and remaining acceptance are recorded in the
+  [daily-driver checkpoint](../research/2026-11-12-next-daily-driver-checkpoint.md),
+  including the guide and screenshot cutover checklist. The goal remains active.
