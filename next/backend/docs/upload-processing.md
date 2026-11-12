@@ -57,6 +57,26 @@ a 15-second heartbeat request timeout. The owner must fence expired generations
 and reject heartbeats after completion. Cloud full-size tests must establish
 whether this execution budget is sufficient before enabling the journey.
 
+Before reading input, the executor checks available scratch filesystem bytes
+against the entire admitted source plus output budget. One attempt may need
+3 GiB of free scratch space, in addition to the image and other runtime files.
+This check does not reserve disk against legacy concurrent jobs: later I/O
+failures remain recoverable. Full-size cloud acceptance must record free space
+before dispatch and peak disk use; it cannot assume a Fly image's nominal disk
+size is all available to the job.
+
+The new encoder allows only file/pipe protocols and mp3, wav, flac, ogg, mov,
+aac, aiff and matroska/webm demuxers. This covers the legacy `AudioFormat`
+contract (including `.aif` and recorder WebM) plus the Next AAC admission.
+Playlist/concat inputs are rejected. MOV external references and
+absolute external paths retain ffmpeg's disabled defaults; the generic command
+does not enable them. [FFmpeg documents these defaults](https://ffmpeg.org/ffmpeg-formats.html).
+The regression verifies an HTTP-referencing manifest makes zero requests and a
+local concat manifest cannot read another file. These restrictions are specific
+to this new execution path; legacy transcoding is unchanged.
+The Docker build runs the executor tests with its pinned Rust 1.85 and static
+ffmpeg 7.0.2, so host-toolchain results alone cannot satisfy the release check.
+
 ## runtime constraints
 
 The existing `/transcode` handler writes input/output to disk and responds with

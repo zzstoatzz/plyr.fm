@@ -11,6 +11,8 @@ use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
+#[cfg(test)]
+mod lifecycle;
 mod transfer;
 
 const RECIPE: &str = "mp3-320k-44100-v1";
@@ -60,6 +62,8 @@ struct Runner {
     auth: String,
     client: reqwest::Client,
     active: Mutex<Option<Attempt>>,
+    scratch: std::path::PathBuf,
+    heartbeat_interval: Duration,
 }
 
 pub fn configured_router() -> anyhow::Result<Router> {
@@ -84,6 +88,8 @@ pub fn configured_router() -> anyhow::Result<Router> {
                     .read_timeout(Duration::from_secs(60))
                     .build()?,
                 active: Mutex::new(None),
+                scratch: env::temp_dir(),
+                heartbeat_interval: Duration::from_secs(20),
             })))
         }
         _ => bail!("incomplete Next processing configuration"),
@@ -194,7 +200,7 @@ async fn run(runner: &Runner, attempt: &Attempt) -> anyhow::Result<()> {
 
 async fn monitor(runner: &Runner, attempt: &Attempt) -> anyhow::Result<()> {
     loop {
-        tokio::time::sleep(Duration::from_secs(20)).await;
+        tokio::time::sleep(runner.heartbeat_interval).await;
         runner.heartbeat(attempt).await?;
     }
 }
@@ -271,6 +277,8 @@ mod tests {
             auth: "fixture-key".into(),
             client: reqwest::Client::new(),
             active: Mutex::new(None),
+            scratch: env::temp_dir(),
+            heartbeat_interval: Duration::from_secs(20),
         });
         let mut headers = HeaderMap::new();
         headers.insert("X-Processing-Key", "fixture-key".parse().unwrap());
@@ -332,6 +340,8 @@ mod tests {
                 auth: "fixture".into(),
                 client: reqwest::Client::new(),
                 active: Mutex::new(None),
+                scratch: env::temp_dir(),
+                heartbeat_interval: Duration::from_secs(20),
             };
             assert!(run(&runner, &attempt()).await.is_err());
             assert_eq!(reads.load(std::sync::atomic::Ordering::SeqCst), 0);

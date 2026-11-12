@@ -12,12 +12,26 @@ use tokio::{
 use super::{accepted, Attempt, Receipt, Runner, PART_BYTES};
 
 pub(super) async fn process(runner: &Runner, attempt: &Attempt) -> anyhow::Result<()> {
-    let directory = tempfile::tempdir()?;
+    let directory = tempfile::tempdir_in(&runner.scratch)?;
+    let scratch = directory.path().to_owned();
+    let available = tokio::task::spawn_blocking(move || fs2::available_space(scratch)).await??;
+    require_scratch(available, attempt.source_bytes, attempt.output_budget)?;
     let input = directory.path().join("source");
     let output = directory.path().join("rendition.mp3");
     download(runner, attempt, &input).await?;
     encode(&input, &output, attempt.output_budget).await?;
     upload(runner, attempt, &output).await
+}
+
+fn require_scratch(available: u64, source: u64, output: u64) -> anyhow::Result<()> {
+    if available
+        < source
+            .checked_add(output)
+            .context("invalid scratch reservation")?
+    {
+        bail!("insufficient scratch capacity for source and rendition");
+    }
+    Ok(())
 }
 
 async fn download(runner: &Runner, attempt: &Attempt, path: &Path) -> anyhow::Result<()> {
@@ -48,7 +62,16 @@ async fn download(runner: &Runner, attempt: &Attempt, path: &Path) -> anyhow::Re
 
 async fn encode(input: &Path, output: &Path, budget: u64) -> anyhow::Result<()> {
     let mut child = Command::new("ffmpeg")
-        .args(["-nostdin", "-v", "error", "-i"])
+        .args([
+            "-nostdin",
+            "-v",
+            "error",
+            "-protocol_whitelist",
+            "file,pipe",
+            "-format_whitelist",
+            "mp3,wav,flac,ogg,mov,aac,aiff,matroska,webm",
+            "-i",
+        ])
         .arg(input)
         .args([
             "-map",
@@ -193,6 +216,21 @@ mod tests {
                 > 10_000
         );
         assert!(encode(&input, &output, 100).await.is_err());
+        for extension in ["mp3", "flac", "ogg", "m4a", "aac", "aif", "aiff", "webm"] {
+            let converted = directory.path().join(format!("source.{extension}"));
+            assert!(Command::new("ffmpeg")
+                .args(["-v", "error", "-i"])
+                .arg(&input)
+                .arg(&converted)
+                .status()
+                .await
+                .unwrap()
+                .success());
+            assert!(
+                encode(&converted, &output, 100_000).await.is_ok(),
+                "{extension}"
+            );
+        }
     }
 
     #[derive(Default)]
@@ -254,6 +292,8 @@ mod tests {
             auth: "test".into(),
             client: reqwest::Client::new(),
             active: Mutex::new(None),
+            scratch: std::env::temp_dir(),
+            heartbeat_interval: Duration::from_secs(20),
         };
         let attempt = Attempt {
             upload_id: "12345678-1234-1234-1234-123456789abc".into(),
@@ -289,5 +329,62 @@ mod tests {
                 .unwrap(),
             5
         );
+    }
+
+    #[test]
+    fn scratch_requires_both_retained_files() {
+        assert!(require_scratch(300, 150, 150).is_ok());
+        assert!(require_scratch(299, 150, 150).is_err());
+        assert!(require_scratch(u64::MAX, u64::MAX, 1).is_err());
+    }
+
+    #[tokio::test]
+    async fn manifests_cannot_open_external_sources() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let reads = Arc::new(AtomicUsize::new(0));
+        let observed = reads.clone();
+        let app = Router::new().route(
+            "/segment.wav",
+            axum::routing::get(move || {
+                let reads = observed.clone();
+                async move {
+                    reads.fetch_add(1, Ordering::SeqCst);
+                    "not audio"
+                }
+            }),
+        );
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+        let directory = tempfile::tempdir().unwrap();
+        let input = directory.path().join("manifest");
+        let output = directory.path().join("output.mp3");
+        tokio::fs::write(&input, format!("#EXTM3U\n#EXT-X-TARGETDURATION:1\n#EXTINF:1,\nhttp://{address}/segment.wav\n#EXT-X-ENDLIST\n")).await.unwrap();
+        assert!(encode(&input, &output, 100_000).await.is_err());
+        assert_eq!(reads.load(Ordering::SeqCst), 0);
+        let wav = directory.path().join("local.wav");
+        let generated = Command::new("ffmpeg")
+            .args([
+                "-v",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                "anullsrc=r=8000:cl=mono",
+                "-t",
+                "0.1",
+            ])
+            .arg(&wav)
+            .status()
+            .await
+            .unwrap();
+        assert!(generated.success());
+        tokio::fs::write(&input, "ffconcat version 1.0\nfile 'local.wav'\n")
+            .await
+            .unwrap();
+        assert!(encode(&input, &output, 100_000).await.is_err());
+        server.abort();
     }
 }
