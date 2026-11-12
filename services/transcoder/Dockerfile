@@ -21,6 +21,7 @@ RUN rm -rf src
 COPY services/transcoder/src ./src
 COPY backend/src/backend/upload_contract.json /app/backend/src/backend/upload_contract.json
 COPY --from=ffmpeg /ffmpeg /usr/local/bin/ffmpeg
+COPY --from=ffmpeg /ffprobe /usr/local/bin/ffprobe
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     cargo test --release && cargo build --release
 

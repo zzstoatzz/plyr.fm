@@ -20,7 +20,8 @@ pub(super) async fn process(runner: &Runner, attempt: &Attempt) -> anyhow::Resul
     let output = directory.path().join("rendition.mp3");
     download(runner, attempt, &input).await?;
     encode(&input, &output, attempt.output_budget).await?;
-    upload(runner, attempt, &output).await
+    let duration = duration(&output).await?;
+    upload(runner, attempt, &output, duration).await
 }
 
 fn require_scratch(available: u64, source: u64, output: u64) -> anyhow::Result<()> {
@@ -127,11 +128,59 @@ async fn copy_bounded(
 #[serde(rename_all = "camelCase")]
 struct Completion {
     size_bytes: u64,
+    duration: u32,
     content_type: &'static str,
     parts: Vec<Receipt>,
 }
 
-async fn upload(runner: &Runner, attempt: &Attempt, path: &Path) -> anyhow::Result<()> {
+async fn duration(path: &Path) -> anyhow::Result<u32> {
+    tokio::time::timeout(Duration::from_secs(15), probe_duration(path))
+        .await
+        .context("duration probe timed out")?
+}
+
+async fn probe_duration(path: &Path) -> anyhow::Result<u32> {
+    let mut child = Command::new("ffprobe")
+        .args([
+            "-v",
+            "error",
+            "-protocol_whitelist",
+            "file,pipe",
+            "-format_whitelist",
+            "mp3",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+        ])
+        .arg(path)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .kill_on_drop(true)
+        .spawn()?;
+    let mut stdout = child.stdout.take().context("probe output unavailable")?;
+    let mut bytes = Vec::with_capacity(65);
+    (&mut stdout).take(65).read_to_end(&mut bytes).await?;
+    if bytes.len() > 64 {
+        bail!("duration probe output exceeded limit");
+    }
+    if !child.wait().await?.success() {
+        bail!("rendition duration unavailable");
+    }
+    let seconds: f64 = std::str::from_utf8(&bytes)?.trim().parse()?;
+    if !seconds.is_finite() || seconds <= 0.0 || seconds.round() > u32::MAX as f64 {
+        bail!("invalid rendition duration");
+    }
+    Ok(seconds.round() as u32)
+}
+
+async fn upload(
+    runner: &Runner,
+    attempt: &Attempt,
+    path: &Path,
+    duration: u32,
+) -> anyhow::Result<()> {
     let mut file = File::open(path).await?;
     let size = file.metadata().await?.len();
     if size == 0 || size > attempt.output_budget {
@@ -164,6 +213,7 @@ async fn upload(runner: &Runner, attempt: &Attempt, path: &Path) -> anyhow::Resu
             .timeout(Duration::from_secs(30))
             .json(&Completion {
                 size_bytes: size,
+                duration,
                 content_type: "audio/mpeg",
                 parts,
             })
@@ -230,6 +280,10 @@ mod tests {
                 encode(&converted, &output, 100_000).await.is_ok(),
                 "{extension}"
             );
+            assert!(
+                (1..=2).contains(&duration(&output).await.unwrap()),
+                "{extension}"
+            );
         }
     }
 
@@ -269,6 +323,7 @@ mod tests {
         Json(value): Json<serde_json::Value>,
     ) -> axum::http::StatusCode {
         assert_eq!(value["sizeBytes"], PART_BYTES + 123);
+        assert_eq!(value["duration"], 1);
         assert_eq!(value["parts"].as_array().unwrap().len(), 2);
         state.lock().await.completed = true;
         axum::http::StatusCode::NO_CONTENT
@@ -307,7 +362,7 @@ mod tests {
         let path = directory.path().join("rendition");
         let file = File::create(&path).await.unwrap();
         file.set_len((PART_BYTES + 123) as u64).await.unwrap();
-        upload(&runner, &attempt, &path).await.unwrap();
+        upload(&runner, &attempt, &path, 1).await.unwrap();
         let observed = state.lock().await;
         assert_eq!(observed.lengths, [PART_BYTES, 123]);
         assert!(observed.completed);
