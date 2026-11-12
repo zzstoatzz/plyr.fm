@@ -163,7 +163,7 @@ export function usePersonalQueue(target: Target) {
         setState(state);
         if ((runtime.current.suspended || held.current)) return;
         runtime.current.setQueue(state.entries.map(entry => entry.track), state.index);
-        if (checkpoint && (!auth.did || !auth.queueSync) && state.entries.length && (!adopting || returning)) {
+        if (checkpoint && (!auth.did || !auth.accountSync) && state.entries.length && (!adopting || returning)) {
           runtime.current.setRepeat(checkpoint.repeat);
           synchronization.current++;
           const entry = state.entries[state.index];
@@ -207,7 +207,7 @@ export function usePersonalQueue(target: Target) {
         }
       },
       remote: (state, force) => { if (!stale()) { setRemote(state); void apply(state, force); } },
-      ...(auth.did && auth.agent && auth.queueSync ? { connect: { admit: () => {
+      ...(auth.did && auth.agent && auth.accountSync ? { connect: { admit: () => {
         resuming = owned.current && runtime.current.playing() && !(runtime.current.suspended || held.current);
         return joinPersonalQueue(auth, client.current, current.wire ? undefined : { ...current.seed(), playing: adopting && runtime.current.playing() }, resuming);
       } } } : {}),
@@ -234,7 +234,7 @@ export function usePersonalQueue(target: Target) {
       current.close();
       generation.current++;
     };
-  }, [auth.ready, auth.did, auth.agent, auth.queueSync]);
+  }, [auth.ready, auth.did, auth.agent, auth.accountSync]);
 
   useEffect(() => {
     if (!session.current?.initialized || target.suspended) return;
@@ -476,7 +476,7 @@ export function usePersonalQueue(target: Target) {
     if (current && !(runtime.current.suspended || held.current)) current.progress(position ?? (current.wire && !owned.current
       ? jamPosition(current.wire, current.position(Date.now())) / 1000 : localPosition()));
   }
-  return { position, duration, keepPlaying: remote?.personal?.keepPlaying ?? target.keepPlaying, setKeepPlaying: (value: boolean) => edit({ action: 'setContinuation', keepPlaying: value }), queueError, waiting, deviceOnly: !!auth.did && !auth.queueSync, checkpoint, ownsOutput: () => owned.current, next, state, remote, outputElsewhere, restoredPosition, resume, defer, command, play, select, local, remember,
+  return { position, duration, keepPlaying: remote?.personal?.keepPlaying ?? target.keepPlaying, setKeepPlaying: (value: boolean) => edit({ action: 'setContinuation', keepPlaying: value }), queueError, waiting, deviceOnly: !!auth.did && !auth.accountSync, checkpoint, ownsOutput: () => owned.current, next, state, remote, outputElsewhere, restoredPosition, resume, defer, command, play, select, local, remember,
     enqueue,
     remove: (at: number) => { const entry = session.current?.state.entries[at]; if (entry) edit({ action: 'removeEntry', entryKey: entry.key }); },
     move: (from: number, to: number) => {

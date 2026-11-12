@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { Client } from '@atcute/client';
-import { BASE_SCOPE_PARTS, SCOPE_PARTS, SYNC_SCOPE_PARTS, hasPreferenceGrant, hasJamGrant, hasQueueGrant } from './auth-config';
+import { BASE_SCOPE_PARTS, SCOPE_PARTS, SYNC_SCOPE_PARTS, hasJamGrant, hasSyncGrant } from './auth-config';
 import { didDocument, pdsEndpoint, pdsSupportsSpaces } from './identity';
 
 export type Did = `did:${string}:${string}`;
@@ -11,16 +11,15 @@ export type Auth = {
 	handle: string | null;
 	agent: Agent | null;
 	rpc: Client | null;
-	preferenceSpace: boolean;
 	jamSpace: boolean;
-	queueSync: boolean;
+	accountSync: boolean;
 	error: string | null;
 	scopeRejected: boolean;
 };
 
 const initial: Auth = {
 	did: null, ready: false, handle: null, agent: null, rpc: null,
-	preferenceSpace: false, jamSpace: false, queueSync: false, error: null, scopeRejected: false
+	jamSpace: false, accountSync: false, error: null, scopeRejected: false
 };
 
 let state = initial;
@@ -43,7 +42,7 @@ export function getAuth(): Auth {
 }
 
 export function setAuth(did: Did, agent: Agent, scope: string) {
-	update({ ...initial, ready: true, did, agent, rpc: new Client({ handler: agent }), preferenceSpace: hasPreferenceGrant(scope, did), jamSpace: hasJamGrant(scope), queueSync: hasQueueGrant(scope) });
+	update({ ...initial, ready: true, did, agent, rpc: new Client({ handler: agent }), jamSpace: hasJamGrant(scope), accountSync: hasSyncGrant(scope) });
 	void didDocument(did).then(doc => {
 		if (state.agent !== agent) return;
 		update({ ...state, handle: doc.alsoKnownAs?.find(value => value.startsWith('at://'))?.slice(5) ?? null });

@@ -29,7 +29,6 @@ jobs:
       EXPO_PUBLIC_API_URL: https://api.next.plyr.fm
       EXPO_PUBLIC_SITE_URL: https://next.plyr.fm
       EXPO_PUBLIC_NSID_PREFIX: fm.plyr
-      EXPO_PUBLIC_PREFERENCE_SYNC: "true"
     steps:
       - uses: actions/checkout@v4
 

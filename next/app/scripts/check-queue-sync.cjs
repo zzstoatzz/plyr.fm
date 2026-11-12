@@ -25,6 +25,10 @@ const queue = 'rpc:fm.plyr.stg.jam.join?aud=did:web:plyr-jams-next.fly.dev#jams'
         const response = await fetch(fixture.bases[0] + '/v1/playback/join', { method: 'POST', headers: { 'content-type': 'application/json', origin }, body: route.request().postData() });
         await route.fulfill({ status: response.status, body: Buffer.from(await response.arrayBuffer()), headers: { 'content-type': 'application/json', 'access-control-allow-origin': origin } });
       });
+      await context.route('https://plyr-jams-next.fly.dev/v1/preferences', async route => {
+        const response = await fetch(fixture.bases[0] + '/v1/preferences', { method: 'POST', headers: { 'content-type': 'application/json', origin }, body: route.request().postData() });
+        await route.fulfill({ status: response.status, body: Buffer.from(await response.arrayBuffer()), headers: { 'content-type': 'application/json', 'access-control-allow-origin': origin } });
+      });
       await context.route('https://api.next.plyr.fm/**', route => route.request().method() === 'GET' || new URL(route.request().url()).pathname === '/v1/tracks/resolve' ? route.fallback() : route.abort());
       await context.exposeFunction('__mintServiceToken', () => serviceToken(account));
       await context.addInitScript(local => {
@@ -52,7 +56,10 @@ const queue = 'rpc:fm.plyr.stg.jam.join?aud=did:web:plyr-jams-next.fly.dev#jams'
       return { page, errors };
     }
 
+    const saved = await fetch(fixture.bases[0] + '/v1/preferences', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ serviceToken: serviceToken(account), patch: { theme: 'dark', accent: '#d24b79' } }) });
+    assert.equal(saved.status, 200);
     const first = await device(`${base} ${queue}`);
+    await first.page.waitForFunction(() => getComputedStyle(document.querySelector('[data-testid="app-frame"]').parentElement).backgroundColor === 'rgb(10, 10, 10)', undefined, { timeout: 15_000 });
     await first.page.waitForFunction(() => window.__joins > 0, undefined, { timeout: 15_000 });
     const title = await first.page.getByTestId('home-chart').getByTestId('track-play-control').first().getAttribute('aria-label');
     await first.page.getByTestId('home-chart').getByTestId('track-play-control').first().click();
@@ -86,11 +93,12 @@ const queue = 'rpc:fm.plyr.stg.jam.join?aud=did:web:plyr-jams-next.fly.dev#jams'
     assert.equal(await later.page.evaluate(() => window.__audio.some(item => !item.paused)), false, 'a restored queue waits for play');
 
     const local = await device(base);
+    assert.equal(await local.page.evaluate(() => getComputedStyle(document.querySelector('[data-testid="app-frame"]').parentElement).backgroundColor), 'rgb(250, 250, 250)', 'a sign-in without the permission keeps device settings');
     await local.page.getByTestId('home-chart').getByTestId('track-play-control').first().click();
     await local.page.getByTestId('player-dock').getByRole('button', { name: 'Queue', exact: true }).click();
     await local.page.getByText('keeps your queue on this device').waitFor({ timeout: 10_000 });
     assert.equal(await local.page.evaluate(() => window.__joins), 0, 'a sign-in without the queue permission never contacts the coordinator');
     assert.deepEqual([...first.errors, ...second.errors, ...later.errors, ...local.errors], []);
-    console.log(`queue sync: an identity with only the queue permission syncs across two devices, hands playback over at ${Math.round(resumed)}s, a fresh browser gets the queue back from PostgreSQL after Redis loses it, and a sign-in without the permission stays on the device`);
+    console.log(`queue sync: an identity with only the sync permission takes its saved theme from the server, syncs its queue across two devices, hands playback over at ${Math.round(resumed)}s, a fresh browser gets the queue back from PostgreSQL after Redis loses it, and a sign-in without the permission stays on the device`);
   } finally { await browser.close(); await fixture.stop(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
