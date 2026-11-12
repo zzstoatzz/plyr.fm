@@ -237,16 +237,19 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 	}
 
 	async function readList(uri: string, kind: 'album' | 'playlist' = 'playlist'): Promise<{ value: ListRecord; cid: string }> {
+		assertSession();
 		const { rpc, did } = session();
 		const res = await ok(
 			rpc.get('com.atproto.repo.getRecord', { params: { repo: did, collection: LIST(), rkey: ownedRkey(uri, did, LIST()) } })
 		);
+		assertSession();
 		const value = res.value as unknown as ListRecord;
 		if (res.uri !== uri || !res.cid || value.listType !== kind) throw new Error('not an editable collection');
 		return { value, cid: res.cid };
 	}
 
 	async function writeList(uri: string, value: ListRecord, swap: string): Promise<AwaitStatus> {
+		assertSession();
 		const { rpc, did } = session();
 		const res = await ok(
 			rpc.post('com.atproto.repo.putRecord', {
@@ -293,6 +296,7 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 		const { rpc, did } = session();
 		const rkey = ownedRkey(playlistUri, did, LIST());
 		const { cid } = await readList(playlistUri);
+		assertSession();
 		await ok(rpc.post('com.atproto.repo.deleteRecord', { input: { repo: did, collection: LIST(), rkey, swapRecord: cid } }));
 		return await settle(playlistUri);
 	}
