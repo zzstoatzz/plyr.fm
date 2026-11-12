@@ -1,12 +1,13 @@
 // writes go straight to the signed-in user's PDS; the appview picks them up
 import type {} from '@atcute/atproto';
 // from the firehose, and /v1/records/await gives read-after-write.
-import { ok } from '@atcute/client';
+import { ClientResponseError, ok } from '@atcute/client';
 import { api, type AwaitStatus, type Track } from './api';
 import { getAuth, type Auth } from './auth-state';
 import { NSID } from './config';
 import { blobUrl } from './identity';
 import { catalogChanged } from './catalog-changes';
+import { normalizeTrackTags } from './publishing/track-tags';
 
 
 export interface MediaFile {
@@ -35,7 +36,12 @@ export interface ListRecord {
 
 export const MAX_AUDIO_BYTES = 104_857_600; // track lexicon audioBlob.maxSize
 
+export class TrackRevisionConflict extends Error {
+	constructor() { super('this track changed elsewhere. reload the latest version before saving.'); }
+}
+
 export interface NewTrack {
+	tags?: string[];
 	file: MediaFile;
 	title: string;
 	artist: string;
@@ -57,6 +63,7 @@ export interface ProfileRecord {
 }
 
 export interface TrackEdits {
+	tags?: string[];
 	title: string;
 	album: string;
 	description: string;
@@ -272,6 +279,7 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 
 	async function uploadTrack(input: NewTrack): Promise<{ uri: string; status: AwaitStatus }> {
 		const { rpc, did } = session();
+		const tags = input.tags === undefined ? undefined : normalizeTrackTags(input.tags);
 		function assertAccount() {
 			if (getAuth().rpc !== rpc || getAuth().did !== did) throw new Error('account changed before publishing.');
 		}
@@ -289,6 +297,7 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 			createdAt: new Date().toISOString()
 		};
 		if (input.album?.trim()) record.album = input.album.trim();
+		if (tags !== undefined) record.tags = tags;
 		if (input.description?.trim()) record.description = input.description.trim();
 		if (input.duration && Number.isFinite(input.duration)) record.duration = Math.round(input.duration);
 		if (input.artwork) Object.assign(record, await uploadArtwork(input.artwork));
@@ -366,11 +375,14 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 		return { imageBlob: uploaded.blob, imageUrl: await blobUrl(did, cid) };
 	}
 
-	async function editTrack(uri: string, edits: TrackEdits): Promise<AwaitStatus> {
+	async function editTrack(uri: string, edits: TrackEdits, revision?: Awaited<ReturnType<typeof myTrack>>): Promise<AwaitStatus> {
 		const { rpc, did } = session();
 		const rkey = ownedRkey(uri, did, NSID.track);
-		const current = await readTrack(uri, rkey);
+		const tags = edits.tags === undefined ? undefined : normalizeTrackTags(edits.tags);
+		const current = revision ?? await readTrack(uri, rkey);
+		if (current.uri !== uri) throw new Error('track revision does not match');
 		const record = { ...(current.value as Record<string, unknown>) };
+		if (tags !== undefined) record.tags = tags;
 		if (!edits.title.trim()) throw new Error('a track needs a title');
 		record.title = edits.title.trim();
 		for (const key of ['album', 'description'] as const) {
@@ -384,6 +396,7 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 		} else if (edits.artwork) {
 			Object.assign(record, await uploadArtwork(edits.artwork));
 		}
+		if (getAuth().rpc !== rpc || getAuth().did !== did) throw new Error('account changed before publishing.');
 		const res = await ok(
 			rpc.post('com.atproto.repo.putRecord', {
 				input: {
@@ -394,7 +407,10 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 					swapRecord: current.cid
 				}
 			})
-		);
+		).catch((error: unknown) => {
+			if (error instanceof ClientResponseError && error.error === 'InvalidSwap') throw new TrackRevisionConflict();
+			throw error;
+		});
 		return await settle(res.uri, res.cid);
 	}
 
@@ -407,10 +423,16 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 		return { ...result, cid: result.cid };
 	}
 
+	async function myTrack(uri: string) {
+		const { did } = session();
+		return readTrack(uri, ownedRkey(uri, did, NSID.track));
+	}
+
 	async function deleteTrack(uri: string): Promise<AwaitStatus> {
 		const { rpc, did } = session();
 		const rkey = ownedRkey(uri, did, NSID.track);
 		const { cid } = await readTrack(uri, rkey);
+		if (getAuth().rpc !== rpc || getAuth().did !== did) throw new Error('account changed before deleting.');
 		await ok(
 			rpc.post('com.atproto.repo.deleteRecord', {
 				input: { repo: did, collection: NSID.track as Nsid, rkey, swapRecord: cid }
@@ -418,5 +440,5 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 		);
 		return await settle(uri);
 	}
-	return { myLikes, like, unlike, createPlaylist, addToPlaylist, removeFromPlaylist, renameCollection, deletePlaylist, uploadTrack, myProfile, saveProfile, editTrack, deleteTrack };
+	return { myLikes, like, unlike, createPlaylist, addToPlaylist, removeFromPlaylist, renameCollection, deletePlaylist, uploadTrack, myProfile, saveProfile, myTrack, editTrack, deleteTrack };
 }

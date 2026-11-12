@@ -56,6 +56,7 @@ async function run(browser, width, theme) {
     await signIn(did);
     const title = page.getByRole('textbox', { name: 'Title', exact: true });
     const artist = page.getByRole('textbox', { name: 'Artist', exact: true });
+    const tags = page.getByRole('textbox', { name: 'Tags', exact: true });
     const submit = () => page.getByRole('button', { name: /^(upload|uploading…)$/i });
     async function choose() {
       const chooser = page.waitForEvent('filechooser');
@@ -65,6 +66,10 @@ async function run(browser, width, theme) {
       await artist.fill('fixture artist');
     }
     await choose();
+    await tags.fill('é'.repeat(26));
+    await submit().click();
+    await page.getByText(/a tag is too long/).waitFor();
+    assert.equal(writes.length, 0, 'invalid Unicode tag cannot publish');
     await title.fill('private draft');
     await signIn(other);
     assert.equal(await title.inputValue(), '', 'draft does not cross accounts');
@@ -81,6 +86,7 @@ async function run(browser, width, theme) {
     release(); holdBlob = false;
     await page.getByRole('button', { name: 'Choose audio', exact: true }).waitFor();
     await choose();
+    await tags.fill(' AI \n--Hip-Hop--\nai');
     reject = true;
     await submit().click();
     await page.getByText(/fixture upload unavailable/).waitFor();
@@ -93,6 +99,7 @@ async function run(browser, width, theme) {
     await createHeld;
     assert.equal(writes.length, 1);
     assert.equal(writes[0].repo, other);
+    assert.deepEqual(writes[0].record.tags, ['ai', 'hip-hop']);
     await signIn(did);
     release(); holdCreate = false;
     await page.getByRole('button', { name: 'Choose audio', exact: true }).waitFor();
@@ -101,6 +108,7 @@ async function run(browser, width, theme) {
     await page.getByRole('link', { name: 'View track', exact: true }).waitFor();
     assert.equal(writes.length, 2, 'accepted writes are not replayed for projection delay');
     assert.equal(writes[1].repo, did);
+    assert.equal(Object.hasOwn(writes[1].record, 'tags'), false, 'blank upload leaves tags absent');
     await screenshot(page, `upload-saved-${width}-${theme}`);
     await signIn(other);
     await page.getByRole('button', { name: 'Choose audio', exact: true }).waitFor();
