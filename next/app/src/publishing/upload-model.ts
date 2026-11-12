@@ -13,6 +13,14 @@ export type UploadStatus = {
 export type UploadStorage = { load(owner: string): Promise<UploadOperation[]>; put(operation: UploadOperation): Promise<void>; delete(operation: UploadOperation): Promise<void> };
 export type ChunkReader = { size: number; read(offset: number, length: number): Promise<Uint8Array<ArrayBuffer>>; close(): void };
 
+export function assertPublicUploadRecord(record: Record<string, unknown>): void {
+  if ((Object.hasOwn(record, 'downloadPolicy') && record.downloadPolicy !== 'open')
+    || (Object.hasOwn(record, 'visibility') && record.visibility !== 'public')
+    || ['audioBlob', 'audioSpace', 'audioFileId', 'supportGate', 'audioPayload', 'privateAudio', 'originalAudioBlob', 'originalFileId', 'originalFileType'].some(field => Object.hasOwn(record, field))) {
+    throw new Error('large uploads support public, open audio only.');
+  }
+}
+
 export function audioFormat(name: string, type: string) {
   const fileType = name.split('.').at(-1)?.toLowerCase() ?? '';
   const contentType = formats[fileType];
@@ -22,6 +30,7 @@ export function audioFormat(name: string, type: string) {
 }
 export function uploadOperation(value: unknown, owner: string): UploadOperation {
   const operation = createOperation(value);
+  assertPublicUploadRecord(operation.record);
   if (!value || typeof value !== 'object' || !('uploadId' in value) || !('name' in value) || !('sizeBytes' in value) || !('contentType' in value) || !('fileType' in value)
     || operation.cid !== undefined || operation.archived !== undefined || operation.owner !== owner || typeof value.uploadId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value.uploadId)
     || typeof value.name !== 'string' || typeof value.sizeBytes !== 'number' || !Number.isSafeInteger(value.sizeBytes) || value.sizeBytes <= 0 || value.sizeBytes > MAX_SERVICE_AUDIO_BYTES

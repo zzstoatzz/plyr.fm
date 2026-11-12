@@ -17,6 +17,7 @@ import { albumPublishing } from './collections/album-pds';
 import { collectionOrdering } from './collections/collection-order-pds';
 import { MAX_AUDIO_BYTES } from './publishing/track-audio';
 import { trackEditor } from './publishing/track-pds';
+import { assertPublicUploadRecord } from './publishing/upload-model';
 
 
 export interface MediaFile {
@@ -354,9 +355,7 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 		const url = new URL(audioUrl);
 		if (url.protocol !== 'https:' || url.username || url.password) throw new Error('invalid uploaded audio address.');
 		if (operation.uri !== `at://${operation.owner}/${operation.collection}/${operation.rkey}`) throw new Error('invalid upload reservation.');
-		for (const field of ['audioBlob', 'audioSpace', 'audioFileId', 'supportGate', 'audioPayload', 'privateAudio', 'originalAudioBlob']) {
-			if (operation.record[field] != null) throw new Error('large uploads support public, open audio only.');
-		}
+		assertPublicUploadRecord(operation.record);
 		return { ...operation, record: { ...operation.record, audioUrl, downloadPolicy: 'open' } };
 	}
 

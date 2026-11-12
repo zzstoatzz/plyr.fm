@@ -16,10 +16,11 @@ const base = `https://audio.fixture/v1/uploads/${'a'.repeat(64)}/`;
 async function run(browser, width, theme) {
   const { page, context, errors } = await setup(browser, width, theme, track, Number(process.env.LARGE_SCALE || 1));
   try {
-    let authModule;
+    let authModule, pdsModule;
     for (const url of await page.locator('script[src]').evaluateAll(nodes => nodes.map(node => node.src))) {
       const source = process.env.PLAYER_URL ? await (await page.request.get(url)).text() : await fs.readFile(path.join(process.env.PLAYER_DIST || path.resolve(__dirname, '../dist'), new URL(url).pathname), 'utf8');
       for (const module of source.split('__d(')) if (module.includes('.setAuth=') || module.includes('"setAuth"')) authModule = Number(module.match(/\},(\d+),\[/)?.[1]);
+      for (const module of source.split('__d(')) if (module.includes('.createPds=') || module.includes('"createPds"')) pdsModule = Number(module.match(/\},(\d+),\[/)?.[1]);
     }
     assert.ok(authModule);
     await context.route('https://plc.directory/**', route => route.fulfill({ json: { service: [] } }));
@@ -111,6 +112,18 @@ async function run(browser, width, theme) {
       await page.getByRole('button', { name, exact: true }).waitFor();
     }
     await enter();
+    assert.ok(pdsModule);
+    const policyErrors = await page.evaluate(async ([authId, pdsId, operation]) => {
+      const pds = globalThis.__r(pdsId).createPds(globalThis.__r(authId).getAuth());
+      const errors = [];
+      for (const fields of [{ downloadPolicy: 'off' }, { visibility: 'private' }, { originalFileId: 'protected' }, { originalFileType: 'flac' }]) {
+        try { await pds.uploadedTrack({ ...operation, record: { ...operation.record, ...fields } }, 'https://audio.fixture/media/fixture', true); errors.push(null); }
+        catch (error) { errors.push(error.message); }
+      }
+      return errors;
+    }, [authModule, pdsModule, operation]);
+    assert.deepEqual(policyErrors, Array(4).fill('large uploads support public, open audio only.'));
+    assert.equal(writes.length, 0, 'restricted recovery never reaches canonical create');
     await page.evaluate(() => {
       const size = Object.getOwnPropertyDescriptor(Blob.prototype, 'size').get;
       Object.defineProperty(Blob.prototype, 'size', { configurable: true, get() { return this instanceof File && this.name === 'large-fixture.wav' ? 104857601 : size.call(this); } });
