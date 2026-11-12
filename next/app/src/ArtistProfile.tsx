@@ -71,8 +71,8 @@ function ArtistCatalog({ artist, onPlay }: { artist: Artist; onPlay: Play }) {
         <TrackRows tracks={tracks.data} onPlay={(track, queue) => onPlay(track, queue, name)} />
         <PageStatus page={tracks} label="tracks" />
       </>}
-      {section === 'albums' && <>{auth.did === artist.did && <Action primary label="New album" href="/create-album" />}<ListRows lists={albums.data} /><PageStatus page={albums} label="albums" /></>}
-      {section === 'playlists' && <><ListRows lists={playlists.data} /><PageStatus page={playlists} label="playlists" /></>}
+      {section === 'albums' && <>{auth.did === artist.did && <Action primary label="New album" href="/create-album" />}<ListRows lists={albums.data} includeEmpty={auth.did === artist.did} /><PageStatus page={albums} label="albums" /></>}
+      {section === 'playlists' && <><ListRows lists={playlists.data} includeEmpty={auth.did === artist.did} /><PageStatus page={playlists} label="playlists" /></>}
       {section === 'likes' && <>
         <TrackRows tracks={likes.data} onPlay={(track, queue) => onPlay(track, queue, `liked by ${name}`)} />
         <PageStatus page={likes} label="likes" />
