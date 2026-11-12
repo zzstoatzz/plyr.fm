@@ -5,7 +5,7 @@ primary_region = "sjc"
   dockerfile = "Dockerfile"
 
 # One image, two process groups. The binary ignores argv; the group name
-# (FLY_PROCESS_GROUP) selects the role: `app` runs MODE=api and scales to zero;
+# (FLY_PROCESS_GROUP) selects the role: `app` runs MODE=api with one warm machine;
 # `ingester` runs the jetstream-to-projection ingester (WORKER_DATABASE_URL) and,
 # when MIRROR_BASE_URL + MIRROR_UPLOAD_TOKEN are set, the blob mirror on a side thread.
 [processes]
@@ -40,7 +40,7 @@ primary_region = "sjc"
   force_https = true
   auto_stop_machines = "stop"
   auto_start_machines = true
-  min_machines_running = 0
+  min_machines_running = 1
 
   [http_service.concurrency]
     type = "connections"
