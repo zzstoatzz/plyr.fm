@@ -27,6 +27,28 @@ finish line. This is execution evidence, not another parity inventory.
 - #2499: signing in from the profile editor replaces the retained route, so its
   native modal no longer covers login. Simulator and deployed browser checks
   verify the visible login and preserved return destination.
+- #2501: uploads also isolate same-account reauthentication. A late accepted
+  write cannot replace the fresh form, and signing in preserves `/upload`.
+- #2498 and #2502: discovery applies creator tags and separate account AI labels
+  before pagination, with explicit opt-out and filter-bound cursors. Historical
+  labels replay into a rebuildable table; expiration and negation are honored.
+  Live multirow verification caught borrowed PostgreSQL label strings; the shared
+  decoder now copies them into request-owned memory, backed by both a deterministic
+  buffer-reuse regression and a 50-row HTTP test.
+- #2495: Settings exposes account-scoped hidden tags, explicit show-all and default
+  restoration. Home resets its cursor when the filter changes, retains it for a
+  no-op settings sync and removes hidden tag suggestions. Real guest browser checks
+  on phone/light and desktop/dark exercised default → show-all → default against
+  the live API and rendered Penny's tracks only with opt-out. Four deployed fixture
+  layouts separately cover custom input, validation and account isolation.
+- #2503: creators can supply tags on upload and edit their canonical tags. The
+  editor reads the current PDS revision, preserves untouched tags and unknown
+  fields, and uses compare-and-swap. A real stale-revision fixture keeps failing
+  until the user explicitly discards the draft and reloads; the later save keeps
+  the newer unknown fields. Explicit clearing writes `[]`; untouched absence
+  stays absent. Published limits are UTF-8 byte limits, distinct from the legacy
+  Python character limit. Four editor and four upload layouts, plus both phone
+  themes at 140% text, passed against the deployed bundle with fixture PDS writes.
 
 These changes passed their scoped local checks, review, CI and Next deployment
 checks. UI matrices covered phone/desktop, light/dark and enlarged text. Signed-in
@@ -51,6 +73,11 @@ Penny's existing account label was verified through the public labeler:
 The [existing policy](../internal/moderation/label-policy.md) applies the label
 where the listener hides `ai`, while preserving artist and direct access.
 An operator account assertion must remain separate from creator track tags.
+After deployment at `2d705ce1`, default latest returned no Penny tracks in its
+first 50; explicit show-all returned 14 with intact `["ai"]` account labels, and
+her artist page returned three of three with the same labels. Those three public
+reads took 351/238/166 ms end to end, with cache warmth unknown; this is acceptance
+evidence, not a warm regional latency measurement or SLO.
 
 ## remaining acceptance
 
@@ -77,7 +104,7 @@ Backend measurements belong in [perf.md](../../next/backend/docs/perf.md), with
 dataset, cache state and limits. A workstation median is not a production SLO.
 The [November 12 cost snapshot](../../COSTS.md#november-12-daily-driver-cost-checkpoint)
 identifies $16.79/month of Next Fly/R2 estimates, excluding Postgres and other
-coverage gaps. The combined identified footprint is at least $58.28; retiring
+coverage gaps. The combined identified estimate is $58.28, still incomplete; retiring
 legacy API traffic alone does not retire its worker responsibilities. Cheaper
 overall operation has not yet been established.
 

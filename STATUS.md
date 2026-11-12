@@ -4,9 +4,13 @@ Start here for the next agent: [November 12 daily-driver checkpoint](docs/resear
 
 ## Next daily-driver work (2026-11-12)
 
-#2490–#2494, #2496, #2497 and #2499 are deployed to Next: faster composed reads with
+#2490–#2499 and #2501–#2503 are deployed to Next: faster composed reads with
 bounded broken-connection recovery, clearer catalog/Search/Library journeys,
 session-isolated uploads, a simpler creator portal and recoverable profile edits.
+Discovery settings honor creator tags and existing account AI labels; live browser
+checks verify default filtering, explicit show-all and restored defaults.
+Creators can upload/edit canonical tags, with explicit clearing, preserved
+unknown fields and actionable revision-conflict recovery.
 Actual iOS simulator playback now starts, survives navigation/backgrounding and
 pauses/resumes. Physical-device controls and real-account consent/sync acceptance
 remain open; fixture PDS checks do not prove them. Production was not promoted.
@@ -585,16 +589,13 @@ Existing-catalog migration is a separate decision; the spec is still moving
 
 ## cost structure
 
-current monthly costs: ~$68/month (plyr.fm specific) — the live `/costs` feed is the source of truth (#1599); the breakdown below is indicative, not hardcoded. `COSTS.md` is the human-readable audit.
-
-see live dashboard: [plyr.fm/costs](https://plyr.fm/costs)
-
-- fly.io (backend + redis ×2 + transcoder + moderation): the largest line; the prior ~$24 figure omitted both redis apps
-- neon postgres: ~$5/month (moderation endpoint now autoscales 0.25–1 CU + scale-to-zero, was pinned always-on 1 CU)
-- cloudflare (R2 + pages + domain): live feed reads $0 until CF is tagged `project=="plyr.fm"` upstream
-- copyright scanning (AuDD): ~$5-10/month (computed from our own DB)
-- replicate (genre classification): <$1/month (scales to zero, ~$0.00019/run)
-- logfire: $0 (free tier)
+The [November 12 snapshot](COSTS.md#november-12-daily-driver-cost-checkpoint)
+identifies $58.28/month in combined Fly/Cloudflare estimates, including $16.79
+for Next. These are incomplete estimates: Postgres, copyright/AI processing and
+other excluded usage still need reconciliation. The old $68 headline is a June
+checkpoint, not today's total. Next has not yet established cheaper overall
+operation while both stacks run. The [live dashboard](https://plyr.fm/costs)
+and `COSTS.md` must be read with their coverage gaps.
 
 ## admin tooling
 

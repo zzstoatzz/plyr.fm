@@ -291,7 +291,7 @@ These are monthly estimates from measured uptime/list prices, not invoices.
 
 The feed's `plyr.fm` project subtotal is $51.95 ($49.66 Fly, $2.29 Cloudflare).
 It omits $6.33 of identifiable Next Jam/R2 resources marked `unattributed`, so
-the identified combined footprint is at least $58.28 before missing costs.
+the combined identified estimate is $58.28 before missing costs.
 Neon explicitly reports no reconciled usage amount; AuDD, AI services, network,
 stopped root filesystems and other excluded usage are not proved free. The
 November 4 measured Postgres baseline is historical, not a refreshed November 12
