@@ -70,17 +70,35 @@ async function run(browser, width, theme, scale) {
     } }, scope), [authId, did, scope]);
     async function enter() { await page.goto(new URL('/upload', page.url()).href); await page.getByRole('link', { name: 'Sign in', exact: true }).waitFor(); await signIn(); }
     const button = name => page.getByRole('button', { name, exact: true });
+    async function requiredFormats() {
+      const beforeWrites = writes, beforeParts = parts;
+    for (const [name, mimeType] of [['original.AIFF', 'audio/x-aiff'], ['original.webm', 'audio/webm']]) {
+      await enter();
+      const [requiredChooser] = await Promise.all([page.waitForEvent('filechooser'), button('Choose audio').click()]);
+      await requiredChooser.setFiles({ name, mimeType, buffer: audio });
+      await button(name).waitFor();
+      await page.getByRole('textbox', { name: 'Artist', exact: true }).fill('fixture artist');
+      assert.ok(await button('Create MP3 playback').isDisabled());
+      assert.equal(await button('Create MP3 playback').getAttribute('aria-pressed'), 'true');
+      assert.ok(await button('Upload').isDisabled(), 'required conversion needs explicit storage consent before any reservation or blob');
+      assert.equal(writes, beforeWrites); assert.equal(parts, beforeParts);
+      await page.getByText('AIFF and WebM need MP3 conversion for playback.', { exact: true }).waitFor();
+    }
+    }
+    if (process.env.PROCESSING_REQUIRED_ONLY) { await requiredFormats(); return; }
     await enter();
     const [chooser] = await Promise.all([page.waitForEvent('filechooser'), button('Choose audio').click()]);
     await chooser.setFiles({ name: 'original.wav', mimeType: 'audio/wav', buffer: audio });
     await page.getByRole('textbox', { name: 'Artist', exact: true }).fill('fixture artist');
     await button('Create MP3 playback').click();
     assert.ok(await button('Upload').isDisabled());
+    assert.equal(await page.getByRole('textbox', { name: 'MP3 space to reserve (MiB)', exact: true }).count(), 0);
+    await button('Advanced options').click();
     const budget = page.getByRole('textbox', { name: 'MP3 space to reserve (MiB)', exact: true });
     await budget.fill('0'); await button('Use plyr storage').click();
     assert.ok(await button('Upload').isDisabled()); assert.equal(claim, undefined);
     await budget.fill('128'); assert.ok(await button('Upload').isDisabled(), 'budget change requires renewed consent');
-    await budget.scrollIntoViewIfNeeded(); await screenshot(page, `processing-consent-${width}-${theme}-${scale}`);
+    await button('Hide advanced options').click(); await button('Create MP3 playback').scrollIntoViewIfNeeded(); await screenshot(page, `processing-consent-${width}-${theme}-${scale}`);
     await button('Use plyr storage').click(); await button('Upload').click();
     await page.getByText('creating MP3 playback. the original is safely uploaded.', { exact: true }).waitFor();
     assert.equal(parts, 1); assert.equal(writes, 0);
@@ -110,6 +128,7 @@ async function run(browser, width, theme, scale) {
     assert.equal(writes, 1, 'lost response reconciles the exact transformed record without replay');
     assert.equal(parts, 1); await screenshot(page, `processing-published-${width}-${theme}-${scale}`);
     await button('Done with upload').click();
+    await requiredFormats();
     assert.deepEqual(errors, []);
     console.log(`${width}/${theme}/${scale}: consent, immutable reservation, processing reload, capacity stop, retry, archive, transformed canonical recovery and session replacement passed`);
   } catch (error) { console.error(await page.locator('body').innerText()); await screenshot(page, `processing-failure-${width}-${theme}-${scale}`); throw error; }
