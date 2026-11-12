@@ -1,0 +1,50 @@
+name: next audio service
+
+on:
+  pull_request:
+    paths:
+      - "next/services/audio/**"
+      - ".github/workflows/deploy-next-audio.yml"
+  push:
+    branches: [main]
+    paths:
+      - "next/services/audio/**"
+      - ".github/workflows/deploy-next-audio.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency: next-audio-${{ github.event_name == 'pull_request' && github.ref || 'main' }}
+
+jobs:
+  audio:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: next/services/audio
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: next/services/audio/package-lock.json
+      - run: npm ci
+      - run: npm run check && npm test
+      - name: validate worker bundle
+        run: npx --no-install wrangler deploy --dry-run
+      - name: deploy existing next audio service
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          UPLOAD_CAPABILITY_SECRET: ${{ secrets.PLYR_NEXT_UPLOAD_CAPABILITY_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "$UPLOAD_CAPABILITY_SECRET"
+          export UPLOAD_SECRETS_FILE="$(mktemp --suffix=.json)"
+          trap 'rm -f "$UPLOAD_SECRETS_FILE"' EXIT
+          node --input-type=module -e 'import { writeFileSync } from "node:fs"; writeFileSync(process.env.UPLOAD_SECRETS_FILE, JSON.stringify({ UPLOAD_CAPABILITY_SECRET: process.env.UPLOAD_CAPABILITY_SECRET }), { mode: 0o600 });'
+          npm run deploy -- --secrets-file "$UPLOAD_SECRETS_FILE"

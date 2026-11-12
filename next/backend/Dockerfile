@@ -28,15 +28,15 @@ ENV PATH=/opt/zig:$PATH
 ENV ZIG_GLOBAL_CACHE_DIR=/root/.cache/zig
 WORKDIR /build
 
-COPY build.zig build.zig.zon ./
+COPY build.zig build.zig.zon upload_contract.json ./
 COPY --chmod=755 scripts/fetch-interop-fixtures scripts/fetch-interop-fixtures
 RUN --mount=type=cache,target=/root/.cache/zig \
-    scripts/fetch-interop-fixtures && zig build --fetch=all
+    scripts/fetch-interop-fixtures && zig build -Dupload_contract=upload_contract.json --fetch=all
 
 COPY src/ src/
 RUN --mount=type=cache,target=/root/.cache/zig \
     --mount=type=cache,target=/build/.zig-cache \
-    zig build -Doptimize=ReleaseSafe -Dcpu=baseline
+    zig build -Dupload_contract=upload_contract.json -Doptimize=ReleaseSafe -Dcpu=baseline
 
 FROM --platform=$TARGETPLATFORM debian:bookworm-slim
 

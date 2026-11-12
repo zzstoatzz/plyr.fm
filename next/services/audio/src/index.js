@@ -1,3 +1,6 @@
+import { routeUpload } from "./upload-worker.ts";
+export { OwnerUploads } from "./upload-worker.ts";
+
 // Content-addressed audio for next.plyr.fm.
 //
 //   GET/HEAD /audio/{cid}  public, Range-capable, immutable
@@ -18,6 +21,8 @@ const CORS = {
 
 export default {
   async fetch(request, env) {
+    const upload = await routeUpload(request, env);
+    if (upload) return upload;
     const key = new URL(request.url).pathname.slice(1);
     const match = KEY.exec(key);
     if (!match) return text(404, "not found");

@@ -6,6 +6,7 @@ on:
   pull_request:
     paths:
       - "next/backend/**"
+      - "backend/src/backend/upload_contract.json"
       - ".github/workflows/test-zig.yml"
   workflow_dispatch:
 
@@ -50,6 +51,10 @@ jobs:
           python3 -m pip install --user ziglang==0.17.0
           ln -s "$(python3 -c 'import ziglang, os; print(os.path.dirname(ziglang.__file__))')/zig" /usr/local/bin/zig || sudo ln -s "$(python3 -c 'import ziglang, os; print(os.path.dirname(ziglang.__file__))')/zig" /usr/local/bin/zig
           zig version
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
 
       - name: install openssl headers
         run: sudo apt-get update && sudo apt-get install -y libssl-dev
@@ -99,6 +104,9 @@ jobs:
       - name: durable play HTTP contract
         working-directory: backend
         run: uv run python ../next/backend/scripts/test_play_http.py
+
+      - name: upload admission HTTP contract
+        run: node scripts/test-upload-admission.cjs
 
       - name: stale connection read HTTP contract
         working-directory: backend

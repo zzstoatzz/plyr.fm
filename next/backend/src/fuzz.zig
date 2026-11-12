@@ -6,6 +6,7 @@
 const std = @import("std");
 
 const groups = .{
+    .{ "uploads", @import("fuzz/uploads.zig") },
     .{ "identity", @import("fuzz/identity.zig") },
     .{ "http", @import("fuzz/http.zig") },
     .{ "text", @import("fuzz/text.zig") },
