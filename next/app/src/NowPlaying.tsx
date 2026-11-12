@@ -12,7 +12,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { Track } from './api';
 import { useAppearance } from './appearance';
 import { Cover, artistName } from './CatalogPieces';
-import { cardSurface } from './materials';
 import { ShareLink } from './ShareLink';
 import { TrackLikes } from './TrackLikes';
 import { usePlayCount } from './use-play-count';
@@ -22,6 +21,7 @@ import { PlayerControl } from './PlayerControl';
 import { usePlayback } from './playback';
 import { usePlayerDismiss } from './use-player-dismiss';
 import { PlayerFlight } from './PlayerFlight';
+import { NowPlayingDetails } from './NowPlayingDetails';
 import { measure, playerSheet, setFlying, type Rect } from './player-sheet';
 
 const AnimatedSafeAreaView = Animated.createAnimatedComponent(SafeAreaView);
@@ -82,6 +82,12 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
   const flights = morph && present && rects && dismiss.atTop ? rects : undefined;
   const scroller = useRef<ScrollViewInstance>(null);
   useEffect(() => { if (overlay && present) scroller.current?.scrollTo({ y: 0, animated: false }); }, [overlay, present]);
+  const [condensed, setCondensed] = useState(false);
+  const condense = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(condense, { toValue: condensed ? 1 : 0, duration: theme.reduceMotion ? 0 : 160, useNativeDriver: Platform.OS !== 'web' }).start();
+  }, [condensed, condense, theme.reduceMotion]);
+  useEffect(() => { if (!present) setCondensed(false); }, [present]);
   const closeRef = useRef(() => {});
   useEffect(() => {
     if (!overlay || !present || Platform.OS !== 'web') return;
@@ -126,13 +132,7 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
   const titleStyle = { lineHeight: 30 * theme.scale, color: theme.text, fontFamily: theme.fontFamily, fontSize: 25 * theme.scale, fontWeight: '800', letterSpacing: -0.4 } as const;
   const error = player.error || player.status.error;
   const caption = { color: theme.muted, fontFamily: theme.fontFamily, fontSize: 13 * theme.scale };
-  const label = { color: theme.faint, fontFamily: theme.fontFamily, fontSize: 13 * theme.scale, fontWeight: '600' } as const;
-  const upcoming = player.queue.slice(player.index + 1, player.index + 4);
   const plays = usePlayCount(track.id, track.metrics.play_count);
-  const likes = track.metrics.like_count;
-  const added = new Date(track.metadata.created_at);
-  const facts = [`${plays} ${plays === 1 ? 'play' : 'plays'}`, likes > 0 && `${likes} ${likes === 1 ? 'like' : 'likes'}`,
-    !Number.isNaN(added.getTime()) && `added ${added.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }).toLowerCase()}`].filter(Boolean).join(' · ');
 
   closeRef.current = close;
   const sheet = <View ref={node => { backdrop.current = node; dismiss.panelRef(node); }} style={overlay ? [styles.backdrop, styles.overlay, !present && styles.hidden] : styles.backdrop}
@@ -141,17 +141,26 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
         style={[{ transform: [{ translateY: dismiss.translation }] }, styles.panel, styles.full]}>
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: theme.background, opacity: fade(1, 0, 0.85, 1) }]} />
         <Animated.View style={[styles.full, { opacity: fade(1, 0, 0, 0.5) }]}>
-        <View style={styles.header}>
+        <View style={[styles.header, condensed && { borderBottomWidth: StyleSheet.hairlineWidth, borderColor: theme.line }]}>
           {compact && <View {...dismiss.protect}><PlayerControl icon={ChevronDown} label="Close" onPress={close} /></View>}
           <View testID="now-playing-dismiss-region" style={[styles.dismissRegion, Platform.OS === 'web' && compact && touchHeader]}>
-          <Text accessibilityRole="header"
+          <Animated.View style={{ opacity: condense.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }}><Text accessibilityRole="header"
             style={[styles.headerTitle, compact && styles.centerTitle,
-              { color: theme.muted, fontSize: 14 * theme.scale, fontFamily: theme.fontFamily }]}>now playing</Text>
+              { color: theme.muted, fontSize: 14 * theme.scale, fontFamily: theme.fontFamily }]}>now playing</Text></Animated.View>
+          <Animated.View testID="now-playing-condensed" pointerEvents="none" aria-hidden={!condensed} style={[StyleSheet.absoluteFill, styles.condensed, { opacity: condense }]}>
+            <Cover instant uri={trackArtwork(track)} size={36} radius={6} />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text numberOfLines={1} style={{ color: theme.text, fontFamily: theme.fontFamily, fontSize: 15 * theme.scale, fontWeight: '700' }}>{track.metadata.title}</Text>
+              <Text numberOfLines={1} style={{ color: theme.muted, fontFamily: theme.fontFamily, fontSize: 12 * theme.scale }}>{artistName(track)}</Text>
+            </View>
+          </Animated.View>
           </View>
-          {compact ? <View style={styles.headerSpacer} /> : <View {...dismiss.protect}><PlayerControl icon={X} label="Close" onPress={close} /></View>}
+          {compact ? <Animated.View {...dismiss.protect} pointerEvents={condensed ? 'auto' : 'none'} aria-hidden={!condensed} style={{ opacity: condense }}>
+            <PlayerControl primary icon={playing ? Pause : Play} label={playing ? 'Pause' : 'Play'} onPress={() => player.setPlaying(!playing)} busy={player.loading} />
+          </Animated.View> : <View {...dismiss.protect}><PlayerControl icon={X} label="Close" onPress={close} /></View>}
         </View>
         <Animated.View {...dismiss.contentStartHandlers} style={[styles.scrollRegion, morph && { transform: [{ translateY: fade(0, -0.6 * rest, 0, 1) }] }]}>
-          <ScrollView ref={scroller} testID="now-playing-scroll" onScroll={dismiss.onScroll} scrollEventThrottle={16} scrollEnabled={!dismiss.dragging}
+          <ScrollView ref={scroller} testID="now-playing-scroll" onScroll={event => { dismiss.onScroll(event); const past = event.nativeEvent.contentOffset.y > artwork + 60; if (past !== condensed) setCondensed(past); }} scrollEventThrottle={16} scrollEnabled={!dismiss.dragging}
             style={Platform.OS === 'web' && compact ? scrollTouch : undefined} contentContainerStyle={[styles.content, sideBySide && styles.desktopContent]} alwaysBounceVertical={false}>
             <View testID="now-playing-artwork" style={[styles.art, carried]}>
               <View ref={artRef}><Cover uri={trackArtwork(track)} size={artwork} radius={16} /></View>
@@ -195,34 +204,7 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
                 <View {...dismiss.protect}><PlayerControl icon={ListMusic} label="Queue" onPress={() => navigate('/queue')} /></View>
               </View>
               {sideBySide && <View style={{ alignItems: 'center' }}><PlayerVolume /></View>}
-              {upcoming.length > 0 && <View testID="now-playing-up-next" style={[styles.card, cardSurface(theme)]}>
-                <View style={styles.cardHeader}>
-                  <Text accessibilityRole="header" aria-level={2} style={label}>up next</Text>
-                  <View {...dismiss.protect}><Pressable accessibilityRole="button" accessibilityLabel="Open queue" style={styles.cardLink} onPress={() => navigate('/queue')}>
-                    <Text style={{ ...caption, color: theme.accent }}>open queue</Text>
-                  </Pressable></View>
-                </View>
-                {upcoming.map((next, offset) => <View key={`${next.id}:${offset}`} {...dismiss.protect}>
-                  <Pressable accessibilityRole="button" accessibilityLabel={`Play ${next.metadata.title} by ${artistName(next)}`}
-                    onPress={() => player.jump(player.index + 1 + offset)} style={({ pressed }) => [styles.next, { opacity: pressed ? 0.65 : 1 }]}>
-                    <Cover uri={trackArtwork(next)} size={40} />
-                    <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-                      <Text numberOfLines={1} style={{ color: theme.text, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale, fontWeight: '600' }}>{next.metadata.title}</Text>
-                      <Text numberOfLines={1} style={caption}>{artistName(next)}</Text>
-                    </View>
-                  </Pressable>
-                </View>)}
-              </View>}
-              <View testID="now-playing-about" style={[styles.card, cardSurface(theme)]}>
-                <Text accessibilityRole="header" aria-level={2} style={label}>about this track</Text>
-                {track.metadata.description ? <Text style={{ color: theme.text, fontFamily: theme.fontFamily, fontSize: 15 * theme.scale, lineHeight: 22 * theme.scale }}>{track.metadata.description}</Text> : null}
-                {track.metadata.album ? <Text style={caption}>from {track.metadata.album}</Text> : null}
-                <Text style={caption}>{facts}</Text>
-                <View {...dismiss.protect} style={{ alignSelf: 'flex-start' }}><Pressable accessibilityRole="button" accessibilityLabel="Open track page" style={styles.cardLink}
-                  onPress={() => navigate(`/track/${track.id}`)}>
-                  <Text style={{ ...caption, color: theme.accent }}>open track page</Text>
-                </Pressable></View>
-              </View>
+              <NowPlayingDetails track={track} plays={plays} protect={dismiss.protect} navigate={navigate} />
             </View>
           </ScrollView>
         </Animated.View>
@@ -253,7 +235,7 @@ const styles = StyleSheet.create({
   dismissRegion: { flex: 1, minHeight: 50, justifyContent: 'center' },
   headerTitle: { fontWeight: '600', textTransform: 'lowercase' },
   centerTitle: { textAlign: 'center' },
-  headerSpacer: { width: 44 },
+  condensed: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 4 },
   scrollRegion: { flex: 1, minHeight: 0 },
   content: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16, gap: 20, alignItems: 'center' },
   desktopContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexGrow: 1, width: '100%', maxWidth: 1440, alignSelf: 'center', padding: 40, gap: 56 },
@@ -267,8 +249,4 @@ const styles = StyleSheet.create({
   numeric: { fontVariant: ['tabular-nums'] },
   transport: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly' },
   utilities: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  card: { padding: 16, gap: 10, borderRadius: 12 },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 24 },
-  cardLink: { minHeight: 44, minWidth: 44, justifyContent: 'center' },
-  next: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 48 }
 });
