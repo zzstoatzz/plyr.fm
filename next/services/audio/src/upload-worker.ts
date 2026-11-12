@@ -52,7 +52,7 @@ export class OwnerUploads extends DurableObject<UploadEnv> {
         if (request.method === "POST" && pieces[5] === "activate" && pieces.length === 6) return Response.json(await this.sessions.activate(session));
         if (request.method === "DELETE" && pieces.length === 5) return Response.json(await this.sessions.cancel(session));
         throw new UploadFailure(405, "method not allowed");
-      });
+      }, request.signal);
     } catch (error) {
       return Response.json({ error: error instanceof UploadFailure ? error.message : "upload unavailable" }, { status: error instanceof UploadFailure ? error.status : 503 });
     }
