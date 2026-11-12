@@ -744,7 +744,7 @@ fn duplicateOptional(allocator: std.mem.Allocator, value: ?[]const u8) !?[]const
 }
 
 fn parseLabels(allocator: std.mem.Allocator, raw: []const u8) ![]const []const u8 {
-    const parsed = try std.json.parseFromSlice([]const []const u8, allocator, raw, .{});
+    const parsed = try std.json.parseFromSlice([]const []const u8, allocator, raw, .{ .allocate = .alloc_always });
     return parsed.value;
 }
 
@@ -1679,3 +1679,13 @@ const tags_query =
     \\ ORDER BY COALESCE(sum(metrics.play_count),0) DESC, tag.name COLLATE "C"
     \\ LIMIT $2::bigint
 ;
+
+test "composed labels own strings beyond the PostgreSQL row buffer" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var row_buffer = "[\"ai\",\"sexual\"]".*;
+    const labels = try parseLabels(arena.allocator(), &row_buffer);
+    @memset(&row_buffer, 'x');
+    try std.testing.expectEqualStrings("ai", labels[0]);
+    try std.testing.expectEqualStrings("sexual", labels[1]);
+}
