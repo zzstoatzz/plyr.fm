@@ -20,6 +20,10 @@ on:
         description: Capture one existing public record proof without creating a fixture
         type: boolean
         default: false
+      full_size:
+        description: Verify 1.5 GiB through real R2 with the disposable integration account
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -29,7 +33,7 @@ concurrency: next-audio-${{ github.event_name == 'pull_request' && github.ref ||
 jobs:
   audio:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: next/services/audio
@@ -45,7 +49,7 @@ jobs:
       - name: install fixture SDK
         run: npm ci --prefix ../../app
       - name: check fixture cleanup
-        run: node --experimental-strip-types --test scripts/verify-upload.node-check.mjs
+        run: node --experimental-strip-types --test scripts/*node-check.mjs
       - name: validate worker bundle
         run: npx --no-install wrangler deploy --dry-run
       - name: deploy existing next audio service
@@ -62,7 +66,7 @@ jobs:
           node --input-type=module -e 'import { writeFileSync } from "node:fs"; writeFileSync(process.env.UPLOAD_SECRETS_FILE, JSON.stringify({ UPLOAD_CAPABILITY_SECRET: process.env.UPLOAD_CAPABILITY_SECRET }), { mode: 0o600 });'
           npm run deploy -- --secrets-file "$UPLOAD_SECRETS_FILE"
       - name: verify deployed upload activation
-        if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && (inputs.verify_upload || inputs.diagnose_upload)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && (inputs.verify_upload || inputs.diagnose_upload || inputs.full_size)
         env:
           ZAT_TEST_PDS: ${{ secrets.ZAT_TEST_PDS }}
           ZAT_TEST_HANDLE: ${{ secrets.ZAT_TEST_HANDLE }}
@@ -70,7 +74,16 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           DIAGNOSE_UPLOAD: ${{ inputs.diagnose_upload }}
+          VERIFY_UPLOAD_FULLSIZE: ${{ inputs.full_size }}
         run: node --experimental-strip-types scripts/verify-upload.mjs
+      - name: retain full-size acceptance and exact cleanup receipt
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.full_size && !inputs.diagnose_upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-size-upload-acceptance
+          path: next/services/audio/upload-acceptance
+          retention-days: 3
+          if-no-files-found: error
       - name: retain bounded public proof
         if: always() && github.event_name == 'workflow_dispatch' && inputs.diagnose_upload
         uses: actions/upload-artifact@v4

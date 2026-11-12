@@ -133,6 +133,25 @@ the account's two-session quota. The fixture has no production target option.
 It uses app-password service authentication; real browser/native OAuth consent
 for the new upload permission remains a separate acceptance requirement.
 
+Use `full_size=true` on that same manual workflow for actual 1.5 GiB R2
+acceptance. It is restricted to a Linux GitHub Actions runner. A deterministic
+192 kHz stereo WAV is generated in at most 10 MiB reads; the real client
+transport and transfer engine upload all 154 parts. The fixture deliberately
+loses one acknowledged part response and resumes the same reservation after
+checking its receipts. Playback is verified by streaming SHA-256 and exact byte
+count, with attachment HEAD/Range checks. No complete-file buffer is used.
+The receipt includes maximum read size and peak process RSS. This exercises raw
+public storage, not transcoding or browser/native OAuth consent.
+
+Full-size runs retain safe reservation identifiers, verification metrics and
+cleanup results for three days; credentials are never included. The same exact
+record/object cleanup runs on failure, with a separate 20-second cancellation
+deadline. A failed completed upload or failed cancellation can still retain quota,
+even after object deletion. Stop further full-size runs in that case and inspect
+the retained reservation: the account has only two unfinished slots, and deleting
+an object does not release its receipt's quota. Do not reset Durable Object state
+or describe this as successful cleanup of the reservation.
+
 For an authority failure, dispatch `diagnose_upload=true` instead. This logs in
 to the same test account but creates no records or uploads. It inspects at most
 three public collections with `limit=1`, then retains one public record CAR

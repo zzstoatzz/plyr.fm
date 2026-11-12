@@ -4,7 +4,9 @@ import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { uploadStatus } from '../../../app/src/publishing/upload-model.ts';
+import { MAX_SERVICE_AUDIO_BYTES, UPLOAD_PART_BYTES } from '../../../app/src/publishing/upload-model.ts';
+import { createUploadTransport } from '../../../app/src/publishing/upload-transport.ts';
+import { waveSource, verifyStream, transferFixture } from './upload-fixture-source.mjs';
 
 const requireApp = createRequire(new URL('../../../app/package.json', import.meta.url));
 const { TID } = requireApp('@atproto/common-web');
@@ -29,15 +31,6 @@ async function json(url, init = {}) {
 
 function post(value, token) {
   return { method: 'POST', headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(value) };
-}
-
-function wave() {
-  const bytes = Buffer.alloc(4044);
-  bytes.write('RIFF'); bytes.writeUInt32LE(bytes.length - 8, 4); bytes.write('WAVEfmt ', 8);
-  bytes.writeUInt32LE(16, 16); bytes.writeUInt16LE(1, 20); bytes.writeUInt16LE(1, 22);
-  bytes.writeUInt32LE(8000, 24); bytes.writeUInt32LE(16000, 28); bytes.writeUInt16LE(2, 32); bytes.writeUInt16LE(16, 34);
-  bytes.write('data', 36); bytes.writeUInt32LE(4000, 40);
-  return bytes;
 }
 
 async function bounded(url, maximum) {
@@ -105,6 +98,8 @@ function deleteFixtureObject(object) {
 export async function main({ deleteObject = deleteFixtureObject } = {}) {
   for (const name of ['ZAT_TEST_PDS', 'ZAT_TEST_HANDLE', 'ZAT_TEST_PASSWORD', 'CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID']) assert.ok(process.env[name], `missing ${name}`);
   assert.ok(process.env.GITHUB_REF === 'refs/heads/main' && process.env.GITHUB_EVENT_NAME === 'workflow_dispatch', 'manual main-only fixture');
+  const fullSize = process.env.VERIFY_UPLOAD_FULLSIZE === 'true';
+  if (fullSize) assert.ok(process.env.GITHUB_ACTIONS === 'true' && process.env.RUNNER_OS === 'Linux', 'full-size fixture is cloud-only');
   const pds = new URL(process.env.ZAT_TEST_PDS);
   assert.ok(pds.protocol === 'https:' && !pds.username && !pds.password, 'invalid fixture PDS');
   const xrpc = method => new URL(`/xrpc/${method}`, pds).href;
@@ -118,56 +113,89 @@ export async function main({ deleteObject = deleteFixtureObject } = {}) {
   const recordUri = `at://${owner}/${collection}/${rkey}`;
   const expectedUploadUrl = `${audioOrigin}/v1/uploads/${ownerHash}/${uploadId}`;
   const audioUrl = `${audioOrigin}/media/${ownerHash}/${uploadId}`;
-  const bytes = wave();
-  const operation = { owner, collection, rkey, uri: recordUri, uploadId, name: 'fixture.wav', sizeBytes: bytes.length, contentType: 'audio/wav', fileType: 'wav', record: {} };
+  const source = waveSource(fullSize ? MAX_SERVICE_AUDIO_BYTES : 4044);
+  const operation = { owner, collection, rkey, uri: recordUri, uploadId, name: 'fixture.wav', sizeBytes: source.size, contentType: 'audio/wav', fileType: 'wav', record: {} };
+  const digest = bytes => createHash('sha256').update(bytes).digest('hex');
+  const auth = { did: owner, uploadStorage: true, agent: {
+    handle(path, init) {
+      const endpoint = new URL(path, pds);
+      assert.equal(endpoint.origin, pds.origin);
+      assert.equal(endpoint.pathname, '/xrpc/com.atproto.server.getServiceAuth');
+      return request(endpoint.href, { ...init, headers: { authorization: `Bearer ${session.accessJwt}` } });
+    },
+  } };
+  const observedFetch = async (url, init) => {
+    const response = await fetch(url, init);
+    if (!response.ok) {
+      const failure = await response.json().catch(() => ({}));
+      const known = ['record authority unavailable', 'invalid authority response', 'upload unavailable'];
+      return Response.json({ error: known.includes(failure.error) ? failure.error : 'upload request failed' }, { status: response.status });
+    }
+    if (String(url) === `${coordinator}/v1/uploads/authorize` && response.ok) {
+      const admission = await response.clone().json();
+      const expiresInMs = admission.expiresAt - Date.now();
+      assert.equal(admission.uploadUrl, expectedUploadUrl);
+      assert.ok(Number.isSafeInteger(admission.expiresAt) && expiresInMs > 0 && expiresInMs <= 300000);
+      console.log(JSON.stringify({ admission: { expiresInMs, sizeBytes: source.size } }));
+    }
+    return response;
+  };
+  const makeTransport = (timeout = 12 * 60 * 1000) => createUploadTransport(auth, operation, () => {}, AbortSignal.timeout(timeout), observedFetch);
+  const transport = makeTransport();
+  const artifact = fullSize ? 'upload-acceptance/reservation.json' : null;
+  if (artifact) {
+    await mkdir('upload-acceptance', { recursive: true });
+    await writeFile(artifact, JSON.stringify({ owner, uploadId, recordUri, object, sizeBytes: source.size }));
+  }
   await deleteObject(object);
-  let capability, started = false, finishing = false, completed = false, published = false;
+  let started = false, completed = false, published = false, cancelled = false;
   let failure;
   try {
-    const service = new URL(xrpc('com.atproto.server.getServiceAuth'));
-    service.searchParams.set('aud', 'did:web:plyr-jams-next.fly.dev#jams');
-    service.searchParams.set('lxm', 'fm.plyr.upload.authorize');
-    const { token } = await json(service.href, { headers: { authorization: `Bearer ${session.accessJwt}` } });
-    assert.ok(typeof token === 'string', 'missing service token');
-    const admitted = await json(`${coordinator}/v1/uploads/authorize`, post({ serviceToken: token, uploadId, recordUri, sizeBytes: bytes.length, contentType: 'audio/wav', fileType: 'wav', visibility: 'public', downloadPolicy: 'open' }));
-    assert.ok(admitted.uploadUrl === expectedUploadUrl && typeof admitted.capability === 'string', 'unexpected admission binding');
-    const expiresInMs = admitted.expiresAt - Date.now();
-    assert.ok(Number.isSafeInteger(admitted.expiresAt) && expiresInMs > 0 && expiresInMs <= 300000, 'invalid millisecond capability expiry');
-    console.log(JSON.stringify({ admission: { expiresInMs, sizeBytes: bytes.length } }));
-    capability = admitted.capability;
-    const headers = { authorization: `Bearer ${capability}` };
-    const initial = await json(expectedUploadUrl, { method: 'POST', headers }); started = true;
-    uploadStatus(initial, operation);
-    await json(`${expectedUploadUrl}/parts/1`, { method: 'PUT', headers, body: bytes });
-    const status = await json(expectedUploadUrl, { headers });
-    uploadStatus(status, operation);
-    assert.ok(status.partSizeBytes === 10485760 && status.partCount === 1 && status.reservedBytes === bytes.length && status.recoveryRequired === false, 'invalid transfer status');
+    started = true;
+    await transport.start();
+    const transfer = {
+      status: transport.status,
+      part: transport.part,
+      async finish() {
+        const status = await transport.finish(); completed = true;
+        return status;
+      },
+    };
+    const { finished, lostAcknowledgement } = await transferFixture(operation, source, transfer, fullSize);
+    assert.equal(finished.audioUrl, audioUrl);
+    const status = await transport.status();
+    assert.equal(status.partSizeBytes, UPLOAD_PART_BYTES);
+    assert.equal(status.partCount, Math.ceil(source.size / UPLOAD_PART_BYTES));
+    assert.equal(status.reservedBytes, source.size);
+    assert.equal(status.recoveryRequired, false);
     assert.deepEqual(status.reservedDigests, status.receivedParts);
-    console.log(JSON.stringify({ status: { partSizeBytes: status.partSizeBytes, partCount: status.partCount, reservedBytes: status.reservedBytes, recoveryRequired: status.recoveryRequired, receivedParts: status.receivedParts, reservedDigests: status.reservedDigests } }));
-    assert.ok(status.receivedParts.length === 1 && status.receivedParts[0].sha256 === createHash('sha256').update(bytes).digest('hex'), 'receipt digest mismatch');
-    finishing = true;
-    const finished = await json(`${expectedUploadUrl}/finish`, { method: 'POST', headers }); completed = true;
-    uploadStatus(finished, operation);
-    assert.ok(finished.audioUrl === audioUrl, 'unexpected published URL');
+    assert.equal(status.receivedParts.length, status.partCount);
+    for (const part of status.receivedParts) {
+      const offset = (part.number - 1) * UPLOAD_PART_BYTES;
+      assert.equal(part.sha256, digest(source.read(offset, Math.min(UPLOAD_PART_BYTES, source.size - offset))));
+    }
+    console.log(JSON.stringify({ status: { partSizeBytes: status.partSizeBytes, partCount: status.partCount, reservedBytes: status.reservedBytes, recoveryRequired: status.recoveryRequired, receiptCount: status.receivedParts.length } }));
     for (const method of ['GET', 'HEAD']) assert.equal((await request(audioUrl, { method })).status, 404);
     const record = { $type: collection, title: `next upload integration-test ${uploadId}`, artist: 'integration test', fileType: 'wav', createdAt: new Date().toISOString(), audioUrl, downloadPolicy: 'open', tags: ['integration-test'] };
     await json(xrpc('com.atproto.repo.createRecord'), post({ repo: owner, collection, rkey, record }, session.accessJwt));
-    const activated = await json(`${expectedUploadUrl}/activate`, { method: 'POST', headers });
+    const activated = await transport.activate();
     assert.ok(activated.state === 'published' && activated.reservedBytes === 0, 'activation did not release quota'); published = true;
-    uploadStatus(activated, operation);
-    const read = await request(audioUrl);
+    const read = await fetch(audioUrl, { redirect: 'error', signal: AbortSignal.timeout(5 * 60 * 1000) });
     assert.equal(read.status, 200); assert.equal(read.headers.get('x-content-type-options'), 'nosniff');
     assert.equal(read.headers.get('content-disposition'), null);
-    assert.deepEqual(Buffer.from(await read.arrayBuffer()), bytes);
+    const verified = await verifyStream(read, source);
     const downloadUrl = `${audioUrl}?download=1`;
     const head = await request(downloadUrl, { method: 'HEAD' });
-    assert.equal(head.status, 200); assert.equal(head.headers.get('content-length'), String(bytes.length));
+    assert.equal(head.status, 200); assert.equal(head.headers.get('content-length'), String(source.size));
     assert.equal(head.headers.get('content-disposition'), 'attachment; filename="audio.wav"');
     const range = await request(downloadUrl, { headers: { range: 'bytes=0-43' } });
-    assert.equal(range.status, 206); assert.equal(range.headers.get('content-range'), `bytes 0-43/${bytes.length}`);
+    assert.equal(range.status, 206); assert.equal(range.headers.get('content-range'), `bytes 0-43/${source.size}`);
     assert.equal(range.headers.get('content-disposition'), 'attachment; filename="audio.wav"');
-    assert.deepEqual(Buffer.from(await range.arrayBuffer()), bytes.subarray(0, 44));
-    console.log('deployed admission, private staging, signed activation, bytes, attachment HEAD and range passed');
+    assert.deepEqual(Buffer.from(await range.arrayBuffer()), source.read(0, 44));
+    const receipt = { ...verified, partCount: status.partCount, lostAcknowledgement, peakRssBytes: process.resourceUsage().maxRSS * 1024 };
+    if (artifact) await writeFile('upload-acceptance/receipt.json', JSON.stringify(receipt));
+    console.log(JSON.stringify(receipt));
+    console.log('deployed client transfer, signed activation, streaming bytes, attachment HEAD and range passed');
   } catch (error) { failure = error; }
   finally {
     const cleanup = [];
@@ -177,13 +205,19 @@ export async function main({ deleteObject = deleteFixtureObject } = {}) {
     }
     catch (error) { cleanup.push(error); }
     if (started && !completed) {
-      try { await json(expectedUploadUrl, { method: 'DELETE', headers: { authorization: `Bearer ${capability}` } }); }
+      try {
+        const status = await makeTransport(20000).cancel();
+        assert.ok(status.state === 'cancelled' && status.reservedBytes === 0, 'fixture cancellation is unresolved');
+        cancelled = true;
+      }
       catch (error) { cleanup.push(error); }
     }
     try { await deleteObject(object); }
     catch { cleanup.push(new Error('exact fixture R2 cleanup failed')); }
     console.log(`fixture cleanup: exact record and object only; completed=${completed}, published=${published}; receipt metadata retained`);
-    if (finishing && !published) console.error('failed activation may retain one 4044-byte quota reservation for fixture recovery');
+    const retainedQuotaPossible = started && !published && !cancelled;
+    if (retainedQuotaPossible) console.error(`failed fixture may retain one ${source.size}-byte quota reservation; do not start another full-size fixture`);
+    if (artifact) await writeFile('upload-acceptance/cleanup.json', JSON.stringify({ completed, published, cancelled, retainedQuotaPossible, cleanupFailed: cleanup.length > 0 }));
     if (cleanup.length) throw new AggregateError([...(failure ? [failure] : []), ...cleanup], 'fixture cleanup failed');
   }
   if (failure) throw failure;
