@@ -41,7 +41,7 @@ jobs:
       - name: install fixture SDK
         run: npm ci --prefix ../../app
       - name: check fixture cleanup
-        run: node --test scripts/verify-upload.test.mjs
+        run: node --test scripts/verify-upload.node-check.mjs
       - name: validate worker bundle
         run: npx --no-install wrangler deploy --dry-run
       - name: deploy existing next audio service
