@@ -165,14 +165,22 @@ impl Runner {
     }
 
     async fn heartbeat(&self, attempt: &Attempt) -> anyhow::Result<()> {
-        self.request(attempt, reqwest::Method::POST, "heartbeat")
-            .timeout(Duration::from_secs(15))
-            .send()
-            .await?
-            .error_for_status()
-            .context("processing authority unavailable")?;
+        accepted(
+            self.request(attempt, reqwest::Method::POST, "heartbeat")
+                .timeout(Duration::from_secs(15))
+                .send()
+                .await?,
+        )
+        .context("processing authority unavailable")?;
         Ok(())
     }
+}
+
+fn accepted(response: reqwest::Response) -> anyhow::Result<reqwest::Response> {
+    if !response.status().is_success() {
+        bail!("processing callback rejected");
+    }
+    Ok(response)
 }
 
 async fn run(runner: &Runner, attempt: &Attempt) -> anyhow::Result<()> {
@@ -296,36 +304,38 @@ mod tests {
 
     #[tokio::test]
     async fn rejected_lease_prevents_source_access() {
-        let reads = Arc::new(std::sync::atomic::AtomicUsize::new(0));
-        let observed = reads.clone();
-        let app = Router::new()
-            .route(
-                "/v1/processing/:id/:generation/heartbeat",
-                post(|| async { StatusCode::CONFLICT }),
-            )
-            .route(
-                "/v1/processing/:id/:generation/source",
-                axum::routing::get(move || {
-                    let reads = observed.clone();
-                    async move {
-                        reads.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                        StatusCode::OK
-                    }
-                }),
-            );
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let origin = format!("http://{}", listener.local_addr().unwrap());
-        let server = tokio::spawn(async move {
-            axum::serve(listener, app).await.unwrap();
-        });
-        let runner = Runner {
-            origin: origin.parse().unwrap(),
-            auth: "fixture".into(),
-            client: reqwest::Client::new(),
-            active: Mutex::new(None),
-        };
-        assert!(run(&runner, &attempt()).await.is_err());
-        assert_eq!(reads.load(std::sync::atomic::Ordering::SeqCst), 0);
-        server.abort();
+        for status in [StatusCode::CONFLICT, StatusCode::FOUND] {
+            let reads = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let observed = reads.clone();
+            let app = Router::new()
+                .route(
+                    "/v1/processing/:id/:generation/heartbeat",
+                    post(move || async move { status }),
+                )
+                .route(
+                    "/v1/processing/:id/:generation/source",
+                    axum::routing::get(move || {
+                        let reads = observed.clone();
+                        async move {
+                            reads.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                            StatusCode::OK
+                        }
+                    }),
+                );
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let origin = format!("http://{}", listener.local_addr().unwrap());
+            let server = tokio::spawn(async move {
+                axum::serve(listener, app).await.unwrap();
+            });
+            let runner = Runner {
+                origin: origin.parse().unwrap(),
+                auth: "fixture".into(),
+                client: reqwest::Client::new(),
+                active: Mutex::new(None),
+            };
+            assert!(run(&runner, &attempt()).await.is_err());
+            assert_eq!(reads.load(std::sync::atomic::Ordering::SeqCst), 0);
+            server.abort();
+        }
     }
 }

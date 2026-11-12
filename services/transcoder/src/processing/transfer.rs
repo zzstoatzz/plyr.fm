@@ -9,7 +9,7 @@ use tokio::{
     process::Command,
 };
 
-use super::{Attempt, Receipt, Runner, PART_BYTES};
+use super::{accepted, Attempt, Receipt, Runner, PART_BYTES};
 
 pub(super) async fn process(runner: &Runner, attempt: &Attempt) -> anyhow::Result<()> {
     let directory = tempfile::tempdir()?;
@@ -21,11 +21,12 @@ pub(super) async fn process(runner: &Runner, attempt: &Attempt) -> anyhow::Resul
 }
 
 async fn download(runner: &Runner, attempt: &Attempt, path: &Path) -> anyhow::Result<()> {
-    let mut response = runner
-        .request(attempt, reqwest::Method::GET, "source")
-        .send()
-        .await?
-        .error_for_status()?;
+    let mut response = accepted(
+        runner
+            .request(attempt, reqwest::Method::GET, "source")
+            .send()
+            .await?,
+    )?;
     if response.content_length() != Some(attempt.source_bytes) {
         bail!("source length does not match reservation");
     }
@@ -121,29 +122,31 @@ async fn upload(runner: &Runner, attempt: &Attempt, path: &Path) -> anyhow::Resu
         file.read_exact(&mut bytes).await?;
         let sha256 = format!("{:x}", Sha256::digest(&bytes));
         let number = parts.len() + 1;
-        runner
-            .request(attempt, reqwest::Method::PUT, &format!("parts/{number}"))
-            .header("X-Part-SHA256", &sha256)
-            .header("Content-Type", "application/octet-stream")
-            .timeout(Duration::from_secs(120))
-            .body(bytes)
-            .send()
-            .await?
-            .error_for_status()?;
+        accepted(
+            runner
+                .request(attempt, reqwest::Method::PUT, &format!("parts/{number}"))
+                .header("X-Part-SHA256", &sha256)
+                .header("Content-Type", "application/octet-stream")
+                .timeout(Duration::from_secs(120))
+                .body(bytes)
+                .send()
+                .await?,
+        )?;
         parts.push(Receipt { number, sha256 });
         remaining -= length as u64;
     }
-    runner
-        .request(attempt, reqwest::Method::POST, "complete")
-        .timeout(Duration::from_secs(30))
-        .json(&Completion {
-            size_bytes: size,
-            content_type: "audio/mpeg",
-            parts,
-        })
-        .send()
-        .await?
-        .error_for_status()?;
+    accepted(
+        runner
+            .request(attempt, reqwest::Method::POST, "complete")
+            .timeout(Duration::from_secs(30))
+            .json(&Completion {
+                size_bytes: size,
+                content_type: "audio/mpeg",
+                parts,
+            })
+            .send()
+            .await?,
+    )?;
     Ok(())
 }
 
