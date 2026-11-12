@@ -5,7 +5,7 @@ import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-au
 import { api, type Track } from './api';
 import { useAuth } from './auth';
 import { getAuth } from './auth-state';
-import { editPrivateQueue, isPrivateTrack, privateSpace } from './publishing/private-track';
+import { editPrivateQueue, isPrivateTrack, privateSpace, withoutPrivateTrack } from './publishing/private-track';
 import { blobUrl } from './identity';
 import { gatedAudioUrl, releaseGatedAudioUrl } from './gated-audio';
 import { useJamPlayback, jamTrack, type ActiveJam } from './use-jam-playback';
@@ -25,6 +25,8 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
   const accounting = usePlayerAccounting(player);
   const [queue, setQueue] = useState<Track[]>([]);
   const [index, setIndex] = useState(-1);
+  const privateQueue = useRef({ queue, index });
+  privateQueue.current = { queue, index };
   const [privatePlayback, setPrivatePlayback] = useState(false);
   const privateMode = useRef(false);
   function privateOutput(value: boolean) { privateMode.current = value; setPrivatePlayback(value); }
@@ -325,6 +327,19 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     canSeek: !jam.jam || jam.jam.canSeek && jam.jam.phase === 'connected',
     seekPreview: jam.jam ? jam.jam.pendingSeekMs === undefined ? undefined : jam.jam.pendingSeekMs / 1000 : (pendingSeek?.source === sequence.current ? pendingSeek.seconds : undefined) ?? (remoteOutput || privatePlayback ? undefined : personal.restoredPosition),
     privatePlayback,
+    forgetPrivateTrack: uri => {
+      if (!privateMode.current || getAuth().did !== auth.did || getAuth().rpc !== auth.rpc) return;
+      const previous = privateQueue.current;
+      const next = withoutPrivateTrack(previous.queue, previous.index, uri);
+      if (next.currentRemoved) {
+        accounting.stop(); sourceEvents.current?.remove(); sequence.current++;
+        player.pause(); player.replace(null);
+        if (objectUrl.current) releaseGatedAudioUrl(objectUrl.current);
+        objectUrl.current = null; setReady(false); setResolving(false); setStarting(null); setError(null); setPendingSeek(null);
+      }
+      privateQueue.current = { queue: next.queue, index: next.index };
+      setQueue(next.queue); setIndex(next.index);
+    },
     joinJam: input => { if (privateMode.current) { setError('play a public track before joining a jam.'); return; } personal.suspend(); jam.join(input); },
     leaveJam: (restore = true) => { jam.leave(false); if (restore) personal.restore(); },
     jamCommand: intent => intent.action === 'play' || intent.action === 'pause' ? jam.setPlaying(intent.action === 'play', jam.jam?.state) : jam.command(intent),
@@ -398,6 +413,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
 }
 
 interface Playback {
+  forgetPrivateTrack: (uri: string) => void;
   privatePlayback: boolean;
   jam?: ActiveJam;
   canSeek: boolean;

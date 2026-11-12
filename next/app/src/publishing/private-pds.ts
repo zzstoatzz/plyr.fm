@@ -1,3 +1,4 @@
+import { privateDeletion } from './private-delete';
 import { TID } from '@atproto/common-web';
 import type { Auth } from '../auth-state';
 import { getAuth } from '../auth-state';
@@ -123,7 +124,15 @@ export function privatePds(auth: Auth) {
       throw error;
     }
   }
-  return { upload, recover, list,
+  const deletion = privateDeletion({ owner, current, policy, allowed: auth.privateDeleting,
+    pending: () => privateCreateStorage.load(current()),
+    read: async rkey => {
+      try { return await request('com.atproto.space.getRecord', { space: privateSpace(current()), repo: current(), collection: NSID.track, rkey }); }
+      catch (error) { if (error instanceof PrivateRequestError && error.code === 'RecordNotFound') return undefined; throw error; }
+    },
+    send: rkey => request('com.atproto.space.deleteRecord', undefined, { space: privateSpace(current()), repo: current(), collection: NSID.track, rkey }),
+  });
+  return { upload, recover, list, deletion,
     pending: async () => privateCreateStorage.load(current()),
     archive: async (operation: PrivateCreate, archived: boolean) => { owned(operation); await privateCreateStorage.archive(operation, archived); },
     dismiss: async (operation: PrivateCreate, keepExisting = false) => {

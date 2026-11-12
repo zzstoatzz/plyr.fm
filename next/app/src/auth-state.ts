@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { Client } from '@atcute/client';
-import { BASE_SCOPE_PARTS, SCOPE_PARTS, SYNC_SCOPE_PARTS, hasJamGrant, hasSyncGrant, hasPrivatePublishGrant } from './auth-config';
+import { BASE_SCOPE_PARTS, SCOPE_PARTS, SYNC_SCOPE_PARTS, hasJamGrant, hasSyncGrant, hasPrivatePublishGrant, hasPrivateDeleteGrant } from './auth-config';
 import { didDocument, pdsEndpoint, pdsSupportsSpaces } from './identity';
 
 export type Did = `did:${string}:${string}`;
@@ -14,13 +14,14 @@ export type Auth = {
 	jamSpace: boolean;
 	accountSync: boolean;
 	privatePublishing: boolean;
+	privateDeleting: boolean;
 	error: string | null;
 	scopeRejected: boolean;
 };
 
 const initial: Auth = {
 	did: null, ready: false, handle: null, agent: null, rpc: null,
-	jamSpace: false, accountSync: false, privatePublishing: false, error: null, scopeRejected: false
+	jamSpace: false, accountSync: false, privatePublishing: false, privateDeleting: false, error: null, scopeRejected: false
 };
 
 let state = initial;
@@ -43,7 +44,7 @@ export function getAuth(): Auth {
 }
 
 export function setAuth(did: Did, agent: Agent, scope: string) {
-	update({ ...initial, ready: true, did, agent, rpc: new Client({ handler: agent }), jamSpace: hasJamGrant(scope), accountSync: hasSyncGrant(scope), privatePublishing: hasPrivatePublishGrant(scope) });
+	update({ ...initial, ready: true, did, agent, rpc: new Client({ handler: agent }), jamSpace: hasJamGrant(scope), accountSync: hasSyncGrant(scope), privatePublishing: hasPrivatePublishGrant(scope), privateDeleting: hasPrivateDeleteGrant(scope) });
 	void didDocument(did).then(doc => {
 		if (state.agent !== agent) return;
 		update({ ...state, handle: doc.alsoKnownAs?.find(value => value.startsWith('at://'))?.slice(5) ?? null });
