@@ -184,3 +184,35 @@ staging Rust service and R2 multipart path, verify bounded memory and both
 original and rendition downloads after fixture publication, then clean up exact
 fixture objects and records. Run only while shared staging integration is idle.
 An HTTP sink or emulator alone does not establish deployed R2 acceptance.
+
+## enabling the staged journey
+
+Provision only after the config/workflow PR is published and reviewed. The new
+credential's canonical SOPS key is `plyr_next.processing_auth_token`; its GitHub
+Actions consumer is `PLYR_NEXT_PROCESSING_AUTH_TOKEN`. The staging transcoder
+workflow stages that value as Fly `NEXT_PROCESSING_AUTH_TOKEN`; the Next audio
+workflow sends the same value as Worker `PROCESSING_TRANSCODER_KEY`. Neither
+consumer reuses upload admission or mirror credentials. Values travel through
+stdin or a mode-0600 temporary file and are never logged. The existing local
+secret sync does not manage GitHub/Fly/Worker consumers: provision the GitHub
+value from SOPS, run the two reviewed workflows, and verify authenticated
+operation. Rotation uses the same sequence while admission is disabled; it is
+not an automatic multi-consumer rotation.
+
+The executor deployment keeps exactly one staging machine in `iad`, with
+`--ha=false`, explicit count one, minimum one and auto-stop disabled. Before
+this change the app had two stopped machines; minimum one alone would not
+remove the extra machine. Production deploy arguments and configuration are
+unchanged. The hourly staging rest job stops only the legacy backend's worker
+and jetstream groups, not the transcoder.
+
+Keep coordinator `UPLOAD_PROCESSING_ENABLED` absent until the disabled owner,
+typed-failure handling and receipt metadata have deployed, the Worker/executor
+configuration is verified, and no shared staging test is active. Enable that
+coordinator flag last through a separate reviewed configuration change. Run
+small then full-size synthetic acceptance, retaining operation/generation
+receipts and exact cleanup evidence. Enable the client only after acceptance.
+On failure, disable admission first, retain unfinished objects for diagnosis,
+fence active attempts before changing executor capacity, and revert the warm
+staging settings if the trial is abandoned. Never delete bytes under an active
+executor or promote production as part of this sequence.
