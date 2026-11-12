@@ -86,7 +86,14 @@ async function socket(base, ticket) {
     const other = await join(bases[0], serviceToken(guest), 'guest-device'); assert.equal(other.status, 200);
     const separate = await socket(bases[0], other.ticket); sockets.push(separate.ws);
     assert.equal(separate.frames.find(frame => frame.type === 'state').state.queue.length, 0, 'another account, signing with a secp256k1 key, gets its own empty queue');
-    console.log('Identity-only admission with no Space; two coordinators; PostgreSQL record restores a queue after Redis loses it: forged, foreign and expired tokens refused, concurrent additions, duplicate retry, output fencing, paused reconnect and per-account isolation passed');
+    const settings = async (token, patch) => { const response = await fetch(bases[0] + '/v1/preferences', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ serviceToken: token, ...(patch ? { patch } : {}) }) }); return { status: response.status, ...await response.json() }; };
+    assert.deepEqual((await settings(serviceToken(host))).preferences, {}, 'an account starts with no saved settings');
+    assert.deepEqual((await settings(serviceToken(host), { theme: 'dark', scale: 115 })).preferences, { theme: 'dark', scale: 115 });
+    assert.deepEqual((await settings(serviceToken(host), { theme: 'light', keepPlaying: true })).preferences, { theme: 'light', scale: 115, keepPlaying: true }, 'a patch merges into saved settings');
+    assert.equal((await settings(serviceToken(host), { font: 'papyrus' })).status, 400, 'an unknown value is refused');
+    assert.equal((await settings(serviceToken(host, { key: guest.privateKey }), { theme: 'dark' })).status, 403, 'a forged token cannot write settings');
+    assert.deepEqual((await settings(serviceToken(guest))).preferences, {}, 'settings are per account');
+    console.log('Identity-only admission with no Space; two coordinators; PostgreSQL record restores a queue after Redis loses it: forged, foreign and expired tokens refused, concurrent additions, duplicate retry, output fencing, paused reconnect, per-account isolation and account settings passed');
   } finally {
     for (const ws of sockets) ws.close();
     await new Promise(resolve => setTimeout(resolve, 100));

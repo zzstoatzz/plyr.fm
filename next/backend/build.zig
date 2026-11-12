@@ -39,6 +39,9 @@ pub fn build(b: *std.Build) void {
     root_module.addAnonymousImport("migration_0035_queue_records", .{
         .root_source_file = b.path("migrations/0035_add_queue_records.sql"),
     });
+    root_module.addAnonymousImport("migration_0036_account_preferences", .{
+        .root_source_file = b.path("migrations/0036_add_account_preferences.sql"),
+    });
     const zat_module = b.dependency("zat", .{
         .target = target,
         .optimize = optimize,

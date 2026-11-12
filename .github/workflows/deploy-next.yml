@@ -80,9 +80,9 @@ jobs:
           command -v psql > /dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client; }
           scripts/migrate
 
-      # The Jam coordinator records personal queues with the writer login.
+      # The Jam coordinator keeps personal queues and settings with the writer login.
       # Its role name is read from the credential, so no name is assumed here.
-      - name: grant queue records to the coordinator's role
+      - name: grant account state to the coordinator's role
         env:
           MIGRATOR_DATABASE_URL: ${{ secrets.ZIG_NEXT_MIGRATOR_DATABASE_URL }}
           WRITER_DATABASE_URL: ${{ secrets.ZIG_NEXT_WRITER_DATABASE_URL }}
@@ -92,6 +92,8 @@ jobs:
           psql "$(plain "$MIGRATOR_DATABASE_URL")" -X -q -v ON_ERROR_STOP=1 -v role="$role" <<'SQL'
           GRANT USAGE ON SCHEMA plyr_playback TO :"role";
           GRANT SELECT, INSERT, UPDATE ON plyr_playback.queue_records TO :"role";
+          GRANT USAGE ON SCHEMA plyr_account TO :"role";
+          GRANT SELECT, INSERT, UPDATE ON plyr_account.preferences TO :"role";
           SQL
 
   build:

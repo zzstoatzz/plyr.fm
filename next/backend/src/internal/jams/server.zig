@@ -5,6 +5,7 @@ const model = @import("model.zig");
 const protocol = @import("protocol.zig");
 const room_store = @import("store.zig");
 const queue_record = @import("queue_record.zig");
+const account_preferences = @import("account_preferences.zig");
 const tickets = @import("tickets.zig");
 const config = @import("../../config.zig");
 
@@ -365,12 +366,21 @@ const Handler = struct {
             return http(conn, a, 200, result, origin);
         }
         const personal_join = std.mem.eql(u8, url, "/v1/playback/join");
-        if (!std.mem.eql(u8, method, "POST") or (!personal_join and !std.mem.eql(u8, url, "/v1/jams/join")) or body.len > (if (personal_join) @as(usize, 63 * 1024) else 60 * 1024)) return http(conn, a, 404, "{}", origin);
+        const settings = std.mem.eql(u8, url, "/v1/preferences");
+        if (!std.mem.eql(u8, method, "POST") or (!personal_join and !settings and !std.mem.eql(u8, url, "/v1/jams/join")) or body.len > (if (personal_join) @as(usize, 63 * 1024) else 60 * 1024)) return http(conn, a, 404, "{}", origin);
         if (context.admissions.fetchAdd(1, .acq_rel) >= 2) {
             _ = context.admissions.fetchSub(1, .acq_rel);
             return http(conn, a, 503, "{}", origin);
         }
         defer _ = context.admissions.fetchSub(1, .acq_rel);
+        if (settings) return preferences(conn, a, body, origin, context) catch |err| {
+            std.log.warn("settings request failed: {s}", .{@errorName(err)});
+            http(conn, a, switch (err) {
+                error.InvalidRequest, error.InvalidPreferences => 400,
+                error.InvalidIdentity => 403,
+                else => 503,
+            }, "{}", origin);
+        };
         join(conn, a, body, origin, context, personal_join) catch |err| {
             std.log.warn("Jam admission failed: {s}", .{@errorName(err)});
             const result = std.json.Stringify.valueAlloc(a, .{ .@"error" = .{ .message = if (personal_join) "Could not open your queue" else if (err == error.RoomNotStarted) "The host needs to start this Jam" else "Could not authorize this Jam" } }, .{}) catch return;
@@ -384,6 +394,16 @@ const Handler = struct {
         };
     }
 };
+
+fn preferences(conn: *websocket.Conn, a: std.mem.Allocator, body: []const u8, origin: []const u8, context: *Context) !void {
+    const Request = struct { serviceToken: []const u8, patch: account_preferences.Patch = .{} };
+    const request = std.json.parseFromSliceLeaky(Request, a, body, .{ .ignore_unknown_fields = true }) catch |err| return if (err == error.OutOfMemory) err else error.InvalidRequest;
+    const records = context.records orelse return error.PreferencesUnavailable;
+    const owner = try auth.admitOwner(a, context.io, context.auth_config, request.serviceToken);
+    const store: account_preferences.Preferences = .{ .pool = records.pool };
+    const value = if (request.patch.empty()) try store.read(a, owner.actor) else try store.merge(a, owner.actor, request.patch);
+    http(conn, a, 200, try std.fmt.allocPrint(a, "{{\"preferences\":{s}}}", .{value}), origin);
+}
 
 fn join(conn: *websocket.Conn, a: std.mem.Allocator, body: []const u8, origin: []const u8, context: *Context, personal_join: bool) !void {
     const Initial = struct { queue: []model.Track, index: u32 = 0, playing: bool = false, positionMs: u64 = 0, personal: ?protocol.Personal = null };

@@ -50,10 +50,11 @@ async function startQueueFixture(accounts, { port = Number(process.env.QUEUE_TES
   const compose = ['compose', '-f', path.resolve(__dirname, '../../backend/compose.yaml'), 'exec', '-T'];
   const forget = () => execFileSync('docker', [...compose, 'test-redis', 'redis-cli', 'DEL', ...keys], { stdio: 'ignore' });
   const sql = (text, input) => execFileSync('docker', [...compose, 'zig-db', 'psql', '-U', 'zig_test', '-d', 'zig_test', '-X', '-q', '-At', '-v', 'ON_ERROR_STOP=1', ...(input ? ['-f', '-'] : ['-c', text])], { input, encoding: 'utf8' }).trim();
-  const schema = require('node:fs').readFileSync(path.resolve(__dirname, '../../backend/migrations/0035_add_queue_records.sql'), 'utf8');
-  sql(null, 'DROP SCHEMA IF EXISTS plyr_playback CASCADE;\n' + schema);
+  const migration = name => require('node:fs').readFileSync(path.resolve(__dirname, '../../backend/migrations', name), 'utf8');
+  const drop = 'DROP SCHEMA IF EXISTS plyr_playback CASCADE; DROP SCHEMA IF EXISTS plyr_account CASCADE;';
+  sql(null, `${drop}\n${migration('0035_add_queue_records.sql')}\n${migration('0036_add_account_preferences.sql')}`);
   const record = account => { const row = sql(`SELECT revision || ' ' || state::text FROM plyr_playback.queue_records WHERE owner_did = '${account.did}'`); return row ? { revision: Number(row.slice(0, row.indexOf(' '))), state: JSON.parse(row.slice(row.indexOf(' ') + 1)) } : null; };
-  const cleanup = () => { forget(); sql('DROP SCHEMA IF EXISTS plyr_playback CASCADE'); };
+  const cleanup = () => { forget(); sql(drop); };
   forget();
   const environment = { ...process.env, MODE: 'jams', INDEX_MODE: 'disabled', DOCKET_URL: 'redis://127.0.0.1:6380/0', TRACK_COLLECTION_NSID: 'fm.plyr.track', LIST_COLLECTION_NSID: 'fm.plyr.list', PROFILE_COLLECTION_NSID: 'fm.plyr.actor.profile', LIKE_COLLECTION_NSID: 'fm.plyr.like', CORS_ALLOWED_ORIGINS: 'https://next.plyr.fm', PLC_DIRECTORY_URL: `http://127.0.0.1:${port + count}`,
     DATABASE_URL: process.env.QUEUE_TEST_DATABASE_URL || 'postgresql://zig_test:zig_test@127.0.0.1:5435/zig_test' };
