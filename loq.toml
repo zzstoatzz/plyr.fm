@@ -536,7 +536,7 @@ max_lines = 948
 
 [[rules]]
 path = "next/backend/src/internal/jams/server.zig"
-max_lines = 522
+max_lines = 538
 
 [[rules]]
 path = "next/backend/src/internal/projection/postgres_track_store.zig"
