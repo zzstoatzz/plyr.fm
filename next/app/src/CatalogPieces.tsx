@@ -178,15 +178,25 @@ export function RowPlay({ onPress, label = 'Play', busy = false }: { onPress: ()
   </Pressable>;
 }
 
-export function ListRows({ lists }: { lists: ListSummary[] }) {
-  return <View style={styles.rows}>{lists.map((list) => <Row
+export function trackCount(count: number) {
+  return `${count} ${count === 1 ? 'track' : 'tracks'}`;
+}
+
+/**
+ * A list whose members all point at deleted or unresolvable tracks has nothing to
+ * play, so listeners never see it; production hides these too. Owners still see
+ * them (`includeEmpty`) so they can edit or remove them.
+ */
+export function ListRows({ lists, includeEmpty = false }: { lists: ListSummary[]; includeEmpty?: boolean }) {
+  const shown = includeEmpty ? lists : lists.filter(list => list.metrics.available_count > 0);
+  return <View style={styles.rows}>{shown.map((list) => <Row
     key={list.id}
     href={{
       pathname: list.object === 'album' ? '/album/[id]' : '/playlist/[id]',
       params: { id: list.id },
     }}
     title={list.metadata.name ?? 'untitled'}
-    subtitle={`${list.metrics.member_count} tracks`}
+    subtitle={list.metrics.available_count > 0 ? trackCount(list.metrics.available_count) : 'no playable tracks'}
     image={collectionArtwork(list)}
   />)}</View>;
 }

@@ -136,7 +136,7 @@ function AccountLibrary({ did, likesOnly, onPlay }: { did: string; likesOnly: bo
       <InlineLink standalone href="/liked">see all liked tracks</InlineLink>
     </AccountSection>
     <AccountSection title="your playlists">
-      <ListRows lists={lists.data} />
+      <ListRows lists={lists.data} includeEmpty />
       <Status loading={lists.loading} error={lists.error} retry={lists.more} empty={!lists.data.length ? 'no playlists yet. make one for your next listen.' : undefined} />
       {lists.cursor && !lists.loading && !lists.error && <Button label="More playlists" onPress={lists.more} />}
     </AccountSection>
