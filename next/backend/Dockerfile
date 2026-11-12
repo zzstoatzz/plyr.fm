@@ -29,8 +29,9 @@ ENV ZIG_GLOBAL_CACHE_DIR=/root/.cache/zig
 WORKDIR /build
 
 COPY build.zig build.zig.zon ./
+COPY --chmod=755 scripts/fetch-interop-fixtures scripts/fetch-interop-fixtures
 RUN --mount=type=cache,target=/root/.cache/zig \
-    zig build --fetch=all
+    scripts/fetch-interop-fixtures && zig build --fetch=all
 
 COPY src/ src/
 RUN --mount=type=cache,target=/root/.cache/zig \

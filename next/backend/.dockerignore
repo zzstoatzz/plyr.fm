@@ -4,3 +4,4 @@ zig-out
 zig-pkg
 scripts/*
 !scripts/canary-resource-snapshot
+!scripts/fetch-interop-fixtures
