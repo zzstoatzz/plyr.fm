@@ -1,7 +1,7 @@
 // writes go straight to the signed-in user's PDS; the appview picks them up
 import type {} from '@atcute/atproto';
 // from the firehose, and /v1/records/await gives read-after-write.
-import { ok } from '@atcute/client';
+import { ClientResponseError, ok } from '@atcute/client';
 import { api, type AwaitStatus, type Track } from './api';
 import { getAuth, type Auth } from './auth-state';
 import { NSID } from './config';
@@ -35,6 +35,10 @@ export interface ListRecord {
 }
 
 export const MAX_AUDIO_BYTES = 104_857_600; // track lexicon audioBlob.maxSize
+
+export class TrackRevisionConflict extends Error {
+	constructor() { super('this track changed elsewhere. reload the latest version before saving.'); }
+}
 
 export interface NewTrack {
 	tags?: string[];
@@ -403,7 +407,10 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 					swapRecord: current.cid
 				}
 			})
-		);
+		).catch((error: unknown) => {
+			if (error instanceof ClientResponseError && error.error === 'InvalidSwap') throw new TrackRevisionConflict();
+			throw error;
+		});
 		return await settle(res.uri, res.cid);
 	}
 

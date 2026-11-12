@@ -2,7 +2,7 @@ export function normalizeTrackTags(tags: readonly string[]): string[] {
   const normalized = [...new Set(tags.map(tag => tag.toLowerCase().replace(/\s+/gu, ' ').replace(/^[ -]+|[ -]+$/gu, '')).filter(Boolean))];
   if (normalized.length > 20) throw new Error('use up to 20 tags.');
   if (normalized.some(tag => tag.includes('\0'))) throw new Error('tags cannot contain null characters.');
-  if (normalized.some(tag => new TextEncoder().encode(tag).length > 50)) throw new Error('a tag is too long. use up to 50 UTF-8 bytes per tag.');
+  if (normalized.some(tag => new TextEncoder().encode(tag).length > 50)) throw new Error('a tag is too long. try a shorter tag.');
   return normalized;
 }
 

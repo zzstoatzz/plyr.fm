@@ -8,7 +8,7 @@ import { useResource } from '../CatalogPieces';
 import { Sheet } from '../Sheet';
 import { Action, Copy, Field, row } from '../controls';
 import { pickMedia } from '../media-picker';
-import { createPds, type MediaFile } from '../pds';
+import { createPds, TrackRevisionConflict, type MediaFile } from '../pds';
 import { recordTags } from './track-tags';
 import { TagsField } from './TagsField';
 
@@ -30,7 +30,7 @@ function EditorSession({ id, auth }: { id: string; auth: Auth }) {
     return { track, revision, tags: recordTags(revision.value.tags) };
   }, [id, auth.did, pds]);
   const resource = useResource(load);
-  if (resource.data) return <TrackForm key={resource.data.revision.cid} auth={auth} data={resource.data} />;
+  if (resource.data) return <TrackForm key={resource.data.revision.cid} auth={auth} data={resource.data} reload={resource.retry} />;
   return <Sheet title="edit track" close={() => close(id)}>
     {resource.error ? <><Copy live>{resource.error}</Copy><Action label="Retry loading track" onPress={resource.retry} /></>
       : <Copy>loading track…</Copy>}
@@ -39,7 +39,7 @@ function EditorSession({ id, auth }: { id: string; auth: Auth }) {
 
 type Data = { track: Awaited<ReturnType<typeof api.track>>; revision: Awaited<ReturnType<ReturnType<typeof createPds>['myTrack']>>; tags?: string[] };
 
-function TrackForm({ auth, data }: { auth: Auth; data: Data }) {
+function TrackForm({ auth, data, reload }: { auth: Auth; data: Data; reload: () => void }) {
   const { track, revision } = data;
   const text = (key: string) => typeof revision.value[key] === 'string' ? revision.value[key] : '';
   const [title, setTitle] = useState(text('title'));
@@ -53,12 +53,13 @@ function TrackForm({ auth, data }: { auth: Auth; data: Data }) {
   const [saved, setSaved] = useState(false);
   const [deleted, setDeleted] = useState(false);
   const [confirm, setConfirm] = useState(false);
+  const [conflict, setConflict] = useState(false);
   const live = useRef(true), locked = useRef(false);
   useEffect(() => { live.current = true; return () => { live.current = false; }; }, []);
   const current = () => live.current && getAuth().did === auth.did && getAuth().rpc === auth.rpc;
 
   async function save(deleting: boolean) {
-    if (!current() || locked.current || saved) return;
+    if (!current() || locked.current || saved || conflict) return;
     locked.current = true;
     setBusy(true); setError(undefined);
     try {
@@ -75,12 +76,16 @@ function TrackForm({ auth, data }: { auth: Auth; data: Data }) {
       setError(status === 'rejected' ? 'saved to your PDS. the catalog rejected the change.' : 'saved to your PDS. the catalog is catching up.');
     } catch (failure) {
       locked.current = false;
-      if (current()) setError(failure instanceof Error ? failure.message : 'could not update track.');
+      if (current()) {
+        setConflict(failure instanceof TrackRevisionConflict);
+        setError(failure instanceof Error ? failure.message : 'could not update track.');
+      }
     } finally { if (current()) setBusy(false); }
   }
 
   return <Sheet title="edit track" close={() => { if (!busy) close(track.id); }}>
     {error && <Copy live>{error}</Copy>}
+    {conflict && <Action label="Discard draft and reload" onPress={reload} />}
     {saved ? <Action label={deleted ? 'Back to your music' : 'View track'} onPress={() => router.replace(deleted ? '/portal' : `/track/${track.id}`)} /> : <>
       <Field label="Title" value={title} onChangeText={setTitle} maxLength={256} editable={!busy} />
       <Field label="Album" value={album} onChangeText={setAlbum} maxLength={256} editable={!busy} />
@@ -92,8 +97,8 @@ function TrackForm({ auth, data }: { auth: Auth; data: Data }) {
         }).catch(() => { if (current()) setError('could not open cover art.'); })} />
         <Action label={artwork === null ? 'cover will be removed' : 'remove cover'} disabled={busy} onPress={() => setArtwork(null)} />
       </View>
-      <Action primary label="Save" disabled={busy || !title.trim()} onPress={() => void save(false)} />
-      <Action destructive label={confirm ? 'Confirm delete' : 'Delete track'} disabled={busy} onPress={() => confirm ? void save(true) : setConfirm(true)} />
+      <Action primary label="Save" disabled={busy || conflict || !title.trim()} onPress={() => void save(false)} />
+      <Action destructive label={confirm ? 'Confirm delete' : 'Delete track'} disabled={busy || conflict} onPress={() => confirm ? void save(true) : setConfirm(true)} />
       {confirm && <Action label="Cancel delete" disabled={busy} onPress={() => setConfirm(false)} />}
     </>}
   </Sheet>;
