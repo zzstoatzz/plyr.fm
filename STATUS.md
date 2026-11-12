@@ -4,7 +4,7 @@ Start here for the next agent: [November 12 daily-driver checkpoint](docs/resear
 
 ## Next daily-driver work (2026-11-12)
 
-#2490–#2494, #2496 and #2497 are deployed to Next: faster composed reads with
+#2490–#2494, #2496, #2497 and #2499 are deployed to Next: faster composed reads with
 bounded broken-connection recovery, clearer catalog/Search/Library journeys,
 session-isolated uploads, a simpler creator portal and recoverable profile edits.
 Actual iOS simulator playback now starts, survives navigation/backgrounding and

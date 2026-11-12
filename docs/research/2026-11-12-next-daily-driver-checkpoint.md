@@ -24,6 +24,9 @@ finish line. This is execution evidence, not another parity inventory.
   navigation/backgrounding and paused/resumed correctly.
 - #2497: profile edits survive failures and distinguish accepted writes from a
   failed refresh. Same-account reauthentication also isolates pending work.
+- #2499: signing in from the profile editor replaces the retained route, so its
+  native modal no longer covers login. Simulator and deployed browser checks
+  verify the visible login and preserved return destination.
 
 These changes passed their scoped local checks, review, CI and Next deployment
 checks. UI matrices covered phone/desktop, light/dark and enlarged text. Signed-in
@@ -54,8 +57,13 @@ An operator account assertion must remain separate from creator track tags.
 Real-account OAuth, fresh service-auth consent and cross-device account behavior
 still need acceptance beyond fixtures. Native simulator playback is evidence for
 the RN path, not physical-device lock-screen controls, App Store readiness or
-replacement of the existing iOS app. Native profile sign-in exposed a retained
-modal over login; its focused follow-up must land before that journey is complete.
+replacement of the existing iOS app. The discovery settings client also passed
+native custom-tag normalization, show-all/default restoration and Home navigation;
+server enforcement has separate acceptance.
+Native remote next/previous remains unimplemented: the current single-player
+`expo-audio@58.0.11` path does not expose those controls. That needs implementation,
+not just another smoke test. Physical interruptions, audio-route changes and
+lock-screen interaction still need device acceptance.
 
 Publishing remains a substantial gap: production supports 1.5 GiB uploads,
 staging/transcoding, protected audio and explicit storage fallback consent.
