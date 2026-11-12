@@ -3,6 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { mkdir, writeFile } from 'node:fs/promises';
 
 const requireApp = createRequire(new URL('../../../app/package.json', import.meta.url));
 const { TID } = requireApp('@atproto/common-web');
@@ -16,7 +17,12 @@ async function request(url, init = {}) {
 
 async function json(url, init = {}) {
   const response = await request(url, init);
-  assert.ok(response.ok, `${new URL(url).pathname}: HTTP ${response.status}`);
+  if (!response.ok) {
+    const failure = await response.json().catch(() => ({}));
+    const known = ['record authority unavailable', 'invalid authority response', 'upload unavailable'];
+    const reason = known.includes(failure.error) ? ` (${failure.error})` : '';
+    throw new Error(`${new URL(url).pathname}: HTTP ${response.status}${reason}`);
+  }
   return response.json();
 }
 
@@ -33,6 +39,63 @@ function wave() {
   return bytes;
 }
 
+async function bounded(url, maximum) {
+  const response = await request(url);
+  assert.ok(response.ok, `${new URL(url).pathname}: HTTP ${response.status}`);
+  const reader = response.body.getReader(), chunks = [];
+  let length = 0;
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      length += value.length;
+      assert.ok(length <= maximum, 'public diagnostic response too large');
+      chunks.push(value);
+    }
+  } finally { await reader.cancel(); }
+  return Buffer.concat(chunks);
+}
+
+async function diagnose(owner, xrpc) {
+  const output = 'upload-diagnostic';
+  await mkdir(output, { recursive: true });
+  let stage = 'public identity';
+  try {
+    assert.ok(owner.startsWith('did:plc:'), 'diagnostic supports the configured PLC fixture account');
+    const document = JSON.parse(await bounded(`https://plc.directory/${encodeURIComponent(owner)}`, 65536));
+    assert.ok(document.id === owner, 'identity mismatch');
+    const endpoint = document.service?.find(item => item.id === '#atproto_pds' || item.id === `${owner}#atproto_pds`)?.serviceEndpoint;
+    assert.ok(typeof endpoint === 'string' && new URL(endpoint).protocol === 'https:', 'missing public PDS endpoint');
+    assert.ok(!new URL(endpoint).username && !new URL(endpoint).password, 'public PDS endpoint must not contain credentials');
+    await writeFile(`${output}/identity.json`, JSON.stringify({ id: owner, endpoint, verificationMethod: document.verificationMethod }));
+    stage = 'public collections';
+    const described = JSON.parse(await bounded(`${xrpc('com.atproto.repo.describeRepo')}?repo=${encodeURIComponent(owner)}`, 65536));
+    assert.ok(Array.isArray(described.collections), 'missing collections');
+    const collections = [...new Set([collection, ...described.collections])].slice(0, 3);
+    for (const candidate of collections) {
+      assert.ok(typeof candidate === 'string', 'invalid collection');
+      stage = 'public record listing';
+      const listing = JSON.parse(await bounded(`${xrpc('com.atproto.repo.listRecords')}?repo=${encodeURIComponent(owner)}&collection=${encodeURIComponent(candidate)}&limit=1`, 1024 * 1024));
+      assert.ok(Array.isArray(listing.records), 'missing records');
+      if (!listing.records.length) continue;
+      const record = listing.records[0];
+      const prefix = `at://${owner}/${candidate}/`;
+      assert.ok(typeof record.uri === 'string' && record.uri.startsWith(prefix), 'unexpected public record URI');
+      const key = record.uri.slice(prefix.length);
+      stage = 'public record proof';
+      const proof = await bounded(`${endpoint}/xrpc/com.atproto.sync.getRecord?did=${encodeURIComponent(owner)}&collection=${encodeURIComponent(candidate)}&rkey=${encodeURIComponent(key)}`, 4 * 1024 * 1024);
+      await writeFile(`${output}/record.car`, proof);
+      await writeFile(`${output}/record.json`, JSON.stringify({ uri: record.uri, cid: record.cid, bytes: proof.length }));
+      console.log(`read-only public proof captured: ${proof.length} bytes; no records or uploads created`);
+      return;
+    }
+    console.log('read-only diagnostic: no record in the three bounded public collections');
+  } catch (error) {
+    await writeFile(`${output}/failure.json`, JSON.stringify({ stage, error: error.name, message: error.message }));
+    throw error;
+  }
+}
+
 function deleteFixtureObject(object) {
   try { execFileSync('npx', ['--no-install', 'wrangler', 'r2', 'object', 'delete', object, '--remote'], { stdio: 'pipe', timeout: 60000 }); }
   catch { throw new Error('fixture R2 cleanup requires object-delete permission'); }
@@ -47,6 +110,7 @@ export async function main({ deleteObject = deleteFixtureObject } = {}) {
   const session = await json(xrpc('com.atproto.server.createSession'), post({ identifier: process.env.ZAT_TEST_HANDLE, password: process.env.ZAT_TEST_PASSWORD }));
   assert.ok(typeof session.did === 'string' && session.did.startsWith('did:'), 'invalid fixture DID');
   assert.ok(typeof session.accessJwt === 'string', 'missing fixture session');
+  if (process.env.DIAGNOSE_UPLOAD === 'true') return diagnose(session.did, xrpc);
   const owner = session.did, rkey = TID.nextStr(), uploadId = randomUUID();
   const ownerHash = createHash('sha256').update(owner).digest('hex');
   const object = `plyr-next-audio/uploads/${ownerHash}/${uploadId}`;
@@ -65,11 +129,17 @@ export async function main({ deleteObject = deleteFixtureObject } = {}) {
     assert.ok(typeof token === 'string', 'missing service token');
     const admitted = await json(`${coordinator}/v1/uploads/authorize`, post({ serviceToken: token, uploadId, recordUri, sizeBytes: bytes.length, contentType: 'audio/wav', fileType: 'wav', visibility: 'public', downloadPolicy: 'open' }));
     assert.ok(admitted.uploadUrl === expectedUploadUrl && typeof admitted.capability === 'string', 'unexpected admission binding');
+    const expiresInMs = admitted.expiresAt - Date.now();
+    assert.ok(Number.isSafeInteger(admitted.expiresAt) && expiresInMs > 0 && expiresInMs <= 300000, 'invalid millisecond capability expiry');
+    console.log(JSON.stringify({ admission: { expiresInMs, sizeBytes: bytes.length } }));
     capability = admitted.capability;
     const headers = { authorization: `Bearer ${capability}` };
     await json(expectedUploadUrl, { method: 'POST', headers }); started = true;
     await json(`${expectedUploadUrl}/parts/1`, { method: 'PUT', headers, body: bytes });
     const status = await json(expectedUploadUrl, { headers });
+    assert.ok(status.partSizeBytes === 10485760 && status.partCount === 1 && status.reservedBytes === bytes.length && status.recoveryRequired === false, 'invalid transfer status');
+    assert.deepEqual(status.reservedDigests, status.receivedParts);
+    console.log(JSON.stringify({ status: { partSizeBytes: status.partSizeBytes, partCount: status.partCount, reservedBytes: status.reservedBytes, recoveryRequired: status.recoveryRequired, receivedParts: status.receivedParts, reservedDigests: status.reservedDigests } }));
     assert.ok(status.receivedParts.length === 1 && status.receivedParts[0].sha256 === createHash('sha256').update(bytes).digest('hex'), 'receipt digest mismatch');
     finishing = true;
     const finished = await json(`${expectedUploadUrl}/finish`, { method: 'POST', headers }); completed = true;

@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { main } from './verify-upload.mjs';
 
 for (const failure of [undefined, 'part', 'create', 'activate', 'cleanup']) test(`deployed fixture exact cleanup: ${failure ?? 'success'}`, async t => {
@@ -20,7 +23,7 @@ for (const failure of [undefined, 'part', 'create', 'activate', 'cleanup']) test
       admission = body();
       const hash = createHash('sha256').update(owner).digest('hex');
       audioUrl = `https://plyr-next-audio.n8-3e9.workers.dev/media/${hash}/${admission.uploadId}`;
-      return response({ capability: 'capability', uploadUrl: audioUrl.replace('/media/', '/v1/uploads/') });
+      return response({ capability: 'capability', expiresAt: Date.now() + 299000, uploadUrl: audioUrl.replace('/media/', '/v1/uploads/') });
     }
     if (path.endsWith('deleteRecord')) { deleted = body(); return response({}); }
     if (path.endsWith('createRecord')) {
@@ -35,22 +38,53 @@ for (const failure of [undefined, 'part', 'create', 'activate', 'cleanup']) test
       if (init.headers?.range) return new Response(bytes.subarray(0, 44), { status: 206, headers: { 'content-range': `bytes 0-43/${bytes.length}` } });
       return new Response(bytes, { headers: { 'x-content-type-options': 'nosniff' } });
     }
-    if (path.endsWith('/parts/1')) { bytes = init.body; return response({}, failure === 'part' ? 503 : 200); }
+    if (path.endsWith('/parts/1')) { bytes = init.body; return response({ error: 'do not expose private payloads' }, failure === 'part' ? 503 : 200); }
     if (path.endsWith('/finish')) return response({ audioUrl });
     if (path.endsWith('/activate')) {
       published = failure !== 'activate';
-      return response({ state: 'published', reservedBytes: 0 }, published ? 200 : 503);
+      return response({ state: 'published', reservedBytes: 0, error: 'record authority unavailable' }, published ? 200 : 503);
     }
     if (init.method === 'DELETE') { cancelled = true; return response({}); }
-    if (!init.method) return response({ receivedParts: [{ sha256: createHash('sha256').update(bytes).digest('hex') }] });
+    if (!init.method) {
+      const parts = [{ number: 1, sha256: createHash('sha256').update(bytes).digest('hex') }];
+      return response({ partSizeBytes: 10485760, partCount: 1, reservedBytes: bytes.length, recoveryRequired: false, receivedParts: parts, reservedDigests: parts });
+    }
     return response({});
   });
   let deletes = 0;
   const run = main({ deleteObject: async key => { removed = key; if (++deletes === 2 && failure === 'cleanup') throw new Error('denied'); } });
-  if (failure) await assert.rejects(run); else await run;
+  if (failure) await assert.rejects(run, error => {
+    assert.ok(!error.message.includes('do not expose private payloads'));
+    if (failure === 'activate') assert.match(error.message, /record authority unavailable/);
+    return true;
+  }); else await run;
   assert.equal(`at://${deleted.repo}/${deleted.collection}/${deleted.rkey}`, admission.recordUri);
   assert.equal(removed, `plyr-next-audio/uploads/${createHash('sha256').update(owner).digest('hex')}/${admission.uploadId}`);
   assert.equal(cancelled, failure === 'part');
+});
+
+test('diagnostics retain a bounded public proof without record or upload writes', async t => {
+  const env = { ZAT_TEST_PDS: 'https://fixture.invalid', ZAT_TEST_HANDLE: 'fixture.invalid', ZAT_TEST_PASSWORD: 'secret', CLOUDFLARE_API_TOKEN: 'secret', CLOUDFLARE_ACCOUNT_ID: 'fixture', GITHUB_REF: 'refs/heads/main', GITHUB_EVENT_NAME: 'workflow_dispatch', DIAGNOSE_UPLOAD: 'true' };
+  const previous = Object.fromEntries(Object.keys(env).map(key => [key, process.env[key]]));
+  Object.assign(process.env, env);
+  const cwd = process.cwd(), directory = await mkdtemp(join(tmpdir(), 'upload-proof-'));
+  process.chdir(directory);
+  t.after(async () => {
+    process.chdir(cwd); await rm(directory, { recursive: true });
+    for (const [key, value] of Object.entries(previous)) if (value === undefined) delete process.env[key]; else process.env[key] = value;
+  });
+  const owner = 'did:plc:aaaaaaaaaaaaaaaaaaaaaaaa';
+  t.mock.method(globalThis, 'fetch', async (url, init) => {
+    if (String(url).includes('createSession')) return Response.json({ did: owner, accessJwt: 'session' });
+    assert.ok(!init.method || init.method === 'GET', 'diagnostic must not write');
+    if (String(url).includes('plc.directory')) return Response.json({ id: owner, verificationMethod: [], service: [{ id: '#atproto_pds', serviceEndpoint: 'https://fixture.invalid' }] });
+    if (String(url).includes('describeRepo')) return Response.json({ collections: ['fm.plyr.track'] });
+    if (String(url).includes('listRecords')) { assert.equal(new URL(url).searchParams.get('limit'), '1'); return Response.json({ records: [{ uri: `at://${owner}/fm.plyr.track/key`, cid: 'cid' }] }); }
+    assert.ok(String(url).includes('sync.getRecord'));
+    return new Response('proof');
+  });
+  await main({ deleteObject: () => { throw new Error('diagnostics must not delete objects'); } });
+  assert.equal(await readFile(join(directory, 'upload-diagnostic/record.car'), 'utf8'), 'proof');
 });
 
 test('fixture refuses nonmanual or nonmain use before network mutations', async t => {
