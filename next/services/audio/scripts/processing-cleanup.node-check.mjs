@@ -51,6 +51,8 @@ for (const failed of [false, true]) test(`processing fixture ${failed ? 'retains
   if (!failed) { assert.equal(record.record.fileType, 'mp3'); assert.equal(record.record.duration, 1); assert.equal(record.rkey, removedRecord.rkey); }
   const cleanup = JSON.parse(await readFile('upload-acceptance/cleanup.json', 'utf8'));
   assert.equal(cleanup.retainedQuotaPossible, failed);
+  assert.equal(cleanup.retainedQuotaBytes, failed ? 768044 + 1048576 : 0);
+  assert.equal(cleanup.retainedBytes, failed);
   assert.equal(cleanup.published, !failed);
   assert.equal(cleanup.cleanupFailed, false);
 });

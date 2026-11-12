@@ -261,10 +261,12 @@ export async function main({ deleteObject = deleteFixtureObject, verifyProcessin
       if (!processing || published || cancelled) await deleteObject(object);
     }
     catch { cleanup.push(new Error('exact fixture R2 cleanup failed')); }
-    console.log(`fixture cleanup: exact record and object only; completed=${completed}, published=${published}; receipt metadata retained`);
+    const retainedBytes = processing && !published && !cancelled;
+    console.log(`fixture cleanup: exact fixture only; completed=${completed}, published=${published}, retainedBytes=${retainedBytes}; receipt metadata retained`);
     const retainedQuotaPossible = started && !published && !cancelled;
-    if (retainedQuotaPossible) console.error(`failed fixture may retain one ${source.size}-byte quota reservation; do not start another full-size fixture`);
-    if (artifact) await writeFile('upload-acceptance/cleanup.json', JSON.stringify({ completed, published, cancelled, retainedQuotaPossible, cleanupFailed: cleanup.length > 0 }));
+    const retainedQuotaBytes = retainedQuotaPossible ? source.size + (recipe?.outputBudget ?? 0) : 0;
+    if (retainedQuotaPossible) console.error(`failed fixture may retain one ${retainedQuotaBytes}-byte quota reservation; do not start another fresh fixture`);
+    if (artifact) await writeFile('upload-acceptance/cleanup.json', JSON.stringify({ completed, published, cancelled, retainedBytes, retainedQuotaPossible, retainedQuotaBytes, cleanupFailed: cleanup.length > 0 }));
     if (cleanup.length) throw new AggregateError([...(failure ? [failure] : []), ...cleanup], 'fixture cleanup failed');
   }
   if (failure) throw failure;
