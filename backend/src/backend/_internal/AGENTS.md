@@ -15,3 +15,8 @@
      the authserver checks every PAR against
   the regression test `tests/api/test_oauth_client_metadata.py` asserts
   the published universe is a superset of every integration's tokens.
+- For operator DM delivery, preserve worker-owned startup and cooldown-limited
+  `ensure_ready()` recovery. Session errors discard the client and retry once;
+  network errors keep the session. Read the executable recovery contracts in
+  [notification tests](../../../tests/_internal/test_notification_service.py)
+  before changing this behavior.
