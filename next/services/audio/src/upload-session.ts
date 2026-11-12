@@ -1,14 +1,16 @@
 import { MAX_UPLOAD_BYTES, PART_BYTES, sameUpload, ownerHash, reservedBytes } from "./upload-capability.ts";
 
 import type { UploadClaim } from "./upload-capability.ts";
+export type ProcessingFailure = "output_budget_exceeded" | "executor_failed" | "lease_expired";
 export type UploadSession = Omit<UploadClaim, "expiresAt"> & {
   audioUrl: string; key: string; state: "starting" | "transferring" | "completing" | "processing" | "complete" | "published" | "cancelling" | "cancelled";
   parts: Record<number, { sha256: string; etag?: string }>; createdAt: number; nextCheck: number | null;
   starts: number; checks: number; multipartId?: string;
   rendition?: { duration: number; sizeBytes: number };
+  processingFailure?: ProcessingFailure;
 };
 type Inspection = (session: UploadSession) => Promise<"published" | "absent" | "conflict">;
-type Process = (session: UploadSession, retry: boolean) => Promise<{ ready: boolean; nextCheck: number | null; artifact?: { duration: number; sizeBytes: number } }>;
+type Process = (session: UploadSession, retry: boolean) => Promise<{ ready: boolean; nextCheck: number | null; artifact?: { duration: number; sizeBytes: number }; failure?: ProcessingFailure }>;
 const DAY = 86400000;
 const ACTIVE_LIMIT = 2;
 const MAX_ATTEMPTS = 20;
@@ -72,6 +74,7 @@ export class UploadSessions {
       recoveryRequired: !["published", "cancelled"].includes(session.state) && session.nextCheck === null,
       reservedBytes: ["published", "cancelled"].includes(session.state) ? 0 : reservedBytes(session),
       processing: session.processing ?? undefined,
+      processingFailure: session.processingFailure,
       rendition: session.rendition ? { ...session.rendition, contentType: "audio/mpeg", fileType: "mp3" } : undefined,
       partSizeBytes: PART_BYTES,
       partCount: Math.ceil(session.sizeBytes / PART_BYTES),
@@ -167,6 +170,7 @@ export class UploadSessions {
     if (session.state !== "processing") throw new UploadFailure(409, "upload is not processing");
     if (!this.process) throw new UploadFailure(503, "processing unavailable");
     const result = await this.process(session, retry);
+    session.processingFailure = result.failure;
     if (result.ready) { session.state = "complete"; session.rendition = result.artifact; }
     session.checks = 0;
     session.nextCheck = result.nextCheck;
