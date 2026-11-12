@@ -84,7 +84,7 @@ def credential_request(
     )
     body = {
         "space": space_uri,
-        "credentialKid": format_did_key(P256_JWT_ALG, public),
+        "credentialKey": format_did_key(P256_JWT_ALG, public),
         "delegationToken": delegation_token,
     }
     return body, key

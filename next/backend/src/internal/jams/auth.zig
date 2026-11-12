@@ -83,7 +83,7 @@ pub fn admit(allocator: std.mem.Allocator, io: std.Io, config: Config, host: []c
     var pair = try zat.Keypair.fromSecretKey(.p256, secret);
     defer std.crypto.secureZero(u8, &pair.secret_key);
     const kid = try pair.did(allocator);
-    const body = try std.json.Stringify.valueAlloc(allocator, .{ .space = space, .credentialKid = kid, .delegationToken = delegation }, .{});
+    const body = try std.json.Stringify.valueAlloc(allocator, .{ .space = space, .credentialKey = kid, .delegationToken = delegation }, .{});
     var transport = zat.HttpTransport.init(io, allocator);
     defer transport.deinit();
     const endpoint: ?safe_endpoint.Endpoint = if (config.test_pds_origin == null) try safe_endpoint.resolve(io, allocator, pds) else null;

@@ -54,7 +54,7 @@ async function credential(account, space) {
   }), 'get delegation');
   const key = await P256Keypair.create();
   const issued = await xrpc(hostPds, 'com.atproto.space.getSpaceCredential', {
-    body: { space, credentialKid: key.did(), delegationToken: token },
+    body: { space, credentialKey: key.did(), delegationToken: token },
   });
   return { issued, key };
 }

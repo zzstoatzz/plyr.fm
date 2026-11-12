@@ -371,7 +371,7 @@ async def _mint_credential(
     key = ec.generate_private_key(ec.SECP256R1())
     payload = {
         "space": space,
-        "credentialKid": _did_key(key),
+        "credentialKey": _did_key(key),
     }
     if delegation_token is not None:
         payload["delegationToken"] = delegation_token

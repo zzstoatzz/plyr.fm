@@ -408,7 +408,7 @@ async def test_mint_credential_uses_delegation_token_flow(
         "https://space-host.test",
         {
             "space": space,
-            "credentialKid": space_client._did_key(credential.key),
+            "credentialKey": space_client._did_key(credential.key),
             "delegationToken": "delegation-token",
         },
     )
@@ -450,7 +450,7 @@ async def test_mint_credential_sends_separate_client_attestation(
         "https://space-host.test",
         {
             "space": space,
-            "credentialKid": ANY,
+            "credentialKey": ANY,
             "delegationToken": "delegation-token",
             "clientAttestation": ("attestation-for:did:plc:authority#atproto_pds"),
         },
