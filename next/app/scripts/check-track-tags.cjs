@@ -38,7 +38,7 @@ async function run(browser, width, theme) {
       return { status: 200, body: { uri: track.record.uri, cid } };
     });
     const signIn = () => page.evaluate(([id, did]) => globalThis.__r(id).setAuth(did, {
-      handle: async (url, init) => { const reply = await window.__tagsPds(String(url), init?.body); return new Response(JSON.stringify(reply.body), { status: reply.status, headers: { 'content-type': 'application/json' } }); },
+      handle: async (url, init) => { const reply = await window.__tagsPds(String(url), init?.body); if (String(url).includes('putRecord')) window.__tagsWritesSettled = (window.__tagsWritesSettled || 0) + 1; return new Response(JSON.stringify(reply.body), { status: reply.status, headers: { 'content-type': 'application/json' } }); },
     }, 'atproto repo:fm.plyr.track'), [authModule, did]);
     await page.goto(new URL(`/edit-track/${track.id}`, page.url()).href);
     await page.getByText('only the artist can edit this track.', { exact: true }).waitFor();
@@ -109,9 +109,9 @@ async function run(browser, width, theme) {
     await signIn();
     await tags.waitFor();
     await tags.fill('fresh session');
-    const settled = page.waitForResponse(response => response.url().includes('/v1/records/await?'));
+    const settled = await page.evaluate(() => window.__tagsWritesSettled || 0);
     release(); hold = false;
-    await settled;
+    await page.waitForFunction(count => window.__tagsWritesSettled === count + 1, settled);
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     assert.equal(await tags.inputValue(), 'fresh session');
     assert.equal(await save.isEnabled(), true);

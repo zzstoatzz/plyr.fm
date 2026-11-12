@@ -1,7 +1,7 @@
 // writes go straight to the signed-in user's PDS; the appview picks them up
 import type {} from '@atcute/atproto';
 // from the firehose, and /v1/records/await gives read-after-write.
-import { ClientResponseError, ok } from '@atcute/client';
+import { ok } from '@atcute/client';
 import { api, type AwaitStatus, type Track } from './api';
 import { getAuth, type Auth } from './auth-state';
 import { NSID } from './config';
@@ -14,6 +14,8 @@ import { recordCreator, CreateUnconfirmed } from './publishing/create-record';
 import type { CreateOperation, CreateReservation } from './publishing/create-operation';
 import { albumPublishing } from './collections/album-pds';
 import { collectionOrdering } from './collections/collection-order-pds';
+import { MAX_AUDIO_BYTES } from './publishing/track-audio';
+import { trackEditor } from './publishing/track-pds';
 
 
 export interface MediaFile {
@@ -40,11 +42,9 @@ export interface ListRecord {
 	updatedAt?: string;
 }
 
-export const MAX_AUDIO_BYTES = 104_857_600; // track lexicon audioBlob.maxSize
+export { MAX_AUDIO_BYTES } from './publishing/track-audio';
 
-export class TrackRevisionConflict extends Error {
-	constructor() { super('this track changed elsewhere. reload the latest version before saving.'); }
-}
+export { TrackRevisionConflict, type TrackEdits } from './publishing/track-pds';
 
 export interface NewTrack {
 	tags?: string[];
@@ -68,14 +68,6 @@ export interface ProfileRecord {
 	[key: string]: unknown;
 }
 
-export interface TrackEdits {
-	tags?: string[];
-	title: string;
-	album: string;
-	description: string;
-	/** a new cover (File), remove it (null), or keep it (undefined) */
-	artwork?: MediaFile | null;
-}
 
 async function uploadBlob(rpc: NonNullable<Auth['rpc']>, file: MediaFile) {
 	return ok(rpc.post('com.atproto.repo.uploadBlob', {
@@ -395,11 +387,6 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 		return await settle(res.uri, res.cid);
 	}
 
-	// your own tracks: edits are a read-modify-write of the fm.plyr.track record,
-	// keeping every field other clients (and prod) wrote; swapRecord guards races.
-
-
-
 	/**
 	 * upload cover art as a blob and return the record fields: imageBlob is the
 	 * canonical cover; imageUrl is its getBlob url for clients that only read urls.
@@ -413,71 +400,7 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 		return { imageBlob: uploaded.blob, imageUrl: await blobUrl(did, cid) };
 	}
 
-	async function editTrack(uri: string, edits: TrackEdits, revision?: Awaited<ReturnType<typeof myTrack>>): Promise<AwaitStatus> {
-		const { rpc, did } = session();
-		const rkey = ownedRkey(uri, did, NSID.track);
-		const tags = edits.tags === undefined ? undefined : normalizeTrackTags(edits.tags);
-		const current = revision ?? await readTrack(uri, rkey);
-		if (current.uri !== uri) throw new Error('track revision does not match');
-		const record = { ...(current.value as Record<string, unknown>) };
-		if (tags !== undefined) record.tags = tags;
-		if (!edits.title.trim()) throw new Error('a track needs a title');
-		record.title = edits.title.trim();
-		for (const key of ['album', 'description'] as const) {
-			const v = edits[key].trim();
-			if (v) record[key] = v;
-			else delete record[key];
-		}
-		if (edits.artwork === null) {
-			delete record.imageBlob;
-			delete record.imageUrl;
-		} else if (edits.artwork) {
-			Object.assign(record, await uploadArtwork(edits.artwork));
-		}
-		if (getAuth().rpc !== rpc || getAuth().did !== did) throw new Error('account changed before publishing.');
-		const res = await ok(
-			rpc.post('com.atproto.repo.putRecord', {
-				input: {
-					repo: did,
-					collection: NSID.track as Nsid,
-					rkey,
-					record,
-					swapRecord: current.cid
-				}
-			})
-		).catch((error: unknown) => {
-			if (error instanceof ClientResponseError && error.error === 'InvalidSwap') throw new TrackRevisionConflict();
-			throw error;
-		});
-		return await settle(res.uri, res.cid);
-	}
-
-	async function readTrack(uri: string, rkey: string) {
-		const { rpc, did } = session();
-		const result = await ok(
-			rpc.get('com.atproto.repo.getRecord', { params: { repo: did, collection: NSID.track as Nsid, rkey } })
-		);
-		if (result.uri !== uri || !result.cid) throw new Error('could not read your track revision');
-		return { ...result, cid: result.cid };
-	}
-
-	async function myTrack(uri: string) {
-		const { did } = session();
-		return readTrack(uri, ownedRkey(uri, did, NSID.track));
-	}
-
-	async function deleteTrack(uri: string): Promise<AwaitStatus> {
-		const { rpc, did } = session();
-		const rkey = ownedRkey(uri, did, NSID.track);
-		const { cid } = await readTrack(uri, rkey);
-		if (getAuth().rpc !== rpc || getAuth().did !== did) throw new Error('account changed before deleting.');
-		await ok(
-			rpc.post('com.atproto.repo.deleteRecord', {
-				input: { repo: did, collection: NSID.track as Nsid, rkey, swapRecord: cid }
-			})
-		);
-		return await settle(uri);
-	}
+	const { myTrack, editTrack, deleteTrack } = trackEditor({ session, assertSession, ownedRkey, uploadArtwork, settle });
 	function collectionOrder(kind: 'album' | 'playlist' = 'playlist') {
 		return collectionOrdering({ ...session(), collection: LIST(), kind, assertSession, settle });
 	}

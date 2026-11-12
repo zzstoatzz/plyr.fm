@@ -178,7 +178,9 @@ export const api = {
 	trackLikes: (id: string, cursor?: string) =>
 		get<Page<TrackLike>>(`/v1/tracks/${encodeURIComponent(id)}/likes`, { limit: 30, cursor }),
 	tracks: (p: { limit?: number; cursor?: string; artist_did?: string; tag?: string[]; hidden_tag?: string[] } = {}, signal?: AbortSignal) => get<Page<Track>>('/v1/tracks', p, signal),
-	track: (id: string) => get<Track>(`/v1/tracks/${encodeURIComponent(id)}`),
+	track: (id: string, options?: { fresh?: boolean }) => options?.fresh
+		? request<Track>(`${API_URL}/v1/tracks/${encodeURIComponent(id)}`, 15_000, undefined, { cache: 'no-store' })
+		: get<Track>(`/v1/tracks/${encodeURIComponent(id)}`),
 	playback: (id: string) => get<Playback>(`/v1/tracks/${encodeURIComponent(id)}/playback`),
 	artist: (didOrHandle: string) => get<Artist>(`/v1/artists/${encodeURIComponent(didOrHandle)}`),
 	artistMetrics: (did: string) => get<ArtistMetrics>(`/v1/artists/${encodeURIComponent(did)}/metrics`),

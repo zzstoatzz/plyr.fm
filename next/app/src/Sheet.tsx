@@ -5,7 +5,7 @@ import X from 'lucide-react-native/icons/x';
 import { useAppearance } from './appearance';
 import { Heading } from './CatalogPieces';
 
-export function Sheet({ title, close, children }: { title: string; close: () => void; children: ReactNode }) {
+export function Sheet({ title, close, children, notice }: { title: string; close: () => void; children: ReactNode; notice?: ReactNode }) {
   const theme = useAppearance();
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -24,6 +24,7 @@ export function Sheet({ title, close, children }: { title: string; close: () => 
           <View style={{ flex: 1, minWidth: 0 }}><Heading>{title}</Heading></View>
           <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={close} style={{ padding: 12 }}><X size={22} color={theme.text} /></Pressable>
         </View>
+        {notice && <View style={{ paddingHorizontal: 20, paddingBottom: 12, gap: 12 }}>{notice}</View>}
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, paddingTop: 4, gap: 12 }}>
           {children}
         </ScrollView>
