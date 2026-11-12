@@ -82,9 +82,8 @@ const output = process.env.TRACK_ACTION_OUTPUT || `/tmp/plyr-track-actions-${Dat
         duplicateLiker = false;
         loseNextCreate = true;
         await page.getByRole('button', { name: 'Like', exact: true }).click();
-        await page.getByText('couldn’t update like', { exact: true }).waitFor();
+        await page.getByText('failed to update like', { exact: true }).waitFor();
         assert.equal(lost, 1, 'Lost response follows a real committed PDS create');
-        await page.getByRole('button', { name: 'close', exact: true }).click();
         await page.getByRole('button', { name: 'See 7 likes', exact: true }).waitFor();
         await page.getByRole('button', { name: 'Like', exact: true }).click();
         await page.getByRole('button', { name: 'Unlike', exact: true }).waitFor();
@@ -111,8 +110,7 @@ const output = process.env.TRACK_ACTION_OUTPUT || `/tmp/plyr-track-actions-${Dat
           const rejectDelete = route => route.abort();
           await page.route('https://pds.fixture.test/xrpc/com.atproto.repo.deleteRecord', rejectDelete);
           await page.getByRole('button', { name: 'Unlike', exact: true }).click();
-          await page.getByText('couldn’t update like', { exact: true }).waitFor();
-          await page.getByRole('button', { name: 'close', exact: true }).click();
+          await page.getByText('failed to update like', { exact: true }).waitFor();
           await page.getByRole('button', { name: 'See 0 likes', exact: true }).waitFor();
           await page.getByRole('button', { name: 'Unlike', exact: true }).waitFor();
           await page.unroute('https://pds.fixture.test/xrpc/com.atproto.repo.deleteRecord', rejectDelete);

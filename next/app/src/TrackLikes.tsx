@@ -4,22 +4,21 @@ import { Link } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import Heart from 'lucide-react-native/icons/heart';
-import X from 'lucide-react-native/icons/x';
 import RefreshCw from 'lucide-react-native/icons/refresh-cw';
 import { api, type Track } from './api';
-import { Row, errorMessage, usePages, useResource } from './CatalogPieces';
+import { Row, usePages, useResource } from './CatalogPieces';
 import { useAuth } from './auth';
 import { createPds } from './pds';
 import { ActionRow } from './ActionRow';
 import { Sheet } from './Sheet';
 import { WaveLoading } from './WaveLoading';
 import { useAppearance } from './appearance';
+import { toast } from './toast';
 
 export function TrackLikes({ track, compact = false, returnTo, menu = false, iconOnly = false, onNavigate }: { track: Track; compact?: boolean; returnTo?: string; menu?: boolean; iconOnly?: boolean; onNavigate?: () => void }) {
   const [open, setOpen] = useState(false);
   const [viewer, setViewer] = useState<{ did: string; uri: string; liked: boolean }>();
   const [count, setCount] = useState(track.metrics.like_count);
-  const [error, setError] = useState<string>();
   const version = useRef(0);
   const auth = useAuth();
   const theme = useAppearance();
@@ -33,7 +32,7 @@ export function TrackLikes({ track, compact = false, returnTo, menu = false, ico
   const label = `${count} ${count === 1 ? 'like' : 'likes'}`;
   return <>
     <View testID="track-like-controls" style={menu ? undefined : { flexDirection: 'row', alignItems: 'center' }}>
-      {auth.did && auth.rpc ? <LikeButton key={`${auth.did}:${track.record.uri}`} track={track} change={change} reportError={setError} reportLiked={setViewer} menu={menu} /> : menu ? <ActionRow icon={Heart} label="sign in to like" href={{ pathname: '/login', params: { return_to: returnTo ?? `/track/${track.id}` } }} onPress={onNavigate} /> :
+      {auth.did && auth.rpc ? <LikeButton key={`${auth.did}:${track.record.uri}`} track={track} change={change} reportLiked={setViewer} menu={menu} /> : menu ? <ActionRow icon={Heart} label="sign in to like" href={{ pathname: '/login', params: { return_to: returnTo ?? `/track/${track.id}` } }} onPress={onNavigate} /> :
         <Link href={{ pathname: '/login', params: { return_to: returnTo ?? `/track/${track.id}` } }} asChild>
           <Pressable accessibilityRole="link" accessibilityLabel="sign in to like" style={target}>
             <Heart size={21} color={theme.muted} />
@@ -44,16 +43,11 @@ export function TrackLikes({ track, compact = false, returnTo, menu = false, ico
       </Pressable>}
     </View>
     {open && <Sheet title="liked by" close={() => setOpen(false)}><People id={track.id} viewer={viewer?.did === auth.did && viewer.uri === track.record.uri ? viewer : undefined} close={() => setOpen(false)} /></Sheet>}
-    {error && menu && <Text accessibilityRole="alert" style={{ color: theme.danger }}>{error}</Text>}
-    {error && !menu && <Sheet title="couldn’t update like" close={() => setError(undefined)}>
-      <Text style={{ color: theme.muted, fontSize: 15 * theme.scale }}>{error}</Text>
-      <ActionRow label="close" icon={X} onPress={() => setError(undefined)} />
-    </Sheet>}
   </>;
 }
 
-function LikeButton({ track, change, reportError, reportLiked, menu }: {
-  track: Track; change: (delta: number) => () => void; reportError: (error: string) => void;
+function LikeButton({ track, change, reportLiked, menu }: {
+  track: Track; change: (delta: number) => () => void;
   menu?: boolean;
   reportLiked: (state: { did: string; uri: string; liked: boolean }) => void;
 }) {
@@ -64,27 +58,24 @@ function LikeButton({ track, change, reportError, reportLiked, menu }: {
   const result = useResource(load);
   const shared = useLikeInteraction(rpc, track.record.uri);
   const busy = shared?.busy ?? false;
-  const [status, setStatus] = useState('');
   const lock = useRef(false);
-  const alive = useRef(true);
-  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   const liked = shared?.liked ?? result.data;
   useEffect(() => { if (did && liked !== undefined) reportLiked({ did, uri: track.record.uri, liked }); }, [did, liked, track.record.uri, reportLiked]);
   async function toggle() {
     if (lock.current || busy || !rpc) return;
-    if (liked === undefined) { if (result.error) { reportError(result.error); result.retry(); } return; }
+    if (liked === undefined) { if (result.error) { toast.error('failed to load like — retrying'); result.retry(); } return; }
     if (!beginLikeInteraction(rpc, track.record.uri, !liked)) return;
     lock.current = true;
     let confirmed = !liked;
     const rollback = change(liked ? -1 : 1);
     try {
-      const saved = await (liked ? pds.unlike(track, { waitForIndex: false }) : pds.like(track, { waitForIndex: false }));
-      if (alive.current) setStatus(saved === 'pending' ? 'like saved. updating catalog.' : liked ? 'like removed.' : 'track liked.');
-    } catch (error) {
+      await (liked ? pds.unlike(track, { waitForIndex: false }) : pds.like(track, { waitForIndex: false }));
+      if (liked) toast.info(`unliked ${track.metadata.title}`); else toast.success(`liked ${track.metadata.title}`);
+    } catch {
       confirmed = liked;
       rollback();
       setLikeInteraction(rpc, track.record.uri, { liked, busy: true });
-      if (alive.current) reportError(errorMessage(error));
+      toast.error('failed to update like');
     } finally {
       lock.current = false;
       setLikeInteraction(rpc, track.record.uri, { liked: confirmed, busy: false });
@@ -97,7 +88,6 @@ function LikeButton({ track, change, reportError, reportLiked, menu }: {
       style={[target, { opacity: busy || liked === undefined ? 0.5 : 1 }]}>
       <Heart size={21} color={liked ? theme.accent : theme.muted} fill={liked ? theme.accent : 'none'} />
     </Pressable>}
-    <Text accessibilityLiveRegion="polite" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', color: 'transparent' }}>{status}</Text>
   </>;
 }
 

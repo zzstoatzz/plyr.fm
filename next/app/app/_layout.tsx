@@ -19,6 +19,7 @@ import RadioPlayer, { RadioContext } from '../src/RadioPlayer';
 import type { RadioStation } from '../src/radio';
 import { KeyboardShortcuts } from '../src/KeyboardShortcuts';
 import { PlayerBar } from '../src/PlayerBar';
+import { Toasts } from '../src/Toasts';
 import { NowPlayingOriginContext } from '../src/now-playing-origin';
 import { PreferencesProvider } from '../src/preference-context';
 import ChartNoAxesColumn from 'lucide-react-native/icons/chart-no-axes-column';
@@ -130,10 +131,12 @@ function Shell() {
             <Stack.Screen name="now-playing" options={{ presentation: Platform.OS === 'web' ? 'transparentModal' : 'card', animation: 'none', gestureEnabled: false, contentStyle: { backgroundColor: 'transparent' } }} />
           </Stack>
         </NowPlayingOriginContext.Provider>
+        {!wide && <Toasts />}
         {!wide && <Animated.View aria-hidden={route === '/now-playing'} pointerEvents={route === '/now-playing' ? 'none' : 'auto'}>{station ? <RadioPlayer key={station.slug} compact tuned={station} /> : <PlayerBar />}</Animated.View>}
         {!wide && nav}
       </View>
     </View>
+    {wide && <Toasts />}
     {wide && <View aria-hidden={route === '/now-playing'} pointerEvents={route === '/now-playing' ? 'none' : 'auto'}>{station ? <View style={[glassSurface(theme), { overflow: 'hidden', width: '100%' }]}><RadioPlayer key={station.slug} compact tuned={station} /></View> : <PlayerBar />}</View>}
   </SafeAreaView></RadioContext.Provider>;
 }

@@ -11,6 +11,7 @@ import type { JamIntent } from './jam-connection';
 import { usePersonalQueue } from './use-personal-queue';
 import { usePlayerAccounting } from './use-player-accounting';
 import { useMediaSession } from './media-session';
+import { toast } from './toast';
 
 export function PlaybackProvider({ children, playThrough, keepPlaying, volume }: {
   children: ReactNode; playThrough: boolean; keepPlaying: boolean; volume: number;
@@ -304,6 +305,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     skip: (seconds) => { const base = jam.jam ? (jam.jam.pendingSeekMs === undefined ? player.currentTime : jam.jam.pendingSeekMs / 1000) : pendingSeek?.source === sequence.current ? pendingSeek.seconds : personal.position(); seek(base + seconds); },
     jump: (at) => { if (!jam.command({ action: 'selectTrack', index: at })) personal.select(at); },
     enqueue: (track) => {
+      toast.success(`queued ${track.metadata.title}`, 1800);
       const ref = jamTrack(track);
       if (jam.active()) { if (ref) jam.editQueue((items, at) => ({ queue: [...items, ref], index: at })); else jam.replaceQueue([...queue, track], index); }
       else personal.enqueue(track);

@@ -2,7 +2,7 @@ import { trackArtwork } from './artwork';
 import { Text } from './Text';
 import { router, usePathname, type Href } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { PlayerPortal } from './PlayerPortal';
+import { BodyPortal } from './BodyPortal';
 import { Animated, PanResponder, Platform, Pressable, View, useWindowDimensions, type ViewInstance } from 'react-native';
 import { playerSheet, useFlying, useSheetPresent } from './player-sheet';
 import { PlaybackFreeze } from './playback';
@@ -153,7 +153,7 @@ export function PlayerBar() {
         </> : <>{play}<PlayerControl label="Next" icon={SkipForward} onPress={() => void player.next()} /></>}
       </View>
     </Animated.View>
-    {sheet && <PlayerPortal><PlaybackFreeze frozen={!shown}>{sheet}</PlaybackFreeze></PlayerPortal>}
+    {sheet && <BodyPortal><PlaybackFreeze frozen={!shown}>{sheet}</PlaybackFreeze></BodyPortal>}
     {Platform.OS !== 'web' && expanded && <NowPlaying track={track} close={() => setExpanded(false)} navigate={target => { setExpanded(false); router.push(target); }} />}
   </>;
 }
