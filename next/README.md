@@ -6,7 +6,9 @@ Zig appview for the catalog, and a coordinator for live playback state. The
 client writes the user's `fm.plyr.*` records straight to their PDS and reads
 them back through the appview, which follows Tangled's
 [Bobbin](https://til.desertthunder.dev/notes/2026/08/01/bobbin/): read-only,
-with an index that can be rebuilt from the records.
+with an index that can be rebuilt from the records. State that is not a record
+stays on our own services, after ana's
+[evil atproto](https://nekomimi.leaflet.pub/3mqovvmc4jk2i).
 
 **live:** [next.plyr.fm](https://next.plyr.fm), with the API at
 api.next.plyr.fm. Production is unchanged by anything here.
