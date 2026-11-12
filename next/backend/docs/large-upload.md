@@ -182,6 +182,12 @@ output and quota for diagnosis rather than deleting beneath a live executor.
 Do not dispatch another fresh fixture to work around such a failure. The raw
 transfer resume inputs deliberately reject processing recovery.
 
+The job allows 55 minutes: transport authorization/transfer/processing share a
+30-minute deadline, media verification shares a 15-minute deadline, and the
+remaining time covers setup and exact cleanup. Metadata and range requests use
+20-second limits; full response bodies each use at most five minutes within the
+shared media deadline. Child decoder deadlines also respect that same bound.
+
 For an authority failure, dispatch `diagnose_upload=true` instead. This logs in
 to the same test account but creates no records or uploads. It inspects at most
 three public collections with `limit=1`, then retains one public record CAR

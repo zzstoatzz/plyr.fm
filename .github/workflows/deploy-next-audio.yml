@@ -45,7 +45,7 @@ concurrency: next-audio-${{ github.event_name == 'pull_request' && github.ref ||
 jobs:
   audio:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 55
     defaults:
       run:
         working-directory: next/services/audio

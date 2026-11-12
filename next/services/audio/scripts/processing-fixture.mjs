@@ -52,19 +52,23 @@ export async function saveRendition(response, path, expectedSize) {
 }
 
 export async function verifyProcessedMedia(audioUrl, source, rendition, directory, fetcher = fetch) {
-  const get = (url, init = {}) => fetcher(url, { ...init, redirect: 'error', signal: AbortSignal.timeout(5 * 60 * 1000) });
+  const deadline = Date.now() + 15 * 60 * 1000;
+  const remaining = maximum => { const value = Math.min(maximum, deadline - Date.now()); assert.ok(value > 0, 'processing media verification deadline exceeded'); return value; };
+  const get = (url, init = {}, body = false) => fetcher(url, { ...init, redirect: 'error', signal: AbortSignal.timeout(remaining(body ? 300000 : 20000)) });
   const manifestResponse = await get(`${audioUrl}/manifest`);
   assert.equal(manifestResponse.status, 200);
   const manifest = await manifestResponse.json();
   validateManifest(manifest, audioUrl, source, rendition);
-  const original = await get(`${audioUrl}/original`);
+  const original = await get(`${audioUrl}/original`, {}, true);
   assert.equal(original.status, 200);
   assert.equal(original.headers.get('content-disposition'), 'attachment; filename="original.wav"');
   const originalReceipt = await verifyStream(original, source);
-  const originalHead = await get(`${audioUrl}/original`, { method: 'HEAD' });
+  const originalHead = await get(`${audioUrl}/original`, { method: 'HEAD', headers: { origin: 'https://next.plyr.fm' } });
   assert.equal(originalHead.status, 200);
   assert.equal(originalHead.headers.get('content-length'), String(source.size));
   assert.equal(originalHead.headers.get('content-disposition'), 'attachment; filename="original.wav"');
+  assert.equal(originalHead.headers.get('access-control-allow-origin'), '*');
+  assert.ok(originalHead.headers.get('access-control-expose-headers')?.split(',').map(value => value.trim().toLowerCase()).includes('content-disposition'));
   const originalRange = await get(`${audioUrl}/original`, { headers: { range: 'bytes=0-43' } });
   assert.equal(originalRange.status, 206);
   assert.equal(originalRange.headers.get('content-range'), `bytes 0-43/${source.size}`);
@@ -72,11 +76,11 @@ export async function verifyProcessedMedia(audioUrl, source, rendition, director
   assert.deepEqual(Buffer.from(await originalRange.arrayBuffer()), source.read(0, 44));
   const path = `${directory}/rendition.mp3`;
   try {
-  const playback = await get(audioUrl);
+  const playback = await get(audioUrl, {}, true);
   assert.equal(playback.headers.get('content-disposition'), null);
   assert.equal(playback.headers.get('x-content-type-options'), 'nosniff');
   const renditionReceipt = await saveRendition(playback, path, rendition.sizeBytes);
-  const probe = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-protocol_whitelist', 'file,pipe', '-format_whitelist', 'mp3', '-show_entries', 'stream=codec_name,sample_rate,bit_rate:format=duration', '-of', 'json', path], { timeout: 30000, maxBuffer: 65536, encoding: 'utf8' }));
+  const probe = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-protocol_whitelist', 'file,pipe', '-format_whitelist', 'mp3', '-show_entries', 'stream=codec_name,sample_rate,bit_rate:format=duration', '-of', 'json', path], { timeout: remaining(30000), maxBuffer: 65536, encoding: 'utf8' }));
   assert.equal(probe.streams.length, 1);
   assert.equal(probe.streams[0].codec_name, 'mp3');
   assert.equal(probe.streams[0].sample_rate, '44100');
@@ -84,7 +88,7 @@ export async function verifyProcessedMedia(audioUrl, source, rendition, director
   const seconds = Number(probe.format.duration);
   assert.ok(Number.isFinite(seconds) && Math.abs(seconds - (source.size - 44) / 768000) < 1, 'rendition duration differs from source');
   assert.equal(Math.round(seconds), rendition.duration);
-  execFileSync('ffmpeg', ['-v', 'error', '-protocol_whitelist', 'file,pipe', '-format_whitelist', 'mp3', '-i', path, '-f', 'null', '-'], { timeout: 300000, maxBuffer: 65536, stdio: ['ignore', 'ignore', 'pipe'] });
+  execFileSync('ffmpeg', ['-v', 'error', '-protocol_whitelist', 'file,pipe', '-format_whitelist', 'mp3', '-i', path, '-f', 'null', '-'], { timeout: remaining(300000), maxBuffer: 65536, stdio: ['ignore', 'ignore', 'pipe'] });
   const attachment = await get(`${audioUrl}?download=1`, { method: 'HEAD', headers: { origin: 'https://next.plyr.fm' } });
   assert.equal(attachment.status, 200);
   assert.equal(attachment.headers.get('content-disposition'), 'attachment; filename="audio.mp3"');
