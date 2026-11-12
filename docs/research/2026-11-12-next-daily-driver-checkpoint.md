@@ -6,6 +6,15 @@ finish line. This is execution evidence, not another parity inventory.
 
 ## shipped to Next
 
+- #2504: the existing API machine stays warm in `sjc`, avoiding an observed
+  2.225-second first request after automatic shutdown. Deployment
+  `43210186456` passed; both existing API/ingester machines run `19053e66`,
+  with the API's minimum running count verified as one. Public readiness and
+  a 24-track catalog read returned 200 in 202 and 342 ms respectively. These
+  are individual network-inclusive observations, not latency percentiles.
+  The estimated incremental compute cost is $1.60–2/month; no replica was
+  added. See [performance evidence](../../next/backend/docs/perf.md#first-visit-startup-november-12)
+  and [cost assumptions](../../COSTS.md#november-12-warm-api-floor).
 - #2490: prepared composed reads, usable artist sections and collection playback,
   clearer Search, consistent Home pagination and repaired browser checks.
 - #2491: Library playlist creation stays reachable; accepted creates remain

@@ -4,6 +4,10 @@ Start here for the next agent: [November 12 daily-driver checkpoint](docs/resear
 
 ## Next daily-driver work (2026-11-12)
 
+#2504 keeps the existing Next API machine warm after a measured 2.225-second
+cold start. Deployment and public readiness/catalog checks passed; no replica
+was added. The estimated incremental compute cost is $1.60–2/month.
+
 #2490–#2499 and #2501–#2503 are deployed to Next: faster composed reads with
 bounded broken-connection recovery, clearer catalog/Search/Library journeys,
 session-isolated uploads, a simpler creator portal and recoverable profile edits.
