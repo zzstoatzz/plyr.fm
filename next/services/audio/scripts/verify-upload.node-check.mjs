@@ -6,13 +6,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { main } from './verify-upload.mjs';
 
-for (const failure of [undefined, 'part', 'create', 'activate', 'cleanup']) test(`deployed fixture exact cleanup: ${failure ?? 'success'}`, async t => {
+for (const failure of [undefined, 'part', 'status', 'create', 'activate', 'cleanup']) test(`deployed fixture exact cleanup: ${failure ?? 'success'}`, async t => {
   const env = { ZAT_TEST_PDS: 'https://fixture.invalid', ZAT_TEST_HANDLE: 'fixture.invalid', ZAT_TEST_PASSWORD: 'secret', CLOUDFLARE_API_TOKEN: 'secret', CLOUDFLARE_ACCOUNT_ID: 'fixture', GITHUB_REF: 'refs/heads/main', GITHUB_EVENT_NAME: 'workflow_dispatch' };
   const previous = Object.fromEntries(Object.keys(env).map(key => [key, process.env[key]]));
   Object.assign(process.env, env);
   t.after(() => { for (const [key, value] of Object.entries(previous)) if (value === undefined) delete process.env[key]; else process.env[key] = value; });
   const owner = 'did:plc:aaaaaaaaaaaaaaaaaaaaaaaa';
   let admission, bytes, audioUrl, published = false, deleted, removed, cancelled = false;
+  const status = state => {
+    const parts = bytes ? [{ number: 1, sha256: createHash('sha256').update(bytes).digest('hex') }] : [];
+    return { state, partSizeBytes: 10485760, partCount: 1, reservedBytes: state === 'published' ? 0 : admission.sizeBytes, recoveryRequired: false, receivedParts: parts, reservedDigests: parts, ...(['complete', 'published'].includes(state) ? { audioUrl } : {}) };
+  };
   t.mock.method(globalThis, 'fetch', async (url, init) => {
     const path = new URL(url).pathname;
     const response = (value, status = 200) => Response.json(value, { status });
@@ -39,17 +43,16 @@ for (const failure of [undefined, 'part', 'create', 'activate', 'cleanup']) test
       return new Response(bytes, { headers: { 'x-content-type-options': 'nosniff' } });
     }
     if (path.endsWith('/parts/1')) { bytes = init.body; return response({ error: 'do not expose private payloads' }, failure === 'part' ? 503 : 200); }
-    if (path.endsWith('/finish')) return response({ audioUrl });
+    if (path.endsWith('/finish')) return response(status('complete'));
     if (path.endsWith('/activate')) {
       published = failure !== 'activate';
-      return response({ state: 'published', reservedBytes: 0, error: 'record authority unavailable' }, published ? 200 : 503);
+      return response(published ? status('published') : { error: 'record authority unavailable' }, published ? 200 : 503);
     }
     if (init.method === 'DELETE') { cancelled = true; return response({}); }
     if (!init.method) {
-      const parts = [{ number: 1, sha256: createHash('sha256').update(bytes).digest('hex') }];
-      return response({ partSizeBytes: 10485760, partCount: 1, reservedBytes: bytes.length, recoveryRequired: false, receivedParts: parts, reservedDigests: parts });
+      return response({ ...status('transferring'), ...(failure === 'status' ? { state: 'unsupported' } : {}) });
     }
-    return response({});
+    return response(status('transferring'));
   });
   let deletes = 0;
   const run = main({ deleteObject: async key => { removed = key; if (++deletes === 2 && failure === 'cleanup') throw new Error('denied'); } });
@@ -60,7 +63,7 @@ for (const failure of [undefined, 'part', 'create', 'activate', 'cleanup']) test
   }); else await run;
   assert.equal(`at://${deleted.repo}/${deleted.collection}/${deleted.rkey}`, admission.recordUri);
   assert.equal(removed, `plyr-next-audio/uploads/${createHash('sha256').update(owner).digest('hex')}/${admission.uploadId}`);
-  assert.equal(cancelled, failure === 'part');
+  assert.equal(cancelled, failure === 'part' || failure === 'status');
 });
 
 test('diagnostics retain a bounded public proof without record or upload writes', async t => {

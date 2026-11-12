@@ -45,7 +45,7 @@ jobs:
       - name: install fixture SDK
         run: npm ci --prefix ../../app
       - name: check fixture cleanup
-        run: node --test scripts/verify-upload.node-check.mjs
+        run: node --experimental-strip-types --test scripts/verify-upload.node-check.mjs
       - name: validate worker bundle
         run: npx --no-install wrangler deploy --dry-run
       - name: deploy existing next audio service
@@ -70,7 +70,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           DIAGNOSE_UPLOAD: ${{ inputs.diagnose_upload }}
-        run: node scripts/verify-upload.mjs
+        run: node --experimental-strip-types scripts/verify-upload.mjs
       - name: retain bounded public proof
         if: always() && github.event_name == 'workflow_dispatch' && inputs.diagnose_upload
         uses: actions/upload-artifact@v4
