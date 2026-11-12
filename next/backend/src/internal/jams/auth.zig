@@ -37,8 +37,14 @@ fn identify(allocator: std.mem.Allocator, resolver: *zat.DidResolver, config: Co
     return .{ .actor = try allocator.dupe(u8, actor), .public_key = try allocator.dupe(u8, signing_key.public_key_multibase) };
 }
 
+const queue_prefix = "queue:";
+
 pub fn queueRoom(allocator: std.mem.Allocator, owner: []const u8) ![]const u8 {
-    return std.fmt.allocPrint(allocator, "queue:{s}", .{owner});
+    return std.fmt.allocPrint(allocator, queue_prefix ++ "{s}", .{owner});
+}
+
+pub fn queueOwner(room: []const u8) ?[]const u8 {
+    return if (std.mem.startsWith(u8, room, queue_prefix)) room[queue_prefix.len..] else null;
 }
 
 /// A personal queue belongs to whoever proves the identity; no Space is involved.

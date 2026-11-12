@@ -340,6 +340,7 @@ test {
     _ = @import("internal/projection/verified_snapshot.zig");
     _ = @import("internal/jams/model.zig");
     _ = @import("internal/jams/store.zig");
+    _ = @import("internal/jams/queue_record.zig");
     _ = @import("internal/jams/auth.zig");
     _ = @import("server.zig");
 }

@@ -4,6 +4,7 @@ const auth = @import("auth.zig");
 const model = @import("model.zig");
 const protocol = @import("protocol.zig");
 const room_store = @import("store.zig");
+const queue_record = @import("queue_record.zig");
 const tickets = @import("tickets.zig");
 const config = @import("../../config.zig");
 
@@ -13,6 +14,7 @@ const max_outbox_bytes = 512 * 1024;
 pub fn run(a: std.mem.Allocator, io: std.Io, settings: config.Config) !void {
     if (env("FLY_APP_NAME") != null and std.mem.eql(u8, env("JAM_TEST_MODE") orelse "", "1")) return error.TestModeForbidden;
     const url = settings.redis_url orelse return error.RedisRequired;
+    if (env("FLY_APP_NAME") != null and settings.database_url == null) return error.QueueDatabaseRequired;
     var context: Context = .{
         .io = io,
         .store = try room_store.Store.init(a, io, url, settings.track_collection),
@@ -25,9 +27,18 @@ pub fn run(a: std.mem.Allocator, io: std.Io, settings: config.Config) !void {
             .test_pds_origin = if (std.mem.eql(u8, env("JAM_TEST_MODE") orelse "", "1")) env("JAM_TEST_PDS_ORIGIN") else null,
         },
         .origins = settings.cors_allowed_origins,
+        .records = if (settings.database_url) |database| try queue_record.Records.init(a, io, database, @min(settings.database_pool_size, 4)) else null,
     };
     defer context.store.deinit();
     defer context.tickets.deinit();
+    defer if (context.records) |*records| records.deinit();
+    const bounded = try context.store.expireUnbounded();
+    if (bounded > 0) std.log.info("gave {d} unbounded room states an expiry", .{bounded});
+    const recorder = try std.Thread.spawn(.{}, Context.record, .{&context});
+    defer {
+        context.stopping.store(true, .release);
+        recorder.join();
+    }
     const cursor = try context.tickets.latestEvent(a);
     defer a.free(cursor);
     const fanout = try std.Thread.spawn(.{}, Context.tail, .{ &context, cursor });
@@ -55,6 +66,9 @@ const Context = struct {
     tickets: tickets.Tickets,
     auth_config: auth.Config,
     origins: []const u8,
+    records: ?queue_record.Records,
+    unrecorded: std.StringHashMapUnmanaged(void) = .empty,
+    unrecorded_mutex: std.Io.Mutex = .init,
     admissions: std.atomic.Value(u8) = .init(0),
     peers: std.ArrayList(*Peer) = .empty,
     mutex: std.Io.Mutex = .init,
@@ -70,6 +84,45 @@ const Context = struct {
         self.mutex.lockUncancelable(self.io);
         defer self.mutex.unlock(self.io);
         for (self.peers.items) |peer| if (std.mem.eql(u8, peer.ticket.admission.room, room)) peer.enqueue(body);
+    }
+    /// Notes that a personal queue changed, for the recorder to copy to PostgreSQL.
+    fn changed(self: *Context, room: []const u8) void {
+        if (self.records == null or auth.queueOwner(room) == null) return;
+        self.unrecorded_mutex.lockUncancelable(self.io);
+        defer self.unrecorded_mutex.unlock(self.io);
+        if (self.unrecorded.contains(room)) return;
+        const owned = allocator.dupe(u8, room) catch return;
+        self.unrecorded.put(allocator, owned, {}) catch allocator.free(owned);
+    }
+    fn record(self: *Context) void {
+        while (!self.stopping.load(.acquire)) {
+            std.Io.sleep(self.io, .fromMilliseconds(1000), .awake) catch {};
+            self.recordChanged();
+        }
+        self.recordChanged();
+    }
+    fn recordChanged(self: *Context) void {
+        self.unrecorded_mutex.lockUncancelable(self.io);
+        var rooms = self.unrecorded;
+        self.unrecorded = .empty;
+        self.unrecorded_mutex.unlock(self.io);
+        defer rooms.deinit(allocator);
+        var keys = rooms.keyIterator();
+        while (keys.next()) |key| {
+            const room = key.*;
+            defer allocator.free(room);
+            self.recordRoom(room) catch |err| {
+                std.log.warn("queue record write failed: {s}", .{@errorName(err)});
+                self.changed(room);
+            };
+        }
+    }
+    fn recordRoom(self: *Context, room: []const u8) !void {
+        const owner = auth.queueOwner(room) orelse return;
+        var snapshot = (try self.store.read(allocator, room)) orelse return;
+        defer snapshot.deinit();
+        if (snapshot.state.personal == null) return;
+        try self.records.?.save(allocator, owner, snapshot.state, snapshot.serverTimeMs);
     }
     fn expire(self: *Context) void {
         const now = self.store.nowMs() catch return;
@@ -90,6 +143,7 @@ const Context = struct {
             defer events.deinit();
             if (events.needsResync) self.resync();
             for (events.events) |event| {
+                self.changed(event.room);
                 var snapshot = (self.store.read(allocator, event.room) catch continue) orelse continue;
                 defer snapshot.deinit();
                 const body = std.json.Stringify.valueAlloc(allocator, .{ .type = "state", .state = snapshot.state, .serverTimeMs = snapshot.serverTimeMs }, .{}) catch continue;
@@ -353,6 +407,17 @@ fn join(conn: *websocket.Conn, a: std.mem.Allocator, body: []const u8, origin: [
     }
     var snapshot = try context.store.read(a, admission.room);
     defer if (snapshot) |*value| value.deinit();
+    if (personal_join) {
+        if (snapshot != null) context.changed(admission.room) else if (context.records) |*records| {
+            if (try records.load(a, admission.actor)) |json| {
+                const recorded = std.json.parseFromSliceLeaky(model.State, a, json, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch null;
+                if (recorded) |state| snapshot = context.store.restore(a, admission.room, state) catch |err| switch (err) {
+                    error.InvalidRoom => null,
+                    else => return err,
+                };
+            }
+        }
+    }
     if (snapshot == null) {
         if (!std.mem.eql(u8, admission.actor, admission.host)) return error.RoomNotStarted;
         const initial = request.initial orelse if (personal_join) Initial{ .queue = &.{} } else return error.RoomNotStarted;

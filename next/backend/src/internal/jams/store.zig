@@ -79,6 +79,27 @@ pub const Store = struct {
         self.allocator.free(self.collection);
         self.allocator.free(self.event_stream);
     }
+    /// Gives every room state that has no expiry the standard one. Returns how many it changed.
+    pub fn expireUnbounded(self: *Store) !usize {
+        var arena = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena.deinit();
+        const a = arena.allocator();
+        var cursor: []const u8 = "0";
+        var changed: usize = 0;
+        while (true) {
+            const page = try array(try self.send(a, &.{ "SCAN", cursor, "MATCH", "plyr:next:jam:*:state", "COUNT", "200" }, false));
+            if (page.len != 2) return error.InvalidRedisReply;
+            for (try array(page[1])) |entry| {
+                const key = try string(entry);
+                const ttl = try self.send(a, &.{ "TTL", key }, false);
+                if (ttl != .integer or ttl.integer != -1) continue;
+                _ = try self.send(a, &.{ "EXPIRE", key, "86400" }, false);
+                changed += 1;
+            }
+            cursor = try string(page[0]);
+            if (std.mem.eql(u8, cursor, "0")) return changed;
+        }
+    }
     pub fn nowMs(self: *Store) !i64 {
         var arena = std.heap.ArenaAllocator.init(self.allocator);
         defer arena.deinit();
@@ -104,8 +125,12 @@ pub const Store = struct {
         return self.createAt(allocator, room, .{ .epoch = epoch, .revision = 0, .queue = queue, .index = 0, .occurrence = if (queue.len == 0) 0 else 1, .playing = false, .positionMs = 0, .updatedAtMs = 0 });
     }
     pub fn createAt(self: *Store, allocator: std.mem.Allocator, room: []const u8, state: model.State) !Snapshot {
-        if (state.revision != 0 or state.occurrence != @as(u64, if (state.queue.len == 0) 0 else 1) or
-            !try model.validateState(allocator, state, self.collection)) return error.InvalidRoom;
+        if (state.revision != 0 or state.occurrence != @as(u64, if (state.queue.len == 0) 0 else 1)) return error.InvalidRoom;
+        return self.restore(allocator, room, state);
+    }
+    /// Seeds a room that Redis no longer holds from its recorded state, keeping its epoch and revision.
+    pub fn restore(self: *Store, allocator: std.mem.Allocator, room: []const u8, state: model.State) !Snapshot {
+        if (!try model.validateState(allocator, state, self.collection)) return error.InvalidRoom;
         var arena = std.heap.ArenaAllocator.init(allocator);
         errdefer arena.deinit();
         const a = arena.allocator();
@@ -380,14 +405,14 @@ const lua_common =
 const read_script = lua_common ++
     \\local raw=redis.call('GET',KEYS[1]); if not raw then return false end
     \\local s=cjson.decode(raw)
-    \\for i,key in ipairs(KEYS) do if i==1 and type(s.personal)=='table' then redis.call('PERSIST',key) else redis.call('EXPIRE',key,86400) end end
+    \\for i,key in ipairs(KEYS) do redis.call('EXPIRE',key,86400) end
     \\return {raw,tostring(math.max(nowms(),s.updatedAtMs)),lastid(KEYS[4])}
 ;
 const create_script = lua_common ++
     \\if not typesok() then return redis.error_reply('invalid room keys') end
     \\local raw=redis.call('GET',KEYS[1]); if raw then local s=cjson.decode(raw); return {raw,tostring(math.max(nowms(),s.updatedAtMs)),lastid(KEYS[4])} end
     \\local s=cjson.decode(ARGV[2]); s.updatedAtMs=nowms(); raw=encode(s)
-    \\redis.call('DEL',KEYS[2],KEYS[3],KEYS[4]); redis.call('SET',KEYS[1],raw,'EX',86400); if type(s.personal)=='table' then redis.call('PERSIST',KEYS[1]) end
+    \\redis.call('DEL',KEYS[2],KEYS[3],KEYS[4]); redis.call('SET',KEYS[1],raw,'EX',86400)
     \\local id=redis.call('XADD',KEYS[4],'MAXLEN',8,'*','state',raw,'time',tostring(s.updatedAtMs))
     \\redis.call('EXPIRE',KEYS[4],86400)
     \\redis.call('XADD',KEYS[5],'MAXLEN',1024,'*','room',ARGV[1],'epoch',s.epoch,'revision',string.format('%.0f',s.revision),'time',tostring(s.updatedAtMs))
@@ -410,7 +435,7 @@ const apply_script = lua_common ++
     \\  local duration=0; if #n.queue>0 then duration=n.queue[n.index+1].durationMs; if duration==0 and type(n.personal)=='table' then duration=86400000 end end
     \\  n.positionMs=math.min(duration,s.positionMs+elapsed); if type(s.personal)=='table' and s.personal['repeat']=='one' and s.playing and duration>0 and s.queue[s.index+1].durationMs>0 then n.positionMs=(s.positionMs+elapsed)%duration end
     \\ end
-    \\ n.updatedAtMs=now; raw=encode(n); s=n; redis.call('SET',KEYS[1],raw,'EX',86400); if type(s.personal)=='table' then redis.call('PERSIST',KEYS[1]) end
+    \\ n.updatedAtMs=now; raw=encode(n); s=n; redis.call('SET',KEYS[1],raw,'EX',86400)
     \\ redis.call('XADD',KEYS[4],'MAXLEN',8,'*','state',raw,'time',tostring(now)); redis.call('EXPIRE',KEYS[4],86400)
     \\ redis.call('XADD',KEYS[5],'MAXLEN',1024,'*','room',ARGV[1],'epoch',s.epoch,'revision',string.format('%.0f',s.revision),'time',tostring(now))
     \\end
@@ -844,7 +869,7 @@ test "personal queues persist idle state and merge concurrent edits across Redis
     current.key = "current";
     var initial = try left.createAt(allocator, room, .{ .epoch = "personal", .revision = 0, .queue = &.{current}, .index = 0, .occurrence = 1, .playing = false, .positionMs = 5432, .updatedAtMs = 0, .personal = .{ .explicitEnd = 1 } });
     defer initial.deinit();
-    try std.testing.expectEqual(@as(i64, -1), (try left.send(a, &.{ "TTL", keys[0] }, false)).integer);
+    try std.testing.expect((try left.send(a, &.{ "TTL", keys[0] }, false)).integer > room_ttl_seconds - 10);
     var first = try fixtureTrack(a, "same");
     first.key = "pick-a";
     var second = first;
@@ -891,7 +916,7 @@ test "personal queues persist idle state and merge concurrent edits across Redis
     var recovered = (try right.read(allocator, room)).?;
     defer recovered.deinit();
     try std.testing.expectEqual(@as(usize, 3), recovered.state.queue.len);
-    try std.testing.expectEqual(@as(i64, -1), (try left.send(a, &.{ "TTL", keys[0] }, false)).integer);
+    try std.testing.expect((try left.send(a, &.{ "TTL", keys[0] }, false)).integer > room_ttl_seconds - 10);
     try std.testing.expectEqualStrings("0-0", recovered.lastEventId);
 }
 

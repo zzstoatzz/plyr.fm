@@ -36,6 +36,9 @@ pub fn build(b: *std.Build) void {
     root_module.addAnonymousImport("migration_0034_tag_normalization", .{
         .root_source_file = b.path("migrations/0034_normalize_derived_tags.sql"),
     });
+    root_module.addAnonymousImport("migration_0035_queue_records", .{
+        .root_source_file = b.path("migrations/0035_add_queue_records.sql"),
+    });
     const zat_module = b.dependency("zat", .{
         .target = target,
         .optimize = optimize,

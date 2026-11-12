@@ -75,12 +75,22 @@ const queue = 'rpc:fm.plyr.stg.jam.join?aud=did:web:plyr-jams-next.fly.dev#jams'
     assert.ok(resumed >= before - 2, `the second device takes over from the server position (${resumed}s after ${before}s)`);
     await first.page.waitForFunction(() => window.__audio.every(item => item.paused), undefined, { timeout: 10_000 });
 
+    let recorded;
+    for (const until = Date.now() + 6000; Date.now() < until; await new Promise(resolve => setTimeout(resolve, 200))) { recorded = fixture.record(account); if (recorded?.state.queue.length) break; }
+    assert.ok(recorded?.state.queue.length, 'the queue is recorded in PostgreSQL');
+    await first.page.context().close(); await second.page.context().close();
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    fixture.forget();
+    const later = await device(`${base} ${queue}`);
+    await later.page.getByTestId('player-dock').getByRole('button', { name: 'Open now playing', exact: true }).getByText(title.replace(/^Play /, ''), { exact: true }).waitFor({ timeout: 15_000 });
+    assert.equal(await later.page.evaluate(() => window.__audio.some(item => !item.paused)), false, 'a restored queue waits for play');
+
     const local = await device(base);
     await local.page.getByTestId('home-chart').getByTestId('track-play-control').first().click();
     await local.page.getByTestId('player-dock').getByRole('button', { name: 'Queue', exact: true }).click();
     await local.page.getByText('keeps your queue on this device').waitFor({ timeout: 10_000 });
     assert.equal(await local.page.evaluate(() => window.__joins), 0, 'a sign-in without the queue permission never contacts the coordinator');
-    assert.deepEqual([...first.errors, ...second.errors, ...local.errors], []);
-    console.log(`queue sync: an identity with only the queue permission syncs across two devices, hands playback over at ${Math.round(resumed)}s, and a sign-in without it stays on the device`);
+    assert.deepEqual([...first.errors, ...second.errors, ...later.errors, ...local.errors], []);
+    console.log(`queue sync: an identity with only the queue permission syncs across two devices, hands playback over at ${Math.round(resumed)}s, a fresh browser gets the queue back from PostgreSQL after Redis loses it, and a sign-in without the permission stays on the device`);
   } finally { await browser.close(); await fixture.stop(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

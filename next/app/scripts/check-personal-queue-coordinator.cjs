@@ -68,10 +68,25 @@ async function socket(base, ticket) {
     state = resumed.frames.find(frame => frame.type === 'state').state;
     assert.equal(state.playing, false, 'reconnect alone does not autoplay');
     assert.equal(state.queue.length, 3);
+    let recorded;
+    for (const until = Date.now() + 5000; Date.now() < until; await new Promise(resolve => setTimeout(resolve, 100))) { recorded = fixture.record(host); if (recorded?.revision === state.revision) break; }
+    assert.equal(recorded?.revision, state.revision, 'the latest revision reaches PostgreSQL');
+    assert.equal(recorded.state.queue.length, 3);
+    assert.equal(recorded.state.playing, false); assert.equal(recorded.state.personal.output, null);
+    for (const ws of sockets.splice(0)) ws.close();
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    const resting = fixture.record(host);
+    fixture.forget();
+    const restored = await join(bases[1], serviceToken(host), 'device-c', { queue: [], personal: { explicitEnd: 0 } }); assert.equal(restored.status, 200);
+    const back = await socket(bases[0], restored.ticket); sockets.push(back.ws);
+    const returned = back.frames.find(frame => frame.type === 'state').state;
+    assert.deepEqual(returned.queue.map(entry => entry.key), resting.state.queue.map(entry => entry.key), 'a queue Redis no longer holds is restored from PostgreSQL, not from the joining device');
+    assert.equal(returned.epoch, resting.state.epoch); assert.equal(returned.revision, resting.revision);
+    assert.equal(returned.playing, false); assert.equal(returned.positionMs, resting.state.positionMs);
     const other = await join(bases[0], serviceToken(guest), 'guest-device'); assert.equal(other.status, 200);
     const separate = await socket(bases[0], other.ticket); sockets.push(separate.ws);
     assert.equal(separate.frames.find(frame => frame.type === 'state').state.queue.length, 0, 'another account, signing with a secp256k1 key, gets its own empty queue');
-    console.log('Identity-only admission with no Space; two coordinators: forged, foreign and expired tokens refused, concurrent additions, duplicate retry, output fencing, paused reconnect and per-account isolation passed');
+    console.log('Identity-only admission with no Space; two coordinators; PostgreSQL record restores a queue after Redis loses it: forged, foreign and expired tokens refused, concurrent additions, duplicate retry, output fencing, paused reconnect and per-account isolation passed');
   } finally {
     for (const ws of sockets) ws.close();
     await new Promise(resolve => setTimeout(resolve, 100));
