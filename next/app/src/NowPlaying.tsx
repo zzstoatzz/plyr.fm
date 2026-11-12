@@ -4,13 +4,10 @@ import Slider from './Slider';
 import type { Href } from 'expo-router';
 import ChevronDown from 'lucide-react-native/icons/chevron-down';
 import ListMusic from 'lucide-react-native/icons/list-music';
-import Pause from 'lucide-react-native/icons/pause';
-import Play from 'lucide-react-native/icons/play';
-import SkipBack from 'lucide-react-native/icons/skip-back';
-import SkipForward from 'lucide-react-native/icons/skip-forward';
+import { NextGlyph as SkipForward, PauseGlyph as Pause, PlayGlyph as Play, PreviousGlyph as SkipBack } from './PlayerGlyph';
 import X from 'lucide-react-native/icons/x';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Modal, Platform, Pressable, ScrollView, StyleSheet, View, useWindowDimensions, type ViewInstance } from 'react-native';
+import { Animated, Modal, Platform, Pressable, ScrollView, StyleSheet, View, useWindowDimensions, type ScrollViewInstance, type ViewInstance } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { Track } from './api';
 import { useAppearance } from './appearance';
@@ -35,7 +32,9 @@ function time(value: number) {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
-export function NowPlaying({ track, close: leave, navigate: go }: { track: Track; close: () => void; navigate: (target: Href) => void }) {
+export function NowPlaying({ track, close: leave, navigate: go, overlay = false, present = true }: {
+  track: Track; close: () => void; navigate: (target: Href) => void; overlay?: boolean; present?: boolean;
+}) {
   const player = usePlayback();
   const theme = useAppearance();
   const { width, height } = useWindowDimensions();
@@ -44,7 +43,7 @@ export function NowPlaying({ track, close: leave, navigate: go }: { track: Track
   const morph = compact && !theme.reduceMotion && playerSheet.dockTop !== undefined;
   const rest = morph ? playerSheet.dockTop! : height;
   const depart = (then: () => void) => () => { setFlying(false); then(); };
-  const dismiss = usePlayerDismiss(compact, width, height, depart(leave), theme.reduceMotion, rest);
+  const dismiss = usePlayerDismiss(compact, width, height, depart(leave), theme.reduceMotion, rest, present);
   const close = () => dismiss.exit(depart(leave));
   const navigate = (target: Href) => dismiss.exit(depart(() => go(target)));
   const [away, setAway] = useState(() => playerSheet.value > 0.5);
@@ -73,18 +72,57 @@ export function NowPlaying({ track, close: leave, navigate: go }: { track: Track
       const [base, panel, art, title, dockArt, dockTitle] = await Promise.all([measure(backdrop.current), measure(panelRef.current), measure(artRef.current),
         measure(titleRef.current), measure(playerSheet.dock.art), measure(playerSheet.dock.title)]);
       if (cancelled || !base || !panel || !art || !title || !dockArt || !dockTitle) return;
-      const open = (rect: Rect) => ({ ...rect, x: rect.x - panel.x, y: rect.y - panel.y });
+      const lifted = 0.6 * Math.min(rest, playerSheet.value);
+      const open = (rect: Rect) => ({ ...rect, x: rect.x - panel.x, y: rect.y - panel.y + lifted });
       const docked = (rect: Rect) => ({ ...rect, x: rect.x - base.x, y: rect.y - base.y - rest });
       setRects({ art: { from: docked(dockArt), to: open(art) }, title: { from: docked(dockTitle), to: open(title) } });
     })());
     return () => { cancelled = true; cancelAnimationFrame(frame); };
-  }, [morph, track.id, track.metadata.title, width, height, theme.scale, artwork]);
-  const flights = morph && rects && dismiss.atTop ? rects : undefined;
+  }, [morph, present, track.id, track.metadata.title, width, height, theme.scale, artwork]);
+  const flights = morph && present && rects && dismiss.atTop ? rects : undefined;
+  const scroller = useRef<ScrollViewInstance>(null);
+  useEffect(() => { if (overlay && present) scroller.current?.scrollTo({ y: 0, animated: false }); }, [overlay, present]);
+  const closeRef = useRef(() => {});
+  useEffect(() => {
+    if (!overlay || !present || Platform.OS !== 'web') return;
+    const dialog = backdrop.current as unknown as HTMLElement | null;
+    const root = document.getElementById('root');
+    const focusable = () => dialog ? [...dialog.querySelectorAll<HTMLElement>('button, [href], input, [tabindex]:not([tabindex="-1"])')]
+      .filter(node => !node.hasAttribute('disabled') && node.getAttribute('aria-disabled') !== 'true' && !node.closest('[aria-hidden="true"]') && node.getClientRects().length > 0) : [];
+    const keys = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { closeRef.current(); return; }
+      if (event.key !== 'Tab' || !dialog) return;
+      const items = focusable();
+      if (!items.length) return;
+      const at = items.indexOf(document.activeElement as HTMLElement);
+      if (at === -1 || event.shiftKey && at === 0 || !event.shiftKey && at === items.length - 1) {
+        event.preventDefault();
+        items[event.shiftKey ? items.length - 1 : 0].focus();
+      }
+    };
+    window.addEventListener('keydown', keys);
+    root?.setAttribute('aria-hidden', 'true');
+    if (dialog && !dialog.contains(document.activeElement)) (document.activeElement as HTMLElement | null)?.blur();
+    return () => { window.removeEventListener('keydown', keys); root?.removeAttribute('aria-hidden'); };
+  }, [overlay, present]);
   useEffect(() => { setFlying(!!flights); }, [!!flights]);
   useEffect(() => () => setFlying(false), []);
   const carried = flights && away ? { opacity: 0 } : undefined;
   const fade = (open: number, docked: number, from: number, to: number) => morph
     ? playerSheet.translation.interpolate({ inputRange: [rest * from, rest * to], outputRange: [open, docked], extrapolate: 'clamp' }) : open;
+  const settle = (progress: number) => { const k = Math.min(1, progress / 0.4); return k * k * (3 - 2 * k); };
+  const artLeft = (progress: number) => {
+    if (!flights) return 0;
+    const { from, to } = flights.art;
+    const small = from.height / to.height;
+    const centered = (width - to.width * (small + (1 - small) * progress)) / 2;
+    return from.x + (centered - from.x) * settle(progress);
+  };
+  const titleLeft = (progress: number) => {
+    if (!flights) return 0;
+    const { from, to } = flights.title;
+    return from.x + (artLeft(progress) + to.x - flights.art.to.x - from.x) * settle(progress);
+  };
   const titleStyle = { lineHeight: 30 * theme.scale, color: theme.text, fontFamily: theme.fontFamily, fontSize: 25 * theme.scale, fontWeight: '800', letterSpacing: -0.4 } as const;
   const error = player.error || player.status.error;
   const caption = { color: theme.muted, fontFamily: theme.fontFamily, fontSize: 13 * theme.scale };
@@ -96,12 +134,13 @@ export function NowPlaying({ track, close: leave, navigate: go }: { track: Track
   const facts = [`${plays} ${plays === 1 ? 'play' : 'plays'}`, likes > 0 && `${likes} ${likes === 1 ? 'like' : 'likes'}`,
     !Number.isNaN(added.getTime()) && `added ${added.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }).toLowerCase()}`].filter(Boolean).join(' · ');
 
-  return <Modal visible transparent accessibilityLabel="Now playing" animationType="none" onRequestClose={close}>
-    <View ref={node => { backdrop.current = node; dismiss.panelRef(node); }} style={styles.backdrop}>
+  closeRef.current = close;
+  const sheet = <View ref={node => { backdrop.current = node; dismiss.panelRef(node); }} style={overlay ? [styles.backdrop, styles.overlay, !present && styles.hidden] : styles.backdrop}
+      {...(overlay ? { role: 'dialog' as const, 'aria-modal': true, 'aria-label': 'Now playing' } : {})}>
       <AnimatedSafeAreaView {...dismiss.panHandlers} accessibilityViewIsModal={Platform.OS === 'web' ? undefined : true} edges={['top', 'bottom']}
         style={[{ transform: [{ translateY: dismiss.translation }] }, styles.panel, styles.full]}>
-        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: theme.background, opacity: fade(1, 0, 0.7, 1) }]} />
-        <Animated.View style={[styles.full, { opacity: fade(1, 0, 0, 0.35) }]}>
+        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: theme.background, opacity: fade(1, 0, 0.85, 1) }]} />
+        <Animated.View style={[styles.full, { opacity: fade(1, 0, 0, 0.5) }]}>
         <View style={styles.header}>
           {compact && <View {...dismiss.protect}><PlayerControl icon={ChevronDown} label="Close" onPress={close} /></View>}
           <View testID="now-playing-dismiss-region" style={[styles.dismissRegion, Platform.OS === 'web' && compact && touchHeader]}>
@@ -111,8 +150,8 @@ export function NowPlaying({ track, close: leave, navigate: go }: { track: Track
           </View>
           {compact ? <View style={styles.headerSpacer} /> : <View {...dismiss.protect}><PlayerControl icon={X} label="Close" onPress={close} /></View>}
         </View>
-        <View {...dismiss.contentStartHandlers} style={styles.scrollRegion}>
-          <ScrollView testID="now-playing-scroll" onScroll={dismiss.onScroll} scrollEventThrottle={16} scrollEnabled={!dismiss.dragging}
+        <Animated.View {...dismiss.contentStartHandlers} style={[styles.scrollRegion, morph && { transform: [{ translateY: fade(0, -0.6 * rest, 0, 1) }] }]}>
+          <ScrollView ref={scroller} testID="now-playing-scroll" onScroll={dismiss.onScroll} scrollEventThrottle={16} scrollEnabled={!dismiss.dragging}
             style={Platform.OS === 'web' && compact ? scrollTouch : undefined} contentContainerStyle={[styles.content, sideBySide && styles.desktopContent]} alwaysBounceVertical={false}>
             <View testID="now-playing-artwork" style={[styles.art, carried]}>
               <View ref={artRef}><Cover uri={trackArtwork(track)} size={artwork} radius={16} /></View>
@@ -143,12 +182,12 @@ export function NowPlaying({ track, close: leave, navigate: go }: { track: Track
                 </View>
               </View>
               <View style={styles.transport}>
-                <View {...dismiss.protect}><PlayerControl icon={SkipBack} label="Previous" onPress={player.previous} /></View>
+                <View {...dismiss.protect}><PlayerControl large icon={SkipBack} label="Previous" onPress={player.previous} /></View>
                 {sideBySide && <PlayerSeek />}
                 <View {...dismiss.protect}><PlayerControl icon={playing ? Pause : Play} label={playing ? 'Pause' : 'Play'}
                   onPress={() => player.setPlaying(!playing)} primary large busy={player.loading} /></View>
                 {sideBySide && <PlayerSeek forward />}
-                <View {...dismiss.protect}><PlayerControl icon={SkipForward} label="Next" onPress={() => void player.next()} /></View>
+                <View {...dismiss.protect}><PlayerControl large icon={SkipForward} label="Next" onPress={() => void player.next()} /></View>
               </View>
               <View style={styles.utilities}>
                 <View {...dismiss.protect}><TrackLikes key={track.id} track={track} iconOnly returnTo="/now-playing" /></View>
@@ -186,26 +225,28 @@ export function NowPlaying({ track, close: leave, navigate: go }: { track: Track
               </View>
             </View>
           </ScrollView>
-        </View>
+        </Animated.View>
         </Animated.View>
         <View ref={panelRef} pointerEvents="none" aria-hidden importantForAccessibility="no-hide-descendants" style={StyleSheet.absoluteFill}>
           {flights && away && <View testID="now-playing-flights" style={StyleSheet.absoluteFill}>
-            <PlayerFlight testID="now-playing-flight-art" {...flights.art} rest={rest} origin={<Cover instant uri={trackArtwork(track)} size={flights.art.from.width} radius={6} />}>
+            <PlayerFlight testID="now-playing-flight-art" {...flights.art} rest={rest} left={artLeft} origin={<Cover instant uri={trackArtwork(track)} size={flights.art.from.width} radius={6} />}>
               <Cover instant uri={trackArtwork(track)} size={flights.art.to.width} radius={16} />
             </PlayerFlight>
-            <PlayerFlight testID="now-playing-flight-title" {...flights.title} rest={rest} originFade={[0.05, 0.25]} fade={[0.5, 0.75]}
+            <PlayerFlight testID="now-playing-flight-title" {...flights.title} rest={rest} left={titleLeft} originFade={[0.05, 0.25]} fade={[0.6, 0.8]}
               origin={<Text numberOfLines={1} style={{ color: theme.text, fontSize: 14 * theme.scale, fontWeight: '700' }}>{track.metadata.title}</Text>}>
               <Text numberOfLines={2} style={titleStyle}>{track.metadata.title}</Text>
             </PlayerFlight>
           </View>}
         </View>
       </AnimatedSafeAreaView>
-    </View>
-  </Modal>;
+    </View>;
+  return overlay ? sheet : <Modal visible transparent accessibilityLabel="Now playing" animationType="none" onRequestClose={close}>{sheet}</Modal>;
 }
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' },
+  overlay: { position: 'fixed' as 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 9999 },
+  hidden: { display: 'none' },
   panel: { width: '100%' },
   full: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', minHeight: 50, paddingHorizontal: 20 },

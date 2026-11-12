@@ -1,16 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Animated, PanResponder, Platform, type ScrollEvent } from 'react-native';
 import { playerSheet } from './player-sheet';
 
-export function usePlayerDismiss(enabled: boolean, width: number, height: number, close: () => void, still = false, rest = height) {
+export function usePlayerDismiss(enabled: boolean, width: number, height: number, close: () => void, still = false, rest = height, present = true) {
   const [panel, setPanel] = useState<HTMLElement | null>(null);
   const panelRef = useCallback((node: unknown) => {
     if (Platform.OS === 'web') setPanel(node instanceof HTMLElement ? node : null);
   }, []);
   const directionalTouch = Platform.OS === 'web' && typeof CSS !== 'undefined' && CSS.supports('touch-action', 'pan-x pan-down');
   const translation = playerSheet.translation;
-  const entered = useRef(false);
-  useState(() => { if (still) translation.setValue(0); else if (!playerSheet.dragging && !playerSheet.release) translation.setValue(rest); });
   const latest = useRef({ enabled, rest, close, still });
   latest.current = { enabled, rest, close, still };
   const closing = useRef(false);
@@ -23,8 +21,8 @@ export function usePlayerDismiss(enabled: boolean, width: number, height: number
   const acquiredAt = useRef({ dx: 0, dy: 0 });
   const active = useRef<number | null>(null);
   const native = Platform.OS !== 'web';
-  const spring = (toValue: number, velocity: number) => Animated.spring(translation, { toValue, velocity, stiffness: 420, damping: 40, mass: 1,
-    overshootClamping: true, restDisplacementThreshold: 1.5, restSpeedThreshold: 1.5, useNativeDriver: native });
+  const spring = (toValue: number, velocity: number) => Animated.spring(translation, { toValue, velocity, stiffness: 1000, damping: 62, mass: 1,
+    overshootClamping: true, restDisplacementThreshold: toValue ? 4 : 1.5, restSpeedThreshold: toValue ? 40 : 1.5, useNativeDriver: native });
   const exit = (then: () => void, velocity = 0) => {
     if (closing.current) return;
     closing.current = true;
@@ -36,7 +34,8 @@ export function usePlayerDismiss(enabled: boolean, width: number, height: number
   const settle = (open: boolean, velocity = 0) => {
     if (!open) { exit(latest.current.close, velocity); return; }
     closing.current = false;
-    spring(0, velocity).start();
+    const request = generation.current;
+    spring(0, velocity).start(({ finished }) => { if (finished && request === generation.current) playerSheet.opened?.(); });
   };
   const api = useRef({ exit, settle });
   api.current = { exit, settle };
@@ -79,15 +78,26 @@ export function usePlayerDismiss(enabled: boolean, width: number, height: number
     onPanResponderTerminate: snapBack,
     onPanResponderTerminationRequest: () => active.current === null
   })).current;
-  useEffect(() => {
+  const sized = useRef({ width, height });
+  useLayoutEffect(() => {
     generation.current++;
     active.current = null;
     closing.current = false;
     setDragging(false);
-    if (entered.current || still) { translation.stopAnimation(); translation.setValue(0); }
+    if (!present) { translation.stopAnimation(); translation.setValue(rest); return; }
+    if (still || playerSheet.instant) { playerSheet.instant = false; translation.stopAnimation(); translation.setValue(0); playerSheet.opened?.(); }
     else if (playerSheet.release) { const { open, velocity } = playerSheet.release; playerSheet.release = undefined; api.current.settle(open, velocity); }
-    else if (!playerSheet.dragging) api.current.settle(true);
-    entered.current = true;
+    else if (!playerSheet.dragging) { translation.setValue(rest); api.current.settle(true); }
+  }, [present, translation]);
+  useEffect(() => {
+    if (sized.current.width === width && sized.current.height === height) return;
+    sized.current = { width, height };
+    generation.current++;
+    active.current = null;
+    closing.current = false;
+    setDragging(false);
+    translation.stopAnimation();
+    translation.setValue(present ? 0 : rest);
   }, [enabled, width, height, translation]);
   useEffect(() => {
     playerSheet.settle = (open, velocity) => api.current.settle(open, velocity);

@@ -2,9 +2,10 @@ import { trackArtwork, collectionArtwork } from './artwork';
 import { Text } from './Text';
 import { Link, type Href } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Animated, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Animated, Platform, Pressable, StyleSheet, View } from 'react-native';
 import Music2 from 'lucide-react-native/icons/eighth-note';
-import PlayIcon from 'lucide-react-native/icons/play';
+import { PlayGlyph as PlayIcon } from './PlayerGlyph';
+import { PlayerLoader } from './PlayerLoader';
 import UserRound from 'lucide-react-native/icons/user-round';
 import type { ListSummary, Page, Track } from './api';
 import { Action } from './controls';
@@ -173,7 +174,7 @@ export function RowPlay({ onPress, label = 'Play', busy = false }: { onPress: ()
   const colors = useColors();
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ busy }} disabled={busy} onPress={onPress}
     style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
-    {busy ? <ActivityIndicator accessibilityLabel="Loading playback" color={colors.muted} /> : <PlayIcon size={20} color={colors.text} fill={colors.text} />}
+    {busy ? <PlayerLoader color={colors.muted} size={18} /> : <PlayIcon size={20} color={colors.text} fill={colors.text} />}
   </Pressable>;
 }
 
