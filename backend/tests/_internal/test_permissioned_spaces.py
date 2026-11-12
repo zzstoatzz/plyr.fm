@@ -323,11 +323,8 @@ async def test_add_and_remove_member_use_memberspace_methods(
     request.assert_awaited_with(
         session,
         "POST",
-        "com.atproto.memberspace.putMembers",
-        payload={
-            "space": space,
-            "members": [{"did": "did:plc:friend", "read": True, "write": False}],
-        },
+        "com.atproto.memberspace.putMember",
+        payload={"space": space, "did": "did:plc:friend", "read": True, "write": False},
         parse_response=False,
     )
 
@@ -340,8 +337,8 @@ async def test_add_and_remove_member_use_memberspace_methods(
     request.assert_awaited_with(
         session,
         "POST",
-        "com.atproto.memberspace.removeMembers",
-        payload={"space": space, "dids": ["did:plc:friend"]},
+        "com.atproto.memberspace.removeMember",
+        payload={"space": space, "did": "did:plc:friend"},
         parse_response=False,
     )
     # plyr forgets the credential it minted for the removed member
@@ -411,7 +408,7 @@ async def test_mint_credential_uses_delegation_token_flow(
         "https://space-host.test",
         {
             "space": space,
-            "credentialKey": space_client._did_key(credential.key),
+            "credentialKid": space_client._did_key(credential.key),
             "delegationToken": "delegation-token",
         },
     )
@@ -453,7 +450,7 @@ async def test_mint_credential_sends_separate_client_attestation(
         "https://space-host.test",
         {
             "space": space,
-            "credentialKey": ANY,
+            "credentialKid": ANY,
             "delegationToken": "delegation-token",
             "clientAttestation": ("attestation-for:did:plc:authority#atproto_pds"),
         },
@@ -744,7 +741,7 @@ async def test_list_space_repos_routes_to_authority_host(
         session,
         host_url="https://authority-space.example",
         audience="did:plc:authority",
-        endpoint="com.atproto.space.listWriters",
+        endpoint="com.atproto.space.listRepos",
         space=space,
         params={"space": space, "limit": 20},
     )

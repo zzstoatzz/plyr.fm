@@ -77,10 +77,10 @@ async def test_credential_request_is_unsigned_and_binds_the_key(
     body = json.loads(request.content)
     assert body == {
         "space": space,
-        "credentialKey": space_client._did_key(credential.key),
+        "credentialKid": space_client._did_key(credential.key),
         "delegationToken": "delegation-token",
     }
-    assert parse_did_key(body["credentialKey"]).jwt_alg == "ES256"
+    assert parse_did_key(body["credentialKid"]).jwt_alg == "ES256"
     assert credential.token == "a.b.c"
 
 

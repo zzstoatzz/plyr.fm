@@ -1,26 +1,34 @@
-"""HPKE-exported RFC 9421 response MACs for permissioned-space reads."""
+"""Response MACs for permissioned-space reads (``@atproto/space`` ``kem.ts`` / ``mac.ts``).
+
+A syncer reading with a space credential sends ``Atproto-Space-Want-Mac`` with a
+fresh P-256 key share; the repo host derives the same shared secret against the
+author's ``#atproto_kem`` key and MACs the commit in ``Atproto-Space-Mac``.
+"""
 
 import base64
 import hashlib
 import hmac
+import re
 import struct
-from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-import http_sfv
 import libipld
 from atproto_core.cid import CID
 from atproto_crypto.consts import P256_JWT_ALG
 from atproto_crypto.did import format_did_key, parse_did_key
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives.kdf.hkdf import HKDFExpand
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 COMMIT_MAC_TYPE = "atproto-space-repo"
 RECORD_MAC_TYPE = "atproto-space-record"
 COMMIT_VERSION = 1
-ACCEPT_SIGNATURE_HEADER = "accept-signature"
+WANT_MAC_HEADER = "atproto-space-want-mac"
+MAC_HEADER = "atproto-space-mac"
+
+# RFC 9180 suite id for DHKEM(P-256, HKDF-SHA256)
+_KEM_PREFIX = b"HPKE-v1" + b"KEM" + struct.pack(">H", 0x0010)
 
 
 class SpaceMacError(Exception):
@@ -44,31 +52,12 @@ def _p256_key_bytes(did_key: str) -> bytes:
 
 
 def _derive_shared_secret(dh: bytes, syncer_key: bytes, author_key: bytes) -> bytes:
-    kem = b"KEM" + struct.pack(">H", 0x0010)
-    suite = b"HPKE" + struct.pack(">HHH", 0x0010, 0x0001, 0xFFFF)
-
-    def extract(suite_id: bytes, salt: bytes, label: bytes, value: bytes) -> bytes:
-        return hmac.new(
-            salt, b"HPKE-v1" + suite_id + label + value, hashlib.sha256
-        ).digest()
-
-    def expand(suite_id: bytes, secret: bytes, label: bytes, info: bytes) -> bytes:
-        return HKDFExpand(
-            algorithm=hashes.SHA256(),
-            length=32,
-            info=struct.pack(">H", 32) + b"HPKE-v1" + suite_id + label + info,
-        ).derive(secret)
-
-    eae = extract(kem, b"", b"eae_prk", dh)
-    kem_secret = expand(kem, eae, b"shared_secret", syncer_key + author_key)
-    context = (
-        b"\x00"
-        + extract(suite, b"", b"psk_id_hash", b"")
-        + extract(suite, b"", b"info_hash", b"atproto-mac")
+    info = (
+        struct.pack(">H", 32) + _KEM_PREFIX + b"shared_secret" + syncer_key + author_key
     )
-    secret = extract(suite, kem_secret, b"secret", b"")
-    exporter = expand(suite, secret, b"exp", context)
-    return expand(suite, exporter, b"sec", b"")
+    return HKDF(algorithm=hashes.SHA256(), length=32, salt=b"", info=info).derive(
+        _KEM_PREFIX + b"eae_prk" + dh
+    )
 
 
 def _did_key(public: ec.EllipticCurvePublicKey) -> str:
@@ -104,138 +93,81 @@ def decapsulate(author_kem_key: ec.EllipticCurvePrivateKey, key_share: str) -> b
     return _derive_shared_secret(dh, syncer_bytes, author_bytes)
 
 
-def format_mac_request(key_share: str, *, mac_type: str = COMMIT_MAC_TYPE) -> str:
-    component = http_sfv.Item(_covered_header(mac_type))
-    component.params["sf"] = True
-    params = http_sfv.InnerList([component])
-    params.params.update({"keyid": key_share, "tag": mac_type})
-    return "mac=" + str(params)
+def format_want_mac_header(key_share: str, *, mac_type: str = COMMIT_MAC_TYPE) -> str:
+    return f'type="{mac_type}", ver={COMMIT_VERSION}, key_share="{key_share}"'
 
 
-def _covered_header(mac_type: str) -> str:
-    if mac_type == COMMIT_MAC_TYPE:
-        return "atproto-space-commit"
-    if mac_type == RECORD_MAC_TYPE:
-        return "atproto-space-record"
-    raise SpaceMacError("unsupported MAC profile")
+_MAC_FIELDS = re.compile(r'(\w+)=("[^"]*"|:[A-Za-z0-9+/=]*:|\d+)')
 
 
-def _dictionary(value: str | None) -> http_sfv.Dictionary:
+def parse_mac_header(value: str | None, *, mac_type: str = COMMIT_MAC_TYPE) -> bytes:
+    """The commit MAC carried in an ``Atproto-Space-Mac`` response header."""
     if not value:
-        raise SpaceMacError("missing MAC header")
-    result = http_sfv.Dictionary()
-    try:
-        result.parse(value.encode("ascii"))
-    except (ValueError, UnicodeError) as exc:
-        raise SpaceMacError("malformed MAC header") from exc
-    return result
-
-
-def _verify_mac(
-    exchange: Encapsulation,
-    headers: Mapping[str, str],
-    mac_type: str,
-) -> http_sfv.Dictionary:
-    inputs = _dictionary(headers.get("signature-input"))
-    signatures = _dictionary(headers.get("signature"))
-    tagged = [
-        (name, member)
-        for name, member in inputs.items()
-        if isinstance(member, http_sfv.InnerList)
-        and type(member.params.get("tag")) is str
-        and member.params.get("tag") == mac_type
-    ]
-    if len(tagged) != 1:
-        raise SpaceMacError("missing or ambiguous MAC signature")
-    label, params = tagged[0]
-    header = _covered_header(mac_type)
-    if (
-        len(params) != 1
-        or type(params[0].value) is not str
-        or params[0].value != header
-        or set(params[0].params) != {"sf"}
-        or params[0].params["sf"] is not True
-        or type(params.params.get("keyid")) is not str
-        or params.params.get("keyid") != exchange.key_share
-        or params.params.get("alg", "hmac-sha256") != "hmac-sha256"
-        or set(params.params) - {"keyid", "tag", "alg"}
+        raise SpaceMacError("missing Atproto-Space-Mac header")
+    fields = dict(_MAC_FIELDS.findall(value))
+    if fields.get("type") != f'"{mac_type}"' or fields.get("ver") != str(
+        COMMIT_VERSION
     ):
-        raise SpaceMacError("unexpected MAC signature parameters")
-    signature = signatures.get(label)
-    if (
-        not isinstance(signature, http_sfv.Item)
-        or not isinstance(signature.value, bytes)
-        or signature.params
-    ):
-        raise SpaceMacError("malformed MAC signature")
-    fields = _dictionary(headers.get(header))
-    base = f'"{header}";sf: {fields}\n"@signature-params": {params}'.encode()
-    expected = hmac.new(exchange.shared_secret, base, hashlib.sha256).digest()
-    if not hmac.compare_digest(expected, signature.value):
-        raise SpaceMacError("response MAC did not verify")
-    return fields
-
-
-def _bare(fields: http_sfv.Dictionary, name: str) -> object:
-    item = fields.get(name)
-    return item.value if isinstance(item, http_sfv.Item) else None
+        raise SpaceMacError(f"unexpected MAC type or version: {value}")
+    mac = fields.get("mac", "")
+    if not (mac.startswith(":") and mac.endswith(":")):
+        raise SpaceMacError("missing or malformed mac")
+    return _b64(mac[1:-1])
 
 
 def _b64(text: str) -> bytes:
-    return base64.b64decode(text + "=" * (-len(text) % 4), validate=True)
+    return base64.b64decode(text + "=" * (-len(text) % 4))
 
 
-def verify_commit_mac(
-    exchange: Encapsulation,
-    commit: dict[str, Any] | None,
-    headers: Mapping[str, str],
-    *,
-    space: str,
-    repo: str,
-) -> None:
-    if (
-        not isinstance(commit, dict)
-        or type(commit.get("ver")) is not int
-        or commit["ver"] != COMMIT_VERSION
-        or not isinstance(commit.get("rev"), str)
-        or not commit["rev"]
-        or commit.get("space") != space
-        or commit.get("repo") != repo
-    ):
-        raise SpaceMacError("missing or unexpected space commit")
-    fields = _verify_mac(exchange, headers, COMMIT_MAC_TYPE)
+def _length_prefixed(text: str) -> bytes:
+    data = text.encode()
+    return struct.pack(">H", len(data)) + data
+
+
+def compute_commit_mac(
+    shared_secret: bytes, *, space: str, repo: str, rev: str, data: bytes
+) -> bytes:
+    context = (
+        f"{COMMIT_MAC_TYPE}-v{COMMIT_VERSION}".encode()
+        + _length_prefixed(space)
+        + _length_prefixed(repo)
+        + _length_prefixed(rev)
+    )
+    return hmac.new(shared_secret, context + data, hashlib.sha256).digest()
+
+
+def verify_commit_mac(shared_secret: bytes, commit: dict, mac: bytes) -> None:
+    """Check a JSON ``com.atproto.space.defs#commit`` against its MAC."""
     try:
-        data = _b64(commit["data"]["$bytes"])
-    except (KeyError, TypeError, ValueError) as exc:
-        raise SpaceMacError("malformed commit data") from exc
-    if (
-        type(_bare(fields, "ver")) is not int
-        or any(type(_bare(fields, key)) is not str for key in ("space", "repo", "rev"))
-        or any(
-            _bare(fields, key) != commit.get(key)
-            for key in ("ver", "space", "repo", "rev")
+        expected = compute_commit_mac(
+            shared_secret,
+            space=commit["space"],
+            repo=commit["repo"],
+            rev=commit["rev"],
+            data=_b64(commit["data"]["$bytes"]),
         )
-        or _bare(fields, "data") != data
-        or len(data) != 32
-    ):
-        raise SpaceMacError("commit does not match its MAC")
+    except (KeyError, TypeError, ValueError) as exc:
+        raise SpaceMacError(f"malformed commit: {commit}") from exc
+    if not hmac.compare_digest(expected, mac):
+        raise SpaceMacError("commit MAC did not verify")
 
 
-def verify_record_mac(
-    exchange: Encapsulation,
-    *,
-    uri: str,
-    cid: str,
-    headers: Mapping[str, str],
-) -> None:
-    fields = _verify_mac(exchange, headers, RECORD_MAC_TYPE)
-    if (
-        type(_bare(fields, "uri")) is not str
-        or type(_bare(fields, "cid")) is not str
-        or _bare(fields, "uri") != uri
-        or _bare(fields, "cid") != cid
-    ):
-        raise SpaceMacError("record does not match its MAC")
+def verify_record_mac(shared_secret: bytes, *, uri: str, cid: str, mac: bytes) -> None:
+    if not cid.startswith("b"):
+        raise SpaceMacError("record CID is not base32")
+    try:
+        raw_cid = base64.b32decode(cid[1:].upper() + "=" * (-len(cid[1:]) % 8))
+    except ValueError as exc:
+        raise SpaceMacError("malformed record CID") from exc
+    expected = hmac.new(
+        shared_secret,
+        f"{RECORD_MAC_TYPE}-v{COMMIT_VERSION}".encode()
+        + _length_prefixed(uri)
+        + raw_cid,
+        hashlib.sha256,
+    ).digest()
+    if not hmac.compare_digest(expected, mac):
+        raise SpaceMacError("record MAC did not verify")
 
 
 def _ipld_value(value: Any) -> Any:

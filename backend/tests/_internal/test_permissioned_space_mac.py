@@ -2,14 +2,9 @@
 ``kem.ts`` and ``mac.ts`` on the permissioned-data branch."""
 
 import base64
-import hashlib
-import hmac
-import json
 import time
-from pathlib import Path
 from unittest.mock import AsyncMock
 
-import http_sfv
 import httpx
 import pytest
 from atproto_crypto.consts import P256_JWT_ALG
@@ -32,14 +27,14 @@ def _did_key(key: ec.EllipticCurvePrivateKey) -> str:
     return format_did_key(P256_JWT_ALG, compressed)
 
 
-def test_kem_matches_current_sdk_hpke_export_vector() -> None:
-    """Upstream 2d4a6736f kem.test.ts vector independently computed by Go HPKE."""
+def test_kem_matches_the_rfc_9180_vector() -> None:
+    """RFC 9180 A.3.1, DHKEM(P-256, HKDF-SHA256), as upstream's kem.test.ts."""
     pk_em = bytes.fromhex(
-        "04d804370b7e24b94749eb1dc8df6d4d4a5d75f9effad01739ebcad5c54a40d57aa"
-        "a8b4190fc124dbde2e4f1e1d1b012a3bc4038157dc29b55533a932306d8d38d"
+        "04a92719c6195d5085104f469a8b9814d5838ff72b60501e2c4466e5e67b325ac9"
+        "8536d7b61a1af4b78e5b7f951c0900be863c403ce65c9bfcb9382657222d18c4"
     )
     author = ec.derive_private_key(
-        int("62c3868357a464f8461d03aa0182c7cebcde841036aea7230ddc7339f1088346", 16),
+        int("f3ce7fdae57e1a310d87f1ebbde6f328be0a99cdbcadf4d6589cf29de4b8ffd2", 16),
         ec.SECP256R1(),
     )
     key_share = format_did_key(
@@ -51,7 +46,7 @@ def test_kem_matches_current_sdk_hpke_export_vector() -> None:
         ),
     )
     assert mac.decapsulate(author, key_share).hex() == (
-        "2060e0558d1b34c10086bc137f849bb79ba59fcdc30544418e35c9cd301f0d0d"
+        "c0d26aeab536609a572b07695d933b589dcf363ff9d93c93adea537aeabb8cb8"
     )
 
 
@@ -79,83 +74,50 @@ def _commit(**changes: object) -> dict:
     return {**commit, **changes}
 
 
-def response_headers(
-    request: str, secret: bytes, covered: str, fields: dict
-) -> dict[str, str]:
-    params = request.split("=", 1)[1]
-    dictionary = http_sfv.Dictionary(fields)
-    base = f'"{covered}";sf: {dictionary}\n"@signature-params": {params}'.encode()
-    signature = base64.b64encode(
-        hmac.new(secret, base, hashlib.sha256).digest()
-    ).decode()
-    return {
-        covered: str(dictionary),
-        "signature-input": request,
-        "signature": f"mac=:{signature}:",
-    }
-
-
-def commit_headers(exchange: mac.Encapsulation, commit: dict) -> dict[str, str]:
-    return response_headers(
-        mac.format_mac_request(exchange.key_share),
-        exchange.shared_secret,
-        "atproto-space-commit",
-        {**commit, "data": base64.b64decode(commit["data"]["$bytes"] + "=")},
+def _mac_for(secret: bytes, commit: dict) -> bytes:
+    return mac.compute_commit_mac(
+        secret,
+        space=commit["space"],
+        repo=commit["repo"],
+        rev=commit["rev"],
+        data=bytes([1]) * 32,
     )
 
 
 def test_commit_mac_covers_every_field_unambiguously() -> None:
-    exchange = mac.Encapsulation("did:key:fixture", bytes(range(32)))
+    secret = bytes(range(32))
     commit = _commit()
-    headers = commit_headers(exchange, commit)
-    mac.verify_commit_mac(exchange, commit, headers, space=SPACE, repo=WRITER)
+    mac.verify_commit_mac(secret, commit, _mac_for(secret, commit))
     for tampered in (
-        _commit(rev="different"),
+        _commit(rev="3kbcq3p7ad401"),
         _commit(repo="did:plc:other"),
-        _commit(ver=2),
-        _commit(data={"$bytes": "AA=="}),
-        None,
+        _commit(data={"$bytes": base64.b64encode(bytes([2]) * 32).decode()}),
     ):
         with pytest.raises(mac.SpaceMacError):
-            mac.verify_commit_mac(exchange, tampered, headers, space=SPACE, repo=WRITER)
+            mac.verify_commit_mac(secret, tampered, _mac_for(secret, commit))
+    a = mac.compute_commit_mac(
+        secret, space=SPACE, repo="did:x:a", rev="3kbc", data=b""
+    )
+    b = mac.compute_commit_mac(
+        secret, space=SPACE, repo="did:x:a3", rev="kbc", data=b""
+    )
+    assert a != b
 
 
-@pytest.mark.parametrize(
-    "header", ["signature", "signature-input", "atproto-space-commit"]
-)
-def test_missing_or_corrupt_proof_fails_closed(header: str) -> None:
-    exchange = mac.Encapsulation("did:key:fixture", bytes(range(32)))
-    for replacement in (None, "corrupt"):
-        headers = commit_headers(exchange, _commit())
-        if replacement is None:
-            del headers[header]
-        else:
-            headers[header] = replacement
+def test_headers_round_trip_the_upstream_shapes() -> None:
+    assert mac.format_want_mac_header("did:key:zDnaeX") == (
+        'type="atproto-space-repo", ver=1, key_share="did:key:zDnaeX"'
+    )
+    value = base64.b64encode(b"\x00" * 32).decode()
+    header = f'type="atproto-space-repo", ver=1, mac=:{value}:'
+    assert mac.parse_mac_header(header) == b"\x00" * 32
+    for bad in (
+        None,
+        'type="atproto-space-record", ver=1, mac=:AA==:',
+        'type="atproto-space-repo", ver=1',
+    ):
         with pytest.raises(mac.SpaceMacError):
-            mac.verify_commit_mac(
-                exchange, _commit(), headers, space=SPACE, repo=WRITER
-            )
-
-
-def test_request_key_binding_and_covered_header_are_required() -> None:
-    exchange = mac.Encapsulation("did:key:fixture", bytes(range(32)))
-    headers = commit_headers(exchange, _commit())
-    for original, replacement in [
-        ("did:key:fixture", "did:key:other"),
-        (";sf", ""),
-        ("atproto-space-commit", "unrelated"),
-        (";tag=", ';alg="other";tag='),
-    ]:
-        altered = {
-            **headers,
-            "signature-input": headers["signature-input"].replace(
-                original, replacement
-            ),
-        }
-        with pytest.raises(mac.SpaceMacError):
-            mac.verify_commit_mac(
-                exchange, _commit(), altered, space=SPACE, repo=WRITER
-            )
+            mac.parse_mac_header(bad)
 
 
 def test_record_value_matches_canonical_dag_cbor_with_links_and_bytes() -> None:
@@ -221,18 +183,16 @@ async def _read_repo_ops(
 
 def _host_reply(kem: ec.EllipticCurvePrivateKey, *, forge: bool = False):
     def reply(headers: dict[str, str]) -> httpx.Response:
-        key_share = (
-            headers[mac.ACCEPT_SIGNATURE_HEADER].split('keyid="')[1].split('"')[0]
-        )
+        key_share = headers[mac.WANT_MAC_HEADER].split('key_share="')[1].rstrip('"')
         secret = mac.decapsulate(kem, key_share)
         commit = _commit()
-        proof = commit_headers(
-            mac.Encapsulation(key_share, bytes(32) if forge else secret), commit
-        )
+        digest = _mac_for(bytes(32) if forge else secret, commit)
         return httpx.Response(
             200,
             json={"ops": [], "commit": commit},
-            headers=proof,
+            headers={
+                mac.MAC_HEADER: f'type="atproto-space-repo", ver=1, mac=:{base64.b64encode(digest).decode()}:'
+            },
         )
 
     return reply
@@ -245,8 +205,8 @@ async def test_repo_ops_request_and_verify_the_commit_mac(
     result = await _read_repo_ops(monkeypatch, kem=kem, respond=_host_reply(kem))
     assert result["commit"]["rev"] == "3kbcq3p7ad400"
     [headers] = result["_sent"]
-    assert headers[mac.ACCEPT_SIGNATURE_HEADER].startswith(
-        'mac=("atproto-space-commit";sf);keyid="did:key:z'
+    assert headers[mac.WANT_MAC_HEADER].startswith(
+        'type="atproto-space-repo", ver=1, key_share="did:key:z'
     )
 
 
@@ -258,121 +218,14 @@ async def test_repo_ops_reject_a_commit_whose_mac_does_not_verify(
         await _read_repo_ops(monkeypatch, kem=kem, respond=_host_reply(kem, forge=True))
 
 
-async def test_repo_ops_without_a_kem_key_fail_closed(
+async def test_repo_ops_without_a_kem_key_send_no_mac_request(
     monkeypatch: pytest.MonkeyPatch, credential: None
 ) -> None:
-    with pytest.raises(space_client.SpaceAccessError, match="no verification key"):
-        await _read_repo_ops(
-            monkeypatch,
-            kem=None,
-            respond=lambda headers: httpx.Response(200, json={"ops": []}),
-        )
-
-
-async def test_repo_ops_without_commit_fail_closed(
-    monkeypatch: pytest.MonkeyPatch, credential: None
-) -> None:
-    with pytest.raises(space_client.SpaceAccessError, match="missing or unexpected"):
-        await _read_repo_ops(
-            monkeypatch,
-            kem=ec.generate_private_key(ec.SECP256R1()),
-            respond=lambda headers: httpx.Response(200, json={"ops": []}),
-        )
-
-
-def test_current_sdk_signed_record_and_commit_vectors() -> None:
-    fixture = json.loads(
-        (Path(__file__).parents[1] / "fixtures/space-mac.json").read_text()
+    result = await _read_repo_ops(
+        monkeypatch,
+        kem=None,
+        respond=lambda headers: httpx.Response(
+            200, json={"ops": [], "commit": _commit()}
+        ),
     )
-    author = ec.derive_private_key(int(fixture["authorPrivateKey"], 16), ec.SECP256R1())
-    secret = mac.decapsulate(author, fixture["keyShare"])
-    assert secret.hex() == fixture["sharedSecret"]
-    exchange = mac.Encapsulation(fixture["keyShare"], secret)
-    commit = fixture["commit"]
-    mac.verify_commit_mac(
-        exchange,
-        commit,
-        fixture["commitHeaders"],
-        space=commit["space"],
-        repo=commit["repo"],
-    )
-    record = fixture["record"]
-    mac.verify_record_value(record["value"], record["cid"])
-    mac.verify_record_mac(
-        exchange, uri=record["uri"], cid=record["cid"], headers=fixture["recordHeaders"]
-    )
-
-
-@pytest.mark.parametrize(
-    "field,value",
-    [
-        ("rev", None),
-        ("rev", 42),
-        ("rev", ""),
-        ("ver", True),
-        ("repo", http_sfv.Token(WRITER)),
-    ],
-)
-def test_signed_malformed_commit_metadata_is_rejected(
-    field: str, value: object
-) -> None:
-    exchange = mac.Encapsulation("did:key:fixture", bytes(range(32)))
-    commit = _commit()
-    signed = {**commit, "data": bytes([1]) * 32}
-    if value is None:
-        signed.pop(field)
-        commit.pop(field)
-    else:
-        signed[field] = value
-        if field == "rev":
-            commit[field] = value
-    headers = response_headers(
-        mac.format_mac_request(exchange.key_share),
-        exchange.shared_secret,
-        "atproto-space-commit",
-        signed,
-    )
-    with pytest.raises(mac.SpaceMacError):
-        mac.verify_commit_mac(exchange, commit, headers, space=SPACE, repo=WRITER)
-
-
-async def test_writer_discovery_uses_current_rpc_and_preserves_writer_metadata(
-    monkeypatch: pytest.MonkeyPatch, credential: None
-) -> None:
-    response = {
-        "repos": [
-            {
-                "repo": WRITER,
-                "latest": {
-                    "$type": "com.atproto.space.defs#repoWrite",
-                    "rev": "3mwcj3b6uak2f",
-                    "data": _commit()["data"],
-                },
-                "spaceRev": "3mwcj3b6uak2f",
-            }
-        ],
-        "cursor": "3mwcj3b6uak2f",
-    }
-    request = AsyncMock(return_value=httpx.Response(200, json=response))
-    monkeypatch.setattr(space_client, "_space_token_request", request)
-    monkeypatch.setattr(
-        space_client,
-        "_space_host_url",
-        AsyncMock(return_value="https://authority.test"),
-    )
-    result = await space_client.list_space_repos(
-        _session(), SPACE, limit=1, cursor="3mwcj3b6uak2e"
-    )
-    assert result == response
-    args = request.await_args
-    assert args is not None
-    assert args.args[:3] == (
-        "https://authority.test",
-        "GET",
-        "com.atproto.space.listWriters",
-    )
-    assert args.kwargs["params"] == {
-        "space": SPACE,
-        "limit": 1,
-        "cursor": "3mwcj3b6uak2e",
-    }
+    assert result["_sent"] == [None]

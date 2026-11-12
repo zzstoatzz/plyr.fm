@@ -75,10 +75,9 @@ media space" a second source for one existing fact.
 ## what the access list is
 
 the memberspace policy already has it: `com.atproto.memberspace.policy` (what plyr
-creates today, with nobody added) plus
-`putMembers({space, members: [{did, read: true, write: false}]})`,
-`removeMembers({space, dids: [did]})`, and `listMembers`. The list is
-**host-internal state consulted at credential-mint time** — not synced,
+creates today, with nobody added) plus `putMember(space, did, read=true, write=false)`,
+`removeMember`, and `listMembers`. The list is **host-internal state consulted
+at credential-mint time** — not synced,
 not enumerated to the network, readable only by the authority's OAuth session.
 It lives on the artist's PDS, so it is portable and survives plyr.fm.
 
@@ -223,7 +222,7 @@ Keep them separate, and keep the direction of authority clear:
 - Supporter access is **a verifier's answer** about a payment, re-evaluated per
   request, expiring naturally. plyr is a verifier, never a broker.
 
-Do **not** derive membership from payments (auto-`putMembers` on a verified
+Do **not** derive membership from payments (auto-`putMember` on a verified
 event). It would make plyr an effectful actor on the artist's PDS driven by
 broker webhooks, turn every missed `subscription.canceled` into an over-grant
 nothing corrects, and collapse two freshness models into the worse one. If a

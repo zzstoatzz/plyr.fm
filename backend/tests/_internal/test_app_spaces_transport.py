@@ -62,7 +62,7 @@ async def credential_authority(
             token = jwt.encode(
                 {
                     "exp": int(time.time()) + 600,
-                    "cnf": {"kid": payload["credentialKey"]},
+                    "cnf": {"kid": payload["credentialKid"]},
                 },
                 pem,
                 algorithm="ES256",

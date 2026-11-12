@@ -228,7 +228,7 @@ class Smoke(SmokeFixtures):
         kid = "did:key:z" + base58.b58encode(b"\x80\x24" + key).decode()
         refused = await self.http.post(
             f"{self.pds}/xrpc/com.atproto.space.getSpaceCredential",
-            json={"space": parts["space"], "credentialKey": kid},
+            json={"space": parts["space"], "credentialKid": kid},
         )
         checked(refused, 400, "unattested app credential")
         assert refused.json()["error"] == "AppNotAuthorized"

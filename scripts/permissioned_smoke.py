@@ -84,7 +84,7 @@ def credential_request(
     )
     body = {
         "space": space_uri,
-        "credentialKey": format_did_key(P256_JWT_ALG, public),
+        "credentialKid": format_did_key(P256_JWT_ALG, public),
         "delegationToken": delegation_token,
     }
     return body, key
@@ -144,9 +144,9 @@ def membership_leg(
     xrpc(
         c,
         "POST",
-        "com.atproto.memberspace.removeMembers",
+        "com.atproto.memberspace.removeMember",
         token=owner_token,
-        json={"space": space_uri, "dids": [member_did]},
+        json={"space": space_uri, "did": member_did},
     )
     before = member_reads(c, member_token, space_uri, owner_did, blob_cid)
     assert before == 403, f"non-member read should be refused, got {before}"
@@ -155,12 +155,9 @@ def membership_leg(
     added = xrpc(
         c,
         "POST",
-        "com.atproto.memberspace.putMembers",
+        "com.atproto.memberspace.putMember",
         token=owner_token,
-        json={
-            "space": space_uri,
-            "members": [{"did": member_did, "read": True, "write": False}],
-        },
+        json={"space": space_uri, "did": member_did, "read": True, "write": False},
     )
     added.raise_for_status()
     members = xrpc(
@@ -172,7 +169,7 @@ def membership_leg(
     )
     members.raise_for_status()
     assert member_did in members.text, members.text
-    print("✓ putMembers + listMembers")
+    print("✓ putMember + listMembers")
 
     during = member_reads(c, member_token, space_uri, owner_did, blob_cid)
     assert during == 206, f"member read should succeed, got {during}"
@@ -181,9 +178,9 @@ def membership_leg(
     removed = xrpc(
         c,
         "POST",
-        "com.atproto.memberspace.removeMembers",
+        "com.atproto.memberspace.removeMember",
         token=owner_token,
-        json={"space": space_uri, "dids": [member_did]},
+        json={"space": space_uri, "did": member_did},
     )
     removed.raise_for_status()
     after = member_reads(c, member_token, space_uri, owner_did, blob_cid)

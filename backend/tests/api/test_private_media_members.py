@@ -92,10 +92,12 @@ async def test_add_writes_pds_and_forgets_what_plyr_held(
     add.assert_awaited_once_with(
         ANY,
         "POST",
-        "com.atproto.memberspace.putMembers",
+        "com.atproto.memberspace.putMember",
         payload={
             "space": _SPACE,
-            "members": [{"did": "did:test:friend", "read": True, "write": False}],
+            "did": "did:test:friend",
+            "read": True,
+            "write": False,
         },
         parse_response=False,
     )

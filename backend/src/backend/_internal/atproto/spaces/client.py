@@ -24,10 +24,12 @@ from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
 from backend._internal import Session as AuthSession
 from backend._internal.atproto.client import make_pds_request
 from backend._internal.atproto.spaces.mac import (
-    ACCEPT_SIGNATURE_HEADER,
+    MAC_HEADER,
+    WANT_MAC_HEADER,
     SpaceMacError,
     encapsulate,
-    format_mac_request,
+    format_want_mac_header,
+    parse_mac_header,
     verify_commit_mac,
 )
 from backend._internal.atproto.spaces.uris import (
@@ -210,11 +212,8 @@ async def add_space_member(auth_session: AuthSession, *, space: str, did: str) -
     await make_pds_request(
         auth_session,
         "POST",
-        "com.atproto.memberspace.putMembers",
-        payload={
-            "space": space,
-            "members": [{"did": did, "read": True, "write": False}],
-        },
+        "com.atproto.memberspace.putMember",
+        payload={"space": space, "did": did, "read": True, "write": False},
         parse_response=False,
     )
 
@@ -229,8 +228,8 @@ async def remove_space_member(
     await make_pds_request(
         auth_session,
         "POST",
-        "com.atproto.memberspace.removeMembers",
-        payload={"space": space, "dids": [did]},
+        "com.atproto.memberspace.removeMember",
+        payload={"space": space, "did": did},
         parse_response=False,
     )
     forget_credential(did, space)
@@ -372,7 +371,7 @@ async def _mint_credential(
     key = ec.generate_private_key(ec.SECP256R1())
     payload = {
         "space": space,
-        "credentialKey": _did_key(key),
+        "credentialKid": _did_key(key),
     }
     if delegation_token is not None:
         payload["delegationToken"] = delegation_token
@@ -520,11 +519,10 @@ async def _credential_read(
     """Perform a JSON space read, renewing once when the credential is stale.
 
     ``audience`` is the DID whose host is being asked. With ``commit_mac_repo``,
-    each request requires the author's KEM key and a verified returned commit.
+    each request asks that repo's host to MAC its commit (when the author
+    publishes a ``#atproto_kem`` key) and a returned commit must verify.
     """
     kem_key = await _kem_key(commit_mac_repo) if commit_mac_repo else None
-    if commit_mac_repo and not kem_key:
-        raise SpaceAccessError("space repo has no verification key")
     for attempt in range(2):
         credential = await get_space_credential(
             auth_session, space, force_refresh=attempt > 0
@@ -539,7 +537,7 @@ async def _credential_read(
             audience=audience,
             params=params,
             extra_headers=(
-                {ACCEPT_SIGNATURE_HEADER: format_mac_request(encapsulation.key_share)}
+                {WANT_MAC_HEADER: format_want_mac_header(encapsulation.key_share)}
                 if encapsulation
                 else None
             ),
@@ -551,14 +549,12 @@ async def _credential_read(
                 f"{endpoint} failed: {response.status_code} {response.text}"
             )
         body = response.json()
-        if encapsulation and commit_mac_repo:
+        if encapsulation and (commit := body.get("commit")):
             try:
                 verify_commit_mac(
-                    encapsulation,
-                    body.get("commit"),
-                    response.headers,
-                    space=space,
-                    repo=commit_mac_repo,
+                    encapsulation.shared_secret,
+                    commit,
+                    parse_mac_header(response.headers.get(MAC_HEADER)),
                 )
             except SpaceMacError as exc:
                 raise SpaceAccessError(f"{endpoint}: {exc}") from exc
@@ -584,7 +580,7 @@ async def list_space_repos(
         auth_session,
         host_url=await _space_host_url(space),
         audience=parse_space_uri(space).owner_did,
-        endpoint="com.atproto.space.listWriters",
+        endpoint="com.atproto.space.listRepos",
         space=space,
         params=params,
     )
@@ -629,8 +625,9 @@ async def list_space_repo_ops(
 ) -> dict[str, Any]:
     """Pull incremental operations directly from a writer's repo host.
 
-    Every page carries a MAC-verified commit; a full page also carries ``cursor``.
-    ``cursor`` takes precedence over ``since`` when both are sent.
+    A full page carries ``cursor`` and no ``commit``; the page that reaches the
+    head of the oplog carries the ``commit`` (MAC-verified) and no ``cursor``. ``cursor``
+    takes precedence over ``since`` when both are sent.
     """
     params: dict[str, Any] = {"space": space, "repo": repo, "limit": limit}
     if since:
