@@ -213,7 +213,7 @@ const list_columns =
     \\  events.subject_uri, events.subject_title, events.created_at, events.sort_at_us,
     \\  lower(actor.handle),
     \\  actor.display_name,
-    \\  CASE WHEN actor.did IS NULL THEN NULL ELSE COALESCE(profile.avatar, actor.avatar_url) END
+    \\  CASE WHEN actor.did IS NULL THEN NULL ELSE CASE WHEN actor.avatar_url IS NOT NULL AND profile.avatar LIKE 'https://cdn.bsky.app/img/avatar/plain/%' THEN actor.avatar_url ELSE COALESCE(NULLIF(profile.avatar, ''), actor.avatar_url) END END
     \\FROM events
 ;
 
