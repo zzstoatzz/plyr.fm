@@ -1,0 +1,156 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs/promises');
+const path = require('node:path');
+const { withPlayerHarness, setup, track, screenshot } = require('./check-player-presentation.cjs');
+const first = 'did:plc:profileone', second = 'did:plc:profiletwo';
+const collection = 'fm.plyr.actor.profile';
+const uri = did => `at://${did}/${collection}/self`;
+const original = bio => ({ $type: collection, bio, avatar: 'https://example.com/avatar.jpg', createdAt: '2026-11-12T00:00:00Z', extra: { preserved: true } });
+
+async function run(browser, width, theme) {
+  const { context, page, errors } = await setup(browser, width, theme, track, Number(process.env.PROFILE_SCALE || 1));
+  try {
+    let authModule;
+    for (const url of await page.locator('script[src]').evaluateAll(nodes => nodes.map(node => node.src))) {
+      const source = process.env.PLAYER_URL ? await (await page.request.get(url)).text() : await fs.readFile(path.join(process.env.PLAYER_DIST || path.resolve(__dirname, '../dist'), new URL(url).pathname), 'utf8');
+      for (const module of source.split('__d(')) if (module.includes('.setAuth=') || module.includes('"setAuth"')) authModule = Number(module.match(/\},(\d+),\[/)?.[1]);
+    }
+    assert.ok(authModule);
+    await page.route('https://plc.directory/**', route => route.fulfill({ json: { service: [] } }));
+    let projection = 'pending';
+    await page.route('https://api.next.plyr.fm/v1/records/await?**', route => route.fulfill({ json: { status: projection } }));
+    const records = new Map([[first, { cid: 'first1', value: original('first account bio') }], [second, { cid: 'second1', value: original('second account bio') }]]);
+    let rejectWrite = true, rejectRead = false, holdWrite = false, holdRead = false;
+    let releaseWrite, releaseRead, writeStarted, readStarted;
+    const writes = [], reads = [];
+    await page.exposeFunction('__profilePds', async (endpoint, init) => {
+      const url = new URL(endpoint, 'https://fixture.invalid');
+      if (url.pathname.endsWith('listRecords')) return { status: 200, body: { records: [] } };
+      if (url.pathname.endsWith('getRecord')) {
+        const did = url.searchParams.get('repo');
+        reads.push(did);
+        if (holdRead && did === first) await new Promise(resolve => { releaseRead = resolve; readStarted?.(); });
+        if (rejectRead) { rejectRead = false; return { status: 503, body: { error: 'Unavailable', message: 'fixture read failed' } }; }
+        return { status: 200, body: { uri: uri(did), ...records.get(did) } };
+      }
+      assert.ok(url.pathname.endsWith('putRecord'), `Unexpected PDS operation ${url.pathname}`);
+      const input = JSON.parse(init.body);
+      writes.push(input);
+      assert.equal(input.collection, collection);
+      assert.equal(input.rkey, 'self');
+      assert.equal(input.swapRecord, records.get(input.repo).cid, 'Save uses the authoritative revision');
+      assert.deepEqual(input.record.extra, { preserved: true }, 'Unknown fields survive editing');
+      if (rejectWrite) return { status: 409, body: { error: 'InvalidSwap', message: 'fixture write failed' } };
+      records.set(input.repo, { cid: input.repo + writes.length, value: input.record });
+      if (holdWrite) await new Promise(resolve => { releaseWrite = resolve; writeStarted?.(); });
+      return { status: 200, body: { uri: uri(input.repo), cid: records.get(input.repo).cid } };
+    });
+    const signIn = did => page.evaluate(([id, account]) => globalThis.__r(id).setAuth(account, {
+      handle: async (url, init) => { const result = await window.__profilePds(String(url), init); window.__profileReplies = (window.__profileReplies || 0) + 1; return new Response(JSON.stringify(result.body), { status: result.status, headers: { 'content-type': 'application/json' } }); },
+    }, 'atproto repo:fm.plyr.actor.profile'), [authModule, did]);
+    await page.goto(new URL('/edit-profile', page.url()).href);
+    await page.getByText('sign in to edit your profile.', { exact: true }).waitFor();
+    await signIn(first);
+    const bio = page.getByRole('textbox', { name: 'Bio', exact: true });
+    const avatar = page.getByRole('textbox', { name: 'Avatar URL', exact: true });
+    const save = page.getByRole('button', { name: 'Save profile', exact: true });
+    await bio.waitFor();
+    await bio.fill('a draft that survives a failed write');
+    await avatar.fill('http://example.com/avatar.jpg');
+    await save.click();
+    await page.getByText('use an HTTPS avatar URL.', { exact: true }).waitFor();
+    assert.equal(writes.length, 0);
+    await avatar.fill('https://');
+    await save.click();
+    await page.getByText('use an HTTPS avatar URL.', { exact: true }).waitFor();
+    assert.equal(writes.length, 0);
+    await avatar.fill('https://example.com/avatar.jpg');
+    await save.click();
+    await page.getByText(/fixture write failed/).waitFor();
+    assert.equal(await bio.inputValue(), 'a draft that survives a failed write');
+    assert.equal(await avatar.inputValue(), 'https://example.com/avatar.jpg');
+    await screenshot(page, `write-error-${width}-${theme}`);
+    rejectWrite = false; rejectRead = true;
+    await save.click();
+    await page.getByText('your changes are saved, but the latest profile could not be loaded.', { exact: true }).waitFor();
+    await page.getByText('saved to your PDS. the catalog is catching up.', { exact: true }).waitFor();
+    assert.equal(await save.count(), 0, 'Accepted write cannot be repeated after refresh failure');
+    assert.equal(writes.length, 2);
+    await screenshot(page, `saved-read-error-${width}-${theme}`);
+    await page.getByRole('button', { name: 'Retry loading profile', exact: true }).click();
+    await page.getByRole('button', { name: 'Edit again', exact: true }).waitFor();
+    assert.equal(await bio.inputValue(), 'a draft that survives a failed write');
+    assert.equal(await bio.isEditable(), false);
+    assert.equal(writes.length, 2, 'Read retry never repeats the write');
+    await screenshot(page, `saved-${width}-${theme}`);
+    await page.getByRole('button', { name: 'Edit again', exact: true }).click();
+    assert.equal(await save.isDisabled(), true, 'Unchanged accepted data cannot be resubmitted');
+    await bio.fill('late first account save');
+    holdWrite = true;
+    const writing = new Promise(resolve => { writeStarted = resolve; });
+    await save.click();
+    await writing;
+    await page.getByRole('button', { name: 'Saving…', exact: true }).waitFor();
+    assert.equal(await bio.isEditable(), false);
+    await signIn(second);
+    await page.waitForFunction(() => document.querySelector('[aria-label="Bio"]')?.value === 'second account bio');
+    const readsBefore = reads.length;
+    const settled = page.waitForResponse(response => response.url().includes('/v1/records/await'));
+    releaseWrite(); holdWrite = false;
+    await settled;
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await page.getByRole('textbox', { name: 'Bio', exact: true }).fill('second account draft');
+    assert.equal(await bio.inputValue(), 'second account draft');
+    assert.equal(await page.getByRole('button', { name: 'Edit again', exact: true }).count(), 0);
+    assert.equal(reads.length, readsBefore, 'Previous account completion cannot start a new profile read');
+    holdRead = true;
+    const reading = new Promise(resolve => { readStarted = resolve; });
+    await signIn(first);
+    await reading;
+    await page.getByLabel('Loading profile', { exact: true }).waitFor();
+    await signIn(second);
+    await page.waitForFunction(() => document.querySelector('[aria-label="Bio"]')?.value === 'second account bio');
+    const replies = await page.evaluate(() => window.__profileReplies);
+    releaseRead(); holdRead = false;
+    await page.waitForFunction(count => window.__profileReplies > count, replies);
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    assert.equal(await bio.inputValue(), 'second account bio', 'Late old-account read cannot replace new account fields');
+    await screenshot(page, `account-switch-${width}-${theme}`);
+    assert.equal(writes.length, 3);
+    assert.deepEqual(writes.map(write => write.repo), [first, first, first]);
+    rejectRead = true;
+    await signIn(first);
+    await page.getByText('could not load your profile.', { exact: true }).waitFor();
+    assert.equal(await bio.count(), 0);
+    await screenshot(page, `initial-read-error-${width}-${theme}`);
+    await page.getByRole('button', { name: 'Retry loading profile', exact: true }).click();
+    await bio.fill('indexed profile');
+    projection = 'indexed';
+    await save.click();
+    await page.getByText('profile saved.', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Edit again', exact: true }).waitFor();
+    assert.equal(writes.length, 4);
+    await page.getByRole('button', { name: 'Edit again', exact: true }).click();
+    await bio.fill('same account session replacement');
+    holdWrite = true;
+    const reauthWriting = new Promise(resolve => { writeStarted = resolve; });
+    await save.click();
+    await reauthWriting;
+    await signIn(first);
+    await page.waitForFunction(() => document.querySelector('[aria-label="Bio"]')?.value === 'same account session replacement');
+    assert.equal(await bio.isEditable(), true, 'Replacement session does not inherit the old busy lock');
+    const reauthSettled = page.waitForResponse(response => response.url().includes('/v1/records/await'));
+    releaseWrite(); holdWrite = false;
+    await reauthSettled;
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    assert.equal(await page.getByRole('button', { name: 'Edit again', exact: true }).count(), 0);
+    assert.equal(writes.length, 5);
+    assert.deepEqual(errors, []);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    console.log(`${width}/${theme}: failed-write draft, CAS/unknown fields, accepted/read failure, read-only retry, repeated-submit guard and late account work isolation passed`);
+  } finally { await page.unrouteAll({ behavior: 'ignoreErrors' }); await context.close(); }
+}
+withPlayerHarness(async browser => {
+  console.log('Auth-state and PDS boundary fixtures; no external writes or OAuth acceptance');
+  for (const width of [390, 1280]) for (const theme of ['light', 'dark']) await run(browser, width, theme);
+}).catch(error => { console.error(error); process.exitCode = 1; });
