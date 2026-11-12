@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import type { Auth } from './auth-state';
-import { personalPreferenceSpace, type PersonalPreferences } from './preference-space';
+import { accountPreferences, type PersonalPreferences } from './preference-sync';
 import { readLocal, writeLocal } from './storage';
 
 export type Preferences = PersonalPreferences & { volume: number };
@@ -14,7 +14,7 @@ const DEFAULTS: Preferences = {
 type Account = {
 	did: string;
 	controller: AbortController;
-	remote: ReturnType<typeof personalPreferenceSpace> | null;
+	remote: ReturnType<typeof accountPreferences> | null;
 	pending: Partial<PersonalPreferences>;
 	busy: boolean;
 	timer?: ReturnType<typeof setTimeout>;
@@ -33,7 +33,7 @@ export function usePreferences(auth: Auth) {
 	const [status, setStatus] = useState<PreferenceStatus>('local');
 	const current = useRef(preferences);
 	const active = useRef<Account | null>(null);
-	const { did, agent, preferenceSpace } = auth;
+	const { did, agent, accountSync } = auth;
 
 	const apply = useCallback((value: Preferences) => {
 		current.current = value;
@@ -85,7 +85,7 @@ export function usePreferences(auth: Auth) {
 			return;
 		}
 		const controller = new AbortController();
-		const remote = agent && preferenceSpace ? personalPreferenceSpace(agent, did, controller.signal) : null;
+		const remote = agent && accountSync ? accountPreferences(agent, controller.signal) : null;
 		const account: Account = { did, controller, remote, pending: {}, busy: false };
 		let value = local;
 		try {
@@ -117,7 +117,7 @@ export function usePreferences(auth: Auth) {
 				window.removeEventListener?.('focus', resume);
 			}
 		};
-	}, [agent, apply, did, preferenceSpace, sync]);
+	}, [agent, apply, did, accountSync, sync]);
 
 	function setPreferences(patch: Partial<Preferences>) {
 		apply({ ...current.current, ...patch });

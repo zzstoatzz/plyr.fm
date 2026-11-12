@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { usePathname } from 'expo-router';
 import { AccessibilityInfo, Platform, useColorScheme } from 'react-native';
-import type { PersonalPreferences } from './preference-space';
+import type { PersonalPreferences } from './preference-sync';
 import { onAccent, palettes, readableAccent } from './colors';
 
 const { light, dark } = palettes;

@@ -53,15 +53,14 @@ export default function Settings() {
         <SettingsRow label={auth.handle ? `@${auth.handle}` : auth.did} detail={status === 'synced' ? 'your settings are saved with your account.' : status === 'syncing' ? 'saving your settings…' : status === 'error' ? 'couldn’t save settings with your account. your changes are kept on this device.' : 'your settings are saved on this device.'} />
         <SettingsRow label="creator portal" href="/portal" />
         {status === 'error' && <SettingsRow label="try saving again" disclosure={false} onPress={() => void sync()} />}
-        {!auth.preferenceSpace && <SettingsRow label="save preferences across devices" onPress={() => setSavingHelp(true)} />}
+        {!auth.accountSync && <SettingsRow label="save preferences across devices" onPress={() => setSavingHelp(true)} />}
         <SettingsRow label="sign out" destructive onPress={() => void logout().catch(() => setError('could not revoke this session.'))} />
       </> : <SettingsRow label="sign in" detail="settings are saved on this device. sign in to save them with your account." href={login} />}
     </SettingsSection>
     <SettingsSection title="plyr.fm" icon={ChartNoAxesColumn}><SettingsRow label="stats" detail="tracks, artists and listening across Next" href="/stats" /></SettingsSection>
     {error && <Copy live>{error}</Copy>}
     {savingHelp && <Sheet title="save preferences across devices" close={() => setSavingHelp(false)}>
-      <Copy>your appearance and playback settings are currently saved on this device. sign in and allow plyr.fm to save them with your account so you can use them on other devices.</Copy>
-      <Copy>if your account’s server doesn’t support this yet, your settings will stay on this device.</Copy>
+      <Copy>your appearance and playback settings are saved on this device for this sign-in. sign in again to save them with your account and use them on other devices.</Copy>
       <Action label="continue to sign in" href={login} onPress={() => setSavingHelp(false)} />
     </Sheet>}
     {picker && <Sheet title={names[picker]} close={() => setPicker(undefined)}>

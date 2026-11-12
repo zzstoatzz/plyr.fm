@@ -22,19 +22,14 @@ Both OAuth client IDs use `EXPO_PUBLIC_SITE_URL`, which defaults to
 `fm.plyr.next:/oauth/callback` scheme, so it requires a native build that
 registers the scheme. The API URL defaults to `https://api.next.plyr.fm`.
 
-## Private preferences
+## Account sync
 
-The client can request a grant for the user's own `self` preferences Space on
-PDSes that advertise Spaces. The published
-[Space declaration](lexicons/preferences.json) and
-[record schema](lexicons/preference.json) use the staging namespace.
-Set `EXPO_PUBLIC_PREFERENCE_SYNC=false` to disable the optional grant.
-
-Preferences use the owner-only `com.atproto.personalspace.policy`. The client
-checks the policy before reading or writing. The record uses integer
-percentages for text scale. The alpha `putRecord` has no compare-and-swap
-field. A client can merge the latest record before writing a patch, but
-simultaneous writes can still race across devices.
+Every sign-in except an explicit device-only one requests one service-auth
+permission for the Jam coordinator. With it, the coordinator verifies the
+account's identity and keeps two things for it in PostgreSQL: the personal
+queue with its playback position, and appearance and playback settings. Neither
+depends on the account's PDS supporting Spaces. Text scale is stored as an
+integer percentage. A settings write merges a patch on the server.
 
 The Spaces-based Jams prototype and browser acceptance cases are tracked in
 [#2303](https://github.com/zzstoatzz/plyr.fm/issues/2303).
