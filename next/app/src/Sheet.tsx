@@ -27,7 +27,7 @@ export function Sheet({ title, close, children, notice, visible = true, onDismis
           <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={close} style={{ padding: 12 }}><X size={22} color={theme.text} /></Pressable>
         </View>
         {notice && <View style={{ paddingHorizontal: 20, paddingBottom: 12, gap: 12 }}>{notice}</View>}
-        <ScrollView style={{ flexShrink: 1 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, paddingTop: 4, gap: 12 }}>
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, paddingTop: 4, gap: 12 }}>
           {children}
         </ScrollView>
       </View>
