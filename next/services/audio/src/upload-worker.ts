@@ -68,6 +68,7 @@ export class OwnerUploads extends DurableObject<UploadEnv> {
     const object = read ?? (request.method === "HEAD" ? await this.env.AUDIO.head(session.key) : null);
     if (!object) return new Response(null, { status: 404 });
     const headers = new Headers({ "content-type": session.contentType, "x-content-type-options": "nosniff", "accept-ranges": "bytes", etag: object.httpEtag, "cache-control": "public, max-age=300" });
+    if (new URL(request.url).searchParams.get("download") === "1") headers.set("content-disposition", `attachment; filename="audio.${session.fileType}"`);
     let size = object.size;
     let status = 200;
     if (request.method !== "HEAD" && request.headers.has("range") && object.range) {

@@ -67,6 +67,39 @@ for (const redirected of [false, true]) test(`activation uses real Worker fetch 
   }
 });
 
+test("published download attachment preserves bytes, HEAD, ranges and visibility", async () => {
+  const value = claim();
+  value.recordUri = `at://${value.owner}/fm.plyr.track/network-verified`;
+  const f = await setup(value);
+  await f.send("POST"); await f.send("PUT", "/parts/1", "0123456789"); await f.send("POST", "/finish");
+  const download = `${f.media}?download=1&filename=untrusted.html`;
+  for (const method of ["GET", "HEAD"]) expect((await routeUpload(new Request(download, { method }), env))?.status).toBe(404);
+  expect((await f.send("POST", "/activate")).status).toBe(200);
+  for (const method of ["GET", "HEAD"]) {
+    const response = await routeUpload(new Request(download, { method }), env);
+    expect(response?.status).toBe(200);
+    expect(response?.headers.get("content-disposition")).toBe('attachment; filename="audio.mp3"');
+    expect(response?.headers.get("content-type")).toBe("audio/mpeg");
+    expect(response?.headers.get("content-length")).toBe("10");
+    expect(response?.headers.get("cache-control")).toBe("public, max-age=300");
+    expect(response?.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(await response?.text()).toBe(method === "GET" ? "0123456789" : "");
+  }
+  const range = await routeUpload(new Request(download, { headers: { range: "bytes=2-4" } }), env);
+  expect(range?.status).toBe(206);
+  expect(range?.headers.get("content-disposition")).toBe('attachment; filename="audio.mp3"');
+  expect(range?.headers.get("content-range")).toBe("bytes 2-4/10");
+  expect(range?.headers.get("content-length")).toBe("3");
+  expect(await range?.text()).toBe("234");
+  for (const suffix of ["", "?download=0", "?filename=audio.mp3"]) {
+    const playback = await routeUpload(new Request(f.media + suffix), env);
+    expect(playback?.status).toBe(200);
+    expect(playback?.headers.get("content-disposition")).toBeNull();
+    expect(playback?.headers.get("etag")).toBe(range?.headers.get("etag"));
+    expect(await playback?.text()).toBe("0123456789");
+  }
+});
+
 test("multipart persists digests across eviction and never exposes unpublished bytes", async () => {
   const f = await setup();
   expect((await f.send("POST")).status).toBe(200);
