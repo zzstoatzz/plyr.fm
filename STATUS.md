@@ -4,6 +4,12 @@ Start here for the next agent: [November 12 daily-driver checkpoint](docs/resear
 
 ## Next daily-driver work (2026-11-12)
 
+#2525 adds explicit owner deletion for private tracks, including uncertain-response
+recovery and removal from private playback. Eight deployed browser cases and an
+iOS simulator deletion/recovery check pass. Confirmation covers the current
+record, including concurrent changes; conflict-safe private metadata editing still
+requires conditional writes absent from the current Spaces API.
+
 #2519 and #2522 ship public audio replacement and private publishing/playback.
 Replacement preserves the track URI and labels with CAS/reconciliation; eight
 deployed browser cases pass. Private music uses the existing player and stays out
