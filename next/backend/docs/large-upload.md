@@ -127,6 +127,13 @@ the account's two-session quota. The fixture has no production target option.
 It uses app-password service authentication; real browser/native OAuth consent
 for the new upload permission remains a separate acceptance requirement.
 
+For an authority failure, dispatch `diagnose_upload=true` instead. This logs in
+to the same test account but creates no records or uploads. It inspects at most
+three public collections with `limit=1`, then retains one public record CAR
+(at most 4 MiB), the public DID key and endpoint, and stage/error metadata for
+three days. Empty accounts are reported without manufacturing a record. Never
+rerun failed write fixtures merely to obtain diagnostics or exhaust their quota.
+
 R2 API constraints: uniform nonfinal parts of at least 5 MiB, completed uploads
 can disappear from the multipart API after success, and incomplete uploads
 expire after 7 days by default. Sources:
