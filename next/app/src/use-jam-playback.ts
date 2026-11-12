@@ -31,6 +31,7 @@ export interface ActiveJam {
 }
 
 export function jamTrack(track: Track, mediaDuration?: number): JamTrack | null {
+  if (track.access.visibility === 'private' || track.record.uri.includes('/space/')) return null;
   const duration = mediaDuration && mediaDuration > 0 ? mediaDuration : track.metadata.duration_seconds ?? 0;
   return track.record.cid && duration > 0 && duration <= 86_400 ? { id: track.id, uri: track.record.uri, cid: track.record.cid,
     durationMs: Math.max(0, Math.round(duration * 1000)) } : null;

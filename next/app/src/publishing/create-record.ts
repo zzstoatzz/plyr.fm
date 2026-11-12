@@ -1,3 +1,4 @@
+import { assertPublicCollection } from './track-reference.ts';
 import { ok } from '@atcute/client';
 import type { Auth } from '../auth-state';
 import { sameRecord, type CreateOperation, type CreateStorage } from './create-operation.ts';
@@ -31,6 +32,7 @@ export function recordCreator(rpc: Rpc, storage: CreateStorage, assertSession: (
   }
 
   async function send(operation: CreateOperation): Promise<CreateResult> {
+    assertPublicCollection(operation.record);
     assertSession();
     try {
       const result = await ok(rpc.post('com.atproto.repo.createRecord', { input: {

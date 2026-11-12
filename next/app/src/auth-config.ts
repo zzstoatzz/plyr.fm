@@ -9,6 +9,16 @@ export const NSID = {
 	profile: `${prefix}.actor.profile`
 } as const;
 
+export const PRIVATE_SPACE_TYPE = `${prefix}.privateMedia`;
+export const PRIVATE_PUBLISH_SCOPE = `space:${PRIVATE_SPACE_TYPE}?authority=self&skey=self&collection=${NSID.track}&action=read&action=create&manage=create`;
+export function hasPrivatePublishGrant(scope: string): boolean {
+  return scope.split(' ').some(value => {
+    const [type, query] = value.split('?'), grant = new URLSearchParams(query);
+    return type === `space:${PRIVATE_SPACE_TYPE}` && grant.get('authority') === 'self' && grant.get('skey') === 'self'
+      && grant.getAll('collection').includes(NSID.track) && grant.getAll('action').includes('read') && grant.getAll('action').includes('create') && grant.getAll('manage').includes('create');
+  });
+}
+
 export const JAM_SPACE = {
 	type: process.env.EXPO_PUBLIC_JAM_SPACE_TYPE || 'fm.plyr.stg.jam',
 	collection: process.env.EXPO_PUBLIC_JAM_STATE_COLLECTION || 'fm.plyr.stg.jamState'
@@ -44,4 +54,4 @@ const protectedAudioScope = prefix === 'fm.plyr'
 	? [`space:${prefix}.privateMedia?authority=*&collection=${NSID.track}&action=read`, `space:${process.env.EXPO_PUBLIC_AUDIO_SPACE_TYPE || 'fm.plyr.stg.audio'}?authority=*&collection=${NSID.track}&action=read`]
 	: [];
 export const SYNC_SCOPE_PARTS = [...BASE_SCOPE_PARTS, SYNC_SCOPE];
-export const SCOPE_PARTS = [...SYNC_SCOPE_PARTS, ...protectedAudioScope, ...JAM_SCOPE_PARTS];
+export const SCOPE_PARTS = [...SYNC_SCOPE_PARTS, ...protectedAudioScope, ...JAM_SCOPE_PARTS, PRIVATE_PUBLISH_SCOPE];

@@ -7,6 +7,7 @@ import ListPlus from 'lucide-react-native/icons/list-plus';
 import LogIn from 'lucide-react-native/icons/log-in';
 import ArrowLeft from 'lucide-react-native/icons/arrow-left';
 import type { Track } from './api';
+import { isPrivateTrack } from './publishing/private-track';
 import { useAuth } from './auth';
 import { ActionRow } from './ActionRow';
 import { TrackPlaylistPicker } from './AccountCatalog';
@@ -26,7 +27,11 @@ export function TrackMenu({ track, close, actions, returnTo }: { track: Track; c
     close();
     router.push(`/edit-track/${track.id}`);
   }
+  if (isPrivateTrack(track)) return <Sheet title="private track" close={close}>
+    <ActionRow icon={ListPlus} label="add to private queue" onPress={() => { player.enqueue(track); close(); }} />
+  </Sheet>;
   return <Sheet title={playlists && did ? 'add to playlist' : 'track options'} close={close} visible={!editing} onDismiss={openEditor}>
+
     <View style={{ gap: 0 }}>
       {playlists && did ? <>
         <ActionRow icon={ArrowLeft} label="back" onPress={() => setPlaylists(false)} />

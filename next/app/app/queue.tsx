@@ -45,11 +45,11 @@ export default function Queue() {
         <View style={styles.header}>
           <Heading>now playing</Heading>
           <View style={styles.actions}>
-            <IconButton label={player.jam ? "Open Jam" : "Start a Jam"} selected={!!player.jam} onPress={() => {
+            {!player.privatePlayback && <IconButton label={player.jam ? "Open Jam" : "Start a Jam"} selected={!!player.jam} onPress={() => {
               if (player.jam) { router.push({ pathname: '/jam/[room]', params: { room: `${player.jam.host}~${player.jam.key}` } }); return; }
               if (did && player.current) router.push({ pathname: '/jam/[room]', params: { room: `${did}~${randomUUID()}`, track: player.current.id } });
               else router.push({ pathname: '/login', params: { return_to: '/queue' } });
-            }}><Users size={20} color={theme.text} /></IconButton>
+            }}><Users size={20} color={theme.text} /></IconButton>}
             <IconButton label={`Repeat: ${player.repeat}`} disabled={!!player.jam} selected={player.repeat !== 'off'}
               onPress={() => player.setRepeat(player.repeat === 'off' ? 'all' : player.repeat === 'all' ? 'one' : 'off')}>
               <RepeatIcon size={20} color={player.repeat === 'off' ? theme.muted : theme.accent} />
@@ -62,6 +62,7 @@ export default function Queue() {
         </View>
       </View>
       <View style={styles.section}>
+        {player.privatePlayback && <Copy>this queue stays on this device and is not shared with jams.</Copy>}
         {player.deviceQueue && <Copy>this sign-in keeps your queue on this device. <InlineLink href="/login?return_to=%2Fqueue">sign in again</InlineLink> to sync it to your account.</Copy>}
         {player.outputElsewhere && <Copy>playing on another device. press play to listen here.</Copy>}
         <View style={styles.header}>

@@ -1,3 +1,4 @@
+import { publicTrackReference, assertPublicCollection } from './publishing/track-reference';
 // writes go straight to the signed-in user's PDS; the appview picks them up
 import type {} from '@atcute/atproto';
 // from the firehose, and /v1/records/await gives read-after-write.
@@ -185,8 +186,7 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 
 	async function like(track: Track, { waitForIndex = true }: { waitForIndex?: boolean } = {}): Promise<AwaitStatus> {
 		const { rpc, did } = session();
-		if (!track.record.cid) throw new Error('track has no verified cid');
-		const subject = { uri: track.record.uri, cid: track.record.cid };
+		const subject = publicTrackReference(track);
 		const likes = await myLikes();
 		const existing = likes.get(subject.uri);
 		if (existing) return waitForIndex ? settle(existing.uri, existing.cid) : 'pending';
@@ -248,6 +248,7 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 	}
 
 	async function writeList(uri: string, value: ListRecord, swap: string): Promise<AwaitStatus> {
+		assertPublicCollection({ ...value, $type: NSID.list });
 		assertSession();
 		const { rpc, did } = session();
 		const res = await ok(
@@ -265,17 +266,17 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 	}
 
 	async function createPlaylist(name: string, first?: Track): Promise<{ uri: string; status: AwaitStatus }> {
+		const items = first ? [{ subject: publicTrackReference(first) }] : [];
 		const reservation = await reserveCreate('playlist');
-		const items = first?.record.cid ? [{ subject: { uri: first.record.uri, cid: first.record.cid } }] : [];
 		return publishCreate(reservation, { $type: NSID.list, name: name.trim().slice(0, 64), listType: 'playlist', items, createdAt: new Date().toISOString() });
 	}
 
 	async function addToPlaylist(playlistUri: string, track: Track): Promise<AwaitStatus> {
-		if (!track.record.cid) throw new Error('track has no verified cid');
+		const subject = publicTrackReference(track);
 		const { value, cid } = await readList(playlistUri);
 		if (value.items.some((i) => i.subject.uri === track.record.uri)) return 'indexed';
 		if (value.items.length >= MAX_ITEMS) throw new Error(`playlists hold at most ${MAX_ITEMS} tracks`);
-		value.items = [...value.items, { subject: { uri: track.record.uri, cid: track.record.cid } }];
+		value.items = [...value.items, { subject }];
 		return writeList(playlistUri, value, cid);
 	}
 

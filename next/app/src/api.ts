@@ -27,7 +27,7 @@ export interface Track {
 		profile: { handle: string; display_name: string; avatar_url: string | null; bio?: string | null };
 	};
 	media: { artwork?: { url: string } | null };
-	access: { visibility: 'public' | 'unlisted' | 'supporters' };
+	access: { visibility: 'public' | 'unlisted' | 'supporters' | 'private' };
 	metrics: { play_count: number; like_count: number };
 	moderation?: { self_labels: string[]; operator_labels: string[]; account_labels?: string[] };
 }
