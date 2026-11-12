@@ -38,8 +38,9 @@ for (const failure of [undefined, 'part', 'status', 'create', 'activate', 'clean
     }
     if (path.includes('/media/')) {
       if (!published) return new Response(null, { status: 404 });
-      if (init.method === 'HEAD') return new Response(null, { headers: { 'content-length': String(bytes.length) } });
-      if (init.headers?.range) return new Response(bytes.subarray(0, 44), { status: 206, headers: { 'content-range': `bytes 0-43/${bytes.length}` } });
+      const disposition = new URL(url).searchParams.get('download') === '1' ? { 'content-disposition': 'attachment; filename="audio.wav"' } : {};
+      if (init.method === 'HEAD') return new Response(null, { headers: { ...disposition, 'content-length': String(bytes.length) } });
+      if (init.headers?.range) return new Response(bytes.subarray(0, 44), { status: 206, headers: { ...disposition, 'content-range': `bytes 0-43/${bytes.length}` } });
       return new Response(bytes, { headers: { 'x-content-type-options': 'nosniff' } });
     }
     if (path.endsWith('/parts/1')) { bytes = init.body; return response({ error: 'do not expose private payloads' }, failure === 'part' ? 503 : 200); }

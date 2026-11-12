@@ -61,6 +61,12 @@ URL is `/media/{ownerHash}/{uploadId}` and returns no bytes until activation.
 Playback uses Range and HEAD without buffering the complete object. This
 namespace does not claim content-addressed integrity or `verified_blob_cid`.
 
+Appending `?download=1` to the published media URL serves the same bytes with
+`Content-Disposition: attachment` and a fixed `audio.<format>` filename from the
+validated upload session. Client-supplied filenames are ignored. GET, HEAD,
+Range and cache behavior are unchanged; unpublished media still returns 404.
+This downloads the object served by that URL, not a separate original source.
+
 ## publication and recovery
 
 Finish stores its intent before the R2 completion side effect. If completion
