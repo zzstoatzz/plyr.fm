@@ -14,6 +14,7 @@ import { Sheet } from './Sheet';
 import { WaveLoading } from './WaveLoading';
 import { useAppearance } from './appearance';
 import { toast } from './toast';
+import { LikeHeart } from './LikeHeart';
 
 export function TrackLikes({ track, compact = false, returnTo, menu = false, iconOnly = false, onNavigate }: { track: Track; compact?: boolean; returnTo?: string; menu?: boolean; iconOnly?: boolean; onNavigate?: () => void }) {
   const [open, setOpen] = useState(false);
@@ -86,7 +87,7 @@ function LikeButton({ track, change, reportLiked, menu }: {
       accessibilityState={{ selected: liked ?? false, busy: busy || liked === undefined && !result.error, disabled: busy || liked === undefined && !result.error }}
       disabled={busy || liked === undefined && !result.error} onPress={() => void toggle()}
       style={[target, { opacity: busy || liked === undefined ? 0.5 : 1 }]}>
-      <Heart size={21} color={liked ? theme.accent : theme.muted} fill={liked ? theme.accent : 'none'} />
+      <LikeHeart liked={liked} />
     </Pressable>}
   </>;
 }
