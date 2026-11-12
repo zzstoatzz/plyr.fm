@@ -33,8 +33,11 @@ finish line. This is execution evidence, not another parity inventory.
   completion/publication. Exact record/object cleanup ran, but upload cancellation
   failed and the artifact reports possible retained 1,610,612,736-byte quota.
   The error body was masked by the fixture's allowlist, so the cause remains
-  unclassified pending exact-reservation read-only diagnosis. No full-size success
-  or throughput claim follows; do not create a fresh retry or reset durable state.
+  unclassified. Exact-reservation read-only status confirmed `transferring`, 69
+  acknowledged parts and the full reserved quota. #2536 reproduces old recovery
+  alarm contention and adds bounded owner-operation waiting; deployment is
+  pending. No full-size success or throughput claim follows; recovery must reuse
+  this reservation rather than create a fresh retry or reset durable state.
 - #2525: owners can delete private tracks with explicit confirmation that the
   current record, including changes made elsewhere, will be removed. Missing
   grants and incompatible policies prevent writes; unresolved creation blocks
