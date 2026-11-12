@@ -6,6 +6,35 @@ finish line. This is execution evidence, not another parity inventory.
 
 ## shipped to Next
 
+- #2510: an owner can explicitly set aside an uncertain or permanently rejected
+  create, with a warning that it may still appear. Its exact intent remains in
+  earlier attempts for checking or resuming. Resolving an earlier attempt
+  preserves an unrelated fresh upload draft; dismissing the current upload
+  resets only its own form. Native MMKV verified the archive/late-accept races;
+  eight deployed recovery cases passed after deployment `43215102495` of
+  `6fc762c5`. Both the original missing action and the draft-loss bug failed
+  their corresponding pre-fix browser checks.
+- #2505: upload and playlist creates persist their exact payload and record key
+  before sending. Lost responses reconcile that address; retries cannot invent
+  a duplicate key or overwrite a different record. Late responses do not restore
+  dismissed operations. Deployed `5859cb8a` passed 16 recovery/upload/Library
+  browser cases. Actual iOS Hermes/MMKV checks verified account isolation,
+  duplicate-key rejection, accepted-CID persistence and delete/late-accept behavior.
+  Recovery lives on the device; it does not transfer across devices or survive
+  clearing application storage.
+- #2508: native next/previous commands reach the existing queue through a pinned
+  Expo Audio patch. The same OS command fails on the unpatched native build and
+  succeeds on the rebuilt patched binary. Radio suspension clears the controls;
+  returning to personal playback restores them. Web deployment `43212966349`
+  and deployed phone/desktop player-navigation checks passed. Installed iOS
+  acceptance is separate from web deployment and does not constitute distribution.
+- #2509: collection reads cannot continue into a write after account/RPC
+  replacement. The editor resets with its owning session, and late accepted
+  writes cannot redirect the replacement editor. The old client reproduced an
+  unwanted write after a held read; the fix passed all four collection mutations
+  across different-account and same-account replacement. Four normal and four
+  enlarged-text layouts, existing Library checks, and four deployed layouts
+  passed. Deployment `43213682157` serves `efe43094`.
 - #2504: the existing API machine stays warm in `sjc`, avoiding an observed
   2.225-second first request after automatic shutdown. Deployment
   `43210186456` passed; both existing API/ingester machines run `19053e66`,
@@ -109,8 +138,8 @@ staging/transcoding, protected audio and explicit storage fallback consent.
 Next's public blob path is capped at 100 MiB by the published blob contract.
 Raising a UI limit alone cannot provide parity. A compatible large-file path
 needs service-owned byte staging and recoverable artifacts while the client
-continues creating the canonical record. Ambiguous create transport recovery,
-collection management and existing access/download policies also remain required.
+continues creating the canonical record. Collection management and existing
+access/download policies also remain required.
 
 Backend measurements belong in [perf.md](../../next/backend/docs/perf.md), with
 dataset, cache state and limits. A workstation median is not a production SLO.

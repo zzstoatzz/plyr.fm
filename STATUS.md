@@ -4,6 +4,14 @@ Start here for the next agent: [November 12 daily-driver checkpoint](docs/resear
 
 ## Next daily-driver work (2026-11-12)
 
+#2505, #2508–#2510 add durable upload/playlist create recovery, verified
+iOS next/previous command dispatch and session-isolated collection editing.
+Recovery passed deployed browser checks and actual native MMKV acceptance.
+Native commands worked with the patch and failed on the unpatched control build.
+Physical device gestures and native distribution remain unverified.
+Uncertain attempts can be explicitly set aside without losing their recovery
+history or an unrelated fresh upload draft.
+
 #2504 keeps the existing Next API machine warm after a measured 2.225-second
 cold start. Deployment and public readiness/catalog checks passed; no replica
 was added. The estimated incremental compute cost is $1.60–2/month.
