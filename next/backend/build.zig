@@ -21,6 +21,9 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    root_module.addAnonymousImport("upload_contract", .{
+        .root_source_file = b.path(b.option([]const u8, "upload_contract", "Shared upload policy contract") orelse "../../backend/src/backend/upload_contract.json"),
+    });
     root_module.addAnonymousImport("migration_0029_like_counts", .{
         .root_source_file = b.path("migrations/0029_add_track_like_counts.sql"),
     });

@@ -533,3 +533,7 @@ max_lines = 2100
 [[rules]]
 path = "next/backend/src/internal/jams/store.zig"
 max_lines = 948
+
+[[rules]]
+path = "next/backend/src/internal/jams/server.zig"
+max_lines = 522

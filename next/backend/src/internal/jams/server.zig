@@ -6,6 +6,8 @@ const protocol = @import("protocol.zig");
 const room_store = @import("store.zig");
 const queue_record = @import("queue_record.zig");
 const account_preferences = @import("account_preferences.zig");
+const upload_admission = @import("../uploads/admission.zig");
+const upload_inspection = @import("../uploads/inspection.zig");
 const tickets = @import("tickets.zig");
 const config = @import("../../config.zig");
 
@@ -30,6 +32,7 @@ pub fn run(a: std.mem.Allocator, io: std.Io, settings: config.Config) !void {
         .origins = settings.cors_allowed_origins,
         .records = if (settings.database_url) |database| try queue_record.Records.init(a, io, database, @min(settings.database_pool_size, 4)) else null,
     };
+    context.upload_settings = try upload_admission.fromEnvironment(a, settings.track_collection, context.auth_config);
     defer context.store.deinit();
     defer context.tickets.deinit();
     defer if (context.records) |*records| records.deinit();
@@ -66,11 +69,13 @@ const Context = struct {
     store: room_store.Store,
     tickets: tickets.Tickets,
     auth_config: auth.Config,
+    upload_settings: ?upload_admission.Settings = null,
     origins: []const u8,
     records: ?queue_record.Records,
     unrecorded: std.StringHashMapUnmanaged(void) = .empty,
     unrecorded_mutex: std.Io.Mutex = .init,
     admissions: std.atomic.Value(u8) = .init(0),
+    upload_admissions: std.atomic.Value(u8) = .init(0),
     peers: std.ArrayList(*Peer) = .empty,
     mutex: std.Io.Mutex = .init,
     stopping: std.atomic.Value(bool) = .init(false),
@@ -365,6 +370,25 @@ const Handler = struct {
             const result = std.json.Stringify.valueAlloc(a, .{ .id = did, .service = .{.{ .id = context.auth_config.audience, .type = "PlyrJamCoordinator", .serviceEndpoint = env("JAM_PUBLIC_URL") orelse "https://plyr-jams-next.fly.dev" }} }, .{}) catch return;
             return http(conn, a, 200, result, origin);
         }
+        const upload_authorize = std.mem.eql(u8, url, "/v1/uploads/authorize");
+        const upload_inspect = std.mem.eql(u8, url, "/internal/uploads/inspect");
+        if (upload_authorize or upload_inspect) {
+            if (!std.mem.eql(u8, method, "POST") or body.len > 8192) return http(conn, a, 400, "{}", origin);
+            const upload_settings = context.upload_settings orelse return http(conn, a, 503, "{}", origin);
+            if (upload_inspect and !upload_admission.authorizedInternal(headers.get("authorization") orelse "", upload_settings.secret)) return http(conn, a, 403, "{}", origin);
+            if (context.upload_admissions.fetchAdd(1, .acq_rel) >= 2) {
+                _ = context.upload_admissions.fetchSub(1, .acq_rel);
+                return http(conn, a, 503, "{}", origin);
+            }
+            defer _ = context.upload_admissions.fetchSub(1, .acq_rel);
+            return upload(conn, a, body, origin, context, upload_settings, upload_inspect) catch |err| {
+                http(conn, a, switch (err) {
+                    error.InvalidUpload => 400,
+                    error.InvalidIdentity, error.UploadPaused => 403,
+                    else => 503,
+                }, "{}", origin);
+            };
+        }
         const personal_join = std.mem.eql(u8, url, "/v1/playback/join");
         const settings = std.mem.eql(u8, url, "/v1/preferences");
         if (!std.mem.eql(u8, method, "POST") or (!personal_join and !settings and !std.mem.eql(u8, url, "/v1/jams/join")) or body.len > (if (personal_join) @as(usize, 63 * 1024) else 60 * 1024)) return http(conn, a, 404, "{}", origin);
@@ -487,4 +511,12 @@ fn query(url: []const u8, key: []const u8) ?[]const u8 {
 fn env(key: [:0]const u8) ?[]const u8 {
     const value = std.c.getenv(key) orelse return null;
     return std.mem.span(value);
+}
+
+fn upload(conn: *websocket.Conn, a: std.mem.Allocator, body: []const u8, origin: []const u8, context: *Context, settings: upload_admission.Settings, inspect: bool) !void {
+    const value = if (inspect)
+        try std.json.Stringify.valueAlloc(a, .{ .state = @tagName(try upload_inspection.inspect(a, context.io, settings, body)) }, .{})
+    else
+        try upload_admission.authorize(a, context.io, settings, body);
+    http(conn, a, 200, value, origin);
 }

@@ -8,6 +8,7 @@ build:
     zig build
 
 image:
+    cp ../../backend/src/backend/upload_contract.json upload_contract.json
     docker build --tag plyr-backend-zig:canary .
 
 image-check: image
@@ -34,6 +35,10 @@ reconcile-catalog:
 
 test:
     zig build test
+
+test-upload-http: build
+    docker compose -f compose.yaml up -d test-redis
+    node scripts/test-upload-admission.cjs
 
 # Applies next/backend/migrations to a database marked 'plyr-zig-next' or
 # 'plyr-zig-test' (see scripts/migrate). Never run against a shared database.
