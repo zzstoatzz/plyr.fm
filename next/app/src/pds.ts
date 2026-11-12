@@ -100,7 +100,7 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 	}
 	async function reserveCreate(kind: 'track' | 'playlist'): Promise<CreateReservation> {
 		assertSession();
-		if ((await pendingCreates(kind)).length) throw new CreateUnconfirmed();
+		if ((await pendingCreates(kind)).some(operation => !operation.archived)) throw new CreateUnconfirmed();
 		assertSession();
 		const owner = session().did, collection = kind === 'track' ? NSID.track : NSID.list, rkey = TID.nextStr();
 		return { owner, collection, rkey, uri: `at://${owner}/${collection}/${rkey}` };
@@ -117,6 +117,11 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 		const result = await recoverCreate(operation);
 		if (result.state !== 'accepted' && !(keepExisting && result.state === 'different')) throw new CreateUnconfirmed();
 		await createStorage.delete(operation);
+	}
+	async function archiveCreate(operation: CreateOperation, archived: boolean) {
+		assertSession();
+		if (operation.owner !== session().did || (operation.collection !== NSID.track && operation.collection !== NSID.list)) throw new Error('not your pending creation');
+		await createStorage.archive(operation, archived);
 	}
 	async function publishCreate(reservation: CreateReservation, record: Record<string, unknown>) {
 		const result = await recordCreator(session().rpc, createStorage, assertSession).create({ ...reservation, record });
@@ -471,5 +476,5 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 		);
 		return await settle(uri);
 	}
-	return { myLikes, like, unlike, createPlaylist, addToPlaylist, removeFromPlaylist, renameCollection, deletePlaylist, uploadTrack, myProfile, saveProfile, myTrack, editTrack, deleteTrack, reserveCreate, pendingCreates, recoverCreate, dismissCreate };
+	return { myLikes, like, unlike, createPlaylist, addToPlaylist, removeFromPlaylist, renameCollection, deletePlaylist, uploadTrack, myProfile, saveProfile, myTrack, editTrack, deleteTrack, reserveCreate, pendingCreates, recoverCreate, dismissCreate, archiveCreate };
 }

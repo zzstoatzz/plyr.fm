@@ -23,4 +23,11 @@ export const createStorage: CreateStorage = {
     if (storage.getString(key) !== value) throw new Error('could not save recovery information.');
   },
   async delete(operation) { storage.remove(createKey(operation)); },
+  async archive(operation, archived) {
+    const key = createKey(operation), value = storage.getString(key);
+    if (!value) throw new Error('could not find this creation attempt.');
+    const updated = JSON.stringify({ ...scopedCreate(JSON.parse(value), operation.owner, operation.collection, key), archived });
+    storage.set(key, updated);
+    if (storage.getString(key) !== updated) throw new Error('could not update this creation attempt.');
+  },
 };

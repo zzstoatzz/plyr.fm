@@ -5,7 +5,7 @@ import { Action, Copy, Field, Page } from '../controls';
 import { measureAudioDuration, pickMedia } from '../media-picker';
 import { createPds, MAX_AUDIO_BYTES, type MediaFile } from '../pds';
 import { TagsField } from './TagsField';
-import { CreateRecovery, useCreateRecovery } from './CreateRecovery';
+import { CreateRecovery, EarlierCreates, useCreateRecovery } from './CreateRecovery';
 
 export default function Upload() {
   const auth = useAuth();
@@ -64,7 +64,9 @@ function AccountUpload({ auth }: { auth: Auth }) {
     }
   }
 
-  return recovery.loading || recovery.error || recovery.operations.length ? <CreateRecovery auth={auth} recovery={recovery} kind="track" onDismiss={() => {
+  return <>
+    <EarlierCreates auth={auth} recovery={recovery} kind="track" />
+    {recovery.loading || recovery.error || recovery.operations.length ? <CreateRecovery auth={auth} recovery={recovery} kind="track" onDismiss={() => {
     setFile(null); setArtwork(null); setTitle(''); setAlbum(''); setDescription(''); setTags(''); setNote(undefined);
   }} /> : <>
       <Copy>audio goes to your PDS. up to 100 MB per track.</Copy>
@@ -77,5 +79,6 @@ function AccountUpload({ auth }: { auth: Auth }) {
       <TagsField value={tags} onChange={setTags} disabled={busy} />
       <Action label={busy ? 'Uploading…' : 'Upload'} onPress={() => void upload()} disabled={busy || !file || !title.trim() || !artist.trim()} />
       {note && <Copy live>{note}</Copy>}
-    </>;
+    </>}
+  </>;
 }

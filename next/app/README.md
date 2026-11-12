@@ -81,8 +81,9 @@ An accepted create remains accessible until dismissed. A different existing
 record is never overwritten and can be explicitly kept. Recovery stores record
 metadata and blob references, never credentials or media bytes. Clearing local
 app data removes these entries; recovery does not transfer between devices.
-Known limitation: a permanently rejected record retains its immutable attempt
-and blocks new creates of that kind on this device. A later rejection plus a
-missing read cannot prove that an earlier request will not still commit. An
-explicit archive-and-reconcile flow is still needed; there is no automatic
-discard on validation or authorization errors.
+An unresolved attempt can be explicitly set aside after a warning that it may
+still appear and starting again could create a duplicate. This allows a new
+intentional creation without erasing the earlier address or immutable record.
+Earlier attempts remain available for read-only status checks and explicit
+recovery; resuming never submits automatically. Late acceptance preserves the
+set-aside state. Validation and authorization errors never discard an attempt.
