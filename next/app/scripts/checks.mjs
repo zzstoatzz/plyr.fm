@@ -85,7 +85,7 @@ const checks = {
   'check-private-delete': [/^src\/publishing\/(PrivateTrackDelete|private-delete)/],
   'check-private-publishing': [/^src\/publishing\/(PrivateMusic|private-)/, /^app\/private/],
   'check-profile-editor': [/^src\/profile\//, /^app\/edit-profile/],
-  'check-queue-drag': [/^src\/QueueReorder/, /^app\/queue/],
+  'check-queue-drag': [/^src\/(QueueReorder|HomeTrackRow)/, /^src\/behaviors\/(reorder|use-reorder-handle|use-cancel-on-leave)/, /^app\/queue/],
   'check-queue-sync': [/^src\/(personal-queue|use-personal-queue|queue-)/],
   'check-radio-accounting': [/^src\/(radio|RadioPlayer|use-radio-feed)/],
   'check-search-layout': [/^src\/(Search|use-search)/, /^app\/search/],
@@ -113,7 +113,7 @@ function needsOf(name) {
   if (source.includes('pds-browser-fixture') || source.includes(':5197')) {
     needs.push('local PDS');
   }
-  if (source.includes('queue-fixture') || source.includes('REDIS_URL')) {
+  if (source.includes("require('./queue-fixture.cjs')") || source.includes('REDIS_URL')) {
     needs.push('compose redis + postgres');
   }
   return [...new Set(needs)];

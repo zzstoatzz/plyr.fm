@@ -57,6 +57,9 @@ instead. Add one when something bites.
 - **Refetching a list on focus with `reload()` drops the pages someone already
   loaded.** Use `revalidate()` from `usePages`, which refetches the loaded
   pages and swaps them in.
+- **A queue started from a list keeps your picks above the collection.** A
+  pick can't be moved below the "from …" line, so a drag or key that would
+  cross it does nothing. Exercise long drags with collection tracks.
 - **The player harness launches `chromium` with `channel: 'chrome'`.** Where
   only Playwright's bundled Chromium exists (cloud containers), point
   `PLAYWRIGHT_MODULE` at a small wrapper that drops `channel`.
