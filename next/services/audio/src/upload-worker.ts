@@ -95,7 +95,7 @@ export async function routeUpload(request: Request, env: UploadEnv): Promise<Res
   const origin = request.headers.get("origin");
   const media = url.pathname.startsWith("/media/");
   if (!media && origin && !env.UPLOAD_ALLOWED_ORIGINS?.split(",").map(value => value.trim()).includes(origin)) return new Response(null, { status: 403 });
-  const cors = { "access-control-allow-origin": media ? "*" : origin ?? "null", "access-control-expose-headers": "accept-ranges, content-length, content-range, etag", "x-content-type-options": "nosniff" };
+  const cors = { "access-control-allow-origin": media ? "*" : origin ?? "null", "access-control-expose-headers": "accept-ranges, content-length, content-range, etag, content-disposition", "x-content-type-options": "nosniff" };
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: { ...cors, "access-control-allow-methods": media ? "GET, HEAD, OPTIONS" : "GET, POST, PUT, DELETE, OPTIONS", "access-control-allow-headers": "authorization, content-type, range" } });
   if (!env.UPLOADS) return new Response(null, { status: 503 });
   if (media) {

@@ -79,6 +79,7 @@ test("published download attachment preserves bytes, HEAD, ranges and visibility
     const response = await routeUpload(new Request(download, { method }), env);
     expect(response?.status).toBe(200);
     expect(response?.headers.get("content-disposition")).toBe('attachment; filename="audio.mp3"');
+    expect(response?.headers.get("access-control-expose-headers")?.split(", ")).toContain("content-disposition");
     expect(response?.headers.get("content-type")).toBe("audio/mpeg");
     expect(response?.headers.get("content-length")).toBe("10");
     expect(response?.headers.get("cache-control")).toBe("public, max-age=300");
