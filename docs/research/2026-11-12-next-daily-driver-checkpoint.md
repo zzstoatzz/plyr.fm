@@ -239,8 +239,9 @@ provide public/open service-owned multipart staging with client canonical writes
 small deployed acceptance passes after #2528. The earlier failed fixture
 `43230541415` completed exact record/object cleanup but may retain one 4,044-byte
 recovery reservation. Full-size run `43241857625` remains pending. Large and
-protected replacements, enabled transcoding, historical download-policy backfill
-and download-client acceptance remain open. Private metadata editing also
+protected replacements, enabled transcoding, access/download-policy management,
+historical download-policy backfill and download-client acceptance remain open.
+Private metadata editing also
 requires conditional-write support absent from the current Spaces API; a
 preliminary read is not an atomic revision check.
 
