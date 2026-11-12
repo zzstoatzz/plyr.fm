@@ -29,7 +29,7 @@ export interface Track {
 	media: { artwork?: { url: string } | null };
 	access: { visibility: 'public' | 'unlisted' | 'supporters' };
 	metrics: { play_count: number; like_count: number };
-	moderation?: { self_labels: string[]; operator_labels: string[] };
+	moderation?: { self_labels: string[]; operator_labels: string[]; account_labels?: string[] };
 }
 
 export interface Playback {
@@ -177,7 +177,7 @@ export const api = {
 	},
 	trackLikes: (id: string, cursor?: string) =>
 		get<Page<TrackLike>>(`/v1/tracks/${encodeURIComponent(id)}/likes`, { limit: 30, cursor }),
-	tracks: (p: { limit?: number; cursor?: string; artist_did?: string; tag?: string[] } = {}, signal?: AbortSignal) => get<Page<Track>>('/v1/tracks', p, signal),
+	tracks: (p: { limit?: number; cursor?: string; artist_did?: string; tag?: string[]; hidden_tag?: string[] } = {}, signal?: AbortSignal) => get<Page<Track>>('/v1/tracks', p, signal),
 	track: (id: string) => get<Track>(`/v1/tracks/${encodeURIComponent(id)}`),
 	playback: (id: string) => get<Playback>(`/v1/tracks/${encodeURIComponent(id)}/playback`),
 	artist: (didOrHandle: string) => get<Artist>(`/v1/artists/${encodeURIComponent(didOrHandle)}`),

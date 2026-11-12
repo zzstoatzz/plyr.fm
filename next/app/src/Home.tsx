@@ -15,8 +15,16 @@ import { pageFrame } from './controls';
 import { tagColors } from './tag-colors';
 import { WaveLoading } from './WaveLoading';
 import { TagScroller } from './TagScroller';
+import { useAppPreferences } from './preference-context';
+import { discoveryFilter } from './discovery/preferences';
 
 export function Home({ onPlay }: { onPlay: Play }) {
+  const { preferences } = useAppPreferences();
+  return <HomeFeed key={JSON.stringify(preferences.hiddenTags)} hiddenTags={preferences.hiddenTags} onPlay={onPlay} />;
+}
+
+function HomeFeed({ onPlay, hiddenTags }: { onPlay: Play; hiddenTags: string[] }) {
+  const hiddenKey = JSON.stringify(hiddenTags);
   const colors = useColors();
   const list = useRef<FlatList<Track>>(null);
   const [layoutWidth, setLayoutWidth] = useState(0);
@@ -27,7 +35,7 @@ export function Home({ onPlay }: { onPlay: Play }) {
   const [selection, setSelection] = useState(() => ({ key, tags: parseSelectedTags(readLocal(key)) }));
   const selected = selection.key === key ? selection.tags : parseSelectedTags(readLocal(key));
   const tagKey = JSON.stringify(selected);
-  const loadLatest = useCallback((cursor?: string) => api.tracks({ limit: HOME_PAGE_SIZE, cursor, tag: parseSelectedTags(tagKey) }), [tagKey]);
+  const loadLatest = useCallback((cursor?: string) => api.tracks({ limit: HOME_PAGE_SIZE, cursor, tag: parseSelectedTags(tagKey), hidden_tag: discoveryFilter(JSON.parse(hiddenKey)) }), [tagKey, hiddenKey]);
   const latest = usePages(loadLatest);
   const [headerHeight, setHeaderHeight] = useState(0);
   const rowHeight = Math.max(96, Math.ceil(64 * colors.scale + 32));
@@ -74,7 +82,7 @@ export function Home({ onPlay }: { onPlay: Play }) {
           </Pressable>}
           {selected.map((name) => tag(name, true, tags.find((item) => item.name === name)?.track_count))}
           {selected.length > 0 && <View testID="home-tags-divider" style={[styles.divider, { backgroundColor: colors.line }]} />}
-          {tags.filter(({ name }) => !selected.includes(name)).map(({ name, track_count }) => tag(name, false, track_count))}
+          {tags.filter(({ name }) => !selected.includes(name) && !hiddenTags.includes(name)).map(({ name, track_count }) => tag(name, false, track_count))}
           {tagPages.hasMore && <Pressable accessibilityRole="button" accessibilityLabel="More tags" accessibilityState={{ busy: tagPages.loading, disabled: tagPages.loading }} disabled={tagPages.loading} onPress={() => void tagPages.more(true)} style={styles.tagTarget}>
             <Text style={{ color: colors.muted, fontSize: 12 * colors.scale }}>{tagPages.loading ? 'loading…' : 'more'}</Text>
           </Pressable>}

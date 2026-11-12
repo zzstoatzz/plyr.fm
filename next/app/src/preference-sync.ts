@@ -1,5 +1,6 @@
 import type { Agent } from './auth-state';
 import { JAM_COORDINATOR_URL, JAM_JOIN_METHOD, JAM_SERVICE_AUDIENCE } from './auth-config';
+import { hiddenTags } from './discovery/preferences';
 
 export interface PersonalPreferences {
 	theme: 'system' | 'light' | 'dark';
@@ -8,6 +9,7 @@ export interface PersonalPreferences {
 	keepPlaying: boolean;
 	playThrough: boolean;
 	scale: number;
+	hiddenTags: string[];
 }
 
 export function decodePreferences(value: unknown): Partial<PersonalPreferences> {
@@ -19,6 +21,8 @@ export function decodePreferences(value: unknown): Partial<PersonalPreferences> 
 	if (v.font === 'comic-sans' || v.font === 'system' || v.font === 'mono' || v.font === 'serif') prefs.font = v.font;
 	if (typeof v.keepPlaying === 'boolean') prefs.keepPlaying = v.keepPlaying;
 	if (typeof v.playThrough === 'boolean') prefs.playThrough = v.playThrough;
+	const hidden = hiddenTags(v.hiddenTags);
+	if (hidden) prefs.hiddenTags = hidden;
 	if (v.scale === 90 || v.scale === 100 || v.scale === 115 || v.scale === 130) prefs.scale = v.scale / 100;
 	return prefs;
 }
