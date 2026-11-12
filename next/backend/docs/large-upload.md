@@ -95,6 +95,18 @@ activation recovery, authority outage, policy rejection, and no prepublication
 bytes through GET/HEAD/Range. Small local parts test mechanics; synthetic size
 metadata tests the 1.5 GiB boundary without moving large media on this laptop.
 
+Provisioning uses a new `UPLOAD_CAPABILITY_SECRET`, separate from the existing
+mirror `UPLOAD_TOKEN`. Keep its canonical value in the encrypted secrets store;
+GitHub's `PLYR_NEXT_UPLOAD_CAPABILITY_SECRET` transports it to the audio deploy
+job, and the Next coordinator receives the same value as a staged Fly secret.
+Set the coordinator's `UPLOAD_BASE_URL` to the existing audio Worker's origin.
+The deploy job writes only this new binding to a private temporary JSON file,
+passes `--secrets-file` to Wrangler, and removes the file on exit. Existing mirror
+secrets are preserved. Do not use `wrangler secret put`, which immediately
+deploys a Worker version. Rotation repeats the coordinated store,
+GitHub and staged Fly updates followed by the normal CI deployments; outstanding
+upload capabilities must be refreshed by authenticated owners.
+
 CI tests and deploys the existing audio Worker from published main alongside
 its Durable Object migration. Backend admission ships before dependent client
 code. Deployment acceptance must prove exact versions and a disposable small
