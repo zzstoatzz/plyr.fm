@@ -21,8 +21,10 @@ finish line. This is execution evidence, not another parity inventory.
   read-only cross-origin missing-object HEAD verified the live header policy.
 - #2529 at `de99e71f` projects verified track download preferences without
   treating a public playback URL as download authorization. Historical catalog
-  reconciliation `43239042552` is still running; complete backfill and the
-  dependent download client are not yet accepted.
+  reconciliation `43239042552` finished with 461 verified, one absent, 16 retryable
+  and two rejected outcomes; its temporary machine was cleaned up. Rejected
+  outcomes are still being classified. Complete backfill and the dependent
+  download client are not yet accepted.
 - #2526 at `555c6adf` adds the staged processing executor with execution disabled.
   It is a prerequisite, not an enabled end-to-end upload/transcode path; durable
   ownership, integration and deployed processing acceptance remain open.
@@ -36,9 +38,17 @@ finish line. This is execution evidence, not another parity inventory.
   unclassified. Exact-reservation read-only status confirmed `transferring`, 69
   acknowledged parts and the full reserved quota. #2536 reproduces old recovery
   alarm contention and adds bounded owner-operation waiting; deployment
-  `43243794512` passed at `0c06dd1d`. Same-reservation recovery acceptance remains
-  pending. No full-size success or throughput claim follows; recovery must reuse
-  this reservation rather than create a fresh retry or reset durable state.
+  `43243794512` passed at `0c06dd1d`.
+  #2535 then resumed the same reservation at `4770cc1e`: run `43244675993` passed
+  with Worker `76840722-6055-4073-8710-6b18b601afab`, 1,610,612,736 bytes and 154
+  parts, reusing 69 acknowledged parts. The streamed download SHA-256 was
+  `06db7cf0de3224738c2140e1354156c811bb784c7b2aea642d9b9d0007e57d11`.
+  Maximum generated read was 10,485,760 bytes; peak runner RSS was 191,934,464
+  bytes. Signed activation, attachment HEAD/Range and browser CORS headers passed.
+  Cleanup confirmed completed/published, no retained quota and no cleanup failure.
+  The first run injected the lost part-two acknowledgement; this recovery run
+  injected no new loss. This proves one cloud full-size transfer and same-ID
+  recovery, not sustained throughput, native memory bounds or real-account OAuth.
 - #2525: owners can delete private tracks with explicit confirmation that the
   current record, including changes made elsewhere, will be removed. Missing
   grants and incompatible policies prevent writes; unresolved creation blocks
@@ -243,12 +253,12 @@ staging/transcoding, protected audio and explicit storage fallback consent.
 Next's public blob path is capped at 100 MiB by the published blob contract.
 Private creation and public audio replacement share that cap. #2507/#2517 now
 provide public/open service-owned multipart staging with client canonical writes;
-small deployed acceptance passes after #2528. The earlier failed fixture
+small deployed acceptance passes after #2528, and the same-ID full-size recovery
+passed in `43244675993`. The earlier failed fixture
 `43230541415` completed exact record/object cleanup but may retain one 4,044-byte
-recovery reservation. Full-size run `43241857625` failed before completion with
-part/cancellation conflicts and possible retained quota; capacity acceptance
-remains open. Large and
-protected replacements, enabled transcoding, access/download-policy management,
+recovery reservation; the separate 1.5 GiB reservation released its quota after
+successful recovery. Large and protected replacements, enabled transcoding,
+access/download-policy management,
 historical download-policy backfill and download-client acceptance remain open.
 Private metadata editing also
 requires conditional-write support absent from the current Spaces API; a
