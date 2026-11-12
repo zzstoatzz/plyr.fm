@@ -1,4 +1,7 @@
 {
   "max_file_bytes": 1610612736,
-  "multipart_overhead_bytes": 1048576
+  "multipart_overhead_bytes": 1048576,
+  "paused_upload_dids": [
+    "did:plc:so3ysj7gypel6w7mixdfjhkh"
+  ]
 }

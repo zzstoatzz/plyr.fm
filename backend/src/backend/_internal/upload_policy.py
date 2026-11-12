@@ -5,9 +5,9 @@ from sqlalchemy import select
 
 from backend._internal.upload_notifications import schedule_upload_pause_notification
 from backend.models import Track
+from backend.upload_limits import PAUSED_UPLOAD_DIDS
 from backend.utilities.database import db_session
 
-PAUSED_UPLOAD_DIDS = frozenset({"did:plc:so3ysj7gypel6w7mixdfjhkh"})
 UPLOAD_PAUSE_MESSAGE = (
     "thanks for using plyr.fm. i've temporarily paused new uploads on your account "
     "because processing this volume of audio is costing more than i can currently "
