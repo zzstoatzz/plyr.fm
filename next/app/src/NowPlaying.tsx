@@ -83,6 +83,7 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
   const scroller = useRef<ScrollViewInstance>(null);
   useEffect(() => { if (overlay && present) scroller.current?.scrollTo({ y: 0, animated: false }); }, [overlay, present]);
   const [condensed, setCondensed] = useState(false);
+  const titleEnd = useRef({ body: 0, meta: 0 });
   const condense = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.timing(condense, { toValue: condensed ? 1 : 0, duration: theme.reduceMotion ? 0 : 160, useNativeDriver: Platform.OS !== 'web' }).start();
@@ -160,13 +161,13 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
           </Animated.View> : <View {...dismiss.protect}><PlayerControl icon={X} label="Close" onPress={close} /></View>}
         </View>
         <Animated.View {...dismiss.contentStartHandlers} style={[styles.scrollRegion, morph && { transform: [{ translateY: fade(0, -0.6 * rest, 0, 1) }] }]}>
-          <ScrollView ref={scroller} testID="now-playing-scroll" onScroll={event => { dismiss.onScroll(event); const past = event.nativeEvent.contentOffset.y > artwork + 60; if (past !== condensed) setCondensed(past); }} scrollEventThrottle={16} scrollEnabled={!dismiss.dragging}
+          <ScrollView ref={scroller} testID="now-playing-scroll" onScroll={event => { dismiss.onScroll(event); const past = titleEnd.current.meta > 0 && event.nativeEvent.contentOffset.y > titleEnd.current.body + titleEnd.current.meta; if (past !== condensed) setCondensed(past); }} scrollEventThrottle={16} scrollEnabled={!dismiss.dragging}
             style={Platform.OS === 'web' && compact ? scrollTouch : undefined} contentContainerStyle={[styles.content, sideBySide && styles.desktopContent]} alwaysBounceVertical={false}>
             <View testID="now-playing-artwork" style={[styles.art, carried]}>
               <View ref={artRef}><Cover uri={trackArtwork(track)} size={artwork} radius={16} /></View>
             </View>
-            <View style={[styles.body, sideBySide ? [styles.desktopBody, { maxWidth: 440 }] : { width: artwork }]}>
-              <View style={styles.meta}>
+            <View onLayout={event => { titleEnd.current.body = sideBySide ? 0 : event.nativeEvent.layout.y; }} style={[styles.body, sideBySide ? [styles.desktopBody, { maxWidth: 440 }] : { width: artwork }]}>
+              <View onLayout={event => { titleEnd.current.meta = event.nativeEvent.layout.y + event.nativeEvent.layout.height; }} style={styles.meta}>
                 <View ref={titleRef} style={carried}><Text testID="now-playing-title" accessibilityRole="header" accessibilityLabel={track.metadata.title} numberOfLines={2} style={titleStyle}>
                   {track.metadata.title}
                 </Text></View>
