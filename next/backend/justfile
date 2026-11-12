@@ -188,3 +188,8 @@ inventory *ARGS:
 # Reads public PDS proofs only; never opens a database or writes records.
 bench-collection DID:
     PROOF_BENCH_DID={{ DID }} zig build bench-collection -Doptimize=ReleaseFast
+
+# Uses a unique database and read-only login on the dedicated local test Postgres.
+test-read-http: build
+    docker compose -f compose.yaml up -d --wait zig-db
+    uv run --project ../../backend python scripts/test_read_http.py

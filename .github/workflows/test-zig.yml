@@ -100,6 +100,10 @@ jobs:
         working-directory: backend
         run: uv run python ../next/backend/scripts/test_play_http.py
 
+      - name: stale connection read HTTP contract
+        working-directory: backend
+        run: uv run python ../next/backend/scripts/test_read_http.py
+
       - name: Python canary and benchmark contract checks
         working-directory: backend
         run: |

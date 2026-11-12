@@ -71,14 +71,17 @@ the remainder in the background.
    the large track query is parsed and planned on each request: about 9 ms of
    the 14 ms a discovery page takes end to end, more than it spends executing.
    Named prepared statements per pooled connection would remove that.
-2. **Idle connections and Neon suspend.** Neon suspends a compute after 5
+2. **Idle connections and Neon suspend.** Composed catalog reads now retry a
+   lost connection once (see the November 12 recovery section); the other read
+   adapters still need the same bounded recovery contract. Neon suspends a compute after 5
    minutes without active queries, and idle connections do not prevent it,
    so the pool costs nothing while idle. The suspend closes the connections
    it held, though, and the pool does not notice until one is used: with
    every server-side connection terminated locally, the next request got a
    503 and the ones after it succeeded. A Fly machine that outlives a Neon
    suspend therefore fails one request on wake. Retrying once on a broken
-   connection (in the pool, or around `acquire` in the stores) would hide it.
+   connection can hide it; retrying only `acquire` is insufficient because the
+   first failure can arrive while reading rows.
 3. **One OS thread per connection** (`server.zig` spawns a thread per
    accepted stream, bounded by `MAX_CONNECTIONS`). Fine at current load on a
    256 MB machine; worth revisiting before raising the connection limit.
@@ -196,3 +199,52 @@ compared body hashes before timing. Keep that warmup and compare hashes across
 revisions when reproducing the table; the plain CLI command alone includes cold
 statement preparation and is a different measurement. Keep the full JSON output,
 including errors, sample count, p99 and memory, alongside any reported summary.
+
+## composed read recovery, November 12
+
+Composed catalog reads retry once when their PostgreSQL connection disappears.
+The retry wraps the complete adapter operation, including result iteration and
+single-row cleanup, before the API serializes or sends a response. It applies to
+track detail, discovery and artist catalogs, liked tracks, batch track hydration,
+tags and readiness. Other PostgreSQL adapters are unchanged; this does not close
+the entire scope of #2319.
+
+`postgres_read.zig` recognizes closed/reset/broken-pipe transports, TLS stream
+read/write failures and PostgreSQL connection-loss or shutdown codes
+`08003`, `08006`, `57P01`, `57P02`. It marks that connection failed before normal
+result cleanup and pool release; pg.zig destroys it and its statement cache, then
+opens a replacement. The second complete attempt reacquires a connection and
+recreates any prepared statement. A second loss becomes `IndexUnavailable`.
+SQL errors, statement cancellation, timeouts, pool exhaustion, allocation errors
+and corrupt projections are not retry signals. No write adapter uses this runner.
+
+Each attempt unwinds its result and connection before the next begins. Partial
+vectors are freed on error; decoded fields retain the existing request-arena
+lifetime and are reclaimed at the end of the HTTP request. At most two bounded
+read attempts allocate into that arena. The runner retains no connection, result
+or allocation between requests.
+
+Verification commands, from `next/backend`:
+
+```sh
+just check
+just test-read-http
+PLYR_ZIG_TEST_DATABASE_URL=postgresql://zig_test:zig_test@127.0.0.1:5435/zig_test \
+  zig build test -Dtest-filter='read retry'
+```
+
+The HTTP test creates a unique scratch database and read-only login on the local
+test Postgres. It warms each catalog path, terminates that login's sole database
+connection, and requires the first subsequent HTTP request to return the identical
+200 response through a different backend PID. Denying new logins before terminating
+the connection must produce a bounded 503. Its database and role are removed on
+exit. The pre-fix binary fails the first terminated-connection case with 503.
+The Zig CI workflow runs this HTTP contract against its disposable Postgres.
+
+The focused Zig test terminates a connection after consuming its first row from
+a deliberately streaming query. It requires exactly two attempts, different PIDs,
+and exactly 1,000 ordered rows without any partial first-attempt rows leaking into
+the result. The testing allocator checks allocation cleanup. Separate tests cover
+the two-attempt limit and non-retryable errors. A test-name filter is now available
+through `-Dtest-filter` so these failure tests can run independently of unrelated
+integration tests.

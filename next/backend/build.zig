@@ -86,7 +86,11 @@ pub fn build(b: *std.Build) void {
     const run_step = b.step("run", "Run the selected backend process role");
     run_step.dependOn(&run_command.step);
 
-    const tests = b.addTest(.{ .root_module = root_module });
+    const test_filter = b.option([]const u8, "test-filter", "Run tests whose names contain this text");
+    const tests = b.addTest(.{
+        .root_module = root_module,
+        .filters = if (test_filter) |filter| &.{filter} else &.{},
+    });
     const run_tests = b.addRunArtifact(tests);
     run_tests.has_side_effects = true;
     const test_step = b.step("test", "Run Zig backend tests");
