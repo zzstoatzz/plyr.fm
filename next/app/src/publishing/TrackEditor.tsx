@@ -7,21 +7,39 @@ import { getAuth, type Auth } from '../auth-state';
 import { useResource } from '../CatalogPieces';
 import { Sheet } from '../Sheet';
 import { Action, Copy, Field, row } from '../controls';
-import { pickMedia } from '../media-picker';
+import { measureAudioDuration, pickMedia } from '../media-picker';
 import { createPds, TrackRevisionConflict, type MediaFile } from '../pds';
 import { recordTags } from './track-tags';
 import { TagsField } from './TagsField';
+import { canReplaceTrackAudio, validateReplacementAudio, TrackWriteUnconfirmed } from './track-audio';
 
 function close(id: string) { router.canGoBack() ? router.back() : router.replace(`/track/${id}`); }
+
+type EditorNotice = { message: string; reload?: () => void };
+type EditorFeedback = { busy: (value: boolean) => void; notice: (value?: EditorNotice) => void };
 
 export function TrackEditor({ id }: { id: string }) {
   const auth = useAuth();
   const [session, setSession] = useState({ rpc: auth.rpc, version: 0 });
   if (session.rpc !== auth.rpc) setSession({ rpc: auth.rpc, version: session.version + 1 });
-  return <EditorSession key={`${id}:${auth.did}:${session.version}`} id={id} auth={auth} />;
+  const key = `${id}:${auth.did}:${session.version}`;
+  const owner = useRef({ key, busy: false });
+  if (owner.current.key !== key) owner.current = { key, busy: false };
+  const [notice, setNotice] = useState<{ key: string; value?: EditorNotice }>();
+  const feedback = useMemo<EditorFeedback>(() => ({
+    busy(value) { if (owner.current.key === key) owner.current.busy = value; },
+    notice(value) { if (owner.current.key === key) setNotice({ key, value }); }
+  }), [key]);
+  const message = notice?.key === key ? notice.value : undefined;
+  return <Sheet title="edit track" close={() => { if (!owner.current.busy) close(id); }} notice={message ? <>
+    <Copy live>{message.message}</Copy>
+    {message.reload && <Action label="Discard draft and reload" onPress={message.reload} />}
+  </> : undefined}>
+    <EditorSession key={key} id={id} auth={auth} feedback={feedback} />
+  </Sheet>;
 }
 
-function EditorSession({ id, auth }: { id: string; auth: Auth }) {
+function EditorSession({ id, auth, feedback }: { id: string; auth: Auth; feedback: EditorFeedback }) {
   const pds = useMemo(() => createPds(auth), [auth.did, auth.rpc]);
   const load = useCallback(async () => {
     const track = await api.track(id);
@@ -30,16 +48,19 @@ function EditorSession({ id, auth }: { id: string; auth: Auth }) {
     return { track, revision, tags: recordTags(revision.value.tags) };
   }, [id, auth.did, pds]);
   const resource = useResource(load);
-  if (resource.data) return <TrackForm key={resource.data.revision.cid} auth={auth} data={resource.data} reload={resource.retry} />;
-  return <Sheet title="edit track" close={() => close(id)}>
+  const retry = useRef(resource.retry);
+  retry.current = resource.retry;
+  const reload = useCallback(() => retry.current(), []);
+  if (resource.data) return <TrackForm key={resource.data.revision.cid} auth={auth} data={resource.data} reload={reload} feedback={feedback} />;
+  return <>
     {resource.error ? <><Copy live>{resource.error}</Copy><Action label="Retry loading track" onPress={resource.retry} /></>
       : <Copy>loading track…</Copy>}
-  </Sheet>;
+  </>;
 }
 
 type Data = { track: Awaited<ReturnType<typeof api.track>>; revision: Awaited<ReturnType<ReturnType<typeof createPds>['myTrack']>>; tags?: string[] };
 
-function TrackForm({ auth, data, reload }: { auth: Auth; data: Data; reload: () => void }) {
+function TrackForm({ auth, data, reload, feedback }: { auth: Auth; data: Data; reload: () => void; feedback: EditorFeedback }) {
   const { track, revision } = data;
   const text = (key: string) => typeof revision.value[key] === 'string' ? revision.value[key] : '';
   const [title, setTitle] = useState(text('title'));
@@ -48,6 +69,7 @@ function TrackForm({ auth, data, reload }: { auth: Auth; data: Data; reload: () 
   const [tags, setTags] = useState((data.tags ?? []).join('\n'));
   const [tagsEdited, setTagsEdited] = useState(false);
   const [artwork, setArtwork] = useState<MediaFile | null>();
+  const [audio, setAudio] = useState<MediaFile>();
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -55,17 +77,21 @@ function TrackForm({ auth, data, reload }: { auth: Auth; data: Data; reload: () 
   const [confirm, setConfirm] = useState(false);
   const [conflict, setConflict] = useState(false);
   const live = useRef(true), locked = useRef(false);
-  useEffect(() => { live.current = true; return () => { live.current = false; }; }, []);
+  useEffect(() => { live.current = true; return () => { live.current = false; feedback.busy(false); feedback.notice(); }; }, [feedback]);
+  useEffect(() => { feedback.notice(error ? { message: error, reload: conflict ? reload : undefined } : undefined); }, [error, conflict, reload, feedback]);
   const current = () => live.current && getAuth().did === auth.did && getAuth().rpc === auth.rpc;
 
   async function save(deleting: boolean) {
     if (!current() || locked.current || saved || conflict) return;
     locked.current = true;
+    feedback.busy(true);
     setBusy(true); setError(undefined);
     try {
       const pds = createPds(auth);
+      const duration = !deleting && audio ? await measureAudioDuration(audio).catch(() => undefined) : undefined;
+      if (!current()) return;
       const status = deleting ? await pds.deleteTrack(track.record.uri)
-        : await pds.editTrack(track.record.uri, { title, album, description, artwork, tags: tagsEdited ? tags.split('\n') : undefined }, revision);
+        : await pds.editTrack(track.record.uri, { title, album, description, artwork, audio: audio ? { file: audio, duration } : undefined, tags: tagsEdited ? tags.split('\n') : undefined }, revision);
       if (!current()) return;
       setSaved(true);
       setDeleted(deleting);
@@ -77,16 +103,24 @@ function TrackForm({ auth, data, reload }: { auth: Auth; data: Data; reload: () 
     } catch (failure) {
       locked.current = false;
       if (current()) {
-        setConflict(failure instanceof TrackRevisionConflict);
+        setConflict(failure instanceof TrackRevisionConflict || failure instanceof TrackWriteUnconfirmed);
         setError(failure instanceof Error ? failure.message : 'could not update track.');
       }
-    } finally { if (current()) setBusy(false); }
+    } finally { if (current()) { setBusy(false); feedback.busy(false); } }
   }
 
-  return <Sheet title="edit track" close={() => { if (!busy) close(track.id); }}>
-    {error && <Copy live>{error}</Copy>}
-    {conflict && <Action label="Discard draft and reload" onPress={reload} />}
+  return <>
     {saved ? <Action label={deleted ? 'Back to your music' : 'View track'} onPress={() => router.replace(deleted ? '/portal' : `/track/${track.id}`)} /> : <>
+      {track.access.visibility === 'public' && canReplaceTrackAudio(revision.value) && <View style={{ gap: 8 }}>
+        <Action label={audio?.name ?? 'Replace audio'} disabled={busy || conflict} onPress={() => void pickMedia('audio/*').then(file => {
+          if (!file || !current()) return;
+          validateReplacementAudio(revision.value, file);
+          setAudio(file); setError(undefined);
+        }).catch(failure => { if (current()) setError(failure instanceof Error ? failure.message : 'could not open audio.'); })} />
+        {audio && <><Copy>save replaces the audio at this track's existing link. up to 100 MiB; your title, likes and playlists stay. keep your original file; replacement cannot be undone here.</Copy>
+          <Action label="Keep current audio" disabled={busy} onPress={() => setAudio(undefined)} /></>}
+        {busy && audio && <Copy live>saving replacement audio…</Copy>}
+      </View>}
       <Field label="Title" value={title} onChangeText={setTitle} maxLength={256} editable={!busy} />
       <Field label="Album" value={album} onChangeText={setAlbum} maxLength={256} editable={!busy} />
       <Field label="Description" value={description} onChangeText={setDescription} maxLength={5000} multiline editable={!busy} />
@@ -101,5 +135,5 @@ function TrackForm({ auth, data, reload }: { auth: Auth; data: Data; reload: () 
       <Action destructive label={confirm ? 'Confirm delete' : 'Delete track'} disabled={busy || conflict} onPress={() => confirm ? void save(true) : setConfirm(true)} />
       {confirm && <Action label="Cancel delete" disabled={busy} onPress={() => setConfirm(false)} />}
     </>}
-  </Sheet>;
+  </>;
 }

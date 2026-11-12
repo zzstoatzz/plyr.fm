@@ -5,12 +5,14 @@ import X from 'lucide-react-native/icons/x';
 import { useAppearance } from './appearance';
 import { Heading } from './CatalogPieces';
 
-export function Sheet({ title, close, children }: { title: string; close: () => void; children: ReactNode }) {
+export function Sheet({ title, close, children, notice, visible = true, onDismiss }: {
+  title: string; close: () => void; children: ReactNode; notice?: ReactNode; visible?: boolean; onDismiss?: () => void;
+}) {
   const theme = useAppearance();
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const wide = width >= 800;
-  return <Modal transparent accessibilityLabel={title} animationType={theme.reduceMotion ? 'none' : 'fade'} visible onRequestClose={close}>
+  return <Modal transparent accessibilityLabel={title} animationType={theme.reduceMotion ? 'none' : 'fade'} visible={visible} onDismiss={onDismiss} onRequestClose={close}>
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={{ flex: 1, justifyContent: wide ? 'center' : 'flex-end', alignItems: 'center' }}>
       <Pressable accessible={false} focusable={false} tabIndex={-1} aria-hidden onPress={close}
@@ -24,6 +26,7 @@ export function Sheet({ title, close, children }: { title: string; close: () => 
           <View style={{ flex: 1, minWidth: 0 }}><Heading>{title}</Heading></View>
           <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={close} style={{ padding: 12 }}><X size={22} color={theme.text} /></Pressable>
         </View>
+        {notice && <View style={{ paddingHorizontal: 20, paddingBottom: 12, gap: 12 }}>{notice}</View>}
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, paddingTop: 4, gap: 12 }}>
           {children}
         </ScrollView>
