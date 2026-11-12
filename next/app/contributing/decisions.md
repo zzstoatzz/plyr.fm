@@ -32,13 +32,13 @@ nate first. Add an entry when a PR settles something.
   once** under `src/behaviors/`, as pure decisions with tests, and screens
   compose it. Its rendered contract is checked against the WAI-ARIA pattern
   with `@ui-sdk/core/testing`'s `checkPattern`, a dev dependency only
-  (`scripts/check-tab-patterns.cjs` shows how).
+  (`scripts/check-aria-patterns.cjs` shows how).
 
 ## known and open
 
-- The account picker's combobox and the queue's reorder handle are still
-  hand-rolled. Each is listed in `scripts/lint-exemptions.json` until it moves
-  to a behavior. Tabs moved to `src/behaviors/use-tabs.ts`; open overlays are
+- The account picker's combobox (the only one, and it passes the APG combobox
+  check) and the queue's reorder handle are still hand-rolled. Each is listed
+  in `scripts/lint-exemptions.json` until it moves to a behavior. Tabs moved to `src/behaviors/use-tabs.ts`; open overlays are
   tracked by `src/behaviors/layers.ts`.
 - The permission for queue and settings is still named for joining a Jam.
 - Sensitive artwork is not filtered from Media Session.

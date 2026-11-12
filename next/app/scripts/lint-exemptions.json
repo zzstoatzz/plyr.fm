@@ -13,7 +13,7 @@
     "app/login.tsx": "pageshow listener resets the picker after bfcache on web"
   },
   "hand-rolled-roles": {
-    "src/AccountPicker.tsx": "combobox and options; move to a listbox behavior",
+    "src/AccountPicker.tsx": "the only combobox; check-aria-patterns verifies it against the APG combobox pattern. Move it to src/behaviors/ when a second one appears",
     "src/QueueReorder.tsx": "adjustable reorder handle; move to a reorder behavior"
   },
   "seam-exports": {
