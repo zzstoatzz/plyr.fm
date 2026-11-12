@@ -106,6 +106,7 @@ pub const Gate = struct {
 pub const Moderation = struct {
     self_labels: []const []const u8,
     operator_labels: []const []const u8,
+    account_labels: []const []const u8 = &.{},
     override: ?ModerationOverride,
 };
 
@@ -133,6 +134,7 @@ pub const Sources = struct {
     access: Source = .legacy_local,
     self_labels: Source = .legacy_projection,
     operator_labels: Source = .legacy_local,
+    account_labels: Source = .derived,
     metrics: Source = .derived,
     like_count: Source = .derived,
     account_availability: Source = .legacy_projection,

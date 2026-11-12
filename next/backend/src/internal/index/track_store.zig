@@ -9,6 +9,7 @@ pub const ListRequest = struct {
     limit: usize,
     after: ?track_cursor.Cursor,
     tags: []const []const u8 = &.{},
+    hidden_tags: []const []const u8 = @import("../domain/tag_filter.zig").defaults,
 };
 
 pub const ListScope = union(enum) {

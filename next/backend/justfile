@@ -193,3 +193,7 @@ bench-collection DID:
 test-read-http: build
     docker compose -f compose.yaml up -d --wait zig-db
     uv run --project ../../backend python scripts/test_read_http.py
+
+test-discovery-http: build
+    docker compose -f compose.yaml up -d --wait zig-db
+    uv run --project ../../backend python scripts/test_discovery_http.py

@@ -37,6 +37,8 @@ pub const Change = struct {
     uri: []const u8,
     value: []const u8,
     active: bool,
+    account: bool = false,
+    expires_at_us: ?i64 = null,
 };
 
 pub const Page = struct {
@@ -57,20 +59,27 @@ pub fn parsePage(arena: std.mem.Allocator, body: []const u8, track_collection: [
         if (label != .object) return error.CorruptLabels;
         const uri = stringField(label, "uri") orelse return error.CorruptLabels;
         const value = stringField(label, "val") orelse return error.CorruptLabels;
-        const at = zat.AtUri.parse(uri) orelse continue;
-        const collection = at.collection() orelse continue;
-        if (!std.mem.eql(u8, collection, track_collection) or at.rkey() == null) continue;
-        if (!isTrackValue(value)) continue;
+        const account = zat.Did.parse(uri) != null;
+        if (account) {
+            if (!std.mem.eql(u8, value, "ai")) continue;
+        } else {
+            const at = zat.AtUri.parse(uri) orelse continue;
+            const collection = at.collection() orelse continue;
+            if (!std.mem.eql(u8, collection, track_collection) or at.rkey() == null) continue;
+            if (!isTrackValue(value)) continue;
+        }
         var active = true;
+        var expires_at_us: ?i64 = null;
         if (label.object.get("neg")) |neg| {
             if (neg == .bool and neg.bool) active = false;
         }
         if (stringField(label, "exp")) |exp| {
             if (parseMillis(exp)) |exp_ms| {
                 if (exp_ms <= now_ms) active = false;
+                expires_at_us = std.math.mul(i64, exp_ms, 1000) catch return error.CorruptLabels;
             }
         }
-        try changes.append(arena, .{ .uri = uri, .value = value, .active = active });
+        try changes.append(arena, .{ .uri = uri, .value = value, .active = active, .account = account, .expires_at_us = expires_at_us });
     }
     const cursor = stringField(parsed, "cursor");
     return .{ .changes = try changes.toOwnedSlice(arena), .cursor = if (cursor) |c| (if (c.len == 0) null else c) else null };
@@ -129,7 +138,7 @@ fn backgroundMain(io: std.Io, allocator: std.mem.Allocator, pool: *pg.Pool, sett
 pub fn run(io: std.Io, allocator: std.mem.Allocator, pool: *pg.Pool, settings: Settings) !void {
     var transport = zat.HttpTransport.initWithUserAgent(io, allocator, user_agent);
     defer transport.deinit();
-    const source = try std.fmt.allocPrint(allocator, "labels:{s}", .{settings.labeler_url});
+    const source = try std.fmt.allocPrint(allocator, "labels:v2:{s}", .{settings.labeler_url});
     defer allocator.free(source);
     log.info("label sync running against {s}", .{settings.labeler_url});
     while (true) {
@@ -165,9 +174,9 @@ fn poll(
     }
 
     const url = if (cursor) |c|
-        try std.fmt.allocPrint(arena, "{s}/xrpc/com.atproto.label.queryLabels?uriPatterns=at%3A%2F%2F*&limit={d}&cursor={d}", .{ settings.labeler_url, page_limit, c })
+        try std.fmt.allocPrint(arena, "{s}/xrpc/com.atproto.label.queryLabels?uriPatterns=at%3A%2F%2F*%2Cdid%3A*&limit={d}&cursor={d}", .{ settings.labeler_url, page_limit, c })
     else
-        try std.fmt.allocPrint(arena, "{s}/xrpc/com.atproto.label.queryLabels?uriPatterns=at%3A%2F%2F*&limit={d}", .{ settings.labeler_url, page_limit });
+        try std.fmt.allocPrint(arena, "{s}/xrpc/com.atproto.label.queryLabels?uriPatterns=at%3A%2F%2F*%2Cdid%3A*&limit={d}", .{ settings.labeler_url, page_limit });
     var result = transport.fetch(.{
         .url = url,
         .accept = "application/json",
@@ -183,19 +192,29 @@ fn poll(
 
     const now_us = std.Io.Timestamp.now(io, .real).toMicroseconds();
     const page = try parsePage(arena, result.body, settings.track_collection, @divFloor(now_us, 1000));
+    try applyPage(conn, page, now_us);
+    const next = page.cursor orelse return false;
+    const next_seq = std.fmt.parseInt(i64, next, 10) catch return error.CorruptLabels;
+    _ = conn.exec(save_cursor_sql, .{ source, next_seq, now_us }) catch |err| return storeError(conn, err);
+    if (page.changes.len > 0) log.info("applied {d} labels through seq {d}", .{ page.changes.len, next_seq });
+    return true;
+}
+
+pub fn applyPage(conn: *pg.Conn, page: Page, now_us: i64) !void {
     for (page.changes) |change| {
-        if (change.active) {
+        if (change.account) {
+            if (change.active) {
+                _ = conn.exec(add_account_sql, .{ change.uri, now_us, change.expires_at_us }) catch |err| return storeError(conn, err);
+            } else {
+                _ = conn.exec("DELETE FROM plyr_index.account_label_policies WHERE owner_did = $1", .{change.uri}) catch |err| return storeError(conn, err);
+            }
+        } else if (change.active) {
             _ = conn.exec(add_sql, .{ change.uri, change.value, now_us }) catch |err| return storeError(conn, err);
         } else {
             _ = conn.exec(drop_empty_sql, .{ change.uri, change.value }) catch |err| return storeError(conn, err);
             _ = conn.exec(remove_sql, .{ change.uri, change.value, now_us }) catch |err| return storeError(conn, err);
         }
     }
-    const next = page.cursor orelse return false;
-    const next_seq = std.fmt.parseInt(i64, next, 10) catch return error.CorruptLabels;
-    _ = conn.exec(save_cursor_sql, .{ source, next_seq, now_us }) catch |err| return storeError(conn, err);
-    if (page.changes.len > 0) log.info("applied {d} track labels through seq {d}", .{ page.changes.len, next_seq });
-    return true;
 }
 
 fn storeError(conn: *pg.Conn, err: anyerror) error{StoreUnavailable} {
@@ -282,4 +301,30 @@ test "label timestamps" {
     try std.testing.expectEqual(@as(?i64, 0), parseMillis("1970-01-01T00:00:00Z"));
     try std.testing.expectEqual(@as(?i64, 1_767_225_600_000), parseMillis("2026-01-01T00:00:00.000Z"));
     try std.testing.expect(parseMillis("nope") == null);
+}
+
+const add_account_sql =
+    \\INSERT INTO plyr_index.account_label_policies (owner_did, operator_labels, observed_at_us, expires_at_us)
+    \\VALUES ($1, '["ai"]', $2, $3)
+    \\ON CONFLICT (owner_did) DO UPDATE SET operator_labels = EXCLUDED.operator_labels,
+    \\  observed_at_us = EXCLUDED.observed_at_us, expires_at_us = EXCLUDED.expires_at_us
+;
+
+test "account AI labels stay separate from track labels" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const page = try parsePage(arena.allocator(),
+        \\{"labels":[
+        \\ {"uri":"did:plc:account","val":"ai","exp":"2099-01-01T00:00:00Z"},
+        \\ {"uri":"did:plc:account","val":"ai","neg":true},
+        \\ {"uri":"did:plc:account","val":"porn"},
+        \\ {"uri":"at://did:plc:account/fm.plyr.track/a","val":"ai"},
+        \\ {"uri":"at://did:plc:account/fm.plyr.track/a","val":"porn"}
+        \\]}
+    , "fm.plyr.track", 0);
+    try std.testing.expectEqual(@as(usize, 3), page.changes.len);
+    try std.testing.expect(page.changes[0].account and page.changes[0].active);
+    try std.testing.expectEqual(parseMillis("2099-01-01T00:00:00Z").? * 1000, page.changes[0].expires_at_us.?);
+    try std.testing.expect(page.changes[1].account and !page.changes[1].active);
+    try std.testing.expect(!page.changes[2].account);
 }
