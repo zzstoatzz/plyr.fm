@@ -3,7 +3,6 @@ const websocket = @import("websocket");
 const auth = @import("auth.zig");
 const model = @import("model.zig");
 const protocol = @import("protocol.zig");
-const personal = @import("personal.zig");
 const room_store = @import("store.zig");
 const tickets = @import("tickets.zig");
 const config = @import("../../config.zig");
@@ -335,20 +334,17 @@ const Handler = struct {
 fn join(conn: *websocket.Conn, a: std.mem.Allocator, body: []const u8, origin: []const u8, context: *Context, personal_join: bool) !void {
     const Initial = struct { queue: []model.Track, index: u32 = 0, playing: bool = false, positionMs: u64 = 0, personal: ?protocol.Personal = null };
     const Request = struct {
-        host: []const u8,
-        key: []const u8,
+        host: []const u8 = "",
+        key: []const u8 = "",
         serviceToken: []const u8,
-        delegationToken: []const u8,
+        delegationToken: []const u8 = "",
         clientId: ?[]const u8 = null,
         resumePlaying: bool = false,
         initial: ?Initial = null,
     };
     const request = std.json.parseFromSliceLeaky(Request, a, body, .{ .ignore_unknown_fields = true }) catch |err| return if (err == error.OutOfMemory) err else error.InvalidRequest;
-    if (personal_join != std.mem.eql(u8, request.key, personal.key)) return error.AccessDenied;
     if (personal_join and !model.boundedId(request.clientId orelse "")) return error.InvalidClient;
-    var auth_config = context.auth_config;
-    auth_config.owner_only = personal_join;
-    const admission = try auth.admit(a, context.io, auth_config, request.host, request.key, request.serviceToken, request.delegationToken);
+    const admission = if (personal_join) try auth.admitOwner(a, context.io, context.auth_config, request.serviceToken) else try auth.admit(a, context.io, context.auth_config, request.host, request.key, request.serviceToken, request.delegationToken);
     var client: ?protocol.Client = null;
     if (personal_join) {
         var bytes: [16]u8 = undefined;
