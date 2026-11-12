@@ -178,8 +178,10 @@ function CollectionBar({ children }: { children: ReactNode }) {
 }
 
 export function CollectionActions(props: CollectionControlsProps) {
-  const { did } = useAuth();
-  if (did && did === props.list.owner.did) return <EditCollection key={did} {...props} />;
+  const { did, rpc } = useAuth();
+  const [session, setSession] = useState({ rpc, version: 0 });
+  if (session.rpc !== rpc) setSession({ rpc, version: session.version + 1 });
+  if (did && did === props.list.owner.did) return <EditCollection key={`${did}:${session.version}:${props.list.record.uri}`} {...props} />;
   const tracks = props.list.members.flatMap(({ track }) => track ? [track] : []);
   return <>
     <CollectionBar>{props.actions}</CollectionBar>
@@ -189,6 +191,7 @@ export function CollectionActions(props: CollectionControlsProps) {
 }
 
 function EditCollection({ list, refresh, actions, onPlay }: CollectionControlsProps) {
+  const auth = useAuth();
   const pds = usePds();
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -201,25 +204,26 @@ function EditCollection({ list, refresh, actions, onPlay }: CollectionControlsPr
     focused.current = true;
     return () => { focused.current = false; };
   }, []));
+  const current = () => focused.current && getAuth().did === auth.did && getAuth().rpc === auth.rpc;
   function rename() {
     void mutation.run(async () => {
       const status = await pds.renameCollection(list.record.uri, name, list.object);
-      if (status === 'indexed') refresh();
+      if (status === 'indexed' && current()) refresh();
       return messageFor(status, album ? 'album renamed.' : 'playlist renamed.');
     });
   }
   function remove(uri: string) {
     void mutation.run(async () => {
       const status = await pds.removeFromPlaylist(list.record.uri, uri);
-      if (status === 'indexed') refresh();
+      if (status === 'indexed' && current()) refresh();
       return messageFor(status, 'track removed.');
     });
   }
   function deletePlaylist() {
     void mutation.run(async () => {
       const status = await pds.deletePlaylist(list.record.uri);
-      if ((status === 'deleted' || status === 'absent') && focused.current && getAuth().did === list.owner.did) router.replace('/library');
-      setConfirmDelete(false);
+      if ((status === 'deleted' || status === 'absent') && current()) router.replace('/library');
+      if (current()) setConfirmDelete(false);
       return messageFor(status, 'playlist deleted.');
     });
   }
