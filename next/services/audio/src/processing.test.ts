@@ -97,6 +97,7 @@ test("real callback routes keep source and rendition private until canonical pub
   await evictDurableObject(f.stub);
   expect(await (await f.send("POST", "/finish")).json()).toMatchObject({ state: "complete", rendition: { duration: 1, sizeBytes: output.length, contentType: "audio/mpeg" } });
   expect((await f.callback(claim, "heartbeat", "POST")).status).toBe(409);
+  expect((await f.callback(claim, "failed", "POST", JSON.stringify({ reason: "output_budget_exceeded" }))).status).toBe(409);
   expect((await f.send("POST", "/activate")).status).toBe(200);
   expect(await (await routeUpload(new Request(f.media), env))?.text()).toBe(output);
   const original = await routeUpload(new Request(`${f.media}/original`, { headers: { range: "bytes=1-3" } }), env);
@@ -259,4 +260,18 @@ test("executor failures have bounded retries and stale reports cannot stop a lat
   expect((await f.state()).job.claim.generation).toBe(4);
   expect((await f.callback(original, "failed", "POST", JSON.stringify({ reason: "output_budget_exceeded" }))).status).toBe(409);
   expect((await f.state()).job.failure).toBeUndefined();
+});
+
+test("unreported expired leases become explicit recovery after bounded attempts", async () => {
+  const f = await setup(); await f.finishSource();
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    await runInDurableObject(f.stub, async (_, context) => {
+      const job = await context.storage.get<ProcessingJob>(`processing:${f.value.uploadId}`);
+      if (!job) throw new Error("missing job");
+      job.leaseUntil = Date.now() - 1; await context.storage.put(`processing:${f.value.uploadId}`, job);
+    });
+    expect((await f.send("POST", "/finish")).status).toBe(200);
+  }
+  expect(await (await f.send("GET")).json()).toMatchObject({ recoveryRequired: true, processingFailure: "lease_expired" });
+  expect((await f.state()).job.claim.generation).toBe(3);
 });

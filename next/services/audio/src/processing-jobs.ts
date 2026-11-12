@@ -57,7 +57,7 @@ export class ProcessingJobs {
       if (current?.phase === "recovery" && !retry) return current;
       if (retry && current?.phase === "running" && current.leaseUntil > this.now()) throw new UploadFailure(409, "processing is still active");
       if (current && (retry || (current.phase === "running" && current.leaseUntil <= this.now()))) {
-        current.failure ??= "lease_expired";
+        current.failure ??= current.phase === "running" ? "lease_expired" : "executor_failed";
         current.phase = "cleanup";
         await this.save(current);
       }
@@ -77,7 +77,7 @@ export class ProcessingJobs {
       }
       if (!current) current = this.fresh(session, await ownerHash(session.owner), 1, 1);
       if (current.phase === "preparing") {
-        if (current.starts >= 3) { current.phase = "recovery"; await this.save(current); return current; }
+        if (current.starts >= 3) { current.phase = "recovery"; current.failure = "executor_failed"; await this.save(current); return current; }
         current.starts += 1;
         await this.save(current);
         const multipart = await this.bucket.createMultipartUpload(current.key, { httpMetadata: { contentType: "audio/mpeg" },
