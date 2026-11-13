@@ -135,8 +135,8 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
   const departed = (open: number, away: number) => still ? open
     : playerSheet.translation.interpolate({ inputRange: [0, 1], outputRange: [open, away], extrapolate: 'clamp' });
   const carried = flights ? { opacity: departed(1, 0) } : undefined;
-  // The resting art loads its own large rendition and fades in; until it has, the flight keeps covering it at the open position.
-  // Handing off earlier showed the empty frame for a beat right after the morph landed, on any track whose large art was not cached.
+  // The resting art loads its own large rendition and fades in. The art flight draws the same image above it and stays opaque
+  // until that art has settled and the sheet is still, then swaps in one commit: a crossfade of two copies dims for a few frames.
   const artShown = !art || settledArt === art;
   const artCarried = flights ? { opacity: artShown ? departed(1, 0) : 0 } : undefined;
   const fade = (open: number, docked: number, from: number, to: number) => morph && !still
@@ -244,7 +244,7 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
         </Animated.View>
         <View ref={panelRef} pointerEvents="none" aria-hidden importantForAccessibility="no-hide-descendants" style={StyleSheet.absoluteFill}>
           {flights && <View testID="now-playing-flights" style={StyleSheet.absoluteFill}>
-            <Animated.View style={[StyleSheet.absoluteFill, { opacity: artShown ? departed(0, 1) : 1 }]}>
+            <Animated.View style={[StyleSheet.absoluteFill, { opacity: artShown && still ? 0 : 1 }]}>
               <PlayerFlight testID="now-playing-flight-art" {...flights.art} rest={rest} left={artLeft} origin={<Cover instant uri={art} size={flights.art.from.width} radius={6} />}>
                 <Cover instant uri={art} size={flights.art.to.width} radius={16} />
               </PlayerFlight>
