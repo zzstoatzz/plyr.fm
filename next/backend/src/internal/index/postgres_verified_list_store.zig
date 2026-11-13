@@ -403,8 +403,8 @@ const header_columns =
     \\  records.indexed_at_us,
     \\  lower(owner_a.handle),
     \\  owner_a.display_name,
-    \\  COALESCE(owner_p.avatar, owner_a.avatar_url),
-    \\  owner_p.avatar IS NOT NULL,
+    \\  CASE WHEN owner_a.avatar_url IS NOT NULL AND owner_p.avatar LIKE 'https://cdn.bsky.app/img/avatar/plain/%' THEN owner_a.avatar_url ELSE COALESCE(NULLIF(owner_p.avatar, ''), owner_a.avatar_url) END,
+    \\  owner_p.avatar IS NOT NULL AND owner_p.avatar <> '' AND (owner_a.avatar_url IS NULL OR owner_p.avatar NOT LIKE 'https://cdn.bsky.app/img/avatar/plain/%'),
     \\  owner_aa.evidence_source
 ;
 
