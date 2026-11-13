@@ -1,3 +1,4 @@
+import { coordinatorHeaders } from './coordinator-origin';
 import type { Auth } from './auth-state';
 import { JAM_COORDINATOR_URL, JAM_JOIN_METHOD, JAM_SERVICE_AUDIENCE } from './auth-config';
 import type { JamTrack, PersonalQueueState } from './jam-connection';
@@ -20,7 +21,7 @@ export async function joinPersonalQueue(auth: Auth, clientId: string, initial: Q
     const service: unknown = await identity.json();
     if (!service || typeof service !== 'object' || !('token' in service) || typeof service.token !== 'string') throw new Error('could not authorize your queue');
     const response = await fetch(`${JAM_COORDINATOR_URL}/v1/playback/join`, {
-      method: 'POST', signal: controller.signal, headers: { 'content-type': 'application/json' },
+      method: 'POST', signal: controller.signal, headers: { 'content-type': 'application/json', ...coordinatorHeaders },
       body: JSON.stringify({ serviceToken: service.token, clientId, initial, resumePlaying }),
     });
     const body: unknown = await response.json();

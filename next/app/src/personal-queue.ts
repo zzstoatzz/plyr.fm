@@ -24,7 +24,7 @@ export interface PersonalQueueOptions {
   connected?(state: JamState): void;
   /** This device's playback client, to tell whether the coordinator gave it the output. */
   client?: string;
-  connect?: Omit<JamConnectionOptions, 'onState' | 'onPhase' | 'onResult' | 'onError'>;
+  connect?: Omit<JamConnectionOptions, 'onState' | 'onPhase' | 'onResult' | 'onError' | 'onClose'>;
 }
 
 export class PersonalQueue {
@@ -102,6 +102,7 @@ export class PersonalQueue {
         if (!this.connected) this.sent = undefined;
         else void this.pump();
       },
+      onClose: (code, reason, opened) => recordPlayback('queue socket closed', { code, reason: reason || undefined, opened }),
       onError: message => this.options.error(message.replaceAll('the jam', 'your queue').replaceAll('the Jam', 'your queue')),
       onResult: (command, outcome) => {
         console.info('[queue] result', { action: command.action, outcome });
@@ -169,12 +170,12 @@ export class PersonalQueue {
 
   get online() { return this.connected; }
   get synchronized() { return !!this.options.connect; }
-  whenConnected(): Promise<boolean> {
+  whenConnected(limit = 15_000): Promise<boolean> {
     if (!this.options.connect || this.connected) return Promise.resolve(true);
     if (this.closed) return Promise.resolve(false);
     return new Promise(resolve => {
       const finish = (connected: boolean) => { clearTimeout(timer); this.waiters.delete(finish); if (!connected) recordPlayback('queue connect timed out'); resolve(connected); };
-      const timer = setTimeout(() => finish(false), 15_000);
+      const timer = setTimeout(() => finish(false), limit);
       this.waiters.add(finish);
     });
   }

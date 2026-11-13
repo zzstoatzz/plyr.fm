@@ -1,3 +1,4 @@
+import { openCoordinatorSocket } from './coordinator-origin';
 import { useEffect, useRef, useState } from 'react';
 import { api, type Track } from './api';
 import { JamConnection, jamPosition, type JamIntent, type JamPhase, type JamState, type JamTrack } from './jam-connection';
@@ -193,7 +194,7 @@ export function useJamPlayback(target: JamPlaybackTarget, did: string | null) {
     active.current = { host: input.host, key: input.key, canSeek: did === input.host, phase: 'connecting' };
     setJam(active.current);
     const connection = new JamConnection({
-      admit: input.admit,
+      admit: input.admit, socket: openCoordinatorSocket,
       onState: (state, force) => {
         const before = active.current?.state;
         if (before?.playing !== state.playing) corrections.current = 0;

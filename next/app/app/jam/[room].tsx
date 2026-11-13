@@ -6,6 +6,7 @@ import { login, useAuth } from '../../src/auth';
 import { getAuth, type Did } from '../../src/auth-state';
 import { Action, Copy, Field, Page } from '../../src/controls';
 import { jamSpace, joinJam, type InitialJam } from '../../src/jam-space';
+import { coordinatorHeaders } from '../../src/coordinator-origin';
 import { usePlayback } from '../../src/playback';
 import { jamTrack } from '../../src/use-jam-playback';
 import { useResource } from '../../src/CatalogPieces';
@@ -58,7 +59,7 @@ export default function JamRoom() {
       initial = { queue: [ref], index: 0, playing: snapshot.playing, positionMs: Math.min(ref.durationMs, snapshot.positionMs) };
     }
     const start = initial;
-    player.joinJam({ host, key, admit: () => joinJam(getAuth(), host as Did, key, start) });
+    player.joinJam({ host, key, admit: () => joinJam(getAuth(), host as Did, key, start, coordinatorHeaders) });
   }
 
   const link = `/jam/${encodeURIComponent(room ?? '')}${trackId ? `?track=${encodeURIComponent(trackId)}` : ''}`;

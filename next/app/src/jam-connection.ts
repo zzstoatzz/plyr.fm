@@ -119,6 +119,8 @@ export interface JamConnectionOptions {
   now?: () => number;
   onState: (state: JamState, force: boolean) => void;
   onPhase: (phase: JamPhase) => void;
+  /** The socket's close code and reason, and whether it opened first; for diagnostics. */
+  onClose?: (code: number, reason: string, opened: boolean) => void;
   onError: (message: string) => void;
   onResult?: (intent: Pending, outcome: string) => void;
 }
@@ -161,7 +163,9 @@ export class JamConnection {
       const socket = this.options.socket?.(admission.websocketUrl) ?? new WebSocket(admission.websocketUrl);
       this.socket = socket;
       let first = true;
+      let opened = false;
       socket.onopen = () => {
+        opened = true;
         if (this.closed || generation !== this.generation) { socket.close(); return; }
         this.lastMessageAt = this.now();
         this.snapshotTimer = setTimeout(() => socket.close(), 8_000);
@@ -215,8 +219,9 @@ export class JamConnection {
         } catch { this.options.onError('could not read the jam update'); }
       };
       socket.onerror = () => socket.close();
-      socket.onclose = () => {
+      socket.onclose = event => {
         if (generation !== this.generation) return;
+        this.options.onClose?.(event?.code ?? 0, event?.reason ?? '', opened);
         this.clearSocket();
         if (this.closed) return;
         this.options.onPhase('reconnecting');

@@ -84,7 +84,8 @@ export interface InitialJam {
   positionMs?: number;
 }
 
-export async function joinJam(auth: Auth, host: Did, key: string, initial?: InitialJam): Promise<{ ticket: string; websocketUrl: string }> {
+/** `headers` carries the native Origin the coordinator binds the ticket to; browsers send their own. */
+export async function joinJam(auth: Auth, host: Did, key: string, initial?: InitialJam, headers: Record<string, string> = {}): Promise<{ ticket: string; websocketUrl: string }> {
   if (!auth.agent) throw new Error('sign in to join this jam');
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 15_000);
@@ -100,7 +101,7 @@ export async function joinJam(auth: Auth, host: Did, key: string, initial?: Init
     const delegationBody = await delegation.json() as { token?: unknown };
     if (typeof serviceBody.token !== 'string' || typeof delegationBody.token !== 'string') throw new Error('could not authorize this jam');
     const response = await fetch(`${JAM_COORDINATOR_URL}/v1/jams/join`, {
-      method: 'POST', headers: { 'content-type': 'application/json' }, signal: controller.signal,
+      method: 'POST', headers: { 'content-type': 'application/json', ...headers }, signal: controller.signal,
       body: JSON.stringify({ host, key, serviceToken: serviceBody.token, delegationToken: delegationBody.token, initial })
     });
     const body = await response.json() as { ticket?: unknown; error?: { message?: string } };
