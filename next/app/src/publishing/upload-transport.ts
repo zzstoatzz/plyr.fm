@@ -55,6 +55,13 @@ export function createUploadTransport(auth: Pick<Auth, 'did' | 'agent' | 'upload
     return status;
   }
   return {
+    /** Address and credentials for one part, for a native background upload that bypasses fetch. */
+    async partTarget(number: number, minimumMs = 300000) {
+      active();
+      const admission = !capability || capability.expiresAt < Date.now() + minimumMs ? await authorize() : capability;
+      return { url: `${admission.uploadUrl}/parts/${number}`, headers: { authorization: `Bearer ${admission.capability}`, 'content-type': operation.contentType } };
+    },
+    forgetCapability() { capability = undefined; },
     start: () => statusRequest('POST'), status: () => statusRequest('GET'), finish: () => statusRequest('POST', '/finish'),
     activate: () => statusRequest('POST', '/activate'), cancel: () => statusRequest('DELETE'),
     retryProcessing: () => statusRequest('POST', '/retry-processing'),
