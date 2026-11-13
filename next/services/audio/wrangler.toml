@@ -12,7 +12,7 @@ binding = "AUDIO"
 bucket_name = "plyr-next-audio"
 
 [vars]
-UPLOAD_INSPECT_URL = "https://plyr-jams-next.fly.dev/internal/uploads/inspect"
+UPLOAD_INSPECT_URL = "https://jams.next.plyr.fm/internal/uploads/inspect"
 UPLOAD_ALLOWED_ORIGINS = "https://next.plyr.fm,http://127.0.0.1:5174"
 PROCESSING_TRANSCODER_URL = "https://plyr-next-processing.fly.dev/v1/processing"
 

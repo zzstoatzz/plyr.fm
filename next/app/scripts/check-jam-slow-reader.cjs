@@ -25,7 +25,7 @@ async function account(name) {
   return { did: data.did, token: data.accessJwt };
 }
 async function join(base, actor, host, key, initial) {
-  const { token: serviceToken } = await rpc('com.atproto.server.getServiceAuth', undefined, actor.token, { aud: 'did:web:plyr-jams-next.fly.dev#jams', lxm: 'fm.plyr.next.jam.join' });
+  const { token: serviceToken } = await rpc('com.atproto.server.getServiceAuth', undefined, actor.token, { aud: 'did:web:jams.next.plyr.fm#jams', lxm: 'fm.plyr.next.jam.join' });
   const { token: delegationToken } = await rpc('com.atproto.space.getDelegationToken', undefined, actor.token, { space: `at://${host}/space/fm.plyr.next.jam/${key}` });
   const response = await fetch(base + '/v1/jams/join', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ host, key, serviceToken, delegationToken, initial }) });
   const data = await response.json();

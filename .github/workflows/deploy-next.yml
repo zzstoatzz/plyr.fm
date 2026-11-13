@@ -147,7 +147,7 @@ jobs:
       - name: keep two warm instances
         run: flyctl scale count 2 --app plyr-jams-next --yes
       - name: check readiness
-        run: curl --fail --retry 8 --retry-delay 2 --retry-all-errors https://plyr-jams-next.fly.dev/ready
+        run: curl --fail --retry 8 --retry-delay 2 --retry-all-errors https://jams.next.plyr.fm/ready
 
   deploy:
     name: deploy next api

@@ -11,7 +11,7 @@ import { awaitRendition, verifyProcessedMedia } from './processing-fixture.mjs';
 
 const requireApp = createRequire(new URL('../../../app/package.json', import.meta.url));
 const { TID } = requireApp('@atproto/common-web');
-const coordinator = 'https://plyr-jams-next.fly.dev';
+const coordinator = 'https://jams.next.plyr.fm';
 const audioOrigin = 'https://plyr-next-audio.n8-3e9.workers.dev';
 const collection = 'fm.plyr.track';
 

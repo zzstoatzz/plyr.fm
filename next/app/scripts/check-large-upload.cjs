@@ -3,7 +3,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
 const { withPlayerHarness, setup, track, screenshot } = require('./check-player-presentation.cjs');
-const did = 'did:plc:largeuploadfixture', scope = 'rpc:fm.plyr.upload.authorize?aud=did:web:plyr-jams-next.fly.dev#jams';
+const did = 'did:plc:largeuploadfixture', scope = 'rpc:fm.plyr.upload.authorize?aud=did:web:jams.next.plyr.fm#jams';
 const partSize = 10485760, size = 16044;
 const audio = Buffer.alloc(size);
 audio.write('RIFF'); audio.writeUInt32LE(size - 8, 4); audio.write('WAVEfmt ', 8); audio.writeUInt32LE(16, 16);
@@ -51,7 +51,7 @@ async function run(browser, width, theme) {
       if (lostCreate) offlineRecord = true;
       return lostCreate ? { drop: true } : { status: 200, body: { uri: operation.uri, cid: 'fixturecid' } };
     });
-    await context.route('https://plyr-jams-next.fly.dev/v1/uploads/authorize', async route => {
+    await context.route('https://jams.next.plyr.fm/v1/uploads/authorize', async route => {
       const body = route.request().postDataJSON(); admissions.push(body);
       assert.equal(body.serviceToken, 'ephemeral-service-fixture');
       assert.equal(body.visibility, 'public'); assert.equal(body.downloadPolicy, 'open');

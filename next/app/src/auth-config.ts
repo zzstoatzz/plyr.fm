@@ -48,8 +48,8 @@ export const JAM_SPACE = {
 	collection: process.env.EXPO_PUBLIC_JAM_STATE_COLLECTION || 'fm.plyr.next.jamState'
 } as const;
 
-export const JAM_COORDINATOR_URL = (process.env.EXPO_PUBLIC_JAM_COORDINATOR_URL || 'https://plyr-jams-next.fly.dev').replace(/\/$/, '');
-export const JAM_SERVICE_AUDIENCE = process.env.EXPO_PUBLIC_JAM_SERVICE_AUDIENCE || 'did:web:plyr-jams-next.fly.dev#jams';
+export const JAM_COORDINATOR_URL = (process.env.EXPO_PUBLIC_JAM_COORDINATOR_URL || 'https://jams.next.plyr.fm').replace(/\/$/, '');
+export const JAM_SERVICE_AUDIENCE = process.env.EXPO_PUBLIC_JAM_SERVICE_AUDIENCE || 'did:web:jams.next.plyr.fm#jams';
 export const JAM_JOIN_METHOD = process.env.EXPO_PUBLIC_JAM_JOIN_METHOD || `${JAM_SPACE.type}.join`;
 
 export const UPLOAD_AUTHORIZE_METHOD = process.env.EXPO_PUBLIC_UPLOAD_AUTHORIZE_METHOD || `${prefix}.upload.authorize`;
