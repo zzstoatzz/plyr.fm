@@ -22,6 +22,7 @@ import { createPds } from './pds';
 import { CreateRecovery, EarlierCreates, useCreateRecovery } from './publishing/CreateRecovery';
 import { AlbumEditor } from './collections/AlbumEditor';
 import { CollectionOrderEditor } from './collections/CollectionOrderEditor';
+import { AccessSheet } from './access/AccessSheet';
 import type { CollectionRevision } from './collections/collection-order';
 
 function usePds() {
@@ -205,6 +206,7 @@ function EditCollection({ list, refresh, actions, onPlay, onOrderSaved }: Collec
   const album = list.object === 'album';
   const [name, setName] = useState(list.metadata.name ?? '');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [access, setAccess] = useState(false);
   const mutation = useMutation();
   const focused = useRef(false);
   useFocusEffect(useCallback(() => {
@@ -249,7 +251,11 @@ function EditCollection({ list, refresh, actions, onPlay, onOrderSaved }: Collec
           setEditing(!editing);
           setConfirmDelete(false);
         }} />
+      <Button label="Who can listen" onPress={() => setAccess(true)} />
     </CollectionBar>
+    {access && <AccessSheet close={() => { setAccess(false); refresh(); }} subject={{ noun: album ? 'album' : 'playlist',
+      tracks: list.members.flatMap(({ track }) => track ? [track] : []), skey: list.record.rkey,
+      returnTo: `/${album ? 'album' : 'playlist'}/${list.id}` }} />}
     {editing && <View style={styles.group}>
       <NameInput label={album ? 'Album name' : 'Playlist name'} value={name} onChange={setName} />
       <Status loading={mutation.busy} empty={mutation.message} />
