@@ -10,9 +10,22 @@ const artist: Artist = { object: 'artist', did: track.artist.did, handle: 'artis
 const read = { track: async () => track, playback: async () => playback, artist: async () => artist };
 
 test('downloads require a known allowed preference and public listening', () => {
-  for (const policy of [undefined, null, '', 'future', 'off', 'supporters']) assert.equal(downloadAllowed({ ...track, access: { visibility: 'public', download_policy: policy } }), false);
+  for (const policy of [undefined, null, '', 'future', 'off']) assert.equal(downloadAllowed({ ...track, access: { visibility: 'public', download_policy: policy } }), false);
   for (const patch of [{ visibility: 'private' as const }, { visibility: 'supporters' as const }, { gate: { type: 'signed-in' } }, { space_uri: 'at://space' }]) assert.equal(downloadAllowed({ ...track, access: { ...track.access, ...patch } }), false);
   assert.ok(downloadAllowed({ ...track, access: { visibility: 'unlisted', download_policy: 'ask' } }));
+  assert.ok(downloadAllowed({ ...track, access: { visibility: 'public', download_policy: 'supporters' } }));
+});
+
+test('supporter admission requires a matching fresh effective track after the decision', async () => {
+  const supported: Track = { ...track, access: { visibility: 'public', download_policy: 'supporters' } };
+  await assert.rejects(prepareDownload(track.id, track.record.uri, { ...read, track: async () => supported }), /authorize/);
+  for (const changed of [{ ...supported, record: { ...supported.record, cid: 'changed' } }, { ...supported, access: { visibility: 'private' as const, download_policy: 'supporters' } }, { ...supported, access: { visibility: 'public' as const, download_policy: 'off' } }, { ...supported, access: { ...supported.access, gate: { type: 'owner' } } }]) {
+    let reads = 0, bytes = 0;
+    await assert.rejects(prepareDownload(track.id, track.record.uri, { ...read, track: async () => ++reads === 1 ? supported : changed,
+      authorize: async record => { assert.equal(record.cid, track.record.cid); return { guard() {}, begin() {} }; },
+      playback: async () => { bytes++; return playback; } }), /changed/);
+    assert.equal(bytes, 0); assert.equal(reads, 2);
+  }
 });
 test('current playback must belong to the exact current record revision', async () => {
   assert.equal((await prepareDownload(track.id, track.record.uri, read)).filename, 'artist - ab song.wav');

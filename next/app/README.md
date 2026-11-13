@@ -179,9 +179,9 @@ not deployed R2 capacity or real-account OAuth acceptance.
 Track options offers downloads for verified `open` and `ask` preferences when
 fresh effective access and playback still allow public listening. An existing
 artist support link may be offered before an `ask` download; support is optional.
-Unknown policies and supporter-only downloads remain unavailable. A protected
-Space source additionally requires sign-in and an explicit `open` or `ask` on
-its freshly verified record. Missing policy, any support gate, and private
+Unknown policies remain unavailable. A protected Space source additionally
+requires sign-in and an explicit permitted policy on its freshly verified
+record. Missing/off policy, an unverified support gate, and private
 visibility refuse download even when playback is readable. Protected bytes use
 the same 100 MiB limit and temporary-file cleanup; account changes cancel the
 attempt. Private titles and descriptions never replace public metadata.
@@ -199,16 +199,23 @@ upload. Raw uploads keep one download action. Choices require the published
 service manifest and refresh effective access before saving; a missing or invalid
 manifest does not authorize an original download.
 
-Supporter authorization remains unfinished. The existing Next verifier in
-`../backend/src/internal/space/network.zig` calls the fixed atprotofans
-`com.atprotofans.validateSupporter` endpoint with supporter DID, artist subject,
-and artist signer (5-second/64 KiB bound, strict boolean response). Its current
-consumer is the PDS-service-authenticated managed-space callback, not a listener
-download endpoint. A follow-up needs a viewer-authenticated Next decision that
-binds that viewer and the current track revision to effective moderation and
-both download policies. Space read credentials alone are not supporter proof.
-The attested broker path needs separate subject-binding verification before reuse;
-legacy cookie-authorized R2 downloads also remain outside this client path.
+Supporter downloads require the dedicated download-check OAuth grant. Existing
+sessions reconnect explicitly; Jam or upload permission does not imply this
+grant. The coordinator's 30-second decision binds the authenticated viewer to
+the current canonical public track CID and `supporters` policy. The client then
+refreshes effective moderation and playback, and checks the decision again
+immediately before bytes start. Expiry does not interrupt a transfer already
+admitted; cancellation and account/RPC changes still stop app-controlled requests.
+An attachment already handed to the browser uses its download controls. Protected sources also
+require their own credential, signed record, and allowed policy. A known `any`
+support gate is accepted only with the current supporter decision.
+
+Owner-only/unknown gates, private Space-only records, and legacy gated playback
+without an accessible source remain unsupported. A public `open` record cannot
+use the supporter endpoint to override a protected `supporters` policy. A 403
+does not distinguish identity, policy, or supporter denial. See the
+[coordinator contract](../backend/docs/download-policy.md) for its proof and
+verifier requirements; this client never infers supporter status from read access.
 
 `node scripts/check-downloads.cjs` checks real browser save events and exact
 fixture bytes, fresh-policy refusal, optional support, cancellation and track

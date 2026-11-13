@@ -7,10 +7,12 @@ function saveLink(url: string, filename: string): void {
 }
 
 export async function saveDownload(download: PreparedDownload, signal: AbortSignal): Promise<void> {
+  download.begin?.();
   if (download.kind === 'public' && download.attachment) {
     const response = await fetch(download.attachment, { method: 'HEAD', signal, cache: 'no-store' });
     if (!response.ok || !response.headers.get('content-disposition')?.startsWith('attachment;')) throw new Error('the download is unavailable. try again.');
     signal.throwIfAborted();
+    download.begin?.();
     saveLink(download.attachment, download.filename);
     return;
   }
@@ -22,7 +24,7 @@ export async function saveDownload(download: PreparedDownload, signal: AbortSign
   try {
     if (Number(response.headers.get('content-length')) > MAX_BUFFERED_DOWNLOAD_BYTES) throw new Error('this source needs a direct download link for files over 100 MiB.');
     while (true) {
-      if (download.kind === 'protected') download.guard();
+      download.guard?.();
       const chunk = await reader.read();
       if (chunk.done) break;
       size += chunk.value.byteLength;
@@ -36,6 +38,7 @@ export async function saveDownload(download: PreparedDownload, signal: AbortSign
       if (size !== download.sizeBytes) throw new Error('incomplete protected audio');
     }
     signal.throwIfAborted();
+    download.guard?.();
     const url = URL.createObjectURL(new Blob(chunks, { type: download.mime }));
     saveLink(url, download.filename);
     setTimeout(() => URL.revokeObjectURL(url), 30_000);

@@ -93,6 +93,7 @@ const checks = {
   'check-settings-search': [/^src\/(SettingsPieces|Search)/, /^app\/settings/],
   'check-short-playback': [/^src\/playback\.tsx/],
   'check-aria-patterns': [/^src\/behaviors\//, /^src\/(ArtistProfile|AccountPieces|AccountPicker|controls)/, /^app\/login/],
+  'check-supporter-downloads': [/^src\/downloads\//, /^src\/(auth-config|auth-state|TrackMenu)/],
   'check-tag-scroll-dynamics': [/^src\/TagScroller/],
   'check-track-actions': [/^src\/(TrackMenu|ActionRow|ShareLink|TrackLikes|LikeHeart)/, /^app\/track/],
   'check-track-tags': [/^src\/publishing\/(TagsField|track-tags)/],

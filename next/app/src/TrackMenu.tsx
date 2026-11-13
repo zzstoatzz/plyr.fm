@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { Platform, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import Pencil from 'lucide-react-native/icons/pencil';
 import ListPlus from 'lucide-react-native/icons/list-plus';
 import LogIn from 'lucide-react-native/icons/log-in';
@@ -22,16 +22,21 @@ export function TrackMenu({ track, close, actions, returnTo }: { track: Track; c
   const player = usePlayback();
   const router = useRouter();
   const [playlists, setPlaylists] = useState(false);
-  const [editing, setEditing] = useState(false);
-  function openEditor() {
-    if (!editing) return;
+  const [destination, setDestination] = useState<Href>();
+  function finishNavigation() {
+    if (!destination) return;
     close();
-    router.push(`/edit-track/${track.id}`);
+    router.push(destination);
+  }
+  function reconnect() {
+    const login: Href = { pathname: '/login', params: { return_to: `/track/${track.id}` } };
+    if (Platform.OS === 'ios') setDestination(login);
+    else { close(); router.push(login); }
   }
   if (isPrivateTrack(track)) return <Sheet title="private track" close={close}>
     <ActionRow icon={ListPlus} label="add to private queue" onPress={() => { player.enqueue(track); close(); }} />
   </Sheet>;
-  return <Sheet title={playlists && did ? 'add to playlist' : 'track options'} close={close} visible={!editing} onDismiss={openEditor}>
+  return <Sheet title={playlists && did ? 'add to playlist' : 'track options'} close={close} visible={!destination} onDismiss={finishNavigation}>
 
     <View style={{ gap: 0 }}>
       {playlists && did ? <>
@@ -42,8 +47,8 @@ export function TrackMenu({ track, close, actions, returnTo }: { track: Track; c
         <ActionRow icon={ListPlus} label="add to queue" onPress={() => { player.enqueue(track); close(); }} />
         {did === track.artist.did && <ActionRow icon={Pencil} label="edit track"
           href={Platform.OS === 'ios' ? undefined : `/edit-track/${track.id}`}
-          onPress={Platform.OS === 'ios' ? () => setEditing(true) : close} />}
-        <DownloadAction key={track.record.uri} track={track} />
+          onPress={Platform.OS === 'ios' ? () => setDestination(`/edit-track/${track.id}`) : close} />}
+        <DownloadAction key={track.record.uri} track={track} reconnect={reconnect} />
         <ShareLink menu path={`/track/${encodeURIComponent(track.id)}`} />
         {did ? <ActionRow icon={ListPlus} label="add to playlist" onPress={() => setPlaylists(true)} /> :
           <ActionRow icon={LogIn} label="sign in to save" href={{ pathname: '/login', params: { return_to: `/track/${track.id}` } }} onPress={close} />}
