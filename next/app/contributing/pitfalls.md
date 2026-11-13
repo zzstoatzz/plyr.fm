@@ -26,9 +26,9 @@ instead. Add one when something bites.
   crashes native startup (#2496 was a `pagehide` listener). Use a `.web.ts`
   seam rather than a `Platform.OS` check; `npm run lint` catches new ones.
 - **React Native `Modal` behaves differently on web.** `Sheet.tsx` sets
-  `accessibilityViewIsModal` only off web, and `KeyboardShortcuts.web.tsx`
-  finds open overlays by querying `[role="dialog"]`. An overlay without that
-  role doesn't stop shortcuts from firing under it.
+  `accessibilityViewIsModal` only off web. Global shortcuts don't see the
+  DOM: an overlay holds them by calling `useLayer` (`Sheet` does), so a new
+  overlay that isn't a `Sheet` must call it too.
 - **The iOS player depends on a pinned `expo-audio` patch.** Changing it needs
   a native rebuild; see [patches/README.md](../patches/README.md).
 
@@ -51,6 +51,15 @@ instead. Add one when something bites.
   `bun install` first.
 - **Checks that need a local PDS or the compose Redis and Postgres** fail at
   setup without them; `node scripts/checks.mjs` lists what each one needs.
-- **Three checks failed on main before November 12** for older reasons:
-  keyboard shortcuts, the playback retry case and font settings. Don't read
-  their failure as yours without running them on main first.
+- **Some checks fail on main** for older reasons: keyboard shortcuts (it also
+  fetches live tracks from api.next.plyr.fm), the playback retry case and font
+  settings. Run a failing check on main before reading it as yours.
+- **Refetching a list on focus with `reload()` drops the pages someone already
+  loaded.** Use `revalidate()` from `usePages`, which refetches the loaded
+  pages and swaps them in.
+- **A queue started from a list keeps your picks above the collection.** A
+  pick can't be moved below the "from …" line, so a drag or key that would
+  cross it does nothing. Exercise long drags with collection tracks.
+- **The player harness launches `chromium` with `channel: 'chrome'`.** Where
+  only Playwright's bundled Chromium exists (cloud containers), point
+  `PLAYWRIGHT_MODULE` at a small wrapper that drops `channel`.

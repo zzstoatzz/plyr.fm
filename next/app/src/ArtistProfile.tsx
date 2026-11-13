@@ -1,6 +1,6 @@
 import { useFocusEffect, type Href } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
-import { Platform, ScrollView, StyleSheet, View, type KeyDownEvent, type ViewInstance } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { api, type Artist } from './api';
 import { useAuth } from './auth';
 import { Action, InlineLink } from './controls';
@@ -10,6 +10,7 @@ import { DetailHeader } from './DetailHeader';
 import { PlayerControl } from './PlayerControl';
 import { PlayGlyph } from './PlayerGlyph';
 import { ShareLink } from './ShareLink';
+import { useTabs } from './behaviors/use-tabs';
 
 const sections = ['tracks', 'albums', 'playlists', 'likes'] as const;
 type Section = typeof sections[number];
@@ -37,26 +38,16 @@ function ArtistCatalog({ artist, onPlay }: { artist: Artist; onPlay: Play }) {
   const { tracks, albums, playlists, likes, metrics } = useArtistCatalog(artist.did);
   const [section, setSection] = useState<Section>('tracks');
   const visited = useRef(false);
-  const reloadAlbums = albums.reload;
+  const revalidateAlbums = albums.revalidate;
   useFocusEffect(useCallback(() => {
-    if (visited.current) reloadAlbums();
+    if (visited.current) void revalidateAlbums();
     visited.current = true;
-  }, [reloadAlbums]));
-  const tabs = useRef<Partial<Record<Section, ViewInstance | null>>>({});
+  }, [revalidateAlbums]));
+  const catalogTabs = useTabs({ label: 'Artist catalog', values: sections, value: section, onChange: setSection });
   const theme = useColors();
   const auth = useAuth();
   const name = artist.display_name || artist.handle;
   const support = /^https?:\/\//i.test(artist.support_url ?? '') ? artist.support_url : null;
-  const selectWithKeyboard = (event: KeyDownEvent) => {
-    const key = event.nativeEvent.key;
-    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(key)) return;
-    event.preventDefault();
-    const current = sections.indexOf(section);
-    const next = key === 'Home' ? 'tracks' : key === 'End' ? 'likes'
-      : sections[(current + (key === 'ArrowRight' ? 1 : sections.length - 1)) % sections.length];
-    setSection(next);
-    tabs.current[next]?.focus();
-  };
   return <>
     <DetailHeader title={name} artwork={artist.avatar_url} round actions={<>
       {tracks.data[0] && <PlayerControl primary large icon={PlayGlyph} label="Play tracks"
@@ -71,13 +62,11 @@ function ArtistCatalog({ artist, onPlay }: { artist: Artist; onPlay: Play }) {
     {support && <InlineLink standalone href={support as Href}>support artist</InlineLink>}
     {metrics.error && <View style={styles.actions}><Detail>couldn’t load totals.</Detail><Action label="Retry totals" onPress={metrics.retry} /></View>}
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }}>
-      <View accessibilityRole="tablist" accessibilityLabel="Artist catalog" style={[styles.tabs, { borderColor: theme.hairline }]}
-        {...(Platform.OS === 'web' ? { onKeyDown: selectWithKeyboard } : {})}>
-        {sections.map(value => <Choice key={value} ref={node => { tabs.current[value] = node; }} role="tab" label={value}
-          selected={section === value} onPress={() => setSection(value)} />)}
+      <View {...catalogTabs.list} style={[styles.tabs, { borderColor: theme.hairline }]}>
+        {sections.map(value => <Choice key={value} {...catalogTabs.tab(value)} />)}
       </View>
     </ScrollView>
-    <View accessibilityRole="tabpanel" accessibilityLabel={section} style={styles.panel}>
+    <View {...catalogTabs.panel(section)} style={styles.panel}>
       {section === 'tracks' && <>
         <TrackRows tracks={tracks.data} onPlay={(track, queue) => onPlay(track, queue, name)} />
         <PageStatus page={tracks} label="tracks" />

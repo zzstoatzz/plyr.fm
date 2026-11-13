@@ -65,6 +65,7 @@ const checks = {
   'check-library-creation': [/^src\/(collections|AccountCatalog)/, /^app\/(library|create-album)/],
   'check-login-picker': [/^src\/(AccountPicker|auth|identity)/, /^app\/login/],
   'check-media-session': [/^src\/media-session/],
+  'check-overlay-shortcuts': [/^src\/(Sheet|KeyboardShortcuts|behaviors\/(layers|use-layer))/],
   'check-personal-queue-browser': [/^src\/(personal-queue|use-personal-queue|queue-)/],
   'check-personal-queue-coordinator': [/^src\/(personal-queue|queue-)/],
   'check-play-outbox-storage': [/^src\/play-outbox/],
@@ -84,12 +85,13 @@ const checks = {
   'check-private-delete': [/^src\/publishing\/(PrivateTrackDelete|private-delete)/],
   'check-private-publishing': [/^src\/publishing\/(PrivateMusic|private-)/, /^app\/private/],
   'check-profile-editor': [/^src\/profile\//, /^app\/edit-profile/],
-  'check-queue-drag': [/^src\/QueueReorder/, /^app\/queue/],
+  'check-queue-drag': [/^src\/(QueueReorder|HomeTrackRow)/, /^src\/behaviors\/(reorder|use-reorder-handle|use-cancel-on-leave)/, /^app\/queue/],
   'check-queue-sync': [/^src\/(personal-queue|use-personal-queue|queue-)/],
   'check-radio-accounting': [/^src\/(radio|RadioPlayer|use-radio-feed)/],
   'check-search-layout': [/^src\/(Search|use-search)/, /^app\/search/],
   'check-settings-search': [/^src\/(SettingsPieces|Search)/, /^app\/settings/],
   'check-short-playback': [/^src\/playback\.tsx/],
+  'check-aria-patterns': [/^src\/behaviors\//, /^src\/(ArtistProfile|AccountPieces|AccountPicker|controls)/, /^app\/login/],
   'check-tag-scroll-dynamics': [/^src\/TagScroller/],
   'check-track-actions': [/^src\/(TrackMenu|ActionRow|ShareLink|TrackLikes|LikeHeart)/, /^app\/track/],
   'check-track-tags': [/^src\/publishing\/(TagsField|track-tags)/],
@@ -111,7 +113,7 @@ function needsOf(name) {
   if (source.includes('pds-browser-fixture') || source.includes(':5197')) {
     needs.push('local PDS');
   }
-  if (source.includes('queue-fixture') || source.includes('REDIS_URL')) {
+  if (source.includes("require('./queue-fixture.cjs')") || source.includes('REDIS_URL')) {
     needs.push('compose redis + postgres');
   }
   return [...new Set(needs)];
