@@ -1,4 +1,4 @@
-import { EarlyIntents } from './early-intents';
+import { EarlyIntents } from './early-intents'; import { recordPlayback } from './playback-diagnostics';
 import { useEffect, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 import { randomUUID } from 'expo-crypto';
@@ -87,25 +87,24 @@ export function usePersonalQueue(target: Target) {
     let adoptAudio = adopting;
     let resuming = false;
     loaded.current = adopting ? loaded.current : '';
-    owned.current = false;
-    setRemote(undefined);
+    owned.current = false; setRemote(undefined);
     setOutputElsewhere(false);
-    deferred.current = undefined;
-    setRestoredPosition(undefined);
+    deferred.current = undefined; setRestoredPosition(undefined);
+    let skipped = ''; const skip = (reason: string) => { if (reason !== skipped) recordPlayback('queue apply skipped', { reason }); skipped = reason; };
 
     async function apply(wire: JamState, force: boolean) {
-      if (stale() || importing || (runtime.current.suspended || held.current) || !wire.personal) return;
+      if (stale() || importing || (runtime.current.suspended || held.current) || !wire.personal) return skip(stale() ? 'stale' : importing ? 'importing' : held.current ? 'held' : runtime.current.suspended ? 'suspended' : 'not personal');
       if (pendingPlay.current !== undefined) {
-        if (wire.queue[wire.index]?.key !== desiredEntry.current || wire.personal.output?.clientId !== client.current) return;
+        if (wire.queue[wire.index]?.key !== desiredEntry.current || wire.personal.output?.clientId !== client.current) return skip(wire.queue[wire.index]?.key !== desiredEntry.current ? 'pending play: other entry' : 'pending play: output elsewhere');
         pendingPlay.current = undefined;
         setWaiting(false);
         setState(current.state);
         runtime.current.setQueue(current.state.entries.map(entry => entry.track), current.state.index);
       }
-      if (adopt?.state.entries.length && !imported && wire.queue[wire.index]?.key !== adopt.state.entries[adopt.state.index]?.key) return;
+      if (adopt?.state.entries.length && !imported && wire.queue[wire.index]?.key !== adopt.state.entries[adopt.state.index]?.key) return skip('adopting');
       const mine = wire.personal.output?.clientId === client.current;
-      if (mine && resuming) return;
-      if (mine && pausedHere.current && wire.playing) { if (current.online) current.command({ action: 'pause' }); return; }
+      if (mine && resuming) return skip('resuming');
+      if (mine && pausedHere.current && wire.playing) { if (current.online) current.command({ action: 'pause' }); return skip('paused here'); }
       const becameOwner = mine && !owned.current;
       owned.current = mine;
       setOutputElsewhere(!!wire.playing && !mine);
@@ -118,9 +117,9 @@ export function usePersonalQueue(target: Target) {
       const track = ref && current.cache.get(ref.id);
       if (!ref || !track) {
         if (ref && current.isMissing(ref.id)) { runtime.current.error('this track is unavailable'); if (mine && wire.playing) current.command({ action: 'pause' }); }
-        return;
+        return skip(!ref ? 'no entry' : current.isMissing(ref.id) ? 'track missing' : 'track not resolved yet');
       }
-      if (!mine) { setRestoredPosition(jamPosition(wire, current.position(Date.now())) / 1000); return; }
+      if (!mine) { setRestoredPosition(jamPosition(wire, current.position(Date.now())) / 1000); return skip('output elsewhere'); }
       const key = `${wire.epoch}/${wire.occurrence}/${ref.key}/${ref.cid}`;
       if (adoptAudio && runtime.current.ready && runtime.current.current?.id === ref.id && runtime.current.playing()) loaded.current = key;
       adoptAudio = false;
@@ -130,8 +129,9 @@ export function usePersonalQueue(target: Target) {
         else if (!wire.playing) runtime.current.pause();
         return;
       }
-      if (synchronizing.key === key) { synchronizing.requested++; return; }
+      if (synchronizing.key === key) { synchronizing.requested++; return skip('already loading'); }
       synchronizing.key = key;
+      skip(''); recordPlayback('queue apply', { newSource, playing: wire.playing });
       const request = ++synchronization.current;
       const reapply = synchronizing.requested;
       try {
@@ -162,7 +162,7 @@ export function usePersonalQueue(target: Target) {
       }
     }
 
-    current = new PersonalQueue({ owner: account, storage: queueStorage, id: randomUUID,
+    current = new PersonalQueue({ owner: account, storage: queueStorage, id: randomUUID, client: client.current,
       resolve: (ids, signal) => api.resolveTracks(ids, signal),
       error: message => { if (!stale()) setQueueError(message); },
       changed: (state, checkpoint) => {
@@ -483,7 +483,7 @@ export function usePersonalQueue(target: Target) {
     if (current && !(runtime.current.suspended || held.current)) current.progress(position ?? (current.wire && !owned.current
       ? jamPosition(current.wire, current.position(Date.now())) / 1000 : localPosition()));
   }
-  return { position, duration, keepPlaying: remote?.personal?.keepPlaying ?? target.keepPlaying, setKeepPlaying: (value: boolean) => edit({ action: 'setContinuation', keepPlaying: value }), queueError, waiting, deviceOnly: !!auth.did && !auth.accountSync, checkpoint, ownsOutput: () => owned.current, next, state, remote, outputElsewhere, restoredPosition, resume, defer, command, play, select, local, remember,
+  return { diagnose: () => ({ waiting, pendingPlay: pendingPlay.current !== undefined, session: !!session.current, synchronized: !!session.current?.synchronized, online: !!session.current?.online, owned: owned.current, early: early.current.length }), unstick: () => { playRequest.current++; pendingPlay.current = undefined; early.current.drain(); setWaiting(false); }, position, duration, keepPlaying: remote?.personal?.keepPlaying ?? target.keepPlaying, setKeepPlaying: (value: boolean) => edit({ action: 'setContinuation', keepPlaying: value }), queueError, waiting, deviceOnly: !!auth.did && !auth.accountSync, checkpoint, ownsOutput: () => owned.current, next, state, remote, outputElsewhere, restoredPosition, resume, defer, command, play, select, local, remember,
     enqueue,
     remove: (at: number) => { const entry = session.current?.state.entries[at]; if (entry) edit({ action: 'removeEntry', entryKey: entry.key }); },
     move: (from: number, to: number) => {
