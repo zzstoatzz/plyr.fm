@@ -6,6 +6,7 @@
 //! and metrics policy as standalone track reads.
 
 const std = @import("std");
+const public_media = @import("../delivery/public_media.zig");
 const pg = @import("pg");
 const zat = @import("zat");
 const verified_list = @import("../domain/verified_list.zig");
@@ -263,7 +264,7 @@ fn decodeSummary(
     if (available_count > member_count) return error.CorruptMetrics;
     const total_plays = try row.get(i64, 18);
     if (total_plays < 0) return error.CorruptMetrics;
-    const cover = try duplicateOptional(allocator, try row.get(?[]const u8, 20));
+    const cover = try public_media.canonicalOwned(allocator, try duplicateOptional(allocator, try row.get(?[]const u8, 20)));
     if (cover) |url| if (!lexicon_value.validUri(url)) return error.CorruptArtwork;
     return .{
         .object = kind,

@@ -5,6 +5,7 @@
 //! it never becomes the authority for the returned music metadata.
 
 const std = @import("std");
+const public_media = @import("../delivery/public_media.zig");
 const pg = @import("pg");
 const zat = @import("zat");
 const lexicon_value = @import("../atproto/lexicon_value.zig");
@@ -110,7 +111,7 @@ fn decodeRow(
     if (zat.Handle.parse(handle) == null) return error.CorruptHandle;
     const display_name = try duplicate(allocator, try row.get([]const u8, 6));
     if (!std.unicode.utf8ValidateSlice(display_name)) return error.CorruptDisplayName;
-    const image_url = try duplicateOptional(allocator, try row.get(?[]const u8, 7));
+    const image_url = try public_media.canonicalOwned(allocator, try duplicateOptional(allocator, try row.get(?[]const u8, 7)));
     if (image_url) |value| if (!lexicon_value.validUri(value)) return error.CorruptImage;
 
     const play_count = try row.get(?i64, 8);

@@ -320,6 +320,7 @@ test {
     _ = @import("internal/delivery/blob_mirror.zig");
     _ = @import("internal/moderation/label_sync.zig");
     _ = @import("internal/delivery/postgres_mirror_store.zig");
+    _ = @import("internal/delivery/public_media.zig");
     _ = @import("internal/identity/actor_identity_refresher.zig");
     _ = @import("internal/identity/postgres_actor_identity_store.zig");
     _ = @import("internal/ingest/catalog_reconcile_runner.zig");
