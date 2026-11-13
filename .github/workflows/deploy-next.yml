@@ -20,7 +20,7 @@ on:
   workflow_dispatch:
     inputs:
       reconcile_catalog:
-        description: re-index staging-namespace repositories into next before deploying
+        description: re-index fm.plyr.* repositories into next before deploying
         type: boolean
         default: false
 

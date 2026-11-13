@@ -1,0 +1,13 @@
+{
+  "lexicon": 1,
+  "id": "fm.plyr.next.audio",
+  "defs": {
+    "main": {
+      "type": "space",
+      "key": "any",
+      "description": "Artist-owned space for plyr.fm Next tracks and their protected audio. Who may read it is decided by the artist's fm.plyr.policy records.",
+      "name": "plyr.fm audio",
+      "collections": ["fm.plyr.track"]
+    }
+  }
+}

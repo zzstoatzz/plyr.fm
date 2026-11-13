@@ -209,7 +209,7 @@ test "PostgreSQL stream commits project, replay, reject and delete profile recor
     const rev_2 = zat.Tid.fromTimestamp(2_000, 1).str();
     const rev_3 = zat.Tid.fromTimestamp(3_000, 1).str();
 
-    const created = try streamRecord(arena, "{\"$type\":\"fm.plyr.dev.actor.profile\",\"bio\":\"hi\",\"displayName\":\"stg nate\",\"createdAt\":\"2026-11-03T00:00:00Z\"}");
+    const created = try streamRecord(arena, "{\"$type\":\"fm.plyr.dev.actor.profile\",\"bio\":\"hi\",\"displayName\":\"next nate\",\"createdAt\":\"2026-11-03T00:00:00Z\"}");
     try applyCommit(pool, arena, collections, .{
         .did = "did:plc:artist",
         .time_us = 1,
@@ -231,7 +231,7 @@ test "PostgreSQL stream commits project, replay, reject and delete profile recor
         .record = created.json,
         .cid = created.cid,
     }, 11);
-    try expectProfile(pool, "stg nate", false, 0);
+    try expectProfile(pool, "next nate", false, 0);
 
     // A record whose JSON doesn't hash to the reported CID is skipped.
     const other = try streamRecord(arena, "{\"$type\":\"fm.plyr.dev.actor.profile\",\"bio\":\"changed\",\"createdAt\":\"2026-11-03T00:00:00Z\"}");
@@ -245,7 +245,7 @@ test "PostgreSQL stream commits project, replay, reject and delete profile recor
         .record = other.json,
         .cid = created.cid,
     }, 12);
-    try expectProfile(pool, "stg nate", false, 0);
+    try expectProfile(pool, "next nate", false, 0);
 
     // A schema-invalid update removes the record and records why.
     const invalid = try streamRecord(arena, "{\"$type\":\"fm.plyr.dev.actor.profile\",\"avatar\":\"not a uri\",\"createdAt\":\"2026-11-03T00:00:00Z\"}");

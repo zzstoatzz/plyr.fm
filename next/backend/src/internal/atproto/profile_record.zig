@@ -12,7 +12,7 @@ const lexicon_string = @import("../text/lexicon_string.zig");
 pub const max_uri_bytes: usize = 1_000_000;
 
 pub const Record = struct {
-    /// stg/next-only extension: overrides the bsky display name on plyr.
+    /// next-only extension: overrides the bsky display name on plyr.
     display_name: ?[]const u8 = null,
     avatar: ?[]const u8,
     bio: ?[]const u8,
@@ -125,9 +125,9 @@ test "profile display name is optional and bounded" {
     const named: zat.cbor.Value = .{ .map = &.{
         .{ .key = "$type", .value = .{ .text = "fm.plyr.dev.actor.profile" } },
         .{ .key = "createdAt", .value = .{ .text = "2026-08-08T12:00:00Z" } },
-        .{ .key = "displayName", .value = .{ .text = "stg nate" } },
+        .{ .key = "displayName", .value = .{ .text = "next nate" } },
     } };
-    try std.testing.expectEqualStrings("stg nate", (try parse(named, "fm.plyr.dev.actor.profile")).display_name.?);
+    try std.testing.expectEqualStrings("next nate", (try parse(named, "fm.plyr.dev.actor.profile")).display_name.?);
     const long = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
     const too_long: zat.cbor.Value = .{ .map = &.{
         .{ .key = "$type", .value = .{ .text = "fm.plyr.dev.actor.profile" } },

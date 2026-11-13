@@ -357,7 +357,7 @@ def verify_product(api_base_url: str) -> None:
     assert albums.status == 200, (albums.status, albums.body)
     assert albums.body["object"] == "list" and albums.body["data"] == []
 
-    track_uri = f"at://{absent_did}/fm.plyr.stg.track/smoke"
+    track_uri = f"at://{absent_did}/fm.plyr.track/smoke"
     track = _request(api_base_url, f"/v1/tracks/{_opaque_id('trk_', track_uri)}")
     assert track.status == 404 and track.body["error"]["code"] == "not_found"
     playback = _request(
@@ -366,7 +366,7 @@ def verify_product(api_base_url: str) -> None:
     assert playback.status == 404
     assert playback.body["error"]["code"] == "not_found"
 
-    album_uri = f"at://{absent_did}/fm.plyr.stg.list/smoke"
+    album_uri = f"at://{absent_did}/fm.plyr.list/smoke"
     album = _request(api_base_url, f"/v1/albums/{_opaque_id('alb_', album_uri)}")
     assert album.status == 404 and album.body["error"]["code"] == "not_found"
 

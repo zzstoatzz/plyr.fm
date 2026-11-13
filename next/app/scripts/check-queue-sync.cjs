@@ -6,7 +6,7 @@ const { identity, serviceToken, startQueueFixture } = require('./queue-fixture.c
 const origin = 'https://next.plyr.fm';
 const dist = path.resolve(__dirname, '../dist');
 const base = 'atproto repo:fm.plyr.track repo:fm.plyr.list repo:fm.plyr.like repo:fm.plyr.actor.profile blob:*/*';
-const queue = 'rpc:fm.plyr.stg.jam.join?aud=did:web:plyr-jams-next.fly.dev#jams';
+const queue = 'rpc:fm.plyr.next.jam.join?aud=did:web:plyr-jams-next.fly.dev#jams';
 
 (async () => {
   const account = identity('k256');

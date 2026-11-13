@@ -1,6 +1,6 @@
 {
   "lexicon": 1,
-  "id": "fm.plyr.stg.jamState",
+  "id": "fm.plyr.next.jamState",
   "defs": {
     "main": {
       "type": "record",

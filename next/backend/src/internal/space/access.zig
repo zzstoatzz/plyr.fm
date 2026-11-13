@@ -42,7 +42,7 @@ pub const PolicySource = struct {
 };
 
 pub const Core = struct {
-    /// the space type plyr manages, e.g. `fm.plyr.stg.audio`
+    /// the space type plyr manages, e.g. `fm.plyr.next.audio`
     space_type: []const u8,
     /// where policies live, e.g. `fm.plyr.policy`
     policy_collection: []const u8,
@@ -77,7 +77,7 @@ pub const Core = struct {
     }
 };
 
-/// `fm.plyr.stg.track` → `fm.plyr.stg.policy`: policies sit beside the tracks.
+/// `fm.plyr.dev.track` → `fm.plyr.dev.policy`: policies sit beside the tracks.
 pub fn policyCollection(a: std.mem.Allocator, track_collection: []const u8) ![]const u8 {
     if (!std.mem.endsWith(u8, track_collection, ".track")) return error.InvalidTrackCollection;
     return std.fmt.allocPrint(a, "{s}.policy", .{track_collection[0 .. track_collection.len - ".track".len]});
@@ -159,6 +159,6 @@ test "legacy gate names keep working until their artist writes a policy" {
 test "policy collections sit beside the track collection" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    try std.testing.expectEqualStrings("fm.plyr.stg.policy", try policyCollection(arena.allocator(), "fm.plyr.stg.track"));
-    try std.testing.expectError(error.InvalidTrackCollection, policyCollection(arena.allocator(), "fm.plyr.stg.list"));
+    try std.testing.expectEqualStrings("fm.plyr.dev.policy", try policyCollection(arena.allocator(), "fm.plyr.dev.track"));
+    try std.testing.expectError(error.InvalidTrackCollection, policyCollection(arena.allocator(), "fm.plyr.dev.list"));
 }

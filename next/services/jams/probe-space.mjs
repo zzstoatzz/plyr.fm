@@ -11,9 +11,9 @@ const {
 const hostPds = 'http://localhost:5297';
 const guestPds = 'http://localhost:5298';
 const plc = 'http://localhost:5296';
-const type = 'fm.plyr.stg.jam';
-const commandCollection = 'fm.plyr.stg.jamCommand';
-const stateCollection = 'fm.plyr.stg.jamState';
+const type = 'fm.plyr.next.jam';
+const commandCollection = 'fm.plyr.next.jamCommand';
+const stateCollection = 'fm.plyr.next.jamState';
 
 async function xrpc(pds, method, { body, query, token, headers } = {}) {
   const url = new URL(`/xrpc/${method}`, pds);

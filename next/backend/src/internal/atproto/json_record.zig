@@ -85,7 +85,7 @@ test "jetstream JSON round-trips to the record CID" {
     defer arena_state.deinit();
     const arena = arena_state.allocator();
     const record: cbor.Value = .{ .map = &.{
-        .{ .key = "$type", .value = .{ .text = "fm.plyr.stg.track" } },
+        .{ .key = "$type", .value = .{ .text = "fm.plyr.dev.track" } },
         .{ .key = "title", .value = .{ .text = "a song" } },
         .{ .key = "duration", .value = .{ .unsigned = 180 } },
         .{ .key = "offset", .value = .{ .negative = -3 } },
@@ -102,7 +102,7 @@ test "jetstream JSON round-trips to the record CID" {
     const cid_text = try (try zat.Cid.forDagCbor(arena, encoded)).toString(arena);
     const link = try (try zat.Cid.forDagCbor(arena, "audio")).toString(arena);
     const json_text = try std.fmt.allocPrint(arena,
-        \\{{"title":"a song","$type":"fm.plyr.stg.track","duration":180,"offset":-3,
+        \\{{"title":"a song","$type":"fm.plyr.dev.track","duration":180,"offset":-3,
         \\"explicit":false,"sig":{{"$bytes":"AQID"}},
         \\"audioBlob":{{"$type":"blob","ref":{{"$link":"{s}"}},"mimeType":"audio/mpeg","size":1234}}}}
     , .{link});
@@ -111,7 +111,7 @@ test "jetstream JSON round-trips to the record CID" {
     try std.testing.expectEqualStrings("a song", result.value.getString("title").?);
 
     const tampered = try std.json.parseFromSliceLeaky(std.json.Value, arena,
-        \\{"title":"another song","$type":"fm.plyr.stg.track"}
+        \\{"title":"another song","$type":"fm.plyr.dev.track"}
     , .{});
     try std.testing.expectError(error.RecordCidMismatch, verified(arena, tampered, cid_text));
 }

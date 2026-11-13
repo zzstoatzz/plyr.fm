@@ -279,7 +279,7 @@ test "label pages keep track labels in order and honor negation and expiry" {
         \\ {"src":"did:plc:mod","uri":"at://did:plc:a/fm.plyr.track/3k1","val":"copyright-violation","neg":true,"cts":"2026-01-02T00:00:00.000Z"},
         \\ {"src":"did:plc:mod","uri":"at://did:plc:a/fm.plyr.track/3k2","val":"porn","cts":"2026-01-01T00:00:00.000Z","exp":"2026-02-01T00:00:00.000Z"},
         \\ {"src":"did:plc:mod","uri":"at://did:plc:a/fm.plyr.track/3k3","val":"sexual","cts":"2026-01-01T00:00:00.000Z","exp":"2027-02-01T00:00:00Z"},
-        \\ {"src":"did:plc:mod","uri":"at://did:plc:a/fm.plyr.stg.track/3k4","val":"porn","cts":"2026-01-01T00:00:00.000Z"},
+        \\ {"src":"did:plc:mod","uri":"at://did:plc:a/fm.plyr.dev.track/3k4","val":"porn","cts":"2026-01-01T00:00:00.000Z"},
         \\ {"src":"did:plc:mod","uri":"did:plc:a","val":"porn","cts":"2026-01-01T00:00:00.000Z"},
         \\ {"src":"did:plc:mod","uri":"at://did:plc:a/fm.plyr.track/3k5","val":"spam","cts":"2026-01-01T00:00:00.000Z"}
         \\]}

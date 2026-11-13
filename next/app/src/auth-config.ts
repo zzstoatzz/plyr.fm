@@ -10,7 +10,7 @@ export const NSID = {
 	policy: `${prefix}.policy`
 } as const;
 
-export const AUDIO_SPACE_TYPE = process.env.EXPO_PUBLIC_AUDIO_SPACE_TYPE || 'fm.plyr.stg.audio';
+export const AUDIO_SPACE_TYPE = process.env.EXPO_PUBLIC_AUDIO_SPACE_TYPE || 'fm.plyr.next.audio';
 export const SPACE_MANAGING_APP = process.env.EXPO_PUBLIC_SPACE_MANAGING_APP || 'did:web:api.next.plyr.fm#plyr_space';
 export const CLOSE_SCOPE = `space:${AUDIO_SPACE_TYPE}?authority=self&collection=${NSID.track}&action=read&action=create&action=delete&manage=create`;
 export function hasCloseGrant(scope: string): boolean {
@@ -44,8 +44,8 @@ export function hasPrivatePublishGrant(scope: string): boolean {
 }
 
 export const JAM_SPACE = {
-	type: process.env.EXPO_PUBLIC_JAM_SPACE_TYPE || 'fm.plyr.stg.jam',
-	collection: process.env.EXPO_PUBLIC_JAM_STATE_COLLECTION || 'fm.plyr.stg.jamState'
+	type: process.env.EXPO_PUBLIC_JAM_SPACE_TYPE || 'fm.plyr.next.jam',
+	collection: process.env.EXPO_PUBLIC_JAM_STATE_COLLECTION || 'fm.plyr.next.jamState'
 } as const;
 
 export const JAM_COORDINATOR_URL = (process.env.EXPO_PUBLIC_JAM_COORDINATOR_URL || 'https://plyr-jams-next.fly.dev').replace(/\/$/, '');

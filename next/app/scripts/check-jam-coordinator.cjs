@@ -8,7 +8,7 @@ const [a, b] = ports.map(port => 'http://127.0.0.1:' + port);
 async function rpc(method, body, token, query) { const r = await fetch(pds + '/xrpc/' + method + (query ? '?' + new URLSearchParams(query) : ''), { method: body === undefined ? 'GET' : 'POST', headers: { ...(body ? { 'content-type': 'application/json' } : {}), ...(token ? { authorization: 'Bearer ' + token } : {}) }, body: body ? JSON.stringify(body) : undefined }); const data = await r.json(); if (!r.ok)
     throw Error(method + ' HTTP' + r.status + ' ' + JSON.stringify(data)); return data; }
 async function account(name) { const data = await rpc('com.atproto.server.createAccount', { handle: name + '.test', email: name + '@example.test', password: 'fixture-only-password' }); return { did: data.did, token: data.accessJwt }; }
-async function join(base, actor, host, key, initial) { const { token: serviceToken } = await rpc('com.atproto.server.getServiceAuth', undefined, actor.token, { aud: 'did:web:plyr-jams-next.fly.dev#jams', lxm: 'fm.plyr.stg.jam.join' }); const { token: delegationToken } = await rpc('com.atproto.space.getDelegationToken', undefined, actor.token, { space: `at://${host}/space/fm.plyr.stg.jam/${key}` }); const r = await fetch(base + '/v1/jams/join', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ host, key, serviceToken, delegationToken, initial }) }); const data = await r.json(); return { status: r.status, ...data }; }
+async function join(base, actor, host, key, initial) { const { token: serviceToken } = await rpc('com.atproto.server.getServiceAuth', undefined, actor.token, { aud: 'did:web:plyr-jams-next.fly.dev#jams', lxm: 'fm.plyr.next.jam.join' }); const { token: delegationToken } = await rpc('com.atproto.space.getDelegationToken', undefined, actor.token, { space: `at://${host}/space/fm.plyr.next.jam/${key}` }); const r = await fetch(base + '/v1/jams/join', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ host, key, serviceToken, delegationToken, initial }) }); const data = await r.json(); return { status: r.status, ...data }; }
 async function socket(base, ticket) { const ws = new WebSocket(base.replace('http', 'ws') + '/v1/jams/socket?ticket=' + ticket); const frames = []; ws.addEventListener('message', e => frames.push(JSON.parse(e.data))); await once(ws, 'open'); const wait = async (predicate) => { const end = Date.now() + 5000; while (Date.now() < end) {
     const frame = frames.find(predicate);
     if (frame)
@@ -30,8 +30,8 @@ async function socket(base, ticket) { const ws = new WebSocket(base.replace('htt
             }
         }
         const suffix = Date.now().toString(36), host = await account('jhost' + suffix), guest = await account('jguest' + suffix), key = 'room' + suffix;
-        const space = `at://${host.did}/space/fm.plyr.stg.jam/${key}`;
-        await rpc('com.atproto.space.createSpace', { spaceType: 'fm.plyr.stg.jam', skey: key, policy: { $type: 'com.atproto.memberspace.policy', publicRead: false, publicWrite: false, publishPolicy: false, publishMembers: false } }, host.token);
+        const space = `at://${host.did}/space/fm.plyr.next.jam/${key}`;
+        await rpc('com.atproto.space.createSpace', { spaceType: 'fm.plyr.next.jam', skey: key, policy: { $type: 'com.atproto.memberspace.policy', publicRead: false, publicWrite: false, publishPolicy: false, publishMembers: false } }, host.token);
         const hits = await (await fetch('https://api.next.plyr.fm/v1/search?q=Sounds%20of%20the%20Drone%20Mix')).json();
         const found = hits.data.find(t => t.type === 'track' && t.title === 'Sounds of the Drone Mix');
         const track = await (await fetch('https://api.next.plyr.fm/v1/tracks/' + found.id)).json();

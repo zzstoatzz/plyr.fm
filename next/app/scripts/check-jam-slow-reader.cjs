@@ -25,8 +25,8 @@ async function account(name) {
   return { did: data.did, token: data.accessJwt };
 }
 async function join(base, actor, host, key, initial) {
-  const { token: serviceToken } = await rpc('com.atproto.server.getServiceAuth', undefined, actor.token, { aud: 'did:web:plyr-jams-next.fly.dev#jams', lxm: 'fm.plyr.stg.jam.join' });
-  const { token: delegationToken } = await rpc('com.atproto.space.getDelegationToken', undefined, actor.token, { space: `at://${host}/space/fm.plyr.stg.jam/${key}` });
+  const { token: serviceToken } = await rpc('com.atproto.server.getServiceAuth', undefined, actor.token, { aud: 'did:web:plyr-jams-next.fly.dev#jams', lxm: 'fm.plyr.next.jam.join' });
+  const { token: delegationToken } = await rpc('com.atproto.space.getDelegationToken', undefined, actor.token, { space: `at://${host}/space/fm.plyr.next.jam/${key}` });
   const response = await fetch(base + '/v1/jams/join', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ host, key, serviceToken, delegationToken, initial }) });
   const data = await response.json();
   assert.equal(response.status, 200, 'join HTTP ' + response.status + ' ' + JSON.stringify(data));
@@ -74,8 +74,8 @@ function remotePresent(pid, localPort) {
       assert.ok(ready, base + ' failed startup');
     }
     const suffix = Date.now().toString(36), host = await account('slowhost' + suffix), guest = await account('slowguest' + suffix), key = 'slow' + suffix;
-    const space = `at://${host.did}/space/fm.plyr.stg.jam/${key}`;
-    await rpc('com.atproto.space.createSpace', { spaceType: 'fm.plyr.stg.jam', skey: key, policy: { $type: 'com.atproto.memberspace.policy', publicRead: false, publicWrite: false, publishPolicy: false, publishMembers: false } }, host.token);
+    const space = `at://${host.did}/space/fm.plyr.next.jam/${key}`;
+    await rpc('com.atproto.space.createSpace', { spaceType: 'fm.plyr.next.jam', skey: key, policy: { $type: 'com.atproto.memberspace.policy', publicRead: false, publicWrite: false, publishPolicy: false, publishMembers: false } }, host.token);
     await rpc('com.atproto.memberspace.putMembers', { space, members: [{ did: guest.did, read: true, write: false }] }, host.token);
     const hits = await (await fetch('https://api.next.plyr.fm/v1/search?q=Sounds%20of%20the%20Drone%20Mix')).json();
     const found = hits.data.find(hit => hit.type === 'track' && hit.title === 'Sounds of the Drone Mix');

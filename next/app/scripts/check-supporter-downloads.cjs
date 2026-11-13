@@ -3,7 +3,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { withPlayerHarness, setup, track, screenshot } = require('./check-player-presentation.cjs');
 const sdk = Promise.all([import('@atproto/crypto'), import('@atproto/lex-data'), import('@atproto/lex-cbor'), import('@atproto/lex-json'), import('@atproto/space')]);
-const did = track.artist.did, space = `at://${did}/space/fm.plyr.stg.audio/supporters`, uri = `${space}/${did}/${track.record.collection}/protected`;
+const did = track.artist.did, space = `at://${did}/space/fm.plyr.next.audio/supporters`, uri = `${space}/${did}/${track.record.collection}/protected`;
 const downloadScope = 'rpc:fm.plyr.download.authorize?aud=did:web:plyr-jams-next.fly.dev#jams';
 const attachment = 'https://plyr-next-audio.n8-3e9.workers.dev/media/' + 'a'.repeat(64) + '/12345678-1234-4123-8123-123456789abc';
 const audio = Buffer.alloc(16044);

@@ -17,7 +17,7 @@ const output=process.env.JAM_REALTIME_OUTPUT||'/tmp/plyr-jam-realtime';
   handles=[credentials.host.handle,credentials.guest.handle];
   accounts=Object.fromEntries([credentials.host,credentials.guest].map(account=>[account.handle,{did:account.did,pass:account.password}]));
   const metadata=await(await fetch(origin+'/oauth-client-metadata.json')).json();
-  assert.ok(metadata.scope.includes('rpc:fm.plyr.stg.jam.join?aud='),'Live Next metadata must contain the Jam admission scope');
+  assert.ok(metadata.scope.includes('rpc:fm.plyr.next.jam.join?aud='),'Live Next metadata must contain the Jam admission scope');
  }else{accounts=await fixtureAccounts(['mvpjamhost','mvpjamguest']);handles=['mvpjamhost.test','mvpjamguest.test'];} 
  const hit=(await(await fetch('https://api.next.plyr.fm/v1/search?q=Sounds%20of%20the%20Drone%20Mix')).json()).data.find(t=>t.type==='track'&&t.title==='Sounds of the Drone Mix');
  const room=accounts[handles[0]].did+'~realtime'+Date.now().toString(36);

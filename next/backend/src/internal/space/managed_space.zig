@@ -23,7 +23,7 @@ pub const Config = struct {
     service_id: []const u8,
     /// e.g. `https://api.next.plyr.fm`
     service_endpoint: []const u8,
-    /// the space type plyr manages, e.g. `fm.plyr.stg.audio`
+    /// the space type plyr manages, e.g. `fm.plyr.next.audio`
     space_type: []const u8,
     /// where artists publish space policies, e.g. `fm.plyr.policy`
     policy_collection: []const u8 = "fm.plyr.policy",
@@ -151,31 +151,31 @@ const test_config: Config = .{
     .service_did = "did:web:api.next.plyr.fm",
     .service_id = "plyr_space",
     .service_endpoint = "https://api.next.plyr.fm",
-    .space_type = "fm.plyr.stg.audio",
+    .space_type = "fm.plyr.next.audio",
 };
 
 test "space URIs parse strictly" {
-    const space = SpaceUri.parse("at://did:plc:artist/space/fm.plyr.stg.audio/supporters").?;
+    const space = SpaceUri.parse("at://did:plc:artist/space/fm.plyr.next.audio/supporters").?;
     try std.testing.expectEqualStrings("did:plc:artist", space.authority);
-    try std.testing.expectEqualStrings("fm.plyr.stg.audio", space.space_type);
+    try std.testing.expectEqualStrings("fm.plyr.next.audio", space.space_type);
     try std.testing.expectEqualStrings("supporters", space.skey);
-    try std.testing.expect(SpaceUri.parse("at://did:plc:artist/space/fm.plyr.stg.audio") == null);
-    try std.testing.expect(SpaceUri.parse("at://did:plc:artist/space/fm.plyr.stg.audio/x/y") == null);
-    try std.testing.expect(SpaceUri.parse("at://did:plc:artist/fm.plyr.stg.track/abc/x") == null);
-    try std.testing.expect(SpaceUri.parse("https://did:plc:artist/space/fm.plyr.stg.audio/x") == null);
+    try std.testing.expect(SpaceUri.parse("at://did:plc:artist/space/fm.plyr.next.audio") == null);
+    try std.testing.expect(SpaceUri.parse("at://did:plc:artist/space/fm.plyr.next.audio/x/y") == null);
+    try std.testing.expect(SpaceUri.parse("at://did:plc:artist/fm.plyr.dev.track/abc/x") == null);
+    try std.testing.expect(SpaceUri.parse("https://did:plc:artist/space/fm.plyr.next.audio/x") == null);
 }
 
 test "space record URIs parse strictly" {
-    const record = SpaceRecordUri.parse("at://did:plc:artist/space/fm.plyr.stg.audio/supporters/did:plc:artist/fm.plyr.stg.track/3l2abc").?;
-    try std.testing.expectEqualStrings("at://did:plc:artist/space/fm.plyr.stg.audio/supporters", record.space_uri);
+    const record = SpaceRecordUri.parse("at://did:plc:artist/space/fm.plyr.next.audio/supporters/did:plc:artist/fm.plyr.dev.track/3l2abc").?;
+    try std.testing.expectEqualStrings("at://did:plc:artist/space/fm.plyr.next.audio/supporters", record.space_uri);
     try std.testing.expectEqualStrings("supporters", record.space.skey);
     try std.testing.expectEqualStrings("did:plc:artist", record.repo);
-    try std.testing.expectEqualStrings("fm.plyr.stg.track", record.collection);
+    try std.testing.expectEqualStrings("fm.plyr.dev.track", record.collection);
     try std.testing.expectEqualStrings("3l2abc", record.rkey);
-    try std.testing.expect(SpaceRecordUri.parse("at://did:plc:artist/space/fm.plyr.stg.audio/supporters") == null);
-    try std.testing.expect(SpaceRecordUri.parse("at://did:plc:artist/space/fm.plyr.stg.audio/supporters/did:plc:artist/fm.plyr.stg.track") == null);
-    try std.testing.expect(SpaceRecordUri.parse("at://did:plc:artist/fm.plyr.stg.track/3l2abc") == null);
-    try std.testing.expect(SpaceRecordUri.parse("at://did:plc:a/space/fm.plyr.stg.audio/s/did:plc:a/fm.plyr.stg.track/x/y") == null);
+    try std.testing.expect(SpaceRecordUri.parse("at://did:plc:artist/space/fm.plyr.next.audio/supporters") == null);
+    try std.testing.expect(SpaceRecordUri.parse("at://did:plc:artist/space/fm.plyr.next.audio/supporters/did:plc:artist/fm.plyr.dev.track") == null);
+    try std.testing.expect(SpaceRecordUri.parse("at://did:plc:artist/fm.plyr.dev.track/3l2abc") == null);
+    try std.testing.expect(SpaceRecordUri.parse("at://did:plc:a/space/fm.plyr.next.audio/s/did:plc:a/fm.plyr.dev.track/x/y") == null);
 }
 
 test "did document names the managing-app service" {

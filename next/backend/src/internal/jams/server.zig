@@ -28,8 +28,8 @@ pub fn run(a: std.mem.Allocator, io: std.Io, settings: config.Config) !void {
         .tickets = try tickets.Tickets.init(a, io, url),
         .auth_config = .{
             .audience = env("JAM_SERVICE_AUDIENCE") orelse "did:web:plyr-jams-next.fly.dev#jams",
-            .method = env("JAM_JOIN_METHOD") orelse "fm.plyr.stg.jam.join",
-            .space_type = env("JAM_SPACE_TYPE") orelse "fm.plyr.stg.jam",
+            .method = env("JAM_JOIN_METHOD") orelse "fm.plyr.next.jam.join",
+            .space_type = env("JAM_SPACE_TYPE") orelse "fm.plyr.next.jam",
             .plc_url = env("PLC_DIRECTORY_URL") orelse "https://plc.directory",
             .test_pds_origin = if (std.mem.eql(u8, env("JAM_TEST_MODE") orelse "", "1")) env("JAM_TEST_PDS_ORIGIN") else null,
         },

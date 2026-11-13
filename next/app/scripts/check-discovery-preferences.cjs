@@ -74,7 +74,7 @@ async function run(browser, width, theme) {
     await page.route('https://plc.directory/**', route => route.fulfill({ json: { service: [] } }));
     const signIn = (did, synced = false) => page.evaluate(([id, did, synced]) => globalThis.__r(id).setAuth(did, {
       handle: async url => new Response(JSON.stringify(String(url).includes('getServiceAuth') ? { token: 'fixture' } : { records: [] }), { headers: { 'content-type': 'application/json' } }),
-    }, synced ? 'atproto rpc:fm.plyr.stg.jam.join?aud=did:web:plyr-jams-next.fly.dev#jams' : 'atproto'), [authModule, did, synced]);
+    }, synced ? 'atproto rpc:fm.plyr.next.jam.join?aud=did:web:plyr-jams-next.fly.dev#jams' : 'atproto'), [authModule, did, synced]);
     await signIn('did:plc:discoveryone');
     await edit();
     await page.getByRole('button', { name: 'Show all tags', exact: true }).click();

@@ -38,6 +38,21 @@ lexicon shapes and preserve fields Next does not know. A lexicon change lands
 in both apps together. Rolling back a Next deploy does not undo records it
 wrote; they are the user's.
 
+### namespaces
+
+NSIDs follow the domain that owns them. Users' catalog records are `fm.plyr.*`
+(`track`, `list`, `like`, `comment`, `actor.profile`, shared with production,
+plus `policy`, which only Next writes so far). Anything only Next defines (the audio space type, Jams and their join method)
+lives under `fm.plyr.next.*`, the authority of next.plyr.fm; their lexicons are
+in [app/lexicons](app/lexicons). `fm.plyr.stg.*` belongs to the legacy staging
+app, so Next never reads or writes it. `fm.plyr.dev.*` is for local runs and
+test fixtures only.
+
+At cutover the `fm.plyr.next.*` names stay as they are. Space uris
+(`at://{artist}/space/fm.plyr.next.audio/{skey}`) are written into track
+records, policies and payment entitlements, so renaming the type would orphan
+every closed release. Keep next.plyr.fm resolvable as the lexicon authority.
+
 ## develop
 
 ```sh
