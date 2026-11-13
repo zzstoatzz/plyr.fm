@@ -41,7 +41,18 @@ export function usePlayerDismiss(enabled: boolean, width: number, height: number
     markResting(false);
     if (latest.current.still) { then(); return; }
     const request = generation.current;
-    spring(latest.current.rest, velocity).start(({ finished }) => { if (finished && request === generation.current) then(); });
+    // The close finishes even if its spring is interrupted or never completes (seen once in the simulator: the sheet sat mid-way).
+    // A reopen or a new open bumps the generation or clears closing, so only a close still in progress ends here.
+    let done = false;
+    const finish = () => {
+      if (done || request !== generation.current || !closing.current) return;
+      done = true;
+      translation.stopAnimation();
+      translation.setValue(latest.current.rest);
+      then();
+    };
+    spring(latest.current.rest, velocity).start(finish);
+    setTimeout(finish, 900);
   };
   const settle = (open: boolean, velocity = 0) => {
     if (!open) { exit(latest.current.close, velocity); return; }
