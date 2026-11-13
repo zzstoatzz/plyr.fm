@@ -12,6 +12,7 @@ import House from 'lucide-react-native/icons/house';
 import Search from 'lucide-react-native/icons/search';
 import Library from 'lucide-react-native/icons/library';
 import UserRound from 'lucide-react-native/icons/user-round';
+import CirclePlus from 'lucide-react-native/icons/circle-plus';
 import Radio from 'lucide-react-native/icons/radio';
 import Settings from 'lucide-react-native/icons/settings';
 import { PlaybackProvider } from '../src/playback';
@@ -60,9 +61,10 @@ function Shell() {
     { label: 'Home', href: '/', icon: House, active: path === '/' },
     { label: 'Search', href: '/search', icon: Search, active: path === '/search' },
     { label: 'Library', href: '/library', icon: Library, active: ['/library', '/liked', '/playlists'].includes(path) },
-    { label: 'You', href: accountPath, icon: UserRound, active: ['/portal', '/login', '/upload'].includes(path) || !wide && path === '/settings' }
+    ...(auth.did ? [{ label: 'Upload', href: '/upload' as Href, icon: CirclePlus, active: path === '/upload' }] : []),
+    { label: 'You', href: accountPath, icon: UserRound, active: ['/portal', '/login'].includes(path) || !auth.did && path === '/upload' || !wide && path === '/settings' }
   ];
-  const showBack = !['/', '/search', '/library', '/portal', '/login'].includes(path);
+  const showBack = !['/', '/search', '/library', '/portal', '/login', '/upload'].includes(path);
   const detail = /^\/(track|u|album|playlist|edit-track)\//.test(path);
   const tabTitle = path === '/' ? (wide ? undefined : 'plyr.fm') : path === '/search' ? 'search' : path === '/library' ? 'library' : path === '/portal' ? 'your music' : undefined;
   const detailTitle = path.startsWith('/u/') ? 'artist' : path.startsWith('/edit-track/') ? 'edit track'

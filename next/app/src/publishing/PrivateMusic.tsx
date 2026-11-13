@@ -13,6 +13,7 @@ import { usePlayback } from '../playback';
 import { TagsField } from './TagsField';
 import { privatePds, type PrivateResult } from './private-pds';
 import type { PrivateCreate } from './private-create';
+import { useArtistName } from './artist-name';
 
 export default function PrivateMusic() {
   const auth = useAuth(), [session, setSession] = useState({ rpc: auth.rpc, version: 0 });
@@ -24,12 +25,13 @@ export default function PrivateMusic() {
 }
 
 function AccountPrivateMusic({ auth }: { auth: Auth }) {
+  const artist = useArtistName(auth);
   const pds = useMemo(() => privatePds(auth), [auth.did, auth.rpc]), player = usePlayback();
   const [tracks, setTracks] = useState<Track[]>([]), [cursor, setCursor] = useState<string>();
   const [pending, setPending] = useState<PrivateCreate[]>([]), [results, setResults] = useState<Record<string, PrivateResult>>({});
   const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [error, setError] = useState<string>(), [recoveryError, setRecoveryError] = useState<string>();
   const [noticeArea, setNoticeArea] = useState<string>('recovery');
-  const [notice, setNotice] = useState<string>(), [file, setFile] = useState<MediaFile>(), [title, setTitle] = useState(''), [artist, setArtist] = useState(''), [description, setDescription] = useState(''), [tags, setTags] = useState(''), [consent, setConsent] = useState(false);
+  const [notice, setNotice] = useState<string>(), [file, setFile] = useState<MediaFile>(), [title, setTitle] = useState(''), [description, setDescription] = useState(''), [tags, setTags] = useState(''), [consent, setConsent] = useState(false);
   const live = useRef(true), locked = useRef(false), generation = useRef(0), ownAttempt = useRef<string | undefined>(undefined);
   const current = () => live.current && getAuth().did === auth.did && getAuth().rpc === auth.rpc;
   useEffect(() => { live.current = true; return () => { live.current = false; generation.current++; }; }, []);
@@ -94,13 +96,12 @@ function AccountPrivateMusic({ auth }: { auth: Auth }) {
         setFile(next); setConsent(false); if (!title) setTitle(next.name.replace(/\.[^.]+$/, '').slice(0, 256));
       }).catch(() => { if (current()) setNotice('could not open the file.'); }); }} />
       <Field label="Title" value={title} onChangeText={setTitle} maxLength={256} editable={!busy && !active} />
-      <Field label="Artist" value={artist} onChangeText={setArtist} maxLength={256} editable={!busy && !active} />
       <Field label="Description" value={description} onChangeText={setDescription} maxLength={5000} multiline editable={!busy && !active} />
       <TagsField value={tags} onChange={setTags} disabled={busy || active} />
       <Action label="Use my private space" selected={consent} disabled={busy || active} onPress={() => setConsent(value => !value)} />
       {error && error !== notice && <Copy live>{error}</Copy>}
       {notice && noticeArea === 'upload' && <Copy live>{notice}</Copy>}
-      <Action primary label={busy ? 'Saving private music…' : 'Upload privately'} disabled={busy || active || loading || !!error || !!recoveryError || !consent || !file || !title.trim() || !artist.trim()} onPress={() => void run(async () => {
+      <Action primary label={busy ? 'Saving private music…' : 'Upload privately'} disabled={busy || active || loading || !!error || !!recoveryError || !consent || !file || !title.trim() || !artist} onPress={() => void run(async () => {
         if (!file) return;
         const duration = await measureAudioDuration(file).catch(() => undefined);
         if (!current()) return;

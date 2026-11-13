@@ -85,7 +85,6 @@ async function run(browser, width, theme) {
     await page.getByRole('link', { name: 'Sign in for private uploads' }).waitFor(); assert.equal(blobs, 0);
     await signIn(); await choose();
     await page.getByRole('textbox', { name: 'Title', exact: true }).fill('private song');
-    await page.getByRole('textbox', { name: 'Artist', exact: true }).fill('private artist');
     await page.getByRole('textbox', { name: 'Description', exact: true }).fill('private liner notes');
     assert.ok(await page.getByRole('button', { name: 'Upload privately', exact: true }).isDisabled());
     await page.getByRole('button', { name: 'Use my private space', exact: true }).click();
@@ -147,7 +146,7 @@ async function run(browser, width, theme) {
     await page.getByRole('button', { name: 'Play', exact: true }).first().click();
     await page.waitForFunction(() => window.__playerPresentationMedia && !window.__playerPresentationMedia.paused && window.__playerPresentationMedia.currentTime > 0.2, null, { timeout: 20000 });
     await enter(); await page.getByRole('button', { name: 'Play private song', exact: true }).waitFor(); publicPolicy = true; const before = blobs;
-    await choose(); await page.getByRole('textbox', { name: 'Artist', exact: true }).fill('private artist');
+    await choose();
     await page.getByRole('button', { name: 'Use my private space', exact: true }).click(); await page.getByRole('button', { name: 'Upload privately', exact: true }).click();
     await page.getByText('this space is not private. its access policy was left unchanged.', { exact: true }).last().waitFor();
     const feedback = await page.getByText('this space is not private. its access policy was left unchanged.', { exact: true }).last().boundingBox();
@@ -155,7 +154,6 @@ async function run(browser, width, theme) {
     await screenshot(page, `private-policy-error-${width}-${theme}`);
     assert.equal(blobs, before); assert.equal(writes.length, 1); assert.deepEqual(publicLeaks, []); assert.deepEqual(errors, []);
     publicPolicy = false; await enter(); await choose();
-    await page.getByRole('textbox', { name: 'Artist', exact: true }).fill('original session artist');
     await page.getByRole('button', { name: 'Use my private space', exact: true }).click();
     holdBlob = true; await page.getByRole('button', { name: 'Upload privately', exact: true }).click();
     await require('node:timers/promises').setTimeout(20);
@@ -165,7 +163,7 @@ async function run(browser, width, theme) {
     await page.getByRole('button', { name: 'Choose private audio', exact: true }).waitFor();
     await page.waitForTimeout(100);
     assert.equal(writes.length, 1, 'old session must not publish after held blob completion');
-    assert.equal(await page.getByRole('textbox', { name: 'Artist', exact: true }).inputValue(), '');
+    assert.equal(await page.getByRole('textbox', { name: 'Title', exact: true }).inputValue(), '');
     assert.deepEqual(errors, []);
     console.log(`${width}/${theme}: private consent, lost create recovery, verified MAC playback, session reset, public handoff and policy denial passed`);
   } catch (error) { console.error(await page.locator('body').innerText()); await screenshot(page, `private-failure-${width}-${theme}`); throw error; }

@@ -91,7 +91,6 @@ async function run(browser, width, theme) {
     await page.getByRole('link', { name: 'Sign in for private uploads' }).waitFor(); assert.equal(blobs, 0);
     await signIn(); await choose();
     await page.getByRole('textbox', { name: 'Title', exact: true }).fill('private song');
-    await page.getByRole('textbox', { name: 'Artist', exact: true }).fill('private artist');
     await page.getByRole('textbox', { name: 'Description', exact: true }).fill('private liner notes');
     assert.ok(await page.getByRole('button', { name: 'Upload privately', exact: true }).isDisabled());
     await page.getByRole('button', { name: 'Use my private space', exact: true }).click();

@@ -130,13 +130,11 @@ async function run(browser, width, theme) {
     });
     await signIn(did, false); await choose('large-fixture.wav');
     await page.getByRole('textbox', { name: 'Title', exact: true }).fill('large fixture');
-    await page.getByRole('textbox', { name: 'Artist', exact: true }).fill('fixture artist');
     await page.getByRole('link', { name: 'Sign in for large uploads', exact: true }).waitFor();
     assert.ok(await page.getByRole('button', { name: 'Upload', exact: true }).isDisabled());
     assert.equal(grants, 0);
     await signIn(); await choose('large-fixture.wav');
     await page.getByRole('textbox', { name: 'Title', exact: true }).fill('large fixture');
-    await page.getByRole('textbox', { name: 'Artist', exact: true }).fill('fixture artist');
     assert.ok(await page.getByRole('button', { name: 'Upload', exact: true }).isDisabled());
     await page.getByRole('button', { name: 'Use plyr storage', exact: true }).scrollIntoViewIfNeeded();
     await screenshot(page, `large-consent-${width}-${theme}`);
@@ -205,7 +203,6 @@ async function run(browser, width, theme) {
     await signIn(); offlineRecord = false; lostCreate = false;
     await choose('fresh.wav');
     await page.getByRole('textbox', { name: 'Title', exact: true }).fill('unrelated fresh draft');
-    await page.getByRole('textbox', { name: 'Artist', exact: true }).fill('fixture artist');
     await page.getByText('finish or set aside the earlier creation before uploading another track.', { exact: true }).waitFor();
     assert.ok(await page.getByRole('button', { name: 'Upload', exact: true }).isDisabled());
     await page.getByRole('button', { name: 'Check upload status', exact: true }).click();
