@@ -80,7 +80,7 @@ function AccountUpload({ auth }: { auth: Auth }) {
   useSharedAudio(item => {
     if (busy || !current()) return;
     try { takeAudio(item); setNote(undefined); } catch (failure) { setNote(failure instanceof Error ? failure.message : 'could not open the shared file.'); }
-  });
+  }, message => { if (current()) setNote(message); });
 
   async function upload() {
     if (!current() || !file || locked.current || recovery.operations.length || !title.trim() || !artist) return;

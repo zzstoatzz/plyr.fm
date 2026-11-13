@@ -5,21 +5,27 @@ import { useIncomingShare } from 'expo-sharing';
 import type { MediaFile } from '../pds';
 
 /** Hands audio shared into the app (Voice Memos, Files) to `receive`, once per share. */
-export function useSharedAudio(receive: (file: MediaFile) => void) {
+export function useSharedAudio(receive: (file: MediaFile) => void, fail: (message: string) => void) {
   const { resolvedSharedPayloads, clearSharedPayloads } = useIncomingShare();
-  const latest = useRef(receive);
-  latest.current = receive;
+  const latest = useRef({ receive, fail });
+  latest.current = { receive, fail };
   useEffect(() => {
     const shared = resolvedSharedPayloads.find(payload => payload.contentUri && (payload.contentType === 'audio' || payload.contentMimeType?.startsWith('audio/')));
     if (!shared?.contentUri) return;
-    const source = new File(shared.contentUri);
-    const directory = new Directory(Paths.cache, `plyr-shared-${randomUUID()}`);
-    directory.create();
-    const name = shared.originalName ?? source.name;
-    const copy = new File(directory, name);
-    source.copy(copy);
-    clearSharedPayloads();
-    latest.current({ name, uri: copy.uri, type: shared.contentMimeType ?? copy.type, size: copy.size, arrayBuffer: () => copy.arrayBuffer() });
+    try {
+      const source = new File(shared.contentUri);
+      const name = shared.originalName ?? source.name;
+      const extension = name.split('.').at(-1)?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'm4a';
+      const directory = new Directory(Paths.cache, 'plyr-shared');
+      if (!directory.exists) directory.create();
+      // Memo titles carry quotes and other characters; an ASCII name keeps the copy's URI unambiguous.
+      const copy = new File(directory, `${randomUUID()}.${extension}`);
+      source.copy(copy);
+      if (!copy.exists || !copy.size) throw new Error('empty copy');
+      latest.current.receive({ name, uri: copy.uri, type: shared.contentMimeType ?? copy.type, size: copy.size, arrayBuffer: () => copy.arrayBuffer() });
+    } catch {
+      latest.current.fail('the shared file could not be read. try sharing it again.');
+    } finally { clearSharedPayloads(); }
   }, [resolvedSharedPayloads, clearSharedPayloads]);
 }
 
