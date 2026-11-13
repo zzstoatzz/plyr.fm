@@ -1,0 +1,62 @@
+{
+  "lexicon": 1,
+  "id": "fm.plyr.notification.listNotifications",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "The authenticated account's notifications, newest first. Authenticate with a service JWT for the plyr appview (aud is its service DID, or that DID with #plyr_appview) and this method as lxm.",
+      "parameters": {
+        "type": "params",
+        "properties": {
+          "limit": { "type": "integer", "minimum": 1, "maximum": 100, "default": 50 },
+          "cursor": { "type": "string" }
+        }
+      },
+      "output": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "required": ["notifications"],
+          "properties": {
+            "notifications": { "type": "array", "items": { "type": "ref", "ref": "#notification" } },
+            "cursor": { "type": "string" },
+            "seenAt": { "type": "string", "format": "datetime", "description": "The account's read watermark; absent until it first calls updateSeen." }
+          }
+        }
+      }
+    },
+    "notification": {
+      "type": "object",
+      "required": ["uri", "cid", "author", "reason", "reasonSubject", "subject", "isRead", "createdAt", "indexedAt"],
+      "properties": {
+        "uri": { "type": "string", "format": "at-uri", "description": "The record that caused it: the like, or the track that features the account." },
+        "cid": { "type": "string", "format": "cid" },
+        "author": { "type": "ref", "ref": "#author" },
+        "reason": { "type": "string", "knownValues": ["like", "feature"] },
+        "reasonSubject": { "type": "string", "format": "at-uri", "description": "The account's liked track, or the track that features it." },
+        "subject": { "type": "ref", "ref": "#subject" },
+        "isRead": { "type": "boolean", "description": "indexedAt is at or before the account's seenAt." },
+        "createdAt": { "type": "string", "format": "datetime", "description": "The causing record's own createdAt." },
+        "indexedAt": { "type": "string", "format": "datetime", "description": "The instant notifications are ordered and read by: createdAt, or when plyr indexed the record if createdAt is later." }
+      }
+    },
+    "author": {
+      "type": "object",
+      "required": ["did"],
+      "properties": {
+        "did": { "type": "string", "format": "did" },
+        "handle": { "type": "string", "format": "handle" },
+        "displayName": { "type": "string" },
+        "avatar": { "type": "string", "format": "uri" }
+      }
+    },
+    "subject": {
+      "type": "object",
+      "required": ["uri", "title"],
+      "properties": {
+        "uri": { "type": "string", "format": "at-uri" },
+        "title": { "type": "string" }
+      }
+    }
+  }
+}

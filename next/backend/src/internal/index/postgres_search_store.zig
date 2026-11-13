@@ -5,6 +5,7 @@
 //! it never becomes the authority for the returned music metadata.
 
 const std = @import("std");
+const public_media = @import("../delivery/public_media.zig");
 const pg = @import("pg");
 const zat = @import("zat");
 const lexicon_value = @import("../atproto/lexicon_value.zig");
@@ -110,7 +111,7 @@ fn decodeRow(
     if (zat.Handle.parse(handle) == null) return error.CorruptHandle;
     const display_name = try duplicate(allocator, try row.get([]const u8, 6));
     if (!std.unicode.utf8ValidateSlice(display_name)) return error.CorruptDisplayName;
-    const image_url = try duplicateOptional(allocator, try row.get(?[]const u8, 7));
+    const image_url = try public_media.canonicalOwned(allocator, try duplicateOptional(allocator, try row.get(?[]const u8, 7)));
     if (image_url) |value| if (!lexicon_value.validUri(value)) return error.CorruptImage;
 
     const play_count = try row.get(?i64, 8);
@@ -367,7 +368,7 @@ const search_query =
     \\  limited.owner_did,
     \\  limited.owner_handle,
     \\  limited.owner_display_name,
-    \\  COALESCE(limited.image_url, image_profile.avatar, image_identity.avatar_url),
+    \\  COALESCE(limited.image_url, CASE WHEN image_identity.avatar_url IS NOT NULL AND image_profile.avatar LIKE 'https://cdn.bsky.app/img/avatar/plain/%' THEN image_identity.avatar_url ELSE COALESCE(image_profile.avatar, image_identity.avatar_url) END),
     \\  CASE WHEN entity_type = 'track' THEN COALESCE(metrics.play_count, 0)::bigint ELSE NULL::bigint END,
     \\  limited.member_count,
     \\  limited.indexed_at_us,
@@ -386,7 +387,7 @@ const search_query =
     \\    WHEN limited.image_url IS NOT NULL THEN CASE
     \\      WHEN entity_type = 'track' THEN 'verified_repo'
     \\      WHEN authored_image THEN 'authored_profile' ELSE 'legacy_projection' END
-    \\    WHEN image_profile.avatar IS NOT NULL THEN 'authored_profile'
+    \\    WHEN image_profile.avatar IS NOT NULL AND (image_identity.avatar_url IS NULL OR image_profile.avatar NOT LIKE 'https://cdn.bsky.app/img/avatar/plain/%') THEN 'authored_profile'
     \\    WHEN image_identity.avatar_url IS NOT NULL THEN 'legacy_projection'
     \\    ELSE 'derived'
     \\  END AS image_source

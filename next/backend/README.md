@@ -139,7 +139,7 @@ Direct SQL is reserved for projection adapter tests and benchmark fixtures.
 | `MIRROR_BASE_URL` | to enable mirror | https origin of the `next-audio` worker (`next/services/audio/`); uploads PUT to and playback reads from `{base}/{prefix}/{cid}` |
 | `MIRROR_UPLOAD_TOKEN` | to enable mirror | bearer secret shared with the worker's `UPLOAD_TOKEN` (32+ chars) |
 | `MIRROR_KEY_PREFIX` | no | object prefix, default `audio` |
-| `SPACE_SERVICE_DID` | to enable gated audio | plyr's managing-app DID, e.g. `did:web:api.next.plyr.fm`; enables `/.well-known/did.json` and `checkUserAccess` |
+| `SPACE_SERVICE_DID` | to enable gated audio and notifications | plyr's service DID, e.g. `did:web:api.next.plyr.fm`; enables `/.well-known/did.json`, `checkUserAccess` and the [notification methods](docs/notifications.md) |
 | `SPACE_SERVICE_ENDPOINT` | with `SPACE_SERVICE_DID` | public https origin of this API, published as the service endpoint |
 | `SPACE_SERVICE_ID` | no | DID-doc service fragment, default `plyr_space` |
 | `SPACE_TYPE_NSID` | no | the space type plyr manages, default `fm.plyr.stg.audio` |

@@ -1,9 +1,9 @@
-import { trackArtwork } from './artwork';
+import { displayUrl, trackArtwork } from './artwork';
 import { Text } from './Text';
 import { router, usePathname, type Href } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { BodyPortal } from './BodyPortal';
-import { Animated, PanResponder, Platform, Pressable, View, useWindowDimensions, type ViewInstance } from 'react-native';
+import { Animated, Image, PanResponder, PixelRatio, Platform, Pressable, View, useWindowDimensions, type ViewInstance } from 'react-native';
 import { playerSheet, useFlying, useSheetPresent } from './player-sheet';
 import { PlaybackFreeze } from './playback';
 import ListMusic from 'lucide-react-native/icons/list-music';
@@ -76,6 +76,11 @@ export function PlayerBar() {
     else router.replace('/');
   };
   const trackId = player.current?.id;
+  const art = player.current ? trackArtwork(player.current) : undefined;
+  useEffect(() => {
+    // Native mounts now playing on open; warm the size it draws the cover at.
+    if (Platform.OS !== 'web' && art) Image.prefetch(displayUrl(art, Math.min(width - 40, 372), PixelRatio.get())).catch(() => {});
+  }, [art, width]);
   const sheet = useMemo(() => hosted && player.current ? <NowPlaying overlay present={shown} track={player.current} close={() => leave.current()} navigate={target => leave.current(target)} /> : null,
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [hosted, shown, trackId]);

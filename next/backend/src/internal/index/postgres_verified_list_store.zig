@@ -6,6 +6,7 @@
 //! and metrics policy as standalone track reads.
 
 const std = @import("std");
+const public_media = @import("../delivery/public_media.zig");
 const pg = @import("pg");
 const zat = @import("zat");
 const verified_list = @import("../domain/verified_list.zig");
@@ -263,7 +264,7 @@ fn decodeSummary(
     if (available_count > member_count) return error.CorruptMetrics;
     const total_plays = try row.get(i64, 18);
     if (total_plays < 0) return error.CorruptMetrics;
-    const cover = try duplicateOptional(allocator, try row.get(?[]const u8, 20));
+    const cover = try public_media.canonicalOwned(allocator, try duplicateOptional(allocator, try row.get(?[]const u8, 20)));
     if (cover) |url| if (!lexicon_value.validUri(url)) return error.CorruptArtwork;
     return .{
         .object = kind,
@@ -403,8 +404,8 @@ const header_columns =
     \\  records.indexed_at_us,
     \\  lower(owner_a.handle),
     \\  owner_a.display_name,
-    \\  COALESCE(owner_p.avatar, owner_a.avatar_url),
-    \\  owner_p.avatar IS NOT NULL,
+    \\  CASE WHEN owner_a.avatar_url IS NOT NULL AND owner_p.avatar LIKE 'https://cdn.bsky.app/img/avatar/plain/%' THEN owner_a.avatar_url ELSE COALESCE(NULLIF(owner_p.avatar, ''), owner_a.avatar_url) END,
+    \\  owner_p.avatar IS NOT NULL AND owner_p.avatar <> '' AND (owner_a.avatar_url IS NULL OR owner_p.avatar NOT LIKE 'https://cdn.bsky.app/img/avatar/plain/%'),
     \\  owner_aa.evidence_source
 ;
 
