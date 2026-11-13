@@ -57,7 +57,7 @@ export function PlayerBar() {
       if (tall <= 0) return;
       playerSheet.dockTop = y;
       setDockTop(y);
-      if (!playerSheet.present) playerSheet.translation.setValue(y);
+      if (!playerSheet.present && !playerSheet.modal) playerSheet.translation.setValue(y);
     }));
     return () => cancelAnimationFrame(frame);
   }, [present, width, height, theme.scale, path]);

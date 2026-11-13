@@ -144,7 +144,11 @@ export function Button(props: Parameters<typeof Action>[0]) {
 
 const revealed = new Set<string>();
 
-export function Cover({ uri, size = 48, round = false, radius = 8, instant = false }: { uri?: string | null; size?: number; round?: boolean; radius?: number; instant?: boolean }) {
+export function Cover({ uri, size = 48, round = false, radius = 8, instant = false, onSettle }: {
+  uri?: string | null; size?: number; round?: boolean; radius?: number; instant?: boolean;
+  /** Called once the image is fully visible, or once every rendition failed and the placeholder shows. */
+  onSettle?: () => void;
+}) {
   const colors = useAppearance();
   const sources = uri && /^https?:\/\//i.test(uri) ? [...new Set([displayUrl(uri, size, PixelRatio.get()), uri])] : [];
   // A resized or thumbnail rendition that fails falls back to the original before the placeholder.
@@ -155,11 +159,15 @@ export function Cover({ uri, size = 48, round = false, radius = 8, instant = fal
   const style = { width: size, height: size, borderRadius, backgroundColor: colors.raised, ...(size >= 100 && !round ? artworkShadow(colors) : {}) };
   const reveal = () => {
     if (source) revealed.add(source);
-    Animated.timing(opacity, { toValue: 1, duration: colors.reduceMotion ? 0 : 180, useNativeDriver: Platform.OS !== 'web' }).start();
+    Animated.timing(opacity, { toValue: 1, duration: colors.reduceMotion ? 0 : 180, useNativeDriver: Platform.OS !== 'web' }).start(() => onSettle?.());
+  };
+  const fail = () => {
+    const count = (failed.uri === uri ? failed.count : 0) + 1;
+    setFailed({ uri, count });
+    if (count >= sources.length) onSettle?.();
   };
   return source ? <View style={style}>
-    <Animated.Image accessibilityIgnoresInvertColors source={{ uri: source, cache: 'force-cache' }} style={{ width: size, height: size, borderRadius, opacity }} onLoad={reveal}
-      onError={() => setFailed(previous => ({ uri, count: (previous.uri === uri ? previous.count : 0) + 1 }))} />
+    <Animated.Image accessibilityIgnoresInvertColors source={{ uri: source, cache: 'force-cache' }} style={{ width: size, height: size, borderRadius, opacity }} onLoad={reveal} onError={fail} />
   </View> : <View style={[style, { alignItems: 'center', justifyContent: 'center' }]}>
     {round ? <UserRound size={size * 0.38} color={colors.muted} /> : <Music2 size={size * 0.32} color={colors.muted} />}
   </View>;
