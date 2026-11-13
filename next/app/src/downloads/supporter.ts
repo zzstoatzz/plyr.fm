@@ -6,6 +6,17 @@ export class DownloadGrantRequired extends Error {
 }
 
 type RecordReference = { uri: string; cid: string };
+export const BUSY_RETRY_DELAYS_MS = [250, 750];
+
+function delay(ms: number, signal: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    signal.throwIfAborted();
+    const done = () => { signal.removeEventListener('abort', stop); resolve(); };
+    const stop = () => { clearTimeout(timer); reject(signal.reason); };
+    const timer = setTimeout(done, ms);
+    signal.addEventListener('abort', stop, { once: true });
+  });
+}
 export function downloadDecision(value: unknown, viewer: string, record: RecordReference, now = Date.now()) {
   if (!value || typeof value !== 'object' || !('viewer' in value) || value.viewer !== viewer
     || !('recordUri' in value) || value.recordUri !== record.uri || !('recordCid' in value) || value.recordCid !== record.cid
@@ -29,9 +40,17 @@ export async function authorizeSupporterDownload(auth: Pick<Auth, 'did' | 'agent
     const service: unknown = await identity.json();
     if (!service || typeof service !== 'object' || !('token' in service) || typeof service.token !== 'string' || !service.token || service.token.length > 8192) throw new Error('could not verify download access. try again.');
     guard();
-    const response = await fetcher(`${JAM_COORDINATOR_URL}/v1/downloads/authorize`, { method: 'POST', signal: controller.signal, redirect: 'error', cache: 'no-store', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ serviceToken: service.token, recordUri: record.uri, recordCid: record.cid }) });
-    guard();
+    const body = JSON.stringify({ serviceToken: service.token, recordUri: record.uri, recordCid: record.cid });
+    let response: Response;
+    for (let attempt = 0; ; attempt++) {
+      response = await fetcher(`${JAM_COORDINATOR_URL}/v1/downloads/authorize`, { method: 'POST', signal: controller.signal, redirect: 'error', cache: 'no-store', headers: { 'content-type': 'application/json' }, body });
+      guard();
+      // The coordinator admits one authorization at a time and answers 503 while busy.
+      if (response.status !== 503 || attempt >= BUSY_RETRY_DELAYS_MS.length) break;
+      await response.body?.cancel();
+      await delay(BUSY_RETRY_DELAYS_MS[attempt], controller.signal);
+      guard();
+    }
     if (!response.ok) throw new Error(response.status === 409 ? 'this track changed. try the download again.' : response.status === 503 ? 'download access checks are unavailable. try again.' : 'could not authorize this download.');
     const value: unknown = await response.json();
     const decision = downloadDecision(value, auth.did, record);

@@ -41,6 +41,21 @@ test('403 stays ambiguous and malformed or stale-session authorization cannot pr
   await assert.rejects(authorizeSupporterDownload(auth, record, guard, new AbortController().signal, async () => { current = false; return Response.json(reply()); }), /session/);
 });
 
+test('a busy coordinator is retried briefly with the same token before giving up', async () => {
+  const auth = { did: viewer, supporterDownloads: true, agent: { async handle() { return Response.json({ token: 'fixture' }); } } };
+  const guard = () => {};
+  let calls = 0;
+  const busyThenOk: typeof fetch = async (_url, init) => { calls++; assert.equal(JSON.parse(String(init?.body)).serviceToken, 'fixture'); return calls < 3 ? Response.json({}, { status: 503 }) : Response.json(reply()); };
+  (await authorizeSupporterDownload(auth, record, guard, new AbortController().signal, busyThenOk)).begin();
+  assert.equal(calls, 3);
+  calls = 0;
+  await assert.rejects(authorizeSupporterDownload(auth, record, guard, new AbortController().signal, async () => { calls++; return Response.json({}, { status: 503 }); }), /unavailable/);
+  assert.equal(calls, 3);
+  calls = 0;
+  await assert.rejects(authorizeSupporterDownload(auth, record, guard, new AbortController().signal, async () => { calls++; return Response.json({}, { status: 403 }); }), /could not authorize/);
+  assert.equal(calls, 1);
+});
+
 test('supporter proof only admits known protected gates and never overrides off or private', () => {
   assert.equal(protectedDownloadPolicy({ downloadPolicy: 'supporters', supportGate: { type: 'any' } }, true), 'supporters');
   assert.equal(protectedDownloadPolicy({ downloadPolicy: 'ask' }, true), 'ask');
