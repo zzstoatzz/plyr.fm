@@ -29,6 +29,7 @@ primary_region = "sjc"
   TRACK_COLLECTION_NSID = "fm.plyr.track"
   # plyr manages gated-audio spaces as did:web:api.next.plyr.fm#plyr_space
   SPACE_SERVICE_DID = "did:web:api.next.plyr.fm"
+  SUPPORT_ATPROTOFANS_FALLBACK = "false"
   SPACE_SERVICE_ENDPOINT = "https://api.next.plyr.fm"
   SPACE_TYPE_NSID = "fm.plyr.stg.audio"
   # catalog bootstrap: every repo the relay has seen write fm.plyr.*
