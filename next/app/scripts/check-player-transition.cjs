@@ -71,7 +71,7 @@ const dist = path.resolve(__dirname, '../dist');
     }
     assert.ok(sizes[0] > dockArt.width + 20 && sizes[0] < sizes[1] && sizes[1] < sizes[2], 'the artwork grows as the sheet rises');
     await finger('touchEnd');
-    await page.waitForFunction(() => (node => node && node.getClientRects().length > 0 && node.getBoundingClientRect().top === 0)(document.querySelector('[data-testid="now-playing-dismiss-region"]')) && !document.querySelector('[data-testid="now-playing-flights"]'), undefined, { timeout: 3000 });
+    await page.waitForFunction(() => (node => node && node.getClientRects().length > 0 && node.getBoundingClientRect().top === 0)(document.querySelector('[data-testid="now-playing-dismiss-region"]')) && (flights => !flights || getComputedStyle(flights).opacity === '0')(document.querySelector('[data-testid="now-playing-flights"]')), undefined, { timeout: 3000 });
     const full = await page.getByTestId('now-playing-artwork').locator('img').first().boundingBox();
     assert.ok(sizes[2] < full.width, 'the artwork reaches full size only when the sheet is open');
     await page.getByRole('button', { name: 'Close', exact: true }).click();
