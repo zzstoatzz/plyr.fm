@@ -1,5 +1,6 @@
 //! Network adapters for the managed-space checks: DID signing keys through
-//! Zat's resolver, and supporter status through atprotofans.
+//! Zat's resolver, and supporter status through attested.network brokers
+//! (optionally falling back to atprotofans.com). See `SupportSources`.
 
 const std = @import("std");
 const zat = @import("zat");
@@ -12,6 +13,49 @@ const pinned_tls = @import("../ingest/pinned_tls.zig");
 const max_pages = 5;
 
 const user_agent = "plyr.fm-zig-api/0.1 (+https://plyr.fm)";
+
+/// Where supporter status comes from, read per check from the environment:
+/// - `SUPPORT_TRUSTED_BROKERS`: comma-separated attested.network broker DIDs
+///   whose payment proofs count (default: broker.atmosphere.money).
+/// - `SUPPORT_ATPROTOFANS_FALLBACK`: `true` (default) or `false`; when false,
+///   no lookup goes to atprotofans.com.
+pub const SupportSources = struct {
+    trusted_brokers: []const []const u8 = &attested.default_trusted_brokers,
+    atprotofans: bool = true,
+
+    pub fn fromEnv(allocator: std.mem.Allocator) !SupportSources {
+        return parse(allocator, getenv("SUPPORT_TRUSTED_BROKERS"), getenv("SUPPORT_ATPROTOFANS_FALLBACK"));
+    }
+
+    pub fn parse(allocator: std.mem.Allocator, brokers: ?[]const u8, fallback: ?[]const u8) !SupportSources {
+        var sources: SupportSources = .{};
+        if (brokers) |list| {
+            var dids: std.ArrayList([]const u8) = .empty;
+            var parts = std.mem.splitScalar(u8, list, ',');
+            while (parts.next()) |part| {
+                const did = std.mem.trim(u8, part, " ");
+                if (did.len == 0) continue;
+                if (zat.Did.parse(did) == null) return error.InvalidSupportConfig;
+                try dids.append(allocator, did);
+            }
+            sources.trusted_brokers = try dids.toOwnedSlice(allocator);
+        }
+        if (fallback) |value| {
+            if (std.mem.eql(u8, value, "true")) {
+                sources.atprotofans = true;
+            } else if (std.mem.eql(u8, value, "false")) {
+                sources.atprotofans = false;
+            } else return error.InvalidSupportConfig;
+        }
+        if (sources.trusted_brokers.len == 0 and !sources.atprotofans) return error.InvalidSupportConfig;
+        return sources;
+    }
+};
+
+fn getenv(name: [*:0]const u8) ?[]const u8 {
+    const value = std.c.getenv(name) orelse return null;
+    return std.mem.span(value);
+}
 
 pub const Network = struct {
     io: std.Io,
@@ -77,26 +121,29 @@ pub const Network = struct {
         return allocator.dupe(u8, method.public_key_multibase);
     }
 
-    /// attested.network first, then atprotofans (same order as the python
-    /// backend). An attested failure falls through to atprotofans.
+    /// attested.network first, then atprotofans when enabled (same order as
+    /// the python backend). An attested failure falls through to atprotofans.
     fn checkSupporter(context: *anyopaque, allocator: std.mem.Allocator, supporter: []const u8, artist: []const u8) anyerror!bool {
         const self: *Network = @ptrCast(@alignCast(context));
         // DIDs are restricted to [A-Za-z0-9._:%-], all query-safe.
         if (zat.Did.parse(supporter) == null or zat.Did.parse(artist) == null) return error.InvalidIdentity;
+        const sources = try SupportSources.fromEnv(allocator);
         try self.checkDeadline();
         var incomplete = false;
-        if (self.attestedSupport(allocator, supporter, artist)) |yes| {
+        if (self.attestedSupport(allocator, supporter, artist, sources.trusted_brokers)) |yes| {
             if (yes) return true;
         } else |err| {
             if (err == error.Canceled) return err;
             incomplete = self.deadline_ns != null;
             std.log.info("attested.network check failed: {s}", .{@errorName(err)});
         }
+        if (!sources.atprotofans) return completeDecision(incomplete, false);
         try self.checkDeadline();
         return completeDecision(incomplete, try self.atprotofansSupport(allocator, supporter, artist));
     }
 
-    fn attestedSupport(self: *Network, allocator: std.mem.Allocator, supporter: []const u8, artist: []const u8) !bool {
+    fn attestedSupport(self: *Network, allocator: std.mem.Allocator, supporter: []const u8, artist: []const u8, brokers: []const []const u8) !bool {
+        if (brokers.len == 0) return false;
         const pds = try self.pdsOf(allocator, supporter);
         for (attested.payment_collections) |collection| {
             var page_cursor: ?[]const u8 = null;
@@ -109,7 +156,7 @@ pub const Network = struct {
                 const body = (try self.getJson(allocator, pds, path)) orelse break;
                 const parsed = try std.json.parseFromSliceLeaky(std.json.Value, allocator, body, .{});
                 if (self.deadline_ns != null) try validatePage(parsed);
-                for (try attested.proofRefs(allocator, parsed, supporter, artist, &attested.default_trusted_brokers)) |proof| {
+                for (try attested.proofRefs(allocator, parsed, supporter, artist, brokers)) |proof| {
                     if (try self.proofVerified(allocator, proof)) return true;
                 }
                 page_cursor = attested.cursor(parsed) orelse break;
@@ -243,4 +290,27 @@ test "budgeted supporter pages distinguish absent from malformed cursors" {
         defer parsed.deinit();
         try std.testing.expectError(error.InvalidSupporterResponse, validatePage(parsed.value));
     }
+}
+
+test "support sources default to atmosphere money with atprotofans fallback" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const defaults = try SupportSources.parse(a, null, null);
+    try std.testing.expectEqual(@as(usize, 1), defaults.trusted_brokers.len);
+    try std.testing.expectEqualStrings(attested.default_trusted_brokers[0], defaults.trusted_brokers[0]);
+    try std.testing.expect(defaults.atprotofans);
+
+    const configured = try SupportSources.parse(a, " did:plc:one , did:web:broker.example ,", "false");
+    try std.testing.expectEqual(@as(usize, 2), configured.trusted_brokers.len);
+    try std.testing.expectEqualStrings("did:plc:one", configured.trusted_brokers[0]);
+    try std.testing.expectEqualStrings("did:web:broker.example", configured.trusted_brokers[1]);
+    try std.testing.expect(!configured.atprotofans);
+
+    const atprotofans_only = try SupportSources.parse(a, "", "true");
+    try std.testing.expectEqual(@as(usize, 0), atprotofans_only.trusted_brokers.len);
+
+    try std.testing.expectError(error.InvalidSupportConfig, SupportSources.parse(a, "not-a-did", null));
+    try std.testing.expectError(error.InvalidSupportConfig, SupportSources.parse(a, null, "no"));
+    try std.testing.expectError(error.InvalidSupportConfig, SupportSources.parse(a, "", "false"));
 }

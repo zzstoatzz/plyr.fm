@@ -49,3 +49,14 @@ shorten it with `DOWNLOAD_AUTH_BUDGET_MS` (1–15000), not extend it. The HTTP f
 holds an actual identity response and verifies timeout, slot release and ready
 responsiveness. This backend contract does not enable client supporter downloads
 or close real-account OAuth consent acceptance.
+
+## supporter sources
+
+Supporter status (downloads, supporter Spaces and playback gates) comes from
+attested.network payment proofs signed by a trusted broker, then optionally
+atprotofans.com. `SUPPORT_TRUSTED_BROKERS` (comma-separated DIDs, default
+broker.atmosphere.money `did:plc:7srqsetux75b6flzbbyag2ro`) and
+`SUPPORT_ATPROTOFANS_FALLBACK` (`true` by default) configure them. Next's API and
+coordinator set the fallback to `false`, so only attested proofs count there.
+Support that exists only in atprotofans, with no attested payment record, does
+not count on Next.
