@@ -6,6 +6,7 @@ import { isPrivateTrack } from './publishing/private-track';
 import { useAppearance } from './appearance';
 import { Cover, artistName } from './CatalogPieces';
 import { Text } from './Text';
+import { AccessSummary } from './access/AccessSummary';
 
 export function NowPlayingDetails({ track, plays, protect, navigate }: {
   track: Track; plays: number; protect: ViewProps; navigate: (target: Href) => void;
@@ -42,7 +43,8 @@ export function NowPlayingDetails({ track, plays, protect, navigate }: {
       <Text accessibilityRole="header" aria-level={2} style={heading}>about this track</Text>
       {track.metadata.description ? <Text style={body}>{track.metadata.description}</Text> : null}
       {track.metadata.album ? <Text style={quiet}>from <Text style={{ ...quiet, color: theme.text, fontWeight: '600' }}>{track.metadata.album}</Text></Text> : null}
-      <Text style={quiet}>{privateTrack ? 'private space · listening stays on this device' : facts}</Text>
+      {!privateTrack && <Text style={quiet}>{facts}</Text>}
+      <AccessSummary track={track} style={quiet} />
       {!privateTrack && <View {...protect} style={{ alignSelf: 'flex-start' }}>
         <Pressable accessibilityRole="button" accessibilityLabel="Open track page" onPress={() => navigate(`/track/${track.id}`)}
           style={({ pressed }) => [styles.more, { borderColor: theme.border, backgroundColor: pressed ? theme.hover : 'transparent' }]}>

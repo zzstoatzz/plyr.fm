@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { Client } from '@atcute/client';
-import { BASE_SCOPE_PARTS, SCOPE_PARTS, SYNC_SCOPE_PARTS, hasJamGrant, hasSyncGrant, hasPrivatePublishGrant, hasPrivateDeleteGrant, hasUploadGrant, hasDownloadGrant } from './auth-config';
+import { BASE_SCOPE_PARTS, SCOPE_PARTS, SYNC_SCOPE_PARTS, hasJamGrant, hasSyncGrant, hasPrivatePublishGrant, hasPrivateDeleteGrant, hasUploadGrant, hasDownloadGrant, hasPolicyGrant } from './auth-config';
 import { didDocument, pdsEndpoint, pdsSupportsSpaces } from './identity';
 
 export type Did = `did:${string}:${string}`;
@@ -17,13 +17,14 @@ export type Auth = {
 	privateDeleting: boolean;
 	uploadStorage: boolean;
 	supporterDownloads: boolean;
+	policyEditing: boolean;
 	error: string | null;
 	scopeRejected: boolean;
 };
 
 const initial: Auth = {
 	did: null, ready: false, handle: null, agent: null, rpc: null,
-	jamSpace: false, accountSync: false, privatePublishing: false, privateDeleting: false, uploadStorage: false, supporterDownloads: false, error: null, scopeRejected: false
+	jamSpace: false, accountSync: false, privatePublishing: false, privateDeleting: false, uploadStorage: false, supporterDownloads: false, policyEditing: false, error: null, scopeRejected: false
 };
 
 let state = initial;
@@ -46,7 +47,7 @@ export function getAuth(): Auth {
 }
 
 export function setAuth(did: Did, agent: Agent, scope: string) {
-	update({ ...initial, ready: true, did, agent, rpc: new Client({ handler: agent }), jamSpace: hasJamGrant(scope), accountSync: hasSyncGrant(scope), privatePublishing: hasPrivatePublishGrant(scope), privateDeleting: hasPrivateDeleteGrant(scope), uploadStorage: hasUploadGrant(scope), supporterDownloads: hasDownloadGrant(scope) });
+	update({ ...initial, ready: true, did, agent, rpc: new Client({ handler: agent }), jamSpace: hasJamGrant(scope), accountSync: hasSyncGrant(scope), privatePublishing: hasPrivatePublishGrant(scope), privateDeleting: hasPrivateDeleteGrant(scope), uploadStorage: hasUploadGrant(scope), supporterDownloads: hasDownloadGrant(scope), policyEditing: hasPolicyGrant(scope) });
 	void didDocument(did).then(doc => {
 		if (state.agent !== agent) return;
 		update({ ...state, handle: doc.alsoKnownAs?.find(value => value.startsWith('at://'))?.slice(5) ?? null });
@@ -70,7 +71,7 @@ export async function scopeFor(identifier: string, deviceOnly: boolean): Promise
 	return SYNC_SCOPE_PARTS.join(' ');
 }
 
-async function resolveHandle(handle: string): Promise<unknown> {
+export async function resolveHandle(handle: string): Promise<unknown> {
 	const url = 'https://public.api.bsky.app/xrpc/com.atproto.identity.resolveHandle';
 	const response = await fetch(`${url}?handle=${encodeURIComponent(handle)}`);
 	return response.ok ? (await response.json()).did : null;
