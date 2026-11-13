@@ -14,6 +14,9 @@ const config = @import("../../config.zig");
 
 const allocator = std.heap.smp_allocator;
 const max_outbox_bytes = 512 * 1024;
+/// Clients ping every 10 seconds; a peer silent for longer than this is gone
+/// without a close frame (network loss, a killed tab) and must release output.
+const idle_timeout_ms = 30_000;
 
 pub fn run(a: std.mem.Allocator, io: std.Io, settings: config.Config) !void {
     if (env("FLY_APP_NAME") != null and std.mem.eql(u8, env("JAM_TEST_MODE") orelse "", "1")) return error.TestModeForbidden;
@@ -143,7 +146,7 @@ const Context = struct {
         const now = self.store.nowMs() catch return;
         self.mutex.lockUncancelable(self.io);
         defer self.mutex.unlock(self.io);
-        for (self.peers.items) |peer| if (now >= peer.ticket.admission.expires_ms) peer.stop();
+        for (self.peers.items) |peer| if (now >= peer.ticket.admission.expires_ms or idle(now, peer.last_message_ms.load(.monotonic))) peer.stop();
     }
     fn tail(self: *Context, start: []const u8) void {
         var cursor = allocator.dupe(u8, start) catch return;
@@ -209,6 +212,7 @@ const Peer = struct {
     stopped: bool = false,
     window_ms: i64 = 0,
     messages: usize = 0,
+    last_message_ms: std.atomic.Value(i64),
 
     fn enqueue(self: *Peer, body: []const u8) void {
         const io = self.context.io;
@@ -273,10 +277,11 @@ const Handler = struct {
         const a = arena.allocator();
         const token = query(handshake.url, "ticket") orelse return error.InvalidTicket;
         const ticket = try context.tickets.consume(a, token);
-        if (!std.mem.eql(u8, ticket.origin, origin) or ticket.admission.expires_ms <= try context.store.nowMs()) return error.AccessDenied;
+        const now = try context.store.nowMs();
+        if (!std.mem.eql(u8, ticket.origin, origin) or ticket.admission.expires_ms <= now) return error.AccessDenied;
         const peer = try allocator.create(Peer);
         errdefer allocator.destroy(peer);
-        peer.* = .{ .context = context, .conn = conn, .arena = arena, .ticket = ticket };
+        peer.* = .{ .context = context, .conn = conn, .arena = arena, .ticket = ticket, .last_message_ms = .init(now) };
         try conn.writeTimeout(500);
         context.mutex.lockUncancelable(context.io);
         defer context.mutex.unlock(context.io);
@@ -305,6 +310,7 @@ const Handler = struct {
         const peer = self.peer;
         const context = peer.context;
         const now = try context.store.nowMs();
+        peer.last_message_ms.store(now, .monotonic);
         if (now >= peer.ticket.admission.expires_ms) return error.AccessDenied;
         if (now - peer.window_ms >= 1000) {
             peer.window_ms = now;
@@ -544,4 +550,14 @@ fn upload(conn: *websocket.Conn, a: std.mem.Allocator, body: []const u8, origin:
     else
         try upload_admission.authorize(a, context.io, settings, body);
     http(conn, a, 200, value, origin);
+}
+
+fn idle(now: i64, last_message_ms: i64) bool {
+    return now - last_message_ms > idle_timeout_ms;
+}
+
+test "a peer that stops pinging is released after the idle timeout" {
+    try std.testing.expect(!idle(100_000, 100_000 - 10_000));
+    try std.testing.expect(!idle(100_000, 100_000 - idle_timeout_ms));
+    try std.testing.expect(idle(100_000, 100_000 - idle_timeout_ms - 1));
 }

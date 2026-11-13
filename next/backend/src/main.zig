@@ -368,6 +368,7 @@ test {
     _ = @import("internal/jams/queue_record.zig");
     _ = @import("internal/jams/account_preferences.zig");
     _ = @import("internal/jams/auth.zig");
+    _ = @import("internal/jams/server.zig");
     _ = @import("internal/uploads/admission.zig");
     _ = @import("internal/uploads/inspection.zig");
     _ = @import("server.zig");

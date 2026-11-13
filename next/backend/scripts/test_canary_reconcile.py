@@ -14,12 +14,17 @@ import json, os, pathlib, sys, time
 p = pathlib.Path(os.environ['FAKE_STATE'])
 s = json.loads(p.read_text())
 a = sys.argv[1:]
+def save():
+    # replace atomically so a concurrent reader never sees a truncated file
+    t = p.with_name(f'{p.name}.{os.getpid()}')
+    t.write_text(json.dumps(s))
+    os.replace(t, p)
 if pathlib.Path(sys.argv[0]).name == 'curl':
     print(json.dumps({'events':[{'type':'exit','request':{'exit_event':{'exit_code':s.get('exit',0)}}}]}))
 elif a[:2] == ['machine','run']:
     name = a[a.index('--name')+1]
     s['machines'].append({'id':'abc123','name':name,'state':s.get('state','stopped'),'config':{'metadata':{'purpose':'zig-catalog-reconciliation'}}})
-    p.write_text(json.dumps(s))
+    save()
     print(os.environ['FLY_API_TOKEN'], flush=True)
     if s.get('create_fail'): sys.exit(17)
     print('Machine ID: abc123', flush=True)
@@ -29,7 +34,7 @@ elif a[:2] == ['machines','list']:
 elif a[:2] == ['machine','destroy']:
     s.setdefault('destroyed',[]).append(a[2])
     if not s.get('destroy_fail'): s['machines'] = [m for m in s['machines'] if m['id'] != a[2]]
-    p.write_text(json.dumps(s))
+    save()
     sys.exit(1 if s.get('destroy_fail') else 0)
 elif a[0] == 'logs':
     print('worker logs')
