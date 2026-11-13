@@ -6,6 +6,7 @@ primary_region = "iad"
 
 [env]
   MODE = "jams"
+  UPLOAD_PROCESSING_ENABLED = "true"
   PORT = "8000"
   INDEX_MODE = "disabled"
   CORS_ALLOWED_ORIGINS = "https://next.plyr.fm,https://plyr-fm-next.pages.dev"
@@ -15,6 +16,7 @@ primary_region = "iad"
   PROFILE_COLLECTION_NSID = "fm.plyr.actor.profile"
   JAM_SERVICE_AUDIENCE = "did:web:plyr-jams-next.fly.dev#jams"
   JAM_JOIN_METHOD = "fm.plyr.stg.jam.join"
+  SPACE_TYPE_NSID = "fm.plyr.stg.audio"
   JAM_SPACE_TYPE = "fm.plyr.stg.jam"
   MAX_CONNECTIONS = "128"
 

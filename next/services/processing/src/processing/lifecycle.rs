@@ -22,7 +22,7 @@ use tokio::{
 };
 use tokio_util::io::ReaderStream;
 
-use super::{run, Attempt, Runner, RECIPE};
+use super::{execute, run, Attempt, Runner, RECIPE};
 
 struct HeldSource {
     reader: DuplexStream,
@@ -116,4 +116,80 @@ async fn lost_lease_cancels_active_source_and_cleans_scratch() {
         .unwrap();
     assert!(std::fs::read_dir(scratch.path()).unwrap().next().is_none());
     server.abort();
+}
+
+#[tokio::test]
+async fn actual_encoder_reports_capacity_separately_from_other_failures() {
+    for valid_audio in [true, false] {
+        let failure = Arc::new(Mutex::new(None));
+        let observed = failure.clone();
+        let mut bytes = vec![0_u8; 16044];
+        if valid_audio {
+            bytes[..4].copy_from_slice(b"RIFF");
+            bytes[4..8].copy_from_slice(&16036_u32.to_le_bytes());
+            bytes[8..16].copy_from_slice(b"WAVEfmt ");
+            bytes[16..20].copy_from_slice(&16_u32.to_le_bytes());
+            bytes[20..22].copy_from_slice(&1_u16.to_le_bytes());
+            bytes[22..24].copy_from_slice(&1_u16.to_le_bytes());
+            bytes[24..28].copy_from_slice(&8000_u32.to_le_bytes());
+            bytes[28..32].copy_from_slice(&16000_u32.to_le_bytes());
+            bytes[32..34].copy_from_slice(&2_u16.to_le_bytes());
+            bytes[34..36].copy_from_slice(&16_u16.to_le_bytes());
+            bytes[36..40].copy_from_slice(b"data");
+            bytes[40..44].copy_from_slice(&16000_u32.to_le_bytes());
+        }
+        let app = Router::new()
+            .route(
+                "/v1/processing/:id/:generation/heartbeat",
+                post(|| async { StatusCode::NO_CONTENT }),
+            )
+            .route(
+                "/v1/processing/:id/:generation/source",
+                get(move || async move { bytes }),
+            )
+            .route(
+                "/v1/processing/:id/:generation/failed",
+                post(
+                    move |axum::Json(value): axum::Json<serde_json::Value>| async move {
+                        *observed.lock().await = Some(value);
+                        StatusCode::NO_CONTENT
+                    },
+                ),
+            );
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let origin = format!("http://{}", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+        let scratch = tempfile::tempdir().unwrap();
+        let runner = Runner {
+            origin: origin.parse().unwrap(),
+            auth: "fixture".into(),
+            client: reqwest::Client::new(),
+            active: Mutex::new(None),
+            scratch: scratch.path().to_owned(),
+            heartbeat_interval: Duration::from_secs(20),
+        };
+        let attempt = Attempt {
+            upload_id: "12345678-1234-1234-1234-123456789abc".into(),
+            generation: 1,
+            source_bytes: 16044,
+            output_budget: 1,
+            recipe: RECIPE.into(),
+            capability: "x".repeat(32),
+        };
+        let result = execute(&runner, &attempt).await.unwrap_err();
+        assert_eq!(
+            result.is::<super::transfer::OutputBudgetExceeded>(),
+            valid_audio
+        );
+        assert_eq!(
+            *failure.lock().await,
+            Some(
+                serde_json::json!({ "reason": if valid_audio { "output_budget_exceeded" } else { "executor_failed" } })
+            )
+        );
+        assert!(std::fs::read_dir(scratch.path()).unwrap().next().is_none());
+        server.abort();
+    }
 }

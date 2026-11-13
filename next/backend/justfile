@@ -36,6 +36,10 @@ reconcile-catalog:
 test:
     zig build test
 
+test-download-http: build
+    docker compose -f compose.yaml up -d test-redis
+    node scripts/test-download-authorization.cjs
+
 test-upload-http: build
     docker compose -f compose.yaml up -d test-redis
     node scripts/test-upload-admission.cjs

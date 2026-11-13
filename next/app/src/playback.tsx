@@ -2,7 +2,7 @@ import { trackArtwork } from './artwork';
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Platform } from 'react-native';
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
-import { api, type Track } from './api';
+import type { Track } from './api';
 import { useAuth } from './auth';
 import { getAuth } from './auth-state';
 import { editPrivateQueue, isPrivateTrack, privateSpace, withoutPrivateTrack } from './publishing/private-track';
@@ -15,6 +15,7 @@ import { usePlayerAccounting } from './use-player-accounting';
 import { useMediaSession } from './media-session';
 import { useRemoteTrackControls } from './use-remote-track-controls';
 import { toast } from './toast';
+import { playbackFor, warm } from './playback-lookup';
 
 export function PlaybackProvider({ children, playThrough, keepPlaying, volume }: {
   children: ReactNode; playThrough: boolean; keepPlaying: boolean; volume: number;
@@ -147,7 +148,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     setStarting(null);
     setError(null);
     try {
-      const playback = privateTrack ? { availability: { status: 'gated' as const, space: { record: track.record.uri }, delivery: undefined, artifact: undefined } } : await api.playback(track.id);
+      const playback = privateTrack ? { availability: { status: 'gated' as const, space: { record: track.record.uri }, delivery: undefined, artifact: undefined } } : await playbackFor(track.id);
       if (request !== sequence.current) return false;
       const { status: availability, space, delivery, artifact } = playback.availability;
       if (!privateTrack) console.info("[playback] availability", { request, track: track.id, availability, delivery: !!delivery, artifact: !!artifact, elapsedMs: Date.now() - startedAt });
@@ -198,6 +199,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
         }, { showSeekForward: true, showSeekBackward: true });
       }
       if (!privateTrack) console.info("[playback] source attached", { request, track: track.id, elapsedMs: Date.now() - startedAt });
+      warm(tracks[at + 1]);
       await waitForMedia();
       if (request !== sequence.current) return false;
       setReady(true);

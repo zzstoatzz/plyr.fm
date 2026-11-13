@@ -70,10 +70,9 @@ pub fn configured_router() -> anyhow::Result<Router> {
     let origin = env::var("NEXT_PROCESSING_ORIGIN").ok();
     let auth = env::var("NEXT_PROCESSING_AUTH_TOKEN").ok();
     match (origin, auth) {
-        (None, None) => Ok(Router::new()),
         (Some(origin), Some(auth)) => {
-            if env::var("FLY_APP_NAME").as_deref() != Ok("plyr-transcoder-staging") {
-                bail!("Next processing requires the staging transcoder app");
+            if env::var("FLY_APP_NAME").as_deref() != Ok("plyr-next-processing") {
+                bail!("Next processing runs only in the plyr-next-processing app");
             }
             let origin = callback_origin(&origin)?;
             if auth.len() < 32 || !auth.bytes().all(|b| b.is_ascii_graphic()) {
@@ -92,7 +91,7 @@ pub fn configured_router() -> anyhow::Result<Router> {
                 heartbeat_interval: Duration::from_secs(20),
             })))
         }
-        _ => bail!("incomplete Next processing configuration"),
+        _ => bail!("NEXT_PROCESSING_ORIGIN and NEXT_PROCESSING_AUTH_TOKEN are required"),
     }
 }
 
@@ -144,8 +143,7 @@ async fn start(
     *active = Some(attempt.clone());
     drop(active);
     tokio::spawn(async move {
-        let result = tokio::time::timeout(JOB_TIMEOUT, run(&runner, &attempt)).await;
-        if !matches!(result, Ok(Ok(()))) {
+        if execute(&runner, &attempt).await.is_err() {
             tracing::warn!(upload_id = %attempt.upload_id, generation = attempt.generation, "processing attempt stopped; owner reconciliation required");
         }
         *runner.active.lock().await = None;
@@ -196,6 +194,32 @@ async fn run(runner: &Runner, attempt: &Attempt) -> anyhow::Result<()> {
         result = work => result,
         result = monitor(runner, attempt) => result,
     }
+}
+
+async fn execute(runner: &Runner, attempt: &Attempt) -> anyhow::Result<()> {
+    let result = tokio::time::timeout(JOB_TIMEOUT, run(runner, attempt))
+        .await
+        .context("processing deadline exceeded")
+        .and_then(|result| result);
+    if let Err(error) = &result {
+        let reason = if error.is::<transfer::OutputBudgetExceeded>() {
+            "output_budget_exceeded"
+        } else {
+            "executor_failed"
+        };
+        let reported = runner
+            .request(attempt, reqwest::Method::POST, "failed")
+            .timeout(Duration::from_secs(15))
+            .json(&serde_json::json!({ "reason": reason }))
+            .send()
+            .await
+            .map_err(anyhow::Error::from)
+            .and_then(accepted);
+        if reported.is_err() {
+            tracing::warn!(upload_id = %attempt.upload_id, generation = attempt.generation, "processing failure acknowledgement unavailable");
+        }
+    }
+    result
 }
 
 async fn monitor(runner: &Runner, attempt: &Attempt) -> anyhow::Result<()> {

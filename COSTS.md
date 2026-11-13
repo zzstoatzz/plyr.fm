@@ -316,3 +316,12 @@ $2/month over a completely idle API. Regional prices and actual billing can
 differ; these are planning estimates, not a refreshed invoice. The ingester and
 database remain unchanged. This intentional latency tradeoff does not establish
 cheaper overall operation; the retirement and coverage gaps above still apply.
+
+### upload processing executor (November 12)
+
+Next processing runs in its own `plyr-next-processing` app: one shared-cpu-1x/1 GiB
+machine in `iad`, kept running. At [Fly's current rates](https://fly.io/pricing/)
+that is approximately $6.70 per 30 days of continuous compute. North American
+egress is separately $0.02/GB; rendition writes also incur R2 storage/operation
+charges. The legacy `plyr-transcoder-staging` app returns to auto-stop/minimum-zero.
+This is a configuration estimate, not a measured invoice.

@@ -9,9 +9,12 @@
     "ios": "expo run:ios",
     "android": "expo run:android",
     "check": "tsc --noEmit",
+    "lint": "node scripts/check-code.mjs",
     "audit:ui": "node scripts/check-ui-consistency.cjs",
     "build:web": "expo export --platform web && node --experimental-strip-types scripts/write-oauth-metadata.mts",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "checks": "node scripts/checks.mjs",
+    "checks:affected": "node scripts/checks.mjs --affected",
     "postinstall": "patch-package --error-on-fail"
   },
   "dependencies": {
@@ -43,6 +46,7 @@
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-native": "0.88.1",
+    "react-native-gesture-handler": "~3.4.0",
     "react-native-mmkv": "^4.3.2",
     "react-native-safe-area-context": "~5.11.1",
     "react-native-screens": "~4.30.1",
@@ -54,6 +58,7 @@
     "@atproto/lex-cbor": "file:vendor/space-sdk/atproto-lex-cbor-0.1.6.tgz",
     "@types/node": "^22.20.5",
     "@types/react": "~19.3.0",
+    "@ui-sdk/core": "0.1.0-beta.1",
     "axe-core": "^4.14.0",
     "patch-package": "^8.0.1",
     "typescript": "~6.0.3"

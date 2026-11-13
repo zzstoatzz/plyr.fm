@@ -165,7 +165,7 @@ const select_fields =
     \\  lower(a.handle),
     \\  a.display_name,
     \\  p.bio,
-    \\  COALESCE(NULLIF(p.avatar, ''), a.avatar_url),
+    \\  CASE WHEN a.avatar_url IS NOT NULL AND p.avatar LIKE 'https://cdn.bsky.app/img/avatar/plain/%' THEN a.avatar_url ELSE COALESCE(NULLIF(p.avatar, ''), a.avatar_url) END,
     \\  false,
     \\  NULL::text,
     \\  p.record_created_at,
@@ -180,7 +180,7 @@ const select_fields =
     \\    'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
     \\  ),
     \\  aa.evidence_source,
-    \\  p.avatar IS NOT NULL AND p.avatar <> ''
+    \\  p.avatar IS NOT NULL AND p.avatar <> '' AND (a.avatar_url IS NULL OR p.avatar NOT LIKE 'https://cdn.bsky.app/img/avatar/plain/%')
     \\FROM plyr_index.profile_records AS p
     \\JOIN plyr_index.account_availability AS aa
     \\  ON aa.repo_did = p.owner_did AND aa.available
@@ -219,7 +219,7 @@ fn duplicateOptional(allocator: std.mem.Allocator, value: ?[]const u8) !?[]const
 
 const resolve_query =
     \\SELECT identity.did, lower(identity.handle), identity.display_name,
-    \\       COALESCE(NULLIF(profile.avatar, ''), identity.avatar_url), counts.track_count
+    \\       CASE WHEN identity.avatar_url IS NOT NULL AND profile.avatar LIKE 'https://cdn.bsky.app/img/avatar/plain/%' THEN identity.avatar_url ELSE COALESCE(NULLIF(profile.avatar, ''), identity.avatar_url) END, counts.track_count
     \\FROM unnest($2::text[]) WITH ORDINALITY AS requested(did, position)
     \\JOIN plyr_index.actor_identities AS identity ON identity.did = requested.did
     \\LEFT JOIN plyr_index.profile_records AS profile
@@ -289,6 +289,10 @@ test "artist resolution returns ordered visible music and current profile artwor
     const authored = (try implementation.get(arena.allocator(), .{ .did = "did:plc:second" })).?;
     try std.testing.expectEqualStrings("https://example.com/profile", authored.avatar_url.?);
     try std.testing.expectEqual(artist.ClaimSource.verified_repo, authored.sources.avatar);
+    _ = try postgres.pool.exec("UPDATE plyr_index.profile_records SET avatar='https://cdn.bsky.app/img/avatar/plain/did:plc:second/stale'", .{});
+    const copied = (try implementation.get(arena.allocator(), .{ .did = "did:plc:second" })).?;
+    try std.testing.expectEqualStrings("https://example.com/fallback", copied.avatar_url.?);
+    try std.testing.expectEqual(artist.ClaimSource.legacy_projection, copied.sources.avatar);
     _ = try postgres.pool.exec("UPDATE plyr_index.profile_records SET avatar=NULL", .{});
     const fallback = (try implementation.get(arena.allocator(), .{ .did = "did:plc:second" })).?;
     try std.testing.expect(fallback.avatar_url != null);

@@ -42,6 +42,7 @@ jobs:
         working-directory: next/app
         run: |
           npm ci
+          npm run lint
           npm run check
           npm test
           npm run build:web

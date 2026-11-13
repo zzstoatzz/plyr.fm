@@ -280,8 +280,8 @@ const columns =
     \\  likes.indexed_at_us,
     \\  lower(actor.handle),
     \\  actor.display_name,
-    \\  CASE WHEN actor.did IS NULL THEN NULL ELSE COALESCE(profile.avatar, actor.avatar_url) END,
-    \\  actor.did IS NOT NULL AND profile.avatar IS NOT NULL,
+    \\  CASE WHEN actor.did IS NULL THEN NULL ELSE CASE WHEN actor.avatar_url IS NOT NULL AND profile.avatar LIKE 'https://cdn.bsky.app/img/avatar/plain/%' THEN actor.avatar_url ELSE COALESCE(NULLIF(profile.avatar, ''), actor.avatar_url) END END,
+    \\  actor.did IS NOT NULL AND profile.avatar IS NOT NULL AND profile.avatar <> '' AND (actor.avatar_url IS NULL OR profile.avatar NOT LIKE 'https://cdn.bsky.app/img/avatar/plain/%'),
     \\  availability.evidence_source,
     \\  likes.record_created_at_us
 ;
