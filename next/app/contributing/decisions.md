@@ -33,6 +33,11 @@ nate first. Add an entry when a PR settles something.
   compose it. Its rendered contract is checked against the WAI-ARIA pattern
   with `@ui-sdk/core/testing`'s `checkPattern`, a dev dependency only
   (`scripts/check-aria-patterns.cjs` shows how).
+- Discoverability goes through one-time hints, never through content peeking
+  in from an edge. Add a hint to the registry in `src/hints.ts` (priority
+  order; `after` chains them into a tour) and draw it with `<Coachmark>` beside
+  its target. One shows at a time, and seen state is kept per account on each
+  device. Mark it seen when the person does the thing it teaches.
 
 ## known and open
 

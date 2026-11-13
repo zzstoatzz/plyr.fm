@@ -75,7 +75,7 @@ const checks = {
   'check-playback-surfaces': [/^src\/(PlayerBar|NowPlaying|Radio|radio-session)/],
   'check-player-history': player,
   'check-player-navigation': [...player, /^src\/use-player-dismiss/],
-  'check-player-presentation': player,
+  'check-player-presentation': [...player, /^src\/(hints|Coachmark|behaviors\/hints)/],
   'check-player-scrubbing': [/^src\/(PlayerSeek|Slider)/],
   'check-player-transition': [/^src\/(PlayerFlight|PlayerBar|NowPlaying|player-sheet)/],
   'check-playlist-order': [/^src\/collections\/(CollectionOrder|collection-order|use-collection-order)/, /^app\/playlist/],
