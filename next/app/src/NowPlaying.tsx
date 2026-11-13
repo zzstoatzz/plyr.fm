@@ -8,7 +8,7 @@ import { NextGlyph as SkipForward, PauseGlyph as Pause, PlayGlyph as Play, Previ
 import X from 'lucide-react-native/icons/x';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Modal, Platform, Pressable, StyleSheet, View, useWindowDimensions, type ScrollViewInstance, type ViewInstance } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Track } from './api';
 import { useAppearance } from './appearance';
 import { Cover, artistName } from './CatalogPieces';
@@ -44,8 +44,15 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
   const morph = compact && !theme.reduceMotion && playerSheet.dockTop !== undefined;
   const rest = morph ? playerSheet.dockTop! : height;
   const depart = (then: () => void) => () => { setFlying(false); then(); };
-  const dismiss = usePlayerDismiss(compact, width, height, depart(leave), theme.reduceMotion, rest, present);
-  const pull = usePlayerPull(compact, dismiss.pull);
+  // The native Modal lays its views out a moment after this renders (safe-area insets included). The open waits until it is
+  // on screen and the morph has measured where the artwork and title land, so the flight starts at the dock.
+  const [shown, setShown] = useState(overlay);
+  const insets = useSafeAreaInsets();
+  // Native pads with the provider's insets: a SafeAreaView inside the Modal applies its own only after layout, after the morph measures.
+  const inset = Platform.OS === 'web' ? undefined : { paddingTop: insets.top, paddingBottom: insets.bottom };
+  const [measured, setMeasured] = useState(overlay || !morph);
+  const dismiss = usePlayerDismiss(compact, width, height, depart(leave), theme.reduceMotion, rest, present && shown && measured);
+  const pull = usePlayerPull(compact && shown && measured, dismiss.pull);
   const close = () => dismiss.exit(depart(leave));
   const navigate = (target: Href) => {
     if (!overlay) { setFlying(false); go(target); return; }
@@ -67,19 +74,22 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
   const updateScrub = (seconds: number) => setScrub({ id: track.id, seconds });
   const playing = player.status.playing;
   useEffect(() => {
-    if (!morph) { setRects(undefined); return; }
+    if (!morph) { setRects(undefined); setMeasured(true); return; }
+    if (!shown) return;
     let cancelled = false;
     const frame = requestAnimationFrame(() => void (async () => {
       const [base, panel, art, title, dockArt, dockTitle] = await Promise.all([measure(backdrop.current), measure(panelRef.current), measure(artRef.current),
         measure(titleRef.current), measure(playerSheet.dock.art), measure(playerSheet.dock.title)]);
-      if (cancelled || !base || !panel || !art || !title || !dockArt || !dockTitle) return;
+      if (cancelled) return;
+      setMeasured(true);
+      if (!base || !panel || !art || !title || !dockArt || !dockTitle) return;
       const lifted = 0.6 * Math.min(rest, playerSheet.value);
       const open = (rect: Rect) => ({ ...rect, x: rect.x - panel.x, y: rect.y - panel.y + lifted });
       const docked = (rect: Rect) => ({ ...rect, x: rect.x - base.x, y: rect.y - base.y - rest });
       setRects({ art: { from: docked(dockArt), to: open(art) }, title: { from: docked(dockTitle), to: open(title) } });
     })());
     return () => { cancelled = true; cancelAnimationFrame(frame); };
-  }, [morph, present, track.id, track.metadata.title, width, height, theme.scale, artwork]);
+  }, [morph, present, shown, track.id, track.metadata.title, width, height, theme.scale, artwork]);
   const flights = morph && present && rects && dismiss.atTop ? rects : undefined;
   const scroller = useRef<ScrollViewInstance>(null);
   useEffect(() => { if (overlay && present) scroller.current?.scrollTo({ y: 0, animated: false }); }, [overlay, present]);
@@ -116,9 +126,13 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
   useEffect(() => { setFlying(!!flights); }, [!!flights]);
   useEffect(() => () => setFlying(false), []);
   // The flights and the resting art/title swap on the native thread as the sheet leaves its open position; both stay mounted so no image reloads mid-morph.
-  const departed = (open: number, away: number) => playerSheet.translation.interpolate({ inputRange: [0, 1], outputRange: [open, away], extrapolate: 'clamp' });
+  // Once open and still, the open state is plain styles: the flight hides and the resting art and title show in one commit,
+  // instead of crossfading through the spring's last point of travel. Motion resumes in the same commit.
+  const still = dismiss.resting;
+  const departed = (open: number, away: number) => still ? open
+    : playerSheet.translation.interpolate({ inputRange: [0, 1], outputRange: [open, away], extrapolate: 'clamp' });
   const carried = flights ? { opacity: departed(1, 0) } : undefined;
-  const fade = (open: number, docked: number, from: number, to: number) => morph
+  const fade = (open: number, docked: number, from: number, to: number) => morph && !still
     ? playerSheet.translation.interpolate({ inputRange: [rest * from, rest * to], outputRange: [open, docked], extrapolate: 'clamp' }) : open;
   const settle = (progress: number) => { const k = Math.min(1, progress / 0.4); return k * k * (3 - 2 * k); };
   const artLeft = (progress: number) => {
@@ -145,8 +159,8 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
   };
   const sheet = <View ref={node => { backdrop.current = node; dismiss.panelRef(node); }} style={overlay ? [styles.backdrop, styles.overlay, !present && styles.hidden] : styles.backdrop}
       {...(overlay ? { role: 'dialog' as const, 'aria-modal': true, 'aria-label': 'Now playing' } : {})}>
-      <PullDetector gesture={pull.pan}><AnimatedSafeAreaView {...dismiss.panHandlers} {...dismiss.panelStartHandlers} accessibilityViewIsModal={Platform.OS === 'web' ? undefined : true} edges={['top', 'bottom']}
-        style={[{ transform: [{ translateY: dismiss.translation }] }, styles.panel, styles.full]}>
+      <PullDetector gesture={pull.pan}><AnimatedSafeAreaView {...dismiss.panHandlers} {...dismiss.panelStartHandlers} accessibilityViewIsModal={Platform.OS === 'web' ? undefined : true} edges={Platform.OS === 'web' ? ['top', 'bottom'] : []}
+        style={[{ transform: [{ translateY: dismiss.translation }] }, styles.panel, styles.full, inset]}>
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: theme.background, opacity: fade(1, 0, 0.85, 1) }]} />
         <Animated.View style={[styles.full, { opacity: fade(1, 0, 0, 0.5) }]}>
         <View style={[styles.header, condensed && { borderBottomWidth: StyleSheet.hairlineWidth, borderColor: theme.line }]}>
@@ -230,7 +244,7 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
         </View>
       </AnimatedSafeAreaView></PullDetector>
     </View>;
-  return overlay ? sheet : <Modal visible transparent accessibilityLabel="Now playing" animationType="none" onRequestClose={close}><PullRoot>{sheet}</PullRoot></Modal>;
+  return overlay ? sheet : <Modal visible transparent accessibilityLabel="Now playing" animationType="none" onShow={() => { requestAnimationFrame(() => setShown(true)); }} onRequestClose={close}><PullRoot>{sheet}</PullRoot></Modal>;
 }
 
 const styles = StyleSheet.create({
