@@ -1,5 +1,5 @@
 import GripHorizontal from 'lucide-react-native/icons/grip-horizontal';
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { Fragment, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { PanResponder, Platform, StyleSheet, useWindowDimensions, View, type ScrollViewInstance, type ViewInstance } from 'react-native';
 import type { Track } from './api';
 import { useAppearance } from './appearance';
@@ -14,9 +14,11 @@ interface Drag {
   top: number; bottom: number; rows: Row[];
 }
 
-export function QueueReorder({ queue, start, move, renderTrack, scrollRef, scrollMetrics, onDragging }: {
+export function QueueReorder({ queue, start, move, renderTrack, renderHeader, scrollRef, scrollMetrics, onDragging }: {
   queue: Track[]; start: number; move(from: number, to: number): void;
   renderTrack(track: Track, index: number): ReactNode;
+  /** Content above a row that stays put while that row is dragged, such as a section label. */
+  renderHeader?(index: number): ReactNode;
   scrollRef: RefObject<ScrollViewInstance | null>; scrollMetrics: RefObject<ScrollMetrics>;
   onDragging(value: boolean): void;
 }) {
@@ -109,7 +111,7 @@ export function QueueReorder({ queue, start, move, renderTrack, scrollRef, scrol
     {queue.slice(start).map((track, offset) => {
       const lifted = drag?.from === offset;
       const shift = drag ? rowShift(drag.rows, drag.from, drag.to, offset) : 0;
-      return <View key={`${track.id}:${start + offset}`} onLayout={event => {
+      return <Fragment key={`${track.id}:${start + offset}`}>{renderHeader?.(start + offset)}<View onLayout={event => {
         layouts.current.set(offset, { top: event.nativeEvent.layout.y, height: event.nativeEvent.layout.height });
       }} style={[styles.row, {
         zIndex: lifted ? 2 : 0, backgroundColor: lifted ? theme.surface : 'transparent',
@@ -123,7 +125,7 @@ export function QueueReorder({ queue, start, move, renderTrack, scrollRef, scrol
           position={offset + 1} total={queue.length - start} label={track.metadata.title} active={!!lifted}
           begin={pointerY => begin(offset, pointerY)} update={update} finish={finish} cancel={cancel}
           move={delta => { if (!active.current) { focusTarget.current = offset + delta; move(start + offset, start + offset + delta); } }} />
-      </View>;
+      </View></Fragment>;
     })}
   </View>;
 }
