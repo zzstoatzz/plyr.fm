@@ -69,6 +69,12 @@ for (const file of files) {
     if (restrictedRoles.includes(match[1])) report('hand-rolled-roles', file, `role "${match[1]}" by hand; reuse the shared control or add one under src/behaviors/`);
   }
 
+  if (imports.includes('expo-file-system')) {
+    for (const match of source.matchAll(/^.*\.(copy|move)\(.*$/gm)) {
+      if (!/\b(await|return)\b|\.then\(/.test(match[0])) report('fs-sync', file, `${match[1]}() returns a promise in expo-file-system; await it or use ${match[1]}Sync()`);
+    }
+  }
+
   for (const match of source.matchAll(/(?:^[ \t]*\/\/.*\n){4,}/gm)) {
     const line = source.slice(0, match.index).split('\n').length;
     report('comment-length', file, `comment block at line ${line} runs past three lines; rationale goes in the PR or docs`);

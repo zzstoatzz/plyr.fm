@@ -42,4 +42,5 @@ entry whose file is gone.
 | `seam-exports` | `name.web.ts(x)` and its sibling export the same names | keep both contracts aligned |
 | `hand-rolled-roles` | tab, combobox, listbox, slider, dialog, menu and similar roles come from one shared control | reuse it, or add the behavior under `src/behaviors/` with its tests |
 | `comment-length` | comment blocks stay at three lines or fewer | the rationale goes in the PR or a doc |
+| `fs-sync` | expo-file-system `copy()`/`move()` (async) are awaited, never fire-and-forget | `await` it or call `copySync()`/`moveSync()` |
 | `browser-checks` | every `scripts/check-*.cjs` is listed in `scripts/checks.mjs` with what it covers | add its entry |
