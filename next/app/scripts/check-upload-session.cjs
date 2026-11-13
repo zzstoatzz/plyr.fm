@@ -61,7 +61,6 @@ async function run(browser, width, theme) {
     await page.getByRole('link', { name: 'Sign in', exact: true }).waitFor();
     await signIn(did);
     const title = page.getByRole('textbox', { name: 'Title', exact: true });
-    const artist = page.getByRole('textbox', { name: 'Artist', exact: true });
     const tags = page.getByRole('textbox', { name: 'Tags', exact: true });
     const submit = () => page.getByRole('button', { name: /^(upload|uploading…)$/i });
     async function choose() {
@@ -69,7 +68,8 @@ async function run(browser, width, theme) {
       await page.getByRole('button', { name: 'Choose audio', exact: true }).click();
       await (await chooser).setFiles({ name: 'quiet room.wav', mimeType: 'audio/wav', buffer: audio });
       await page.getByRole('button', { name: 'quiet room.wav', exact: true }).waitFor();
-      await artist.fill('fixture artist');
+      const details = page.getByRole('button', { name: 'add album, description or tags', exact: true });
+      if (await details.count()) await details.click();
     }
     await choose();
     await tags.fill('é'.repeat(26));

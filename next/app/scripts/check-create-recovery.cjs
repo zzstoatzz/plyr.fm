@@ -63,7 +63,6 @@ async function run(browser, width, theme, kind) {
         await page.getByRole('button', { name: 'Choose audio', exact: true }).click();
         await (await chooser).setFiles({ name: 'recovery.wav', mimeType: 'audio/wav', buffer: audio });
         await page.getByRole('textbox', { name: 'Title', exact: true }).fill(name);
-        await page.getByRole('textbox', { name: 'Artist', exact: true }).fill('fixture artist');
         await page.getByRole('button', { name: 'Upload', exact: true }).click();
       }
     }
@@ -203,7 +202,6 @@ async function run(browser, width, theme, kind) {
       await (await chooser).setFiles({ name: 'fresh-draft.wav', mimeType: 'audio/wav', buffer: audio });
       await page.getByRole('button', { name: 'fresh-draft.wav', exact: true }).waitFor();
       await page.getByRole('textbox', { name: 'Title', exact: true }).fill('preserve my unsent draft');
-      await page.getByRole('textbox', { name: 'Artist', exact: true }).fill('draft artist');
       await page.getByRole('button', { name: 'Show earlier attempts (1)', exact: true }).click();
       await page.getByRole('button', { name: 'Resume recovery', exact: true }).click();
       reject = false; commit = true; lost = false;
