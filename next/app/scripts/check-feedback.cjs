@@ -34,10 +34,11 @@ const did = 'did:plc:feedbackfixtureaaaaaaaaa';
     await page.getByRole('button', { name: 'Add to queue', exact: true }).click();
     const queued = await shown(`queued ${track.metadata.title}`);
     const box = await queued.boundingBox();
-    const nav = await page.getByText(/^library$/i).last().boundingBox();
     if (process.env.FEEDBACK_SHOTS) await page.screenshot({ path: process.env.FEEDBACK_SHOTS + '-queued.png' });
     assert.ok(box.x >= 8 && box.x + box.width <= 393 - 8, 'the toast fits the phone width');
-    assert.ok(box.y + box.height <= nav.y, 'the toast sits above the bottom navigation');
+    assert.ok(box.y < 760 / 4, `on a phone the toast drops from the top, out of the thumb's way (y=${box.y})`);
+    const under = await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.closest('[data-testid="toast"]') !== null, { x: box.x + box.width / 2, y: box.y + box.height / 2 });
+    assert.equal(under, false, 'a toast lets taps through to whatever is under it');
     await queued.waitFor({ state: 'detached', timeout: 4000 });
 
     await page.getByRole('button', { name: 'Share', exact: true }).first().click();
@@ -59,6 +60,12 @@ const did = 'did:plc:feedbackfixtureaaaaaaaaa';
       globalThis.__r(id).setAuth(owner, { handle: async url => {
         const text = String(url);
         if (text.includes('com.atproto.repo.listRecords')) return json({ records: [] });
+        if (/createRecord|deleteRecord/.test(text)) {
+          window.__writes = (window.__writes ?? 0) + 1;
+          window.__pendingWrites = (window.__pendingWrites ?? 0) + 1;
+          await new Promise(resolve => setTimeout(resolve, window.__slowLike ? 600 : 0));
+          window.__pendingWrites--;
+        }
         if (text.includes('com.atproto.repo.createRecord')) return window.__failLike ? json({ error: 'InternalServerError' }, 500) : json({ uri: `at://${owner}/fm.plyr.like/3lfeedback22a`, cid: 'bafyreib2rxk3rybk3aobmv5cjuql3bm2twh4jo5uxgf5kpqcsgz7soitae' });
         if (text.includes('com.atproto.repo.deleteRecord')) return json({});
         return json({ error: 'MethodNotImplemented' }, 501);
@@ -96,6 +103,24 @@ const did = 'did:plc:feedbackfixtureaaaaaaaaa';
     assert.ok(motion.low > 0.99 && motion.high < 1.01 && motion.ring < 0.01, 'unliking does not animate');
     await shown(`unliked ${track.metadata.title}`);
 
+    await page.waitForFunction(() => document.querySelector('[aria-label="Like"]')?.getAttribute('aria-disabled') !== 'true');
+    await page.evaluate(() => { window.__writes = 0; window.__slowLike = true; });
+    for (let tap = 0; tap < 5; tap++) {
+      const name = tap % 2 ? 'Unlike' : 'Like';
+      await page.getByRole('button', { name, exact: true }).first().click({ timeout: 1000 });
+      await page.getByRole('button', { name: tap % 2 ? 'Like' : 'Unlike', exact: true }).first().waitFor({ timeout: 1000 });
+    }
+    await page.evaluate(() => { window.__slowLike = false; });
+    await page.waitForFunction(() => document.querySelector('[aria-label="Unlike"]') && !window.__pendingWrites);
+    const settled = toasts.filter({ hasText: track.metadata.title });
+    await settled.first().waitFor();
+    assert.equal(await settled.filter({ hasText: /^liked/ }).count() + await settled.filter({ hasText: /^unliked/ }).count() <= 2, true, 'rapid taps replace one like toast instead of stacking');
+    assert.ok(await page.evaluate(() => window.__writes) <= 3, 'five quick taps write at most once per direction while a write is in flight');
+    await page.waitForFunction(() => document.querySelector('[aria-label="Unlike"]')?.getAttribute('aria-disabled') !== 'true');
+    await page.getByRole('button', { name: 'Unlike', exact: true }).first().click();
+    await page.getByRole('button', { name: 'Like', exact: true }).first().waitFor();
+    await page.waitForFunction(() => !window.__pendingWrites);
+
     await page.evaluate(() => { window.__failLike = true; });
     await page.waitForFunction(() => document.querySelector('[aria-label="Like"]')?.getAttribute('aria-disabled') !== 'true');
     await page.getByRole('button', { name: 'Like', exact: true }).first().click();
@@ -117,6 +142,6 @@ const did = 'did:plc:feedbackfixtureaaaaaaaaa';
     const instant = still.getByTestId('toast').filter({ hasText: 'queued' });
     await instant.waitFor();
     assert.equal(await instant.evaluate(node => getComputedStyle(node).opacity), '1', 'reduced motion shows the toast without a fade');
-    console.log('feedback: queue and copy toasts sit above the navigation and leave on their own; liking dips, overshoots and throws a ring, unliking stays still; a failed like raises an alert toast and reverts');
+    console.log('feedback: phone toasts drop from the top, let taps through and leave on their own; rapid like/unlike stays responsive and coalesces writes; liking dips, overshoots and throws a ring, unliking stays still; a failed like raises an alert toast and reverts');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

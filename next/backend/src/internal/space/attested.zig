@@ -1,6 +1,7 @@
 const std = @import("std");
 const zat = @import("zat");
 const json_record = @import("../atproto/json_record.zig");
+const policy = @import("policy.zig");
 
 pub const proof_collection = "network.attested.payment.proof";
 pub const payment_collections = [_][]const u8{
@@ -17,6 +18,8 @@ pub const ProofRef = struct {
     /// the CID the payer's record claims for the proof
     cid: []const u8,
     payer: []const u8,
+    /// the payer's payment record
+    payment_uri: []const u8,
     payment: std.json.Value,
 };
 
@@ -55,7 +58,7 @@ pub fn proofRefs(
             if (!std.mem.eql(u8, proof_type, proof_collection)) continue;
             if (!std.mem.eql(u8, proof_rkey, rkey)) continue;
             if (!contains(trusted, broker)) continue;
-            try out.append(allocator, .{ .broker = broker, .rkey = rkey, .cid = cid, .payer = payer, .payment = value });
+            try out.append(allocator, .{ .broker = broker, .rkey = rkey, .cid = cid, .payer = payer, .payment_uri = uri, .payment = value });
         }
     }
     return out.toOwnedSlice(allocator);
@@ -90,6 +93,25 @@ pub fn proofVerifies(allocator: std.mem.Allocator, record: std.json.Value, proof
     return true;
 }
 
+/// What a verified payment record says: its amount, currency and the at-uris
+/// it entitles the payer to. Malformed optional fields read as absent.
+pub fn paymentOf(allocator: std.mem.Allocator, value: std.json.Value) !policy.Payment {
+    var out: policy.Payment = .{ .currency = stringField(value, "currency") };
+    if (value == .object) if (value.object.get("amount")) |amount| {
+        if (amount == .integer) out.amount = amount.integer;
+    };
+    const entitlements = (if (value == .object) value.object.get("entitlements") else null) orelse return out;
+    if (entitlements != .array) return out;
+    var uris: std.ArrayList([]const u8) = .empty;
+    for (entitlements.array.items) |entry| {
+        const uri = stringField(entry, "uri") orelse continue;
+        if (zat.AtUri.parse(uri) == null) continue;
+        try uris.append(allocator, uri);
+    }
+    out.entitlements = try uris.toOwnedSlice(allocator);
+    return out;
+}
+
 pub fn cursor(page: std.json.Value) ?[]const u8 {
     return stringField(page, "cursor");
 }
@@ -117,6 +139,10 @@ test "attested binds broker proof to the exact payer and payment" {
     const refs = try proofRefs(a, page, "did:plc:fan", "did:plc:artist", &default_trusted_brokers);
     try std.testing.expectEqual(@as(usize, 1), refs.len);
     try std.testing.expect(try proofVerifies(a, record, refs[0]));
+    const paid = try paymentOf(a, refs[0].payment);
+    try std.testing.expectEqual(@as(?i64, 2500), paid.amount);
+    try std.testing.expectEqualStrings("USD", paid.currency.?);
+    try std.testing.expectEqual(@as(usize, 0), paid.entitlements.len);
     var replay = refs[0];
     replay.payer = "did:plc:thief";
     try std.testing.expect(!try proofVerifies(a, record, replay));

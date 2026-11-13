@@ -6,8 +6,23 @@ export const NSID = {
 	track: `${prefix}.track`,
 	list: `${prefix}.list`,
 	like: `${prefix}.like`,
-	profile: `${prefix}.actor.profile`
+	profile: `${prefix}.actor.profile`,
+	policy: `${prefix}.policy`
 } as const;
+
+export const AUDIO_SPACE_TYPE = process.env.EXPO_PUBLIC_AUDIO_SPACE_TYPE || 'fm.plyr.stg.audio';
+export const SPACE_MANAGING_APP = process.env.EXPO_PUBLIC_SPACE_MANAGING_APP || 'did:web:api.next.plyr.fm#plyr_space';
+export const CLOSE_SCOPE = `space:${AUDIO_SPACE_TYPE}?authority=self&collection=${NSID.track}&action=read&action=create&action=delete&manage=create`;
+export function hasCloseGrant(scope: string): boolean {
+  return scope.split(' ').some(value => {
+    const [type, query] = value.split('?'), grant = new URLSearchParams(query);
+    return type === `space:${AUDIO_SPACE_TYPE}` && grant.get('authority') === 'self' && grant.getAll('collection').includes(NSID.track)
+      && ['read', 'create', 'delete'].every(action => grant.getAll('action').includes(action)) && grant.getAll('manage').includes('create');
+  });
+}
+export function hasPolicyGrant(scope: string): boolean {
+  return scope.split(' ').includes(`repo:${NSID.policy}`);
+}
 
 export const PRIVATE_SPACE_TYPE = `${prefix}.privateMedia`;
 export const PRIVATE_DELETE_SCOPE = `space:${PRIVATE_SPACE_TYPE}?authority=self&skey=self&collection=${NSID.track}&action=read&action=delete`;
@@ -80,7 +95,7 @@ export function hasJamGrant(scope: string): boolean {
 
 export const BASE_SCOPE_PARTS = ['atproto', ...Object.values(NSID).map(nsid => `repo:${nsid}`), 'blob:*/*'];
 const protectedAudioScope = prefix === 'fm.plyr'
-	? [`space:${prefix}.privateMedia?authority=*&collection=${NSID.track}&action=read`, `space:${process.env.EXPO_PUBLIC_AUDIO_SPACE_TYPE || 'fm.plyr.stg.audio'}?authority=*&collection=${NSID.track}&action=read`]
+	? [`space:${prefix}.privateMedia?authority=*&collection=${NSID.track}&action=read`, `space:${AUDIO_SPACE_TYPE}?authority=*&collection=${NSID.track}&action=read`]
 	: [];
 export const SYNC_SCOPE_PARTS = [...BASE_SCOPE_PARTS, SYNC_SCOPE, UPLOAD_SCOPE, DOWNLOAD_SCOPE];
-export const SCOPE_PARTS = [...SYNC_SCOPE_PARTS, ...protectedAudioScope, ...JAM_SCOPE_PARTS, PRIVATE_PUBLISH_SCOPE, PRIVATE_DELETE_SCOPE];
+export const SCOPE_PARTS = [...SYNC_SCOPE_PARTS, ...protectedAudioScope, ...JAM_SCOPE_PARTS, PRIVATE_PUBLISH_SCOPE, PRIVATE_DELETE_SCOPE, CLOSE_SCOPE];

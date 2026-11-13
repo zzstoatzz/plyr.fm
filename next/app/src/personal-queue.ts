@@ -4,6 +4,7 @@ import { JamConnection, type JamConnectionOptions, type JamState, type JamTrack,
 import { queueCheckpoint, type QueueCheckpoint, type QueueStorage } from './queue-checkpoint.ts';
 import { mergeQueueMutations, type DurableQueueEdit, type QueueMutation } from './queue-mutation.ts';
 import * as queue from './queue-state.ts';
+import { recordPlayback } from './playback-diagnostics.ts';
 
 export type Reference = JamTrack & { key: string };
 export function queueReference(track: Track, key: string): Reference {
@@ -21,6 +22,8 @@ export interface PersonalQueueOptions {
   remote(state: JamState, force: boolean): void;
   error(message: string): void;
   connected?(state: JamState): void;
+  /** This device's playback client, to tell whether the coordinator gave it the output. */
+  client?: string;
   connect?: Omit<JamConnectionOptions, 'onState' | 'onPhase' | 'onResult' | 'onError'>;
 }
 
@@ -63,11 +66,28 @@ export class PersonalQueue {
       this.options.changed(this.state, restored);
     }
     this.initialized = true;
+    recordPlayback('queue session started', { synchronized: !!this.options.connect, entries: this.state.entries.length });
     if (!this.options.connect) return;
-    this.connection = new JamConnection({ ...this.options.connect,
+    const connect = this.options.connect;
+    let attempts = 0;
+    this.connection = new JamConnection({ ...connect,
+      admit: async () => {
+        attempts++;
+        try {
+          const admission = await connect.admit();
+          recordPlayback('queue admitted', { attempt: attempts });
+          return admission;
+        } catch (failure) {
+          recordPlayback('queue admission failed', { attempt: attempts, error: failure instanceof Error ? failure.message : String(failure) });
+          throw failure;
+        }
+      },
       onState: (state, force) => {
         if (!state.personal || this.closed) return;
         console.info('[queue] state', { revision: state.revision, occurrence: state.occurrence, entries: state.queue.length, playing: state.playing });
+        const output = state.personal.output;
+        recordPlayback('queue state', { revision: state.revision, entries: state.queue.length, playing: state.playing,
+          output: !output ? 'none' : output.clientId === this.options.client ? 'this device' : 'another device' });
         this.wire = state;
         this.project();
         this.options.remote(state, force);
@@ -76,6 +96,7 @@ export class PersonalQueue {
       onPhase: phase => {
         const previous = this.connected;
         this.connected = phase === 'connected';
+        if (phase !== 'connected' || !previous) recordPlayback('queue ' + phase, { attempts });
         if (!previous && this.connected && this.wire) this.options.connected?.(this.wire);
         if (this.connected) for (const finish of this.waiters) finish(true);
         if (!this.connected) this.sent = undefined;
@@ -84,6 +105,7 @@ export class PersonalQueue {
       onError: message => this.options.error(message.replaceAll('the jam', 'your queue').replaceAll('the Jam', 'your queue')),
       onResult: (command, outcome) => {
         console.info('[queue] result', { action: command.action, outcome });
+        recordPlayback('queue result', { action: command.action, outcome });
         const waiting = this.commands.get(command.id);
         if (waiting) { clearTimeout(waiting.timer); this.commands.delete(command.id); waiting.finish(['applied', 'noop', 'duplicate'].includes(outcome)); }
         if (this.mutations[0]?.id !== command.id) return;
@@ -151,18 +173,22 @@ export class PersonalQueue {
     if (!this.options.connect || this.connected) return Promise.resolve(true);
     if (this.closed) return Promise.resolve(false);
     return new Promise(resolve => {
-      const finish = (connected: boolean) => { clearTimeout(timer); this.waiters.delete(finish); resolve(connected); };
+      const finish = (connected: boolean) => { clearTimeout(timer); this.waiters.delete(finish); if (!connected) recordPlayback('queue connect timed out'); resolve(connected); };
       const timer = setTimeout(() => finish(false), 15_000);
       this.waiters.add(finish);
     });
   }
 
   dispatch(intent: PlaybackIntent): Promise<boolean> {
-    if (!this.connected || !this.wire || !this.connection) return Promise.resolve(false);
+    if (!this.connected || !this.wire || !this.connection) {
+      recordPlayback('queue dispatch skipped', { action: intent.action, connected: this.connected, state: !!this.wire });
+      return Promise.resolve(false);
+    }
     const id = this.options.id();
     const wire = this.wire;
     return new Promise(resolve => {
-      const timer = setTimeout(() => { this.commands.delete(id); resolve(false); }, 10_000);
+      recordPlayback('queue dispatch', { action: intent.action });
+      const timer = setTimeout(() => { this.commands.delete(id); recordPlayback('queue dispatch timed out', { action: intent.action }); resolve(false); }, 10_000);
       this.commands.set(id, { finish: resolve, timer });
       if (!this.connection!.enqueuePrepared({ ...intent, id, epoch: wire.epoch, expectedRevision: wire.revision,
         occurrence: wire.occurrence, expectedOutput: wire.personal?.output?.connectionId ?? null })) {

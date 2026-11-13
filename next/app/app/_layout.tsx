@@ -104,6 +104,7 @@ function Shell() {
     <View testID="app-frame" style={{ flex: 1, width: '100%', flexDirection: wide ? 'row' : 'column', overflow: 'hidden' }}>
       {wide && nav}
       <View style={{ flex: 1, minWidth: 0 }}>
+        {!wide && <Toasts top />}
         {!(wide && path === '/') && <View style={{
           ...pageFrame, minHeight: tabTitle ? 52 : 48, flexDirection: 'row', alignItems: 'center',
           borderBottomWidth: detail ? StyleSheet.hairlineWidth : 0, borderColor: theme.hairline
@@ -129,7 +130,6 @@ function Shell() {
             <Stack.Screen name="now-playing" options={{ presentation: Platform.OS === 'web' ? 'transparentModal' : 'card', animation: 'none', gestureEnabled: false, contentStyle: { backgroundColor: 'transparent' } }} />
           </Stack>
         </NowPlayingOriginContext.Provider>
-        {!wide && <Toasts />}
         {!wide && <Animated.View aria-hidden={route === '/now-playing'} pointerEvents={route === '/now-playing' ? 'none' : 'auto'}>{dock}</Animated.View>}
         {!wide && nav}
       </View>

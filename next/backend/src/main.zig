@@ -245,6 +245,8 @@ test {
     _ = @import("internal/space/managed_space.zig");
     _ = @import("internal/space/network.zig");
     _ = @import("internal/space/attested.zig");
+    _ = @import("internal/space/access.zig");
+    _ = @import("internal/space/policy.zig");
     _ = @import("internal/ingest/relay_repository_candidates.zig");
     _ = @import("api/artists.zig");
     _ = @import("api/charts.zig");

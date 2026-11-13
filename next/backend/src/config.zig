@@ -1,5 +1,6 @@
 const std = @import("std");
 const ManagedSpace = @import("internal/space/managed_space.zig").Config;
+const policyCollection = @import("internal/space/access.zig").policyCollection;
 const zat = @import("zat");
 
 pub const Role = enum {
@@ -138,6 +139,8 @@ pub const Config = struct {
                 .service_endpoint = getenv("SPACE_SERVICE_ENDPOINT") orelse
                     return error.SpaceServiceEndpointRequired,
                 .space_type = getenv("SPACE_TYPE_NSID") orelse "fm.plyr.stg.audio",
+                // lives as long as the process
+                .policy_collection = try policyCollection(std.heap.page_allocator, track_collection),
                 .plc_url = getenv("PLC_DIRECTORY_URL") orelse "https://plc.directory",
             } else null,
             .account_check_interval_us = try parseSecondsMicros(
