@@ -3,7 +3,8 @@ import { UploadRequestError, type createUploadTransport } from './upload-transpo
 import { UPLOAD_PART_BYTES, type ChunkReader, type UploadOperation, type UploadStatus } from './upload-model';
 
 type Transport = ReturnType<typeof createUploadTransport>;
-const IN_FLIGHT = 6;
+// The audio service handles one part at a time per owner and queues at most two more, so more in flight only earns 409s.
+const IN_FLIGHT = 2;
 
 /**
  * Native sends each part as an iOS background URLSession upload from a temporary file, several at once, so the
@@ -44,25 +45,37 @@ export async function sendParts(operation: UploadOperation, reader: ChunkReader,
         if (file.exists) file.delete();
         file.create();
         await file.write(bytes);
-        return { number, sha256, file };
+        return { number, sha256, bytes, file };
       }));
-      try {
-        const results = await Promise.all(staged.map(async part => {
-          const target = await transport.partTarget(part.number);
-          active();
-          return { part, result: await part.file.upload(target.url, { httpMethod: 'PUT', headers: target.headers, sessionType: 'background' as never }) };
-        }));
-        for (const { part, result } of results) {
+      // Every native task must settle before its file goes: iOS raises an uncatchable exception for a background
+      // upload whose source file is missing, so a sibling's failure cannot delete files still queued.
+      const settled = await Promise.allSettled(staged.map(async part => {
+        const target = await transport.partTarget(part.number);
+        active();
+        if (!part.file.exists) throw new Error('the staged audio part is missing.');
+        try {
+          const result = await part.file.upload(target.url, { httpMethod: 'PUT', headers: target.headers, sessionType: 'background' });
           if (result.status === 403) { transport.forgetCapability(); throw new UploadRequestError(503, 'upload authorization expired. retrying.'); }
+          if (result.status === 409 || result.status === 429 || result.status >= 500) throw new UploadRequestError(result.status, 'upload service is busy. retrying.');
           if (result.status < 200 || result.status >= 300) throw new UploadRequestError(result.status, 'upload request failed. check its status before retrying.');
-          const receipt: unknown = JSON.parse(result.body);
-          if (!receipt || typeof receipt !== 'object' || !('number' in receipt) || receipt.number !== part.number || !('sha256' in receipt) || receipt.sha256 !== part.sha256)
-            throw new Error('upload receipt does not match the selected file.');
-          sent += length(part.number);
-          progress(sent, false);
+          return { part, receipt: JSON.parse(result.body) as unknown };
+        } catch (failure) {
+          if (failure instanceof UploadRequestError) throw failure;
+          // The background session refused the task itself: send this part in the foreground rather than stall.
+          console.warn('background part upload failed; sending in the foreground', failure);
+          active();
+          return { part, receipt: await transport.part(part.number, part.bytes) as unknown };
         }
-      } finally {
-        for (const part of staged) if (part.file.exists) part.file.delete();
+      }));
+      for (const part of staged) if (part.file.exists) part.file.delete();
+      for (const outcome of settled) if (outcome.status === 'rejected') throw outcome.reason;
+      for (const outcome of settled) {
+        if (outcome.status !== 'fulfilled') continue;
+        const { part, receipt } = outcome.value;
+        if (!receipt || typeof receipt !== 'object' || !('number' in receipt) || receipt.number !== part.number || !('sha256' in receipt) || receipt.sha256 !== part.sha256)
+          throw new Error('upload receipt does not match the selected file.');
+        sent += length(part.number);
+        progress(sent, false);
       }
     }
     active();
