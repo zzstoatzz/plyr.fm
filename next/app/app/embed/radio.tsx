@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
-import Radio from '../radio';
+import { RadioEmbed as Station } from '../../src/RadioEmbed';
 
 export default function RadioEmbed() {
   useEffect(() => {
@@ -11,5 +11,5 @@ export default function RadioEmbed() {
     return () => style.remove();
   }, []);
 
-  return <Radio compact />;
+  return <Station />;
 }

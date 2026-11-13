@@ -49,10 +49,10 @@ audio.writeUInt16LE(16, 34); audio.write('data', 36); audio.writeUInt32LE(audio.
         await context.route('https://public.api.bsky.app/xrpc/app.bsky.graph.getFollows?*', route => route.fulfill({ headers: { 'cache-control': 'no-store' }, json: { follows: [{ did, avatar: artwork }] } }));
         await context.route('https://ui.fixture.test/**', route => route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400"><rect width="400" height="400" fill="white"/><circle cx="200" cy="200" r="140" fill="#8da4c6"/></svg>' }));
         await context.route('https://ui-audio.fixture.test/**', route => route.fulfill({ body: audio, contentType: 'audio/wav' }));
-        await context.route(/https:\/\/[^/]*radio\.plyr\.fm\//, route => {
-          if (new URL(route.request().url()).pathname.endsWith('/cover')) return route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400"><rect width="400" height="400" fill="white"/></svg>' });
-          return route.fulfill({ headers: { 'cache-control': 'no-store' }, json: { currentSong: { id, title: track.metadata.title, artist: 'A longer artist name', durationSeconds: 120, hasCover: true }, state: { status: 'playing', positionSeconds: 10, startedAt: Date.now() - 10000 } } });
-        });
+        await context.route('https://api.plyr.fm/radio/state?*', route => route.fulfill({ headers: { 'cache-control': 'no-store' }, json: {
+          current: { id: 7, title: track.metadata.title, artist: 'A longer artist name', artist_handle: handle, artist_did: did, stream_url: 'https://ui-audio.fixture.test/audio.wav',
+            duration: 120, artwork_url: artwork, thumbnail_url: artwork, atproto_record_uri: track.record.uri, atproto_record_cid: track.record.cid, created_at: '2026-11-05T00:00:00Z', like_count: 1, play_count: 3 },
+          current_ends_at: new Date(Date.now() + 110_000).toISOString(), progress_seconds: 10, up_next: [] } }));
         await context.route('https://api.next.plyr.fm/**', async route => {
           const url = new URL(route.request().url());
           const p = url.pathname;
@@ -151,7 +151,7 @@ audio.writeUInt16LE(16, 34); audio.write('data', 36); audio.writeUInt32LE(audio.
           ['jam', `/jam/${did}~audit?track=${id}`, 'heading'], ['queue-empty', '/queue', 'heading'], ['radio', '/radio', 'heading'],
           ['embed-track', '/embed/track/' + id, 'Play'], ['embed-album', '/embed/album/alb_fixture', 'heading'],
           ['embed-playlist', '/embed/playlist/pls_fixture', 'heading'], ['embed-artist', '/embed/u/' + handle, 'heading'],
-          ['embed-radio', '/embed/radio', 'listen live'], ['embed-album-slug', '/embed/album/' + handle + '/fixture', 'heading'],
+          ['embed-radio', '/embed/radio', 'Listen live'], ['embed-album-slug', '/embed/album/' + handle + '/fixture', 'heading'],
         ]) {
           if (process.env.UI_AUDIT_ONLY && !process.env.UI_AUDIT_ONLY.split(',').includes(name)) continue;
           await page.goto(origin + route);

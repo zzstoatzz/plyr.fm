@@ -1,4 +1,4 @@
-import type { RadioSnapshot } from './radio';
+import { nextRead, type RadioSnapshot } from './radio.ts';
 
 export interface RadioFeedState {
 	readonly snapshot: RadioSnapshot | undefined;
@@ -7,6 +7,10 @@ export interface RadioFeedState {
 
 const empty: RadioFeedState = Object.freeze({ snapshot: undefined, error: '' });
 
+/**
+ * One station's state, read while anything watches it. Reads land just after each song change rather than on a fixed beat.
+ * The last snapshot outlives its watchers, so coming back to a station draws it at once while a fresh read runs.
+ */
 export class RadioFeed {
 	private state = empty;
 	private listeners = new Set<() => void>();
@@ -16,15 +20,18 @@ export class RadioFeed {
 	private readonly load: (signal: AbortSignal) => Promise<RadioSnapshot>;
 	private readonly intervalMs: number;
 	private readonly timeoutMs: number;
+	private readonly retryMs: number;
 
 	constructor(
 		load: (signal: AbortSignal) => Promise<RadioSnapshot>,
-		intervalMs = 5000,
+		intervalMs = 30_000,
 		timeoutMs = 10_000,
+		retryMs = 5000,
 	) {
 		this.load = load;
 		this.intervalMs = intervalMs;
 		this.timeoutMs = timeoutMs;
+		this.retryMs = retryMs;
 	}
 
 	getSnapshot = (): RadioFeedState => this.state;
@@ -40,7 +47,7 @@ export class RadioFeed {
 			clearTimeout(this.timer);
 			this.controller?.abort();
 			this.controller = undefined;
-			this.state = empty;
+			if (this.state.error) this.state = Object.freeze({ snapshot: this.state.snapshot, error: '' });
 		};
 	};
 
@@ -54,10 +61,12 @@ export class RadioFeed {
 			controller.signal.addEventListener('abort', abort, { once: true });
 		});
 		const deadline = setTimeout(() => controller.abort(), this.timeoutMs);
+		let delay = this.retryMs;
 		try {
 			const snapshot = await Promise.race([this.load(controller.signal), cancelled]);
 			if (!this.active(generation)) return;
 			this.state = Object.freeze({ snapshot, error: '' });
+			delay = nextRead(snapshot, this.intervalMs);
 			this.notify();
 		} catch {
 			if (!this.active(generation)) return;
@@ -67,7 +76,7 @@ export class RadioFeed {
 			clearTimeout(deadline);
 			controller.signal.removeEventListener('abort', abort);
 			if (this.controller === controller) this.controller = undefined;
-			if (this.active(generation)) this.timer = setTimeout(() => { void this.poll(generation); }, this.intervalMs);
+			if (this.active(generation)) this.timer = setTimeout(() => { void this.poll(generation); }, delay);
 		}
 	}
 

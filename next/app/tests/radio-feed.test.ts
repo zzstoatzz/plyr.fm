@@ -2,10 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { setImmediate } from 'node:timers/promises';
 import { RadioFeed } from '../src/radio-feed.ts';
+import { nextRead, parseRadio } from '../src/radio.ts';
 import type { RadioSnapshot } from '../src/radio.ts';
 
 function snapshot(position: number): RadioSnapshot {
-	return Object.freeze({ currentSong: null, state: Object.freeze({ status: 'playing', positionSeconds: position }), receivedAt: position * 1000 });
+	return Object.freeze({ currentSong: null, positionSeconds: position, endsAt: null, upNext: [], receivedAt: position * 1000 });
 }
 
 async function until(condition: () => boolean): Promise<void> {
@@ -38,7 +39,7 @@ test('two observers share one read and one leaving cannot cancel the other', asy
 	context.mock.timers.tick(40);
 	await setImmediate();
 	assert.equal(requests.length, 1, 'last observer stops the next poll');
-	assert.equal(feed.getSnapshot().snapshot, undefined);
+	assert.equal(feed.getSnapshot().snapshot?.receivedAt, 7000, 'the last snapshot stays, so returning to the station draws at once');
 });
 
 test('last unsubscribe aborts a pending read and stale completion cannot replace a new subscription', async () => {
@@ -73,7 +74,7 @@ test('a hung transport times out and a later poll recovers without overlapping r
 		}
 		assert.equal(firstSignal?.aborted, true);
 		return received;
-	}, 10, 20);
+	}, 10, 20, 10);
 	const unsubscribe = feed.subscribe(() => {});
 	try {
 		context.mock.timers.tick(20);
@@ -113,4 +114,31 @@ test('each poll publishes the one received snapshot to all observers', async con
 		assert.equal(first[0], second[0]);
 		assert.equal(first[1], second[1]);
 	} finally { unsubscribeFirst(); unsubscribeSecond(); }
+});
+
+test('the next read lands just after the song changes, never later than the ceiling', () => {
+	const now = 1_000_000;
+	const ending = { ...snapshot(0), endsAt: now + 12_000 };
+	assert.equal(nextRead(ending, 30_000, now), 12_400);
+	assert.equal(nextRead({ ...ending, endsAt: now + 90_000 }, 30_000, now), 30_000);
+	assert.equal(nextRead({ ...ending, endsAt: now - 5_000 }, 30_000, now), 500, 'a stale end time retries soon, not in a tight loop');
+	assert.equal(nextRead(snapshot(0), 30_000, now), 30_000);
+});
+
+test('a station state becomes a catalog track that now playing and likes can use', () => {
+	const uri = 'at://did:plc:artistaaaaaaaaaaaaaaaaaa/fm.plyr.track/3lradio';
+	const parsed = parseRadio({
+		current: { id: 42, title: 'tide', artist: 'sea', artist_handle: 'sea.test', artist_did: 'did:plc:artistaaaaaaaaaaaaaaaaaa', stream_url: 'https://api.plyr.fm/audio/abc',
+			duration: 200, artwork_url: 'https://images.plyr.fm/images/x.webp', thumbnail_url: 'https://images.plyr.fm/images/x_thumb.webp',
+			atproto_record_uri: uri, atproto_record_cid: 'bafy', created_at: '2026-01-01T00:00:00Z', like_count: 2, play_count: 9 },
+		current_ends_at: new Date(2_000_000).toISOString(), progress_seconds: 50, up_next: [],
+	}, 5, 1_900_000);
+	const song = parsed.currentSong!;
+	assert.match(song.id, /^trk_/);
+	assert.equal(song.track.record.uri, uri);
+	assert.equal(song.track.record.cid, 'bafy');
+	assert.equal(song.track.artist.profile.handle, 'sea.test');
+	assert.equal(song.thumbnail, 'https://images.plyr.fm/images/x_thumb.webp');
+	assert.equal(parsed.endsAt, 2_000_000);
+	assert.equal(parsed.positionSeconds, 50);
 });

@@ -51,11 +51,11 @@ const origin = 'https://next.plyr.fm';
    await key('q');await page.waitForURL('**/queue');await page.getByRole('heading',{name:'queue',exact:true}).waitFor();await page.getByRole('dialog').waitFor({state:'hidden'});
    await page.getByRole('link',{name:'Home',exact:true}).click();await page.waitForURL(origin+'/');
    await page.getByRole('link',{name:'Radio',exact:true}).click();await page.waitForURL('**/radio');
-   await page.getByRole('button',{name:'listen live',exact:true}).click();
-   await page.waitForFunction(()=>window.jamAudio.some(a=>!a.paused&&a.src.includes('radio.plyr.fm')));
+   await page.getByRole('button',{name:'Listen to loved radio',exact:true}).click();
+   await page.waitForFunction(()=>window.jamAudio.some(a=>!a.paused&&a.src.includes('api.plyr.fm/audio')));
    await key('Space');await page.waitForFunction(()=>window.jamAudio.filter(a=>a.src).every(a=>a.paused));
-   await page.getByRole('button',{name:'Listen live',exact:true}).waitFor();
-   await key('Space');await page.waitForFunction(()=>window.jamAudio.some(a=>!a.paused&&a.src.includes('radio.plyr.fm')));
+   await page.getByRole('button',{name:'Play',exact:true}).first().waitFor();
+   await key('Space');await page.waitForFunction(()=>window.jamAudio.some(a=>!a.paused&&a.src.includes('api.plyr.fm/audio')));
    assert.deepEqual(errors,[]);console.log(`${width}: every documented shortcut, editor guard, queue roundtrip, now-playing, radio handoff/pause/resume and playback continuity passed`);
   } catch(error) { console.log(await page.evaluate(()=>({path:location.pathname,active:document.activeElement?.tagName,dialogs:[...document.querySelectorAll('[role=dialog]')].map(e=>e.outerHTML.slice(0,600)),media:window.jamAudio.map(a=>({paused:a.paused,time:a.currentTime,src:a.src})),body:document.body.innerText.slice(-1000)})));await page.screenshot({path:'/tmp/plyr-keyboard-failure.png'});throw error;} finally {await context.close();}
  }} finally {await browser.close();}

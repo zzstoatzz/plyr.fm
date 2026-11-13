@@ -5,13 +5,18 @@ import { NowPlaying } from '../src/NowPlaying';
 import { usePlayback } from '../src/playback';
 import { NowPlayingOriginContext } from '../src/now-playing-origin';
 import { playerSheet } from '../src/player-sheet';
+import { RadioPlayback } from '../src/radio-session';
 
 function samePath(target: string, origin: string) {
   try { return decodeURIComponent(target) === decodeURIComponent(origin); }
   catch { return target === origin; }
 }
 
-export default function NowPlayingRoute() {
+export default function NowPlayingScreen() {
+  return <RadioPlayback><NowPlayingRoute /></RadioPlayback>;
+}
+
+function NowPlayingRoute() {
   const player = usePlayback();
   const origin = useContext(NowPlayingOriginContext);
   const leaving = useRef(false);

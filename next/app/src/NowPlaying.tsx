@@ -4,6 +4,7 @@ import Slider from './Slider';
 import type { Href } from 'expo-router';
 import ChevronDown from 'lucide-react-native/icons/chevron-down';
 import ListMusic from 'lucide-react-native/icons/list-music';
+import RadioTower from 'lucide-react-native/icons/radio';
 import { NextGlyph as SkipForward, PauseGlyph as Pause, PlayGlyph as Play, PreviousGlyph as SkipBack } from './PlayerGlyph';
 import X from 'lucide-react-native/icons/x';
 import { useEffect, useRef, useState } from 'react';
@@ -168,7 +169,7 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
           <View testID="now-playing-dismiss-region" style={[styles.dismissRegion, Platform.OS === 'web' && compact && touchHeader]}>
           <Animated.View style={{ opacity: condense.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }}><Text accessibilityRole="header"
             style={[styles.headerTitle, compact && styles.centerTitle,
-              { color: theme.muted, fontSize: 14 * theme.scale, fontFamily: theme.fontFamily }]}>now playing</Text></Animated.View>
+              { color: theme.muted, fontSize: 14 * theme.scale, fontFamily: theme.fontFamily }]}>{player.live ? `${player.live.station.label} radio · live` : 'now playing'}</Text></Animated.View>
           <Animated.View testID="now-playing-condensed" pointerEvents="none" aria-hidden={!condensed} style={[StyleSheet.absoluteFill, styles.condensed, { opacity: condense }]}>
             <Cover instant uri={trackArtwork(track)} size={36} radius={6} />
             <View style={{ flex: 1, minWidth: 0 }}>
@@ -199,11 +200,14 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
                 </Pressable></View>
               </View>
               <View>
-                <View {...dismiss.protectSlider}><Slider accessibilityLabel="Playback position" minimumValue={0} maximumValue={duration || 1}
+                {player.live ? <View testID="now-playing-live-progress" accessibilityRole="progressbar" accessibilityLabel="Song progress"
+                  aria-valuemin={0} aria-valuemax={Math.round(duration)} aria-valuenow={Math.round(position)} style={[styles.liveTrack, { backgroundColor: theme.line }]}>
+                  <View style={[styles.liveFill, { backgroundColor: theme.accent, width: `${duration ? Math.min(100, position / duration * 100) : 0}%` }]} />
+                </View> : <View {...dismiss.protectSlider}><Slider accessibilityLabel="Playback position" minimumValue={0} maximumValue={duration || 1}
                   value={position} minimumTrackTintColor={theme.accent} maximumTrackTintColor={theme.border}
                   thumbTintColor={theme.accent} disabled={!player.canSeek || !duration || !!error}
                   onSlidingStart={updateScrub} onValueChange={updateScrub}
-                  onSlidingComplete={(seconds) => { player.seek(seconds); setScrub(null); }} /></View>
+                  onSlidingComplete={(seconds) => { player.seek(seconds); setScrub(null); }} /></View>}
                 <View testID="now-playing-time" style={styles.time}>
                   <Text style={[caption, styles.numeric]}>{time(position)}</Text>
                   <Text accessibilityLiveRegion="polite" style={[caption, styles.status]}>
@@ -213,17 +217,18 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
                 </View>
               </View>
               <View style={styles.transport}>
-                <View {...dismiss.protect}><PlayerControl large icon={SkipBack} label="Previous" onPress={player.previous} /></View>
-                {sideBySide && <PlayerSeek />}
+                {!player.live && <View {...dismiss.protect}><PlayerControl large icon={SkipBack} label="Previous" onPress={player.previous} /></View>}
+                {sideBySide && !player.live && <PlayerSeek />}
                 <View {...dismiss.protect}><PlayerControl icon={playing ? Pause : Play} label={playing ? 'Pause' : 'Play'}
                   onPress={() => player.setPlaying(!playing)} primary large busy={player.loading} /></View>
-                {sideBySide && <PlayerSeek forward />}
-                <View {...dismiss.protect}><PlayerControl large icon={SkipForward} label="Next" onPress={() => void player.next()} /></View>
+                {sideBySide && !player.live && <PlayerSeek forward />}
+                {!player.live && <View {...dismiss.protect}><PlayerControl large icon={SkipForward} label="Next" onPress={() => void player.next()} /></View>}
               </View>
               <View style={styles.utilities}>
                 {!player.privatePlayback && <View {...dismiss.protect}><TrackLikes key={track.id} track={track} iconOnly returnTo="/now-playing" /></View>}
                 {!player.privatePlayback && <View {...dismiss.protect}><ShareLink compact path={`/track/${encodeURIComponent(track.id)}`} /></View>}
-                <View {...dismiss.protect}><PlayerControl icon={ListMusic} label="Queue" onPress={() => navigate('/queue')} /></View>
+                <View {...dismiss.protect}>{player.live ? <PlayerControl icon={RadioTower} label="Stations" onPress={() => navigate('/radio')} />
+                  : <PlayerControl icon={ListMusic} label="Queue" onPress={() => navigate('/queue')} />}</View>
               </View>
               {sideBySide && <View style={{ alignItems: 'center' }}><PlayerVolume /></View>}
               <NowPlayingDetails track={track} plays={plays} protect={dismiss.protect} navigate={navigate} />
@@ -269,6 +274,8 @@ const styles = StyleSheet.create({
   time: { minHeight: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 6 },
   status: { flex: 1, textAlign: 'center' },
   numeric: { fontVariant: ['tabular-nums'] },
+  liveTrack: { height: 4, borderRadius: 2, overflow: 'hidden', marginVertical: 18 },
+  liveFill: { height: 4, borderRadius: 2 },
   transport: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly' },
   utilities: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
 });

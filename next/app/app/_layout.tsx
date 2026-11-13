@@ -1,6 +1,6 @@
 import { Text } from '../src/Text';
 import { Link, Stack, router, usePathname, type Href } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,15 +15,13 @@ import UserRound from 'lucide-react-native/icons/user-round';
 import Radio from 'lucide-react-native/icons/radio';
 import Settings from 'lucide-react-native/icons/settings';
 import { PlaybackProvider } from '../src/playback';
-import RadioPlayer, { RadioContext } from '../src/RadioPlayer';
-import type { RadioStation } from '../src/radio';
+import { RadioPlayback, RadioProvider } from '../src/radio-session';
 import { KeyboardShortcuts } from '../src/KeyboardShortcuts';
 import { PlayerBar } from '../src/PlayerBar';
 import { Toasts } from '../src/Toasts';
 import { NowPlayingOriginContext } from '../src/now-playing-origin';
 import { PreferencesProvider } from '../src/preference-context';
 import ChartNoAxesColumn from 'lucide-react-native/icons/chart-no-axes-column';
-import { glassSurface } from '../src/materials';
 import { pageFrame } from '../src/controls';
 import { usePreferences } from '../src/preferences';
 
@@ -39,16 +37,15 @@ export default function RootLayout() {
   return <PreferencesProvider value={prefs}>
     <AppearanceProvider preferences={prefs.preferences}>
       <PlaybackProvider playThrough={prefs.preferences.playThrough} keepPlaying={prefs.preferences.keepPlaying} volume={prefs.preferences.volume}>
-        <Shell />
+        <RadioProvider>
+          <Shell />
+        </RadioProvider>
       </PlaybackProvider>
     </AppearanceProvider>
   </PreferencesProvider>;
 }
 
 function Shell() {
-  const [station, tune] = useState<RadioStation | null>(null);
-  const [togglePlayback, setTogglePlayback] = useState<(() => void) | null>(null);
-  const registerToggle = useCallback((toggle: (() => void) | null) => setTogglePlayback(() => toggle), []);
   const theme = useAppearance();
   const route = usePathname();
   const lastPage = useRef('/');
@@ -100,8 +97,9 @@ function Shell() {
       </Pressable>
     </Link>)}
   </View>;
-  return <RadioContext.Provider value={{ station, tune, togglePlayback, registerToggle }}><SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
-    <KeyboardShortcuts origin={path} />
+  const dock = <RadioPlayback><PlayerBar /></RadioPlayback>;
+  return <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
+    <RadioPlayback><KeyboardShortcuts origin={path} /></RadioPlayback>
     <StatusBar style={theme.dark ? 'light' : 'dark'} />
     <View testID="app-frame" style={{ flex: 1, width: '100%', flexDirection: wide ? 'row' : 'column', overflow: 'hidden' }}>
       {wide && nav}
@@ -132,11 +130,11 @@ function Shell() {
             <Stack.Screen name="now-playing" options={{ presentation: Platform.OS === 'web' ? 'transparentModal' : 'card', animation: 'none', gestureEnabled: false, contentStyle: { backgroundColor: 'transparent' } }} />
           </Stack>
         </NowPlayingOriginContext.Provider>
-        {!wide && <Animated.View aria-hidden={route === '/now-playing'} pointerEvents={route === '/now-playing' ? 'none' : 'auto'}>{station ? <RadioPlayer key={station.slug} compact tuned={station} /> : <PlayerBar />}</Animated.View>}
+        {!wide && <Animated.View aria-hidden={route === '/now-playing'} pointerEvents={route === '/now-playing' ? 'none' : 'auto'}>{dock}</Animated.View>}
         {!wide && nav}
       </View>
     </View>
     {wide && <Toasts />}
-    {wide && <View aria-hidden={route === '/now-playing'} pointerEvents={route === '/now-playing' ? 'none' : 'auto'}>{station ? <View style={[glassSurface(theme), { overflow: 'hidden', width: '100%' }]}><RadioPlayer key={station.slug} compact tuned={station} /></View> : <PlayerBar />}</View>}
-  </SafeAreaView></RadioContext.Provider>;
+    {wide && <View aria-hidden={route === '/now-playing'} pointerEvents={route === '/now-playing' ? 'none' : 'auto'}>{dock}</View>}
+  </SafeAreaView>;
 }
