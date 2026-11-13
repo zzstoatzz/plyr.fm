@@ -1,4 +1,5 @@
 import type { Track } from './api';
+import { recordPlayback, type DiagnosticFields } from './playback-diagnostics.ts';
 
 export type EarlyIntent = { kind: 'play'; track: Track; collection?: Track[]; label?: string } | { kind: 'enqueue'; track: Track };
 type EarlyPlay = Extract<EarlyIntent, { kind: 'play' }>;
@@ -17,10 +18,12 @@ export class EarlyIntents {
   private timer: ReturnType<typeof setTimeout> | undefined;
   private readonly expire: (intent: EarlyPlay) => void;
   private readonly limit: number;
+  private readonly context: () => DiagnosticFields;
 
-  constructor(expire: (intent: EarlyPlay) => void, limit = EARLY_PLAY_LIMIT_MS) {
+  constructor(expire: (intent: EarlyPlay) => void, limit = EARLY_PLAY_LIMIT_MS, context: () => DiagnosticFields = () => ({})) {
     this.expire = expire;
     this.limit = limit;
+    this.context = context;
   }
 
   get length() { return this.intents.length; }
@@ -36,6 +39,7 @@ export class EarlyIntents {
       this.timer = undefined;
       if (!this.intents.includes(play)) return;
       this.intents = this.intents.filter(item => item !== play);
+      recordPlayback('early play expired', { track: play.track.id, ...this.context() });
       this.expire(play);
     }, this.limit);
   }

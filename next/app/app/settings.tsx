@@ -14,6 +14,7 @@ import { Sheet } from '../src/Sheet';
 import { usePlayback } from '../src/playback';
 import { useAppPreferences } from '../src/preference-context';
 import { DiscoverySettings } from '../src/discovery/DiscoverySettings';
+import { sharePlaybackLog } from '../src/share-playback-log';
 
 const themes = ['system', 'light', 'dark'] as const;
 const fonts = ['comic-sans', 'system', 'mono', 'serif'] as const;
@@ -48,6 +49,7 @@ export default function Settings() {
       ] as const).map(([label, detail, key]) => <SettingsRow key={key} label={label} detail={detail}>
         <Switch {...(Platform.OS === 'web' ? { activeThumbColor: theme.background } : {})} accessibilityLabel={label} value={key === 'keepPlaying' ? player.keepPlaying : preferences[key]} thumbColor={theme.background} trackColor={{ false: theme.border, true: theme.accent }} ios_backgroundColor={theme.border} onValueChange={value => { if (key === 'keepPlaying') player.setKeepPlaying(value); setPreferences({ [key]: value }); }} />
       </SettingsRow>)}
+      <SettingsRow label="share playback log" detail="recent play attempts on this device, to send when tracks won’t play" disclosure={false} onPress={() => void sharePlaybackLog(!!auth.did, auth.ready)} />
     </SettingsSection>
     <DiscoverySettings key={auth.did ?? 'anonymous'} />
     <SettingsSection title="account" icon={UserRound}>
