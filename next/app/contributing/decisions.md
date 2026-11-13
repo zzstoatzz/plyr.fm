@@ -33,6 +33,13 @@ nate first. Add an entry when a PR settles something.
   compose it. Its rendered contract is checked against the WAI-ARIA pattern
   with `@ui-sdk/core/testing`'s `checkPattern`, a dev dependency only
   (`scripts/check-aria-patterns.cjs` shows how).
+- **Uploads run in the app-level queue** (`src/publishing/upload-queue.ts`),
+  mounted above the route stack like playback. The upload page only queues a
+  track and resets; one persistent toast per upload carries its progress.
+  WAV, FLAC, AIFF and WebM go through plyr storage with the server's MP3
+  playback copy (the original stays downloadable), as production does; small
+  MP3/M4A/AAC/OGG go straight to the account's PDS. Storage consent is asked
+  once per account on a device.
 - Discoverability goes through one-time hints, never through content peeking
   in from an edge. Add a hint to the registry in `src/hints.ts` (priority
   order; `after` chains them into a tour) and draw it with `<Coachmark>` beside

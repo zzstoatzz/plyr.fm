@@ -1,19 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
-import { CryptoDigestAlgorithm, digest, randomUUID } from 'expo-crypto';
 import { Action, Copy } from '../controls';
 import { getAuth, type Auth } from '../auth-state';
-import { createPds, type MediaFile, type NewTrack } from '../pds';
+import { createPds, type MediaFile } from '../pds';
 import { trackIdFromUri } from '../api';
 import { pickMedia } from '../media-picker';
 import type { CreateReservation } from './create-operation';
 import type { CreateResult } from './create-record';
-import { audioFormat, MAX_SERVICE_AUDIO_BYTES, transferParts, type UploadOperation, type UploadStatus } from './upload-model';
+import { uploadPublication, type UploadOperation, type UploadStatus } from './upload-model';
+import { uploadQueue } from './upload-queue';
 import { uploadStorage } from './upload-storage';
 import { createUploadTransport, UploadRequestError } from './upload-transport';
-import { openUploadReader } from './upload-reader';
 
-type TransferView = { archived?: boolean; status?: UploadStatus; publication?: CreateResult; message?: string; progress?: number; checking?: boolean };
+type TransferView = { archived?: boolean; status?: UploadStatus; publication?: CreateResult; message?: string };
 export function useLargeUploads(auth: Auth, onChange: () => Promise<unknown>, onDismiss: (operation: CreateReservation) => void) {
   const pds = useMemo(() => createPds(auth), [auth.did, auth.rpc]);
   const [operations, setOperations] = useState<UploadOperation[]>([]);
@@ -33,7 +32,7 @@ export function useLargeUploads(auth: Auth, onChange: () => Promise<unknown>, on
   }, [auth.did, auth.rpc]);
   useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
   const update = (operation: UploadOperation, patch: TransferView) => { if (current()) setViews(values => ({ ...values, [operation.uploadId]: { ...values[operation.uploadId], ...patch } })); };
-  async function run(operation: UploadOperation, action: 'check' | 'resume' | 'finish' | 'publish' | 'activate' | 'cancel' | 'done' | 'archive', file?: MediaFile) {
+  async function run(operation: UploadOperation, action: 'check' | 'publish' | 'activate' | 'cancel' | 'done' | 'archive') {
     if (controller.current || !current()) return;
     const abort = new AbortController(); controller.current = abort; setBusy(operation.uploadId);
     update(operation, { message: undefined });
@@ -66,26 +65,15 @@ export function useLargeUploads(auth: Auth, onChange: () => Promise<unknown>, on
         if (status.state !== 'cancelled') throw new Error('cancellation is not confirmed. check this upload again.');
         assertCurrent(); await uploadStorage.delete(operation); if (current()) onDismiss(operation);
       } else {
-        let status = action === 'resume' ? await transport.start() : action === 'finish' ? await transport.finish() : await transport.status();
-        if (action === 'resume' && status.state === 'completing') status = await transport.finish();
+        let status = await transport.status();
         update(operation, { status });
-        if (action === 'resume' && !['complete', 'published'].includes(status.state)) {
-          if (!file) throw new Error('select the original audio file to resume.');
-          const format = audioFormat(file.name, file.type);
-          if (format.fileType !== operation.fileType || format.contentType !== operation.contentType) throw new Error('select the original audio format.');
-          status = await transferParts(operation, openUploadReader(file), transport, async bytes => {
-            const value = await digest(CryptoDigestAlgorithm.SHA256, bytes);
-            return Array.from(new Uint8Array(value), byte => byte.toString(16).padStart(2, '0')).join('');
-          }, abort.signal, (progress, checking) => update(operation, { progress, checking }));
-          update(operation, { status });
-        }
         if (status.audioUrl) {
           const pending = (await pds.pendingCreates('track')).find(item => item.rkey === operation.rkey);
           assertCurrent();
-          const publish = status.state !== 'published' && (action === 'publish' || ((action === 'resume' || action === 'finish') && !pending?.archived));
+          const publish = status.state !== 'published' && action === 'publish';
           if (!(await uploadStorage.load(operation.owner)).some(item => item.uploadId === operation.uploadId && item.uri === operation.uri)) throw new Error('this upload was already dismissed.');
           assertCurrent();
-          const publication = await pds.uploadedTrack(operation, status.audioUrl, publish);
+          const publication = await pds.uploadedTrack(operation.processing ? uploadPublication(operation, status) : operation, status.audioUrl, publish);
           assertCurrent(); update(operation, { publication, archived: !!pending?.archived });
           if (publication.state === 'accepted' && (publish || action === 'activate')) {
             status = await transport.activate(); update(operation, { status });
@@ -93,31 +81,20 @@ export function useLargeUploads(auth: Auth, onChange: () => Promise<unknown>, on
           if (pending?.archived && !publish) update(operation, { message: 'creation is set aside. publish only if you want to resume this attempt.' });
         }
       }
-    } catch (failure) { update(operation, { message: abort.signal.aborted ? 'upload paused. reselect the original file to resume.' : failure instanceof Error ? failure.message : 'upload stopped. check its status.' }); }
+    } catch (failure) { update(operation, { message: failure instanceof Error ? failure.message : 'upload stopped. check its status.' }); }
     finally {
       controller.current = undefined;
       if (current()) { setBusy(undefined); await refresh(); await onChange(); }
     }
   }
-  async function start(input: NewTrack, reservation: CreateReservation) {
-    assertCurrent();
-    if (!auth.uploadStorage) throw new Error('sign in again to allow large uploads.');
-    if (!Number.isSafeInteger(input.file.size) || input.file.size <= 0 || input.file.size > MAX_SERVICE_AUDIO_BYTES) throw new Error('audio files are limited to 1.5 GiB.');
-    const format = audioFormat(input.file.name, input.file.type);
-    const record = await pds.prepareTrackRecord(input);
-    assertCurrent();
-    const operation: UploadOperation = { ...reservation, record: { ...record, fileType: format.fileType }, uploadId: randomUUID(), name: input.file.name, sizeBytes: input.file.size, ...format };
-    await uploadStorage.put(operation);
-    assertCurrent(); await refresh();
-    await run(operation, 'resume', input.file);
-  }
-  return { operations, views, loading, error, busy, start, run, refresh, pause: () => controller.current?.abort() };
+  return { operations, views, loading, error, busy, run, refresh };
 }
 
-export function LargeUploads({ uploads, disabled = false }: { uploads: ReturnType<typeof useLargeUploads>; disabled?: boolean }) {
+/** Saved plyr-storage uploads the queue isn't driving: a transfer that needs its file again, or one that needs a decision. */
+export function LargeUploads({ uploads, skip }: { uploads: ReturnType<typeof useLargeUploads>; skip: Set<string> }) {
   return <>
     {uploads.error && <><Copy live>{uploads.error}</Copy><Action label="Retry large upload recovery" onPress={() => void uploads.refresh()} /></>}
-    {uploads.operations.map(operation => <LargeUpload key={operation.uploadId} operation={operation} uploads={uploads} disabled={disabled} />)}
+    {uploads.operations.filter(operation => !skip.has(operation.uploadId)).map(operation => <LargeUpload key={operation.uploadId} operation={operation} uploads={uploads} disabled={false} />)}
   </>;
 }
 function LargeUpload({ operation, uploads, disabled }: { operation: UploadOperation; uploads: ReturnType<typeof useLargeUploads>; disabled: boolean }) {
@@ -125,6 +102,10 @@ function LargeUpload({ operation, uploads, disabled }: { operation: UploadOperat
   const status = view?.status, busy = uploads.busy === operation.uploadId, locked = disabled || !!uploads.busy;
   const complete = status?.state === 'complete' || status?.state === 'published';
   const title = typeof operation.record.title === 'string' ? operation.record.title : operation.name;
+  function carryOn(original?: MediaFile) {
+    try { uploadQueue.continue(operation, original); setPickError(undefined); }
+    catch (failure) { setPickError(failure instanceof Error ? failure.message : 'could not resume this upload.'); }
+  }
   async function choose() {
     try { const next = await pickMedia('audio/*'); if (next) setFile(next); setPickError(undefined); }
     catch { setPickError('could not select the file. try again.'); }
@@ -132,14 +113,15 @@ function LargeUpload({ operation, uploads, disabled }: { operation: UploadOperat
   return <>
     <Copy>{title}</Copy>
     <Copy live>{status?.state === 'published' ? 'saved. public audio is available.' : complete ? 'audio uploaded. publication still needs confirmation.'
-      : view?.progress !== undefined ? `${view.checking ? 'checking original file' : 'uploaded'}: ${Math.min(100, Math.floor(view.progress / operation.sizeBytes * 100))}%` : 'large upload saved for recovery.'}</Copy>
+      : status?.state === 'processing' ? status.processingFailure === 'output_budget_exceeded' ? 'the mp3 needs more space than reserved. the original is kept.' : 'converting to mp3.'
+        : 'upload saved for recovery.'}</Copy>
     {(view?.message || pickError) && <Copy live>{pickError ?? view?.message}</Copy>}
     {!busy && <Action label="Check upload status" disabled={locked} onPress={() => void uploads.run(operation, 'check')} />}
-    {busy && (complete ? <Copy live>confirming publication…</Copy> : <Action label="Pause upload" onPress={uploads.pause} />)}
-    {!complete && !busy && (status?.state === 'completing' || (status && status.receivedParts.length === status.partCount)
-      ? <Action label="Finish upload" disabled={locked} onPress={() => void uploads.run(operation, 'finish')} /> : <>
+    {busy && <Copy live>checking…</Copy>}
+    {!complete && !busy && (status?.state === 'completing' || status?.state === 'processing' || (status && status.receivedParts.length === status.partCount)
+      ? <Action label="Continue upload" disabled={locked} onPress={() => carryOn()} /> : <>
       <Action label={file?.name ?? 'Reselect original audio'} disabled={locked} onPress={() => void choose()} />
-      <Action label="Resume upload" disabled={locked || !file} onPress={() => void uploads.run(operation, 'resume', file)} />
+      <Action label="Resume upload" disabled={locked || !file} onPress={() => carryOn(file)} />
     </>)}
     {complete && status.state !== 'published' && <>
       {view?.publication?.state === 'different' ? <Copy>a different record exists at this address. it will not be overwritten.</Copy>

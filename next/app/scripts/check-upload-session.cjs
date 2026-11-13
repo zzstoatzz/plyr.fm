@@ -39,7 +39,7 @@ async function run(browser, width, theme) {
       }
       if (url.includes('uploadBlob')) {
         if (holdBlob) await new Promise(resolve => { release = resolve; entered(); });
-        if (reject) return { status: 503, body: { error: 'Unavailable', message: 'fixture upload unavailable' } };
+        if (reject) return { status: 400, body: { error: 'InvalidRequest', message: 'fixture upload unavailable' } };
         return { status: 200, body: { blob: { $type: 'blob', ref: { $link: 'bafkreigh2akiscaildcw4533xrlwoecrloyfg4huyh2fq7rmr5mnnxfk5q' }, mimeType: 'audio/wav', size: audio.length } } };
       }
       assert.ok(url.includes('createRecord'), `unexpected PDS operation: ${url}`);
@@ -62,12 +62,12 @@ async function run(browser, width, theme) {
     await signIn(did);
     const title = page.getByRole('textbox', { name: 'Title', exact: true });
     const tags = page.getByRole('textbox', { name: 'Tags', exact: true });
-    const submit = () => page.getByRole('button', { name: /^(upload|uploading…)$/i });
+    const submit = () => page.getByRole('button', { name: 'Upload', exact: true });
+    const toast = text => page.getByTestId('toast').filter({ hasText: text });
     async function choose() {
-      const chooser = page.waitForEvent('filechooser');
-      await page.getByRole('button', { name: 'Choose audio', exact: true }).click();
-      await (await chooser).setFiles({ name: 'quiet room.wav', mimeType: 'audio/wav', buffer: audio });
-      await page.getByRole('button', { name: 'quiet room.wav', exact: true }).waitFor();
+      const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.getByRole('button', { name: 'Choose audio', exact: true }).click()]);
+      await chooser.setFiles({ name: 'quiet room.mp3', mimeType: 'audio/mpeg', buffer: audio });
+      await page.getByRole('button', { name: 'quiet room.mp3', exact: true }).waitFor();
       const details = page.getByRole('button', { name: 'add album, description or tags', exact: true });
       if (await details.count()) await details.click();
     }
@@ -86,20 +86,25 @@ async function run(browser, width, theme) {
     const blobHeld = waitForHold();
     await submit().click();
     await blobHeld;
-    assert.equal(await title.getAttribute('readonly'), '');
-    assert.equal(await submit().isDisabled(), true);
+    assert.equal(await title.inputValue(), '', 'the form resets as soon as the upload is queued');
+    await page.getByRole('button', { name: 'Choose audio', exact: true }).waitFor();
+    await toast('uploading "quiet room"…').waitFor();
+    await screenshot(page, `upload-queued-${width}-${theme}`);
     await signIn(other);
     release(); holdBlob = false;
+    await toast('"quiet room" didn\'t upload').first().waitFor();
+    assert.equal(writes.length, 0, 'switch during blob upload cannot publish the previous account');
     await page.getByRole('button', { name: 'Choose audio', exact: true }).waitFor();
     await choose();
     await tags.fill(' AI \n--Hip-Hop--\nai');
     reject = true;
     await submit().click();
-    await page.getByText(/fixture upload unavailable/).waitFor();
-    assert.equal(writes.length, 0, 'switch during blob upload cannot publish the previous account');
-    assert.equal(await title.inputValue(), 'quiet room');
+    await toast(/fixture upload unavailable/).waitFor();
+    assert.equal(writes.length, 0);
     await screenshot(page, `upload-error-${width}-${theme}`);
     reject = false; holdCreate = true;
+    await choose();
+    await tags.fill(' AI \n--Hip-Hop--\nai');
     const createHeld = waitForHold();
     await submit().click();
     await createHeld;
@@ -111,17 +116,15 @@ async function run(browser, width, theme) {
     await page.getByRole('button', { name: 'Choose audio', exact: true }).waitFor();
     await choose();
     await submit().click();
-    await page.getByRole('link', { name: 'View track', exact: true }).waitFor();
+    await toast('"quiet room" uploaded').waitFor();
+    await page.getByRole('link', { name: 'View track', exact: true }).first().waitFor();
     assert.equal(writes.length, 2, 'accepted writes are not replayed for projection delay');
     assert.equal(writes[1].repo, did);
     assert.equal(Object.hasOwn(writes[1].record, 'tags'), false, 'blank upload leaves tags absent');
     await screenshot(page, `upload-saved-${width}-${theme}`);
     await signIn(other);
-    await page.getByRole('link', { name: 'View track', exact: true }).waitFor();
     await page.getByRole('button', { name: 'Upload another', exact: true }).click();
     await page.getByRole('button', { name: 'Choose audio', exact: true }).waitFor();
-    assert.equal(await page.getByRole('link', { name: 'View track', exact: true }).count(), 0);
-    assert.equal(await title.inputValue(), '');
     await choose();
     holdCreate = true;
     const reauthHeld = waitForHold();
@@ -129,30 +132,24 @@ async function run(browser, width, theme) {
     await reauthHeld;
     assert.equal(writes.length, 3);
     await signIn(other);
-    await page.getByRole('link', { name: 'View track', exact: true }).waitFor();
-    await page.getByRole('button', { name: 'Upload another', exact: true }).click();
-    await page.getByRole('button', { name: 'Choose audio', exact: true }).waitFor();
-    assert.equal(await title.inputValue(), '', 'reauthentication clears the previous session draft');
     await title.fill('fresh session draft');
-    const projected = page.waitForResponse(response => response.url().includes('/v1/records/await?'));
     release(); holdCreate = false;
-    await projected;
-    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-    assert.equal(await page.getByRole('link', { name: 'View track', exact: true }).count(), 0, 'accepted old-session write must not replace the fresh form');
-    assert.equal(await title.inputValue(), 'fresh session draft');
-    await screenshot(page, `upload-fresh-session-${width}-${theme}`);
+    await toast('"quiet room" uploaded').waitFor();
+    assert.equal(await title.inputValue(), 'fresh session draft', 'a finishing upload never touches the form');
+    await screenshot(page, `upload-reauth-${width}-${theme}`);
     await choose();
     await submit().click();
-    await page.getByRole('link', { name: 'View track', exact: true }).waitFor();
-    assert.equal(writes.length, 4, 'fresh session can submit once; accepted old write is not replayed');
-    await screenshot(page, `upload-reauth-${width}-${theme}`);
+    for (let wait = 0; writes.length < 4 && wait < 100; wait++) await page.waitForTimeout(100);
+    await toast('"quiet room" uploaded').first().waitFor();
+    assert.equal(writes.length, 4, 'same-DID reauth finishes its held upload once and the next upload once');
     await page.evaluate(id => globalThis.__r(id).clearAuth(), authModule);
     await page.getByRole('link', { name: 'Sign in', exact: true }).click();
     await page.getByRole('heading', { name: 'sign in to plyr.fm', exact: true }).waitFor();
     assert.equal(new URL(page.url()).searchParams.get('return_to'), '/upload');
     assert.deepEqual(errors, []);
-    console.log(`${width}/${theme}: isolated drafts, locked form, account switch and same-DID reauth, retry, accepted-write recovery and login return passed`);
-  } finally { await page.unrouteAll({ behavior: 'ignoreErrors' }); await context.close(); }
+    console.log(`${width}/${theme}: queued upload resets the form, toasts progress, isolates accounts, survives same-DID reauth, and returns to login passed`);
+  } catch (error) { console.error(await page.locator('body').innerText()); throw error; }
+  finally { await page.unrouteAll({ behavior: 'ignoreErrors' }); await context.close(); }
 }
 
 withPlayerHarness(async browser => {
