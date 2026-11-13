@@ -33,7 +33,20 @@
       "expo-router",
       "expo-status-bar",
       "expo-web-browser",
-      "expo-sharing"
+      [
+        "expo-sharing",
+        {
+          "ios": {
+            "enabled": true,
+            "activationRule": "SUBQUERY(extensionItems, $extensionItem, SUBQUERY($extensionItem.attachments, $attachment, ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO \"public.audio\").@count == 1).@count == 1",
+            "extensionBundleIdentifier": "fm.plyr.share"
+          },
+          "android": {
+            "enabled": false
+          }
+        }
+      ],
+      "./plugins/share-extension-name"
     ],
     "extra": {
       "eas": {

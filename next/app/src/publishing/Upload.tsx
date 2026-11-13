@@ -7,6 +7,7 @@ import { measureAudioDuration, pickMedia } from '../media-picker';
 import { createPds, MAX_AUDIO_BYTES, type MediaFile } from '../pds';
 import { LargeUploads, useLargeUploads } from './LargeUploads';
 import { MAX_SERVICE_AUDIO_BYTES } from './upload-model';
+import { useSharedAudio } from './shared-audio';
 import type { CreateReservation } from './create-operation';
 import { TagsField } from './TagsField';
 import { CreateRecovery, EarlierCreates, useCreateRecovery } from './CreateRecovery';
@@ -56,15 +57,22 @@ function AccountUpload({ auth }: { auth: Auth }) {
     try {
       const item = await pickMedia(kind);
       if (!item || !current()) return;
-      if (kind === 'audio/*') {
-        if (item.size > MAX_SERVICE_AUDIO_BYTES) throw new Error('audio files are limited to 1.5 GiB.');
-        setFile(item); setServiceConsent(false);
-        if (!title) setTitle(item.name.replace(/\.[^.]+$/, '').slice(0, 256));
-      } else setArtwork(item);
+      if (kind === 'audio/*') takeAudio(item);
+      else setArtwork(item);
     } catch (failure) {
       if (current()) setNote(failure instanceof Error ? failure.message : 'could not open the file.');
     }
   }
+
+  function takeAudio(item: MediaFile) {
+    if (item.size > MAX_SERVICE_AUDIO_BYTES) throw new Error('audio files are limited to 1.5 GiB.');
+    setFile(item); setServiceConsent(false);
+    if (!title) setTitle(item.name.replace(/\.[^.]+$/, '').slice(0, 256));
+  }
+  useSharedAudio(item => {
+    if (busy || !current()) return;
+    try { takeAudio(item); setNote(undefined); } catch (failure) { setNote(failure instanceof Error ? failure.message : 'could not open the shared file.'); }
+  });
 
   async function upload() {
     if (!current() || !file || locked.current || recovery.operations.length || !title.trim() || !artist.trim()) return;
