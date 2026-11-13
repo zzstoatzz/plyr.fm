@@ -5,7 +5,7 @@ const http = require('node:http');
 const path = require('node:path');
 
 const audience = 'did:web:plyr-jams-next.fly.dev#jams';
-const method = 'fm.plyr.stg.jam.join';
+const method = 'fm.plyr.next.jam.join';
 const alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 function base58(bytes) {
   let value = BigInt('0x' + Buffer.from(bytes).toString('hex')), text = '';

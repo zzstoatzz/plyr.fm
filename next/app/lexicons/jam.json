@@ -1,13 +1,13 @@
 {
   "lexicon": 1,
-  "id": "fm.plyr.stg.jam",
+  "id": "fm.plyr.next.jam",
   "defs": {
     "main": {
       "type": "space",
       "key": "any",
       "description": "Private room for synchronized listening on plyr.fm Next.",
       "name": "plyr.fm Jam",
-      "collections": ["fm.plyr.stg.jamState"]
+      "collections": ["fm.plyr.next.jamState"]
     }
   }
 }

@@ -188,8 +188,8 @@ test "PostgreSQL identities prefer the plyr profile name and refresh on profile 
     _ = try pool.exec(
         \\INSERT INTO plyr_index.profile_records (record_uri, record_cid, owner_did, collection,
         \\  rkey, record_created_at, deleted, commit_cid, commit_rev, indexed_at_us, display_name)
-        \\VALUES ('at://did:plc:a/fm.plyr.stg.actor.profile/self', 'cid', 'did:plc:a',
-        \\  'fm.plyr.stg.actor.profile', 'self', '2026-11-03T00:00:00Z', false, 'c', 'r', 100, ' plyr name ')
+        \\VALUES ('at://did:plc:a/fm.plyr.dev.actor.profile/self', 'cid', 'did:plc:a',
+        \\  'fm.plyr.dev.actor.profile', 'self', '2026-11-03T00:00:00Z', false, 'c', 'r', 100, ' plyr name ')
     , .{});
 
     var arena = std.heap.ArenaAllocator.init(allocator);

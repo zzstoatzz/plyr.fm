@@ -158,12 +158,12 @@ test "checkUserAccess params" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
-    const params = try parseParams(arena, "/xrpc/x?space=at%3A%2F%2Fdid%3Aplc%3Aartist%2Fspace%2Ffm.plyr.stg.audio%2Fsupporters&user=did:plc:fan&access=read&clientId=https%3A%2F%2Fnext.plyr.fm");
+    const params = try parseParams(arena, "/xrpc/x?space=at%3A%2F%2Fdid%3Aplc%3Aartist%2Fspace%2Ffm.plyr.next.audio%2Fsupporters&user=did:plc:fan&access=read&clientId=https%3A%2F%2Fnext.plyr.fm");
     try std.testing.expectEqualStrings("did:plc:artist", params.space.authority);
     try std.testing.expectEqualStrings("did:plc:fan", params.user);
     try std.testing.expectEqual(managed_space.Access.read, params.access);
     try std.testing.expectError(error.InvalidQuery, parseParams(arena, "/xrpc/x?user=did:plc:fan&access=read"));
-    try std.testing.expectError(error.InvalidQuery, parseParams(arena, "/xrpc/x?space=at://did:plc:a/space/fm.plyr.stg.audio/s&user=nope"));
-    try std.testing.expectError(error.InvalidQuery, parseParams(arena, "/xrpc/x?space=at://did:plc:a/space/fm.plyr.stg.audio/s&user=did:plc:b&access=admin"));
-    try std.testing.expectError(error.InvalidQuery, parseParams(arena, "/xrpc/x?space=at://did:plc:a/space/fm.plyr.stg.audio/s&user=did:plc:b&user=did:plc:c"));
+    try std.testing.expectError(error.InvalidQuery, parseParams(arena, "/xrpc/x?space=at://did:plc:a/space/fm.plyr.next.audio/s&user=nope"));
+    try std.testing.expectError(error.InvalidQuery, parseParams(arena, "/xrpc/x?space=at://did:plc:a/space/fm.plyr.next.audio/s&user=did:plc:b&access=admin"));
+    try std.testing.expectError(error.InvalidQuery, parseParams(arena, "/xrpc/x?space=at://did:plc:a/space/fm.plyr.next.audio/s&user=did:plc:b&user=did:plc:c"));
 }

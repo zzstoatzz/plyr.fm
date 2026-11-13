@@ -138,7 +138,7 @@ pub const Config = struct {
                 .service_id = getenv("SPACE_SERVICE_ID") orelse "plyr_space",
                 .service_endpoint = getenv("SPACE_SERVICE_ENDPOINT") orelse
                     return error.SpaceServiceEndpointRequired,
-                .space_type = getenv("SPACE_TYPE_NSID") orelse "fm.plyr.stg.audio",
+                .space_type = getenv("SPACE_TYPE_NSID") orelse "fm.plyr.next.audio",
                 // lives as long as the process
                 .policy_collection = try policyCollection(std.heap.page_allocator, track_collection),
                 .plc_url = getenv("PLC_DIRECTORY_URL") orelse "https://plc.directory",

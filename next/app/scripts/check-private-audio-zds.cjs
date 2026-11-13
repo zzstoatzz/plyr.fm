@@ -24,7 +24,7 @@ async function rpc(method, body, token) {
   const accounts = await fixtureAccounts(['mvpjamhost']);
   const handle = 'mvpjamhost.test', did = accounts[handle].did;
   const session = await rpc('com.atproto.server.createSession', { identifier: handle, password: accounts[handle].pass });
-  const key = 'streaming-' + Date.now().toString(36), space = `at://${did}/space/fm.plyr.stg.audio/${key}`;
+  const key = 'streaming-' + Date.now().toString(36), space = `at://${did}/space/fm.plyr.next.audio/${key}`;
   const privateUri = `${space}/${did}/fm.plyr.track/${key}`;
   const canonicalUri = `at://${did}/fm.plyr.track/${key}`;
   const id = 'trk_' + Buffer.from(canonicalUri).toString('base64url');
@@ -36,7 +36,7 @@ async function rpc(method, body, token) {
   const upload = await fetch(pds + '/xrpc/com.atproto.repo.uploadBlob', { method: 'POST', headers: { authorization: 'Bearer ' + session.accessJwt, 'content-type': 'audio/wav' }, body: audio });
   assert.equal(upload.status, 200);
   const { blob } = await upload.json();
-  await rpc('com.atproto.space.createSpace', { spaceType: 'fm.plyr.stg.audio', skey: key,
+  await rpc('com.atproto.space.createSpace', { spaceType: 'fm.plyr.next.audio', skey: key,
     policy: { $type: 'com.atproto.managedspace.policy', managingApp: 'did:web:api.next.plyr.fm#plyr_space', publishPolicy: false } }, session.accessJwt);
   const record = { $type: 'fm.plyr.track', title: 'Protected streaming fixture', artist: 'fixture artist', duration: 300, fileType: 'wav', createdAt: new Date().toISOString() };
   const stored = await rpc('com.atproto.space.putRecord', { space, repo: did, collection: 'fm.plyr.track', rkey: key, validate: false, record: { ...record, audioBlob: blob } }, session.accessJwt);
@@ -107,7 +107,7 @@ async function rpc(method, body, token) {
     assert.ok(requests.some(r => r.status === 206 && Number(/^bytes=(\d+)/.exec(r.range || '')?.[1]) > audio.length / 2));
     await page.screenshot({ path: output + '/protected-playing.png' });
     assert.deepEqual(failures, []);
-    const result = { spaceType: 'fm.plyr.stg.audio', policy: 'com.atproto.managedspace.policy', recordCid: stored.cid, browser: 'Chrome', startupMs, startupBytes, fileBytes: audio.length, seekMs, source: 'real ZDS, OAuth, MAC and range body; appview catalog fixture', requests };
+    const result = { spaceType: 'fm.plyr.next.audio', policy: 'com.atproto.managedspace.policy', recordCid: stored.cid, browser: 'Chrome', startupMs, startupBytes, fileBytes: audio.length, seekMs, source: 'real ZDS, OAuth, MAC and range body; appview catalog fixture', requests };
     await fs.writeFile(output + '/result.json', JSON.stringify(result, null, 2)); console.log(JSON.stringify(result));
     await context.close();
   } finally {
