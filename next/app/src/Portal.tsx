@@ -1,14 +1,18 @@
 import { trackArtwork, collectionArtwork } from './artwork';
-import { Link, useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
-import { Pressable, ScrollView, View, type ScrollViewProps, type ScrollViewInstance } from 'react-native';
+import { Link, useFocusEffect, type Href } from 'expo-router';
+import ChevronRight from 'lucide-react-native/icons/chevron-right';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react';
+import { Pressable, ScrollView, StyleSheet, View, type ScrollViewProps, type ScrollViewInstance } from 'react-native';
 import Pencil from 'lucide-react-native/icons/pencil';
-import RefreshCw from 'lucide-react-native/icons/refresh-cw';
-import { api, ApiError, type Artist, type ListSummary } from './api';
+import { api, ApiError, type Artist, type ListSummary, type Track } from './api';
 import { useAuth } from './auth';
 import { useAppearance } from './appearance';
-import { Action, Copy, InlineLink, pageFrame, row } from './controls';
+import { Action, Copy, pageFrame, row } from './controls';
 import { Cover, Detail, Row, useResource } from './CatalogPieces';
+import { accessLabel } from './access/label';
+import { usePlayback } from './playback';
+import { privatePds } from './publishing/private-pds';
+import { isPrivateTrack } from './publishing/private-track';
 import { Choice } from './AccountPieces';
 import { Text } from './Text';
 import { WaveLoading } from './WaveLoading';
@@ -83,19 +87,23 @@ function AccountPortal({ did, handle }: { did: string; handle: string | null }) 
       {portalTabs.map(value => <Choice key={value} {...catalogTabs.tab(value)} />)}
     </View>;
   return <PortalPage scrollRef={scroll} onScroll={event => { offset.current = event.nativeEvent.contentOffset.y; }} onContentSizeChange={restoreScroll}>
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 8 }}>
-      <Cover uri={profile?.avatar_url} size={64} round />
-      <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
-        <Text numberOfLines={2} style={{ color: theme.text, fontSize: 22 * theme.scale, fontWeight: '700' }}>{name}</Text>
-        {handle && <Detail>@{handle}</Detail>}
-        <InlineLink standalone href={{ pathname: '/u/[handle]', params: { handle: handle || did } }}>view public profile</InlineLink>
-      </View>
-    </View>
+    <Link href={{ pathname: '/u/[handle]', params: { handle: handle || did } }} asChild>
+      <Pressable accessibilityRole="link" accessibilityLabel={`${name}, view your public profile`}
+        style={{ paddingVertical: 8 }}>
+        {({ pressed }) => <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, opacity: pressed ? 0.7 : 1 }}>
+        <Cover uri={profile?.avatar_url} size={72} round />
+        <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+          <Text numberOfLines={2} style={{ color: theme.text, fontFamily: theme.fontFamily, fontSize: 22 * theme.scale, fontWeight: '700' }}>{name}</Text>
+          {handle && <Detail>@{handle}</Detail>}
+        </View>
+        <ChevronRight size={20} color={theme.muted} />
+        </View>}
+      </Pressable>
+    </Link>
     <View style={row}>
       <Action primary label="upload" href="/upload" />
-      <Action label="private music" href="/private" />
       <Action label="edit profile" href="/edit-profile" />
-      <ShareLink compact path={'/u/' + (handle || did)} />
+      <ShareLink path={'/u/' + (handle || did)} />
     </View>
     {artist.error && <View style={row}><Copy>couldn’t load your profile.</Copy><Action label="retry profile" onPress={artist.retry} /></View>}
 
@@ -104,45 +112,63 @@ function AccountPortal({ did, handle }: { did: string; handle: string | null }) 
   </PortalPage>;
 }
 
-function CatalogToolbar({ children, onRefresh, disabled }: { children: ReactNode; onRefresh: () => void; disabled: boolean }) {
+function CatalogToolbar({ children }: { children: ReactNode }) {
   const theme = useAppearance();
-  return <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingBottom: 12, borderBottomWidth: 1, borderColor: theme.hairline }}>
-    <View style={{ flex: 1 }}>{children}</View><Refresh onPress={onRefresh} disabled={disabled} />
-  </View>;
-}
-
-function Refresh({ onPress, disabled }: { onPress: () => void; disabled: boolean }) {
-  const theme = useAppearance();
-  return <Pressable accessibilityRole="button" accessibilityLabel="refresh catalog" disabled={disabled} onPress={onPress}
-    style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', opacity: disabled ? 0.4 : 1 }}>
-    <RefreshCw color={theme.muted} size={18} />
-  </Pressable>;
+  return <View style={{ borderBottomWidth: StyleSheet.hairlineWidth, borderColor: theme.hairline, marginBottom: 4 }}>{children}</View>;
 }
 
 function OwnedTracks({ did, active, tabs }: { did: string; active: boolean; tabs: ReactNode }) {
-  const theme = useAppearance();
+  const player = usePlayback();
   const load = useCallback((cursor?: string) => api.tracks({ artist_did: did, limit: 25, cursor }), [did]);
   const tracks = usePortalPages(did, 'tracks', load, active);
+  const own = useOwnerOnlyTracks(did, active);
+  // One list: what everyone can hear and what only you can, each row saying which.
+  const all = [...tracks.data, ...own].sort((a, b) => b.metadata.created_at.localeCompare(a.metadata.created_at));
+  const plays = (track: Track) => `${track.metrics.play_count} ${track.metrics.play_count === 1 ? 'play' : 'plays'}`;
   return <View style={{ gap: 8 }}>
-    {tabs && <CatalogToolbar onRefresh={tracks.reload} disabled={tracks.loading}>{tabs}</CatalogToolbar>}
-    {tracks.data.map(track => <Row key={track.record.uri} title={track.metadata.title} image={trackArtwork(track)}
-      subtitle={`${track.metrics.play_count} ${track.metrics.play_count === 1 ? 'play' : 'plays'}${track.metadata.album ? ` · ${track.metadata.album}` : ''}`}
-      href={{ pathname: '/track/[id]', params: { id: track.id } }}
-      action={<Link href={{ pathname: '/edit-track/[id]', params: { id: track.id } }} asChild>
-        <Pressable accessibilityRole="link" accessibilityLabel={`edit ${track.metadata.title}`} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
-          <Pencil color={theme.muted} size={18} />
-        </Pressable>
-      </Link>} />)}
-    <CatalogState loading={tracks.loading} error={tracks.error} empty={!tracks.data.length} retry={tracks.retry} />
+    {tabs && <CatalogToolbar>{tabs}</CatalogToolbar>}
+    {all.map(track => {
+      const subtitle = [accessLabel(track), !isPrivateTrack(track) && plays(track), track.metadata.album].filter(Boolean).join(' · ');
+      return isPrivateTrack(track)
+        ? <Row key={track.record.uri} title={track.metadata.title} image={trackArtwork(track)} subtitle={subtitle}
+          onPress={() => player.play(track, own)} action={<Edit label={`manage ${track.metadata.title}`} href="/private" />} />
+        : <Row key={track.record.uri} title={track.metadata.title} image={trackArtwork(track)} subtitle={subtitle}
+          href={{ pathname: '/track/[id]', params: { id: track.id } }}
+          action={<Edit label={`edit ${track.metadata.title}`} href={{ pathname: '/edit-track/[id]', params: { id: track.id } }} />} />;
+    })}
+    <CatalogState loading={tracks.loading} error={tracks.error} empty={!all.length} retry={tracks.retry} />
     {tracks.cursor && !tracks.loading && !tracks.error && <View style={row}><Action label="more tracks" onPress={tracks.more} /></View>}
   </View>;
+}
+
+function Edit({ label, href }: { label: string; href: Href }) {
+  const theme = useAppearance();
+  return <Link href={href} asChild>
+    <Pressable accessibilityRole="link" accessibilityLabel={label} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+      <Pencil color={theme.muted} size={18} />
+    </Pressable>
+  </Link>;
+}
+
+/** Tracks only their owner can hear, read from the owner's PDS; a PDS without them just adds nothing. */
+function useOwnerOnlyTracks(did: string, active: boolean) {
+  const auth = useAuth();
+  const [tracks, setTracks] = useState<Track[]>([]);
+  const pds = useMemo(() => auth.did === did && auth.rpc ? privatePds(auth) : undefined, [auth.did, auth.rpc, did]);
+  useFocusEffect(useCallback(() => {
+    if (!pds || !active) return;
+    let live = true;
+    pds.list().then(result => { if (live) setTracks(result.tracks); }).catch(() => {});
+    return () => { live = false; };
+  }, [pds, active]));
+  return tracks;
 }
 
 function OwnedAlbums({ did, active, tabs }: { did: string; active: boolean; tabs: ReactNode }) {
   const load = useCallback((cursor?: string) => api.albums(did, { cursor, limit: 25 }), [did]);
   const albums = usePortalPages<ListSummary>(did, 'albums', load, active);
   return <View style={{ gap: 8 }}>
-    {tabs && <CatalogToolbar onRefresh={albums.reload} disabled={albums.loading}>{tabs}</CatalogToolbar>}
+    {tabs && <CatalogToolbar>{tabs}</CatalogToolbar>}
     {albums.data.map(album => <Row key={album.record.uri} title={album.metadata.name || 'untitled album'} image={collectionArtwork(album)}
       subtitle={`${album.metrics.member_count} ${album.metrics.member_count === 1 ? 'track' : 'tracks'}`}
       href={{ pathname: '/album/[id]', params: { id: album.id } }} />)}
@@ -154,6 +180,6 @@ function OwnedAlbums({ did, active, tabs }: { did: string; active: boolean; tabs
 function CatalogState({ loading, error, empty, retry }: { loading: boolean; error?: string; empty: boolean; retry: () => void }) {
   if (loading) return <WaveLoading label="Loading your music" />;
   if (error) return <View style={{ gap: 10 }}><Copy>{error}</Copy><View style={row}><Action label="retry" onPress={retry} /></View></View>;
-  if (empty) return <View style={{ gap: 12, paddingVertical: 20 }}><Copy>no published music here yet.</Copy></View>;
+  if (empty) return <View style={{ gap: 12, paddingVertical: 20 }}><Copy>nothing here yet. upload something and it shows up here, open to everyone or just for you.</Copy></View>;
   return null;
 }

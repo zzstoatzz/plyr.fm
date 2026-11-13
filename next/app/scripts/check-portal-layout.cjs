@@ -54,15 +54,18 @@ async function run(browser, width, theme) {
     await retry.click();
     await page.getByRole('link', { name: 'edit recording 24', exact: true }).waitFor();
     assert.equal(albumRequests, 0, 'Inactive albums are not fetched');
-    const publicProfile = page.getByRole('link', { name: 'view public profile', exact: true });
+    const publicProfile = page.getByRole('link', { name: 'a musician with a long display name, view your public profile', exact: true });
     assert.equal(await publicProfile.getAttribute('href'), '/u/fixture.test');
     assert.equal(await page.getByRole('link', { name: 'upload', exact: true }).getAttribute('href'), '/upload');
     await page.getByRole('button', { name: 'Share', exact: true }).click();
     await page.waitForFunction(() => window.__sharedProfile?.endsWith('/u/fixture.test'));
     const tabs = page.getByRole('tablist', { name: 'Your catalog', exact: true });
-    const refresh = page.getByRole('button', { name: 'refresh catalog', exact: true });
-    const tabBox = await tabs.boundingBox(), refreshBox = await refresh.boundingBox();
-    assert.ok(Math.abs(tabBox.y - refreshBox.y) < 4, 'Refresh shares the catalog tab row');
+    await tabs.waitFor();
+    assert.equal(await page.getByRole('button', { name: 'refresh catalog', exact: true }).count(), 0, 'the catalog revalidates on its own, no refresh button');
+    const actions = await Promise.all([page.getByRole('link', { name: 'upload', exact: true }), page.getByRole('link', { name: 'edit profile', exact: true }), page.getByRole('button', { name: 'Share', exact: true })]
+      .map(control => control.evaluate(node => [Math.round(node.getBoundingClientRect().height), getComputedStyle(node).borderRadius].join())));
+    assert.equal(new Set(actions).size, 1, `profile actions share one shape (${actions})`);
+    assert.equal(await page.getByRole('link', { name: 'private music', exact: true }).count(), 0, 'no separate private music entry');
     assert.equal(await page.getByText('your published tracks', { exact: true }).count(), 0);
     await screenshot(page, `portal-${width}-${theme}`);
     await page.getByRole('button', { name: 'more tracks', exact: true }).click();
@@ -91,14 +94,9 @@ async function run(browser, width, theme) {
     await last.waitFor();
     await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === 'tracks');
     assert.equal(trackRequests, beforeBack);
-    fail = true;
-    await refresh.click(); await retry.waitFor();
-    assert.equal(await last.count(), 1, 'Failed refresh retains loaded rows');
-    await retry.click(); await retry.waitFor({ state: 'hidden' });
-    await last.waitFor();
     empty = true;
     await signIn('did:plc:otherfixture');
-    await page.getByText('no published music here yet.', { exact: true }).waitFor();
+    await page.getByText(/^nothing here yet\./).waitFor();
     assert.equal(await last.count(), 0, 'Account switch removes previous account catalog');
     await screenshot(page, `portal-empty-${width}-${theme}`);
     await page.getByRole('button', { name: 'Share', exact: true }).click();
@@ -107,7 +105,7 @@ async function run(browser, width, theme) {
     await page.getByRole('heading', { name: 'a musician with a long display name', exact: true }).waitFor();
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     assert.deepEqual(errors, []);
-    console.log(`${width}/${theme}: profile/share/upload, toolbar, retained pagination/Back, tab focus, refresh retry and account switch passed`);
+    console.log(`${width}/${theme}: profile link, one shape of action, no refresh or private-music entry, retained pagination/Back, tab focus and account switch passed`);
   } finally { await page.unrouteAll({ behavior: 'ignoreErrors' }); await context.close(); }
 }
 withPlayerHarness(async browser => {

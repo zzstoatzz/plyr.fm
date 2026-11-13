@@ -25,9 +25,11 @@ export function Setting({ label, detail, children }: { label: string; detail?: s
 export function Choice({ label, selected, onPress, role = 'button', ref, nativeID, 'aria-controls': controls }: { label: string; selected: boolean; onPress: () => void; role?: 'button' | 'tab'; ref?: Ref<ViewInstance>; nativeID?: string; 'aria-controls'?: string }) {
   const theme = useAppearance();
   return <Pressable ref={ref} nativeID={nativeID} aria-controls={controls} accessibilityRole={role} tabIndex={role === 'tab' && !selected ? -1 : 0} accessibilityLabel={label} accessibilityState={{ selected }} aria-pressed={role === 'button' ? selected : undefined} aria-selected={role === 'tab' ? selected : undefined} onPress={onPress}
-    style={({ pressed }) => ({ minHeight: 44, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12,
-      borderWidth: 1, borderColor: selected ? theme.accent : theme.hairline, backgroundColor: selected || pressed ? theme.surface : 'transparent', justifyContent: 'center' })}>
-    <Text style={{ color: selected ? theme.text : theme.muted, fontSize: 14 * theme.scale, fontWeight: selected ? '700' : '400' }}>{label}</Text>
+    style={({ pressed }) => role === 'tab'
+      ? { minHeight: 44, paddingHorizontal: 4, marginRight: 16, justifyContent: 'center', borderBottomWidth: 2, borderColor: selected ? theme.accent : 'transparent', opacity: pressed ? 0.7 : 1 }
+      : { minHeight: 44, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 24, borderWidth: 1, borderColor: selected ? theme.accent : theme.line,
+        backgroundColor: selected || pressed ? theme.surface : 'transparent', justifyContent: 'center' }}>
+    <Text style={{ color: selected ? theme.text : theme.muted, fontFamily: theme.fontFamily, fontSize: (role === 'tab' ? 16 : 14) * theme.scale, fontWeight: selected ? '700' : '500', textTransform: 'lowercase' }}>{label}</Text>
   </Pressable>;
 }
 

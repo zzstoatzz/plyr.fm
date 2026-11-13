@@ -119,12 +119,6 @@ async function pdsCall(method, data, token) {
         await page.getByRole('link', { name: 'edit recording 25', exact: true }).waitFor();
         assert.equal(requests.length, afterAlbums, 'Visited tracks stay loaded without a request');
         assert.equal(await page.getByRole('tab', { name: 'tracks', exact: true }).getAttribute('aria-selected'), 'true');
-        failNext = true;
-        await page.getByRole('button', { name: 'refresh catalog', exact: true }).click();
-        await page.getByRole('button', { name: 'retry', exact: true }).waitFor();
-        assert.equal(await page.getByRole('link', { name: 'edit recording 25', exact: true }).count(), 1, 'Failed revalidation retains all loaded rows');
-        await page.getByRole('button', { name: 'retry', exact: true }).click();
-        await page.getByRole('button', { name: 'retry', exact: true }).waitFor({ state: 'hidden' });
         await page.getByRole('link', { name: 'edit recording 25', exact: true }).click();
         await page.getByRole('textbox', { name: 'Title', exact: true }).fill('updated recording 25');
         await page.getByRole('button', { name: 'Save', exact: true }).click();
@@ -133,10 +127,6 @@ async function pdsCall(method, data, token) {
         await page.getByRole('link', { name: 'edit updated recording 25', exact: true }).waitFor();
         assert.equal(await page.getByRole('link', { name: 'edit recording 24', exact: true }).count(), 1, 'Indexed edit revalidates full loaded cursor chain');
         assert.equal(requests.filter(url => url.startsWith('/v1/albums')).length, 2, 'Track edit does not refresh inactive albums');
-        empty = true;
-        await page.getByRole('button', { name: 'refresh catalog', exact: true }).click();
-        await page.getByText('no published music here yet.', { exact: true }).waitFor();
-        await page.screenshot({ path: path.join(output, `${width}-${theme}-empty.png`) });
         await page.getByRole('link', { name: 'You', exact: true }).click();
         await page.getByRole('link', { name: 'Settings', exact: true }).click();
         await page.getByText(`@${handle}`, { exact: true }).waitFor();
