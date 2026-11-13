@@ -7,7 +7,7 @@ import ListMusic from 'lucide-react-native/icons/list-music';
 import RadioTower from 'lucide-react-native/icons/radio';
 import { NextGlyph as SkipForward, PauseGlyph as Pause, PlayGlyph as Play, PreviousGlyph as SkipBack } from './PlayerGlyph';
 import X from 'lucide-react-native/icons/x';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Animated, Modal, Platform, Pressable, StyleSheet, View, useWindowDimensions, type ScrollViewInstance, type ViewInstance } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Track } from './api';
@@ -126,6 +126,11 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
     if (dialog && !dialog.contains(document.activeElement)) (document.activeElement as HTMLElement | null)?.blur();
     return () => { window.removeEventListener('keydown', keys); root?.removeAttribute('aria-hidden'); };
   }, [overlay, present]);
+  useLayoutEffect(() => {
+    if (overlay) return;
+    playerSheet.modal = true;
+    return () => { playerSheet.modal = false; };
+  }, [overlay]);
   useEffect(() => { setFlying(!!flights); }, [!!flights]);
   useEffect(() => () => setFlying(false), []);
   // The flights and the resting art/title swap on the native thread as the sheet leaves its open position; both stay mounted so no image reloads mid-morph.

@@ -18,6 +18,8 @@ export const playerSheet = {
   settle: undefined as ((open: boolean, velocity: number) => void) | undefined,
   dock: { art: null, title: null } as Record<'art' | 'title', Measurable | null>,
   instant: false,
+  /** Native: now playing's Modal is mounted and its dismiss owns `translation`. */
+  modal: false,
   leaving: false,
   opened: undefined as (() => void) | undefined,
   /** Opens now playing from outside the dock (the radio grid); the dock sets it while it is mounted. */
