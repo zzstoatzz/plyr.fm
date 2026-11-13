@@ -84,6 +84,7 @@ const checks = {
   'check-private-audio-zds': [/^src\/(gated-audio|private-audio)/],
   'check-private-delete': [/^src\/publishing\/(PrivateTrackDelete|private-delete)/],
   'check-private-publishing': [/^src\/publishing\/(PrivateMusic|private-)/, /^app\/private/],
+  'check-protected-downloads': [/^src\/downloads\//, /^src\/gated-audio-shared/],
   'check-profile-editor': [/^src\/profile\//, /^app\/edit-profile/],
   'check-queue-drag': [/^src\/(QueueReorder|HomeTrackRow)/, /^src\/behaviors\/(reorder|use-reorder-handle|use-cancel-on-leave)/, /^app\/queue/],
   'check-queue-sync': [/^src\/(personal-queue|use-personal-queue|queue-)/],
