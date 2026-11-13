@@ -1,8 +1,8 @@
-import { trackArtwork, collectionArtwork, thumbnailUrl, THUMBNAIL_MAX_SIZE } from './artwork';
+import { trackArtwork, collectionArtwork, displayUrl } from './artwork';
 import { Text } from './Text';
 import { Link, type Href } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Animated, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Animated, PixelRatio, Platform, Pressable, StyleSheet, View } from 'react-native';
 import Music2 from 'lucide-react-native/icons/eighth-note';
 import { PlayGlyph as PlayIcon } from './PlayerGlyph';
 import { PlayerLoader } from './PlayerLoader';
@@ -148,18 +148,24 @@ export function Button(props: Parameters<typeof Action>[0]) {
   return <Action {...props} />;
 }
 
+const revealed = new Set<string>();
+
 export function Cover({ uri, size = 48, round = false, radius = 8, instant = false }: { uri?: string | null; size?: number; round?: boolean; radius?: number; instant?: boolean }) {
   const colors = useColors();
-  const [failedUri, setFailedUri] = useState<string>();
-  const opacity = useRef(new Animated.Value(instant ? 1 : 0)).current;
+  const sources = uri && /^https?:\/\//i.test(uri) ? [...new Set([displayUrl(uri, size, PixelRatio.get()), uri])] : [];
+  // A resized or thumbnail rendition that fails falls back to the original before the placeholder.
+  const [failed, setFailed] = useState<{ uri?: string | null; count: number }>({ count: 0 });
+  const source = sources[failed.uri === uri ? failed.count : 0];
+  const opacity = useRef(new Animated.Value(instant || source && revealed.has(source) ? 1 : 0)).current;
   const borderRadius = round ? size / 2 : radius;
   const style = { width: size, height: size, borderRadius, backgroundColor: colors.raised, ...(size >= 100 && !round ? artworkShadow(colors) : {}) };
-  const reveal = () => Animated.timing(opacity, { toValue: 1, duration: colors.reduceMotion ? 0 : 180, useNativeDriver: Platform.OS !== 'web' }).start();
-  const thumbnail = uri && size <= THUMBNAIL_MAX_SIZE ? thumbnailUrl(uri) : undefined;
-  // A missing thumbnail falls back to the original before the placeholder.
-  const source = thumbnail && thumbnail !== failedUri ? thumbnail : uri;
-  return uri && source && uri !== failedUri && /^https?:\/\//i.test(source) ? <View style={style}>
-    <Animated.Image accessibilityIgnoresInvertColors source={{ uri: source }} style={{ width: size, height: size, borderRadius, opacity }} onLoad={reveal} onError={() => setFailedUri(source)} />
+  const reveal = () => {
+    if (source) revealed.add(source);
+    Animated.timing(opacity, { toValue: 1, duration: colors.reduceMotion ? 0 : 180, useNativeDriver: Platform.OS !== 'web' }).start();
+  };
+  return source ? <View style={style}>
+    <Animated.Image accessibilityIgnoresInvertColors source={{ uri: source, cache: 'force-cache' }} style={{ width: size, height: size, borderRadius, opacity }} onLoad={reveal}
+      onError={() => setFailed(previous => ({ uri, count: (previous.uri === uri ? previous.count : 0) + 1 }))} />
   </View> : <View style={[style, { alignItems: 'center', justifyContent: 'center' }]}>
     {round ? <UserRound size={size * 0.38} color={colors.muted} /> : <Music2 size={size * 0.32} color={colors.muted} />}
   </View>;

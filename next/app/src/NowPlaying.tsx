@@ -7,7 +7,7 @@ import ListMusic from 'lucide-react-native/icons/list-music';
 import { NextGlyph as SkipForward, PauseGlyph as Pause, PlayGlyph as Play, PreviousGlyph as SkipBack } from './PlayerGlyph';
 import X from 'lucide-react-native/icons/x';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Modal, Platform, Pressable, ScrollView, StyleSheet, View, useWindowDimensions, type ScrollViewInstance, type ViewInstance } from 'react-native';
+import { Animated, Modal, Platform, Pressable, StyleSheet, View, useWindowDimensions, type ScrollViewInstance, type ViewInstance } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { Track } from './api';
 import { useAppearance } from './appearance';
@@ -50,11 +50,6 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
     go(target);
     dismiss.exit(depart(() => playerSheet.hide()));
   };
-  const [away, setAway] = useState(() => playerSheet.value > 0.5);
-  useEffect(() => {
-    const id = playerSheet.translation.addListener(({ value }) => setAway(value > 0.5));
-    return () => playerSheet.translation.removeListener(id);
-  }, []);
   const backdrop = useRef<ViewInstance | null>(null);
   const panelRef = useRef<ViewInstance>(null);
   const artRef = useRef<ViewInstance>(null);
@@ -118,7 +113,9 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
   }, [overlay, present]);
   useEffect(() => { setFlying(!!flights); }, [!!flights]);
   useEffect(() => () => setFlying(false), []);
-  const carried = flights && away ? { opacity: 0 } : undefined;
+  // The flights and the resting art/title swap on the native thread as the sheet leaves its open position; both stay mounted so no image reloads mid-morph.
+  const departed = (open: number, away: number) => playerSheet.translation.interpolate({ inputRange: [0, 1], outputRange: [open, away], extrapolate: 'clamp' });
+  const carried = flights ? { opacity: departed(1, 0) } : undefined;
   const fade = (open: number, docked: number, from: number, to: number) => morph
     ? playerSheet.translation.interpolate({ inputRange: [rest * from, rest * to], outputRange: [open, docked], extrapolate: 'clamp' }) : open;
   const settle = (progress: number) => { const k = Math.min(1, progress / 0.4); return k * k * (3 - 2 * k); };
@@ -140,6 +137,10 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
   const plays = usePlayCount(track.id, track.metrics.play_count);
 
   closeRef.current = close;
+  dismiss.scrolled.current = event => {
+    const past = titleEnd.current.meta > 0 && event.nativeEvent.contentOffset.y > titleEnd.current.body + titleEnd.current.meta;
+    if (past !== condensed) setCondensed(past);
+  };
   const sheet = <View ref={node => { backdrop.current = node; dismiss.panelRef(node); }} style={overlay ? [styles.backdrop, styles.overlay, !present && styles.hidden] : styles.backdrop}
       {...(overlay ? { role: 'dialog' as const, 'aria-modal': true, 'aria-label': 'Now playing' } : {})}>
       <AnimatedSafeAreaView {...dismiss.panHandlers} accessibilityViewIsModal={Platform.OS === 'web' ? undefined : true} edges={['top', 'bottom']}
@@ -164,17 +165,17 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
             <PlayerControl primary icon={playing ? Pause : Play} label={playing ? 'Pause' : 'Play'} onPress={() => player.setPlaying(!playing)} busy={player.loading} />
           </Animated.View> : <View {...dismiss.protect}><PlayerControl icon={X} label="Close" onPress={close} /></View>}
         </View>
-        <Animated.View {...dismiss.contentStartHandlers} style={[styles.scrollRegion, morph && { transform: [{ translateY: fade(0, -0.6 * rest, 0, 1) }] }]}>
-          <ScrollView ref={scroller} testID="now-playing-scroll" onScroll={event => { dismiss.onScroll(event); const past = titleEnd.current.meta > 0 && event.nativeEvent.contentOffset.y > titleEnd.current.body + titleEnd.current.meta; if (past !== condensed) setCondensed(past); }} scrollEventThrottle={16} scrollEnabled={!dismiss.dragging}
-            style={Platform.OS === 'web' && compact ? scrollTouch : undefined} contentContainerStyle={[styles.content, sideBySide && styles.desktopContent]} alwaysBounceVertical={false}>
-            <View testID="now-playing-artwork" style={[styles.art, carried]}>
+        <Animated.View {...dismiss.contentStartHandlers} style={[styles.scrollRegion, { transform: [{ translateY: morph ? fade(0, -0.6 * rest, 0, 1) : 0 }, { translateY: dismiss.contentPull ?? 0 }] }]}>
+          <Animated.ScrollView ref={scroller} testID="now-playing-scroll" {...dismiss.scrollProps} scrollEventThrottle={16} scrollEnabled={!dismiss.dragging}
+            style={Platform.OS === 'web' && compact ? scrollTouch : undefined} contentContainerStyle={[styles.content, sideBySide && styles.desktopContent]}>
+            <Animated.View testID="now-playing-artwork" style={[styles.art, carried]}>
               <View ref={artRef}><Cover uri={trackArtwork(track)} size={artwork} radius={16} /></View>
-            </View>
+            </Animated.View>
             <View onLayout={event => { titleEnd.current.body = sideBySide ? 0 : event.nativeEvent.layout.y; }} style={[styles.body, sideBySide ? [styles.desktopBody, { maxWidth: 440 }] : { width: artwork }]}>
               <View onLayout={event => { titleEnd.current.meta = event.nativeEvent.layout.y + event.nativeEvent.layout.height; }} style={styles.meta}>
-                <View ref={titleRef} style={carried}><Text testID="now-playing-title" accessibilityRole="header" accessibilityLabel={track.metadata.title} numberOfLines={2} style={titleStyle}>
+                <Animated.View ref={titleRef} style={carried}><Text testID="now-playing-title" accessibilityRole="header" accessibilityLabel={track.metadata.title} numberOfLines={2} style={titleStyle}>
                   {track.metadata.title}
-                </Text></View>
+                </Text></Animated.View>
                 <View {...dismiss.protect} style={{ alignSelf: 'flex-start', maxWidth: '100%' }}><Pressable accessibilityRole="link" style={styles.artist} onPress={() => {
                   navigate(`/u/${encodeURIComponent(track.artist.profile.handle || track.artist.did)}`);
                 }}>
@@ -211,11 +212,11 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
               {sideBySide && <View style={{ alignItems: 'center' }}><PlayerVolume /></View>}
               <NowPlayingDetails track={track} plays={plays} protect={dismiss.protect} navigate={navigate} />
             </View>
-          </ScrollView>
+          </Animated.ScrollView>
         </Animated.View>
         </Animated.View>
         <View ref={panelRef} pointerEvents="none" aria-hidden importantForAccessibility="no-hide-descendants" style={StyleSheet.absoluteFill}>
-          {flights && away && <View testID="now-playing-flights" style={StyleSheet.absoluteFill}>
+          {flights && <Animated.View testID="now-playing-flights" style={[StyleSheet.absoluteFill, { opacity: departed(0, 1) }]}>
             <PlayerFlight testID="now-playing-flight-art" {...flights.art} rest={rest} left={artLeft} origin={<Cover instant uri={trackArtwork(track)} size={flights.art.from.width} radius={6} />}>
               <Cover instant uri={trackArtwork(track)} size={flights.art.to.width} radius={16} />
             </PlayerFlight>
@@ -223,7 +224,7 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
               origin={<Text numberOfLines={1} style={{ color: theme.text, fontSize: 14 * theme.scale, fontWeight: '700' }}>{track.metadata.title}</Text>}>
               <Text numberOfLines={2} style={titleStyle}>{track.metadata.title}</Text>
             </PlayerFlight>
-          </View>}
+          </Animated.View>}
         </View>
       </AnimatedSafeAreaView>
     </View>;
