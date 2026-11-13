@@ -67,7 +67,7 @@ pub fn validate(request: Request, owner: []const u8, collection: []const u8) !vo
         if (std.mem.eql(u8, request.fileType, format[0]) and std.mem.eql(u8, request.contentType, format[1])) return;
     }
     if (request.processing != null) {
-        const processing_formats = .{ .{ "aif", "audio/aiff" }, .{ "aiff", "audio/aiff" }, .{ "webm", "audio/webm" } };
+        const processing_formats = .{ .{ "aif", "audio/aiff" }, .{ "aiff", "audio/aiff" }, .{ "webm", "audio/webm" }, .{ "opus", "audio/opus" } };
         inline for (processing_formats) |format| {
             if (std.mem.eql(u8, request.fileType, format[0]) and std.mem.eql(u8, request.contentType, format[1])) return;
         }
@@ -152,6 +152,11 @@ test "processing admits legacy inputs only with bounded source and output reserv
     request.fileType = "webm";
     request.contentType = "audio/webm";
     try validate(request, owner, "fm.plyr.dev.track");
+    request.fileType = "opus";
+    request.contentType = "audio/opus";
+    try validate(request, owner, "fm.plyr.dev.track");
+    request.processing = null;
+    try std.testing.expectError(error.InvalidUpload, validate(request, owner, "fm.plyr.dev.track"));
 }
 
 pub fn requireAllowed(a: std.mem.Allocator, owner: []const u8) !void {
