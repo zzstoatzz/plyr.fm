@@ -6,6 +6,8 @@ import { ActionRow } from '../ActionRow';
 import { Action, Copy, row } from '../controls';
 import { downloadAllowed, prepareDownload } from './model';
 import { saveDownload } from './delivery';
+import { useAuth } from '../auth';
+import { prepareProtectedDownload } from './protected';
 
 function formatAudio(audio: { mime: string; sizeBytes?: number }): string {
   const type = audio.mime.replace(/^audio\//, '').toUpperCase();
@@ -16,17 +18,23 @@ function formatAudio(audio: { mime: string; sizeBytes?: number }): string {
 }
 
 export function DownloadAction({ track }: { track: Track }) {
+  const auth = useAuth();
   const [busy, setBusy] = useState(false), [message, setMessage] = useState<string>();
   const [choice, setChoice] = useState<Awaited<ReturnType<typeof prepareDownload>>>();
   const active = useRef<AbortController | null>(null);
   useEffect(() => () => { active.current?.abort(); }, [track.record.uri]);
+  useEffect(() => {
+    active.current?.abort(); active.current = null;
+    setBusy(false); setChoice(undefined); setMessage(undefined);
+  }, [auth.did, auth.rpc]);
   async function download(selection?: 'playback' | 'original') {
     if (active.current) return;
     const controller = new AbortController(); active.current = controller;
     setBusy(true); setMessage(undefined);
     try {
       const prepared = await prepareDownload(track.id, track.record.uri, {
-        track: id => api.track(id, { fresh: true }), playback: id => api.playback(id, { fresh: true }), artist: api.artist
+        track: id => api.track(id, { fresh: true }), playback: id => api.playback(id, { fresh: true }), artist: api.artist,
+        protected: (current, uri) => prepareProtectedDownload(current, uri, auth, controller.signal)
       }, controller.signal);
       controller.signal.throwIfAborted();
       if (!selection && (prepared.support || prepared.original)) { setChoice(prepared); return; }

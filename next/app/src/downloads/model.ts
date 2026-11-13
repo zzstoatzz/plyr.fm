@@ -2,6 +2,10 @@ import type { Artist, Playback, Track } from '../api.ts';
 import { readDownloadManifest, serviceMediaUrl, type DownloadManifest } from './manifest.ts';
 
 export const MAX_BUFFERED_DOWNLOAD_BYTES = 104_857_600;
+type PublicDownload = { kind: 'public'; source: string; attachment?: string; mime: string; filename: string; sizeBytes?: number };
+export type ProtectedDownload = { kind: 'protected'; mime: string; sizeBytes: number; filename: string; guard(): void; open(): Promise<Response> };
+export type PreparedDownload = PublicDownload | ProtectedDownload;
+type DownloadChoice = PreparedDownload & { original?: PublicDownload; support: string | null; title: string };
 
 export function downloadAllowed(track: Track): boolean {
   return (track.access.visibility === 'public' || track.access.visibility === 'unlisted')
@@ -42,20 +46,27 @@ export function downloadFilename(track: Track, mime: string): string {
 export async function prepareDownload(id: string, uri: string, read: {
   track: (id: string) => Promise<Track>; playback: (id: string) => Promise<Playback>; artist: (did: string) => Promise<Artist>;
   manifest?: (source: string, signal?: AbortSignal) => Promise<DownloadManifest>;
-}, signal?: AbortSignal) {
+  protected?: (track: Track, uri: string) => Promise<Omit<ProtectedDownload, 'filename'> & { policy: 'open' | 'ask' }>;
+}, signal?: AbortSignal): Promise<DownloadChoice> {
   const track = await read.track(id);
   if (track.record.uri !== uri || !track.record.cid || !downloadAllowed(track)) throw new Error('downloads are unavailable for this track.');
-  const support = track.access.download_policy === 'ask' ? await read.artist(track.artist.did).then(artist => safeHttpUrl(artist.support_url)).catch(() => null) : null;
   const playback = await read.playback(id);
   const availability = playback.availability;
-  if (playback.record.uri !== uri || playback.record.cid !== track.record.cid || availability.status !== 'available' || availability.space) throw new Error('this track changed or is unavailable. try again.');
+  if (playback.record.uri !== uri || playback.record.cid !== track.record.cid) throw new Error('this track changed or is unavailable. try again.');
+  const supportFor = async (ask: boolean) => ask ? read.artist(track.artist.did).then(artist => safeHttpUrl(artist.support_url)).catch(() => null) : null;
+  if (availability.status === 'gated' && availability.space && read.protected) {
+    const protectedAudio = await read.protected(track, availability.space.record);
+    const support = await supportFor(track.access.download_policy === 'ask' || protectedAudio.policy === 'ask');
+    protectedAudio.guard();
+    return { ...protectedAudio, filename: downloadFilename(track, protectedAudio.mime), support, title: track.metadata.title };
+  }
+  if (availability.status !== 'available' || availability.space) throw new Error('this track changed or is unavailable. try again.');
+  const support = await supportFor(track.access.download_policy === 'ask');
   const source = safeHttpUrl(availability.delivery?.url);
   if (!source || !availability.delivery?.media_type.startsWith('audio/')) throw new Error('no downloadable audio is available.');
   const manifest = serviceMediaUrl(source) ? await (read.manifest || readDownloadManifest)(source, signal) : undefined;
   const playbackAudio = manifest?.playback || { source, mime: availability.delivery.media_type, sizeBytes: undefined };
-  const playbackDownload = { ...playbackAudio, attachment: attachmentUrl(source), filename: downloadFilename(track, playbackAudio.mime) };
-  const original = manifest?.processed ? { ...manifest.original, attachment: manifest.original.source, filename: downloadFilename(track, manifest.original.mime) } : undefined;
+  const playbackDownload: PublicDownload = { kind: 'public', ...playbackAudio, attachment: attachmentUrl(source), filename: downloadFilename(track, playbackAudio.mime) };
+  const original: PublicDownload | undefined = manifest?.processed ? { kind: 'public', ...manifest.original, attachment: manifest.original.source, filename: downloadFilename(track, manifest.original.mime) } : undefined;
   return { ...playbackDownload, original, support, title: track.metadata.title };
 }
-
-export type PreparedDownload = Pick<Awaited<ReturnType<typeof prepareDownload>>, 'source' | 'attachment' | 'mime' | 'filename'>;
