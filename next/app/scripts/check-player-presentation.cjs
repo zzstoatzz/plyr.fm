@@ -155,6 +155,10 @@ async function run(browser, width, theme) {
     };
     await open();
     await plainControls(page);
+    if (width < 600) {
+      const [fold, details] = await Promise.all([page.getByTestId('now-playing-scroll').boundingBox(), page.getByTestId('now-playing-artist').boundingBox()]);
+      assert.ok(details.y >= fold.y + fold.height, 'The details start below the first screen instead of peeking into it');
+    }
     await screenshot(page, name + '-now-playing');
     const cdp = await context.newCDPSession(page);
     const header = page.getByTestId('now-playing-dismiss-region');
@@ -200,7 +204,8 @@ async function run(browser, width, theme) {
         await gesture(page, cdp, { x: body.x + body.width / 2, y: body.y + body.height / 2 }, 0, 150);
         await continuous(); await open();
       }
-      await gesture(page, cdp, { x: width / 2, y: 750 }, 0, 140);
+      const below = await page.getByTestId('now-playing-scroll').boundingBox();
+      await gesture(page, cdp, { x: width / 2, y: below.y + below.height - 12 }, 0, 140);
       await continuous(); await open();
       const pause = await page.getByTestId('now-playing-scroll').getByRole('button', { name: 'Pause', exact: true }).boundingBox();
       await gesture(page, cdp, { x: pause.x + pause.width / 2, y: pause.y + pause.height / 2 }, 0, 150);

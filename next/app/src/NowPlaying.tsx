@@ -51,6 +51,8 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
   const insets = useSafeAreaInsets();
   // Native pads with the provider's insets: a SafeAreaView inside the Modal applies its own only after layout, after the morph measures.
   const inset = Platform.OS === 'web' ? undefined : { paddingTop: insets.top, paddingBottom: insets.bottom };
+  // On a phone the player fills the first screen exactly; the details start below the fold instead of peeking up into it.
+  const [viewport, setViewport] = useState(0);
   const [measured, setMeasured] = useState(overlay || !morph);
   const dismiss = usePlayerDismiss(compact, width, height, depart(leave), theme.reduceMotion, rest, present && shown && measured);
   const pull = usePlayerPull(compact && shown && measured, dismiss.pull);
@@ -92,12 +94,12 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
       setRects({ art: { from: docked(dockArt), to: open(art) }, title: { from: docked(dockTitle), to: open(title) } });
     })());
     return () => { cancelled = true; cancelAnimationFrame(frame); };
-  }, [morph, present, shown, track.id, track.metadata.title, width, height, theme.scale, artwork]);
+  }, [morph, present, shown, track.id, track.metadata.title, width, height, theme.scale, artwork, viewport]);
   const flights = morph && present && rects && dismiss.atTop ? rects : undefined;
   const scroller = useRef<ScrollViewInstance>(null);
   useEffect(() => { if (overlay && present) scroller.current?.scrollTo({ y: 0, animated: false }); }, [overlay, present]);
   const [condensed, setCondensed] = useState(false);
-  const titleEnd = useRef({ body: 0, meta: 0 });
+  const titleEnd = useRef({ hero: 0, body: 0, meta: 0 });
   const condense = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.timing(condense, { toValue: condensed ? 1 : 0, duration: theme.reduceMotion ? 0 : 160, useNativeDriver: Platform.OS !== 'web' }).start();
@@ -164,9 +166,11 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
   const caption = { color: theme.muted, fontFamily: theme.fontFamily, fontSize: 13 * theme.scale };
   const plays = usePlayCount(track.id, track.metrics.play_count);
 
+  const details = <NowPlayingDetails track={track} plays={plays} protect={dismiss.protect} navigate={navigate} />;
+
   closeRef.current = close;
   dismiss.scrolled.current = event => {
-    const past = titleEnd.current.meta > 0 && event.nativeEvent.contentOffset.y > titleEnd.current.body + titleEnd.current.meta;
+    const past = titleEnd.current.meta > 0 && event.nativeEvent.contentOffset.y > titleEnd.current.hero + titleEnd.current.body + titleEnd.current.meta;
     if (past !== condensed) setCondensed(past);
   };
   const sheet = <View ref={node => { backdrop.current = node; dismiss.panelRef(node); }} style={overlay ? [styles.backdrop, styles.overlay, !present && styles.hidden] : styles.backdrop}
@@ -193,9 +197,11 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
             <PlayerControl primary icon={playing ? Pause : Play} label={playing ? 'Pause' : 'Play'} onPress={() => player.setPlaying(!playing)} busy={player.loading} />
           </Animated.View> : <View {...dismiss.protect}><PlayerControl icon={X} label="Close" onPress={close} /></View>}
         </View>
-        <Animated.View {...dismiss.contentStartHandlers} style={[styles.scrollRegion, { transform: [{ translateY: morph ? fade(0, -0.6 * rest, 0, 1) : 0 }] }]}>
+        <Animated.View {...dismiss.contentStartHandlers} onLayout={event => setViewport(event.nativeEvent.layout.height)} style={[styles.scrollRegion, { transform: [{ translateY: morph ? fade(0, -0.6 * rest, 0, 1) : 0 }] }]}>
           <PullDetector gesture={pull.scroll}><Animated.ScrollView ref={scroller} testID="now-playing-scroll" {...dismiss.scrollProps} scrollEventThrottle={16} scrollEnabled={!dismiss.dragging}
             style={Platform.OS === 'web' && compact ? scrollTouch : undefined} contentContainerStyle={[styles.content, sideBySide && styles.desktopContent]}>
+            <View testID="now-playing-hero" onLayout={event => { titleEnd.current.hero = sideBySide ? 0 : event.nativeEvent.layout.y; }}
+              style={sideBySide ? styles.heroSide : [styles.hero, viewport > 0 && { minHeight: viewport - 36 }]}>
             <Animated.View testID="now-playing-artwork" style={[styles.art, artCarried]}>
               <View ref={artRef}><Cover uri={art} size={artwork} radius={16} onSettle={() => setSettledArt(art)} /></View>
             </Animated.View>
@@ -242,8 +248,10 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
                   : <PlayerControl icon={ListMusic} label="Queue" onPress={() => navigate('/queue')} />}</View>
               </View>
               {sideBySide && <View style={{ alignItems: 'center' }}><PlayerVolume /></View>}
-              <NowPlayingDetails track={track} plays={plays} protect={dismiss.protect} navigate={navigate} />
+              {sideBySide && details}
             </View>
+            </View>
+            {!sideBySide && <View style={{ width: artwork }}>{details}</View>}
           </Animated.ScrollView></PullDetector>
         </Animated.View>
         </Animated.View>
@@ -279,6 +287,8 @@ const styles = StyleSheet.create({
   scrollRegion: { flex: 1, minHeight: 0 },
   content: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16, gap: 20, alignItems: 'center' },
   desktopContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexGrow: 1, width: '100%', maxWidth: 1440, alignSelf: 'center', padding: 40, gap: 56 },
+  hero: { gap: 20, alignItems: 'center', justifyContent: 'center' },
+  heroSide: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 56 },
   art: { alignItems: 'center' },
   body: { gap: 16, minWidth: 0 },
   desktopBody: { flex: 1 },
