@@ -189,6 +189,11 @@ cache file when the sheet finishes. Rebuild the native app after installing the
 Expo Sharing dependency. Public-byte URLs remain public; this UI does not revoke
 existing copies or implement owner policy editing.
 
+Processed Next audio offers a choice of playback audio or the retained original
+upload. Raw uploads keep one download action. Choices require the published
+service manifest and refresh effective access before saving; a missing or invalid
+manifest does not authorize an original download.
+
 `node scripts/check-downloads.cjs` checks real browser save events and exact
 fixture bytes, fresh-policy refusal, optional support, cancellation and track
 navigation. Set `DOWNLOAD_SCALE=1.4` for enlarged text and `PLAYER_DIST` for a

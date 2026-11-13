@@ -1,8 +1,7 @@
 import type { Artist, Playback, Track } from '../api.ts';
+import { readDownloadManifest, serviceMediaUrl, type DownloadManifest } from './manifest.ts';
 
 export const MAX_BUFFERED_DOWNLOAD_BYTES = 104_857_600;
-const audioOrigin = 'https://plyr-next-audio.n8-3e9.workers.dev';
-const mediaPath = /^\/media\/[a-f0-9]{64}\/[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 
 export function downloadAllowed(track: Track): boolean {
   return (track.access.visibility === 'public' || track.access.visibility === 'unlisted')
@@ -19,14 +18,15 @@ export function safeHttpUrl(value: string | null | undefined): string | null {
 }
 
 export function attachmentUrl(source: string): string | undefined {
-  const url = new URL(source);
-  if (url.origin !== audioOrigin || !mediaPath.test(url.pathname) || url.search || url.hash) return;
+  const base = serviceMediaUrl(source);
+  if (!base) return;
+  const url = new URL(base);
   url.searchParams.set('download', '1');
   return url.href;
 }
 
 export function downloadFilename(track: Track, mime: string): string {
-  const extensions: Record<string, string> = { 'audio/mpeg': 'mp3', 'audio/mp3': 'mp3', 'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/flac': 'flac', 'audio/x-flac': 'flac', 'audio/mp4': 'm4a', 'audio/aac': 'aac', 'audio/ogg': 'ogg', 'audio/webm': 'webm' };
+  const extensions: Record<string, string> = { 'audio/mpeg': 'mp3', 'audio/mp3': 'mp3', 'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/flac': 'flac', 'audio/x-flac': 'flac', 'audio/mp4': 'm4a', 'audio/aac': 'aac', 'audio/ogg': 'ogg', 'audio/webm': 'webm', 'audio/aiff': 'aiff', 'audio/x-aiff': 'aiff' };
   const artist = track.metadata.artist_name || track.artist.profile.display_name || track.artist.profile.handle;
   const clean = `${artist} - ${track.metadata.title}`.replace(/[\\/:*?"<>|\u0000-\u001f\u007f]/g, '').trim();
   const encoder = new TextEncoder();
@@ -41,7 +41,8 @@ export function downloadFilename(track: Track, mime: string): string {
 
 export async function prepareDownload(id: string, uri: string, read: {
   track: (id: string) => Promise<Track>; playback: (id: string) => Promise<Playback>; artist: (did: string) => Promise<Artist>;
-}) {
+  manifest?: (source: string, signal?: AbortSignal) => Promise<DownloadManifest>;
+}, signal?: AbortSignal) {
   const track = await read.track(id);
   if (track.record.uri !== uri || !track.record.cid || !downloadAllowed(track)) throw new Error('downloads are unavailable for this track.');
   const support = track.access.download_policy === 'ask' ? await read.artist(track.artist.did).then(artist => safeHttpUrl(artist.support_url)).catch(() => null) : null;
@@ -50,7 +51,11 @@ export async function prepareDownload(id: string, uri: string, read: {
   if (playback.record.uri !== uri || playback.record.cid !== track.record.cid || availability.status !== 'available' || availability.space) throw new Error('this track changed or is unavailable. try again.');
   const source = safeHttpUrl(availability.delivery?.url);
   if (!source || !availability.delivery?.media_type.startsWith('audio/')) throw new Error('no downloadable audio is available.');
-  return { source, attachment: attachmentUrl(source), mime: availability.delivery.media_type, filename: downloadFilename(track, availability.delivery.media_type), support, title: track.metadata.title };
+  const manifest = serviceMediaUrl(source) ? await (read.manifest || readDownloadManifest)(source, signal) : undefined;
+  const playbackAudio = manifest?.playback || { source, mime: availability.delivery.media_type, sizeBytes: undefined };
+  const playbackDownload = { ...playbackAudio, attachment: attachmentUrl(source), filename: downloadFilename(track, playbackAudio.mime) };
+  const original = manifest?.processed ? { ...manifest.original, attachment: manifest.original.source, filename: downloadFilename(track, manifest.original.mime) } : undefined;
+  return { ...playbackDownload, original, support, title: track.metadata.title };
 }
 
-export type PreparedDownload = Awaited<ReturnType<typeof prepareDownload>>;
+export type PreparedDownload = Pick<Awaited<ReturnType<typeof prepareDownload>>, 'source' | 'attachment' | 'mime' | 'filename'>;

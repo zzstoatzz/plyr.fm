@@ -4,9 +4,11 @@ const { withPlayerHarness, setup, track, screenshot } = require('./check-player-
 const sample = Buffer.alloc(44 + 16000);
 sample.write('RIFF'); sample.writeUInt32LE(sample.length - 8, 4); sample.write('WAVEfmt ', 8); sample.writeUInt32LE(16, 16); sample.writeUInt16LE(1, 20); sample.writeUInt16LE(1, 22); sample.writeUInt32LE(8000, 24); sample.writeUInt32LE(16000, 28); sample.writeUInt16LE(2, 32); sample.writeUInt16LE(16, 34); sample.write('data', 36); sample.writeUInt32LE(sample.length - 44, 40);
 const attachment = 'https://plyr-next-audio.n8-3e9.workers.dev/media/' + 'a'.repeat(64) + '/12345678-1234-4123-8123-123456789abc';
+const originalSample = Buffer.from(sample); originalSample[44] = 42;
 async function run(browser, width, theme) {
   let policy = 'open', visibility = 'public', source = 'https://download-fixture.invalid/audio.wav', mismatch = false, gated = false, unavailable = false, huge = false, hold = false, release, entered = false;
   let mediaReads = 0, heads = 0;
+  let processed = false, invalidManifest = false, manifestReads = 0;
   const otherUri = track.record.uri + '-second';
   const other = { ...track, id: 'trk_' + Buffer.from(otherUri).toString('base64url'), record: { ...track.record, uri: otherUri }, metadata: { ...track.metadata, title: 'another download fixture' }, access: { visibility: 'public', download_policy: 'open' } };
   const current = () => ({ ...track, access: { visibility, download_policy: policy } });
@@ -27,14 +29,23 @@ async function run(browser, width, theme) {
       if (route.request().method() === 'HEAD') heads++; else mediaReads++;
       await route.fulfill({ body: route.request().method() === 'HEAD' ? '' : sample, headers: { 'content-type': 'audio/wav', 'content-disposition': 'attachment; filename="audio.wav"', 'content-length': String(route.request().method() === 'HEAD' ? 200_000_000 : sample.length), 'access-control-allow-origin': '*', 'access-control-expose-headers': 'content-disposition, content-length' } });
     });
+    await context.route(attachment + '/manifest', async route => {
+      manifestReads++;
+      await route.fulfill({ json: { processed, original: { url: invalidManifest ? 'https://foreign.invalid/audio' : attachment + '/original', contentType: 'audio/wav', fileType: 'wav', sizeBytes: originalSample.length }, playback: { url: attachment, contentType: 'audio/wav', sizeBytes: sample.length } } });
+    });
+    await context.route(attachment + '/original', async route => {
+      assert.ok(['HEAD', 'GET'].includes(route.request().method()));
+      if (route.request().method() === 'HEAD') heads++; else mediaReads++;
+      await route.fulfill({ body: route.request().method() === 'HEAD' ? '' : originalSample, headers: { 'content-type': 'audio/wav', 'content-disposition': 'attachment; filename="original.wav"', 'content-length': String(originalSample.length), 'access-control-allow-origin': '*', 'access-control-expose-headers': 'content-disposition, content-length' } });
+    });
     const enter = async () => { await page.goto(new URL('/track/' + track.id, page.url()).href); await page.getByRole('button', { name: 'More', exact: true }).click(); await page.getByRole('button', { name: 'add to queue', exact: true }).click({ trial: true }); await page.evaluate(() => Promise.all(document.getAnimations().map(animation => animation.finished.catch(() => {})))); };
     const download = () => page.getByRole('button', { name: 'download audio', exact: true }).click();
-    const file = async action => {
+    const file = async (action, expected = sample) => {
       const pending = page.waitForEvent('download'); await action(); const result = await pending;
       let timer;
       try {
         assert.equal(await Promise.race([result.failure(), new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('download completion timed out')), 15000); })]), null);
-        assert.ok((await fs.readFile(await result.path())).equals(sample), 'saved file bytes must exactly match the fixture');
+        assert.ok((await fs.readFile(await result.path())).equals(expected), 'saved file bytes must exactly match the selected fixture');
         return result;
       } finally { clearTimeout(timer); }
     };
@@ -50,6 +61,21 @@ async function run(browser, width, theme) {
     assert.equal(mediaReads, 1); await screenshot(page, `download-ask-${width}-${theme}`);
     await file(() => page.getByRole('button', { name: 'Continue download', exact: true }).click()); assert.equal(mediaReads, 2);
     policy = 'open'; source = attachment; await enter(); assert.equal((await file(download)).suggestedFilename(), 'audio.wav'); assert.equal(heads, 1); assert.equal(mediaReads, 3);
+    assert.equal(await page.getByRole('button', { name: /^Original upload/ }).count(), 0, 'raw uploads must not offer duplicate formats');
+    processed = true; await download();
+    const originalButton = () => page.getByRole('button', { name: /^Original upload/ });
+    await originalButton().waitFor(); await screenshot(page, `download-original-choice-${width}-${theme}`);
+    const beforeOriginal = manifestReads;
+    assert.equal((await file(() => originalButton().click(), originalSample)).suggestedFilename(), 'original.wav');
+    assert.equal(manifestReads, beforeOriginal + 1, 'selection must refresh the manifest');
+    await download(); await file(() => page.getByRole('button', { name: /^Playback audio/ }).click());
+    policy = 'ask'; await download(); await originalButton().waitFor(); await screenshot(page, `download-original-ask-${width}-${theme}`);
+    const beforeDenied = mediaReads; policy = 'off'; await originalButton().click();
+    await page.getByText('downloads are unavailable for this track.', { exact: true }).waitFor(); assert.equal(mediaReads, beforeDenied);
+    policy = 'open'; invalidManifest = true; await download();
+    await page.getByText('the audio download information is unavailable. try again.', { exact: true }).waitFor(); assert.equal(mediaReads, beforeDenied); invalidManifest = false;
+    await download(); await originalButton().waitFor(); processed = false; await originalButton().click();
+    await page.getByText('the original download changed. choose a download again.', { exact: true }).waitFor(); assert.equal(mediaReads, beforeDenied);
     source = 'https://download-fixture.invalid/audio.wav'; huge = true; await download();
     await page.getByText('this source needs a direct download link for files over 100 MiB.', { exact: true }).waitFor(); await screenshot(page, `download-unavailable-${width}-${theme}`);
     huge = false; hold = true; await download(); for (let i = 0; i < 100 && !entered; i++) await new Promise(resolve => setTimeout(resolve, 20)); assert.ok(entered);

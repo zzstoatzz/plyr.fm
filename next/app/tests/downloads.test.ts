@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { Artist, Playback, Track } from '../src/api.ts';
 import { attachmentUrl, downloadAllowed, downloadFilename, prepareDownload } from '../src/downloads/model.ts';
+import { parseDownloadManifest } from '../src/downloads/manifest.ts';
 
 const track: Track = { object: 'track', id: 'track', record: { uri: 'at://did:plc:artist/fm.plyr.track/song', cid: 'revision', revision: null, collection: 'fm.plyr.track', rkey: 'song' }, metadata: { title: 'a/b: song', artist_name: 'artist', description: null, album: null, duration_seconds: 1, created_at: '2026-11-12T00:00:00Z' }, artist: { did: 'did:plc:artist', profile: { handle: 'artist.test', display_name: 'artist', avatar_url: null } }, media: {}, access: { visibility: 'public', download_policy: 'open' }, metrics: { play_count: 0, like_count: 0 } };
 const playback: Playback = { object: 'playback', track_id: track.id, record: { uri: track.record.uri, cid: 'revision' }, availability: { status: 'available', delivery: { url: 'https://media.test/audio.wav', media_type: 'audio/wav' } } };
@@ -35,4 +36,21 @@ test('Unicode filenames fit native filesystem component limits without splitting
   const filename = downloadFilename({ ...track, metadata: { ...track.metadata, title: '🎵'.repeat(120) } }, 'audio/wav');
   assert.ok(new TextEncoder().encode(filename).byteLength <= 184);
   assert.match(filename, /🎵\.wav$/u);
+});
+
+test('processed service downloads bind both choices to the published media path', async () => {
+  const source = 'https://plyr-next-audio.n8-3e9.workers.dev/media/' + 'a'.repeat(64) + '/12345678-1234-4123-8123-123456789abc';
+  const value = { processed: true, playback: { url: source, contentType: 'audio/mpeg', sizeBytes: 1000 }, original: { url: source + '/original', contentType: 'audio/flac', fileType: 'flac', sizeBytes: 2000 } };
+  const manifest = parseDownloadManifest(value, source);
+  const serviceRead = { ...read, playback: async () => ({ ...playback, availability: { status: 'available' as const, delivery: { url: source, media_type: 'audio/mpeg' } } }), manifest: async () => manifest };
+  const prepared = await prepareDownload(track.id, track.record.uri, serviceRead);
+  assert.equal(prepared.source, source); assert.equal(prepared.filename, 'artist - ab song.mp3');
+  assert.equal(prepared.original?.source, source + '/original'); assert.equal(prepared.original?.attachment, source + '/original');
+  assert.equal(prepared.original?.filename, 'artist - ab song.flac'); assert.equal(prepared.original?.sizeBytes, 2000);
+  assert.equal(downloadFilename(track, 'audio/aiff'), 'artist - ab song.aiff');
+  assert.equal((await prepareDownload(track.id, track.record.uri, { ...serviceRead, manifest: async () => ({ ...manifest, processed: false }) })).original, undefined);
+  let manifestReads = 0;
+  await assert.rejects(prepareDownload(track.id, track.record.uri, { ...serviceRead, track: async () => ({ ...track, access: { ...track.access, download_policy: 'off' } }), manifest: async () => { manifestReads++; return manifest; } }));
+  assert.equal(manifestReads, 0);
+  for (const invalid of [null, [], { ...value, processed: undefined }, { ...value, processed: 'true' }, { ...value, original: { ...value.original, url: 'https://other.test/original' } }, { ...value, playback: { ...value.playback, url: source + '?download=1' } }, { ...value, original: { ...value.original, sizeBytes: 1.5 } }, { ...value, original: { ...value.original, contentType: 'text/html' } }]) assert.throws(() => parseDownloadManifest(invalid, source));
 });
