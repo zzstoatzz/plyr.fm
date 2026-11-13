@@ -1,4 +1,5 @@
 import { routeUpload } from "./upload-worker.ts";
+import { routeGenres } from "./genres.ts";
 export { OwnerUploads } from "./upload-worker.ts";
 
 // Content-addressed audio for next.plyr.fm.
@@ -21,7 +22,7 @@ const CORS = {
 
 export default {
   async fetch(request, env) {
-    const upload = await routeUpload(request, env);
+    const upload = await routeUpload(request, env) ?? await routeGenres(request, env);
     if (upload) return upload;
     const key = new URL(request.url).pathname.slice(1);
     const match = KEY.exec(key);

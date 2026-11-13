@@ -30,7 +30,7 @@ async function run(browser, width, theme) {
       const timeout = setTimeout(() => reject(new Error('upload did not reach the held PDS request')), 30_000);
       entered = () => { clearTimeout(timeout); resolve(); };
     });
-    const writes = [], records = new Map();
+    const writes = [], puts = [], records = new Map();
     await page.exposeFunction('__uploadPds', async (url, body) => {
       if (url.includes('listRecords')) return { status: 200, body: { records: [] } };
       if (url.includes('getRecord')) {
@@ -41,6 +41,13 @@ async function run(browser, width, theme) {
         if (holdBlob) await new Promise(resolve => { release = resolve; entered(); });
         if (reject) return { status: 400, body: { error: 'InvalidRequest', message: 'fixture upload unavailable' } };
         return { status: 200, body: { blob: { $type: 'blob', ref: { $link: 'bafkreigh2akiscaildcw4533xrlwoecrloyfg4huyh2fq7rmr5mnnxfk5q' }, mimeType: 'audio/wav', size: audio.length } } };
+      }
+      if (url.includes('putRecord')) {
+        const input = JSON.parse(body);
+        puts.push(input);
+        const result = { uri: `at://${input.repo}/fm.plyr.track/${input.rkey}`, cid: `putcid${puts.length}`, value: input.record };
+        records.set(input.rkey, result);
+        return { status: 200, body: result };
       }
       assert.ok(url.includes('createRecord'), `unexpected PDS operation: ${url}`);
       const input = JSON.parse(body);
@@ -122,6 +129,23 @@ async function run(browser, width, theme) {
     assert.equal(writes[1].repo, did);
     assert.equal(Object.hasOwn(writes[1].record, 'tags'), false, 'blank upload leaves tags absent');
     await screenshot(page, `upload-saved-${width}-${theme}`);
+    const genreAsks = [];
+    await page.route('https://plyr-next-audio.n8-3e9.workers.dev/v1/genres', route => {
+      genreAsks.push(JSON.parse(route.request().postData() ?? '{}').uri);
+      return route.fulfill({ json: genreAsks.length < 2 ? { state: 'pending' } : { state: 'ready', genres: [{ name: 'ambient', confidence: 0.7 }, { name: 'drone', confidence: 0.5 }, { name: 'rock', confidence: 0.2 }] } });
+    });
+    await choose();
+    await tags.fill('field recording');
+    const autoTag = page.getByRole('checkbox', { name: 'auto-tag with recommended genres', exact: true });
+    await autoTag.click();
+    await submit().click();
+    await toast('"quiet room" uploaded').first().waitFor();
+    for (const started = Date.now(); !puts.length; await new Promise(resolve => setTimeout(resolve, 200))) assert.ok(Date.now() - started < 20_000, 'auto-tag writes the suggested genres');
+    assert.equal(genreAsks[0], `at://${did}/fm.plyr.track/${writes[2].rkey}`);
+    assert.deepEqual(puts[0].record.tags, ['field recording', 'ambient', 'drone'], 'genres within half the top score follow the artist tags');
+    assert.equal(puts[0].record.title, 'quiet room');
+    await autoTag.click();
+    for (let wait = 0; await toast('"quiet room" uploaded').count() && wait < 100; wait++) await page.waitForTimeout(100);
     await signIn(other);
     await page.getByRole('button', { name: 'Upload another', exact: true }).click();
     await page.getByRole('button', { name: 'Choose audio', exact: true }).waitFor();
@@ -130,7 +154,7 @@ async function run(browser, width, theme) {
     const reauthHeld = waitForHold();
     await submit().click();
     await reauthHeld;
-    assert.equal(writes.length, 3);
+    assert.equal(writes.length, 4);
     await signIn(other);
     await title.fill('fresh session draft');
     release(); holdCreate = false;
@@ -139,9 +163,9 @@ async function run(browser, width, theme) {
     await screenshot(page, `upload-reauth-${width}-${theme}`);
     await choose();
     await submit().click();
-    for (let wait = 0; writes.length < 4 && wait < 100; wait++) await page.waitForTimeout(100);
+    for (let wait = 0; writes.length < 5 && wait < 100; wait++) await page.waitForTimeout(100);
     await toast('"quiet room" uploaded').first().waitFor();
-    assert.equal(writes.length, 4, 'same-DID reauth finishes its held upload once and the next upload once');
+    assert.equal(writes.length, 5, 'same-DID reauth finishes its held upload once and the next upload once');
     await page.evaluate(id => globalThis.__r(id).clearAuth(), authModule);
     await page.getByRole('link', { name: 'Sign in', exact: true }).click();
     await page.getByRole('heading', { name: 'sign in to plyr.fm', exact: true }).waitFor();

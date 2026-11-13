@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
-import { jobLine, outputBudget, processingStep, transient, uploadRoute } from '../src/publishing/upload-queue-model.ts';
+import { genreTags, jobLine, outputBudget, processingStep, transient, uploadRoute } from '../src/publishing/upload-queue-model.ts';
 import { audioFormat, MAX_SERVICE_AUDIO_BYTES, UPLOAD_PART_BYTES, type UploadStatus } from '../src/publishing/upload-model.ts';
 
 const MIB = 1_048_576;
@@ -62,4 +62,15 @@ test('iOS picker types for WAV and WebM are accepted and routed to mp3 processin
     if (!name.endsWith('.mp3')) assert.equal(audioFormat(name, type, true).contentType, name.endsWith('.webm') ? 'audio/webm' : name.endsWith('.flac') ? 'audio/flac' : 'audio/wav');
   }
   assert.throws(() => uploadRoute({ name: 'clip.wav', type: 'video/mp4', size: 5 * MIB }), /choose an/);
+});
+
+test('auto-tag adds genres within half the top score, at most five, after the artist\'s own tags', () => {
+  const genres = [{ name: 'electronic', confidence: 0.8 }, { name: 'ambient', confidence: 0.6 }, { name: 'idm', confidence: 0.41 }, { name: 'rock', confidence: 0.39 }];
+  assert.deepEqual(genreTags(['field recording'], genres), ['field recording', 'electronic', 'ambient', 'idm']);
+  assert.deepEqual(genreTags(['ambient'], genres), ['ambient', 'electronic', 'idm']);
+  const many = Array.from({ length: 8 }, (_, index) => ({ name: `g${index}`, confidence: 0.9 }));
+  assert.equal(genreTags([], many).length, 5);
+  const full = Array.from({ length: 20 }, (_, index) => `t${index}`);
+  assert.deepEqual(genreTags(full, genres), full);
+  assert.deepEqual(genreTags(['x'], []), ['x']);
 });

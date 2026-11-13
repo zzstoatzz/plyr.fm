@@ -56,6 +56,8 @@ export interface NewTrack {
 	album?: string;
 	description?: string;
 	duration?: number;
+	/** add suggested genre tags once the track is published */
+	autoTag?: boolean;
 	/** cover art, stored on your PDS as imageBlob */
 	artwork?: MediaFile | null;
 }

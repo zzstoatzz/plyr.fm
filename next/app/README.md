@@ -165,7 +165,15 @@ storage on the public/open `audioUrl` path with sequential 10 MiB parts; the
 lossless and WebM ones request the server's `mp3-320k-44100-v1` playback copy
 and keep the original for download. Plyr storage needs the separate upload
 service-auth permission and a storage consent asked once per account on each
-device.
+device. On iOS the parts go through a background `URLSession`, and the audio
+service finishes a transfer whose parts all arrived without waiting for the app.
+
+"auto-tag with recommended genres" (remembered per account on each device)
+asks the audio service's `POST /v1/genres` for production's effnet-discogs
+suggestions once the track is up. The service reads the record to find its audio
+and classifies each source once; the client adds genres within half the top
+score, at most five, to its own record. It stays off until the
+`PLYR_NEXT_REPLICATE_API_TOKEN` secret is set for the audio deploy.
 
 Device-local recovery keeps each plyr-storage upload's ID, record URI and
 prepared metadata, never credentials or media bytes. After a reload the queue

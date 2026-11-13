@@ -7,7 +7,7 @@ const processingFormats: Record<string, string> = { ...formats, aif: 'audio/aiff
 export type UploadProcessing = { recipe: 'mp3-320k-44100-v1'; outputBudget: number };
 export type UploadRendition = { duration: number; sizeBytes: number; contentType: 'audio/mpeg'; fileType: 'mp3' };
 export type UploadProcessingFailure = 'output_budget_exceeded' | 'executor_failed' | 'lease_expired';
-export type UploadOperation = Omit<CreateOperation, 'cid' | 'archived'> & { uploadId: string; name: string; sizeBytes: number; contentType: string; fileType: string; processing?: UploadProcessing };
+export type UploadOperation = Omit<CreateOperation, 'cid' | 'archived'> & { uploadId: string; name: string; sizeBytes: number; contentType: string; fileType: string; processing?: UploadProcessing; autoTag?: boolean };
 export type UploadReceipt = { number: number; sha256: string };
 export type UploadStatus = {
   state: 'starting' | 'transferring' | 'completing' | 'processing' | 'complete' | 'published' | 'cancelling' | 'cancelled';
@@ -50,7 +50,7 @@ export function uploadOperation(value: unknown, owner: string): UploadOperation 
     || typeof value.fileType !== 'string' || typeof value.contentType !== 'string') throw new Error('could not read upload recovery.');
   const processing = 'processing' in value && value.processing !== undefined ? processingRecipe(value.processing, value.sizeBytes) : undefined;
   if ((processing ? processingFormats : formats)[value.fileType] !== value.contentType) throw new Error('could not read upload recovery.');
-  return { ...operation, uploadId: value.uploadId, name: value.name, sizeBytes: value.sizeBytes, contentType: value.contentType, fileType: value.fileType, ...(processing ? { processing } : {}) };
+  return { ...operation, uploadId: value.uploadId, name: value.name, sizeBytes: value.sizeBytes, contentType: value.contentType, fileType: value.fileType, ...(processing ? { processing } : {}), ...('autoTag' in value && value.autoTag === true ? { autoTag: true } : {}) };
 }
 export function uploadStatus(value: unknown, operation: UploadOperation): UploadStatus {
   if (!value || typeof value !== 'object' || !('state' in value) || !('partSizeBytes' in value) || !('partCount' in value) || !('reservedBytes' in value) || !('recoveryRequired' in value)
