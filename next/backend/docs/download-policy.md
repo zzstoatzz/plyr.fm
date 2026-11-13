@@ -26,10 +26,11 @@ OAuth RPC grant for this method, rather than reusing Jam or upload consent.
 
 The coordinator fetches and verifies the current canonical public record proof,
 requires the exact requested CID and explicit `supporters` download policy, then
-uses the existing supporter verifier. The record author bypasses only the
-supporter lookup. Owner-only/unknown gates, copyright self-labels, private record
-shapes, and protected references outside the configured `SPACE_TYPE_NSID` remain
-denied. Space-only records without a canonical public proof remain unsupported.
+asks the space access core (see [space-access.md](space-access.md)). The record
+author always passes. Audio in a space downloads for whoever that space's
+policies let read it; public audio downloads for any supporter of the artist.
+Copyright self-labels, private record shapes, and protected references outside
+the configured `SPACE_TYPE_NSID` remain denied. Space-only records without a canonical public proof remain unsupported.
 This is intentionally stricter than legacy owner-only download handling.
 
 A successful response contains `viewer`, `recordUri`, `recordCid`,
@@ -52,11 +53,11 @@ or close real-account OAuth consent acceptance.
 
 ## supporter sources
 
-Supporter status (downloads, supporter Spaces and playback gates) comes from
-attested.network payment proofs signed by a trusted broker, then optionally
-atprotofans.com. `SUPPORT_TRUSTED_BROKERS` (comma-separated DIDs, default
-broker.atmosphere.money `did:plc:7srqsetux75b6flzbbyag2ro`) and
-`SUPPORT_ATPROTOFANS_FALLBACK` (`true` by default) configure them. Next's API and
-coordinator set the fallback to `false`, so only attested proofs count there.
-Support that exists only in atprotofans, with no attested payment record, does
-not count on Next.
+Supporter downloads ask the same access core as `checkUserAccess`
+([space access](space-access.md)). Audio in a space downloads for whoever the
+artist's policies let read that space. Audio outside a space downloads for
+any reader holding a broker-verified attested.network payment to the artist.
+`SUPPORT_TRUSTED_BROKERS` (comma-separated DIDs, default broker.atmosphere.money
+`did:plc:7srqsetux75b6flzbbyag2ro`) names the brokers whose proofs count when
+a policy names none. atprotofans.com is no longer consulted, and the authored
+`supportGate` no longer decides anything.

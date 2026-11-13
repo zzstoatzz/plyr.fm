@@ -1,33 +1,32 @@
-//! Network adapters for the managed-space checks: DID signing keys through
-//! Zat's resolver, and supporter status through attested.network brokers
-//! (optionally falling back to atprotofans.com). See `SupportSources`.
+//! Network adapters for the access core: DID signing keys through Zat's
+//! resolver, a space authority's policy records from their PDS, and
+//! broker-verified attested.network payments from the reader's PDS.
 
 const std = @import("std");
 const zat = @import("zat");
 const managed_space = @import("managed_space.zig");
+const access = @import("access.zig");
+const policy = @import("policy.zig");
 const attested = @import("attested.zig");
 const safe_endpoint = @import("../ingest/safe_endpoint.zig");
 const pinned_tls = @import("../ingest/pinned_tls.zig");
 
-/// listRecords pages read per payment collection
+/// listRecords pages read per payment or policy collection
 const max_pages = 5;
 
 const user_agent = "plyr.fm-zig-api/0.1 (+https://plyr.fm)";
 
-/// Where supporter status comes from, read per check from the environment:
-/// - `SUPPORT_TRUSTED_BROKERS`: comma-separated attested.network broker DIDs
-///   whose payment proofs count (default: broker.atmosphere.money).
-/// - `SUPPORT_ATPROTOFANS_FALLBACK`: `true` (default) or `false`; when false,
-///   no lookup goes to atprotofans.com.
+/// Which brokers' payment proofs count when a policy names none, read per
+/// check from `SUPPORT_TRUSTED_BROKERS` (comma-separated DIDs; default
+/// broker.atmosphere.money). A policy that names its own brokers uses those.
 pub const SupportSources = struct {
     trusted_brokers: []const []const u8 = &attested.default_trusted_brokers,
-    atprotofans: bool = true,
 
     pub fn fromEnv(allocator: std.mem.Allocator) !SupportSources {
-        return parse(allocator, getenv("SUPPORT_TRUSTED_BROKERS"), getenv("SUPPORT_ATPROTOFANS_FALLBACK"));
+        return parse(allocator, getenv("SUPPORT_TRUSTED_BROKERS"));
     }
 
-    pub fn parse(allocator: std.mem.Allocator, brokers: ?[]const u8, fallback: ?[]const u8) !SupportSources {
+    pub fn parse(allocator: std.mem.Allocator, brokers: ?[]const u8) !SupportSources {
         var sources: SupportSources = .{};
         if (brokers) |list| {
             var dids: std.ArrayList([]const u8) = .empty;
@@ -38,16 +37,9 @@ pub const SupportSources = struct {
                 if (zat.Did.parse(did) == null) return error.InvalidSupportConfig;
                 try dids.append(allocator, did);
             }
+            if (dids.items.len == 0) return error.InvalidSupportConfig;
             sources.trusted_brokers = try dids.toOwnedSlice(allocator);
         }
-        if (fallback) |value| {
-            if (std.mem.eql(u8, value, "true")) {
-                sources.atprotofans = true;
-            } else if (std.mem.eql(u8, value, "false")) {
-                sources.atprotofans = false;
-            } else return error.InvalidSupportConfig;
-        }
-        if (sources.trusted_brokers.len == 0 and !sources.atprotofans) return error.InvalidSupportConfig;
         return sources;
     }
 };
@@ -102,8 +94,12 @@ pub const Network = struct {
         return .{ .context = self, .lookup_fn = lookupKey };
     }
 
-    pub fn supporters(self: *Network) managed_space.SupporterCheck {
-        return .{ .context = self, .check_fn = checkSupporter };
+    pub fn evidence(self: *Network) policy.Evidence {
+        return .{ .context = self, .payments_fn = loadPayments };
+    }
+
+    pub fn policies(self: *Network) access.PolicySource {
+        return .{ .context = self, .list_fn = listPolicies };
     }
 
     fn lookupKey(context: *anyopaque, allocator: std.mem.Allocator, did_text: []const u8) anyerror![]const u8 {
@@ -121,49 +117,66 @@ pub const Network = struct {
         return allocator.dupe(u8, method.public_key_multibase);
     }
 
-    /// attested.network first, then atprotofans when enabled (same order as
-    /// the python backend). An attested failure falls through to atprotofans.
-    fn checkSupporter(context: *anyopaque, allocator: std.mem.Allocator, supporter: []const u8, artist: []const u8) anyerror!bool {
+    /// Broker-verified payments from `payer` to `recipient`, by the given
+    /// brokers or else the deployment's trusted set.
+    fn loadPayments(context: *anyopaque, allocator: std.mem.Allocator, payer: []const u8, recipient: []const u8, brokers: policy.Brokers) anyerror![]const policy.Payment {
         const self: *Network = @ptrCast(@alignCast(context));
         // DIDs are restricted to [A-Za-z0-9._:%-], all query-safe.
-        if (zat.Did.parse(supporter) == null or zat.Did.parse(artist) == null) return error.InvalidIdentity;
-        const sources = try SupportSources.fromEnv(allocator);
+        if (zat.Did.parse(payer) == null or zat.Did.parse(recipient) == null) return error.InvalidIdentity;
+        const trusted = brokers orelse (try SupportSources.fromEnv(allocator)).trusted_brokers;
         try self.checkDeadline();
-        var incomplete = false;
-        if (self.attestedSupport(allocator, supporter, artist, sources.trusted_brokers)) |yes| {
-            if (yes) return true;
-        } else |err| {
-            if (err == error.Canceled) return err;
-            incomplete = self.deadline_ns != null;
-            std.log.info("attested.network check failed: {s}", .{@errorName(err)});
-        }
-        if (!sources.atprotofans) return completeDecision(incomplete, false);
-        try self.checkDeadline();
-        return completeDecision(incomplete, try self.atprotofansSupport(allocator, supporter, artist));
-    }
-
-    fn attestedSupport(self: *Network, allocator: std.mem.Allocator, supporter: []const u8, artist: []const u8, brokers: []const []const u8) !bool {
-        if (brokers.len == 0) return false;
-        const pds = try self.pdsOf(allocator, supporter);
+        var verified: std.ArrayList(policy.Payment) = .empty;
+        var seen: std.StringHashMapUnmanaged(void) = .empty;
+        const pds = try self.pdsOf(allocator, payer);
         for (attested.payment_collections) |collection| {
             var page_cursor: ?[]const u8 = null;
             var page: usize = 0;
             while (page < max_pages) : (page += 1) {
                 const path = if (page_cursor) |c|
-                    try std.fmt.allocPrint(allocator, "/xrpc/com.atproto.repo.listRecords?repo={s}&collection={s}&limit=100&cursor={f}", .{ supporter, collection, std.fmt.alt(std.Uri.Component{ .raw = c }, .formatQuery) })
+                    try std.fmt.allocPrint(allocator, "/xrpc/com.atproto.repo.listRecords?repo={s}&collection={s}&limit=100&cursor={f}", .{ payer, collection, std.fmt.alt(std.Uri.Component{ .raw = c }, .formatQuery) })
                 else
-                    try std.fmt.allocPrint(allocator, "/xrpc/com.atproto.repo.listRecords?repo={s}&collection={s}&limit=100", .{ supporter, collection });
+                    try std.fmt.allocPrint(allocator, "/xrpc/com.atproto.repo.listRecords?repo={s}&collection={s}&limit=100", .{ payer, collection });
                 const body = (try self.getJson(allocator, pds, path)) orelse break;
                 const parsed = try std.json.parseFromSliceLeaky(std.json.Value, allocator, body, .{});
-                if (self.deadline_ns != null) try validatePage(parsed);
-                for (try attested.proofRefs(allocator, parsed, supporter, artist, brokers)) |proof| {
-                    if (try self.proofVerified(allocator, proof)) return true;
+                try validatePage(parsed);
+                for (try attested.proofRefs(allocator, parsed, payer, recipient, trusted)) |proof| {
+                    if (seen.contains(proof.payment_uri)) continue;
+                    if (!try self.proofVerified(allocator, proof)) continue;
+                    try seen.put(allocator, proof.payment_uri, {});
+                    try verified.append(allocator, try attested.paymentOf(allocator, proof.payment));
                 }
                 page_cursor = attested.cursor(parsed) orelse break;
             }
-            if (page == max_pages and page_cursor != null and self.deadline_ns != null) return error.SupporterCheckIncomplete;
+            if (page == max_pages and page_cursor != null) return error.SupporterCheckIncomplete;
         }
-        return false;
+        return verified.toOwnedSlice(allocator);
+    }
+
+    /// The policies `authority` publishes for spaces of `space_type`. A
+    /// malformed record opens nothing; an unreadable repo is an error.
+    fn listPolicies(context: *anyopaque, allocator: std.mem.Allocator, authority: []const u8, collection: []const u8, space_type: []const u8) anyerror![]const policy.Policy {
+        const self: *Network = @ptrCast(@alignCast(context));
+        if (zat.Did.parse(authority) == null) return error.InvalidIdentity;
+        if (zat.Nsid.parse(collection) == null) return error.InvalidPolicyCollection;
+        const pds = try self.pdsOf(allocator, authority);
+        var out: std.ArrayList(policy.Policy) = .empty;
+        var page_cursor: ?[]const u8 = null;
+        var page: usize = 0;
+        while (page < max_pages) : (page += 1) {
+            const path = if (page_cursor) |c|
+                try std.fmt.allocPrint(allocator, "/xrpc/com.atproto.repo.listRecords?repo={s}&collection={s}&limit=100&cursor={f}", .{ authority, collection, std.fmt.alt(std.Uri.Component{ .raw = c }, .formatQuery) })
+            else
+                try std.fmt.allocPrint(allocator, "/xrpc/com.atproto.repo.listRecords?repo={s}&collection={s}&limit=100", .{ authority, collection });
+            const body = (try self.getJson(allocator, pds, path)) orelse break;
+            const parsed = try std.json.parseFromSliceLeaky(std.json.Value, allocator, body, .{});
+            try validatePage(parsed);
+            for (parsed.object.get("records").?.array.items) |item| {
+                if (try policy.parse(allocator, item, collection, space_type)) |entry| try out.append(allocator, entry);
+            }
+            page_cursor = attested.cursor(parsed) orelse break;
+        }
+        if (page == max_pages and page_cursor != null) return error.PolicyListIncomplete;
+        return out.toOwnedSlice(allocator);
     }
 
     fn proofVerified(self: *Network, allocator: std.mem.Allocator, proof: attested.ProofRef) !bool {
@@ -185,7 +198,7 @@ pub const Network = struct {
     }
 
     /// GET from a DID-declared PDS, address-pinned past SSRF checks. Null on
-    /// a non-200 answer.
+    /// 404; any other non-200 answer is an error, never an empty result.
     fn getJson(self: *Network, allocator: std.mem.Allocator, pds: []const u8, path: []const u8) !?[]const u8 {
         try self.checkDeadline();
         var endpoint = try safe_endpoint.resolve(self.io, allocator, pds);
@@ -202,73 +215,19 @@ pub const Network = struct {
         });
         defer result.deinit(self.transport.allocator);
         if (result.status != .ok) {
-            if (self.deadline_ns != null and result.status != .not_found) return error.SupporterCheckRejected;
+            if (result.status != .not_found) return error.UpstreamRejected;
             return null;
         }
         return try allocator.dupe(u8, result.body);
     }
-
-    /// Direct atprotofans support: the artist is both subject and signer.
-    fn atprotofansSupport(self: *Network, allocator: std.mem.Allocator, supporter: []const u8, artist: []const u8) !bool {
-        const url = try std.fmt.allocPrint(
-            allocator,
-            "https://atprotofans.com/xrpc/com.atprotofans.validateSupporter?supporter={s}&subject={s}&signer={s}",
-            .{ supporter, artist, artist },
-        );
-        var result = try self.transport.fetch(.{
-            .url = url,
-            .accept = "application/json",
-            .max_response_size = 64 * 1024,
-            .on_redirect = .refuse,
-            .deadline_ns = try self.requestBudget(),
-        });
-        defer result.deinit(self.transport.allocator);
-        if (result.status != .ok) return error.SupporterCheckRejected;
-        return validFromBody(allocator, result.body, self.deadline_ns != null);
-    }
 };
 
-fn validFromBody(allocator: std.mem.Allocator, body: []const u8, required: bool) !bool {
-    const parsed = try std.json.parseFromSlice(std.json.Value, allocator, body, .{});
-    defer parsed.deinit();
-    if (parsed.value != .object) return error.InvalidSupporterResponse;
-    const valid = parsed.value.object.get("valid") orelse return if (required) error.InvalidSupporterResponse else false;
-    if (valid != .bool) return if (required) error.InvalidSupporterResponse else false;
-    return valid.bool;
-}
-
-test "atprotofans answers are read strictly" {
-    try std.testing.expect(try validFromBody(std.testing.allocator, "{\"valid\":true,\"profile\":{}}", false));
-    try std.testing.expect(!try validFromBody(std.testing.allocator, "{\"valid\":false}", false));
-    try std.testing.expect(!try validFromBody(std.testing.allocator, "{\"valid\":\"true\"}", false));
-    try std.testing.expect(!try validFromBody(std.testing.allocator, "{}", false));
-    try std.testing.expectError(error.InvalidSupporterResponse, validFromBody(std.testing.allocator, "[]", false));
-}
-
-test "expired supporter budget rejects before identity or atprotofans fallback" {
+test "an expired budget rejects before any identity lookup" {
     var network = Network.init(std.testing.io, std.testing.allocator, "http://127.0.0.1:1");
     defer network.deinit();
     network.deadline_ns = std.Io.Clock.awake.now(std.testing.io).nanoseconds - 1;
-    try std.testing.expectError(error.AuthorizationUnavailable, network.supporters().check(std.testing.allocator, "did:plc:viewer", "did:plc:artist"));
+    try std.testing.expectError(error.AuthorizationUnavailable, network.evidence().payments(std.testing.allocator, "did:plc:viewer", "did:plc:artist", null));
     try std.testing.expectError(error.AuthorizationUnavailable, network.requestBudget());
-}
-
-fn completeDecision(incomplete: bool, verified: bool) !bool {
-    if (!verified and incomplete) return error.SupporterCheckIncomplete;
-    return verified;
-}
-
-test "incomplete supporter source cannot become a definitive negative" {
-    try std.testing.expectError(error.SupporterCheckIncomplete, completeDecision(true, false));
-    try std.testing.expect(try completeDecision(true, true));
-    try std.testing.expect(!try completeDecision(false, false));
-    try std.testing.expect(try completeDecision(false, true));
-}
-
-test "budgeted supporter query requires an explicit boolean decision" {
-    try std.testing.expectError(error.InvalidSupporterResponse, validFromBody(std.testing.allocator, "{}", true));
-    try std.testing.expectError(error.InvalidSupporterResponse, validFromBody(std.testing.allocator, "{\"valid\":\"false\"}", true));
-    try std.testing.expect(!try validFromBody(std.testing.allocator, "{\"valid\":false}", true));
 }
 
 fn validatePage(page: std.json.Value) !void {
@@ -292,25 +251,19 @@ test "budgeted supporter pages distinguish absent from malformed cursors" {
     }
 }
 
-test "support sources default to atmosphere money with atprotofans fallback" {
+test "support sources default to atmosphere money" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
-    const defaults = try SupportSources.parse(a, null, null);
+    const defaults = try SupportSources.parse(a, null);
     try std.testing.expectEqual(@as(usize, 1), defaults.trusted_brokers.len);
     try std.testing.expectEqualStrings(attested.default_trusted_brokers[0], defaults.trusted_brokers[0]);
-    try std.testing.expect(defaults.atprotofans);
 
-    const configured = try SupportSources.parse(a, " did:plc:one , did:web:broker.example ,", "false");
+    const configured = try SupportSources.parse(a, " did:plc:one , did:web:broker.example ,");
     try std.testing.expectEqual(@as(usize, 2), configured.trusted_brokers.len);
     try std.testing.expectEqualStrings("did:plc:one", configured.trusted_brokers[0]);
     try std.testing.expectEqualStrings("did:web:broker.example", configured.trusted_brokers[1]);
-    try std.testing.expect(!configured.atprotofans);
 
-    const atprotofans_only = try SupportSources.parse(a, "", "true");
-    try std.testing.expectEqual(@as(usize, 0), atprotofans_only.trusted_brokers.len);
-
-    try std.testing.expectError(error.InvalidSupportConfig, SupportSources.parse(a, "not-a-did", null));
-    try std.testing.expectError(error.InvalidSupportConfig, SupportSources.parse(a, null, "no"));
-    try std.testing.expectError(error.InvalidSupportConfig, SupportSources.parse(a, "", "false"));
+    try std.testing.expectError(error.InvalidSupportConfig, SupportSources.parse(a, "not-a-did"));
+    try std.testing.expectError(error.InvalidSupportConfig, SupportSources.parse(a, ""));
 }
