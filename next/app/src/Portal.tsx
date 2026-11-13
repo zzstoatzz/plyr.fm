@@ -8,7 +8,7 @@ import { api, ApiError, type Artist, type ListSummary, type Track } from './api'
 import { useAuth } from './auth';
 import { useAppearance } from './appearance';
 import { Action, Copy, pageFrame, row } from './controls';
-import { Cover, Detail, Row, useResource } from './CatalogPieces';
+import { Cover, Row, useResource } from './CatalogPieces';
 import { accessLabel } from './access/label';
 import { usePlayback } from './playback';
 import { privatePds } from './publishing/private-pds';
@@ -94,7 +94,7 @@ function AccountPortal({ did, handle }: { did: string; handle: string | null }) 
         <Cover uri={profile?.avatar_url} size={72} round />
         <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
           <Text numberOfLines={2} style={{ color: theme.text, fontFamily: theme.fontFamily, fontSize: 22 * theme.scale, fontWeight: '700' }}>{name}</Text>
-          {handle && <Detail>@{handle}</Detail>}
+          {handle && <Copy>@{handle}</Copy>}
         </View>
         <ChevronRight size={20} color={theme.muted} />
         </View>}

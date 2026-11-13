@@ -5,14 +5,14 @@ import SearchIcon from 'lucide-react-native/icons/search';
 import X from 'lucide-react-native/icons/x';
 import ChevronRight from 'lucide-react-native/icons/chevron-right';
 import { api, type SearchHit } from './api';
-import { Cover, Detail, Heading, Status, errorMessage, useResource, type Play } from './CatalogPieces';
+import { Cover, Heading, Status, errorMessage, useResource, type Play } from './CatalogPieces';
 import { Text } from './Text';
 import { useAppearance } from './appearance';
 import { usePlayback } from './playback';
 import { HomeTrackRow } from './HomeTrackRow';
 import { WaveLoading } from './WaveLoading';
 import { useSearch } from './use-search';
-import { Action } from './controls';
+import { Action, Copy } from './controls';
 import { PlayGlyph } from './PlayerGlyph';
 import { glassSurface } from './materials';
 
@@ -92,13 +92,13 @@ export function Search({ onPlay }: { onPlay: Play }) {
             disabled={playing === hit.id} accessibilityState={{ disabled: playing === hit.id, busy: playing === hit.id, selected: player.current?.id === hit.id }} onPress={hit.type === 'track' ? () => void play(hit) : undefined} onPressIn={() => setPressed(hit.id)} onPressOut={() => setPressed(undefined)}
             style={{ ...styles.result, backgroundColor: pressed === hit.id ? theme.hover : player.current?.id === hit.id ? theme.surface : 'transparent' }}>{content}</Pressable>;
           return <View key={`${hit.type}:${hit.id}`}>{hit.type === 'track' ? control : <Link href={destination(hit)} asChild>{control}</Link>}
-            {failure?.id === hit.id && <View style={{ paddingVertical: 8, gap: 8 }}><Detail>{failure.message}</Detail><Action label="retry playback" onPress={() => void play(hit)} /></View>}
+            {failure?.id === hit.id && <View style={{ paddingVertical: 8, gap: 8 }}><Copy>{failure.message}</Copy><Action label="retry playback" onPress={() => void play(hit)} /></View>}
           </View>;
         })}
       </View>
       {results.loading && results.data && <WaveLoading label="loading more…" />}
       {!results.loading && results.data?.length === 20 && limit === 20 && <Action label="show more results" onPress={() => setExpanded(key)} />}
-      {!results.loading && results.data?.length === 50 && <Detail>showing the first 50 results. try a more specific search.</Detail>}
+      {!results.loading && results.data?.length === 50 && <Copy>showing the first 50 results. try a more specific search.</Copy>}
     </>}
   </>;
 }
@@ -106,7 +106,7 @@ export function Search({ onPlay }: { onPlay: Play }) {
 function Suggestions({ onPlay }: { onPlay: Play }) {
   const chart = useResource(loadChart);
   return <View style={{ gap: 16 }}>
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}><Heading>top tracks</Heading><Detail>past month</Detail></View>
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}><Heading>top tracks</Heading><Copy>past month</Copy></View>
     <View>{chart.data?.map(track => <HomeTrackRow key={track.id} track={track} tracks={chart.data ?? []} onPlay={onPlay} returnTo="/search" />)}</View>
     <Status loading={!chart.data && !chart.error} error={chart.error} retry={chart.retry} empty={chart.data?.length === 0 ? 'nothing liked this month yet' : undefined} />
   </View>;

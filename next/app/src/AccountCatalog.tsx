@@ -14,9 +14,9 @@ import { api, playlistIdFromUri, type AwaitStatus, type ListDetail, type Track }
 import { useAuth } from './auth';
 import { getAuth } from './auth-state';
 import {
-  Button, Detail, Heading, ListRows, Row, Status, TrackRows, artistName, errorMessage, usePages, useResource, type Play,
+  Button, Heading, ListRows, Row, Status, TrackRows, artistName, errorMessage, usePages, useResource, type Play,
 } from './CatalogPieces';
-import { Action, Field, InlineLink } from './controls';
+import { Action, Field, InlineLink, Copy } from './controls';
 import { Sheet } from './Sheet';
 import { createPds } from './pds';
 import { CreateRecovery, EarlierCreates, useCreateRecovery } from './publishing/CreateRecovery';
@@ -68,7 +68,7 @@ export function Library({ likesOnly, onPlay }: { likesOnly: boolean; onPlay: Pla
   if (!ready) return <Status loading />;
   if (!did) return <>
     {likesOnly && <Heading main>liked tracks</Heading>}
-    <Detail>sign in to see your liked tracks and playlists.</Detail>
+    <Copy>sign in to see your liked tracks and playlists.</Copy>
     <View style={styles.actions}><Action primary label="Sign in" href="/login" /></View>
   </>;
   return <AccountLibrary key={`${did}:${session.version}`} did={did} likesOnly={likesOnly} onPlay={onPlay} />;
@@ -162,11 +162,11 @@ export function TrackPlaylistPicker({ track }: { track: Track }) {
     {lists.data.map(list => <ActionRow key={list.record.uri} icon={Music2} label={list.metadata.name ?? 'Untitled'} disabled={mutation.busy}
       onPress={() => void mutation.run(async () => messageFor(await pds.addToPlaylist(list.record.uri, track), 'added to playlist.'))} />)}
     {lists.loading && <WaveLoading label="Loading playlists" />}
-    {lists.error && <><Detail>{lists.error}</Detail><ActionRow icon={RefreshCw} label="retry" onPress={lists.more} /></>}
-    {!lists.loading && !lists.error && !lists.data.length && <Detail>create a playlist from your library first.</Detail>}
+    {lists.error && <><Copy>{lists.error}</Copy><ActionRow icon={RefreshCw} label="retry" onPress={lists.more} /></>}
+    {!lists.loading && !lists.error && !lists.data.length && <Copy>create a playlist from your library first.</Copy>}
     {lists.cursor && !lists.loading && !lists.error && <ActionRow icon={ListPlus} label="more playlists" onPress={lists.more} />}
-    {mutation.busy && <Detail>adding to playlist…</Detail>}
-    {mutation.message && <Detail>{mutation.message}</Detail>}
+    {mutation.busy && <Copy>adding to playlist…</Copy>}
+    {mutation.message && <Copy>{mutation.message}</Copy>}
   </View>;
 }
 
@@ -270,7 +270,7 @@ function EditCollection({ list, refresh, actions, onPlay, onOrderSaved }: Collec
         onPress={() => remove(subject.uri)} />;
       return track ? <Row key={position} href={{ pathname: '/track/[id]', params: { id: track.id } }}
         title={track.metadata.title} subtitle={artistName(track)} image={trackArtwork(track)} action={removeAction} />
-        : <View key={position} style={styles.actions}><Detail>unavailable track</Detail>{removeAction}</View>;
+        : <View key={position} style={styles.actions}><Copy>unavailable track</Copy>{removeAction}</View>;
     }) : <TrackRows tracks={tracks} onPlay={(track, tracks) => onPlay(track, tracks, list.metadata.name ?? 'collection')} />}
     {editing && !album && !mutation.busy && <View style={styles.actions}>
       <Button destructive label={confirmDelete ? 'Confirm delete playlist' : 'Delete playlist'}

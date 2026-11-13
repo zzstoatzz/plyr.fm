@@ -1,7 +1,8 @@
+import { useAppearance } from './appearance';
 import { Link } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 import type { NetworkArtist } from './home-api';
-import { Cover, Heading, useColors } from './CatalogPieces';
+import { Cover, Heading } from './CatalogPieces';
 import { HomeShelf } from './HomeShelf';
 import { cardSurface } from './materials';
 import { Text } from './Text';
@@ -9,7 +10,7 @@ import { Text } from './Text';
 const placeholders = [0, 1, 2, 3];
 
 export function HomeArtists({ artists, loading }: { artists: NetworkArtist[]; loading: boolean }) {
-  const colors = useColors();
+  const colors = useAppearance();
   const card = [cardSurface(colors), styles.card, { width: 176 * colors.scale }];
   const name = Math.ceil(14 * colors.scale * 1.3);
   const count = Math.ceil(12 * colors.scale * 1.3);

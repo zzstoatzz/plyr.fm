@@ -1,3 +1,4 @@
+import { useAppearance } from './appearance';
 import { collectionArtwork } from './artwork';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useRef, useState, type ReactNode } from 'react';
@@ -7,7 +8,7 @@ import ListPlus from 'lucide-react-native/icons/list-plus';
 import Ellipsis from 'lucide-react-native/icons/ellipsis';
 import { api, type Track } from './api';
 import {
-  Button, Detail, Heading, ListRows, Status, trackCount, useColors,
+  Button, Heading, ListRows, Status, trackCount,
   usePages, useResource, type Play, type TrackActions,
 } from './CatalogPieces';
 import { Search } from './Search';
@@ -17,7 +18,7 @@ import { TrackPresentation } from './TrackPresentation';
 import { PlayerControl } from './PlayerControl';
 import { usePlayback } from './playback';
 import { TrackLikes } from './TrackLikes';
-import { InlineLink, pageFrame } from './controls';
+import { InlineLink, pageFrame, Copy } from './controls';
 import { ArtistProfile } from './ArtistProfile';
 import { ShareLink } from './ShareLink';
 import { TrackMenu } from './TrackMenu';
@@ -29,7 +30,7 @@ const loadPlaylists = (cursor?: string) => api.playlists({ limit: 30, cursor });
 
 function TrackPlayCount({ track }: { track: Track }) {
   const count = usePlayCount(track.id, track.metrics.play_count);
-  return <Detail>{count} {count === 1 ? 'play' : 'plays'}</Detail>;
+  return <Copy>{count} {count === 1 ? 'play' : 'plays'}</Copy>;
 }
 
 function TrackDetail({ id, onPlay, onEnqueue, trackActions }: {
@@ -77,11 +78,11 @@ function Collection({ id, album, onPlay }: { id: string; album: boolean; onPlay:
     {list.owner.profile && <InlineLink href={{ pathname: '/u/[handle]', params: { handle: list.owner.profile.handle || list.owner.did } }}>
       {list.owner.profile.display_name || list.owner.profile.handle}
     </InlineLink>}
-    <Detail>{tracks.length ? trackCount(tracks.length) : 'no playable tracks'}{tracks.length && tracks.length < list.metrics.member_count ? ` · ${list.metrics.member_count - tracks.length} no longer available` : ''}</Detail>
+    <Copy>{tracks.length ? trackCount(tracks.length) : 'no playable tracks'}{tracks.length && tracks.length < list.metrics.member_count ? ` · ${list.metrics.member_count - tracks.length} no longer available` : ''}</Copy>
     </DetailHeader>
-    {!tracks.length && list.metrics.member_count > 0 && <Detail>
+    {!tracks.length && list.metrics.member_count > 0 && <Copy>
       {list.metrics.member_count === 1 ? 'the track in this ' : 'the tracks in this '}{album ? 'album' : 'playlist'} {list.metrics.member_count === 1 ? 'was' : 'were'} deleted or can't be loaded right now.
-    </Detail>}
+    </Copy>}
     <CollectionActions list={list} refresh={result.retry} onPlay={onPlay} onOrderSaved={saved} actions={<>
       {tracks[0] && <PlayerControl primary large icon={PlayIcon} label={album ? 'Play album' : 'Play playlist'} onPress={() => onPlay(tracks[0], tracks, list.metadata.name ?? (album ? 'album' : 'playlist'))} />}
       <ShareLink compact path={`/${album ? 'album' : 'playlist'}/${encodeURIComponent(id)}`} />
@@ -104,7 +105,7 @@ export type CatalogScreen = 'home' | 'search' | 'playlists' | 'track' | 'album' 
 export function Catalog({
   screen, onPlay, onEnqueue, trackActions,
 }: { screen: CatalogScreen; onPlay: Play; onEnqueue: (track: Track) => void; trackActions?: TrackActions }) {
-  const colors = useColors();
+  const colors = useAppearance();
   const { id, handle } = useLocalSearchParams<{ id?: string; handle?: string }>();
   let content: ReactNode;
   if (screen === 'home') return <Home onPlay={onPlay} />;
@@ -115,7 +116,7 @@ export function Catalog({
   else if ((screen === 'album' || screen === 'playlist') && id) {
     content = <Collection key={id} id={id} album={screen === 'album'} onPlay={onPlay} />;
   } else if (screen === 'artist' && handle) content = <ArtistProfile key={handle} handle={handle} onPlay={onPlay} />;
-  else content = <Detail>this catalog link is incomplete.</Detail>;
+  else content = <Copy>this catalog link is incomplete.</Copy>;
   return <ScrollView style={{ flex: 1, backgroundColor: colors.background }} keyboardShouldPersistTaps="handled" keyboardDismissMode={screen === 'search' ? 'on-drag' : undefined} automaticallyAdjustKeyboardInsets={screen === 'search'}>
     <View style={styles.page}>{content}</View>
   </ScrollView>;

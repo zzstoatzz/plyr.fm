@@ -8,7 +8,7 @@ import { PlayGlyph as PlayIcon } from './PlayerGlyph';
 import { PlayerLoader } from './PlayerLoader';
 import UserRound from 'lucide-react-native/icons/user-round';
 import type { ListSummary, Page, Track } from './api';
-import { Action } from './controls';
+import { Action, Copy } from './controls';
 import { WaveLoading } from './WaveLoading';
 import { useAppearance } from './appearance';
 import { artworkShadow, cardSurface } from './materials';
@@ -16,7 +16,6 @@ import { artworkShadow, cardSurface } from './materials';
 export type Play = (track: Track, queue?: Track[], label?: string) => void;
 export type TrackActions = (track: Track) => ReactNode;
 type Result<T> = { data?: T; error?: string };
-export const useColors = useAppearance;
 
 export function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'could not load the catalog.';
@@ -134,14 +133,9 @@ export function usePages<T>(load: (cursor?: string) => Promise<Page<T>>) {
 }
 
 export function Heading({ children, main = false, center = false }: { children: ReactNode; main?: boolean; center?: boolean }) {
-  const colors = useColors();
+  const colors = useAppearance();
   return <Text accessibilityRole="header" aria-level={main ? 1 : 2} style={[main ? styles.title : styles.heading, { color: colors.text, fontFamily: colors.fontFamily, fontSize: (main ? 28 : 20) * colors.scale,
     textAlign: center ? 'center' : undefined, textShadowColor: colors.dark ? '#00000073' : '#00000014', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }]}>{children}</Text>;
-}
-
-export function Detail({ children }: { children: ReactNode }) {
-  const colors = useColors();
-  return <Text style={{ color: colors.muted, fontFamily: colors.fontFamily, fontSize: 15 * colors.scale, lineHeight: 22 * colors.scale }}>{children}</Text>;
 }
 
 export function Button(props: Parameters<typeof Action>[0]) {
@@ -151,7 +145,7 @@ export function Button(props: Parameters<typeof Action>[0]) {
 const revealed = new Set<string>();
 
 export function Cover({ uri, size = 48, round = false, radius = 8, instant = false }: { uri?: string | null; size?: number; round?: boolean; radius?: number; instant?: boolean }) {
-  const colors = useColors();
+  const colors = useAppearance();
   const sources = uri && /^https?:\/\//i.test(uri) ? [...new Set([displayUrl(uri, size, PixelRatio.get()), uri])] : [];
   // A resized or thumbnail rendition that fails falls back to the original before the placeholder.
   const [failed, setFailed] = useState<{ uri?: string | null; count: number }>({ count: 0 });
@@ -176,7 +170,7 @@ export function Row({
 }: {
   title: string; subtitle?: string | null; meta?: string; image?: string | null; action?: ReactNode; round?: boolean; onNavigate?: () => void;
 } & ({ href: Href; onPress?: never } | { href?: never; onPress: () => void })) {
-  const colors = useColors();
+  const colors = useAppearance();
   const body = <Pressable accessibilityRole={href ? 'link' : 'button'} onPress={href ? onNavigate : onPress} style={styles.rowLink}>
     <Cover uri={image} round={round} />
     <View style={styles.rowText}>
@@ -213,7 +207,7 @@ export function TrackRows({ tracks, onPlay }: { tracks: Track[]; onPlay: Play })
 }
 
 export function RowPlay({ onPress, label = 'Play', busy = false }: { onPress: () => void; label?: string; busy?: boolean }) {
-  const colors = useColors();
+  const colors = useAppearance();
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ busy }} disabled={busy} onPress={onPress}
     style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
     {busy ? <PlayerLoader color={colors.muted} size={18} /> : <PlayIcon size={20} color={colors.text} fill={colors.text} />}
@@ -246,10 +240,10 @@ export function ListRows({ lists, includeEmpty = false }: { lists: ListSummary[]
 export function Status({ loading, error, retry, empty }: { loading?: boolean; error?: string; retry?: () => void; empty?: string }) {
   if (loading) return <WaveLoading label="Loading catalog" />;
   if (error) return <View accessibilityRole="alert" style={styles.group}>
-    <Detail>{error}</Detail>
+    <Copy>{error}</Copy>
     {retry ? <Button label="Retry" onPress={retry} /> : null}
   </View>;
-  return empty ? <Detail>{empty}</Detail> : null;
+  return empty ? <Copy>{empty}</Copy> : null;
 }
 
 const styles = StyleSheet.create({

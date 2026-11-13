@@ -1,15 +1,16 @@
+import { useAppearance } from './appearance';
 import { trackArtwork } from './artwork';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { api, type Track } from './api';
-import { Cover, Heading, Status, artistName, errorMessage, useColors, type Play } from './CatalogPieces';
+import { Cover, Heading, Status, artistName, errorMessage, type Play } from './CatalogPieces';
 import { HomeShelf } from './HomeShelf';
 import { cardSurface } from './materials';
 import { nextPopulatedChart, periodLabels, type ChartPeriod } from './home-state';
 import { Text } from './Text';
 
 export function HomeChart({ onPlay }: { onPlay: Play }) {
-  const colors = useColors();
+  const colors = useAppearance();
   const [period, setPeriod] = useState<ChartPeriod>('month');
   const [tracks, setTracks] = useState<Track[]>([]);
   const [loading, setLoading] = useState(true);

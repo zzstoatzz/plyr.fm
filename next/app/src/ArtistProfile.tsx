@@ -1,10 +1,11 @@
+import { useAppearance } from './appearance';
 import { useFocusEffect, type Href } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { api, type Artist } from './api';
 import { useAuth } from './auth';
-import { Action, InlineLink } from './controls';
-import { Detail, ListRows, Status, TrackRows, useColors, usePages, useResource, type Play } from './CatalogPieces';
+import { Action, InlineLink, Copy } from './controls';
+import { ListRows, Status, TrackRows, usePages, useResource, type Play } from './CatalogPieces';
 import { Choice } from './AccountPieces';
 import { DetailHeader } from './DetailHeader';
 import { PlayerControl } from './PlayerControl';
@@ -44,7 +45,7 @@ function ArtistCatalog({ artist, onPlay }: { artist: Artist; onPlay: Play }) {
     visited.current = true;
   }, [revalidateAlbums]));
   const catalogTabs = useTabs({ label: 'Artist catalog', values: sections, value: section, onChange: setSection });
-  const theme = useColors();
+  const theme = useAppearance();
   const auth = useAuth();
   const name = artist.display_name || artist.handle;
   const support = /^https?:\/\//i.test(artist.support_url ?? '') ? artist.support_url : null;
@@ -55,12 +56,12 @@ function ArtistCatalog({ artist, onPlay }: { artist: Artist; onPlay: Play }) {
       <ShareLink compact path={`/u/${encodeURIComponent(artist.handle || artist.did)}`} />
       {auth.did === artist.did && <Action label="Edit profile" href="/edit-profile" />}
     </>}>
-      <Detail>@{artist.handle}</Detail>
-      {metrics.data && <Detail>{metrics.data.totals.tracks} {metrics.data.totals.tracks === 1 ? 'track' : 'tracks'} · {metrics.data.totals.plays} {metrics.data.totals.plays === 1 ? 'play' : 'plays'}</Detail>}
+      <Copy>@{artist.handle}</Copy>
+      {metrics.data && <Copy>{metrics.data.totals.tracks} {metrics.data.totals.tracks === 1 ? 'track' : 'tracks'} · {metrics.data.totals.plays} {metrics.data.totals.plays === 1 ? 'play' : 'plays'}</Copy>}
     </DetailHeader>
-    {artist.bio && <Detail>{artist.bio}</Detail>}
+    {artist.bio && <Copy>{artist.bio}</Copy>}
     {support && <InlineLink standalone href={support as Href}>support artist</InlineLink>}
-    {metrics.error && <View style={styles.actions}><Detail>couldn’t load totals.</Detail><Action label="Retry totals" onPress={metrics.retry} /></View>}
+    {metrics.error && <View style={styles.actions}><Copy>couldn’t load totals.</Copy><Action label="Retry totals" onPress={metrics.retry} /></View>}
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }}>
       <View {...catalogTabs.list} style={[styles.tabs, { borderColor: theme.hairline }]}>
         {sections.map(value => <Choice key={value} {...catalogTabs.tab(value)} />)}
