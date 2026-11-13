@@ -64,6 +64,8 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
   const panelRef = useRef<ViewInstance>(null);
   const artRef = useRef<ViewInstance>(null);
   const titleRef = useRef<ViewInstance>(null);
+  const art = trackArtwork(track);
+  const [settledArt, setSettledArt] = useState<string>();
   const [rects, setRects] = useState<Record<'art' | 'title', { from: Rect; to: Rect }>>();
   const scrollTouch = { touchAction: dismiss.directionalTouch && dismiss.atTop ? 'pan-x pan-down' : 'pan-x pan-y', cursor: 'auto' } as const;
   const sideBySide = width >= 800;
@@ -133,6 +135,10 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
   const departed = (open: number, away: number) => still ? open
     : playerSheet.translation.interpolate({ inputRange: [0, 1], outputRange: [open, away], extrapolate: 'clamp' });
   const carried = flights ? { opacity: departed(1, 0) } : undefined;
+  // The resting art loads its own large rendition and fades in; until it has, the flight keeps covering it at the open position.
+  // Handing off earlier showed the empty frame for a beat right after the morph landed, on any track whose large art was not cached.
+  const artShown = !art || settledArt === art;
+  const artCarried = flights ? { opacity: artShown ? departed(1, 0) : 0 } : undefined;
   const fade = (open: number, docked: number, from: number, to: number) => morph && !still
     ? playerSheet.translation.interpolate({ inputRange: [rest * from, rest * to], outputRange: [open, docked], extrapolate: 'clamp' }) : open;
   const settle = (progress: number) => { const k = Math.min(1, progress / 0.4); return k * k * (3 - 2 * k); };
@@ -171,7 +177,7 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
             style={[styles.headerTitle, compact && styles.centerTitle,
               { color: theme.muted, fontSize: 14 * theme.scale, fontFamily: theme.fontFamily }]}>{player.live ? `${player.live.station.label} radio · live` : 'now playing'}</Text></Animated.View>
           <Animated.View testID="now-playing-condensed" pointerEvents="none" aria-hidden={!condensed} style={[StyleSheet.absoluteFill, styles.condensed, { opacity: condense }]}>
-            <Cover instant uri={trackArtwork(track)} size={36} radius={6} />
+            <Cover instant uri={art} size={36} radius={6} />
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text numberOfLines={1} style={{ color: theme.text, fontFamily: theme.fontFamily, fontSize: 15 * theme.scale, fontWeight: '700' }}>{track.metadata.title}</Text>
               <Text numberOfLines={1} style={{ color: theme.muted, fontFamily: theme.fontFamily, fontSize: 12 * theme.scale }}>{artistName(track)}</Text>
@@ -185,8 +191,8 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
         <Animated.View {...dismiss.contentStartHandlers} style={[styles.scrollRegion, { transform: [{ translateY: morph ? fade(0, -0.6 * rest, 0, 1) : 0 }] }]}>
           <PullDetector gesture={pull.scroll}><Animated.ScrollView ref={scroller} testID="now-playing-scroll" {...dismiss.scrollProps} scrollEventThrottle={16} scrollEnabled={!dismiss.dragging}
             style={Platform.OS === 'web' && compact ? scrollTouch : undefined} contentContainerStyle={[styles.content, sideBySide && styles.desktopContent]}>
-            <Animated.View testID="now-playing-artwork" style={[styles.art, carried]}>
-              <View ref={artRef}><Cover uri={trackArtwork(track)} size={artwork} radius={16} /></View>
+            <Animated.View testID="now-playing-artwork" style={[styles.art, artCarried]}>
+              <View ref={artRef}><Cover uri={art} size={artwork} radius={16} onSettle={() => setSettledArt(art)} /></View>
             </Animated.View>
             <View onLayout={event => { titleEnd.current.body = sideBySide ? 0 : event.nativeEvent.layout.y; }} style={[styles.body, sideBySide ? [styles.desktopBody, { maxWidth: 440 }] : { width: artwork }]}>
               <View onLayout={event => { titleEnd.current.meta = event.nativeEvent.layout.y + event.nativeEvent.layout.height; }} style={styles.meta}>
@@ -237,15 +243,17 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
         </Animated.View>
         </Animated.View>
         <View ref={panelRef} pointerEvents="none" aria-hidden importantForAccessibility="no-hide-descendants" style={StyleSheet.absoluteFill}>
-          {flights && <Animated.View testID="now-playing-flights" style={[StyleSheet.absoluteFill, { opacity: departed(0, 1) }]}>
-            <PlayerFlight testID="now-playing-flight-art" {...flights.art} rest={rest} left={artLeft} origin={<Cover instant uri={trackArtwork(track)} size={flights.art.from.width} radius={6} />}>
-              <Cover instant uri={trackArtwork(track)} size={flights.art.to.width} radius={16} />
-            </PlayerFlight>
-            <PlayerFlight testID="now-playing-flight-title" {...flights.title} rest={rest} left={titleLeft} originFade={[0.05, 0.25]} fade={[0.6, 0.8]}
+          {flights && <View testID="now-playing-flights" style={StyleSheet.absoluteFill}>
+            <Animated.View style={[StyleSheet.absoluteFill, { opacity: artShown ? departed(0, 1) : 1 }]}>
+              <PlayerFlight testID="now-playing-flight-art" {...flights.art} rest={rest} left={artLeft} origin={<Cover instant uri={art} size={flights.art.from.width} radius={6} />}>
+                <Cover instant uri={art} size={flights.art.to.width} radius={16} />
+              </PlayerFlight>
+            </Animated.View>
+            <Animated.View style={[StyleSheet.absoluteFill, { opacity: departed(0, 1) }]}><PlayerFlight testID="now-playing-flight-title" {...flights.title} rest={rest} left={titleLeft} originFade={[0.05, 0.25]} fade={[0.6, 0.8]}
               origin={<Text numberOfLines={1} style={{ color: theme.text, fontSize: 14 * theme.scale, fontWeight: '700' }}>{track.metadata.title}</Text>}>
               <Text numberOfLines={2} style={titleStyle}>{track.metadata.title}</Text>
-            </PlayerFlight>
-          </Animated.View>}
+            </PlayerFlight></Animated.View>
+          </View>}
         </View>
       </AnimatedSafeAreaView></PullDetector>
     </View>;
