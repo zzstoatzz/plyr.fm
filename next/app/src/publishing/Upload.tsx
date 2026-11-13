@@ -3,13 +3,16 @@ import { useAuth } from '../auth';
 import { getAuth, type Auth } from '../auth-state';
 import { View } from 'react-native';
 import { Action, Copy, Field, Page } from '../controls';
-import { measureAudioDuration, pickMedia } from '../media-picker';
-import { createPds, MAX_AUDIO_BYTES, type MediaFile } from '../pds';
+import { pickMedia } from '../media-picker';
+import type { MediaFile } from '../pds';
+import { readLocal, removeLocal, writeLocal } from '../storage';
 import { LargeUploads, useLargeUploads } from './LargeUploads';
-import { MAX_SERVICE_AUDIO_BYTES } from './upload-model';
+import { needsPlyrStorage, uploadRoute } from './upload-queue-model';
+import { uploadQueue, useUploadQueue } from './upload-queue';
+import { UploadQueueList } from './UploadQueue';
 import { usePendingSharedAudio, useSharedAudio } from './shared-audio';
-import type { CreateReservation } from './create-operation';
 import { TagsField } from './TagsField';
+import { normalizeTrackTags } from './track-tags';
 import { CreateRecovery, EarlierCreates, useCreateRecovery } from './CreateRecovery';
 import { AudienceToggle, FormCard, PickTile } from './UploadPieces';
 import { useArtistName } from './artist-name';
@@ -35,8 +38,6 @@ function SignedOut() {
 
 function AccountUpload({ auth }: { auth: Auth }) {
   const live = useRef(true);
-  const locked = useRef(false);
-  const currentCreation = useRef<string | undefined>(undefined);
   const [file, setFile] = useState<MediaFile | null>(null);
   const [artwork, setArtwork] = useState<MediaFile | null>(null);
   const [title, setTitle] = useState('');
@@ -44,20 +45,19 @@ function AccountUpload({ auth }: { auth: Auth }) {
   const [album, setAlbum] = useState('');
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [serviceConsent, setServiceConsent] = useState(false);
+  const consentKey = `plyr-storage-consent:${auth.did}`;
+  const [serviceConsent, setServiceConsent] = useState(() => readLocal(consentKey) === 'yes');
   const [note, setNote] = useState<string>();
+  const queue = useUploadQueue();
+  const busy = uploadQueue.busy();
   const recovery = useCreateRecovery(auth, 'track');
-  const uploads = useLargeUploads(auth, recovery.refresh, resetCreation);
-  const creationRecovery = { ...recovery, operations: recovery.operations.filter(operation => !uploads.operations.some(upload => upload.uri === operation.uri)),
-    archived: recovery.archived.filter(operation => !uploads.operations.some(upload => upload.uri === operation.uri)) };
-  const large = !!file && file.size > MAX_AUDIO_BYTES;
-  function resetCreation(operation: CreateReservation) {
-    if (operation.rkey !== currentCreation.current) return;
-    currentCreation.current = undefined;
-    setFile(null); setArtwork(null); setTitle(''); setAlbum(''); setDetails(false); setDescription(''); setTags(''); setNote(undefined); setServiceConsent(false);
-  }
+  const uploads = useLargeUploads(auth, recovery.refresh, () => {});
+  const ours = (operation: { rkey: string }) => busy.rkeys.has(operation.rkey) || uploads.operations.some(upload => upload.rkey === operation.rkey);
+  const creationRecovery = { ...recovery, operations: recovery.operations.filter(operation => !ours(operation)), archived: recovery.archived.filter(operation => !ours(operation)) };
+  const service = !!file && needsPlyrStorage(file);
   useEffect(() => { live.current = true; return () => { live.current = false; }; }, []);
+  const settled = queue.filter(job => job.phase === 'done' || job.phase === 'failed').map(job => job.id).join();
+  useEffect(() => { void recovery.refresh(); void uploads.refresh(); }, [settled]);
   const artist = useArtistName(auth);
   const current = () => live.current && getAuth().did === auth.did && getAuth().rpc === auth.rpc;
 
@@ -73,60 +73,56 @@ function AccountUpload({ auth }: { auth: Auth }) {
   }
 
   function takeAudio(item: MediaFile) {
-    if (item.size > MAX_SERVICE_AUDIO_BYTES) throw new Error('audio files are limited to 1.5 GiB.');
-    setFile(item); setServiceConsent(false);
-    if (!title) setTitle(item.name.replace(/\.[^.]+$/, '').slice(0, 256));
+    uploadRoute(item);
+    setFile(item); setNote(undefined);
+    setTitle(item.name.replace(/\.[^.]+$/, '').slice(0, 256));
   }
   useSharedAudio(item => {
-    if (busy || !current()) return;
-    try { takeAudio(item); setNote(undefined); } catch (failure) { setNote(failure instanceof Error ? failure.message : 'could not open the shared file.'); }
+    if (!current()) return;
+    try { takeAudio(item); } catch (failure) { setNote(failure instanceof Error ? failure.message : 'could not open the shared file.'); }
   }, message => { if (current()) setNote(message); });
 
-  async function upload() {
-    if (!current() || !file || locked.current || recovery.operations.length || !title.trim() || !artist) return;
-    if (large && (!serviceConsent || !auth.uploadStorage || uploads.loading || uploads.error)) return;
-    locked.current = true;
-    setBusy(true);
-    setNote(undefined);
+  function consent() {
+    const next = !serviceConsent;
+    setServiceConsent(next);
+    if (next) writeLocal(consentKey, 'yes'); else removeLocal(consentKey);
+  }
+
+  function upload() {
+    if (!current() || !file || !title.trim() || !artist || (service && (!serviceConsent || !auth.uploadStorage))) return;
     try {
-      const duration = await measureAudioDuration(file).catch(() => undefined);
-      if (!current()) return;
-      const pds = createPds(auth), reservation = await pds.reserveCreate('track');
-      if (!current()) return;
-      currentCreation.current = reservation.rkey;
-      const input = { file, artwork, title, artist, album, description, duration, tags: tags.trim() ? tags.split('\n') : undefined };
-      if (large) await uploads.start(input, reservation);
-      else await pds.uploadTrack(input, reservation);
+      const list = tags.trim() ? tags.split('\n') : undefined;
+      if (list) normalizeTrackTags(list);
+      uploadQueue.add({ file, artwork, title, artist, album, description, tags: list });
     } catch (failure) {
-      if (current()) setNote(failure instanceof Error ? failure.message : 'upload failed.');
-    } finally {
-      locked.current = false;
-      if (current()) { await recovery.refresh(); setBusy(false); }
+      setNote(failure instanceof Error ? failure.message : 'upload failed.');
+      return;
     }
+    setFile(null); setArtwork(null); setTitle(''); setAlbum(''); setDetails(false); setDescription(''); setTags(''); setNote(undefined);
   }
 
   return <>
-    <LargeUploads uploads={uploads} disabled={busy} />
+    <UploadQueueList />
+    <LargeUploads uploads={uploads} skip={busy.uploadIds} />
     <EarlierCreates auth={auth} recovery={creationRecovery} kind="track" />
-    {creationRecovery.loading || creationRecovery.error || creationRecovery.operations.length ? <CreateRecovery auth={auth} recovery={creationRecovery} kind="track" onDismiss={resetCreation} /> : uploads.operations.some(operation => operation.rkey === currentCreation.current) ? null : <>
+    {creationRecovery.loading || creationRecovery.error || creationRecovery.operations.length ? <CreateRecovery auth={auth} recovery={creationRecovery} kind="track" onDismiss={() => {}} /> : <>
       <FormCard>
-        <PickTile kind="audio" file={file} disabled={busy} onPress={() => void choose('audio/*')} hint="mp3, wav, flac, ogg, m4a or aac · up to 1.5 GiB" />
-        {large && <>
-          <Copy>large audio is stored by plyr, not your PDS. playback and downloads are public and remain public after publishing. protected audio, restricted downloads and transcoding are not supported here.</Copy>
-          <Action label="Use plyr storage" selected={serviceConsent} disabled={busy} onPress={() => setServiceConsent(value => !value)} />
-          {!auth.uploadStorage && <><Copy>sign in again to grant large-upload permission. you will need to select the file again.</Copy><Action label="Sign in for large uploads" href={{ pathname: '/login', params: { return_to: '/upload' } }} /></>}
+        <PickTile kind="audio" file={file} onPress={() => void choose('audio/*')} hint="mp3, wav, flac, aiff, ogg, m4a or aac · up to 1.5 GiB" />
+        {service && <>
+          <Copy>plyr stores this file and makes an mp3 for playback when needed. playback and downloads are public.</Copy>
+          {!serviceConsent && <Action label="Use plyr storage" onPress={consent} />}
+          {!auth.uploadStorage && <><Copy>sign in again to allow plyr storage. you will need to select the file again.</Copy><Action label="Sign in again" href={{ pathname: '/login', params: { return_to: '/upload' } }} /></>}
         </>}
-        <Field label="Title" value={title} onChangeText={setTitle} maxLength={256} editable={!busy} placeholder="track title" />
-        <PickTile kind="artwork" file={artwork} disabled={busy} onPress={() => void choose('image/*')} hint="optional · jpg, png, webp or gif" />
+        <Field label="Title" value={title} onChangeText={setTitle} maxLength={256} placeholder="track title" />
+        <PickTile kind="artwork" file={artwork} onPress={() => void choose('image/*')} hint="optional · jpg, png, webp or gif" />
         {details ? <>
-          <Field label="Album" value={album} onChangeText={setAlbum} maxLength={256} editable={!busy} placeholder="optional" />
-          <Field label="Description" value={description} onChangeText={setDescription} maxLength={5000} multiline editable={!busy} placeholder="liner notes, credits…" style={{ minHeight: 88 }} />
-          <TagsField value={tags} onChange={setTags} disabled={busy} />
-        </> : <Action label="add album, description or tags" disabled={busy} onPress={() => setDetails(true)} />}
-        {!!recovery.operations.length && <Copy>finish or set aside the earlier creation before uploading another track.</Copy>}
+          <Field label="Album" value={album} onChangeText={setAlbum} maxLength={256} placeholder="optional" />
+          <Field label="Description" value={description} onChangeText={setDescription} maxLength={5000} multiline placeholder="liner notes, credits…" style={{ minHeight: 88 }} />
+          <TagsField value={tags} onChange={setTags} disabled={false} />
+        </> : <Action label="add album, description or tags" onPress={() => setDetails(true)} />}
         <View style={{ gap: 8 }}>
-          <Action primary label={busy ? 'Uploading…' : 'Upload'} onPress={() => void upload()} disabled={busy || !!uploads.busy || !!recovery.operations.length || !file || !title.trim() || !artist || (large && (!serviceConsent || !auth.uploadStorage || uploads.loading || !!uploads.error))} />
-          {!!artist && <Copy>posts to your profile as {artist}.</Copy>}
+          <Action primary label="Upload" onPress={upload} disabled={!file || !title.trim() || !artist || (service && (!serviceConsent || !auth.uploadStorage))} />
+          {!!artist && <Copy>posts to your profile as {artist}. you can keep browsing while it uploads.</Copy>}
         </View>
       </FormCard>
       {note && <Copy live>{note}</Copy>}

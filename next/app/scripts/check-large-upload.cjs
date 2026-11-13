@@ -43,25 +43,29 @@ async function run(browser, width, theme) {
       }
       assert.ok(url.pathname.endsWith('createRecord'), `unexpected PDS call ${url.pathname}`);
       const input = JSON.parse(body); writes.push(input);
-      assert.equal(input.rkey, operation.rkey); assert.equal(input.repo, did);
-      assert.equal(input.record.audioUrl, base.replace('/v1/uploads/', '/media/') + operation.uploadId);
+      assert.equal(input.repo, did);
+      const session = [...sessions.values()].find(item => item.recordUri.endsWith('/' + input.rkey)); assert.ok(session);
+      assert.equal(input.record.audioUrl, base.replace('/v1/uploads/', '/media/') + session.uploadId);
+      if (session.processing) { assert.equal(input.record.fileType, 'mp3'); assert.equal(input.record.duration, 1); }
       assert.equal(input.record.downloadPolicy, 'open'); assert.equal(input.record.audioBlob, undefined);
       if (records.has(input.rkey)) return { status: 400, body: { error: 'RecordAlreadyExists' } };
-      records.set(input.rkey, { uri: operation.uri, cid: 'fixturecid', value: input.record });
+      const uri = `at://${did}/fm.plyr.track/${input.rkey}`;
+      records.set(input.rkey, { uri, cid: 'fixturecid', value: input.record });
       if (lostCreate) offlineRecord = true;
-      return lostCreate ? { drop: true } : { status: 200, body: { uri: operation.uri, cid: 'fixturecid' } };
+      return lostCreate ? { drop: true } : { status: 200, body: { uri, cid: 'fixturecid' } };
     });
     await context.route('https://jams.next.plyr.fm/v1/uploads/authorize', async route => {
       const body = route.request().postDataJSON(); admissions.push(body);
       assert.equal(body.serviceToken, 'ephemeral-service-fixture');
       assert.equal(body.visibility, 'public'); assert.equal(body.downloadPolicy, 'open');
-      if (denyAdmission) return route.fulfill({ status: 503, json: {} });
+      if (denyAdmission) return route.fulfill({ status: 403, json: {} });
       return route.fulfill({ json: { uploadUrl: base + body.uploadId, capability: 'ephemeral-capability', expiresAt: Date.now() + 300000 } });
     });
     function status(session) {
-      return { state: session.state, recoveryRequired: false, reservedBytes: session.state === 'published' || session.state === 'cancelled' ? 0 : session.sizeBytes,
+      return { state: session.state, recoveryRequired: false, processing: session.processing, reservedBytes: session.state === 'published' || session.state === 'cancelled' ? 0 : session.sizeBytes + (session.processing?.outputBudget ?? 0),
         partSizeBytes: partSize, partCount: Math.ceil(session.sizeBytes / partSize), receivedParts: session.receipts, reservedDigests: session.receipts,
-        ...(['complete', 'published'].includes(session.state) ? { audioUrl: base.replace('/v1/uploads/', '/media/') + session.uploadId } : {}) };
+        ...(['complete', 'published'].includes(session.state) ? { audioUrl: base.replace('/v1/uploads/', '/media/') + session.uploadId,
+          ...(session.processing ? { rendition: { duration: 1, sizeBytes: 5000, contentType: 'audio/mpeg', fileType: 'mp3' } } : {}) } : {}) };
     }
     await context.route('https://audio.fixture/v1/uploads/**', async route => {
       const request = route.request(), url = new URL(request.url()), pieces = url.pathname.split('/'), id = pieces[4];
@@ -70,8 +74,9 @@ async function run(browser, width, theme) {
       if (refreshCapability) { refreshCapability = false; return route.fulfill({ status: 403, json: {} }); }
       if (!session && request.method() === 'POST' && pieces.length === 5) {
         const claim = admissions.findLast(item => item.uploadId === id); assert.ok(claim);
-        session = { ...claim, state: 'transferring', receipts: [] }; sessions.set(id, session);
+        session = { ...claim, state: 'transferring', receipts: [], polls: 0 }; sessions.set(id, session);
       }
+      if (session?.state === 'processing' && request.method() === 'GET' && ++session.polls >= 2) session.state = 'complete';
       if (!session) return route.fulfill({ status: 404, json: { error: 'upload not found' } });
       if (request.method() === 'PUT') {
         const bytes = request.postDataBuffer(); assert.ok(bytes && bytes.length <= partSize);
@@ -85,11 +90,11 @@ async function run(browser, width, theme) {
       }
       if (pieces[5] === 'finish') {
         finishes++;
-        assert.equal(session.receipts.length, 1); session.state = 'complete';
+        assert.equal(session.receipts.length, 1); if (session.state !== 'processing') session.state = session.processing ? 'processing' : 'complete';
         if (lostFinish) { lostFinish = false; return route.abort('failed'); }
       }
       if (pieces[5] === 'activate') {
-        assert.ok(records.has(operation.rkey)); session.state = 'published';
+        assert.ok(records.has(session.recordUri.split('/').at(-1))); session.state = 'published';
       }
       if (request.method() === 'DELETE') {
         if (session.state === 'complete') return route.fulfill({ status: 409, json: { error: 'completed upload requires publication recovery' } });
@@ -128,9 +133,15 @@ async function run(browser, width, theme) {
       const size = Object.getOwnPropertyDescriptor(Blob.prototype, 'size').get;
       Object.defineProperty(Blob.prototype, 'size', { configurable: true, get() { return this instanceof File && this.name === 'large-fixture.wav' ? 104857601 : size.call(this); } });
     });
+    const toast = text => page.getByTestId('toast').filter({ hasText: text });
+    const saved = (item, receipts = []) => page.evaluate(operation => new Promise((resolve, reject) => {
+      const request = indexedDB.open('plyr-next-uploads', 1);
+      request.onsuccess = () => { const transaction = request.result.transaction('uploads', 'readwrite'); transaction.objectStore('uploads').put(operation, `${operation.owner}/${operation.uploadId}`);
+        transaction.oncomplete = () => { request.result.close(); resolve(); }; transaction.onerror = () => reject(transaction.error); };
+    }), item).then(() => { if (receipts.length) sessions.set(item.uploadId, { ...item, recordUri: item.uri, state: 'transferring', receipts, polls: 0 }); });
     await signIn(did, false); await choose('large-fixture.wav');
     await page.getByRole('textbox', { name: 'Title', exact: true }).fill('large fixture');
-    await page.getByRole('link', { name: 'Sign in for large uploads', exact: true }).waitFor();
+    await page.getByRole('link', { name: 'Sign in again', exact: true }).waitFor();
     assert.ok(await page.getByRole('button', { name: 'Upload', exact: true }).isDisabled());
     assert.equal(grants, 0);
     await signIn(); await choose('large-fixture.wav');
@@ -140,82 +151,74 @@ async function run(browser, width, theme) {
     await screenshot(page, `large-consent-${width}-${theme}`);
     await page.getByRole('button', { name: 'Use plyr storage', exact: true }).click();
     await page.getByRole('button', { name: 'Upload', exact: true }).click();
-    await page.getByText('large upload service is unavailable. try again.', { exact: true }).waitFor();
+    await toast('large uploads are not allowed for this account').waitFor();
     assert.equal(admissions[0].sizeBytes, 104857601); assert.equal(blobWrites, 0); assert.equal(parts.length, 0);
+    assert.deepEqual(admissions[0].processing?.recipe, 'mp3-320k-44100-v1', 'wav gets an mp3 playback copy');
     const reserved = admissions[0]; denyAdmission = false;
     await page.getByRole('button', { name: 'Cancel transfer', exact: true }).click();
-    await page.getByRole('button', { name: 'Choose audio', exact: true }).waitFor();
+    await page.getByText('large fixture', { exact: true }).waitFor({ state: 'detached' });
     assert.equal(sessions.get(reserved.uploadId).state, 'cancelled', 'an unstarted upload is cancelled at its original address');
     assert.ok(admissions.every(item => item.uploadId === reserved.uploadId && item.recordUri === reserved.recordUri));
-    await page.evaluate(operation => new Promise((resolve, reject) => {
-      const request = indexedDB.open('plyr-next-uploads', 1);
-      request.onsuccess = () => { const transaction = request.result.transaction('uploads', 'readwrite'); transaction.objectStore('uploads').put(operation, `${operation.owner}/${operation.uploadId}`);
-        transaction.oncomplete = () => { request.result.close(); resolve(); }; transaction.onerror = () => reject(transaction.error); };
-    }), operation);
+    await choose('large-fixture.wav');
+    assert.equal(await page.getByRole('button', { name: 'Use plyr storage', exact: true }).count(), 0, 'storage consent is remembered for the account');
+    await saved(operation);
     await enter();
     await page.getByText('resumable fixture', { exact: true }).waitFor();
     await choose('original.wav', audio, 'Reselect original audio');
     const heldPart = new Promise(resolve => { partEntered = resolve; });
+    offlineRecord = false;
     await page.getByRole('button', { name: 'Resume upload', exact: true }).click();
     await heldPart;
+    await toast('uploading "resumable fixture"').waitFor();
     await signIn();
     releasePart(); holdPart = false;
-    await page.getByRole('button', { name: 'Reselect original audio', exact: true }).waitFor();
-    assert.equal(finishes, 0, 'replaced session cannot continue after a held part');
-    assert.equal(parts.length, 1);
-    const different = Buffer.from(audio); different[different.length - 1] = 1;
-    await choose('different.wav', different, 'Reselect original audio');
-    await page.getByRole('button', { name: 'Resume upload', exact: true }).click();
-    await page.getByText('this file differs from the uploaded parts. choose the original file.', { exact: true }).waitFor();
-    assert.equal(parts.length, 1); await screenshot(page, `large-mismatch-${width}-${theme}`);
-    await enter();
+    await toast('could not confirm creation').waitFor({ timeout: 60000 });
+    assert.equal(parts.length, 1, 'an acknowledged part is never resent after a lost reply or same-account reauth');
+    assert.equal(finishes, 1, 'a lost finish reply recovers from status without finishing twice');
+    assert.equal(writes.length, 1);
     refreshCapability = true;
-    await page.getByRole('button', { name: 'Check upload status', exact: true }).click();
-    await page.getByRole('button', { name: 'Finish upload', exact: true }).click();
-    await page.getByRole('button', { name: 'Check upload status', exact: true }).waitFor();
     await page.getByRole('button', { name: 'Cancel transfer', exact: true }).click();
     await page.getByText('completed upload requires publication recovery', { exact: true }).waitFor();
     await page.getByRole('button', { name: 'Check upload status', exact: true }).click();
     await page.getByRole('button', { name: 'Publish this track', exact: true }).waitFor();
     await page.getByText('completed audio is retained for publication recovery and cannot be cancelled here.', { exact: true }).waitFor();
-    assert.equal(parts.length, 1, 'acknowledged part is never resent');
     await page.getByRole('button', { name: 'Set aside creation', exact: true }).click();
     await page.getByText('creation set aside. the uploaded audio remains available for recovery.', { exact: true }).waitFor();
-    assert.equal(writes.length, 0);
-    await enter(); await page.getByRole('button', { name: 'Check upload status', exact: true }).click();
+    await enter();
+    await page.getByText('resumable fixture', { exact: true }).waitFor();
     offlineRecord = false;
     await page.getByRole('button', { name: 'Check upload status', exact: true }).click();
     await page.getByText('creation is set aside. publish only if you want to resume this attempt.', { exact: true }).waitFor();
-    assert.equal(writes.length, 0); await screenshot(page, `large-archived-${width}-${theme}`);
-    offlineRecord = false;
-    await page.getByRole('button', { name: 'Publish this track', exact: true }).click();
-    await page.getByText('could not confirm creation. check its status before trying again.', { exact: true }).waitFor();
-    assert.equal(writes.length, 1);
+    await screenshot(page, `large-archived-${width}-${theme}`);
     await signIn('did:plc:otherfixture');
-    assert.equal(await page.getByText('resumable fixture', { exact: true }).count(), 0);
-    await page.evaluate(operation => new Promise((resolve, reject) => {
-      const request = indexedDB.open('plyr-next-pending-creates', 1);
-      request.onsuccess = () => { const transaction = request.result.transaction('operations', 'readwrite'), store = transaction.objectStore('operations');
-        const key = `${operation.owner}/${operation.collection}/${operation.rkey}`, read = store.get(key);
-        read.onsuccess = () => store.put({ ...read.result, archived: false }, key);
-        transaction.oncomplete = () => { request.result.close(); resolve(); }; transaction.onerror = () => reject(transaction.error); };
-    }), operation);
-    await signIn(); offlineRecord = false; lostCreate = false;
-    await choose('fresh.wav');
-    await page.getByRole('textbox', { name: 'Title', exact: true }).fill('unrelated fresh draft');
-    await page.getByText('finish or set aside the earlier creation before uploading another track.', { exact: true }).waitFor();
-    assert.ok(await page.getByRole('button', { name: 'Upload', exact: true }).isDisabled());
+    assert.equal(await page.getByText('resumable fixture', { exact: true }).count(), 0, 'another account never sees this upload');
+    await signIn(); lostCreate = false;
     await page.getByRole('button', { name: 'Check upload status', exact: true }).click();
     await page.getByRole('button', { name: 'Check playback availability', exact: true }).click();
     await page.getByText('saved. public audio is available.', { exact: true }).waitFor();
-    assert.equal(writes.length, 1); assert.equal(blobWrites, 0);
+    assert.equal(writes.length, 1, 'the record that already landed is reused'); assert.equal(blobWrites, 0);
     await screenshot(page, `large-published-${width}-${theme}`);
     await page.getByRole('button', { name: 'Done with upload', exact: true }).click();
     await page.getByText('resumable fixture', { exact: true }).waitFor({ state: 'detached' });
-    assert.equal(await page.getByRole('textbox', { name: 'Title', exact: true }).inputValue(), 'unrelated fresh draft');
-    assert.ok(await page.getByRole('button', { name: 'Upload', exact: true }).isEnabled());
+    const mismatch = { ...operation, rkey: '3jzfcijpj2z2b', uri: `at://${did}/fm.plyr.track/3jzfcijpj2z2b`, uploadId: '12345678-1234-4123-8123-123456789abd', record: { ...operation.record, title: 'mismatch fixture' } };
+    await saved(mismatch, [{ number: 1, sha256: createHash('sha256').update(audio).digest('hex') }]);
+    await enter();
+    const different = Buffer.from(audio); different[different.length - 1] = 1;
+    await choose('different.wav', different, 'Reselect original audio');
+    await page.getByRole('button', { name: 'Resume upload', exact: true }).click();
+    await toast('this file differs from the uploaded parts').waitFor();
+    assert.equal(parts.length, 1); await screenshot(page, `large-mismatch-${width}-${theme}`);
+    await page.getByRole('button', { name: 'Cancel transfer', exact: true }).click();
+    await page.getByText('mismatch fixture', { exact: true }).waitFor({ state: 'detached' });
+    await choose('fresh.wav');
+    await page.getByRole('button', { name: 'Upload', exact: true }).click();
+    await toast('converting "fresh" to mp3…').waitFor({ timeout: 30000 });
+    await screenshot(page, `large-processing-${width}-${theme}`);
+    await toast('"fresh" uploaded').waitFor({ timeout: 60000 });
+    const fresh = [...sessions.values()].find(item => item.recordUri.endsWith('/' + writes.at(-1).rkey));
+    assert.equal(fresh.state, 'published'); assert.equal(writes.length, 2); assert.equal(writes[1].record.fileType, 'mp3');
     assert.deepEqual(errors, []);
-    console.log(`${width}/${theme}: consent, dedicated grant, bounded small transfer, mismatch protection, capability refresh, lost part/finish/create, cancellation conflict, archive/reload, held-part same-account reauth, owner isolation and activation passed`);
+    console.log(`${width}/${theme}: remembered consent, dedicated grant, queued transfer through lost part/finish/create and same-account reauth, mismatch protection, capability refresh, cancellation conflict, archive/reload, owner isolation, activation and mp3 processing passed`);
   } catch (error) { console.error(await page.locator('body').innerText()); await screenshot(page, `large-failure-${width}-${theme}`); throw error; }
   finally { await context.close(); }
 }

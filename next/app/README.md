@@ -150,23 +150,33 @@ Editing needs an upstream atomic conditional-write contract plus discoverable
 support, or another protocol-supported concurrency mechanism. Reading before a
 write and sending an ignored public-repo swapRecord field are not substitutes.
 
-## Large public uploads
+## Uploads
 
-Large public uploads require explicit service-storage consent and the separate
-upload service-auth permission. Existing sessions can keep listening and using
-the small PDS-blob path; sign in again only when large-upload permission is
-needed. Audio above 100 MiB and up to 1.5 GiB uses the service's public/open
-`audioUrl` path, with sequential 10 MiB reads on web and native. This does not
-complete protected uploads, restricted downloads or transcoding parity.
+Uploads run in an app-level queue above the route stack
+(`src/publishing/upload-queue.ts`), one at a time, with one persistent toast
+each. The page queues a track and resets, so leaving it or queueing more never
+interrupts a transfer. Network drops and server errors retry with backoff; a
+same-account sign-in mid-upload carries on. The web tab asks before closing
+while an upload runs.
 
-Pause stops transfer work without pretending to cancel an accepted request.
-Reselect the original file to resume; every server-reserved digest is checked
-before sending new parts. Device-local recovery retains the original upload ID,
-record URI and prepared metadata, never credentials or media bytes. Publication
-reuses the same canonical create attempt and activates only after authoritative
-record verification. Setting a create aside retains completed-upload recovery.
-Completed cancellation conflicts remain visible and quota-bearing; published
-URLs remain public. Clearing local app data loses this client's recovery list.
+Small MP3, M4A, AAC and OGG files go to the account's PDS as a blob. WAV, FLAC,
+AIFF and WebM, and anything above 100 MiB (up to 1.5 GiB), go through plyr
+storage on the public/open `audioUrl` path with sequential 10 MiB parts; the
+lossless and WebM ones request the server's `mp3-320k-44100-v1` playback copy
+and keep the original for download. Plyr storage needs the separate upload
+service-auth permission and a storage consent asked once per account on each
+device.
+
+Device-local recovery keeps each plyr-storage upload's ID, record URI and
+prepared metadata, never credentials or media bytes. After a reload the queue
+finishes any whose bytes already arrived (still converting, or complete but
+unpublished). A transfer that stopped part way shows on the upload page; reselect
+the original file to resume, and every server-reserved digest is checked before
+new parts are sent. Publication reuses the same canonical create attempt and
+activates only after authoritative record verification. Setting a create aside
+retains completed-upload recovery and the queue leaves it alone. Completed
+cancellation conflicts remain visible and quota-bearing; published URLs remain
+public. Clearing local app data loses this client's recovery list.
 
 `check-large-upload.cjs` uses small file/HTTP/PDS fixtures and logical size
 metadata for the consent boundary. `check-large-upload-stream.mts` defaults to a

@@ -25,6 +25,7 @@ import { PreferencesProvider } from '../src/preference-context';
 import ChartNoAxesColumn from 'lucide-react-native/icons/chart-no-axes-column';
 import { pageFrame } from '../src/controls';
 import { usePreferences } from '../src/preferences';
+import { UploadQueueHost } from '../src/publishing/UploadQueue';
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
@@ -39,6 +40,7 @@ export default function RootLayout() {
     <AppearanceProvider preferences={prefs.preferences}>
       <PlaybackProvider playThrough={prefs.preferences.playThrough} keepPlaying={prefs.preferences.keepPlaying} volume={prefs.preferences.volume}>
         <RadioProvider>
+          <UploadQueueHost />
           <Shell />
         </RadioProvider>
       </PlaybackProvider>
