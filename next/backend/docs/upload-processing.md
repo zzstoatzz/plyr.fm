@@ -85,6 +85,12 @@ delivered, lease recovery still applies; it cannot infer an undelivered reason.
 Increasing the immutable budget is not implemented and must not be advertised as
 a recovery action. Processing UI remains gated on handling this distinction.
 
+Authenticated upload status includes `processingGeneration` once an attempt
+exists. A fixture can retain its exact private rendition key
+`processing/{ownerHash}/{uploadId}/{processingGeneration}` without recording a
+capability. Published manifests distinguish processed uploads with
+`processed: true`; raw uploads report false and need no original/rendition choice.
+
 Rust's individual attempt deadline is two hours, with 20-second heartbeats and
 a 15-second heartbeat request timeout. The owner must fence expired generations
 and reject heartbeats after completion. Cloud full-size tests must establish
@@ -97,6 +103,15 @@ This check does not reserve disk against legacy concurrent jobs: later I/O
 failures remain recoverable. Full-size cloud acceptance must record free space
 before dispatch and peak disk use; it cannot assume a Fly image's nominal disk
 size is all available to the job.
+
+Executor logs bind `scratch_available_bytes` before input and
+`owned_scratch_peak_file_bytes` after encoding to the upload UUID and generation.
+The latter sums the two monotonically growing source/output files' logical byte
+lengths; it is owned scratch usage, not whole-machine peak disk or filesystem
+allocation overhead. No media, credentials or capabilities enter these logs.
+Successful cloud fixtures remove only their exact source and observed generation
+after publication. Unfinished failures retain objects and their reservation
+artifact for fenced diagnosis; never delete bytes under an active executor.
 
 The new encoder allows only file/pipe protocols and mp3, wav, flac, ogg, mov,
 aac, aiff and matroska/webm demuxers. This covers the legacy `AudioFormat`
@@ -127,32 +142,28 @@ require known lengths, with uniform parts except the final part.
 - [Workers invocation limits](https://developers.cloudflare.com/workers/platform/limits/)
 - [R2 multipart API](https://developers.cloudflare.com/r2/api/workers/workers-api-reference/)
 
-## staging wiring and release isolation
+## executor and isolation
 
-`deploy-staging.yml` invokes `deploy-transcoder.yml` with target `staging` on
-main changes. `deploy-prod.yml` invokes target `production` only on a published
-release. Source pushes and merges do not promote production.
+The executor is `next/services/processing`, deployed as the Next-owned Fly app
+`plyr-next-processing` by `deploy-next-processing.yml`. It shares no source,
+app, secret or deploy path with the legacy transcoder, and production never
+deploys it.
 
-The new route requires `FLY_APP_NAME=plyr-transcoder-staging`,
+It refuses to start unless `FLY_APP_NAME=plyr-next-processing` and both
 `NEXT_PROCESSING_ORIGIN` (the Next audio HTTPS origin) and
 `NEXT_PROCESSING_AUTH_TOKEN` (at least 32 bytes, sent by the DO in
-`X-Processing-Key`). Missing
-configuration leaves the route absent; partial or non-staging configuration
-must fail closed. Existing `/transcode` behavior is unchanged.
+`X-Processing-Key`) are set.
 
 The coordinator separately requires `UPLOAD_PROCESSING_ENABLED=true` before it
 admits a recipe/output budget. The audio Worker requires
-`PROCESSING_TRANSCODER_URL=https://plyr-transcoder-staging.fly.dev/v1/processing`
+`PROCESSING_TRANSCODER_URL=https://plyr-next-processing.fly.dev/v1/processing`
 and `PROCESSING_TRANSCODER_KEY` matching the executor token. Otherwise recipe
-admission fails before source reservation. None of these settings is enabled
-by this implementation. AIFF/AIF and WebM admission requires processing; the
-existing direct-upload format contract remains unchanged.
+admission fails before source reservation. AIFF/AIF and WebM admission requires
+processing; the existing direct-upload format contract remains unchanged.
 
-Before enabling background processing, staging's current auto-stop/minimum-zero
-configuration must change to keep its single processing machine alive. Callback
-traffic alone is not an inbound request keeping the Fly machine active. This
-staging-only capacity/configuration change and secret wiring require review;
-production settings and secrets are not changed by this slice.
+The app keeps one machine running with auto-stop off: after its single inbound
+dispatch an attempt has only outbound callback traffic, which does not keep a
+Fly machine alive.
 
 ## acceptance
 
@@ -169,3 +180,37 @@ staging Rust service and R2 multipart path, verify bounded memory and both
 original and rendition downloads after fixture publication, then clean up exact
 fixture objects and records. Run only while shared staging integration is idle.
 An HTTP sink or emulator alone does not establish deployed R2 acceptance.
+
+## enabling the staged journey
+
+Provision only after the config/workflow PR is published and reviewed. The new
+credential's canonical SOPS key is `plyr_next.processing_auth_token`; its GitHub
+Actions consumer is `PLYR_NEXT_PROCESSING_AUTH_TOKEN`. The next processing
+workflow (`deploy-next-processing.yml`) stages that value as Fly
+`NEXT_PROCESSING_AUTH_TOKEN` on `plyr-next-processing`; the Next audio
+workflow sends the same value as Worker `PROCESSING_TRANSCODER_KEY`. Neither
+consumer reuses upload admission or mirror credentials. Values travel through
+stdin or a mode-0600 temporary file and are never logged. The existing local
+secret sync does not manage GitHub/Fly/Worker consumers: provision the GitHub
+value from SOPS, run the two reviewed workflows, and verify authenticated
+operation. Rotation uses the same sequence while admission is disabled; it is
+not an automatic multi-consumer rotation.
+
+The executor deployment keeps exactly one staging machine in `iad`, with
+`--ha=false`, explicit count one, minimum one and auto-stop disabled. Before
+this change the app had two stopped machines; minimum one alone would not
+remove the extra machine. Production deploy arguments and configuration are
+unchanged. The hourly staging rest job stops only the legacy backend's worker
+and jetstream groups, not the transcoder.
+
+Coordinator `UPLOAD_PROCESSING_ENABLED` is `true` in `fly.jams.toml` as of the
+executor moving to `plyr-next-processing`. It was kept absent until the disabled owner,
+typed-failure handling and receipt metadata have deployed, the Worker/executor
+configuration is verified, and no shared staging test is active. Enable that
+coordinator flag last through a separate reviewed configuration change. Run
+small then full-size synthetic acceptance, retaining operation/generation
+receipts and exact cleanup evidence. Enable the client only after acceptance.
+On failure, disable admission first, retain unfinished objects for diagnosis,
+fence active attempts before changing executor capacity, and revert the warm
+staging settings if the trial is abandoned. Never delete bytes under an active
+executor or promote production as part of this sequence.

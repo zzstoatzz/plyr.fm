@@ -1,0 +1,20 @@
+{
+  "platform-seams": {
+    "src/NowPlaying.tsx": "web-only modal focus handling runs inside a Platform.OS guard; candidate for a layers behavior",
+    "src/ShareLink.tsx": "navigator.share and clipboard behind a Platform.OS guard",
+    "src/appearance.tsx": "writes theme color to the document on web behind a Platform.OS guard",
+    "src/gated-audio-shared.ts": "false positive: document is a DID document, not the DOM",
+    "src/preferences.ts": "online and focus listeners use optional calls that no-op on native",
+    "src/queue-login.ts": "sessionStorage access is wrapped in try and only reached on web",
+    "src/use-personal-queue.ts": "pagehide listener behind a Platform.OS guard",
+    "src/use-player-accounting.ts": "online listener behind a Platform.OS guard",
+    "app/embed/radio.tsx": "embed routes are web-only",
+    "app/login.tsx": "pageshow listener resets the picker after bfcache on web"
+  },
+  "hand-rolled-roles": {
+    "src/AccountPicker.tsx": "the only combobox; check-aria-patterns verifies it against the APG combobox pattern. Move it to src/behaviors/ when a second one appears"
+  },
+  "seam-exports": {
+    "src/private-audio.web.ts": "web-only helper imported by gated-audio.web.ts"
+  }
+}

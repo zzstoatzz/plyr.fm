@@ -14,7 +14,7 @@ import { PlayerControl } from './PlayerControl';
 export function HomeTrackRow({ track, tracks, onPlay, returnTo = '/', height }: { height?: number; track: Track; tracks: Track[]; onPlay: Play; returnTo?: string }) {
   const theme = useAppearance();
   return <View testID="home-track-row" style={{ height, paddingBottom: 8 }}><View style={[styles.row, cardSurface(theme)]}>
-    <Pressable testID="track-play-control" accessibilityRole="button" accessibilityLabel={`Play ${track.metadata.title}`} onPress={() => onPlay(track)}
+    <Pressable testID="track-play-control" accessibilityRole="button" accessibilityLabel={`Play ${track.metadata.title}`} onPress={() => onPlay(track, tracks)}
       style={({ pressed }) => [StyleSheet.absoluteFill, { borderRadius: 8, backgroundColor: pressed ? theme.hover : 'transparent' }]} />
     <View pointerEvents="none"><Cover uri={trackArtwork(track)} size={44} /></View>
     <View pointerEvents="box-none" style={styles.meta}>

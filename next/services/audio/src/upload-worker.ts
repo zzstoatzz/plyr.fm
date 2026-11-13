@@ -22,7 +22,7 @@ export class OwnerUploads extends DurableObject<UploadEnv> {
     super(ctx, env);
     const origin = env.PROCESSING_TRANSCODER_URL;
     const auth = env.PROCESSING_TRANSCODER_KEY;
-    this.processing = new ProcessingJobs(ctx.storage, env.AUDIO, origin === "https://plyr-transcoder-staging.fly.dev/v1/processing" && auth && auth.length >= 32 ? {
+    this.processing = new ProcessingJobs(ctx.storage, env.AUDIO, origin === "https://plyr-next-processing.fly.dev/v1/processing" && auth && auth.length >= 32 ? {
       secret: env.UPLOAD_CAPABILITY_SECRET, url: origin, auth,
     } : null);
     this.sessions = new UploadSessions(ctx.storage, env.AUDIO, session => this.inspect(session), Date.now, (session, retry) => this.processing.advance(session, retry));
@@ -54,7 +54,7 @@ export class OwnerUploads extends DurableObject<UploadEnv> {
         if (!claim || pieces[3] !== await ownerHash(claim.owner) || pieces[4] !== claim.uploadId) throw new UploadFailure(403, "invalid upload capability");
         const base = `${url.origin}/media/${pieces[3]}/${claim.uploadId}`;
         if (request.method === "POST" && pieces.length === 5) {
-          if (claim.processing && ((this.env.PROCESSING_TRANSCODER_KEY?.length ?? 0) < 32 || this.env.PROCESSING_TRANSCODER_URL !== "https://plyr-transcoder-staging.fly.dev/v1/processing")) throw new UploadFailure(503, "processing is not configured");
+          if (claim.processing && ((this.env.PROCESSING_TRANSCODER_KEY?.length ?? 0) < 32 || this.env.PROCESSING_TRANSCODER_URL !== "https://plyr-next-processing.fly.dev/v1/processing")) throw new UploadFailure(503, "processing is not configured");
           return Response.json(await this.sessions.start(claim, base));
         }
         const session = await this.sessions.load(claim.uploadId);
@@ -62,7 +62,7 @@ export class OwnerUploads extends DurableObject<UploadEnv> {
         if (!sameUpload(session, claim)) throw new UploadFailure(403, "upload reservation mismatch");
         if (request.method === "GET" && pieces.length === 5) {
           const job = session.processing ? await this.processing.load(session.uploadId) : undefined;
-          return Response.json({ ...this.sessions.view(session), ...(job?.failure ? { processingFailure: job.failure,
+          return Response.json({ ...this.sessions.view(session), ...(job ? { processingGeneration: job.claim.generation } : {}), ...(job?.failure ? { processingFailure: job.failure,
             recoveryRequired: session.nextCheck === null || job.failure === "output_budget_exceeded" || job.phase === "recovery" } : {}) });
         }
         if (request.method === "PUT" && pieces[5] === "parts" && pieces.length === 7) return Response.json(await this.sessions.part(session, Number(pieces[6]), request));
@@ -104,6 +104,7 @@ export class OwnerUploads extends DurableObject<UploadEnv> {
     const job = session.processing ? await this.processing.load(id) : undefined;
     if (session.processing && job?.phase !== "ready") return new Response(null, { status: 404 });
     if (variant === "manifest") return request.method === "HEAD" ? new Response(null, { headers: { "content-type": "application/json" } }) : Response.json({
+      processed: !!job,
       original: { url: `${session.audioUrl}/original`, contentType: session.contentType, fileType: session.fileType, sizeBytes: session.sizeBytes },
       playback: { url: session.audioUrl, contentType: job ? "audio/mpeg" : session.contentType, sizeBytes: job?.outputSize ?? session.sizeBytes, duration: job?.duration },
     });

@@ -70,10 +70,9 @@ pub fn configured_router() -> anyhow::Result<Router> {
     let origin = env::var("NEXT_PROCESSING_ORIGIN").ok();
     let auth = env::var("NEXT_PROCESSING_AUTH_TOKEN").ok();
     match (origin, auth) {
-        (None, None) => Ok(Router::new()),
         (Some(origin), Some(auth)) => {
-            if env::var("FLY_APP_NAME").as_deref() != Ok("plyr-transcoder-staging") {
-                bail!("Next processing requires the staging transcoder app");
+            if env::var("FLY_APP_NAME").as_deref() != Ok("plyr-next-processing") {
+                bail!("Next processing runs only in the plyr-next-processing app");
             }
             let origin = callback_origin(&origin)?;
             if auth.len() < 32 || !auth.bytes().all(|b| b.is_ascii_graphic()) {
@@ -92,7 +91,7 @@ pub fn configured_router() -> anyhow::Result<Router> {
                 heartbeat_interval: Duration::from_secs(20),
             })))
         }
-        _ => bail!("incomplete Next processing configuration"),
+        _ => bail!("NEXT_PROCESSING_ORIGIN and NEXT_PROCESSING_AUTH_TOKEN are required"),
     }
 }
 

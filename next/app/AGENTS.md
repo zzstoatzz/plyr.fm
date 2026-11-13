@@ -20,11 +20,19 @@
   Shared feature code must not import DOM or native storage implementations.
   Keep both implementations' behavior and exported contracts aligned.
 
+## how to work here
+
+Read [contributing/](contributing/README.md) first: the pitfalls, what is
+settled, and the lint rules. Write with the `next-write-ui` skill, finish with
+`next-unslop`, and run `next-review` before asking a person to look.
+
 ## checks
 
-From `next/app`, run `npm run check`, `npm test` and `npm run build:web`.
-Exercise model behavior in `tests/` and rendered interactions through the
-relevant browser checks in `scripts/`, following the parent instructions.
+From `next/app`, run `npm run lint`, `npm run check`, `npm test` and
+`npm run build:web`. Exercise model behavior in `tests/` and rendered
+interactions through the browser checks the change reaches
+(`npm run checks:affected`), following the parent instructions. Every
+check kind and its command is in [contributing/checks.md](contributing/checks.md).
 Platform changes also need the affected native build and device behavior;
 an Expo bundle export does not verify native lifecycle or audio.
 

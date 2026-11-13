@@ -24,11 +24,22 @@ pub(super) async fn process(runner: &Runner, attempt: &Attempt) -> anyhow::Resul
     let directory = tempfile::tempdir_in(&runner.scratch)?;
     let scratch = directory.path().to_owned();
     let available = tokio::task::spawn_blocking(move || fs2::available_space(scratch)).await??;
+    tracing::info!(upload_id = %attempt.upload_id, generation = attempt.generation,
+        scratch_available_bytes = available, "processing scratch baseline");
     require_scratch(available, attempt.source_bytes, attempt.output_budget)?;
     let input = directory.path().join("source");
     let output = directory.path().join("rendition.mp3");
     download(runner, attempt, &input).await?;
-    encode(&input, &output, attempt.output_budget).await?;
+    let encoded = encode(&input, &output, attempt.output_budget).await;
+    let output_bytes = match tokio::fs::metadata(&output).await {
+        Ok(metadata) => metadata.len(),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => 0,
+        Err(error) => return Err(error.into()),
+    };
+    tracing::info!(upload_id = %attempt.upload_id, generation = attempt.generation,
+        owned_scratch_peak_file_bytes = attempt.source_bytes + output_bytes,
+        "processing scratch peak");
+    encoded?;
     let duration = duration(&output).await?;
     upload(runner, attempt, &output, duration).await
 }
