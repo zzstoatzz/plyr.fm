@@ -38,7 +38,7 @@ export default function RadioStations() {
       {size > 0 && radioStations.map(station => <StationWindow key={station.slug} station={station} size={size}
         tuned={radio.station === station} listening={radio.station === station && radio.listening} onPress={() => listen(station)} />)}
     </View>
-    <Text style={{ color: theme.muted, fontFamily: theme.fontFamily, fontSize: 13 * theme.scale, lineHeight: 20 * theme.scale }}>
+    <Text style={{ color: theme.muted, fontFamily: theme.fontFamily, fontSize: 12 * theme.scale, lineHeight: 18 * theme.scale, opacity: 0.8, marginTop: 8, marginBottom: 24 }}>
       streaming? any station drops into OBS as a browser source:{' '}
       {radioStations.map((station, at) => <Text key={station.slug}>
         <InlineLink href={`/embed/radio?station=${station.slug}&autoplay=1`}>{station.label}</InlineLink>{at < radioStations.length - 1 ? ', ' : ''}
