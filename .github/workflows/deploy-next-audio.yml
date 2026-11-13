@@ -75,13 +75,15 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           UPLOAD_CAPABILITY_SECRET: ${{ secrets.PLYR_NEXT_UPLOAD_CAPABILITY_SECRET }}
           PROCESSING_TRANSCODER_KEY: ${{ secrets.PLYR_NEXT_PROCESSING_AUTH_TOKEN }}
+          # Optional: genre suggestions stay off (503) until this secret exists.
+          REPLICATE_API_TOKEN: ${{ secrets.PLYR_NEXT_REPLICATE_API_TOKEN }}
         run: |
           set -euo pipefail
           test -n "$UPLOAD_CAPABILITY_SECRET"
           test -n "$PROCESSING_TRANSCODER_KEY"
           export UPLOAD_SECRETS_FILE="$(mktemp --suffix=.json)"
           trap 'rm -f "$UPLOAD_SECRETS_FILE"' EXIT
-          node --input-type=module -e 'import { writeFileSync } from "node:fs"; writeFileSync(process.env.UPLOAD_SECRETS_FILE, JSON.stringify({ UPLOAD_CAPABILITY_SECRET: process.env.UPLOAD_CAPABILITY_SECRET, PROCESSING_TRANSCODER_KEY: process.env.PROCESSING_TRANSCODER_KEY }), { mode: 0o600 });'
+          node --input-type=module -e 'import { writeFileSync } from "node:fs"; writeFileSync(process.env.UPLOAD_SECRETS_FILE, JSON.stringify({ UPLOAD_CAPABILITY_SECRET: process.env.UPLOAD_CAPABILITY_SECRET, PROCESSING_TRANSCODER_KEY: process.env.PROCESSING_TRANSCODER_KEY, ...(process.env.REPLICATE_API_TOKEN ? { REPLICATE_API_TOKEN: process.env.REPLICATE_API_TOKEN } : {}) }), { mode: 0o600 });'
           npm run deploy -- --secrets-file "$UPLOAD_SECRETS_FILE"
       - name: verify deployed upload activation
         if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && (inputs.verify_upload || inputs.diagnose_upload || inputs.full_size || inputs.verify_processing)

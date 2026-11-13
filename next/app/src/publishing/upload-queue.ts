@@ -12,6 +12,7 @@ import { openUploadReader } from './upload-reader';
 import { sendParts } from './part-sender';
 import { uploadStorage } from './upload-storage';
 import { createUploadTransport } from './upload-transport';
+import { applyGenreTags } from './genre-tags';
 
 /**
  * Uploads run here, above the route stack, one at a time: leaving the upload page, opening another screen or
@@ -61,11 +62,12 @@ async function withRetries<T>(job: Job, step: () => Promise<T>): Promise<T> {
   }
 }
 
-async function finishCreate(job: Job, uri: string) {
+async function finishCreate(job: Job, uri: string, autoTag?: boolean) {
   const pds = createPds(session(job));
   const pending = (await pds.pendingCreates('track')).find(item => item.uri === uri);
   if (pending) await pds.dismissCreate(pending).catch(() => undefined);
   patch(job, { phase: 'done', uri });
+  if (autoTag) void applyGenreTags(() => session(job), uri).catch(() => undefined);
 }
 
 async function runPds(job: Job, input: NewTrack, reservation: CreateReservation) {
@@ -79,7 +81,7 @@ async function runPds(job: Job, input: NewTrack, reservation: CreateReservation)
     if ((await withRetries(job, () => pds.recoverCreate(pending, true))).state !== 'accepted') throw failure;
   }
   patch(job, { phase: 'publishing' });
-  await finishCreate(job, reservation.uri);
+  await finishCreate(job, reservation.uri, input.autoTag);
 }
 
 async function runService(job: Job, operation: UploadOperation) {
@@ -124,7 +126,7 @@ async function runService(job: Job, operation: UploadOperation) {
       status = await withRetries(job, () => transport.activate());
     }
   }
-  await finishCreate(job, operation.uri);
+  await finishCreate(job, operation.uri, operation.autoTag);
   if (status.state === 'published') await uploadStorage.delete(operation);
 }
 
@@ -140,7 +142,7 @@ async function prepare(job: Job, input: NewTrack) {
   const format = audioFormat(input.file.name, input.file.type, !!route.processing);
   const record = await pds.prepareTrackRecord(ready);
   const operation: UploadOperation = { ...reservation, record: { ...record, fileType: format.fileType }, uploadId: randomUUID(),
-    name: input.file.name, sizeBytes: input.file.size, ...format, ...(route.processing ? { processing: route.processing } : {}) };
+    name: input.file.name, sizeBytes: input.file.size, ...format, ...(route.processing ? { processing: route.processing } : {}), ...(input.autoTag ? { autoTag: true } : {}) };
   await uploadStorage.put(operation);
   patch(job, { operation, uploadId: operation.uploadId });
   return () => runService(job, operation);

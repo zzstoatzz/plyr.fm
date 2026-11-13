@@ -14,7 +14,7 @@ import { usePendingSharedAudio, useSharedAudio } from './shared-audio';
 import { TagsField } from './TagsField';
 import { normalizeTrackTags } from './track-tags';
 import { CreateRecovery, EarlierCreates, useCreateRecovery } from './CreateRecovery';
-import { AudienceToggle, FormCard, PickTile } from './UploadPieces';
+import { AudienceToggle, CheckRow, FormCard, PickTile } from './UploadPieces';
 import { useArtistName } from './artist-name';
 
 export default function Upload() {
@@ -47,6 +47,8 @@ function AccountUpload({ auth }: { auth: Auth }) {
   const [tags, setTags] = useState('');
   const consentKey = `plyr-storage-consent:${auth.did}`;
   const [serviceConsent, setServiceConsent] = useState(() => readLocal(consentKey) === 'yes');
+  const autoTagKey = `plyr-auto-tag:${auth.did}`;
+  const [autoTag, setAutoTag] = useState(() => readLocal(autoTagKey) === 'yes');
   const [note, setNote] = useState<string>();
   const queue = useUploadQueue();
   const busy = uploadQueue.busy();
@@ -93,7 +95,7 @@ function AccountUpload({ auth }: { auth: Auth }) {
     try {
       const list = tags.trim() ? tags.split('\n') : undefined;
       if (list) normalizeTrackTags(list);
-      uploadQueue.add({ file, artwork, title, artist, album, description, tags: list });
+      uploadQueue.add({ file, artwork, title, artist, album, description, tags: list, autoTag });
     } catch (failure) {
       setNote(failure instanceof Error ? failure.message : 'upload failed.');
       return;
@@ -121,6 +123,7 @@ function AccountUpload({ auth }: { auth: Auth }) {
           <Field label="Description" value={description} onChangeText={setDescription} maxLength={5000} multiline placeholder="liner notes, credits…" style={{ minHeight: 88 }} />
           <TagsField value={tags} onChange={setTags} disabled={false} />
         </> : <Action label="add album, description or tags" onPress={() => setDetails(true)} />}
+        <CheckRow label="auto-tag with recommended genres" checked={autoTag} onChange={value => { setAutoTag(value); if (value) writeLocal(autoTagKey, 'yes'); else removeLocal(autoTagKey); }} />
         <View style={{ gap: 8 }}>
           <Action primary label="Upload" onPress={upload} disabled={!file || !title.trim() || !artist || (service && (!serviceConsent || !auth.uploadStorage))} />
           {!!artist && <Copy>posts to your profile as {artist}. you can keep browsing while it uploads.</Copy>}

@@ -47,6 +47,15 @@ export function processingStep(status: UploadStatus): 'wait' | 'publish' | 'retr
   return status.recoveryRequired ? 'retry' : 'wait';
 }
 
+export type Genre = { name: string; confidence: number };
+
+/** Production's rule: genres within half the top score, at most five, added after the artist's own tags. */
+export function genreTags(current: readonly string[], genres: readonly Genre[]) {
+  const top = genres[0]?.confidence ?? 0;
+  const suggested = genres.filter(genre => genre.confidence >= top * 0.5).slice(0, 5).map(genre => genre.name);
+  return [...new Set([...current, ...suggested])].slice(0, Math.max(20, current.length));
+}
+
 /** Network drops and server hiccups are worth another try; refusals are not. */
 export function transient(failure: unknown) {
   if (failure instanceof TypeError) return true;

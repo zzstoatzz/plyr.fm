@@ -3,6 +3,7 @@ import { Image, Pressable, View } from 'react-native';
 import { router } from 'expo-router';
 import FileAudio from 'lucide-react-native/icons/file-music';
 import ImagePlus from 'lucide-react-native/icons/image-plus';
+import Check from 'lucide-react-native/icons/check';
 import { useAppearance } from '../appearance';
 import { Text } from '../Text';
 import type { MediaFile } from '../pds';
@@ -46,4 +47,15 @@ export function AudienceToggle() {
 export function FormCard({ children }: { children: ReactNode }) {
   const theme = useAppearance();
   return <View style={{ gap: 18, padding: 18, borderRadius: 12, borderWidth: 1, borderColor: theme.hairline, backgroundColor: theme.surface }}>{children}</View>;
+}
+
+export function CheckRow({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
+  const theme = useAppearance();
+  return <Pressable accessibilityRole="checkbox" accessibilityState={{ checked }} aria-checked={checked} onPress={() => onChange(!checked)}
+    style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44, alignSelf: 'flex-start', opacity: pressed ? 0.7 : 1 })}>
+    <View style={{ width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, borderColor: checked ? theme.accent : theme.hairline, backgroundColor: checked ? theme.accent : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
+      {checked && <Check size={15} color={theme.onAccent} strokeWidth={3} />}
+    </View>
+    <Text style={{ color: theme.text, fontFamily: theme.fontFamily, fontSize: 15 * theme.scale }}>{label}</Text>
+  </Pressable>;
 }
