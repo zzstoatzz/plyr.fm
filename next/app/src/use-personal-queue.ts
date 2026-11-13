@@ -40,7 +40,7 @@ export function usePersonalQueue(target: Target) {
     setWaiting(false);
     runtime.current.setQueue(tracks, at);
     void runtime.current.load(tracks, at).then(ready => { if (ready) runtime.current.play(); });
-  }));
+  }, undefined, () => ({ account: source.current === 'anonymous' ? 'signed out' : source.current ? 'signed in' : 'not started' })));
   const continuation = useRef(new QueueContinuation((cursor, signal) => api.tracks({ limit: 10, cursor }, signal)));
   const continuing = useRef<Promise<void> | undefined>(undefined);
   const context = useRef('');

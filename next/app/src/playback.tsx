@@ -1,3 +1,4 @@
+import { recordPlayback, urlHost } from './playback-diagnostics';
 import { trackArtwork } from './artwork';
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Platform } from 'react-native';
@@ -137,6 +138,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     const request = ++sequence.current;
     const startedAt = Date.now();
     if (!privateTrack) console.info("[playback] load", { request, track: track.id, start });
+    recordPlayback("load", { request, track: privateTrack ? "private" : track.id, start, signedIn: !!auth.did });
     accounting.stop();
     sourceEvents.current?.remove();
     player.pause();
@@ -152,6 +154,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
       if (request !== sequence.current) return false;
       const { status: availability, space, delivery, artifact } = playback.availability;
       if (!privateTrack) console.info("[playback] availability", { request, track: track.id, availability, delivery: !!delivery, artifact: !!artifact, elapsedMs: Date.now() - startedAt });
+      recordPlayback("availability", { request, availability, host: urlHost(delivery?.url), media: delivery?.media_type ?? artifact?.media_type, elapsedMs: Date.now() - startedAt });
       let url: string;
       if (availability === 'gated' && space) {
         url = await gatedAudioUrl(space.record, auth);
@@ -182,12 +185,14 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
       sourceEvents.current = player.addListener('playbackStatusUpdate', (event) => {
         if (request !== sequence.current) return;
         if (event.error) {
+          recordPlayback("player error", { request, error: String(event.error), elapsedMs: Date.now() - startedAt });
           setStarting((pending) => pending === request ? null : pending);
           setReady(false);
           setError(event.error);
         } else if (!settled && ((event.playing && player.currentTime > 0) || event.didJustFinish)) {
           settled = true;
           if (!privateTrack) console.info('[playback] startup settled', { request, track: track.id, position: player.currentTime, finished: event.didJustFinish });
+          recordPlayback("started", { request, elapsedMs: Date.now() - startedAt });
           setStarting((pending) => pending === request ? null : pending);
         }
       });
@@ -199,17 +204,24 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
         }, { showSeekForward: true, showSeekBackward: true });
       }
       if (!privateTrack) console.info("[playback] source attached", { request, track: track.id, elapsedMs: Date.now() - startedAt });
+      recordPlayback("source attached", { request, host: urlHost(url), elapsedMs: Date.now() - startedAt });
       warm(tracks[at + 1]);
       await waitForMedia();
       if (request !== sequence.current) return false;
       setReady(true);
+      recordPlayback("media ready", { request, elapsedMs: Date.now() - startedAt });
       if (start) {
         setStarting(request);
         player.play();
+        // Startup holds the loading state until the player reports progress; note when that hasn't happened.
+        setTimeout(() => {
+          if (request === sequence.current && !settled) recordPlayback("startup stalled", { request, playing: player.playing, position: player.currentTime, elapsedMs: Date.now() - startedAt });
+        }, 10_000);
       }
       return true;
     } catch (cause) {
       if (!privateTrack) console.warn("[playback] load failed", { request, track: track.id, error: cause instanceof Error ? cause.name : "unknown", elapsedMs: Date.now() - startedAt });
+      recordPlayback("load failed", { request, error: cause instanceof Error ? `${cause.name}: ${cause.message}` : String(cause), elapsedMs: Date.now() - startedAt });
       if (request === sequence.current) {
         setStarting(null);
         setError(cause instanceof Error ? cause.message : 'could not play audio');
