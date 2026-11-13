@@ -20,6 +20,7 @@ import { PlayerSeek } from './PlayerSeek';
 import { PlayerControl } from './PlayerControl';
 import { usePlayback } from './playback';
 import { usePlayerDismiss } from './use-player-dismiss';
+import { PullDetector, PullRoot, usePlayerPull } from './player-pull';
 import { PlayerFlight } from './PlayerFlight';
 import { NowPlayingDetails } from './NowPlayingDetails';
 import { measure, playerSheet, setFlying, type Rect } from './player-sheet';
@@ -44,6 +45,7 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
   const rest = morph ? playerSheet.dockTop! : height;
   const depart = (then: () => void) => () => { setFlying(false); then(); };
   const dismiss = usePlayerDismiss(compact, width, height, depart(leave), theme.reduceMotion, rest, present);
+  const pull = usePlayerPull(compact, dismiss.pull);
   const close = () => dismiss.exit(depart(leave));
   const navigate = (target: Href) => {
     if (!overlay) { setFlying(false); go(target); return; }
@@ -143,7 +145,7 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
   };
   const sheet = <View ref={node => { backdrop.current = node; dismiss.panelRef(node); }} style={overlay ? [styles.backdrop, styles.overlay, !present && styles.hidden] : styles.backdrop}
       {...(overlay ? { role: 'dialog' as const, 'aria-modal': true, 'aria-label': 'Now playing' } : {})}>
-      <AnimatedSafeAreaView {...dismiss.panHandlers} accessibilityViewIsModal={Platform.OS === 'web' ? undefined : true} edges={['top', 'bottom']}
+      <PullDetector gesture={pull.pan}><AnimatedSafeAreaView {...dismiss.panHandlers} {...dismiss.panelStartHandlers} accessibilityViewIsModal={Platform.OS === 'web' ? undefined : true} edges={['top', 'bottom']}
         style={[{ transform: [{ translateY: dismiss.translation }] }, styles.panel, styles.full]}>
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: theme.background, opacity: fade(1, 0, 0.85, 1) }]} />
         <Animated.View style={[styles.full, { opacity: fade(1, 0, 0, 0.5) }]}>
@@ -165,8 +167,8 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
             <PlayerControl primary icon={playing ? Pause : Play} label={playing ? 'Pause' : 'Play'} onPress={() => player.setPlaying(!playing)} busy={player.loading} />
           </Animated.View> : <View {...dismiss.protect}><PlayerControl icon={X} label="Close" onPress={close} /></View>}
         </View>
-        <Animated.View {...dismiss.contentStartHandlers} style={[styles.scrollRegion, { transform: [{ translateY: morph ? fade(0, -0.6 * rest, 0, 1) : 0 }, { translateY: dismiss.contentPull ?? 0 }] }]}>
-          <Animated.ScrollView ref={scroller} testID="now-playing-scroll" {...dismiss.scrollProps} scrollEventThrottle={16} scrollEnabled={!dismiss.dragging}
+        <Animated.View {...dismiss.contentStartHandlers} style={[styles.scrollRegion, { transform: [{ translateY: morph ? fade(0, -0.6 * rest, 0, 1) : 0 }] }]}>
+          <PullDetector gesture={pull.scroll}><Animated.ScrollView ref={scroller} testID="now-playing-scroll" {...dismiss.scrollProps} scrollEventThrottle={16} scrollEnabled={!dismiss.dragging}
             style={Platform.OS === 'web' && compact ? scrollTouch : undefined} contentContainerStyle={[styles.content, sideBySide && styles.desktopContent]}>
             <Animated.View testID="now-playing-artwork" style={[styles.art, carried]}>
               <View ref={artRef}><Cover uri={trackArtwork(track)} size={artwork} radius={16} /></View>
@@ -183,7 +185,7 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
                 </Pressable></View>
               </View>
               <View>
-                <View {...dismiss.protect}><Slider accessibilityLabel="Playback position" minimumValue={0} maximumValue={duration || 1}
+                <View {...dismiss.protectSlider}><Slider accessibilityLabel="Playback position" minimumValue={0} maximumValue={duration || 1}
                   value={position} minimumTrackTintColor={theme.accent} maximumTrackTintColor={theme.border}
                   thumbTintColor={theme.accent} disabled={!player.canSeek || !duration || !!error}
                   onSlidingStart={updateScrub} onValueChange={updateScrub}
@@ -212,7 +214,7 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
               {sideBySide && <View style={{ alignItems: 'center' }}><PlayerVolume /></View>}
               <NowPlayingDetails track={track} plays={plays} protect={dismiss.protect} navigate={navigate} />
             </View>
-          </Animated.ScrollView>
+          </Animated.ScrollView></PullDetector>
         </Animated.View>
         </Animated.View>
         <View ref={panelRef} pointerEvents="none" aria-hidden importantForAccessibility="no-hide-descendants" style={StyleSheet.absoluteFill}>
@@ -226,9 +228,9 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
             </PlayerFlight>
           </Animated.View>}
         </View>
-      </AnimatedSafeAreaView>
+      </AnimatedSafeAreaView></PullDetector>
     </View>;
-  return overlay ? sheet : <Modal visible transparent accessibilityLabel="Now playing" animationType="none" onRequestClose={close}>{sheet}</Modal>;
+  return overlay ? sheet : <Modal visible transparent accessibilityLabel="Now playing" animationType="none" onRequestClose={close}><PullRoot>{sheet}</PullRoot></Modal>;
 }
 
 const styles = StyleSheet.create({
