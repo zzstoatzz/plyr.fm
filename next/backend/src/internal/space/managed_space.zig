@@ -1,16 +1,12 @@
-//! plyr as the managing app of gated-audio managedspaces.
+//! plyr as the managing app of gated managedspaces: identity, addressing and
+//! the service JWT the space's PDS sends with `checkUserAccess`.
 //!
 //! An artist's PDS owns the space (`at://{artist}/space/{type}/{skey}`) and
-//! names plyr as its managing app. When a listener asks that PDS for a space
+//! names plyr as its managing app. When a reader asks that PDS for a space
 //! credential, the PDS asks plyr `checkUserAccess` with a service JWT the
 //! artist's repo key signed. plyr answers one bit; it never holds or relays
-//! the audio.
-//!
-//! The skey carries the gate:
-//!   - `supporters`: the listener must support the artist (atprotofans).
-//!   - `signed-in`: any signed-in listener.
-//! The artist always has access to their own space, and nobody else may
-//! write to it.
+//! the bytes. Who passes is decided in access.zig from the artist's policies;
+//! the skey is only a name.
 
 const std = @import("std");
 const zat = @import("zat");
@@ -29,6 +25,8 @@ pub const Config = struct {
     service_endpoint: []const u8,
     /// the space type plyr manages, e.g. `fm.plyr.stg.audio`
     space_type: []const u8,
+    /// where artists publish space policies, e.g. `fm.plyr.policy`
+    policy_collection: []const u8 = "fm.plyr.policy",
     /// where did:plc documents resolve (a local stub in dev/e2e)
     plc_url: []const u8 = "https://plc.directory",
 
@@ -68,15 +66,6 @@ pub const Access = enum {
 
     pub fn parse(text: []const u8) ?Access {
         return std.meta.stringToEnum(Access, text);
-    }
-};
-
-pub const Gate = enum {
-    supporters,
-    @"signed-in",
-
-    pub fn parse(skey: []const u8) ?Gate {
-        return std.meta.stringToEnum(Gate, skey);
     }
 };
 
@@ -133,20 +122,6 @@ pub const SpaceRecordUri = struct {
     }
 };
 
-pub const Decision = enum { allow, deny, check_supporter };
-
-/// The access rule, without any I/O.
-pub fn decide(config: Config, space: SpaceUri, user: []const u8, access: Access) Decision {
-    if (!std.mem.eql(u8, space.space_type, config.space_type)) return .deny;
-    if (std.mem.eql(u8, user, space.authority)) return .allow;
-    if (access == .write) return .deny;
-    const gate = Gate.parse(space.skey) orelse return .deny;
-    return switch (gate) {
-        .@"signed-in" => .allow,
-        .supporters => .check_supporter,
-    };
-}
-
 pub const AuthError = service_auth.Error;
 
 /// Resolves a DID to its `#atproto` signing key as a multibase string.
@@ -168,36 +143,6 @@ pub fn verifyServiceAuth(
     }, keys);
     defer allocator.free(issuer);
     if (!std.mem.eql(u8, issuer, authority)) return error.BadIssuer;
-}
-
-/// Answers "does `supporter` support `artist`".
-pub const SupporterCheck = struct {
-    context: *anyopaque,
-    check_fn: *const fn (*anyopaque, std.mem.Allocator, []const u8, []const u8) anyerror!bool,
-
-    pub fn check(self: SupporterCheck, allocator: std.mem.Allocator, supporter: []const u8, artist: []const u8) !bool {
-        return self.check_fn(self.context, allocator, supporter, artist);
-    }
-};
-
-/// Full answer for an authenticated request. Supporter-check failures are
-/// denials: the PDS treats anything but `true` as no access anyway.
-pub fn authorize(
-    allocator: std.mem.Allocator,
-    config: Config,
-    space: SpaceUri,
-    user: []const u8,
-    access: Access,
-    supporters: SupporterCheck,
-) bool {
-    return switch (decide(config, space, user, access)) {
-        .allow => true,
-        .deny => false,
-        .check_supporter => supporters.check(allocator, user, space.authority) catch |err| blk: {
-            std.log.warn("supporter check failed: {s}", .{@errorName(err)});
-            break :blk false;
-        },
-    };
 }
 
 // --- tests -----------------------------------------------------------------
@@ -231,21 +176,6 @@ test "space record URIs parse strictly" {
     try std.testing.expect(SpaceRecordUri.parse("at://did:plc:artist/space/fm.plyr.stg.audio/supporters/did:plc:artist/fm.plyr.stg.track") == null);
     try std.testing.expect(SpaceRecordUri.parse("at://did:plc:artist/fm.plyr.stg.track/3l2abc") == null);
     try std.testing.expect(SpaceRecordUri.parse("at://did:plc:a/space/fm.plyr.stg.audio/s/did:plc:a/fm.plyr.stg.track/x/y") == null);
-}
-
-test "access rules" {
-    const supporters = SpaceUri.parse("at://did:plc:artist/space/fm.plyr.stg.audio/supporters").?;
-    const signed_in = SpaceUri.parse("at://did:plc:artist/space/fm.plyr.stg.audio/signed-in").?;
-    const unknown = SpaceUri.parse("at://did:plc:artist/space/fm.plyr.stg.audio/vip").?;
-    const foreign = SpaceUri.parse("at://did:plc:artist/space/com.example.space/supporters").?;
-    try std.testing.expectEqual(Decision.allow, decide(test_config, supporters, "did:plc:artist", .read));
-    try std.testing.expectEqual(Decision.allow, decide(test_config, supporters, "did:plc:artist", .write));
-    try std.testing.expectEqual(Decision.check_supporter, decide(test_config, supporters, "did:plc:fan", .read));
-    try std.testing.expectEqual(Decision.deny, decide(test_config, supporters, "did:plc:fan", .write));
-    try std.testing.expectEqual(Decision.allow, decide(test_config, signed_in, "did:plc:fan", .read));
-    try std.testing.expectEqual(Decision.deny, decide(test_config, signed_in, "did:plc:fan", .write));
-    try std.testing.expectEqual(Decision.deny, decide(test_config, unknown, "did:plc:fan", .read));
-    try std.testing.expectEqual(Decision.deny, decide(test_config, foreign, "did:plc:artist", .read));
 }
 
 test "did document names the managing-app service" {
@@ -326,23 +256,4 @@ test "service JWTs are bound to the managing app, method, authority and key" {
 
     const fragment_issuer = try signToken(arena, keypair, .{ .iss = "did:plc:artist#atproto_pds", .aud = app, .exp = now + 60, .lxm = check_user_access_nsid });
     try verifyServiceAuth(arena, now, fragment_issuer, app, "did:plc:artist", lookup);
-}
-
-test "supporter checks gate only supporter spaces and fail closed" {
-    const Stub = struct {
-        answer: anyerror!bool,
-        calls: usize = 0,
-        fn check(context: *anyopaque, _: std.mem.Allocator, _: []const u8, _: []const u8) anyerror!bool {
-            const self: *@This() = @ptrCast(@alignCast(context));
-            self.calls += 1;
-            return self.answer;
-        }
-    };
-    const space = SpaceUri.parse("at://did:plc:artist/space/fm.plyr.stg.audio/supporters").?;
-    var yes: Stub = .{ .answer = true };
-    var down: Stub = .{ .answer = error.Unavailable };
-    try std.testing.expect(authorize(std.testing.allocator, test_config, space, "did:plc:fan", .read, .{ .context = &yes, .check_fn = Stub.check }));
-    try std.testing.expect(!authorize(std.testing.allocator, test_config, space, "did:plc:fan", .read, .{ .context = &down, .check_fn = Stub.check }));
-    try std.testing.expect(authorize(std.testing.allocator, test_config, space, "did:plc:artist", .read, .{ .context = &down, .check_fn = Stub.check }));
-    try std.testing.expectEqual(@as(usize, 1), down.calls);
 }

@@ -143,6 +143,7 @@ Direct SQL is reserved for projection adapter tests and benchmark fixtures.
 | `SPACE_SERVICE_ENDPOINT` | with `SPACE_SERVICE_DID` | public https origin of this API, published as the service endpoint |
 | `SPACE_SERVICE_ID` | no | DID-doc service fragment, default `plyr_space` |
 | `SPACE_TYPE_NSID` | no | the space type plyr manages, default `fm.plyr.stg.audio` |
+| `SUPPORT_TRUSTED_BROKERS` | no | comma-separated attested.network broker DIDs trusted when a policy names none, default broker.atmosphere.money |
 | `PLC_DIRECTORY_URL` | no | did:plc resolution for the managed-space checks, default `https://plc.directory`; point it at a local PLC stub for a local zds e2e |
 
 The ingester subscribes to jetstreams (`INGEST_STREAM_HOSTS`) filtered to the
@@ -162,9 +163,14 @@ Gated audio lives in managedspaces on the artist's own PDS
 browsers mint space credentials from that PDS and read blobs directly; the
 PDS asks this API `GET /xrpc/com.atproto.managedspace.checkUserAccess`
 with a service JWT from the artist (aud = the managing app, fragment
-included). The skey is the gate: `supporters` checks atprotofans,
-`signed-in` admits any account; the artist always has access and nobody
-else may write. The API never proxies or stores gated audio.
+included). Who may read is decided by the artist's public policy records
+(`{track namespace}.policy`, e.g. `fm.plyr.policy`): each names one space and
+one rule (signed in, listed members, any verified supporter, or a purchase
+whose attested payment is entitled to that policy), and passing any one is
+enough. A space with no policy falls back to its legacy skey (`supporters`,
+`signed-in`), otherwise stays closed. The artist always has access and nobody
+else may write. See [space access](docs/space-access.md). The API never
+proxies or stores gated audio.
 
 The ingester runs the blob mirror on a side thread when configured (`MODE=mirror` runs it
 alone). It fetches each live track's audio blob from the owner's

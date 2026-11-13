@@ -6,6 +6,7 @@ const std = @import("std");
 const response = @import("response.zig");
 const query = @import("../internal/http/query.zig");
 const managed_space = @import("../internal/space/managed_space.zig");
+const space_access = @import("../internal/space/access.zig");
 const Network = @import("../internal/space/network.zig").Network;
 
 const http = std.http;
@@ -96,6 +97,8 @@ pub fn checkUserAccess(
 
     var network = Network.init(io, allocator, config.plc_url);
     defer network.deinit();
+    // the asking PDS is waiting; an answer after this is no answer
+    network.deadline_ns = std.Io.Clock.awake.now(io).nanoseconds + 10 * std.time.ns_per_s;
 
     const now = std.Io.Timestamp.now(io, .real).toSeconds();
     managed_space.verifyServiceAuth(
@@ -126,14 +129,22 @@ pub fn checkUserAccess(
         },
     };
 
-    const authorized = managed_space.authorize(
-        allocator,
-        config,
-        params.space,
-        params.user,
-        params.access,
-        network.supporters(),
-    );
+    var core: space_access.Core = .{
+        .space_type = config.space_type,
+        .policy_collection = config.policy_collection,
+        .policies = network.policies(),
+        .evidence = network.evidence(),
+    };
+    // anything short of a definite yes is no: the PDS treats it the same
+    const authorized = core.decider().decide(allocator, .{
+        .space = params.space,
+        .user = params.user,
+        .access = params.access,
+    }) catch |err| blk: {
+        if (err == error.OutOfMemory) return err;
+        std.log.warn("access check failed: {s}", .{@errorName(err)});
+        break :blk false;
+    };
     try response.json(
         request,
         .ok,

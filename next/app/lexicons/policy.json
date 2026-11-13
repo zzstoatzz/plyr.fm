@@ -1,0 +1,89 @@
+{
+  "lexicon": 1,
+  "id": "fm.plyr.policy",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "description": "One way into one of the author's gated spaces on plyr.fm. A space can carry any number of policies of any kinds; a reader who passes one may read the space. Whatever the space holds (a track, an album's tracks, a playlist) is opened as a whole.",
+      "record": {
+        "type": "object",
+        "required": ["space", "rule", "createdAt"],
+        "properties": {
+          "space": {
+            "type": "string",
+            "format": "uri",
+            "description": "The space this policy opens, at://{author}/space/{type}/{skey}. Only the author's own spaces count."
+          },
+          "rule": {
+            "type": "union",
+            "refs": ["#signedIn", "#members", "#supporter", "#purchase"],
+            "description": "What a reader must satisfy. Readers apply only the rules they know; an unknown rule opens nothing."
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 640,
+            "maxGraphemes": 64,
+            "description": "Short name shown to readers, e.g. 'buy the album' or 'friends'."
+          },
+          "createdAt": { "type": "string", "format": "datetime" }
+        }
+      }
+    },
+    "signedIn": {
+      "type": "object",
+      "description": "Any signed-in account.",
+      "properties": {}
+    },
+    "members": {
+      "type": "object",
+      "description": "The listed accounts. The list is public.",
+      "required": ["members"],
+      "properties": {
+        "members": {
+          "type": "array",
+          "maxLength": 512,
+          "items": { "type": "string", "format": "did" }
+        }
+      }
+    },
+    "supporter": {
+      "type": "object",
+      "description": "Anyone holding a broker-verified network.attested.payment record to the author, of any amount.",
+      "properties": {
+        "brokers": {
+          "type": "array",
+          "minLength": 1,
+          "maxLength": 16,
+          "items": { "type": "string", "format": "did" },
+          "description": "Brokers whose payment proofs count. Absent: the reading app's trusted brokers."
+        }
+      }
+    },
+    "purchase": {
+      "type": "object",
+      "description": "Anyone holding a broker-verified network.attested.payment record to the author, at or above this price, whose entitlements include this policy record.",
+      "required": ["amount", "currency"],
+      "properties": {
+        "amount": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Price in the currency's smallest unit, as attested.network records amounts."
+        },
+        "currency": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 3,
+          "description": "ISO 4217 code."
+        },
+        "brokers": {
+          "type": "array",
+          "minLength": 1,
+          "maxLength": 16,
+          "items": { "type": "string", "format": "did" },
+          "description": "Brokers whose payment proofs count. Absent: the reading app's trusted brokers."
+        }
+      }
+    }
+  }
+}
