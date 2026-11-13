@@ -1,1 +1,1 @@
-export { default } from '../src/RadioPlayer';
+export { default } from '../src/RadioStations';

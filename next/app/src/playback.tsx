@@ -17,6 +17,7 @@ import { useMediaSession } from './media-session';
 import { useRemoteTrackControls } from './use-remote-track-controls';
 import { toast } from './toast';
 import { playbackFor, warm } from './playback-lookup';
+import type { RadioStation } from './radio';
 
 export function PlaybackProvider({ children, playThrough, keepPlaying, volume }: {
   children: ReactNode; playThrough: boolean; keepPlaying: boolean; volume: number;
@@ -426,7 +427,9 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
   return <PlaybackContext.Provider value={value}>{children}</PlaybackContext.Provider>;
 }
 
-interface Playback {
+export interface Playback {
+  /** Set while a radio station is the output: there is nothing to seek, skip or queue. */
+  live?: { station: RadioStation };
   forgetPrivateTrack: (uri: string) => void;
   privatePlayback: boolean;
   jam?: ActiveJam;
@@ -473,6 +476,10 @@ export function PlaybackFreeze({ frozen, children }: { frozen: boolean; children
   const held = useRef(live);
   if (!frozen) held.current = live;
   return <PlaybackContext.Provider value={frozen ? held.current : live}>{children}</PlaybackContext.Provider>;
+}
+
+export function PlaybackOverride({ value, children }: { value: Playback; children: ReactNode }) {
+  return <PlaybackContext.Provider value={value}>{children}</PlaybackContext.Provider>;
 }
 
 export function usePlayback(): Playback {

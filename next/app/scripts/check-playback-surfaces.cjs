@@ -42,12 +42,14 @@ module.exports = async function runSurfaces({ browser, browserName, prepareConte
         await frame.getByRole('button', { name: 'Play', exact: true }).click();
       } else {
         await page.goto(`${origin}/radio?station=${process.env.PLAYBACK_STATION || 'loved'}`, { waitUntil: 'domcontentloaded' });
-        await page.getByRole('button', { name: 'listen live', exact: true }).waitFor();
+        const station = page.getByRole('button', { name: `Listen to ${(process.env.PLAYBACK_STATION || 'loved').replace('-', ' ')} radio`, exact: true });
+        await station.waitFor();
         await page.waitForTimeout(400);
-        report.preTuneAudioReads = report.requests.filter(request => /\/api\/songs\/[^/]+\/audio$/.test(request.path)).length;
+        report.preTuneAudioReads = report.requests.filter(request => /^\/audio\//.test(request.path)).length;
         assert.equal(report.preTuneAudioReads, 0, 'The Radio page cannot preload audio before tuning');
         tapped = performance.now();
-        await page.getByRole('button', { name: 'listen live', exact: true }).click();
+        await station.click();
+        await page.getByRole('dialog', { name: 'Now playing' }).waitFor();
       }
       await target.waitForFunction(() => window.__plyrPlaybackMedia.some(audio => !audio.paused && audio.currentTime > 0.15));
       report.tapToMediaProgressMs = Math.round(performance.now() - tapped);
@@ -70,9 +72,9 @@ module.exports = async function runSurfaces({ browser, browserName, prepareConte
       assert.equal(report.receipt.sources.metrics, 'application_metrics');
       if (surface === 'radio') {
         assert.equal(active.volume, 0.25, 'Radio source replacement preserves the selected volume');
-        report.stateReadCount = report.requests.filter(request => request.path === '/api/radio/state').length;
-        report.audioSourceReads = report.requests.filter(request => /\/api\/songs\/[^/]+\/audio$/.test(request.path)).length;
-        assert.ok(report.stateReadCount <= Math.ceil(report.tapToReceiptMs / 5000) + 2, 'Page and player must share one polling cadence');
+        report.stateReadCount = report.requests.filter(request => request.path === '/radio/state').length;
+        report.audioSourceReads = report.requests.filter(request => /^\/audio\//.test(request.path)).length;
+        assert.ok(report.stateReadCount <= 4 + Math.ceil(report.tapToReceiptMs / 30_000) * 4 + 4, 'Stations are read once each, then at song changes, not on a short beat');
         assert.equal(report.audioSourceReads, 1, 'Only the actual Radio output loads the source');
       }
       if (surface === 'embed') {

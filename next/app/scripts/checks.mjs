@@ -15,7 +15,7 @@ import { parseArgs } from 'node:util';
 const app = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const player = [
-  /^src\/(Player|NowPlaying|RadioPlayer|WaveLoading|PlayerFlight)/,
+  /^src\/(Player|NowPlaying|Radio|radio-session|WaveLoading|PlayerFlight)/,
   /^src\/(playback\.tsx|player-sheet|use-player-|now-playing-origin|remote-track-controls|use-remote-track-controls)/,
   /^app\/now-playing/,
 ];
@@ -72,7 +72,7 @@ const checks = {
   'check-playback': player,
   'check-playback-accounting': [/^src\/(play-reporting|play-metrics|use-player-accounting|play-listener)/],
   'check-playback-restore': [/^src\/(playback\.tsx|queue-storage|queue-checkpoint)/],
-  'check-playback-surfaces': [/^src\/(PlayerBar|NowPlaying|RadioPlayer)/],
+  'check-playback-surfaces': [/^src\/(PlayerBar|NowPlaying|Radio|radio-session)/],
   'check-player-history': player,
   'check-player-navigation': [...player, /^src\/use-player-dismiss/],
   'check-player-presentation': player,
@@ -88,7 +88,8 @@ const checks = {
   'check-profile-editor': [/^src\/profile\//, /^app\/edit-profile/],
   'check-queue-drag': [/^src\/(QueueReorder|HomeTrackRow)/, /^src\/behaviors\/(reorder|use-reorder-handle|use-cancel-on-leave)/, /^app\/queue/],
   'check-queue-sync': [/^src\/(personal-queue|use-personal-queue|queue-)/],
-  'check-radio-accounting': [/^src\/(radio|RadioPlayer|use-radio-feed)/],
+  'check-radio-stations': [/^src\/(radio|Radio|use-radio-feed)/, /^app\/radio/, /^src\/(PlayerBar|NowPlaying)/],
+  'check-radio-accounting': [/^src\/(radio|Radio|use-radio-feed)/, /^app\/(radio|embed\/radio)/],
   'check-search-layout': [/^src\/(Search|use-search)/, /^app\/search/],
   'check-settings-search': [/^src\/(SettingsPieces|Search)/, /^app\/settings/],
   'check-short-playback': [/^src\/playback\.tsx/],

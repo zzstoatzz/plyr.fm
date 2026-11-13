@@ -18,11 +18,14 @@ import { TrackLikes } from './TrackLikes';
 import { NowPlaying } from './NowPlaying';
 import { PlayerSeek } from './PlayerSeek';
 import { PlayerControl } from './PlayerControl';
+import { useRadio } from './radio-session';
+import X from 'lucide-react-native/icons/x';
 
 const liftTouch = { touchAction: 'none', cursor: 'auto' } as const;
 
 export function PlayerBar() {
   const player = usePlayback();
+  const radio = useRadio();
   const theme = useAppearance();
   const path = usePathname();
   const previousPath = useRef(path);
@@ -110,6 +113,17 @@ export function PlayerBar() {
     if (playerSheet.settle) playerSheet.settle(open, velocity);
     else playerSheet.release = { open, velocity };
   }
+  const [expandRequested, setExpandRequested] = useState(false);
+  useEffect(() => {
+    playerSheet.expand = () => setExpandRequested(true);
+    return () => { playerSheet.expand = undefined; };
+  }, []);
+  useEffect(() => {
+    // A request from outside the dock can land in the same commit that first shows the track; open once the dock has a place.
+    if (!expandRequested || !present || hosted && dockTop === undefined) return;
+    setExpandRequested(false);
+    launch.current();
+  }, [expandRequested, present, hosted, dockTop]);
   const carried = flying ? { opacity: 0 } : undefined;
   const [scrub, setScrub] = useState<{ id: string; seconds: number }>();
   if (!player.current) return null;
@@ -119,6 +133,7 @@ export function PlayerBar() {
   const play = <PlayerControl primary label={playing ? 'Pause' : 'Play'} icon={playing ? Pause : Play}
     onPress={() => player.setPlaying(!playing)} busy={player.loading} />;
   const error = player.error ?? player.status.error;
+  const stopRadio = <PlayerControl label="Stop radio" icon={X} onPress={radio.stop} />;
   const open = () => { openedFrom.current = path; if (hosted) playerSheet.show(); else if (Platform.OS === 'web') router.navigate('/now-playing'); else setExpanded(true); };
   launch.current = open;
   const identity = <Pressable ref={trigger} accessibilityRole="button" accessibilityLabel="Open now playing" onPress={open}
@@ -126,7 +141,7 @@ export function PlayerBar() {
     <View ref={node => { playerSheet.dock.art = node; }} style={carried}><Cover uri={trackArtwork(track)} size={desktop ? 52 : 40} radius={6} /></View>
     <View style={{ flex: 1, minWidth: 0 }}>
       <View ref={node => { playerSheet.dock.title = node; }} style={carried}><Text numberOfLines={1} style={{ color: theme.text, fontSize: 14 * theme.scale, fontWeight: '700' }}>{track.metadata.title}</Text></View>
-      <Text numberOfLines={1} style={{ color: theme.muted, fontSize: 12 * theme.scale }}>{error ? "couldn’t play this track" : player.outputElsewhere ? "playing on another device" : artistName(track)}</Text>
+      <Text numberOfLines={1} style={{ color: theme.muted, fontSize: 12 * theme.scale }}>{error ? "couldn’t play this track" : player.outputElsewhere ? "playing on another device" : player.live ? `${artistName(track)} · ${player.live.station.label} radio` : artistName(track)}</Text>
     </View>
   </Pressable>;
   return <>
@@ -142,8 +157,10 @@ export function PlayerBar() {
         {desktop ? <>
           <View style={{ flex: 1.4, minWidth: 224, maxWidth: 600 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }}>
-              <PlayerControl label="Previous" icon={SkipBack} onPress={player.previous} /><PlayerSeek />{play}<PlayerSeek forward />
-              <PlayerControl label="Next" icon={SkipForward} onPress={() => void player.next()} />
+              {player.live ? play : <>
+                <PlayerControl label="Previous" icon={SkipBack} onPress={player.previous} /><PlayerSeek />{play}<PlayerSeek forward />
+                <PlayerControl label="Next" icon={SkipForward} onPress={() => void player.next()} />
+              </>}
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Text style={{ color: theme.muted, fontSize: 11, fontVariant: ['tabular-nums'] }}>{clock(player.seekPreview ?? player.status.currentTime)}</Text>
@@ -153,9 +170,9 @@ export function PlayerBar() {
             </View>
           </View>
           <View style={{ flex: 1, minWidth: 188, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' }}>
-            <PlayerControl label="Queue" icon={ListMusic} onPress={() => router.navigate('/queue')} /><PlayerVolume />
+            {player.live ? stopRadio : <PlayerControl label="Queue" icon={ListMusic} onPress={() => router.navigate('/queue')} />}<PlayerVolume />
           </View>
-        </> : <>{play}<PlayerControl label="Next" icon={SkipForward} onPress={() => void player.next()} /></>}
+        </> : <>{play}{player.live ? stopRadio : <PlayerControl label="Next" icon={SkipForward} onPress={() => void player.next()} />}</>}
       </View>
     </Animated.View>
     {sheet && <BodyPortal><PlaybackFreeze frozen={!shown}>{sheet}</PlaybackFreeze></BodyPortal>}

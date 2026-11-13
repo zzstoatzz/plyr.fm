@@ -7,17 +7,10 @@ module.exports = async function runRadioAccounting({ browser, browserName, prepa
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'dark' });
   await prepareContext(context, 'dark');
   const page = await context.newPage();
-  const report = { name: `${browserName}-radio-delayed-identity-fixture`, errors: [], result: 'running' };
+  const report = { name: `${browserName}-radio-canonical-identity`, errors: [], identityLookups: 0, result: 'running' };
   reports.push(report);
   page.on('pageerror', error => report.errors.push(error.message));
-  let releaseIdentity;
-  const gate = new Promise(resolve => { releaseIdentity = resolve; });
-  await page.route('https://api.plyr.fm/tracks/*', async route => {
-    if (route.request().method() !== 'GET') return route.abort('blockedbyclient');
-    const response = await route.fetch();
-    await gate;
-    await route.fulfill({ response });
-  });
+  page.on('request', request => { const url = new URL(request.url()); if (url.host === 'api.plyr.fm' && /^\/tracks\/\d+$/.test(url.pathname)) report.identityLookups++; });
   await page.route('**/v1/tracks/*/plays?*', async route => {
     const url = new URL(route.request().url());
     const canonical = decodeURIComponent(url.pathname.split('/')[3]);
@@ -32,46 +25,22 @@ module.exports = async function runRadioAccounting({ browser, browserName, prepa
   });
   try {
     await page.goto(`${origin}/radio?station=${process.env.PLAYBACK_STATION || 'loved'}`, { waitUntil: 'domcontentloaded' });
-    await page.getByRole('button', { name: 'listen live', exact: true }).waitFor();
-    const lookup = page.waitForRequest(request => new URL(request.url()).host === 'api.plyr.fm' && /^\/tracks\/\d+$/.test(new URL(request.url()).pathname), { timeout: 65_000 });
+    const station = page.getByRole('button', { name: `Listen to ${(process.env.PLAYBACK_STATION || 'loved').replace('-', ' ')} radio`, exact: true });
+    await station.waitFor();
+    const receipt = page.waitForResponse(response => response.request().method() === 'POST' && /\/plays\?/.test(response.url()) && response.ok(), { timeout: 65_000 });
     const tapped = performance.now();
-    await page.getByRole('button', { name: 'listen live', exact: true }).click();
+    await station.click();
     await page.waitForFunction(() => window.__plyrPlaybackMedia.some(audio => !audio.paused && audio.currentTime > 0.15));
     report.tapToMediaMs = Math.round(performance.now() - tapped);
-    await lookup;
-    report.tapToIdentityLookupMs = Math.round(performance.now() - tapped);
-    assert.ok(report.tapToIdentityLookupMs >= 28_000, 'Canonical identity lookup stays off the tune-in path');
-    report.pending = await page.evaluate(() => new Promise((resolve, reject) => {
-      const request = indexedDB.open('plyr-next-play-outbox', 1);
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => {
-        const db = request.result;
-        const pending = db.transaction('plays', 'readonly').objectStore('plays').getAll();
-        pending.onsuccess = () => { resolve(pending.result); db.close(); };
-        pending.onerror = () => reject(pending.error);
-      };
-    }));
-    assert.equal(report.pending.length, 1);
-    assert.match(report.pending[0].trackId, /^radio:/);
-    await page.getByRole('button', { name: 'stop listening', exact: true }).first().click();
+    const sent = await receipt;
+    report.canonicalTrack = decodeURIComponent(new URL(sent.url()).pathname.split('/')[3]);
+    assert.match(report.canonicalTrack, /^trk_/, 'a radio play is counted against the catalog track the station named');
+    assert.equal(report.identityLookups, 0, 'the station state carries the record, so no identity lookup runs');
+    await page.getByRole('button', { name: 'Close', exact: true }).first().click();
+    await page.getByRole('button', { name: 'Stop radio', exact: true }).click();
     await page.waitForFunction(() => window.__plyrPlaybackMedia.every(audio => audio.paused));
-    const receipt = page.waitForResponse(response => response.request().method() === 'POST' && /\/plays\?/.test(response.url()) && response.ok());
-    releaseIdentity();
-    await receipt;
-    assert.equal(report.submittedOccurrence, report.pending[0].occurrenceId);
-    await page.waitForFunction(() => new Promise((resolve, reject) => {
-      const request = indexedDB.open('plyr-next-play-outbox', 1);
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => {
-        const db = request.result;
-        const pending = db.transaction('plays', 'readonly').objectStore('plays').getAll();
-        pending.onsuccess = () => { resolve(pending.result.length === 0); db.close(); };
-        pending.onerror = () => reject(pending.error);
-      };
-    }));
-    report.pendingCleared = true;
     assert.deepEqual(report.errors, []);
-    report.screenshot = `${browserName}-radio-delayed-identity.png`;
+    report.screenshot = `${browserName}-radio-identity.png`;
     await page.waitForTimeout(400);
     await page.screenshot({ path: path.join(output, report.screenshot) });
     report.result = 'passed';
@@ -81,7 +50,6 @@ module.exports = async function runRadioAccounting({ browser, browserName, prepa
     await page.screenshot({ path: path.join(output, `${browserName}-radio-identity-failure.png`) }).catch(() => {});
     throw error;
   } finally {
-    releaseIdentity();
     await fs.writeFile(path.join(output, 'report.json'), JSON.stringify({ origin, track, totalMs: Math.round(performance.now() - started), reports }, null, 2));
     console.log(JSON.stringify(report));
     await context.close();

@@ -20,6 +20,8 @@ export const playerSheet = {
   instant: false,
   leaving: false,
   opened: undefined as (() => void) | undefined,
+  /** Opens now playing from outside the dock (the radio grid); the dock sets it while it is mounted. */
+  expand: undefined as (() => void) | undefined,
   get present() { return present; },
   show(instant = false) { if (!present) playerSheet.instant = instant; setPresent(true); },
   hide() { playerSheet.leaving = false; setPresent(false); },
