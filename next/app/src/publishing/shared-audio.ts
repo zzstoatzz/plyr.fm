@@ -22,3 +22,10 @@ export function useSharedAudio(receive: (file: MediaFile) => void) {
     latest.current({ name, uri: copy.uri, type: shared.contentMimeType ?? copy.type, size: copy.size, arrayBuffer: () => copy.arrayBuffer() });
   }, [resolvedSharedPayloads, clearSharedPayloads]);
 }
+
+/** Name of shared audio still waiting for an account to upload it, without taking it. */
+export function usePendingSharedAudio(): string | undefined {
+  const { sharedPayloads } = useIncomingShare();
+  const shared = sharedPayloads.find(payload => payload.shareType === 'audio' || payload.mimeType?.startsWith('audio/'));
+  return shared ? decodeURIComponent(shared.value.split('/').at(-1) ?? '') || 'shared audio' : undefined;
+}

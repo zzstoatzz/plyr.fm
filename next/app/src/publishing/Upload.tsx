@@ -7,7 +7,7 @@ import { measureAudioDuration, pickMedia } from '../media-picker';
 import { createPds, MAX_AUDIO_BYTES, type MediaFile } from '../pds';
 import { LargeUploads, useLargeUploads } from './LargeUploads';
 import { MAX_SERVICE_AUDIO_BYTES } from './upload-model';
-import { useSharedAudio } from './shared-audio';
+import { usePendingSharedAudio, useSharedAudio } from './shared-audio';
 import type { CreateReservation } from './create-operation';
 import { TagsField } from './TagsField';
 import { CreateRecovery, EarlierCreates, useCreateRecovery } from './CreateRecovery';
@@ -21,9 +21,17 @@ export default function Upload() {
       <Copy>who can listen</Copy>
       <View style={row}><Action label="everyone" selected onPress={() => {}} /><Action label="just you" href="/private" /></View>
     </View>
-    {!auth.ready ? <Copy>loading your account…</Copy> : !auth.did ? <Action label="Sign in" href={{ pathname: '/login', params: { return_to: '/upload' } }} />
+    {!auth.ready ? <Copy>loading your account…</Copy> : !auth.did ? <SignedOut />
       : <AccountUpload key={`${auth.did}:${session.version}`} auth={auth} />}
   </Page>;
+}
+
+function SignedOut() {
+  const shared = usePendingSharedAudio();
+  return <>
+    {shared && <Copy>sign in to upload {shared}.</Copy>}
+    <Action label="Sign in" href={{ pathname: '/login', params: { return_to: '/upload' } }} />
+  </>;
 }
 
 function AccountUpload({ auth }: { auth: Auth }) {
