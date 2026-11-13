@@ -17,6 +17,9 @@ export function usePlayerDismiss(enabled: boolean, width: number, height: number
   const offset = useRef(0);
   const [atTop, setAtTop] = useState(true);
   const [dragging, setDragging] = useState(false);
+  // Native only: true while the sheet sits open with nothing moving it, so the open state renders as plain styles.
+  const [resting, setResting] = useState(false);
+  const markResting = (open: boolean) => { if (native) setResting(open); };
   const generation = useRef(0);
   const acquiredAt = useRef({ dx: 0, dy: 0 });
   const active = useRef<number | null>(null);
@@ -27,12 +30,15 @@ export function usePlayerDismiss(enabled: boolean, width: number, height: number
   const fromContent = useRef(false);
   const pulled = useRef(0);
   const scrolled = useRef((_event: ScrollEvent) => {});
+  // JS-driven on every platform: React commits write Animated props from the JS value, which a native-driven spring leaves
+  // stale, so a re-render mid-animation (a playback tick) snapped the sheet's content to its closed state.
   const spring = (toValue: number, velocity: number) => Animated.spring(translation, { toValue, velocity, stiffness: 1000, damping: 62, mass: 1,
-    overshootClamping: true, restDisplacementThreshold: toValue ? 4 : 1.5, restSpeedThreshold: toValue ? 40 : 1.5, useNativeDriver: native });
+    overshootClamping: true, restDisplacementThreshold: toValue ? 4 : 1.5, restSpeedThreshold: toValue ? 40 : 1.5, useNativeDriver: false });
   const exit = (then: () => void, velocity = 0) => {
     if (closing.current) return;
     closing.current = true;
     active.current = null;
+    markResting(false);
     if (latest.current.still) { then(); return; }
     const request = generation.current;
     spring(latest.current.rest, velocity).start(({ finished }) => { if (finished && request === generation.current) then(); });
@@ -40,15 +46,24 @@ export function usePlayerDismiss(enabled: boolean, width: number, height: number
   const settle = (open: boolean, velocity = 0) => {
     if (!open) { exit(latest.current.close, velocity); return; }
     closing.current = false;
+    markResting(false);
     const request = generation.current;
-    spring(0, velocity).start(({ finished }) => { if (finished && request === generation.current) playerSheet.opened?.(); });
+    spring(0, velocity).start(({ finished }) => {
+      if (!finished || request !== generation.current) return;
+      translation.setValue(0);
+      markResting(true);
+      playerSheet.opened?.();
+    });
   };
   const api = useRef({ exit, settle });
   api.current = { exit, settle };
   const snapBack = () => {
     active.current = null;
     setDragging(false);
-    Animated.spring(translation, { toValue: 0, stiffness: 280, damping: 24, mass: 1, useNativeDriver: native }).start();
+    const request = generation.current;
+    Animated.spring(translation, { toValue: 0, stiffness: 280, damping: 24, mass: 1, useNativeDriver: false }).start(({ finished }) => {
+      if (finished && request === generation.current && !closing.current) { translation.setValue(0); markResting(true); }
+    });
   };
   const responder = useRef(PanResponder.create({
     onStartShouldSetPanResponderCapture: (_, gesture) => {
@@ -92,7 +107,8 @@ export function usePlayerDismiss(enabled: boolean, width: number, height: number
     setDragging(false);
     pullFrom.current = null;
     if (!present) { translation.stopAnimation(); translation.setValue(rest); return; }
-    if (still || playerSheet.instant) { playerSheet.instant = false; translation.stopAnimation(); translation.setValue(0); playerSheet.opened?.(); }
+    markResting(false);
+    if (still || playerSheet.instant) { playerSheet.instant = false; translation.stopAnimation(); translation.setValue(0); markResting(true); playerSheet.opened?.(); }
     else if (playerSheet.release) { const { open, velocity } = playerSheet.release; playerSheet.release = undefined; api.current.settle(open, velocity); }
     else if (!playerSheet.dragging) { translation.setValue(rest); api.current.settle(true); }
   }, [present, translation]);
@@ -105,6 +121,7 @@ export function usePlayerDismiss(enabled: boolean, width: number, height: number
     setDragging(false);
     translation.stopAnimation();
     translation.setValue(present ? 0 : rest);
+    markResting(present);
   }, [enabled, width, height, translation]);
   useEffect(() => {
     playerSheet.settle = (open, velocity) => api.current.settle(open, velocity);
@@ -155,6 +172,7 @@ export function usePlayerDismiss(enabled: boolean, width: number, height: number
         // A pull from rest counts the recognizer's activation distance; one that follows a scroll starts where the content met its top.
         pullFrom.current = first ? 0 : dy;
         active.current = generation.current;
+        markResting(false);
         setDragging(true);
         translation.stopAnimation();
       }
@@ -174,7 +192,7 @@ export function usePlayerDismiss(enabled: boolean, width: number, height: number
   };
   return {
     translation, scrolled,
-    dragging, atTop, directionalTouch, exit,
+    dragging, resting, atTop, directionalTouch, exit,
     panelRef,
     pull,
     panHandlers: enabled && !native ? responder.panHandlers : {},
