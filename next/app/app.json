@@ -1,11 +1,18 @@
 {
   "expo": {
     "name": "plyr.fm",
-    "slug": "plyr-next",
+    "slug": "plyr-fm",
+    "owner": "zzstoatzz.io",
     "scheme": "fm.plyr.next",
     "version": "1.0.0",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
     "ios": {
-      "bundleIdentifier": "fm.plyr.next"
+      "bundleIdentifier": "fm.plyr",
+      "supportsTablet": false,
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "fm.plyr.next"
@@ -27,6 +34,11 @@
       "expo-status-bar",
       "expo-web-browser",
       "expo-sharing"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "680fd924-087f-4ae5-8813-2fee71cb66f8"
+      }
+    }
   }
 }

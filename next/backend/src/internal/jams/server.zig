@@ -7,6 +7,7 @@ const room_store = @import("store.zig");
 const queue_record = @import("queue_record.zig");
 const account_preferences = @import("account_preferences.zig");
 const upload_admission = @import("../uploads/admission.zig");
+const download_authorization = @import("../downloads/authorization.zig");
 const upload_inspection = @import("../uploads/inspection.zig");
 const tickets = @import("tickets.zig");
 const config = @import("../../config.zig");
@@ -35,6 +36,12 @@ pub fn run(a: std.mem.Allocator, io: std.Io, settings: config.Config) !void {
         .origins = settings.cors_allowed_origins,
         .records = if (settings.database_url) |database| try queue_record.Records.init(a, io, database, @min(settings.database_pool_size, 4)) else null,
     };
+    var download_auth = context.auth_config;
+    if (!std.mem.endsWith(u8, settings.track_collection, ".track")) return error.InvalidDownloadSettings;
+    download_auth.method = try std.fmt.allocPrint(a, "{s}.download.authorize", .{settings.track_collection[0 .. settings.track_collection.len - ".track".len]});
+    const budget_ms = if (env("DOWNLOAD_AUTH_BUDGET_MS")) |text| try std.fmt.parseInt(u64, text, 10) else 15_000;
+    if (budget_ms == 0 or budget_ms > 15_000) return error.InvalidDownloadSettings;
+    context.download_settings = .{ .auth_config = download_auth, .track_collection = settings.track_collection, .audio_space_type = env("SPACE_TYPE_NSID"), .budget_ns = budget_ms * std.time.ns_per_ms };
     context.upload_settings = try upload_admission.fromEnvironment(a, settings.track_collection, context.auth_config);
     defer context.store.deinit();
     defer context.tickets.deinit();
@@ -73,6 +80,8 @@ const Context = struct {
     tickets: tickets.Tickets,
     auth_config: auth.Config,
     upload_settings: ?upload_admission.Settings = null,
+    download_settings: ?download_authorization.Settings = null,
+    download_admissions: std.atomic.Value(u8) = .init(0),
     origins: []const u8,
     records: ?queue_record.Records,
     unrecorded: std.StringHashMapUnmanaged(void) = .empty,
@@ -375,6 +384,22 @@ const Handler = struct {
             const did = context.auth_config.audience[0 .. std.mem.indexOfScalar(u8, context.auth_config.audience, '#') orelse context.auth_config.audience.len];
             const result = std.json.Stringify.valueAlloc(a, .{ .id = did, .service = .{.{ .id = context.auth_config.audience, .type = "PlyrJamCoordinator", .serviceEndpoint = env("JAM_PUBLIC_URL") orelse "https://plyr-jams-next.fly.dev" }} }, .{}) catch return;
             return http(conn, a, 200, result, origin);
+        }
+        if (std.mem.eql(u8, url, "/v1/downloads/authorize")) {
+            if (!std.mem.eql(u8, method, "POST") or body.len > 8192) return http(conn, a, 400, "{}", origin);
+            if (context.download_admissions.fetchAdd(1, .acq_rel) >= 1) {
+                _ = context.download_admissions.fetchSub(1, .acq_rel);
+                return http(conn, a, 503, "{}", origin);
+            }
+            defer _ = context.download_admissions.fetchSub(1, .acq_rel);
+            const settings = context.download_settings orelse return http(conn, a, 503, "{}", origin);
+            const response = download_authorization.authorize(a, context.io, settings, body) catch |err| return http(conn, a, switch (err) {
+                error.InvalidRequest => 400,
+                error.InvalidIdentity, error.DownloadDenied => 403,
+                error.TrackChanged => 409,
+                else => 503,
+            }, "{}", origin);
+            return http(conn, a, 200, response, origin);
         }
         const upload_authorize = std.mem.eql(u8, url, "/v1/uploads/authorize");
         const upload_inspect = std.mem.eql(u8, url, "/internal/uploads/inspect");
