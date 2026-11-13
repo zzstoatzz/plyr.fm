@@ -28,7 +28,10 @@ export function assertPublicUploadRecord(record: Record<string, unknown>): void 
 export function audioFormat(name: string, type: string, processing = false) {
   const fileType = name.split('.').at(-1)?.toLowerCase() ?? '';
   const contentType = (processing ? processingFormats : formats)[fileType];
-  const normalized = ({ 'audio/x-wav': 'audio/wav', 'audio/wave': 'audio/wav', 'audio/x-flac': 'audio/flac', 'audio/x-m4a': 'audio/mp4', 'audio/x-aiff': 'audio/aiff' } as Record<string, string>)[type] ?? type;
+  // Pickers name the same format differently: iOS reports WAV as audio/vnd.wave and WebM as video/webm.
+  const normalized = ({ 'audio/x-wav': 'audio/wav', 'audio/wave': 'audio/wav', 'audio/vnd.wave': 'audio/wav', 'audio/x-pn-wav': 'audio/wav',
+    'audio/x-flac': 'audio/flac', 'audio/x-m4a': 'audio/mp4', 'audio/m4a': 'audio/mp4', 'audio/x-aiff': 'audio/aiff', 'audio/mp3': 'audio/mpeg',
+    'audio/x-mpeg': 'audio/mpeg', 'audio/x-aac': 'audio/aac', 'audio/vorbis': 'audio/ogg', 'video/webm': 'audio/webm' } as Record<string, string>)[type] ?? type;
   if (!contentType || (normalized && normalized !== contentType)) throw new Error(processing ? 'choose an MP3, WAV, FLAC, OGG, M4A, AAC, AIFF or WebM file.' : 'choose an MP3, WAV, FLAC, OGG, M4A or AAC file.');
   return { fileType, contentType };
 }
