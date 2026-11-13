@@ -1,3 +1,4 @@
+import { EarlyIntents } from './early-intents';
 import { useEffect, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 import { randomUUID } from 'expo-crypto';
@@ -32,7 +33,14 @@ export function usePersonalQueue(target: Target) {
   const loaded = useRef('');
   const synchronization = useRef(0);
   const source = useRef('');
-  const early = useRef<({ kind: 'play'; track: Track; collection?: Track[]; label?: string } | { kind: 'enqueue'; track: Track })[]>([]);
+  // A play made before the account queue starts would otherwise hold the loading state until it does, however long that takes.
+  const early = useRef(new EarlyIntents(intent => {
+    const tracks = intent.collection ?? [intent.track];
+    const at = Math.max(0, tracks.findIndex(item => item.id === intent.track.id));
+    setWaiting(false);
+    runtime.current.setQueue(tracks, at);
+    void runtime.current.load(tracks, at).then(ready => { if (ready) runtime.current.play(); });
+  }));
   const continuation = useRef(new QueueContinuation((cursor, signal) => api.tracks({ limit: 10, cursor }, signal)));
   const continuing = useRef<Promise<void> | undefined>(undefined);
   const context = useRef('');
@@ -55,7 +63,7 @@ export function usePersonalQueue(target: Target) {
     if (!auth.ready) return;
     playRequest.current++;
     pendingPlay.current = undefined;
-    setWaiting(early.current.some(intent => intent.kind === 'play'));
+    setWaiting(early.current.hasPlay());
     setQueueError(undefined);
     held.current = false;
     pausedHere.current = false;
@@ -218,9 +226,9 @@ export function usePersonalQueue(target: Target) {
       if (checkpoint) adopt = { ...checkpoint, owner: account };
       if (!stale()) return current.start(adopt);
     }).catch(() => { if (!stale()) return current.start(); }) : current.start(adopt);
-    void starting.then(() => {
+    void Promise.resolve(starting).catch(() => {}).then(() => {
       if (stale()) return;
-      for (const intent of early.current.splice(0)) {
+      for (const intent of early.current.drain()) {
         if (intent.kind === 'play') play(intent.track, intent.collection, intent.label);
         else enqueue(intent.track);
       }
@@ -407,8 +415,7 @@ export function usePersonalQueue(target: Target) {
     forget();
     const current = session.current;
     if (!current || source.current !== (auth.did ?? 'anonymous')) {
-      early.current = early.current.filter(intent => intent.kind !== 'play');
-      early.current.push({ kind: 'play', track, collection, label });
+      early.current.play({ track, collection, label });
       setWaiting(true);
       runtime.current.setQueue([track], 0);
       return true;
@@ -455,7 +462,7 @@ export function usePersonalQueue(target: Target) {
     return true;
   }
   function enqueue(track: Track) {
-    if (!session.current || source.current !== (auth.did ?? 'anonymous')) { if (early.current.length < 64) early.current.push({ kind: 'enqueue', track }); return; }
+    if (!session.current || source.current !== (auth.did ?? 'anonymous')) { early.current.enqueue(track); return; }
     remember([track]);
     edit({ action: 'enqueue', entry: queueReference(track, randomUUID()) });
   }
