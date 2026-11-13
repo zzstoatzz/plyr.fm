@@ -27,7 +27,7 @@ pub fn run(a: std.mem.Allocator, io: std.Io, settings: config.Config) !void {
         .store = try room_store.Store.init(a, io, url, settings.track_collection),
         .tickets = try tickets.Tickets.init(a, io, url),
         .auth_config = .{
-            .audience = env("JAM_SERVICE_AUDIENCE") orelse "did:web:plyr-jams-next.fly.dev#jams",
+            .audience = env("JAM_SERVICE_AUDIENCE") orelse "did:web:jams.next.plyr.fm#jams",
             .method = env("JAM_JOIN_METHOD") orelse "fm.plyr.next.jam.join",
             .space_type = env("JAM_SPACE_TYPE") orelse "fm.plyr.next.jam",
             .plc_url = env("PLC_DIRECTORY_URL") orelse "https://plc.directory",
@@ -382,7 +382,7 @@ const Handler = struct {
         }
         if (std.mem.eql(u8, url, "/.well-known/did.json")) {
             const did = context.auth_config.audience[0 .. std.mem.indexOfScalar(u8, context.auth_config.audience, '#') orelse context.auth_config.audience.len];
-            const result = std.json.Stringify.valueAlloc(a, .{ .id = did, .service = .{.{ .id = context.auth_config.audience, .type = "PlyrJamCoordinator", .serviceEndpoint = env("JAM_PUBLIC_URL") orelse "https://plyr-jams-next.fly.dev" }} }, .{}) catch return;
+            const result = std.json.Stringify.valueAlloc(a, .{ .id = did, .service = .{.{ .id = context.auth_config.audience, .type = "PlyrJamCoordinator", .serviceEndpoint = env("JAM_PUBLIC_URL") orelse "https://jams.next.plyr.fm" }} }, .{}) catch return;
             return http(conn, a, 200, result, origin);
         }
         if (std.mem.eql(u8, url, "/v1/downloads/authorize")) {

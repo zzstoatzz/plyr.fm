@@ -39,13 +39,13 @@ const output=process.env.JAM_REALTIME_OUTPUT||'/tmp/plyr-jam-realtime';
    });
    let backend=Number(process.env.JAM_INSTANCE_A||5301)+(i?1:0);
    const frames=[],commands=[];let admissions=0,connections=0,currentSocket;
-   if(!live) await fixture.context.route('https://plyr-jams-next.fly.dev/**',async route=>{
+   if(!live) await fixture.context.route('https://jams.next.plyr.fm/**',async route=>{
     const u=new URL(route.request().url());const request=route.request();
     const r=await fetch(`http://127.0.0.1:${backend}`+u.pathname+u.search,{method:request.method(),headers:{'content-type':'application/json',origin:upstreamOrigin},body:request.postDataBuffer()||undefined});
     if(u.pathname==='/v1/jams/join'&&r.ok)admissions++;
     await route.fulfill({status:r.status,headers:{...Object.fromEntries(r.headers),'access-control-allow-origin':origin},body:Buffer.from(await r.arrayBuffer())});
    });
-   if(!live) await fixture.context.routeWebSocket('wss://plyr-jams-next.fly.dev/**',route=>{
+   if(!live) await fixture.context.routeWebSocket('wss://jams.next.plyr.fm/**',route=>{
     const u=new URL(route.url());const upstream=new WS(`ws://127.0.0.1:${backend}`+u.pathname+u.search,{origin:upstreamOrigin});const pending=[];currentSocket=upstream;connections++;
     upstream.on('open',()=>{for(const data of pending)upstream.send(data)});
     upstream.on('message',data=>{const text=String(data);frames.push({...JSON.parse(text),receivedAt:performance.now()});route.send(text)});

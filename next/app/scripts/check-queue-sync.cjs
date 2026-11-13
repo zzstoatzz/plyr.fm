@@ -6,7 +6,7 @@ const { identity, serviceToken, startQueueFixture } = require('./queue-fixture.c
 const origin = 'https://next.plyr.fm';
 const dist = path.resolve(__dirname, '../dist');
 const base = 'atproto repo:fm.plyr.track repo:fm.plyr.list repo:fm.plyr.like repo:fm.plyr.actor.profile blob:*/*';
-const queue = 'rpc:fm.plyr.next.jam.join?aud=did:web:plyr-jams-next.fly.dev#jams';
+const queue = 'rpc:fm.plyr.next.jam.join?aud=did:web:jams.next.plyr.fm#jams';
 
 (async () => {
   const account = identity('k256');
@@ -21,11 +21,11 @@ const queue = 'rpc:fm.plyr.next.jam.join?aud=did:web:plyr-jams-next.fly.dev#jams
         try { if (!(await fs.stat(file)).isFile()) throw Error(); } catch { file = path.join(dist, 'index.html'); }
         await route.fulfill({ body: await fs.readFile(file), contentType: file.endsWith('.js') ? 'text/javascript' : file.endsWith('.ttf') ? 'font/ttf' : 'text/html' });
       });
-      await context.route('https://plyr-jams-next.fly.dev/v1/playback/join', async route => {
+      await context.route('https://jams.next.plyr.fm/v1/playback/join', async route => {
         const response = await fetch(fixture.bases[0] + '/v1/playback/join', { method: 'POST', headers: { 'content-type': 'application/json', origin }, body: route.request().postData() });
         await route.fulfill({ status: response.status, body: Buffer.from(await response.arrayBuffer()), headers: { 'content-type': 'application/json', 'access-control-allow-origin': origin } });
       });
-      await context.route('https://plyr-jams-next.fly.dev/v1/preferences', async route => {
+      await context.route('https://jams.next.plyr.fm/v1/preferences', async route => {
         const response = await fetch(fixture.bases[0] + '/v1/preferences', { method: 'POST', headers: { 'content-type': 'application/json', origin }, body: route.request().postData() });
         await route.fulfill({ status: response.status, body: Buffer.from(await response.arrayBuffer()), headers: { 'content-type': 'application/json', 'access-control-allow-origin': origin } });
       });
@@ -35,7 +35,7 @@ const queue = 'rpc:fm.plyr.next.jam.join?aud=did:web:plyr-jams-next.fly.dev#jams
         const Native = window.Audio; window.__audio = [];
         window.Audio = class extends Native { constructor(...args) { super(...args); this.muted = true; window.__audio.push(this); } };
         const Socket = window.WebSocket; window.__joins = 0;
-        window.WebSocket = class extends Socket { constructor(url, protocols) { const parsed = new URL(url); if (parsed.host === 'plyr-jams-next.fly.dev') { parsed.protocol = 'ws:'; parsed.host = new URL(local).host; window.__joins++; } super(parsed.toString(), protocols); } };
+        window.WebSocket = class extends Socket { constructor(url, protocols) { const parsed = new URL(url); if (parsed.host === 'jams.next.plyr.fm') { parsed.protocol = 'ws:'; parsed.host = new URL(local).host; window.__joins++; } super(parsed.toString(), protocols); } };
       }, fixture.bases[0]);
       const page = await context.newPage();
       const errors = [];

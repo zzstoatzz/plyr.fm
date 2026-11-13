@@ -4,7 +4,7 @@ const path = require('node:path');
 const { withPlayerHarness, setup, track, screenshot } = require('./check-player-presentation.cjs');
 const sdk = Promise.all([import('@atproto/crypto'), import('@atproto/lex-data'), import('@atproto/lex-cbor'), import('@atproto/lex-json'), import('@atproto/space')]);
 const did = track.artist.did, space = `at://${did}/space/fm.plyr.next.audio/supporters`, uri = `${space}/${did}/${track.record.collection}/protected`;
-const downloadScope = 'rpc:fm.plyr.download.authorize?aud=did:web:plyr-jams-next.fly.dev#jams';
+const downloadScope = 'rpc:fm.plyr.download.authorize?aud=did:web:jams.next.plyr.fm#jams';
 const attachment = 'https://plyr-next-audio.n8-3e9.workers.dev/media/' + 'a'.repeat(64) + '/12345678-1234-4123-8123-123456789abc';
 const audio = Buffer.alloc(16044);
 audio.write('RIFF'); audio.writeUInt32LE(audio.length - 8, 4); audio.write('WAVEfmt ', 8); audio.writeUInt32LE(16, 16); audio.writeUInt16LE(1, 20); audio.writeUInt16LE(1, 22); audio.writeUInt32LE(8000, 24); audio.writeUInt32LE(16000, 28); audio.writeUInt16LE(2, 32); audio.writeUInt16LE(16, 34); audio.write('data', 36); audio.writeUInt32LE(audio.length - 44, 40);
@@ -41,11 +41,11 @@ async function run(browser, width, theme) {
       serviceRequests++;
       const url = new URL(endpoint, 'https://protected-pds.fixture');
       assert.equal(url.pathname, '/xrpc/com.atproto.server.getServiceAuth');
-      assert.equal(url.searchParams.get('aud'), 'did:web:plyr-jams-next.fly.dev#jams');
+      assert.equal(url.searchParams.get('aud'), 'did:web:jams.next.plyr.fm#jams');
       assert.equal(url.searchParams.get('lxm'), 'fm.plyr.download.authorize');
       return { token: 'fixture-service:' + owner };
     });
-    await context.route('https://plyr-jams-next.fly.dev/v1/downloads/authorize', async route => {
+    await context.route('https://jams.next.plyr.fm/v1/downloads/authorize', async route => {
       decisions++;
       const body = route.request().postDataJSON();
       assert.deepEqual(Object.keys(body).sort(), ['recordCid', 'recordUri', 'serviceToken']);

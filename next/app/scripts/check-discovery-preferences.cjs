@@ -74,7 +74,7 @@ async function run(browser, width, theme) {
     await page.route('https://plc.directory/**', route => route.fulfill({ json: { service: [] } }));
     const signIn = (did, synced = false) => page.evaluate(([id, did, synced]) => globalThis.__r(id).setAuth(did, {
       handle: async url => new Response(JSON.stringify(String(url).includes('getServiceAuth') ? { token: 'fixture' } : { records: [] }), { headers: { 'content-type': 'application/json' } }),
-    }, synced ? 'atproto rpc:fm.plyr.next.jam.join?aud=did:web:plyr-jams-next.fly.dev#jams' : 'atproto'), [authModule, did, synced]);
+    }, synced ? 'atproto rpc:fm.plyr.next.jam.join?aud=did:web:jams.next.plyr.fm#jams' : 'atproto'), [authModule, did, synced]);
     await signIn('did:plc:discoveryone');
     await edit();
     await page.getByRole('button', { name: 'Show all tags', exact: true }).click();
@@ -87,11 +87,11 @@ async function run(browser, width, theme) {
     await page.getByRole('button', { name: 'hidden tags: none', exact: true }).waitFor();
     assert.equal(await field.count(), 0, 'editor draft does not cross accounts');
     let preferenceReads = 0;
-    await page.route('https://plyr-jams-next.fly.dev/v1/preferences', route => {
+    await page.route('https://jams.next.plyr.fm/v1/preferences', route => {
       preferenceReads++;
       return route.fulfill({ json: { preferences: { hiddenTags: defaults } } });
     });
-    await page.route('https://plyr-jams-next.fly.dev/v1/playback/join', route => route.fulfill({ status: 503, json: { error: 'fixture unavailable' } }));
+    await page.route('https://jams.next.plyr.fm/v1/playback/join', route => route.fulfill({ status: 503, json: { error: 'fixture unavailable' } }));
     await page.route('https://public.api.bsky.app/**', route => route.fulfill({ json: { follows: [] } }));
     await page.routeWebSocket('**/*', socket => socket.close());
     await page.exposeFunction('__preferenceReads', () => preferenceReads);

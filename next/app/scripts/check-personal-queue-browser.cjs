@@ -40,7 +40,7 @@ const assert = require('node:assert/strict');
       await route.fulfill({status:200,contentType:'text/html',body:'<script>location.replace('+JSON.stringify(destination)+')</script>'});
     else await route.fulfill({response});
   });
-  if (localCoordinator) await context.route('https://plyr-jams-next.fly.dev/v1/playback/join',async route=>{
+  if (localCoordinator) await context.route('https://jams.next.plyr.fm/v1/playback/join',async route=>{
    const response=await fetch(localCoordinator+'/v1/playback/join',{method:'POST',headers:{'content-type':'application/json',origin:'https://next.plyr.fm'},body:route.request().postData()});
    await route.fulfill({status:response.status,body:Buffer.from(await response.arrayBuffer()),headers:{'content-type':'application/json','access-control-allow-origin':'https://next.plyr.fm'}});
    console.log('personal admission',response.status);
@@ -48,7 +48,7 @@ const assert = require('node:assert/strict');
   await context.addInitScript(localCoordinator=>{
    const Audio=window.Audio;window.queueAudio=[];window.Audio=class extends Audio{constructor(...args){super(...args);window.queueAudio.push(this)}};
    const Socket=window.WebSocket;window.queueFrames=[];window.queueSockets=[];window.queueCommands=[];
-   window.WebSocket=class extends Socket {constructor(url,protocols){const parsed=new URL(url);if(localCoordinator&&parsed.host==='plyr-jams-next.fly.dev'){const local=new URL(localCoordinator);parsed.protocol=local.protocol==='https:'?'wss:':'ws:';parsed.host=local.host;}super(parsed.toString(),protocols);const send=this.send.bind(this);this.send=value=>{try{const command=JSON.parse(value);if(command.action)window.queueCommands.push(command.action);}catch{}send(value)};window.queueSockets.push(this);this.addEventListener('message',e=>{try{const value=JSON.parse(e.data);if(value.state?.personal)window.queueFrames.push(value);}catch{}});}};
+   window.WebSocket=class extends Socket {constructor(url,protocols){const parsed=new URL(url);if(localCoordinator&&parsed.host==='jams.next.plyr.fm'){const local=new URL(localCoordinator);parsed.protocol=local.protocol==='https:'?'wss:':'ws:';parsed.host=local.host;}super(parsed.toString(),protocols);const send=this.send.bind(this);this.send=value=>{try{const command=JSON.parse(value);if(command.action)window.queueCommands.push(command.action);}catch{}send(value)};window.queueSockets.push(this);this.addEventListener('message',e=>{try{const value=JSON.parse(e.data);if(value.state?.personal)window.queueFrames.push(value);}catch{}});}};
   }, localCoordinator);
   const page=await context.newPage();page.setDefaultTimeout(20000);
 
@@ -134,7 +134,7 @@ const assert = require('node:assert/strict');
  for (const action of ['Pause', 'Play']) {
    let release;
    const gate=new Promise(resolve=>{release=resolve});let admitted=false;
-   const admission='https://plyr-jams-next.fly.dev/v1/playback/join';
+   const admission='https://jams.next.plyr.fm/v1/playback/join';
    const hold=async route=>{admitted=true;await gate;await route.fallback();};
    await b.route(admission,hold);
    await b.evaluate(()=>window.queueSockets.at(-1).close());

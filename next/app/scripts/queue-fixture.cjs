@@ -4,7 +4,7 @@ const { spawn, execFileSync } = require('node:child_process');
 const http = require('node:http');
 const path = require('node:path');
 
-const audience = 'did:web:plyr-jams-next.fly.dev#jams';
+const audience = 'did:web:jams.next.plyr.fm#jams';
 const method = 'fm.plyr.next.jam.join';
 const alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 function base58(bytes) {
