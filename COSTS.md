@@ -317,15 +317,11 @@ differ; these are planning estimates, not a refreshed invoice. The ingester and
 database remain unchanged. This intentional latency tradeoff does not establish
 cheaper overall operation; the retirement and coverage gaps above still apply.
 
-### staged upload processing capacity (November 12)
+### upload processing executor (November 12)
 
-The processing wiring trial keeps one existing `plyr-transcoder-staging`
-shared-cpu-1x/1 GiB machine in `iad` warm, and removes its extra stopped replica.
-At [Fly's current rates](https://fly.io/pricing/), that shape is approximately
-$6.70 per 30 days of continuous compute, so the increase over an otherwise idle
-machine is at most about $6.70/month, less its previous running time. This is a
-configuration estimate, not a measured invoice or a revision of older snapshots.
-North American egress is separately $0.02/GB; rendition writes also incur R2
-storage/operation charges. No new service, dedicated IP or volume is added.
-Admission remains disabled until staged acceptance; an abandoned trial restores
-auto-stop/minimum-zero after active attempts are fenced.
+Next processing runs in its own `plyr-next-processing` app: one shared-cpu-1x/1 GiB
+machine in `iad`, kept running. At [Fly's current rates](https://fly.io/pricing/)
+that is approximately $6.70 per 30 days of continuous compute. North American
+egress is separately $0.02/GB; rendition writes also incur R2 storage/operation
+charges. The legacy `plyr-transcoder-staging` app returns to auto-stop/minimum-zero.
+This is a configuration estimate, not a measured invoice.

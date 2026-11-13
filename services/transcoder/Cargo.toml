@@ -9,12 +9,9 @@ axum = { version = "0.7", features = ["macros", "json", "multipart"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "1.0"
-tokio = { version = "1.40", features = ["rt-multi-thread", "macros", "signal", "process", "fs", "io-util", "sync", "time"] }
+tokio = { version = "1.40", features = ["rt-multi-thread", "macros", "signal", "process", "fs", "io-util"] }
 tokio-util = { version = "0.7", features = ["io"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 tempfile = "3.10"
 sanitize-filename = "0.5"
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
-sha2 = "0.10"
-fs2 = "0.4"

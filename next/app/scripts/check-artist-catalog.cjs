@@ -71,7 +71,7 @@ async function run(browser, width, theme) {
     await continuity();
     await screenshot(page, `artist-catalog-${width}-${theme}`);
     await page.getByRole('tabpanel').getByRole('link').filter({ hasText: album.metadata.name }).click();
-    await page.getByText('2 tracks · 1 unavailable', { exact: true }).waitFor();
+    await page.getByText('1 track · 1 no longer available', { exact: true }).waitFor();
     await continuity();
     await screenshot(page, `artist-collection-${width}-${theme}`);
     await page.getByRole('button', { name: 'Back', exact: true }).click();

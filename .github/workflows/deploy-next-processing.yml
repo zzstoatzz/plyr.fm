@@ -1,0 +1,67 @@
+name: deploy next processing
+
+# Next's upload processing executor (next/services/processing). It is a
+# Next-owned Fly app; nothing here touches the legacy transcoder or production.
+
+on:
+  pull_request:
+    paths:
+      - "next/services/processing/**"
+      - ".github/workflows/deploy-next-processing.yml"
+  push:
+    branches: [main]
+    paths:
+      - "next/services/processing/**"
+      - ".github/workflows/deploy-next-processing.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency: deploy-next-processing-${{ github.ref }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: next/services/processing
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: next/services/processing
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test
+
+  deploy:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_PROCESSING_NEXT }}
+      PROCESSING_TOKEN: ${{ secrets.PLYR_NEXT_PROCESSING_AUTH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: deploy
+        working-directory: next/services/processing
+        run: |
+          test -n "$FLY_API_TOKEN"
+          test -n "$PROCESSING_TOKEN"
+          printf 'NEXT_PROCESSING_AUTH_TOKEN=%s\n' "$PROCESSING_TOKEN" | flyctl secrets import --stage --app plyr-next-processing
+          flyctl deploy --remote-only --ha=false --app plyr-next-processing .
+          flyctl scale count 1 --app plyr-next-processing --region iad --yes
+      - name: verify health and authentication
+        run: |
+          curl -fsS https://plyr-next-processing.fly.dev/health
+          status=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{}' https://plyr-next-processing.fly.dev/v1/processing)
+          echo "unauthenticated dispatch: $status"
+          test "$status" = 401 -o "$status" = 422 -o "$status" = 400

@@ -6,6 +6,8 @@ const postgres = @import("internal/index/postgres_track_store.zig");
 const postgres_composed_tracks = @import("internal/index/postgres_composed_track_store.zig");
 const postgres_track_charts = @import("internal/index/postgres_track_chart_store.zig");
 const postgres_likes = @import("internal/index/postgres_like_query_store.zig");
+const postgres_notifications = @import("internal/notification/postgres_store.zig");
+const notification_service_config = @import("internal/notification/service.zig");
 const postgres_playback = @import("internal/index/postgres_playback_store.zig");
 const postgres_search = @import("internal/index/postgres_search_store.zig");
 const postgres_artists = @import("internal/index/postgres_artist_store.zig");
@@ -112,6 +114,20 @@ pub fn main() !void {
     else
         null;
     const artist_metric_store = if (postgres_artist_metric_store) |*store| store.store() else null;
+    var postgres_notification_store: ?postgres_notifications.PostgresNotificationStore = if (postgres_store) |*store|
+        .{ .pool = store.pool }
+    else
+        null;
+    const notification_store = if (postgres_notification_store) |*store| store.store() else null;
+    // notifications answer to the same service DID as the managed spaces
+    const notification_service: ?notification_service_config.Config = if (settings.managed_space) |space|
+        try notification_service_config.Config.init(allocator, space.service_did, space.plc_url, .{
+            .track = settings.track_collection,
+            .like = settings.like_collection,
+            .profile = settings.profile_collection,
+        })
+    else
+        null;
     var platform_stats: ?postgres_platform_stats.PostgresPlatformStatsStore = if (postgres_store) |*store| .{ .pool = store.pool, .io = io, .collection = settings.track_collection } else null;
     switch (settings.role) {
         .jams => unreachable,
@@ -148,6 +164,8 @@ pub fn main() !void {
                 .like_collection = settings.like_collection,
                 .cors = .{ .allowed_origins = settings.cors_allowed_origins },
                 .managed_space = settings.managed_space,
+                .notifications = notification_service,
+                .notification_store = notification_store,
             });
         },
         .mirror => {
@@ -219,6 +237,11 @@ test {
     _ = @import("api/response.zig");
     _ = @import("api/router.zig");
     _ = @import("api/managed_space.zig");
+    _ = @import("api/notifications.zig");
+    _ = @import("internal/application/notifications.zig");
+    _ = @import("internal/atproto/service_auth.zig");
+    _ = @import("internal/notification/postgres_store.zig");
+    _ = @import("internal/notification/service.zig");
     _ = @import("internal/space/managed_space.zig");
     _ = @import("internal/space/network.zig");
     _ = @import("internal/space/attested.zig");
@@ -297,6 +320,7 @@ test {
     _ = @import("internal/delivery/blob_mirror.zig");
     _ = @import("internal/moderation/label_sync.zig");
     _ = @import("internal/delivery/postgres_mirror_store.zig");
+    _ = @import("internal/delivery/public_media.zig");
     _ = @import("internal/identity/actor_identity_refresher.zig");
     _ = @import("internal/identity/postgres_actor_identity_store.zig");
     _ = @import("internal/ingest/catalog_reconcile_runner.zig");

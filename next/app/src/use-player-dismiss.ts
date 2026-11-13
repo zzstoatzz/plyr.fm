@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Animated, PanResponder, Platform, type ScrollEvent } from 'react-native';
+import { Animated, PanResponder, Platform, type NativeSyntheticEvent, type NativeScrollEvent, type ScrollEvent } from 'react-native';
 import { playerSheet } from './player-sheet';
 
 export function usePlayerDismiss(enabled: boolean, width: number, height: number, close: () => void, still = false, rest = height, present = true) {
@@ -21,6 +21,14 @@ export function usePlayerDismiss(enabled: boolean, width: number, height: number
   const acquiredAt = useRef({ dx: 0, dy: 0 });
   const active = useRef<number | null>(null);
   const native = Platform.OS !== 'web';
+  // iOS: a pull past the top of now playing is the scroll view's own bounce, which moves the sheet instead of the content.
+  const ios = Platform.OS === 'ios';
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const pullGate = useRef(new Animated.Value(1)).current;
+  const pull = useRef(scrollY.interpolate({ inputRange: [-1, 0], outputRange: [1, 0], extrapolateRight: 'clamp' })).current;
+  const sheetTranslation = useRef(ios ? Animated.add(translation, Animated.multiply(pull, pullGate)) : translation).current;
+  const contentPull = useRef(ios ? Animated.multiply(pull, -1) : undefined).current;
+  const scrolled = useRef((_event: ScrollEvent) => {});
   const spring = (toValue: number, velocity: number) => Animated.spring(translation, { toValue, velocity, stiffness: 1000, damping: 62, mass: 1,
     overshootClamping: true, restDisplacementThreshold: toValue ? 4 : 1.5, restSpeedThreshold: toValue ? 40 : 1.5, useNativeDriver: native });
   const exit = (then: () => void, velocity = 0) => {
@@ -71,7 +79,8 @@ export function usePlayerDismiss(enabled: boolean, width: number, height: number
       const dy = gesture.dy + acquiredAt.current.dy;
       const dx = gesture.dx + acquiredAt.current.dx;
       const downward = dy > Math.abs(dx) * 1.2;
-      const dismiss = downward && (dy >= Math.min(120, height * 0.16) || (dy >= 48 && gesture.vy >= 0.8));
+      const dismiss = downward && (native ? dy >= Math.min(80, height * 0.1) || dy >= 24 && gesture.vy >= 0.3
+        : dy >= Math.min(120, height * 0.16) || dy >= 48 && gesture.vy >= 0.8);
       if (dismiss) api.current.exit(latest.current.close, gesture.vy * 1000);
       else snapBack();
     },
@@ -84,6 +93,7 @@ export function usePlayerDismiss(enabled: boolean, width: number, height: number
     active.current = null;
     closing.current = false;
     setDragging(false);
+    pullGate.setValue(1);
     if (!present) { translation.stopAnimation(); translation.setValue(rest); return; }
     if (still || playerSheet.instant) { playerSheet.instant = false; translation.stopAnimation(); translation.setValue(0); playerSheet.opened?.(); }
     else if (playerSheet.release) { const { open, velocity } = playerSheet.release; playerSheet.release = undefined; api.current.settle(open, velocity); }
@@ -128,20 +138,33 @@ export function usePlayerDismiss(enabled: boolean, width: number, height: number
       panel.removeEventListener('touchcancel', end, true);
     };
   }, [panel, enabled, directionalTouch]);
+  const onScroll = useRef((event: ScrollEvent) => {
+    const wasAtTop = offset.current <= 1;
+    offset.current = Math.max(0, event.nativeEvent.contentOffset.y);
+    if (wasAtTop !== (offset.current <= 1)) setAtTop(offset.current <= 1);
+    scrolled.current(event);
+  }).current;
+  const scrollEvent = useRef(ios ? Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true, listener: onScroll }) : onScroll).current;
+  const release = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const pulled = -event.nativeEvent.contentOffset.y;
+    const velocity = event.nativeEvent.velocity?.y ?? 0;
+    if (!latest.current.enabled || closing.current || pulled <= 0 || velocity > 0.5) return;
+    if (pulled < Math.min(80, height * 0.1) && !(pulled >= 16 && velocity < -0.3)) return;
+    pullGate.setValue(0);
+    translation.setValue(Math.min(latest.current.rest, pulled));
+    exit(latest.current.close, Math.max(0, -velocity * 1000));
+  };
   return {
-    translation, dragging, atTop, directionalTouch, exit,
+    translation: sheetTranslation, contentPull, scrolled,
+    dragging, atTop, directionalTouch, exit,
     panelRef,
     panHandlers: enabled ? responder.panHandlers : {},
     contentStartHandlers: {
-      onStartShouldSetResponderCapture: () => { canPull.current = offset.current <= 1; return false; }
+      onStartShouldSetResponderCapture: () => { canPull.current = !ios && offset.current <= 1; return false; }
     },
     protect: {
       onStartShouldSetResponderCapture: () => { blocked.current = true; return false; }
     },
-    onScroll: (event: ScrollEvent) => {
-      const wasAtTop = offset.current <= 1;
-      offset.current = Math.max(0, event.nativeEvent.contentOffset.y);
-      if (wasAtTop !== (offset.current <= 1)) setAtTop(offset.current <= 1);
-    }
+    scrollProps: { onScroll: scrollEvent, alwaysBounceVertical: ios, ...(ios ? { onScrollEndDrag: release } : {}) },
   };
 }
