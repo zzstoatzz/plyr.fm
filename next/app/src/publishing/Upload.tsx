@@ -108,6 +108,7 @@ function AccountUpload({ auth }: { auth: Auth }) {
     {creationRecovery.loading || creationRecovery.error || creationRecovery.operations.length ? <CreateRecovery auth={auth} recovery={creationRecovery} kind="track" onDismiss={() => {}} /> : <>
       <FormCard>
         <PickTile kind="audio" file={file} onPress={() => void choose('audio/*')} hint="mp3, wav, flac, aiff, ogg, m4a or aac · up to 1.5 GiB" />
+        {note && <Copy live>{note}</Copy>}
         {service && <>
           <Copy>plyr stores this file and makes an mp3 for playback when needed. playback and downloads are public.</Copy>
           {!serviceConsent && <Action label="Use plyr storage" onPress={consent} />}
@@ -125,7 +126,6 @@ function AccountUpload({ auth }: { auth: Auth }) {
           {!!artist && <Copy>posts to your profile as {artist}. you can keep browsing while it uploads.</Copy>}
         </View>
       </FormCard>
-      {note && <Copy live>{note}</Copy>}
     </>}
   </>;
 }

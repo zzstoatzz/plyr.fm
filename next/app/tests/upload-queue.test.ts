@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 import { jobLine, outputBudget, processingStep, transient, uploadRoute } from '../src/publishing/upload-queue-model.ts';
-import { MAX_SERVICE_AUDIO_BYTES, UPLOAD_PART_BYTES, type UploadStatus } from '../src/publishing/upload-model.ts';
+import { audioFormat, MAX_SERVICE_AUDIO_BYTES, UPLOAD_PART_BYTES, type UploadStatus } from '../src/publishing/upload-model.ts';
 
 const MIB = 1_048_576;
 
@@ -53,4 +53,13 @@ test('one toast line per phase', () => {
   assert.equal(jobLine({ ...job, phase: 'processing' }), 'converting "jimmy john’s 28" to mp3…');
   assert.equal(jobLine({ ...job, phase: 'done' }), '"jimmy john’s 28" uploaded');
   assert.equal(jobLine({ ...job, phase: 'failed', error: 'finish the earlier upload first' }), '"jimmy john’s 28" didn\'t upload: finish the earlier upload first');
+});
+
+test('iOS picker types for WAV and WebM are accepted and routed to mp3 processing', () => {
+  for (const [name, type] of [['Queue test – wav ’26.wav', 'audio/vnd.wave'], ['rec.webm', 'video/webm'], ['take.flac', 'audio/x-flac'], ['song.mp3', 'audio/mp3']]) {
+    const route = uploadRoute({ name, type, size: 5 * MIB }, 20);
+    assert.equal(route.kind, name.endsWith('.mp3') ? 'pds' : 'service', name);
+    if (!name.endsWith('.mp3')) assert.equal(audioFormat(name, type, true).contentType, name.endsWith('.webm') ? 'audio/webm' : name.endsWith('.flac') ? 'audio/flac' : 'audio/wav');
+  }
+  assert.throws(() => uploadRoute({ name: 'clip.wav', type: 'video/mp4', size: 5 * MIB }), /choose an/);
 });
