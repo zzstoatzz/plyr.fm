@@ -137,8 +137,7 @@ async function run(browser, width, theme) {
     await page.waitForFunction(() => window.__playerPresentationMedia && !window.__playerPresentationMedia.paused && window.__playerPresentationMedia.currentSrc.includes('player-fixture.invalid'), null, { timeout: 20000 });
     console.log('public handoff verified; returning to private');
     await page.getByRole('link', { name: 'You', exact: true }).click();
-    await page.getByRole('link', { name: 'private music', exact: true }).click();
-    await page.getByRole('button', { name: 'Play private song', exact: true }).click();
+    await page.getByRole('button', { name: /private song.*only you/ }).click();
     await page.waitForFunction(() => window.__playerPresentationMedia && !window.__playerPresentationMedia.paused && window.__playerPresentationMedia.currentSrc.startsWith('blob:'), null, { timeout: 20000 });
     await page.getByRole('button', { name: 'Open now playing', exact: true }).click();
     await signIn();

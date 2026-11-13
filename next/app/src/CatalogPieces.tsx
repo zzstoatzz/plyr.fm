@@ -172,22 +172,21 @@ export function Cover({ uri, size = 48, round = false, radius = 8, instant = fal
 }
 
 export function Row({
-  title, subtitle, meta, image, href, action, round = false, onNavigate,
+  title, subtitle, meta, image, href, onPress, action, round = false, onNavigate,
 }: {
-  title: string; subtitle?: string | null; meta?: string; image?: string | null; href: Href; action?: ReactNode; round?: boolean; onNavigate?: () => void;
-}) {
+  title: string; subtitle?: string | null; meta?: string; image?: string | null; action?: ReactNode; round?: boolean; onNavigate?: () => void;
+} & ({ href: Href; onPress?: never } | { href?: never; onPress: () => void })) {
   const colors = useColors();
+  const body = <Pressable accessibilityRole={href ? 'link' : 'button'} onPress={href ? onNavigate : onPress} style={styles.rowLink}>
+    <Cover uri={image} round={round} />
+    <View style={styles.rowText}>
+      <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text, fontFamily: colors.fontFamily, fontSize: 16 * colors.scale }]}>{title}</Text>
+      {subtitle ? <Text numberOfLines={1} style={{ color: colors.muted, fontFamily: colors.fontFamily, fontSize: 14 * colors.scale }}>{subtitle}</Text> : null}
+      {meta ? <Text numberOfLines={1} style={{ color: colors.faint, fontFamily: colors.fontFamily, fontSize: 12 * colors.scale }}>{meta}</Text> : null}
+    </View>
+  </Pressable>;
   return <View style={[styles.row, cardSurface(colors)]}>
-    <Link href={href} asChild>
-      <Pressable accessibilityRole="link" onPress={onNavigate} style={styles.rowLink}>
-        <Cover uri={image} round={round} />
-        <View style={styles.rowText}>
-          <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text, fontFamily: colors.fontFamily, fontSize: 16 * colors.scale }]}>{title}</Text>
-          {subtitle ? <Text numberOfLines={1} style={{ color: colors.muted, fontFamily: colors.fontFamily, fontSize: 14 * colors.scale }}>{subtitle}</Text> : null}
-          {meta ? <Text numberOfLines={1} style={{ color: colors.faint, fontFamily: colors.fontFamily, fontSize: 12 * colors.scale }}>{meta}</Text> : null}
-        </View>
-      </Pressable>
-    </Link>
+    {href ? <Link href={href} asChild>{body}</Link> : body}
     {action}
   </View>;
 }

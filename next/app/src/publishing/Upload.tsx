@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth';
 import { getAuth, type Auth } from '../auth-state';
-import { Action, Copy, Field, Page } from '../controls';
+import { View } from 'react-native';
+import { Action, Copy, Field, Page, row } from '../controls';
 import { measureAudioDuration, pickMedia } from '../media-picker';
 import { createPds, MAX_AUDIO_BYTES, type MediaFile } from '../pds';
 import { LargeUploads, useLargeUploads } from './LargeUploads';
@@ -15,7 +16,10 @@ export default function Upload() {
   const [session, setSession] = useState({ rpc: auth.rpc, version: 0 });
   if (session.rpc !== auth.rpc) setSession({ rpc: auth.rpc, version: session.version + 1 });
   return <Page title="upload">
-    <Action label="Private music" href="/private" />
+    <View style={{ gap: 8 }}>
+      <Copy>who can listen</Copy>
+      <View style={row}><Action label="everyone" selected onPress={() => {}} /><Action label="just you" href="/private" /></View>
+    </View>
     {!auth.ready ? <Copy>loading your account…</Copy> : !auth.did ? <Action label="Sign in" href={{ pathname: '/login', params: { return_to: '/upload' } }} />
       : <AccountUpload key={`${auth.did}:${session.version}`} auth={auth} />}
   </Page>;

@@ -17,7 +17,7 @@ import type { PrivateCreate } from './private-create';
 export default function PrivateMusic() {
   const auth = useAuth(), [session, setSession] = useState({ rpc: auth.rpc, version: 0 });
   if (session.rpc !== auth.rpc) setSession({ rpc: auth.rpc, version: session.version + 1 });
-  return <Page title="private music">
+  return <Page title="just for you">
     {!auth.ready ? <Copy>loading your account…</Copy> : !auth.did ? <Action label="Sign in" href={{ pathname: '/login', params: { return_to: '/private' } }} />
       : <AccountPrivateMusic key={`${auth.did}:${session.version}`} auth={auth} />}
   </Page>;
@@ -57,7 +57,7 @@ function AccountPrivateMusic({ auth }: { auth: Auth }) {
   }
   const active = pending.some(operation => !operation.archived);
   return <>
-    <Copy>private tracks live in your PDS space. people you have invited to that space can listen and download. they do not appear in the public catalog. uploading privately does not make previously public audio private.</Copy>
+    <Copy>these live in your own PDS and only you can hear them. they show up in your music with everything else, marked “only you”. uploading here doesn’t change who can hear anything you already published.</Copy>
     {notice && noticeArea === 'recovery' && <Copy live>{notice}</Copy>}
     {recoveryError && <><Copy live>{recoveryError}</Copy><Action label="Retry private recovery" onPress={() => void refresh()} /></>}
     {pending.map(operation => <View key={operation.rkey} style={{ gap: 10 }}>
@@ -72,7 +72,7 @@ function AccountPrivateMusic({ auth }: { auth: Auth }) {
       {!operation.archived && results[operation.rkey]?.state !== 'accepted' && <><Copy>this attempt may still appear. starting again could create a duplicate.</Copy>
         <Action label="Set aside private creation" disabled={busy} onPress={() => void run(async () => { await pds.archive(operation, true); reset(operation); }, true, operation.rkey)} /></>}
     </View>)}
-    <Heading>your private tracks</Heading>
+    <Heading>only you can hear these</Heading>
     {loading ? <Copy>loading private music…</Copy> : error ? <><Copy live>{error}</Copy><Action label="Retry private music" onPress={() => void refresh()} /></> : !tracks.length ? <Copy>no private tracks yet.</Copy> : null}
     {tracks.map(track => <View key={track.record.uri} style={{ gap: 6 }}><Action label={`Play ${track.metadata.title}`} onPress={() => player.play(track, tracks)} /><Copy>{track.metadata.artist_name}</Copy>
       <PrivateTrackDelete track={track} auth={auth} deletion={pds.deletion} pending={pending.some(operation => operation.uri === track.record.uri)} deleted={() => {
@@ -85,7 +85,7 @@ function AccountPrivateMusic({ auth }: { auth: Auth }) {
       const version = generation.current, next = await pds.list(cursor);
       if (current() && generation.current === version) { setTracks(values => [...values, ...next.tracks.filter(track => !values.some(item => item.record.uri === track.record.uri))]); setCursor(next.cursor); }
     }, false)} />}
-    <Heading>upload privately</Heading>
+    <Heading>upload just for you</Heading>
     <Copy>up to 100 MiB. private uploads do not support transcoding or separate supporter and download rules yet.</Copy>
     {!auth.privatePublishing ? <Action label="Sign in for private uploads" href={{ pathname: '/login', params: { return_to: '/private' } }} /> : <>
       <Action label={file?.name ?? 'Choose private audio'} disabled={busy || active} onPress={() => { setNoticeArea('upload'); void pickMedia('audio/*').then(next => {
