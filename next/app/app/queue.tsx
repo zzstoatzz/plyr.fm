@@ -79,10 +79,10 @@ export default function Queue() {
         {upcoming.length > 1 && <Text style={{ color: theme.muted, fontSize: 13 * theme.scale, paddingHorizontal: 8, paddingBottom: 6 }}>drag the handles to reorder</Text>}
         {upcoming.length ? <QueueReorder queue={player.queue} start={player.index + 1} move={player.move}
           scrollRef={scrollRef} scrollMetrics={scrollMetrics} onDragging={setDragging}
-          renderTrack={(track, index) => <>
-            {player.tail && index === Math.max(player.index + 1, player.tail.from) && <View style={{ paddingVertical: 8 }}><Copy>from {player.tail.label}</Copy></View>}
-            <QueueTrack track={track} play={() => player.jump(index)} remove={() => player.remove(index)} />
-          </>} /> : <Copy>nothing queued. add tracks from their menus.</Copy>}
+          renderHeader={index => player.tail && index === Math.max(player.index + 1, player.tail.from)
+            ? <View style={{ paddingVertical: 8 }}><Copy>from {player.tail.label}</Copy></View> : null}
+          renderTrack={(track, index) => <QueueTrack track={track} play={() => player.jump(index)} remove={() => player.remove(index)} />} />
+          : <Copy>nothing queued. add tracks from their menus.</Copy>}
       </View>
       {player.index > 0 && <View style={styles.section}>
         <Pressable accessibilityRole="button" accessibilityState={{ expanded: history }} onPress={() => setHistory(!history)}

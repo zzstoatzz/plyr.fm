@@ -7,6 +7,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { MAX_SERVICE_AUDIO_BYTES, UPLOAD_PART_BYTES } from '../../../app/src/publishing/upload-model.ts';
 import { createUploadTransport } from '../../../app/src/publishing/upload-transport.ts';
 import { waveSource, verifyStream, transferFixture } from './upload-fixture-source.mjs';
+import { awaitRendition, verifyProcessedMedia } from './processing-fixture.mjs';
 
 const requireApp = createRequire(new URL('../../../app/package.json', import.meta.url));
 const { TID } = requireApp('@atproto/common-web');
@@ -104,12 +105,15 @@ function deleteFixtureObject(object) {
   catch { throw new Error('fixture R2 cleanup requires object-delete permission'); }
 }
 
-export async function main({ deleteObject = deleteFixtureObject } = {}) {
+export async function main({ deleteObject = deleteFixtureObject, verifyProcessing = verifyProcessedMedia } = {}) {
   for (const name of ['ZAT_TEST_PDS', 'ZAT_TEST_HANDLE', 'ZAT_TEST_PASSWORD', 'CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID']) assert.ok(process.env[name], `missing ${name}`);
   assert.ok(process.env.GITHUB_REF === 'refs/heads/main' && process.env.GITHUB_EVENT_NAME === 'workflow_dispatch', 'manual main-only fixture');
   const fullSize = process.env.VERIFY_UPLOAD_FULLSIZE === 'true';
+  const processing = process.env.VERIFY_UPLOAD_PROCESSING === 'true';
   if (fullSize) assert.ok(process.env.GITHUB_ACTIONS === 'true' && process.env.RUNNER_OS === 'Linux', 'full-size fixture is cloud-only');
+  if (processing) assert.ok(process.env.GITHUB_ACTIONS === 'true' && process.env.RUNNER_OS === 'Linux', 'processing fixture is cloud-only');
   const identity = fixtureIdentity();
+  assert.ok(!processing || !identity.resume, 'processing recovery needs its own diagnosed reservation');
   const pds = new URL(process.env.ZAT_TEST_PDS);
   assert.ok(pds.protocol === 'https:' && !pds.username && !pds.password, 'invalid fixture PDS');
   const xrpc = method => new URL(`/xrpc/${method}`, pds).href;
@@ -123,8 +127,10 @@ export async function main({ deleteObject = deleteFixtureObject } = {}) {
   const recordUri = `at://${owner}/${collection}/${rkey}`;
   const expectedUploadUrl = `${audioOrigin}/v1/uploads/${ownerHash}/${uploadId}`;
   const audioUrl = `${audioOrigin}/media/${ownerHash}/${uploadId}`;
-  const source = waveSource(fullSize ? MAX_SERVICE_AUDIO_BYTES : 4044);
-  const operation = { owner, collection, rkey, uri: recordUri, uploadId, name: 'fixture.wav', sizeBytes: source.size, contentType: 'audio/wav', fileType: 'wav', record: {} };
+  const source = waveSource(fullSize ? MAX_SERVICE_AUDIO_BYTES : processing ? 768044 : 4044);
+  const recipe = processing ? { recipe: 'mp3-320k-44100-v1', outputBudget: fullSize ? 134217728 : 1048576 } : undefined;
+  const operation = { owner, collection, rkey, uri: recordUri, uploadId, name: 'fixture.wav', sizeBytes: source.size, contentType: 'audio/wav', fileType: 'wav', record: {}, processing: recipe };
+  let processingGeneration;
   const digest = bytes => createHash('sha256').update(bytes).digest('hex');
   const auth = { did: owner, uploadStorage: true, agent: {
     handle(path, init) {
@@ -149,14 +155,21 @@ export async function main({ deleteObject = deleteFixtureObject } = {}) {
       assert.ok(Number.isSafeInteger(admission.expiresAt) && expiresInMs > 0 && expiresInMs <= 300000);
       console.log(JSON.stringify({ admission: { expiresInMs, sizeBytes: source.size } }));
     }
+    if (processing && String(url).startsWith(expectedUploadUrl)) {
+      const status = await response.clone().json();
+      if (Number.isSafeInteger(status.processingGeneration) && status.processingGeneration > 0) {
+        processingGeneration = status.processingGeneration;
+        await writeFile('upload-acceptance/processing.json', JSON.stringify({ uploadId, processingGeneration, state: status.state, failure: status.processingFailure, object: `plyr-next-audio/processing/${ownerHash}/${uploadId}/${processingGeneration}` }));
+      }
+    }
     return response;
   };
-  const makeTransport = (timeout = 12 * 60 * 1000) => createUploadTransport(auth, operation, () => {}, AbortSignal.timeout(timeout), observedFetch);
+  const makeTransport = (timeout = (processing ? 30 : 12) * 60 * 1000) => createUploadTransport(auth, operation, () => {}, AbortSignal.timeout(timeout), observedFetch);
   const transport = makeTransport();
-  const artifact = fullSize ? 'upload-acceptance/reservation.json' : null;
+  const artifact = fullSize || processing ? 'upload-acceptance/reservation.json' : null;
   if (artifact) {
     await mkdir('upload-acceptance', { recursive: true });
-    await writeFile(artifact, JSON.stringify({ owner, uploadId, recordUri, object, sizeBytes: source.size }));
+    await writeFile(artifact, JSON.stringify({ owner, uploadId, recordUri, object, sizeBytes: source.size, processing: recipe }));
   }
   if (!resume) await deleteObject(object);
   let resumedParts = 0;
@@ -183,11 +196,12 @@ export async function main({ deleteObject = deleteFixtureObject } = {}) {
       },
     };
     const { finished, lostAcknowledgement } = await transferFixture(operation, source, transfer, fullSize && !resume);
-    assert.equal(finished.audioUrl, audioUrl);
+    const ready = processing ? await awaitRendition(transport, finished, AbortSignal.timeout(20 * 60 * 1000)) : finished;
+    assert.equal(ready.audioUrl, audioUrl);
     const status = await transport.status();
     assert.equal(status.partSizeBytes, UPLOAD_PART_BYTES);
     assert.equal(status.partCount, Math.ceil(source.size / UPLOAD_PART_BYTES));
-    assert.equal(status.reservedBytes, source.size);
+    assert.equal(status.reservedBytes, source.size + (recipe?.outputBudget ?? 0));
     assert.equal(status.recoveryRequired, false);
     assert.deepEqual(status.reservedDigests, status.receivedParts);
     assert.equal(status.receivedParts.length, status.partCount);
@@ -196,15 +210,18 @@ export async function main({ deleteObject = deleteFixtureObject } = {}) {
       assert.equal(part.sha256, digest(source.read(offset, Math.min(UPLOAD_PART_BYTES, source.size - offset))));
     }
     console.log(JSON.stringify({ status: { partSizeBytes: status.partSizeBytes, partCount: status.partCount, reservedBytes: status.reservedBytes, recoveryRequired: status.recoveryRequired, receiptCount: status.receivedParts.length } }));
-    for (const method of ['GET', 'HEAD']) assert.equal((await request(audioUrl, { method })).status, 404);
-    const record = { $type: collection, title: `next upload integration-test ${uploadId}`, artist: 'integration test', fileType: 'wav', createdAt: new Date().toISOString(), audioUrl, downloadPolicy: 'open', tags: ['integration-test'] };
+    for (const path of processing ? [audioUrl, `${audioUrl}/original`, `${audioUrl}/manifest`] : [audioUrl]) for (const method of ['GET', 'HEAD']) assert.equal((await request(path, { method })).status, 404);
+    const record = { $type: collection, title: `next upload integration-test ${uploadId}`, artist: 'integration test', fileType: processing ? ready.rendition.fileType : 'wav', ...(processing ? { duration: ready.rendition.duration } : {}), createdAt: new Date().toISOString(), audioUrl, downloadPolicy: 'open', tags: ['integration-test'] };
     await json(xrpc('com.atproto.repo.createRecord'), post({ repo: owner, collection, rkey, record }, session.accessJwt));
     const activated = await transport.activate();
     assert.ok(activated.state === 'published' && activated.reservedBytes === 0, 'activation did not release quota'); published = true;
+    let verified;
+    if (processing) verified = await verifyProcessing(audioUrl, source, ready.rendition, 'upload-acceptance');
+    else {
     const read = await fetch(audioUrl, { redirect: 'error', signal: AbortSignal.timeout(5 * 60 * 1000) });
     assert.equal(read.status, 200); assert.equal(read.headers.get('x-content-type-options'), 'nosniff');
     assert.equal(read.headers.get('content-disposition'), null);
-    const verified = await verifyStream(read, source);
+    verified = await verifyStream(read, source);
     const downloadUrl = `${audioUrl}?download=1`;
     const head = await request(downloadUrl, { method: 'HEAD', headers: { origin: 'https://next.plyr.fm' } });
     assert.equal(head.status, 200); assert.equal(head.headers.get('content-length'), String(source.size));
@@ -215,7 +232,8 @@ export async function main({ deleteObject = deleteFixtureObject } = {}) {
     assert.equal(range.status, 206); assert.equal(range.headers.get('content-range'), `bytes 0-43/${source.size}`);
     assert.equal(range.headers.get('content-disposition'), 'attachment; filename="audio.wav"');
     assert.deepEqual(Buffer.from(await range.arrayBuffer()), source.read(0, 44));
-    const receipt = { ...verified, partCount: status.partCount, resumedParts, lostAcknowledgement, peakRssBytes: process.resourceUsage().maxRSS * 1024 };
+    }
+    const receipt = { ...verified, processingGeneration, partCount: status.partCount, resumedParts, lostAcknowledgement, peakRssBytes: process.resourceUsage().maxRSS * 1024 };
     if (artifact) await writeFile('upload-acceptance/receipt.json', JSON.stringify(receipt));
     console.log(JSON.stringify(receipt));
     console.log('deployed client transfer, signed activation, streaming bytes, attachment HEAD and range passed');
@@ -235,12 +253,20 @@ export async function main({ deleteObject = deleteFixtureObject } = {}) {
       }
       catch (error) { cleanup.push(error); }
     }
-    try { await deleteObject(object); }
+    try {
+      if (processing && published) {
+        assert.ok(Number.isSafeInteger(processingGeneration) && processingGeneration > 0, 'missing exact rendition cleanup generation');
+        await deleteObject(`plyr-next-audio/processing/${ownerHash}/${uploadId}/${processingGeneration}`);
+      }
+      if (!processing || published || cancelled) await deleteObject(object);
+    }
     catch { cleanup.push(new Error('exact fixture R2 cleanup failed')); }
-    console.log(`fixture cleanup: exact record and object only; completed=${completed}, published=${published}; receipt metadata retained`);
+    const retainedBytes = processing && !published && !cancelled;
+    console.log(`fixture cleanup: exact fixture only; completed=${completed}, published=${published}, retainedBytes=${retainedBytes}; receipt metadata retained`);
     const retainedQuotaPossible = started && !published && !cancelled;
-    if (retainedQuotaPossible) console.error(`failed fixture may retain one ${source.size}-byte quota reservation; do not start another full-size fixture`);
-    if (artifact) await writeFile('upload-acceptance/cleanup.json', JSON.stringify({ completed, published, cancelled, retainedQuotaPossible, cleanupFailed: cleanup.length > 0 }));
+    const retainedQuotaBytes = retainedQuotaPossible ? source.size + (recipe?.outputBudget ?? 0) : 0;
+    if (retainedQuotaPossible) console.error(`failed fixture may retain one ${retainedQuotaBytes}-byte quota reservation; do not start another fresh fixture`);
+    if (artifact) await writeFile('upload-acceptance/cleanup.json', JSON.stringify({ completed, published, cancelled, retainedBytes, retainedQuotaPossible, retainedQuotaBytes, cleanupFailed: cleanup.length > 0 }));
     if (cleanup.length) throw new AggregateError([...(failure ? [failure] : []), ...cleanup], 'fixture cleanup failed');
   }
   if (failure) throw failure;

@@ -12,4 +12,5 @@ export const queueStorage: QueueStorage = {
   async load(owner) { return applyQueueProgress(read(owner), read(owner + ':progress'), owner); },
   async save(owner, snapshot) { const safe = queueCheckpoint(snapshot, owner); if (!safe) throw new Error('could not save this queue'); storage.set(owner, JSON.stringify(safe)); },
   async progress(owner, progress) { storage.set(owner + ':progress', JSON.stringify(progress)); },
+  latest(owner, progress) { storage.set(owner + ':progress', JSON.stringify(progress)); },
 };

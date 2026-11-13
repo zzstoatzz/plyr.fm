@@ -11,15 +11,35 @@ use tokio::{
 
 use super::{accepted, Attempt, Receipt, Runner, PART_BYTES};
 
+#[derive(Debug)]
+pub(super) struct OutputBudgetExceeded;
+impl std::fmt::Display for OutputBudgetExceeded {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("rendition exceeds admitted output budget")
+    }
+}
+impl std::error::Error for OutputBudgetExceeded {}
+
 pub(super) async fn process(runner: &Runner, attempt: &Attempt) -> anyhow::Result<()> {
     let directory = tempfile::tempdir_in(&runner.scratch)?;
     let scratch = directory.path().to_owned();
     let available = tokio::task::spawn_blocking(move || fs2::available_space(scratch)).await??;
+    tracing::info!(upload_id = %attempt.upload_id, generation = attempt.generation,
+        scratch_available_bytes = available, "processing scratch baseline");
     require_scratch(available, attempt.source_bytes, attempt.output_budget)?;
     let input = directory.path().join("source");
     let output = directory.path().join("rendition.mp3");
     download(runner, attempt, &input).await?;
-    encode(&input, &output, attempt.output_budget).await?;
+    let encoded = encode(&input, &output, attempt.output_budget).await;
+    let output_bytes = match tokio::fs::metadata(&output).await {
+        Ok(metadata) => metadata.len(),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => 0,
+        Err(error) => return Err(error.into()),
+    };
+    tracing::info!(upload_id = %attempt.upload_id, generation = attempt.generation,
+        owned_scratch_peak_file_bytes = attempt.source_bytes + output_bytes,
+        "processing scratch peak");
+    encoded?;
     let duration = duration(&output).await?;
     upload(runner, attempt, &output, duration).await
 }
@@ -118,7 +138,7 @@ async fn copy_bounded(
         }
         size += count as u64;
         if size > budget {
-            bail!("rendition exceeds admitted output budget");
+            return Err(OutputBudgetExceeded.into());
         }
         file.write_all(&buffer[..count]).await?;
     }
@@ -183,7 +203,10 @@ async fn upload(
 ) -> anyhow::Result<()> {
     let mut file = File::open(path).await?;
     let size = file.metadata().await?.len();
-    if size == 0 || size > attempt.output_budget {
+    if size > attempt.output_budget {
+        return Err(OutputBudgetExceeded.into());
+    }
+    if size == 0 {
         bail!("invalid rendition size");
     }
     let mut parts = Vec::new();

@@ -17,16 +17,28 @@ export function usePlayerDismiss(enabled: boolean, width: number, height: number
   const offset = useRef(0);
   const [atTop, setAtTop] = useState(true);
   const [dragging, setDragging] = useState(false);
+  // Native only: true while the sheet sits open with nothing moving it, so the open state renders as plain styles.
+  const [resting, setResting] = useState(false);
+  const markResting = (open: boolean) => { if (native) setResting(open); };
   const generation = useRef(0);
   const acquiredAt = useRef({ dx: 0, dy: 0 });
   const active = useRef<number | null>(null);
   const native = Platform.OS !== 'web';
+  // Native pulls come from a gesture-handler pan running beside the scroll view: it moves the sheet only once the content is at its top.
+  const pullFrom = useRef<number | null>(null);
+  const firstMove = useRef(true);
+  const fromContent = useRef(false);
+  const pulled = useRef(0);
+  const scrolled = useRef((_event: ScrollEvent) => {});
+  // JS-driven on every platform: React commits write Animated props from the JS value, which a native-driven spring leaves
+  // stale, so a re-render mid-animation (a playback tick) snapped the sheet's content to its closed state.
   const spring = (toValue: number, velocity: number) => Animated.spring(translation, { toValue, velocity, stiffness: 1000, damping: 62, mass: 1,
-    overshootClamping: true, restDisplacementThreshold: toValue ? 4 : 1.5, restSpeedThreshold: toValue ? 40 : 1.5, useNativeDriver: native });
+    overshootClamping: true, restDisplacementThreshold: toValue ? 4 : 1.5, restSpeedThreshold: toValue ? 40 : 1.5, useNativeDriver: false });
   const exit = (then: () => void, velocity = 0) => {
     if (closing.current) return;
     closing.current = true;
     active.current = null;
+    markResting(false);
     if (latest.current.still) { then(); return; }
     const request = generation.current;
     spring(latest.current.rest, velocity).start(({ finished }) => { if (finished && request === generation.current) then(); });
@@ -34,15 +46,24 @@ export function usePlayerDismiss(enabled: boolean, width: number, height: number
   const settle = (open: boolean, velocity = 0) => {
     if (!open) { exit(latest.current.close, velocity); return; }
     closing.current = false;
+    markResting(false);
     const request = generation.current;
-    spring(0, velocity).start(({ finished }) => { if (finished && request === generation.current) playerSheet.opened?.(); });
+    spring(0, velocity).start(({ finished }) => {
+      if (!finished || request !== generation.current) return;
+      translation.setValue(0);
+      markResting(true);
+      playerSheet.opened?.();
+    });
   };
   const api = useRef({ exit, settle });
   api.current = { exit, settle };
   const snapBack = () => {
     active.current = null;
     setDragging(false);
-    Animated.spring(translation, { toValue: 0, stiffness: 280, damping: 24, mass: 1, useNativeDriver: native }).start();
+    const request = generation.current;
+    Animated.spring(translation, { toValue: 0, stiffness: 280, damping: 24, mass: 1, useNativeDriver: false }).start(({ finished }) => {
+      if (finished && request === generation.current && !closing.current) { translation.setValue(0); markResting(true); }
+    });
   };
   const responder = useRef(PanResponder.create({
     onStartShouldSetPanResponderCapture: (_, gesture) => {
@@ -71,7 +92,7 @@ export function usePlayerDismiss(enabled: boolean, width: number, height: number
       const dy = gesture.dy + acquiredAt.current.dy;
       const dx = gesture.dx + acquiredAt.current.dx;
       const downward = dy > Math.abs(dx) * 1.2;
-      const dismiss = downward && (dy >= Math.min(120, height * 0.16) || (dy >= 48 && gesture.vy >= 0.8));
+      const dismiss = downward && (dy >= Math.min(120, height * 0.16) || dy >= 48 && gesture.vy >= 0.8);
       if (dismiss) api.current.exit(latest.current.close, gesture.vy * 1000);
       else snapBack();
     },
@@ -84,8 +105,10 @@ export function usePlayerDismiss(enabled: boolean, width: number, height: number
     active.current = null;
     closing.current = false;
     setDragging(false);
+    pullFrom.current = null;
     if (!present) { translation.stopAnimation(); translation.setValue(rest); return; }
-    if (still || playerSheet.instant) { playerSheet.instant = false; translation.stopAnimation(); translation.setValue(0); playerSheet.opened?.(); }
+    markResting(false);
+    if (still || playerSheet.instant) { playerSheet.instant = false; translation.stopAnimation(); translation.setValue(0); markResting(true); playerSheet.opened?.(); }
     else if (playerSheet.release) { const { open, velocity } = playerSheet.release; playerSheet.release = undefined; api.current.settle(open, velocity); }
     else if (!playerSheet.dragging) { translation.setValue(rest); api.current.settle(true); }
   }, [present, translation]);
@@ -98,6 +121,7 @@ export function usePlayerDismiss(enabled: boolean, width: number, height: number
     setDragging(false);
     translation.stopAnimation();
     translation.setValue(present ? 0 : rest);
+    markResting(present);
   }, [enabled, width, height, translation]);
   useEffect(() => {
     playerSheet.settle = (open, velocity) => api.current.settle(open, velocity);
@@ -128,20 +152,59 @@ export function usePlayerDismiss(enabled: boolean, width: number, height: number
       panel.removeEventListener('touchcancel', end, true);
     };
   }, [panel, enabled, directionalTouch]);
+  const guard = { onStartShouldSetResponderCapture: () => { blocked.current = true; return false; } };
+  const onScroll = (event: ScrollEvent) => {
+    const wasAtTop = offset.current <= 1;
+    offset.current = Math.max(0, event.nativeEvent.contentOffset.y);
+    if (wasAtTop !== (offset.current <= 1)) setAtTop(offset.current <= 1);
+    scrolled.current(event);
+  };
+  // A drag that starts in the header pulls at once; one that starts in the content pulls from the moment the content reaches its top.
+  const pull = {
+    begin() { firstMove.current = true; },
+    update(dy: number, pointers: number) {
+      const first = firstMove.current;
+      firstMove.current = false;
+      if (!latest.current.enabled || closing.current || blocked.current) return;
+      if (pointers > 1) { if (pullFrom.current !== null) { pullFrom.current = null; snapBack(); } return; }
+      if (pullFrom.current === null) {
+        if (dy <= 0 || fromContent.current && offset.current > 0) return;
+        // A pull from rest counts the recognizer's activation distance; one that follows a scroll starts where the content met its top.
+        pullFrom.current = first ? 0 : dy;
+        active.current = generation.current;
+        markResting(false);
+        setDragging(true);
+        translation.stopAnimation();
+      }
+      pulled.current = Math.min(latest.current.rest, Math.max(0, dy - pullFrom.current));
+      translation.setValue(pulled.current);
+    },
+    end(velocity: number) {
+      if (pullFrom.current === null) return;
+      pullFrom.current = null;
+      if (active.current !== generation.current) return;
+      const distance = pulled.current;
+      if (velocity > -300 && (distance >= Math.min(80, height * 0.1) || distance >= 16 && velocity >= 300)) {
+        setDragging(false);
+        api.current.exit(latest.current.close, Math.max(0, velocity));
+      } else snapBack();
+    },
+  };
   return {
-    translation, dragging, atTop, directionalTouch, exit,
+    translation, scrolled,
+    dragging, resting, atTop, directionalTouch, exit,
     panelRef,
-    panHandlers: enabled ? responder.panHandlers : {},
+    pull,
+    panHandlers: enabled && !native ? responder.panHandlers : {},
+    panelStartHandlers: native ? {
+      onStartShouldSetResponderCapture: () => { blocked.current = false; fromContent.current = false; return false; }
+    } : {},
     contentStartHandlers: {
-      onStartShouldSetResponderCapture: () => { canPull.current = offset.current <= 1; return false; }
+      onStartShouldSetResponderCapture: () => { canPull.current = offset.current <= 1; fromContent.current = true; return false; }
     },
-    protect: {
-      onStartShouldSetResponderCapture: () => { blocked.current = true; return false; }
-    },
-    onScroll: (event: ScrollEvent) => {
-      const wasAtTop = offset.current <= 1;
-      offset.current = Math.max(0, event.nativeEvent.contentOffset.y);
-      if (wasAtTop !== (offset.current <= 1)) setAtTop(offset.current <= 1);
-    }
+    // On native an active pull cancels a press on its own, so only the seek slider keeps a drag to itself.
+    protect: native ? {} : guard,
+    protectSlider: guard,
+    scrollProps: { onScroll, ...(native ? { bounces: !atTop } : {}) },
   };
 }

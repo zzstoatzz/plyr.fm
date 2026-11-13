@@ -317,3 +317,29 @@ plan; they do not establish every cross-account member-private case.
 
 Those are product/interoperability layers above the now-aligned personal private-media
 transport; they should not be folded into a listener member-list checkbox.
+
+## Next supporter proof binding
+
+Next's existing Attested verifier requires both CID layers of a remote
+attestation. First, the fetched broker proof's canonical DAG-CBOR must match the
+payer's strong reference. Second, the proof's `cid` must match the payment record
+without `signatures`, plus `$sig: {repo: <payer DID>}`, where the payer is the
+authenticated requesting repository. The payment carries the artist `subject`. A
+copied proof or edited payment cannot authorize a different payer or artist.
+Trusted-broker selection and the existing `verified` status requirement remain in
+force; atprotofans remains the existing fallback.
+
+That `$sig` shape is what live atprotofans proofs use, not the proof-metadata
+shape the [badge.blue specification](https://badge.blue/#verification) describes.
+On November 13, 2026 all 12 resolvable payer/proof pairs from broker
+`did:plc:7srqsetux75b6flzbbyag2ro` (pds.atmosphere.money) matched
+`{...payment without signatures, $sig: {repo: payer}}` under `@atproto/lex-cbor`
+0.1.6. None matched variants carrying the proof's `$type`/`status` or a
+`repository` key. [Attested's schemas](https://attested.network/) define no
+expiry, and this fix does not invent one, add supporter-download endpoints, or
+change legacy Python verification.
+
+The synthetic golden vector mirrors that live shape:
+`node next/backend/scripts/generate-attested-fixture.mjs` after installing the
+Next app's locked dependencies. Unit and property tests exercise payer replay and
+payment mutation against that fixed vector.

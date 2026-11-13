@@ -2,12 +2,13 @@ import { PART_BYTES, ownerHash } from "./upload-capability.ts";
 import { signProcessing } from "./processing-capability.ts";
 import type { ProcessingClaim } from "./processing-capability.ts";
 import { UploadFailure, boundedBody } from "./upload-session.ts";
-import type { UploadSession } from "./upload-session.ts";
+import type { ProcessingFailure, UploadSession } from "./upload-session.ts";
 
 type Part = { size: number; sha256: string; etag?: string };
 export type ProcessingJob = {
   claim: ProcessingClaim; key: string; phase: "preparing" | "running" | "completing" | "ready" | "cleanup" | "recovery";
   attempts: number; starts: number; leaseUntil: number; started?: boolean; multipartId?: string; parts: Record<number, Part>; outputSize?: number; duration?: number;
+  failure?: ProcessingFailure;
 };
 type Settings = { secret: string; url: string; auth: string };
 type Bucket = Pick<R2Bucket, "get" | "head" | "delete" | "createMultipartUpload" | "resumeMultipartUpload">;
@@ -44,7 +45,7 @@ export class ProcessingJobs {
     await this.save(job);
   }
 
-  async advance(session: UploadSession, retry = false): Promise<{ ready: boolean; nextCheck: number | null; artifact?: { duration: number; sizeBytes: number } }> {
+  async advance(session: UploadSession, retry = false): Promise<{ ready: boolean; nextCheck: number | null; artifact?: { duration: number; sizeBytes: number }; failure?: ProcessingFailure }> {
     if (!session.processing) throw new UploadFailure(409, "upload has no processing recipe");
     const settings = this.settings;
     if (!settings) throw new UploadFailure(503, "processing is not configured");
@@ -52,9 +53,11 @@ export class ProcessingJobs {
       let current = await this.load(session.uploadId);
       if (current) await this.recover(current);
       if (current?.phase === "ready") return current;
+      if (retry && current?.failure === "output_budget_exceeded") throw new UploadFailure(409, "rendition exceeds the reserved space; retry cannot increase it");
       if (current?.phase === "recovery" && !retry) return current;
       if (retry && current?.phase === "running" && current.leaseUntil > this.now()) throw new UploadFailure(409, "processing is still active");
       if (current && (retry || (current.phase === "running" && current.leaseUntil <= this.now()))) {
+        current.failure ??= current.phase === "running" ? "lease_expired" : "executor_failed";
         current.phase = "cleanup";
         await this.save(current);
       }
@@ -64,7 +67,7 @@ export class ProcessingJobs {
           catch (error) { if (!absentMultipart(error) && !await this.bucket.head(current.key)) throw new UploadFailure(503, "processing cleanup requires recovery"); }
         }
         await this.bucket.delete(current.key);
-        if (current.attempts >= 3 && !retry) {
+        if (current.failure === "output_budget_exceeded" || (current.attempts >= 3 && !retry)) {
           current.phase = "recovery";
           await this.save(current);
           return current;
@@ -74,7 +77,7 @@ export class ProcessingJobs {
       }
       if (!current) current = this.fresh(session, await ownerHash(session.owner), 1, 1);
       if (current.phase === "preparing") {
-        if (current.starts >= 3) { current.phase = "recovery"; await this.save(current); return current; }
+        if (current.starts >= 3) { current.phase = "recovery"; current.failure = "executor_failed"; await this.save(current); return current; }
         current.starts += 1;
         await this.save(current);
         const multipart = await this.bucket.createMultipartUpload(current.key, { httpMetadata: { contentType: "audio/mpeg" },
@@ -86,7 +89,7 @@ export class ProcessingJobs {
       return current;
     });
     if (job.phase === "ready") return this.ready(job);
-    if (job.phase === "recovery") return { ready: false, nextCheck: null };
+    if (job.phase === "recovery") return { ready: false, nextCheck: null, failure: job.failure };
     if (job.phase === "completing") {
       await this.finish(job.claim);
       const completed = await this.load(session.uploadId);
@@ -128,6 +131,19 @@ export class ProcessingJobs {
 
   async heartbeat(claim: ProcessingClaim) {
     await this.locked(async () => { const job = await this.authorized(claim); job.started = true; job.leaseUntil = Math.min(claim.expiresAt, this.now() + lease); await this.save(job); });
+  }
+  async failed(claim: ProcessingClaim, value: unknown) {
+    if (!value || typeof value !== "object" || !("reason" in value) || (value.reason !== "output_budget_exceeded" && value.reason !== "executor_failed")) throw new UploadFailure(400, "invalid processing failure");
+    const reason = value.reason;
+    await this.locked(async () => {
+      const previous = await this.load(claim.uploadId);
+      if (previous?.claim.generation === claim.generation && previous.claim.ownerHash === claim.ownerHash && previous.claim.expiresAt === claim.expiresAt
+        && previous.failure === reason && ["cleanup", "recovery"].includes(previous.phase)) return;
+      const job = await this.authorized(claim);
+      if (job.phase !== "running") throw new UploadFailure(409, "rendition is already completing");
+      job.failure = reason; job.phase = "cleanup";
+      await this.save(job);
+    });
   }
   async source(claim: ProcessingClaim, session: UploadSession) {
     await this.authorized(claim);

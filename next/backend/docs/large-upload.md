@@ -161,6 +161,33 @@ sending missing parts. Its receipt distinguishes previously acknowledged parts
 from a newly injected lost acknowledgement. Completed or published fixtures need
 their own recovery investigation and are rejected by this transfer-only mode.
 
+After the reviewed staging processing wiring is enabled, `verify_processing=true`
+uses the actual client transport to request the MP3 recipe. Run its one-second
+synthetic WAV first; add `full_size=true` for the 1.5 GiB source with a 128 MiB
+output reservation. Both modes are Linux-CI-only. The runner needs ffmpeg and
+ffprobe; missing tools fail before creating a fixture. The test waits for a
+completed rendition without submitting another source or record, checks that
+all media variants remain private before publication, then publishes the same
+reserved URI using returned MP3 metadata.
+
+Acceptance streams the original into SHA-256 verification and the MP3 into a
+temporary disk file. It checks 320 kbps/44.1 kHz MP3 metadata, source duration,
+complete decoding, manifest identity, attachment headers and exact byte ranges.
+The temporary MP3 is removed before retaining artifacts. The authenticated
+processing generation identifies the exact rendition object for cleanup;
+executor logs separately provide baseline free space and peak owned scratch
+file bytes for that upload/generation. Successful published fixtures remove
+their exact record, original and rendition. Failed processing retains source,
+output and quota for diagnosis rather than deleting beneath a live executor.
+Do not dispatch another fresh fixture to work around such a failure. The raw
+transfer resume inputs deliberately reject processing recovery.
+
+The job allows 55 minutes: transport authorization/transfer/processing share a
+30-minute deadline, media verification shares a 15-minute deadline, and the
+remaining time covers setup and exact cleanup. Metadata and range requests use
+20-second limits; full response bodies each use at most five minutes within the
+shared media deadline. Child decoder deadlines also respect that same bound.
+
 For an authority failure, dispatch `diagnose_upload=true` instead. This logs in
 to the same test account but creates no records or uploads. It inspects at most
 three public collections with `limit=1`, then retains one public record CAR

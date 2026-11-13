@@ -5,6 +5,7 @@
 //! comes from a record-CID-bound delivery projection.
 
 const std = @import("std");
+const public_media = @import("../delivery/public_media.zig");
 const pg = @import("pg");
 const zat = @import("zat");
 const playback = @import("../domain/playback.zig");
@@ -94,7 +95,7 @@ fn decode(
         .byte_length = blob_size,
     } else null;
 
-    const authored_url = try duplicateOptional(allocator, try row.get(?[]const u8, 8));
+    const authored_url = try public_media.canonicalOwned(allocator, try duplicateOptional(allocator, try row.get(?[]const u8, 8)));
     const authored_media_type = try duplicate(allocator, try row.get([]const u8, 9));
     const authored_delivery: ?playback.Delivery = if (authored_url) |url|
         if (supportedDeliveryUrl(url)) .{

@@ -187,6 +187,7 @@ export class PersonalQueue {
     const key = this.state.entries[this.state.index]?.key;
     if (!key || this.closed) return;
     const progress = { key, position: Math.min(86400, Math.max(0, position)), updatedAt: Date.now() };
+    try { this.options.storage.latest?.(this.options.owner, progress); } catch { /* the queued write below still runs */ }
     this.writes = this.writes.catch(() => {}).then(() => this.options.storage.progress(this.options.owner, progress));
     void this.writes.catch(() => this.options.error('could not save your playback position'));
   }
