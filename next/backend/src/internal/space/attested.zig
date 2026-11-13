@@ -75,14 +75,14 @@ pub fn proofVerifies(allocator: std.mem.Allocator, record: std.json.Value, proof
         error.OutOfMemory => return err,
         else => return false,
     };
+    // atprotofans proofs commit to the payment (without its signatures) plus
+    // `$sig: {repo: payer}`; checked against live broker proofs on 2026-11-13.
     const expected = stringField(value, "cid") orelse return false;
-    var metadata = try value.object.clone(allocator);
-    _ = metadata.swapRemove("cid");
-    _ = metadata.swapRemove("signature");
-    try metadata.put(allocator, "repository", .{ .string = proof.payer });
+    var sig: std.json.ObjectMap = .empty;
+    try sig.put(allocator, "repo", .{ .string = proof.payer });
     var payment = try proof.payment.object.clone(allocator);
     _ = payment.swapRemove("signatures");
-    try payment.put(allocator, "$sig", .{ .object = metadata });
+    try payment.put(allocator, "$sig", .{ .object = sig });
     _ = json_record.verified(allocator, .{ .object = payment }, expected) catch |err| switch (err) {
         error.OutOfMemory => return err,
         else => return false,
