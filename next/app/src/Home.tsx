@@ -1,3 +1,4 @@
+import { useAppearance } from './appearance';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { HomeTrackRow } from './HomeTrackRow';
@@ -5,13 +6,13 @@ import { HomeChart } from './HomeChart';
 import { HomeArtists } from './HomeArtists';
 import { api, type Track } from './api';
 import { useAuth } from './auth';
-import { Detail, Heading, Status, useColors, usePages, type Play } from './CatalogPieces';
+import { Heading, Status, usePages, type Play } from './CatalogPieces';
 import { useHomeTags } from './use-home-tags';
 import { HOME_PAGE_SIZE, parseSelectedTags, selectedTagsKey } from './home-state';
 import { readLocal, writeLocal } from './storage';
 import { Text } from './Text';
 import { useNetworkArtists } from './use-network-artists';
-import { pageFrame } from './controls';
+import { pageFrame, Copy } from './controls';
 import { tagColors } from './tag-colors';
 import { WaveLoading } from './WaveLoading';
 import { TagScroller } from './TagScroller';
@@ -25,7 +26,7 @@ export function Home({ onPlay }: { onPlay: Play }) {
 
 function HomeFeed({ onPlay, hiddenTags }: { onPlay: Play; hiddenTags: string[] }) {
   const hiddenKey = JSON.stringify(hiddenTags);
-  const colors = useColors();
+  const colors = useAppearance();
   const list = useRef<FlatList<Track>>(null);
   const [layoutWidth, setLayoutWidth] = useState(0);
   const contentWidth = Math.max(0, layoutWidth - pageFrame.paddingHorizontal * 2);
@@ -70,7 +71,7 @@ function HomeFeed({ onPlay, hiddenTags }: { onPlay: Play; hiddenTags: string[] }
   const header = <View style={styles.home} onLayout={event => setHeaderHeight(event.nativeEvent.layout.height)}>
     <HomeChart onPlay={onPlay} />
     {(network.loading || network.artists.length > 0) && <HomeArtists artists={network.artists} loading={network.loading} />}
-    {network.error && <Detail>{network.error}</Detail>}
+    {network.error && <Copy>{network.error}</Copy>}
     <View style={styles.section}>
       <View style={styles.headingRow}>
         <Pressable accessibilityRole="button" accessibilityLabel="Refresh tracks" onPress={() => { list.current?.scrollToOffset({ offset: 0, animated: false }); latest.reload(); }} style={{ minHeight: 44, justifyContent: 'center' }}><Heading>latest tracks</Heading></Pressable>

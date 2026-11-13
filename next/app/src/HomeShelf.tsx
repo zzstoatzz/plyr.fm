@@ -1,14 +1,14 @@
+import { useAppearance } from './appearance';
 import { useRef, useState, type ReactNode } from 'react';
 import { ScrollView, StyleSheet, View, type ScrollViewInstance } from 'react-native';
 import ChevronLeft from 'lucide-react-native/icons/chevron-left';
 import ChevronRight from 'lucide-react-native/icons/chevron-right';
-import { useColors } from './CatalogPieces';
 import { PlayerControl } from './PlayerControl';
 
 export function HomeShelf({ testID, heading, label, busy = false, children }: {
   testID: string; heading: ReactNode; label: string; busy?: boolean; children: ReactNode;
 }) {
-  const colors = useColors();
+  const colors = useAppearance();
   const scroller = useRef<ScrollViewInstance>(null);
   const [view, setView] = useState({ width: 0, content: 0, offset: 0 });
   const overflow = view.content > view.width + 1;

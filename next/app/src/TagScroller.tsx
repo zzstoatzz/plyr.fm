@@ -1,9 +1,9 @@
+import { useAppearance } from './appearance';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { ScrollView, type ScrollViewInstance } from 'react-native';
-import { useColors } from './CatalogPieces';
 
 export function TagScroller({ children, hasMore, onNearEnd, lead }: { children: ReactNode; hasMore: boolean; onNearEnd: () => void; lead: number }) {
-  const colors = useColors();
+  const colors = useAppearance();
   const scroller = useRef<ScrollViewInstance>(null);
   const viewport = useRef({ width: 0, content: 0, offset: 0 });
   const previous = useRef(lead);
