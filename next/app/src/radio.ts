@@ -6,6 +6,7 @@ export const radioStations = [
   { slug: 'fresh', label: 'fresh' },
   { slug: 'deep-cuts', label: 'deep cuts' },
   { slug: 'slop', label: 'slop' },
+  { slug: 'firehose', label: 'firehose', about: 'the atproto firehose, sonified' },
 ] as const;
 
 export type RadioStation = typeof radioStations[number];

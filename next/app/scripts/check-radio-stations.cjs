@@ -6,7 +6,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || '../../../frontend
 const origin = 'https://next.plyr.fm';
 const dist = path.resolve(__dirname, '../dist');
 const did = 'did:plc:radiofixtureaaaaaaaaaaaa';
-const titles = { loved: 'heavy rotation', fresh: 'first light', 'deep-cuts': 'side b, track nine', slop: 'a very long machine-made title that keeps going and going' };
+const titles = { loved: 'heavy rotation', fresh: 'first light', 'deep-cuts': 'side b, track nine', slop: 'a very long machine-made title that keeps going and going', firehose: 'segment 0412' };
 const wav = (() => {
   const rate = 8000, seconds = 30, samples = rate * seconds, data = Buffer.alloc(samples * 2);
   for (let i = 0; i < samples; i++) data.writeInt16LE(Math.round(2000 * Math.sin(2 * Math.PI * 220 * i / rate)), i * 2);
@@ -65,13 +65,24 @@ async function prepare(context, reads, delay) {
       page.on('pageerror', error => errors.push(error.message));
       await page.goto(origin + '/radio');
       for (const title of Object.values(titles)) await page.getByText(title, { exact: false }).first().waitFor();
-      assert.deepEqual([...new Set(reads)].sort(), Object.keys(titles).sort(), 'all four stations load at once');
-      assert.equal(reads.length, 4, 'each station is read once, not polled on a short beat');
+      assert.deepEqual([...new Set(reads)].sort(), Object.keys(titles).sort(), 'every station loads at once');
+      assert.equal(reads.length, 5, 'each station is read once, not polled on a short beat');
       const tiles = await page.getByRole('button', { name: /^Listen to .* radio$/ }).evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect()));
-      assert.equal(tiles.length, 4);
+      assert.equal(tiles.length, 5);
       assert.ok(tiles.every(tile => tile.right <= width), 'the grid fits the screen');
-      if (width < 600) assert.equal(new Set(tiles.map(tile => Math.round(tile.top))).size, 2, 'two rows of two on a phone');
-      else assert.equal(new Set(tiles.map(tile => Math.round(tile.top))).size, 1, 'one row on a wide screen');
+      const firehose = tiles[4], squares = tiles.slice(0, 4);
+      if (width < 600) assert.equal(new Set(squares.map(tile => Math.round(tile.top))).size, 2, 'two rows of two on a phone');
+      else assert.equal(new Set(squares.map(tile => Math.round(tile.top))).size, 1, 'one row on a wide screen');
+      assert.ok(firehose.top > Math.max(...squares.map(tile => tile.top)) && firehose.width > squares[0].width * 1.9, 'firehose spans the width below the others');
+      const corner = await page.getByRole('button', { name: 'Listen to loved radio', exact: true }).evaluate(node => getComputedStyle(node.firstElementChild).borderTopLeftRadius);
+      assert.ok(parseFloat(corner) > 0 && parseFloat(corner) <= 16, `tiles have small rounded corners (${corner})`);
+      const embed = page.getByRole('button', { name: 'embed radio in your stream' });
+      assert.equal(await embed.getAttribute('aria-expanded'), 'false', 'the embed links start folded away');
+      assert.equal(await page.locator('a[href*="/embed/radio"]').count(), 0);
+      await embed.click();
+      assert.equal(await page.locator('a[href*="/embed/radio"]').count(), 5, 'every station has an embed link');
+      await page.getByRole('link', { name: 'Ana’s radio' }).waitFor();
+      if (process.env.RADIO_SHOTS) await page.screenshot({ path: `${process.env.RADIO_SHOTS}-${width}-grid.png`, fullPage: true });
       assert.equal(await page.evaluate(() => window.media.length), 0, 'nothing loads audio before a station is picked');
 
       await page.getByRole('button', { name: 'Listen to fresh radio', exact: true }).click();
@@ -103,6 +114,6 @@ async function prepare(context, reads, delay) {
       assert.deepEqual(errors, []);
       await context.close();
     }
-    console.log('radio: four stations load at once and redraw instantly on return; a station opens the normal now playing live (no seek, skip or queue), the artist stays tappable, and stop radio silences it');
+    console.log('radio: five stations load at once (firehose wide below the rest, rounded tiles, embed links folded into one disclosure, sister-radio credit) and redraw instantly on return; a station opens the normal now playing live (no seek, skip or queue), the artist stays tappable, and stop radio silences it');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
