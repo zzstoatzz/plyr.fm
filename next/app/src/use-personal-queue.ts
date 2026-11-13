@@ -1,4 +1,4 @@
-import { EarlyIntents } from './early-intents'; import { recordPlayback } from './playback-diagnostics';
+import { EarlyIntents } from './early-intents'; import { openCoordinatorSocket } from './coordinator-origin'; import { recordPlayback } from './playback-diagnostics';
 import { useEffect, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 import { randomUUID } from 'expo-crypto';
@@ -215,7 +215,7 @@ export function usePersonalQueue(target: Target) {
         }
       },
       remote: (state, force) => { if (!stale()) { setRemote(state); void apply(state, force); } },
-      ...(auth.did && auth.agent && auth.accountSync ? { connect: { admit: () => {
+      ...(auth.did && auth.agent && auth.accountSync ? { connect: { socket: openCoordinatorSocket, admit: () => {
         resuming = owned.current && runtime.current.playing() && !(runtime.current.suspended || held.current);
         return joinPersonalQueue(auth, client.current, current.wire ? undefined : { ...current.seed(), playing: adopting && runtime.current.playing() }, resuming);
       } } } : {}),
@@ -431,20 +431,20 @@ export function usePersonalQueue(target: Target) {
     const state = queue.switchContext(current.state, entries, at, label);
     if (current.synchronized) {
       const request = ++playRequest.current;
-      pendingPlay.current = request;
-      desiredEntry.current = entries[at].key;
+      pendingPlay.current = request; desiredEntry.current = entries[at].key;
       setWaiting(true);
-      setState(state);
-      runtime.current.setQueue(state.entries.map(entry => entry.track), state.index);
-      runtime.current.pause();
+      setState(state); runtime.current.setQueue(state.entries.map(entry => entry.track), state.index); runtime.current.pause();
       void (async () => {
-        if (!await current.whenConnected() || request !== playRequest.current || current !== session.current) return false;
+        if (!await current.whenConnected(5_000)) return 'offline';
+        if (request !== playRequest.current || current !== session.current) return false;
         return current.dispatch({ action: 'playContext', queue: entries.map(entry => queueReference(entry.track, entry.key)), index: at, label, playing: true });
       })().then(accepted => {
         if (request !== playRequest.current || current !== session.current) return;
+        // Local playback never waits on the account queue: play here, and hand the queue this play once it connects.
+        if (accepted === 'offline') { pendingPlay.current = undefined; setWaiting(false); local(state); void runtime.current.load(state.entries.map(entry => entry.track), state.index).then(ready => { if (ready) runtime.current.play(); });
+          void current.whenConnected(120_000).then(connected => { if (connected && request === playRequest.current && current === session.current) void current.dispatch({ action: 'playContext', queue: entries.map(entry => queueReference(entry.track, entry.key)), index: at, label, playing: !pausedHere.current, positionMs: Math.round(runtime.current.position() * 1000) }); }); return; }
         const applied = pendingPlay.current === undefined && current.wire?.queue[current.wire.index]?.key === entries[at].key;
-        pendingPlay.current = undefined;
-        setWaiting(false);
+        pendingPlay.current = undefined; setWaiting(false);
         if (!applied) {
           setState(current.state);
           runtime.current.setQueue(current.state.entries.map(entry => entry.track), current.state.index);
