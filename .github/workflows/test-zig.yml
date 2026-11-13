@@ -105,6 +105,9 @@ jobs:
         working-directory: backend
         run: uv run python ../next/backend/scripts/test_play_http.py
 
+      - name: supporter download authorization HTTP contract
+        run: node scripts/test-download-authorization.cjs
+
       - name: upload admission HTTP contract
         run: node scripts/test-upload-admission.cjs
 
