@@ -71,7 +71,7 @@ async function run(browser, width, theme) {
     policy = 'open'; supportGate = { type: 'any' }; await download(); await page.getByText('downloads are unavailable for this protected track.', { exact: true }).waitFor(); assert.equal(blobReads, 1);
     supportGate = undefined; visibility = 'private'; await download(); await page.getByText('downloads are unavailable for this protected track.', { exact: true }).waitFor(); assert.equal(blobReads, 1); visibility = undefined;
     publicGate = { type: 'any' }; await download(); await page.getByText('downloads are unavailable for this track.', { exact: true }).waitFor(); assert.equal(blobReads, 1); publicGate = undefined;
-    publicPolicy = 'supporters'; await download(); await page.getByText('downloads are unavailable for this track.', { exact: true }).waitFor(); assert.equal(blobReads, 1); publicPolicy = 'open';
+    publicPolicy = 'supporters'; await download(); await page.getByRole('button', { name: 'Reconnect for supporter downloads', exact: true }).waitFor(); assert.equal(blobReads, 1); publicPolicy = 'open'; await signIn();
     corrupt = true; await download(); await page.getByText('could not verify this protected track', { exact: true }).waitFor(); assert.equal(blobReads, 1); corrupt = false;
     policy = 'ask'; await download(); await page.getByRole('button', { name: 'Continue download', exact: true }).waitFor();
     await screenshot(page, `protected-download-ask-${width}-${theme}`);

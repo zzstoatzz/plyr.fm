@@ -2,12 +2,15 @@ import type { Artist, Playback, Track } from '../api.ts';
 import { readDownloadManifest, serviceMediaUrl, type DownloadManifest } from './manifest.ts';
 
 export const MAX_BUFFERED_DOWNLOAD_BYTES = 104_857_600;
-type PublicDownload = { kind: 'public'; source: string; attachment?: string; mime: string; filename: string; sizeBytes?: number };
-export type ProtectedDownload = { kind: 'protected'; mime: string; sizeBytes: number; filename: string; guard(): void; open(): Promise<Response> };
+export type DownloadAdmission = { guard(): void; begin(): void };
+type PublicDownload = { kind: 'public'; source: string; attachment?: string; mime: string; filename: string; sizeBytes?: number; guard?(): void; begin?(): void };
+export type ProtectedDownload = { kind: 'protected'; mime: string; sizeBytes: number; filename: string; guard(): void; begin?(): void; open(): Promise<Response> };
 export type PreparedDownload = PublicDownload | ProtectedDownload;
 type DownloadChoice = PreparedDownload & { original?: PublicDownload; support: string | null; title: string };
 
 export function downloadAllowed(track: Track): boolean {
+  if (track.access.download_policy === 'supporters') return ['public', 'unlisted', 'supporters'].includes(track.access.visibility)
+    && !track.access.space_uri && (!track.access.gate || track.access.gate.type === 'any');
   return (track.access.visibility === 'public' || track.access.visibility === 'unlisted')
     && !track.access.gate && !track.access.space_uri
     && (track.access.download_policy === 'open' || track.access.download_policy === 'ask');
@@ -46,19 +49,30 @@ export function downloadFilename(track: Track, mime: string): string {
 export async function prepareDownload(id: string, uri: string, read: {
   track: (id: string) => Promise<Track>; playback: (id: string) => Promise<Playback>; artist: (did: string) => Promise<Artist>;
   manifest?: (source: string, signal?: AbortSignal) => Promise<DownloadManifest>;
-  protected?: (track: Track, uri: string) => Promise<Omit<ProtectedDownload, 'filename'> & { policy: 'open' | 'ask' }>;
+  authorize?: (record: { uri: string; cid: string }) => Promise<DownloadAdmission>;
+  protected?: (track: Track, uri: string, admission?: DownloadAdmission) => Promise<Omit<ProtectedDownload, 'filename'> & { policy: 'open' | 'ask' | 'supporters' }>;
 }, signal?: AbortSignal): Promise<DownloadChoice> {
-  const track = await read.track(id);
+  let track = await read.track(id);
   if (track.record.uri !== uri || !track.record.cid || !downloadAllowed(track)) throw new Error('downloads are unavailable for this track.');
+  let admission: DownloadAdmission | undefined;
+  if (track.access.download_policy === 'supporters') {
+    if (!read.authorize) throw new Error('could not authorize this download.');
+    const cid = track.record.cid;
+    admission = await read.authorize({ uri: track.record.uri, cid });
+    track = await read.track(id);
+    if (track.record.uri !== uri || track.record.cid !== cid || track.access.download_policy !== 'supporters' || !downloadAllowed(track)) throw new Error('this track changed or is unavailable. try again.');
+    admission.begin();
+  }
   const playback = await read.playback(id);
   const availability = playback.availability;
   if (playback.record.uri !== uri || playback.record.cid !== track.record.cid) throw new Error('this track changed or is unavailable. try again.');
   const supportFor = async (ask: boolean) => ask ? read.artist(track.artist.did).then(artist => safeHttpUrl(artist.support_url)).catch(() => null) : null;
   if (availability.status === 'gated' && availability.space && read.protected) {
-    const protectedAudio = await read.protected(track, availability.space.record);
+    const protectedAudio = await read.protected(track, availability.space.record, admission);
     const support = await supportFor(track.access.download_policy === 'ask' || protectedAudio.policy === 'ask');
     protectedAudio.guard();
-    return { ...protectedAudio, filename: downloadFilename(track, protectedAudio.mime), support, title: track.metadata.title };
+    admission?.begin();
+    return { ...protectedAudio, begin: admission?.begin, filename: downloadFilename(track, protectedAudio.mime), support, title: track.metadata.title };
   }
   if (availability.status !== 'available' || availability.space) throw new Error('this track changed or is unavailable. try again.');
   const support = await supportFor(track.access.download_policy === 'ask');
@@ -66,7 +80,8 @@ export async function prepareDownload(id: string, uri: string, read: {
   if (!source || !availability.delivery?.media_type.startsWith('audio/')) throw new Error('no downloadable audio is available.');
   const manifest = serviceMediaUrl(source) ? await (read.manifest || readDownloadManifest)(source, signal) : undefined;
   const playbackAudio = manifest?.playback || { source, mime: availability.delivery.media_type, sizeBytes: undefined };
-  const playbackDownload: PublicDownload = { kind: 'public', ...playbackAudio, attachment: attachmentUrl(source), filename: downloadFilename(track, playbackAudio.mime) };
-  const original: PublicDownload | undefined = manifest?.processed ? { kind: 'public', ...manifest.original, attachment: manifest.original.source, filename: downloadFilename(track, manifest.original.mime) } : undefined;
+  admission?.begin();
+  const playbackDownload: PublicDownload = { kind: 'public', ...playbackAudio, ...admission, attachment: attachmentUrl(source), filename: downloadFilename(track, playbackAudio.mime) };
+  const original: PublicDownload | undefined = manifest?.processed ? { kind: 'public', ...manifest.original, ...admission, attachment: manifest.original.source, filename: downloadFilename(track, manifest.original.mime) } : undefined;
   return { ...playbackDownload, original, support, title: track.metadata.title };
 }

@@ -41,6 +41,15 @@ export const UPLOAD_AUTHORIZE_METHOD = process.env.EXPO_PUBLIC_UPLOAD_AUTHORIZE_
 export const UPLOAD_SERVICE_AUDIENCE = process.env.EXPO_PUBLIC_UPLOAD_SERVICE_AUDIENCE || JAM_SERVICE_AUDIENCE;
 export const UPLOAD_COORDINATOR_URL = (process.env.EXPO_PUBLIC_UPLOAD_COORDINATOR_URL || JAM_COORDINATOR_URL).replace(/\/$/, '');
 export const UPLOAD_SCOPE = `rpc:${UPLOAD_AUTHORIZE_METHOD}?aud=${UPLOAD_SERVICE_AUDIENCE}`;
+export const DOWNLOAD_AUTHORIZE_METHOD = `${prefix}.download.authorize`;
+export const DOWNLOAD_SCOPE = `rpc:${DOWNLOAD_AUTHORIZE_METHOD}?aud=${JAM_SERVICE_AUDIENCE}`;
+export function hasDownloadGrant(scope: string): boolean {
+  return scope.split(' ').some(value => {
+    const [type, query] = value.split('?');
+    const grant = new URLSearchParams(query);
+    return type === `rpc:${DOWNLOAD_AUTHORIZE_METHOD}` && grant.getAll('aud').length === 1 && grant.get('aud') === JAM_SERVICE_AUDIENCE;
+  });
+}
 export function hasUploadGrant(scope: string): boolean {
   return scope.split(' ').some(value => {
     const [type, query] = value.split('?');
@@ -73,5 +82,5 @@ export const BASE_SCOPE_PARTS = ['atproto', ...Object.values(NSID).map(nsid => `
 const protectedAudioScope = prefix === 'fm.plyr'
 	? [`space:${prefix}.privateMedia?authority=*&collection=${NSID.track}&action=read`, `space:${process.env.EXPO_PUBLIC_AUDIO_SPACE_TYPE || 'fm.plyr.stg.audio'}?authority=*&collection=${NSID.track}&action=read`]
 	: [];
-export const SYNC_SCOPE_PARTS = [...BASE_SCOPE_PARTS, SYNC_SCOPE, UPLOAD_SCOPE];
+export const SYNC_SCOPE_PARTS = [...BASE_SCOPE_PARTS, SYNC_SCOPE, UPLOAD_SCOPE, DOWNLOAD_SCOPE];
 export const SCOPE_PARTS = [...SYNC_SCOPE_PARTS, ...protectedAudioScope, ...JAM_SCOPE_PARTS, PRIVATE_PUBLISH_SCOPE, PRIVATE_DELETE_SCOPE];

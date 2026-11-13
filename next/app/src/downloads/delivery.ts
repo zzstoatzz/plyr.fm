@@ -33,11 +33,12 @@ export async function saveDownload(download: PreparedDownload, signal: AbortSign
   const directory = new Directory(Paths.cache, `plyr-download-${randomUUID()}`);
   directory.create();
   try {
+    download.begin?.();
     const file = new File(directory, download.filename);
     if (download.kind === 'protected') await writeProtected(download, file, signal);
     else await File.downloadFileAsync(download.source, file, { signal });
     signal.throwIfAborted();
-    if (download.kind === 'protected') download.guard();
+    download.guard?.();
     if (!file.size) throw new Error('the audio file is empty.');
     await shareAsync(file.uri, { mimeType: download.mime, dialogTitle: 'save audio' });
   } finally { if (directory.exists) directory.delete(); }
