@@ -18,6 +18,8 @@ export interface QueueStorage {
   saveMutations(owner: string, entries: QueueMutation[], remove?: string[]): Promise<QueueMutation[]>;
   save(owner: string, snapshot: QueueCheckpoint): Promise<void>;
   progress(owner: string, progress: QueueProgress): Promise<void>;
+  /** Records progress synchronously, so a page that is unloading still keeps it. */
+  latest?(owner: string, progress: QueueProgress): void;
 }
 
 function object(value: unknown): value is Record<string, unknown> { return !!value && typeof value === 'object' && !Array.isArray(value); }
@@ -79,6 +81,11 @@ export function queueCheckpoint(value: unknown, owner: string): QueueCheckpoint 
     tail = { from: candidate.from, kind: candidate.kind, label: candidate.label };
   }
   return { version: 1, owner, updatedAt: value.updatedAt, state: { entries: parsed, index, ...(tail ? { tail } : {}) }, position: value.position, repeat: value.repeat, keepPlaying: value.keepPlaying };
+}
+
+export function newerProgress(a: unknown, b: unknown): unknown {
+  const at = (value: unknown) => object(value) && count(value.updatedAt) ? value.updatedAt : -1;
+  return at(b) > at(a) ? b : a;
 }
 
 export function applyQueueProgress(snapshot: unknown, progress: unknown, owner: string): QueueCheckpoint | null {

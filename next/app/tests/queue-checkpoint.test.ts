@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { Track } from '../src/api.ts';
-import { applyQueueProgress, queueCheckpoint, type QueueCheckpoint } from '../src/queue-checkpoint.ts';
+import { applyQueueProgress, newerProgress, queueCheckpoint, type QueueCheckpoint } from '../src/queue-checkpoint.ts';
 
 const uri = 'at://did:plc:aaaaaaaaaaaaaaaaaaaaaaaa/fm.plyr.track/a';
 const track: Track = { object: 'track', id: 'trk_' + Buffer.from(uri).toString('base64url'), record: { uri, cid: 'bafyreie5737gdxlw5i64vzichcalba3z2v5n6icifvx5xytvske7mr3hpm', revision: 'rev', collection: 'fm.plyr.track', rkey: 'a' },
@@ -37,4 +37,14 @@ test('only display metadata is cached, not delivery URLs or unknown response fie
   assert.deepEqual(safe, checkpoint);
   assert.equal(JSON.stringify(safe).includes('delivery.example'), false);
   assert.equal(JSON.stringify(safe).includes('discard-me'), false);
+});
+
+test('restore uses whichever saved progress is newest, so a pagehide write that never committed is not needed', () => {
+  const committed = { key: 'second', position: 20, updatedAt: 200 };
+  const synchronous = { key: 'second', position: 31, updatedAt: 300 };
+  assert.equal(newerProgress(committed, synchronous), synchronous);
+  assert.equal(newerProgress(synchronous, committed), synchronous);
+  assert.equal(newerProgress(undefined, synchronous), synchronous);
+  assert.equal(newerProgress(committed, null), committed);
+  assert.equal(applyQueueProgress(checkpoint, newerProgress(committed, synchronous), 'anonymous')?.position, 31);
 });

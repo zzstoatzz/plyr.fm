@@ -140,3 +140,22 @@ test('late checkpoint reads cannot replace a fresh local selection or its metada
     assert.equal(queue.cache.get(track.id)?.metadata.title, 'Fresh selection');
   } finally { queue.close(); }
 });
+
+test('progress is recorded synchronously before queued storage writes', async () => {
+  const order: string[] = [];
+  let release!: () => void;
+  const storage: QueueStorage = { load: async () => null, loadMutations: async () => [], saveMutations: async (_, entries) => entries,
+    save: () => new Promise<void>(resolve => { release = resolve; }), progress: async () => { order.push('queued'); },
+    latest: (_, progress) => { order.push('latest:' + progress.position); } };
+  const queue = new PersonalQueue({ owner: 'anonymous', storage, id: () => 'test', resolve: async () => ({ data: [], missing: [] }),
+    error: () => {}, changed: () => {} });
+  await queue.start();
+  (queue as unknown as { state: { entries: { key: string }[]; index: number } }).state = { entries: [{ key: 'only' }], index: 0 };
+  void queue.save(5, 'off', false);
+  queue.progress(42);
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.deepEqual(order, ['latest:42'], 'the queued write is still waiting behind the save');
+  release();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.deepEqual(order, ['latest:42', 'queued']);
+});
