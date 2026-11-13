@@ -20,7 +20,7 @@ export function useSharedAudio(receive: (file: MediaFile) => void, fail: (messag
       if (!directory.exists) directory.create();
       // Memo titles carry quotes and other characters; an ASCII name keeps the copy's URI unambiguous.
       const copy = new File(directory, `${randomUUID()}.${extension}`);
-      source.copy(copy);
+      source.copySync(copy);
       if (!copy.exists || !copy.size) throw new Error('empty copy');
       latest.current.receive({ name, uri: copy.uri, type: shared.contentMimeType ?? copy.type, size: copy.size, arrayBuffer: () => copy.arrayBuffer() });
     } catch {
