@@ -5,7 +5,7 @@ import { readLocal, writeLocal } from './storage';
 
 /** Every one-time hint in the app, in priority order. A screen shows one with `useHint(id, ready)`. */
 export const hints = [
-  { id: 'now-playing.more-below', text: 'scroll down for the artist and more about this track' },
+  { id: 'now-playing.more-below', text: 'scroll down for the artist and track details' },
 ] as const satisfies readonly (HintSpec & { text: string })[];
 
 export type HintId = typeof hints[number]['id'];
@@ -18,9 +18,7 @@ const listeners = new Set<() => void>();
 const subscribe = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; };
 
 function settle() {
-  const next = account === undefined ? undefined : nextHint(hints, seen, ready, current);
-  if (next === current) return;
-  current = next;
+  current = account === undefined ? undefined : nextHint(hints, seen, ready, current);
   for (const listener of listeners) listener();
 }
 
@@ -46,6 +44,13 @@ export function resetHints() {
   seen = new Set();
   writeLocal(seenKey(account), '[]');
   settle();
+}
+
+/** Whether this hint is still to be seen by this account on this device, so a screen can make room for it up front. */
+export function useHintPending(id: HintId) {
+  const auth = useAuth();
+  useAccount(auth.did, auth.ready);
+  return useSyncExternalStore(subscribe, () => account !== undefined && !seen.has(id), () => false);
 }
 
 /**

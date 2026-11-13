@@ -25,7 +25,7 @@ import { PullDetector, PullRoot, usePlayerPull } from './player-pull';
 import { PlayerFlight } from './PlayerFlight';
 import { NowPlayingDetails } from './NowPlayingDetails';
 import { Coachmark } from './Coachmark';
-import { markHintSeen } from './hints';
+import { markHintSeen, useHintPending } from './hints';
 import { measure, playerSheet, setFlying, type Rect } from './player-sheet';
 
 const AnimatedSafeAreaView = Animated.createAnimatedComponent(SafeAreaView);
@@ -74,8 +74,16 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
   const scrollTouch = { touchAction: dismiss.directionalTouch && dismiss.atTop ? 'pan-x pan-down' : 'pan-x pan-y', cursor: 'auto' } as const;
   const sideBySide = width >= 800;
   const controlRoom = 370 + 64 * (theme.scale - 1);
+  // The first open after install makes room for the "more below" hint under the controls, taking it from the art if the
+  // screen is short, so the hint never covers like/share/queue. The room stays until close, so dismissing never shifts layout.
+  const hintPending = useHintPending('now-playing.more-below');
+  const [hintRoom, setHintRoom] = useState(false);
+  const [bodyFit, setBodyFit] = useState<{ track: string; height: number }>();
+  useEffect(() => { if (!present) { setHintRoom(false); setBodyFit(undefined); } else if (hintPending && compact && !sideBySide) setHintRoom(true); }, [present, hintPending, compact, sideBySide]);
+  const hintSlot = 68 * theme.scale;
+  const fitted = hintRoom && viewport > 0 && bodyFit?.track === track.id ? Math.max(128, viewport - 36 - 20 - bodyFit.height - 20 - hintSlot) : Infinity;
   const artwork = sideBySide ? Math.max(160, Math.min(660, width * 0.48 - 56, height - 144))
-    : Math.max(1, Math.min(width - 40, 372, Math.max(128, height - controlRoom)));
+    : Math.max(1, Math.min(width - 40, 372, fitted, Math.max(128, height - controlRoom)));
   const duration = player.status.duration || track.metadata.duration_seconds || 0;
   const position = Math.max(0, Math.min(duration, scrub?.id === track.id ? scrub.seconds : player.seekPreview ?? player.status.currentTime));
   const updateScrub = (seconds: number) => setScrub({ id: track.id, seconds });
@@ -208,7 +216,10 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
             <Animated.View testID="now-playing-artwork" style={[styles.art, artCarried]}>
               <View ref={artRef}><Cover uri={art} size={artwork} radius={16} onSettle={() => setSettledArt(art)} /></View>
             </Animated.View>
-            <View onLayout={event => { titleEnd.current.body = sideBySide ? 0 : event.nativeEvent.layout.y; }} style={[styles.body, sideBySide ? [styles.desktopBody, { maxWidth: 440 }] : { width: artwork }]}>
+            <View onLayout={event => {
+              titleEnd.current.body = sideBySide ? 0 : event.nativeEvent.layout.y;
+              if (present && event.nativeEvent.layout.height > 0 && bodyFit?.track !== track.id) setBodyFit({ track: track.id, height: event.nativeEvent.layout.height });
+            }} style={[styles.body, sideBySide ? [styles.desktopBody, { maxWidth: 440 }] : { width: artwork }]}>
               <View onLayout={event => { titleEnd.current.meta = event.nativeEvent.layout.y + event.nativeEvent.layout.height; }} style={styles.meta}>
                 <Animated.View ref={titleRef} style={carried}><Text testID="now-playing-title" accessibilityRole="header" accessibilityLabel={track.metadata.title} numberOfLines={2} style={titleStyle}>
                   {track.metadata.title}
@@ -253,11 +264,12 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
               {sideBySide && <View style={{ alignItems: 'center' }}><PlayerVolume /></View>}
               {sideBySide && details}
             </View>
+            {hintRoom && <View style={{ width: Math.min(width - 32, 440), height: hintSlot, justifyContent: 'flex-end' }}>
+              <Coachmark hint="now-playing.more-below" ready={present && measured && dismiss.atTop && !dismiss.dragging} touch={dismiss.protect} />
+            </View>}
             </View>
             {!sideBySide && <View style={{ width: artwork }}>{details}</View>}
           </Animated.ScrollView></PullDetector>
-          {!sideBySide && <Coachmark hint="now-playing.more-below" ready={compact && present && measured && dismiss.atTop && !dismiss.dragging}
-            touch={dismiss.protect} style={styles.moreBelow} />}
         </Animated.View>
         </Animated.View>
         <View ref={panelRef} pointerEvents="none" aria-hidden importantForAccessibility="no-hide-descendants" style={StyleSheet.absoluteFill}>
@@ -292,7 +304,6 @@ const styles = StyleSheet.create({
   scrollRegion: { flex: 1, minHeight: 0 },
   content: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16, gap: 20, alignItems: 'center' },
   desktopContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexGrow: 1, width: '100%', maxWidth: 1440, alignSelf: 'center', padding: 40, gap: 56 },
-  moreBelow: { position: 'absolute', left: 16, right: 16, bottom: 14 },
   hero: { gap: 20, alignItems: 'center', justifyContent: 'center' },
   heroSide: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 56 },
   art: { alignItems: 'center' },

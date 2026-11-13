@@ -258,6 +258,29 @@ async function run(browser, width, theme) {
   } finally { await page.unrouteAll({ behavior: 'ignoreErrors' }); await context.close(); }
 }
 
+async function hintRoom(browser) {
+  // A phone-height screen: the first open makes room for the more-below hint instead of covering like/share/queue.
+  const { context, page, errors } = await setup(browser, 390, 'dark', track, 1, 760);
+  try {
+    await page.getByRole('button', { name: 'Play', exact: true }).click();
+    await page.getByRole('button', { name: 'Open now playing', exact: true }).click();
+    const hint = page.getByTestId('coachmark');
+    await hint.waitFor();
+    await page.waitForTimeout(300);
+    const [bubble, queue, fold] = await Promise.all([hint.boundingBox(), page.getByTestId('now-playing-scroll').getByRole('button', { name: 'Queue', exact: true }).boundingBox(),
+      page.getByTestId('now-playing-scroll').boundingBox()]);
+    assert.ok(bubble.y >= queue.y + queue.height, 'The hint sits below like/share/queue instead of covering them');
+    assert.ok(bubble.y + bubble.height <= fold.y + fold.height, 'The hint stays on the first screen');
+    await screenshot(page, '390-dark-760-now-playing-hint');
+    const art = await page.getByTestId('now-playing-artwork').boundingBox();
+    await hint.getByRole('button', { name: 'got it', exact: true }).click();
+    await hint.waitFor({ state: 'detached' });
+    assert.deepEqual(await page.getByTestId('now-playing-artwork').boundingBox(), art, 'Dismissing the hint does not shift the player');
+    assert.deepEqual(errors, []);
+    console.log('390x760: the more-below hint has its own room and dismissing it keeps the layout still');
+  } finally { await page.unrouteAll({ behavior: 'ignoreErrors' }); await context.close(); }
+}
+
 async function longContent(browser) {
   const selected = { ...track, media: { artwork: null }, metadata: { ...track.metadata,
     title: 'A very long title with ünicode — an extended live recording from a quiet room across several evenings',
@@ -356,5 +379,6 @@ module.exports = { withPlayerHarness, setup, track, screenshot };
 if (require.main === module) withPlayerHarness(async browser => {
   if (process.env.PLAYER_WEBKIT) { await webkitFallback(browser); return; }
   for (const width of [390, 1280]) for (const theme of ['light', 'dark']) { if (width >= 800) await runDesktop(browser, width, theme, { setup, track, screenshot }); else await run(browser, width, theme); }
+  await hintRoom(browser);
   await longContent(browser);
 }).catch(error => { console.error(error); process.exitCode = 1; if (server.listening) server.close(); });
