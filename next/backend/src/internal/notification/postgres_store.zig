@@ -109,14 +109,40 @@ pub const PostgresNotificationStore = struct {
         const self: *PostgresNotificationStore = @ptrCast(@alignCast(context));
         const conn = self.pool.acquire() catch return error.IndexUnavailable;
         defer self.pool.release(conn);
+        // the api's role defaults to read-only transactions; this is its one
+        // owned write, so it asks for a writable one explicitly
+        _ = conn.exec("BEGIN READ WRITE", .{}) catch |err| {
+            logQueryError(conn, err);
+            return error.IndexUnavailable;
+        };
+        var committed = false;
+        defer if (!committed) {
+            _ = conn.exec("ROLLBACK", .{}) catch {};
+        };
         var row = (conn.row(mark_seen_query, .{ recipient_did, seen_at }) catch |err| {
             logQueryError(conn, err);
             return error.IndexUnavailable;
         }) orelse return error.IndexUnavailable;
-        defer row.deinit() catch {};
-        return row.get(i64, 0) catch return error.CorruptProjection;
+        const stored = row.get(i64, 0) catch {
+            finishRow(&row) catch {};
+            return error.CorruptProjection;
+        };
+        finishRow(&row) catch return error.IndexUnavailable;
+        _ = conn.exec("COMMIT", .{}) catch |err| {
+            logQueryError(conn, err);
+            return error.IndexUnavailable;
+        };
+        committed = true;
+        return stored;
     }
 };
+
+fn finishRow(row: *pg.QueryRow) !void {
+    row.deinit() catch |err| {
+        row.result.deinit();
+        return err;
+    };
+}
 
 fn decodeRow(allocator: std.mem.Allocator, row: anytype, request: store_module.ListRequest) !store_module.Item {
     const reason = store_module.Reason.parse(try row.get([]const u8, 0)) orelse return error.CorruptReason;
@@ -352,6 +378,10 @@ test "PostgreSQL notifications: likes and features, newest first, read by waterm
         \\   'at://did:plc:artist/fm.plyr.dev.track/song', $1, '2999-01-01T00:00:00Z', false, $2, $3, 1767484800000000)
     , .{ cid, commit, rev, late });
 
+    // the deployed api role defaults to read-only transactions; the pool has
+    // one connection, so this holds for every store call below
+    _ = try pool.exec("SET default_transaction_read_only = on", .{});
+    defer _ = pool.exec("SET default_transaction_read_only = off", .{}) catch null;
     var implementation: PostgresNotificationStore = .{ .pool = pool };
     const notifications = implementation.store();
 
