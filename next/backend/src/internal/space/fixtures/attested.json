@@ -1,0 +1,37 @@
+{
+  "page": {
+    "records": [
+      {
+        "uri": "at://did:plc:fan/network.attested.payment.oneTime/3abc",
+        "value": {
+          "$type": "network.attested.payment.oneTime",
+          "subject": "did:plc:artist",
+          "amount": 2500,
+          "currency": "USD",
+          "txnid": "fixture-1",
+          "createdAt": "2026-11-12T00:00:00Z",
+          "entitlements": [],
+          "signatures": [
+            {
+              "uri": "at://did:plc:7srqsetux75b6flzbbyag2ro/network.attested.payment.proof/3abc",
+              "cid": "bafyreid2wqgh5hqhb5lmh7qs2iha3gcaotbskvvzcjhqsdf64c6fjovhou"
+            },
+            {
+              "uri": "at://did:plc:irrelevant/network.attested.payment.proof/3abc",
+              "cid": "bafyreid2wqgh5hqhb5lmh7qs2iha3gcaotbskvvzcjhqsdf64c6fjovhou"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "proof": {
+    "uri": "at://did:plc:7srqsetux75b6flzbbyag2ro/network.attested.payment.proof/3abc",
+    "cid": "bafyreid2wqgh5hqhb5lmh7qs2iha3gcaotbskvvzcjhqsdf64c6fjovhou",
+    "value": {
+      "$type": "network.attested.payment.proof",
+      "status": "verified",
+      "cid": "bafyreifnimw5ydbxrqptzbb64yzpun4hnblfp5flh5ybier57bq4ythuhe"
+    }
+  }
+}

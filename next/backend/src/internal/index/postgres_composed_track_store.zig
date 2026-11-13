@@ -9,6 +9,7 @@
 
 const tag_cursor = @import("../identity/tag_cursor.zig");
 const std = @import("std");
+const public_media = @import("../delivery/public_media.zig");
 const pg = @import("pg");
 const postgres_read = @import("postgres_read.zig");
 const zat = @import("zat");
@@ -372,11 +373,11 @@ pub fn decodeRow(allocator: std.mem.Allocator, row: anytype) !track.Track {
         break :blk values;
     } else &.{};
 
-    const authored_url = try duplicateOptional(allocator, try row.get(?[]const u8, 14));
+    const authored_url = try public_media.canonicalOwned(allocator, try duplicateOptional(allocator, try row.get(?[]const u8, 14)));
     if (authored_url) |url| {
         if (!lexicon_value.validUri(url)) return error.CorruptOrigin;
     }
-    const legacy_url = try duplicateOptional(allocator, try row.get(?[]const u8, 25));
+    const legacy_url = try public_media.canonicalOwned(allocator, try duplicateOptional(allocator, try row.get(?[]const u8, 25)));
     if (legacy_url) |url| {
         if (!lexicon_value.validUri(url)) return error.CorruptOrigin;
     }
@@ -435,7 +436,7 @@ pub fn decodeRow(allocator: std.mem.Allocator, row: anytype) !track.Track {
     const has_moderation_policy = try row.get(bool, 42);
     const has_metrics = try row.get(bool, 43);
     const account_labels = try parseLabels(allocator, try row.get([]const u8, 46));
-    const artwork_url = try duplicateOptional(allocator, try row.get(?[]const u8, 45));
+    const artwork_url = try public_media.canonicalOwned(allocator, try duplicateOptional(allocator, try row.get(?[]const u8, 45)));
     if (artwork_url) |url| if (!lexicon_value.validUri(url)) return error.CorruptArtwork;
     return .{
         .id = id,
@@ -550,8 +551,8 @@ pub const projected_columns =
     \\  v.owner_did,
     \\  a.handle,
     \\  a.display_name,
-    \\  COALESCE(p.avatar, a.avatar_url),
-    \\  p.avatar IS NOT NULL,
+    \\  CASE WHEN a.avatar_url IS NOT NULL AND p.avatar LIKE 'https://cdn.bsky.app/img/avatar/plain/%' THEN a.avatar_url ELSE COALESCE(NULLIF(p.avatar, ''), a.avatar_url) END,
+    \\  p.avatar IS NOT NULL AND p.avatar <> '' AND (a.avatar_url IS NULL OR p.avatar NOT LIKE 'https://cdn.bsky.app/img/avatar/plain/%'),
     \\  p.bio,
     \\  p.bio IS NOT NULL,
     \\  NULL::text,

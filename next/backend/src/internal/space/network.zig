@@ -82,7 +82,7 @@ pub const Network = struct {
                     try std.fmt.allocPrint(allocator, "/xrpc/com.atproto.repo.listRecords?repo={s}&collection={s}&limit=100", .{ supporter, collection });
                 const body = (try self.getJson(allocator, pds, path)) orelse break;
                 const parsed = try std.json.parseFromSliceLeaky(std.json.Value, allocator, body, .{});
-                for (try attested.proofRefs(allocator, parsed, artist, &attested.default_trusted_brokers)) |proof| {
+                for (try attested.proofRefs(allocator, parsed, supporter, artist, &attested.default_trusted_brokers)) |proof| {
                     if (try self.proofVerified(allocator, proof)) return true;
                 }
                 page_cursor = attested.cursor(parsed) orelse break;
@@ -97,7 +97,7 @@ pub const Network = struct {
         const path = try std.fmt.allocPrint(allocator, "/xrpc/com.atproto.repo.getRecord?repo={s}&collection={s}&rkey={s}", .{ proof.broker, attested.proof_collection, proof.rkey });
         const body = (try self.getJson(allocator, pds, path)) orelse return false;
         const parsed = try std.json.parseFromSliceLeaky(std.json.Value, allocator, body, .{});
-        return attested.proofVerifies(parsed, proof.cid);
+        return attested.proofVerifies(allocator, parsed, proof);
     }
 
     fn pdsOf(self: *Network, allocator: std.mem.Allocator, did_text: []const u8) ![]const u8 {
