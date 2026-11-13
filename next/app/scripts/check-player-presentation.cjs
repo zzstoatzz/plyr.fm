@@ -158,6 +158,18 @@ async function run(browser, width, theme) {
     if (width < 600) {
       const [fold, details] = await Promise.all([page.getByTestId('now-playing-scroll').boundingBox(), page.getByTestId('now-playing-artist').boundingBox()]);
       assert.ok(details.y >= fold.y + fold.height, 'The details start below the first screen instead of peeking into it');
+      const hint = page.getByTestId('coachmark');
+      await hint.waitFor();
+      const bubble = await hint.boundingBox();
+      assert.ok(bubble.y + bubble.height <= fold.y + fold.height, 'The more-below hint sits on the first screen');
+      await page.waitForTimeout(300);
+      await screenshot(page, name + '-now-playing-hint');
+      await hint.getByRole('button', { name: 'got it', exact: true }).click();
+      await hint.waitFor({ state: 'detached' });
+      await page.getByRole('button', { name: 'Close', exact: true }).click();
+      await open();
+      await page.waitForTimeout(1000);
+      assert.equal(await page.getByTestId('coachmark').count(), 0, 'A dismissed hint never comes back');
     }
     await screenshot(page, name + '-now-playing');
     const cdp = await context.newCDPSession(page);

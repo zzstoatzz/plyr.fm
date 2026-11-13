@@ -5,8 +5,8 @@ import { readLocal, writeLocal } from './storage';
 
 /** Every one-time hint in the app, in priority order. A screen shows one with `useHint(id, ready)`. */
 export const hints = [
-  { id: 'now-playing.more-below' },
-] as const satisfies readonly HintSpec[];
+  { id: 'now-playing.more-below', text: 'scroll down for the artist and more about this track' },
+] as const satisfies readonly (HintSpec & { text: string })[];
 
 export type HintId = typeof hints[number]['id'];
 

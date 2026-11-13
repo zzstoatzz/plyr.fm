@@ -24,6 +24,8 @@ import { usePlayerDismiss } from './use-player-dismiss';
 import { PullDetector, PullRoot, usePlayerPull } from './player-pull';
 import { PlayerFlight } from './PlayerFlight';
 import { NowPlayingDetails } from './NowPlayingDetails';
+import { Coachmark } from './Coachmark';
+import { markHintSeen } from './hints';
 import { measure, playerSheet, setFlying, type Rect } from './player-sheet';
 
 const AnimatedSafeAreaView = Animated.createAnimatedComponent(SafeAreaView);
@@ -170,6 +172,7 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
 
   closeRef.current = close;
   dismiss.scrolled.current = event => {
+    if (event.nativeEvent.contentOffset.y > 24) markHintSeen('now-playing.more-below');
     const past = titleEnd.current.meta > 0 && event.nativeEvent.contentOffset.y > titleEnd.current.hero + titleEnd.current.body + titleEnd.current.meta;
     if (past !== condensed) setCondensed(past);
   };
@@ -253,6 +256,8 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
             </View>
             {!sideBySide && <View style={{ width: artwork }}>{details}</View>}
           </Animated.ScrollView></PullDetector>
+          {!sideBySide && <Coachmark hint="now-playing.more-below" ready={compact && present && measured && dismiss.atTop && !dismiss.dragging}
+            touch={dismiss.protect} style={styles.moreBelow} />}
         </Animated.View>
         </Animated.View>
         <View ref={panelRef} pointerEvents="none" aria-hidden importantForAccessibility="no-hide-descendants" style={StyleSheet.absoluteFill}>
@@ -287,6 +292,7 @@ const styles = StyleSheet.create({
   scrollRegion: { flex: 1, minHeight: 0 },
   content: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16, gap: 20, alignItems: 'center' },
   desktopContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexGrow: 1, width: '100%', maxWidth: 1440, alignSelf: 'center', padding: 40, gap: 56 },
+  moreBelow: { position: 'absolute', left: 16, right: 16, bottom: 14 },
   hero: { gap: 20, alignItems: 'center', justifyContent: 'center' },
   heroSide: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 56 },
   art: { alignItems: 'center' },

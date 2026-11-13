@@ -7,18 +7,20 @@ import type { Glyph } from './PlayerGlyph';
 import { useAppearance } from './appearance';
 import { onAccent } from './colors';
 
-export function Action({ label, onPress, href, disabled, selected, primary, destructive, icon: Icon, onArtwork }: {
+export function Action({ label, onPress, href, disabled, selected, primary, destructive, icon: Icon, onArtwork, onAccentFill }: {
   label: string; onPress?: () => void; href?: Href; disabled?: boolean; selected?: boolean; primary?: boolean; destructive?: boolean; icon?: Glyph; onArtwork?: boolean;
+  /** Sits on an accent-filled surface, such as a coachmark. */
+  onAccentFill?: boolean;
 }) {
   const theme = useAppearance();
   const [pressed, setPressed] = useState(false);
   const press = usePressIntent(onPress);
   const fill = primary ? destructive ? theme.danger : theme.accent : undefined;
-  const ink = fill ? destructive ? onAccent(fill) : theme.onAccent : onArtwork ? '#ffffff' : destructive ? theme.danger : theme.text;
+  const ink = fill ? destructive ? onAccent(fill) : theme.onAccent : onAccentFill ? theme.onAccent : onArtwork ? '#ffffff' : destructive ? theme.danger : theme.text;
   const control = <Pressable accessibilityRole={href ? 'link' : 'button'} accessibilityState={{ disabled, selected }} aria-pressed={selected}
     disabled={disabled} onPointerDown={press.onPointerDown} onPress={press.onPress} onPressIn={() => { press.onPressIn(); setPressed(true); }} onPressOut={() => { press.onPressOut(); setPressed(false); }}
-    style={{ ...styles.button, backgroundColor: fill ?? (onArtwork ? pressed ? '#ffffff33' : '#00000059' : pressed ? theme.hover : selected ? theme.surface : 'transparent'), opacity: disabled ? 0.5 : pressed && fill ? 0.85 : 1,
-      borderColor: fill ?? (onArtwork ? '#ffffff80' : selected ? theme.accent : theme.line) }}>
+    style={{ ...styles.button, backgroundColor: fill ?? (onAccentFill ? pressed ? theme.onAccent + '26' : 'transparent' : onArtwork ? pressed ? '#ffffff33' : '#00000059' : pressed ? theme.hover : selected ? theme.surface : 'transparent'), opacity: disabled ? 0.5 : pressed && fill ? 0.85 : 1,
+      borderColor: fill ?? (onAccentFill ? theme.onAccent : onArtwork ? '#ffffff80' : selected ? theme.accent : theme.line) }}>
     {Icon && <Icon size={18} color={ink} fill={primary ? ink : 'none'} />}
     <Text style={{ color: ink, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale, fontWeight: '600', textAlign: 'center', textTransform: 'lowercase', flexShrink: 1 }}>{label}</Text>
   </Pressable>;
