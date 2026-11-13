@@ -75,6 +75,7 @@ test("published download attachment preserves bytes, HEAD, ranges and visibility
   const download = `${f.media}?download=1&filename=untrusted.html`;
   for (const method of ["GET", "HEAD"]) expect((await routeUpload(new Request(download, { method }), env))?.status).toBe(404);
   expect((await f.send("POST", "/activate")).status).toBe(200);
+  expect(await (await routeUpload(new Request(`${f.media}/manifest`), env))?.json()).toMatchObject({ processed: false });
   for (const method of ["GET", "HEAD"]) {
     const response = await routeUpload(new Request(download, { method }), env);
     expect(response?.status).toBe(200);

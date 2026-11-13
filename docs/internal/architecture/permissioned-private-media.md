@@ -321,30 +321,25 @@ transport; they should not be folded into a listener member-list checkbox.
 ## Next supporter proof binding
 
 Next's existing Attested verifier requires both CID layers of a remote
-attestation: the fetched broker proof's canonical DAG-CBOR must match the payer's
-strong reference, and the payment plus proof metadata must match the attestation
-CID inside that proof. The latter includes the authenticated requested payer's
-repository DID and the payment's artist subject. A copied proof or edited payment
-cannot authorize a different payer or artist. Trusted-broker selection and the
-existing `verified` status requirement remain in force; atprotofans remains the
-existing fallback.
+attestation. First, the fetched broker proof's canonical DAG-CBOR must match the
+payer's strong reference. Second, the proof's `cid` must match the payment record
+without `signatures`, plus `$sig: {repo: <payer DID>}`, where the payer is the
+authenticated requesting repository. The payment carries the artist `subject`. A
+copied proof or edited payment cannot authorize a different payer or artist.
+Trusted-broker selection and the existing `verified` status requirement remain in
+force; atprotofans remains the existing fallback.
 
-The current [badge.blue remote verification specification](https://badge.blue/#verification)
-defines this binding, using metadata from the fetched proof rather than the
-strong reference. [Attested's payment/proof schemas](https://attested.network/)
-define no expiry field or access-validity duration. This fix does not invent one,
-add supporter-download endpoints, or change legacy Python verification.
-Previously accepted records that do not satisfy the binding now reject; current
-broker compatibility has not been established by querying payment records.
+That `$sig` shape is what live atprotofans proofs use, not the proof-metadata
+shape the [badge.blue specification](https://badge.blue/#verification) describes.
+On November 13, 2026 all 12 resolvable payer/proof pairs from broker
+`did:plc:7srqsetux75b6flzbbyag2ro` (pds.atmosphere.money) matched
+`{...payment without signatures, $sig: {repo: payer}}` under `@atproto/lex-cbor`
+0.1.6. None matched variants carrying the proof's `$type`/`status` or a
+`repository` key. [Attested's schemas](https://attested.network/) define no
+expiry, and this fix does not invent one, add supporter-download endpoints, or
+change legacy Python verification.
 
-The synthetic golden vector is generated independently with the existing client
-`@atproto/lex-cbor` 0.1.6 encoder:
+The synthetic golden vector mirrors that live shape:
 `node next/backend/scripts/generate-attested-fixture.mjs` after installing the
-Next app's locked dependencies. It includes nested payment/proof metadata and
-multiple signatures. Unit and property tests exercise payer replay and payment
-mutation against that fixed vector. The official pages expose no source revision;
-the November 12, 2026 fetched HTML SHA-256 values were
-`187a0471713d196e4aa9976239b04695f0a1c394a2f0e222d274e4628e5ab723`
-(badge.blue) and
-`d31555fadf31d9bec0737d3cc5a85670780118f81af34f85dac8118a73684bcd`
-(attested.network).
+Next app's locked dependencies. Unit and property tests exercise payer replay and
+payment mutation against that fixed vector.

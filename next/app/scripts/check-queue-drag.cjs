@@ -40,7 +40,7 @@ const order = page => page.locator('[aria-label^="Reorder "]').evaluateAll(nodes
 const handle = (page, title) => page.getByLabel(`Reorder ${title}`, { exact: true });
 const shot = (page, name) => page.screenshot({ path: path.join(output, `${name}.png`) });
 
-async function setup(browser, width, theme, queue = tracks) {
+async function setup(browser, width, theme, queue = tracks, enqueue = []) {
   const context = await browser.newContext({ viewport: { width, height: 900 }, hasTouch: true, colorScheme: theme });
   await context.addInitScript(({ theme, accent }) => localStorage.setItem('plyr-next:prefs', JSON.stringify({ theme, accent, playThrough: true, keepPlaying: false })), { theme, accent: process.env.QUEUE_ACCENT || '#6a9fff' });
   await context.route('**/*', route => ['GET', 'HEAD', 'OPTIONS'].includes(route.request().method()) ? route.continue() : route.abort('blockedbyclient'));
@@ -82,6 +82,11 @@ async function setup(browser, width, theme, queue = tracks) {
   await page.goto(origin);
   await page.getByTestId('home-track-row').first().getByRole('button', { name: /^Play / }).click({ position: { x: 22, y: 40 } });
   await page.getByRole('button', { name: 'Open now playing', exact: true }).waitFor();
+  for (const title of enqueue) {
+    await page.getByTestId('home-track-row').filter({ hasText: title }).first().getByRole('button', { name: /More options/ }).click();
+    await page.getByRole('button', { name: 'add to queue', exact: true }).click();
+    await page.getByRole('button', { name: 'add to queue', exact: true }).waitFor({ state: 'detached' });
+  }
   await shot(page, `${width}-${theme}-busy`);
   await page.getByRole('button', { name: 'Open now playing', exact: true }).click();
   await page.waitForTimeout(350);
@@ -142,8 +147,8 @@ async function standard(browser, width, theme) {
       const beta = await handle(page, 'Beta').boundingBox();
       await touchDrag(page, cdp, handle(page, 'Gamma'), beta.y + 10);
       assert.deepEqual((await order(page)).slice(0, 3), ['Gamma', 'Beta', 'Alpha']);
-      await touchDrag(page, cdp, handle(page, 'Gamma'), width === 390 ? 755 : 815, false, 850);
-      assert.ok((await order(page)).indexOf('Gamma') > 5, 'Holding at the edge scrolls to farther queue positions');
+      await touchDrag(page, cdp, handle(page, 'Delta'), width === 390 ? 755 : 815, false, 850);
+      assert.ok((await order(page)).indexOf('Delta') > 5, 'Holding at the edge scrolls to farther queue positions');
       await handle(page, 'Beta').scrollIntoViewIfNeeded();
       const cancelBox = await handle(page, 'Beta').boundingBox();
       const beforeTouchCancel = await order(page);
@@ -159,6 +164,7 @@ async function standard(browser, width, theme) {
     await page.waitForTimeout(100);
     await shot(page, `${width}-${theme}-pressed`);
     await page.mouse.up();
+    const [nextUp] = await order(page);
     const changeBox = await handle(page, 'Beta').boundingBox();
     await page.mouse.move(changeBox.x + 22, changeBox.y + 28);
     await page.mouse.down();
@@ -168,7 +174,7 @@ async function standard(browser, width, theme) {
     await page.mouse.up();
     await page.waitForTimeout(100);
     assert.equal(await page.locator('[aria-valuetext="Moving"]').count(), 0);
-    assert.match(await page.getByRole('button', { name: 'Open now playing', exact: true }).innerText(), /Beta/);
+    assert.match(await page.getByRole('button', { name: 'Open now playing', exact: true }).innerText(), new RegExp(nextUp));
     if (width === 390 && theme === 'light') {
       const target = handle(page, 'Alpha');
       await target.scrollIntoViewIfNeeded();
@@ -183,18 +189,27 @@ async function standard(browser, width, theme) {
       await page.mouse.up();
       assert.deepEqual(await order(page), beforeResize);
     }
+    const beforeEnds = await order(page);
+    await handle(page, 'Alpha').focus();
+    await page.keyboard.press('End');
+    assert.equal((await order(page)).at(-1), 'Alpha');
+    assert.equal(await page.evaluate(() => document.activeElement.getAttribute('aria-label')), 'Reorder Alpha');
+    await page.keyboard.press('Home');
+    assert.deepEqual(await order(page), ['Alpha', ...beforeEnds.filter(title => title !== 'Alpha')]);
+    await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === 'Reorder Alpha');
     assert.deepEqual(errors, []);
-    console.log(`${engine}/${width}/${theme}: mouse, ${engine === 'chromium' ? 'touch, autoscroll, ' : ''}keyboard focus, cancellation and queue change passed (${Math.round(performance.now() - started)}ms)`);
+    console.log(`${engine}/${width}/${theme}: mouse, ${engine === 'chromium' ? 'touch, autoscroll, ' : ''}keyboard focus, Home/End, cancellation and queue change passed (${Math.round(performance.now() - started)}ms)`);
   } finally { await page.unrouteAll({ behavior: 'ignoreErrors' }); await context.close(); }
 }
 
 async function duplicates(browser) {
-  const { context, page, errors } = await setup(browser, 390, 'light', [tracks[0], tracks[1], tracks[2], tracks[3], tracks[2], tracks[4]]);
+  const { context, page, errors } = await setup(browser, 390, 'light', tracks.slice(0, 5), ['Beta']);
   try {
-    await mouseDrag(page, handle(page, 'Beta').first(), handle(page, 'Beta').last());
-    assert.deepEqual(await order(page), ['Alpha', 'Gamma', 'Beta', 'Beta', 'Delta']);
-    await mouseDrag(page, handle(page, 'Beta').last(), handle(page, 'Alpha'));
-    assert.deepEqual(await order(page), ['Beta', 'Alpha', 'Gamma', 'Beta', 'Delta']);
+    assert.deepEqual(await order(page), ['Beta', 'Alpha', 'Beta', 'Gamma', 'Delta']);
+    await mouseDrag(page, handle(page, 'Beta').last(), handle(page, 'Beta').first());
+    assert.deepEqual(await order(page), ['Beta', 'Beta', 'Alpha', 'Gamma', 'Delta']);
+    await mouseDrag(page, handle(page, 'Delta'), handle(page, 'Alpha'));
+    assert.deepEqual(await order(page), ['Beta', 'Beta', 'Delta', 'Alpha', 'Gamma']);
     assert.match(await page.getByRole('button', { name: 'Open now playing', exact: true }).innerText(), /Current song/);
     assert.deepEqual(errors, []);
     console.log('Duplicate record occurrences reorder independently; dragging does not change playback');

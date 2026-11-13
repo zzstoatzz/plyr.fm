@@ -11,6 +11,9 @@ const search = @import("search.zig");
 const tracks = @import("tracks.zig");
 const actors = @import("actors.zig");
 const managed_space = @import("managed_space.zig");
+const notifications = @import("notifications.zig");
+const NotificationService = @import("../internal/notification/service.zig").Config;
+const NotificationStore = @import("../internal/notification/store.zig").NotificationStore;
 const ManagedSpaceConfig = @import("../internal/space/managed_space.zig").Config;
 const path_segment = @import("../internal/http/path_segment.zig");
 const ArtistStore = @import("../internal/index/artist_store.zig").ArtistStore;
@@ -54,6 +57,9 @@ pub const App = struct {
     like_collection: []const u8,
     cors: response.CorsPolicy,
     managed_space: ?ManagedSpaceConfig = null,
+    /// null when no service DID is configured: callers authenticate to it
+    notifications: ?NotificationService = null,
+    notification_store: ?NotificationStore = null,
 };
 
 pub fn handle(
@@ -115,6 +121,17 @@ pub fn handle(
             return;
         }
         try managed_space.checkUserAccess(request, allocator, app.io, config, app.cors, request_id);
+    } else if (if (app.notifications) |config| notifications.match(config, path) else null) |method| {
+        try notifications.handle(
+            request,
+            allocator,
+            app.io,
+            app.notifications.?,
+            app.notification_store,
+            method,
+            app.cors,
+            request_id,
+        );
     } else if (mem.eql(u8, path, prefix ++ "/albums")) {
         if (request.head.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
