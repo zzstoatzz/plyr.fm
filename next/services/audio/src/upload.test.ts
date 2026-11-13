@@ -346,3 +346,22 @@ test("unknown-length streamed part is stopped at the declared bound", async () =
   expect((await f.send("PUT", "/parts/1", body)).status).toBe(413);
   expect((await (await f.send("GET")).json<{ receivedParts: unknown[] }>()).receivedParts).toEqual([]);
 });
+
+test("the alarm finishes a transfer whose parts all arrived without a client finish", async () => {
+  const f = await setup();
+  await f.send("POST");
+  expect((await f.send("PUT", "/parts/1", "0123456789")).status).toBe(200);
+  await runInDurableObject(f.stub, async (_, state) => {
+    const current = await session(state, f.value.uploadId);
+    expect(current.state).toBe("transferring");
+    expect(current.nextCheck).not.toBeNull();
+    current.nextCheck = Date.now() - 1;
+    await state.storage.put(`session:${f.value.uploadId}`, current);
+    const sessions = new UploadSessions(state.storage, env.AUDIO, async () => "absent");
+    await sessions.alarm();
+    const after = await session(state, f.value.uploadId);
+    expect(after.state).toBe("complete");
+    expect(await env.AUDIO.head(after.key)).not.toBeNull();
+  });
+  expect((await f.send("POST", "/finish")).status).toBe(200);
+});

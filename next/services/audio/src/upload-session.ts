@@ -19,6 +19,12 @@ export class UploadFailure extends Error {
   constructor(public status: number, message: string) { super(message); this.status = status; }
 }
 
+function allParts(session: UploadSession) {
+  const count = Math.ceil(session.sizeBytes / PART_BYTES);
+  for (let number = 1; number <= count; number++) if (!session.parts[number]?.etag) return false;
+  return true;
+}
+
 export class UploadSessions {
   busy = false;
   private waiting: (() => void)[] = [];
@@ -129,6 +135,8 @@ export class UploadSessions {
     await this.save(session);
     const receipt = await this.bucket.resumeMultipartUpload(session.key, session.multipartId ?? "").uploadPart(number, bytes);
     session.parts[number] = { sha256, etag: receipt.etag };
+    // Every part in: let the alarm finish (and start processing) even if the client is suspended, e.g. an iOS background upload.
+    if (allParts(session)) session.nextCheck = this.now() + 1000;
     await this.save(session);
     return { number, sha256 };
   }
@@ -221,6 +229,7 @@ export class UploadSessions {
         continue;
       }
       try {
+        if (session.state === "transferring" && allParts(session)) await this.finish(session);
         await this.recoverComplete(session);
         if (session.state === "completing") await this.finish(session);
         if (session.state === "complete") await this.activate(session);

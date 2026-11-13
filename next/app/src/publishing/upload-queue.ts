@@ -6,9 +6,10 @@ import { measureAudioDuration } from '../media-picker';
 import { createPds, type MediaFile, type NewTrack } from '../pds';
 import { toast } from '../toast';
 import type { CreateReservation } from './create-operation';
-import { audioFormat, transferParts, uploadPublication, type UploadOperation, type UploadStatus } from './upload-model';
+import { audioFormat, uploadPublication, type UploadOperation, type UploadStatus } from './upload-model';
 import { jobLine, processingStep, retryDelay, transient, uploadRoute, type UploadJobView } from './upload-queue-model';
 import { openUploadReader } from './upload-reader';
+import { sendParts } from './part-sender';
 import { uploadStorage } from './upload-storage';
 import { createUploadTransport } from './upload-transport';
 
@@ -92,7 +93,7 @@ async function runService(job: Job, operation: UploadOperation) {
   if (status.state === 'transferring') {
     const file = job.file;
     if (!file) throw new Error('reselect the original file on the upload page');
-    status = await withRetries(job, () => transferParts(operation, openUploadReader(file), transport,
+    status = await withRetries(job, () => sendParts(operation, openUploadReader(file), transport,
       async bytes => hex(await digest(CryptoDigestAlgorithm.SHA256, bytes)), abort.signal,
       (sent, checking) => patch(job, { phase: 'uploading', progress: checking ? undefined : sent / operation.sizeBytes })));
   }
