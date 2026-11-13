@@ -6,7 +6,7 @@ primary_region = "iad"
 
 [env]
   MODE = "jams"
-  UPLOAD_PROCESSING_ENABLED = "false"
+  UPLOAD_PROCESSING_ENABLED = "true"
   PORT = "8000"
   INDEX_MODE = "disabled"
   CORS_ALLOWED_ORIGINS = "https://next.plyr.fm,https://plyr-fm-next.pages.dev"

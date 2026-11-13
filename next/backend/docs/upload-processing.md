@@ -185,8 +185,9 @@ An HTTP sink or emulator alone does not establish deployed R2 acceptance.
 
 Provision only after the config/workflow PR is published and reviewed. The new
 credential's canonical SOPS key is `plyr_next.processing_auth_token`; its GitHub
-Actions consumer is `PLYR_NEXT_PROCESSING_AUTH_TOKEN`. The staging transcoder
-workflow stages that value as Fly `NEXT_PROCESSING_AUTH_TOKEN`; the Next audio
+Actions consumer is `PLYR_NEXT_PROCESSING_AUTH_TOKEN`. The next processing
+workflow (`deploy-next-processing.yml`) stages that value as Fly
+`NEXT_PROCESSING_AUTH_TOKEN` on `plyr-next-processing`; the Next audio
 workflow sends the same value as Worker `PROCESSING_TRANSCODER_KEY`. Neither
 consumer reuses upload admission or mirror credentials. Values travel through
 stdin or a mode-0600 temporary file and are never logged. The existing local
@@ -202,7 +203,8 @@ remove the extra machine. Production deploy arguments and configuration are
 unchanged. The hourly staging rest job stops only the legacy backend's worker
 and jetstream groups, not the transcoder.
 
-Keep coordinator `UPLOAD_PROCESSING_ENABLED` absent until the disabled owner,
+Coordinator `UPLOAD_PROCESSING_ENABLED` is `true` in `fly.jams.toml` as of the
+executor moving to `plyr-next-processing`. It was kept absent until the disabled owner,
 typed-failure handling and receipt metadata have deployed, the Worker/executor
 configuration is verified, and no shared staging test is active. Enable that
 coordinator flag last through a separate reviewed configuration change. Run
