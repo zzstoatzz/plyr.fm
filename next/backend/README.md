@@ -164,13 +164,12 @@ browsers mint space credentials from that PDS and read blobs directly; the
 PDS asks this API `GET /xrpc/com.atproto.managedspace.checkUserAccess`
 with a service JWT from the artist (aud = the managing app, fragment
 included). Who may read is decided by the artist's public policy records
-(`{track namespace}.policy`, e.g. `fm.plyr.policy`): each names one space and
-one rule (signed in, listed members, any verified supporter, or a purchase
-whose attested payment is entitled to that policy), and passing any one is
-enough. A space with no policy falls back to its legacy skey (`supporters`,
-`signed-in`), otherwise stays closed. The artist always has access and nobody
-else may write. See [space access](docs/space-access.md). The API never
-proxies or stores gated audio.
+(`{track namespace}.policy`): each names one space and one rule (signed in,
+listed members, any verified supporter, or an entitled purchase); passing any
+one is enough. A space with no policy falls back to its legacy skey
+(`supporters`, `signed-in`). The artist always has access and nobody else may
+write. See [space access](docs/space-access.md). The API never proxies or
+stores gated audio.
 
 The ingester runs the blob mirror on a side thread when configured (`MODE=mirror` runs it
 alone). It fetches each live track's audio blob from the owner's
