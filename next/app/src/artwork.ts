@@ -28,3 +28,27 @@ export function thumbnailUrl(uri: string): string {
   if (avatar) return `${avatar[1]}avatar_thumbnail${avatar[2]}`;
   return uri;
 }
+
+const legacyBucket = /^https:\/\/pub-7ea7ea9a6f224f4f8c0321a2bb008c5a\.r2\.dev\/images\//;
+const resizable = /^(https:\/\/images(?:-stg)?\.plyr\.fm)(\/(?!cdn-cgi\/)[^?#]+)$/;
+const widths = [320, 640, 1280];
+
+/**
+ * The URL to load for artwork drawn `size` points wide at `density` pixels per
+ * point. Small covers use the stored thumbnail; larger plyr images are resized
+ * at the CDN edge (as production's `resizedImageUrl`), in a few fixed widths so
+ * the dock, the morph and now playing share cache entries. Legacy `r2.dev`
+ * links are rate limited by Cloudflare, so they load from the same bucket
+ * through `images.plyr.fm`.
+ */
+export function displayUrl(uri: string, size: number, density: number): string {
+  const canonical = uri.replace(legacyBucket, 'https://images.plyr.fm/images/');
+  if (size <= THUMBNAIL_MAX_SIZE) {
+    const thumbnail = thumbnailUrl(canonical);
+    if (thumbnail !== canonical) return thumbnail;
+  }
+  const image = resizable.exec(canonical);
+  if (!image) return canonical;
+  const width = widths.find(candidate => candidate >= size * density) ?? widths[widths.length - 1];
+  return `${image[1]}/cdn-cgi/image/width=${width},quality=82,format=auto${image[2]}`;
+}
