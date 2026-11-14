@@ -15,7 +15,8 @@ import { PlayerBar } from '../src/PlayerBar';
 import { Toasts } from '../src/Toasts';
 import { NowPlayingOriginContext } from '../src/now-playing-origin';
 import { PreferencesProvider } from '../src/preference-context';
-import { pageFrame } from '../src/controls';
+import { pageFrame, wideFrame } from '../src/controls';
+import { DESKTOP_HOME_WIDTH } from '../src/DesktopHome';
 import { usePreferences } from '../src/preferences';
 import { UploadQueueHost } from '../src/publishing/UploadQueue';
 
@@ -103,7 +104,7 @@ function Shell() {
       <View style={{ flex: 1, minWidth: 0 }}>
         {!wide && <Toasts top />}
         {!(wide && path === '/') && <View style={{
-          ...pageFrame, minHeight: tabTitle ? 52 : 48, flexDirection: 'row', alignItems: 'center',
+          ...(width >= DESKTOP_HOME_WIDTH && ['/library', '/liked'].includes(path) ? wideFrame : pageFrame), minHeight: tabTitle ? 52 : 48, flexDirection: 'row', alignItems: 'center',
           borderBottomWidth: detail ? StyleSheet.hairlineWidth : 0, borderColor: theme.hairline
         }}>
           {showBack && <Pressable accessibilityRole="button" accessibilityLabel="Back"

@@ -60,6 +60,8 @@ export function InlineLink({ href, children, standalone = false }: { href: Href;
 }
 
 export const pageFrame = { width: '100%', maxWidth: 824, alignSelf: 'center', paddingHorizontal: 20 } as const;
+/** The frame for pages laid out for a desktop window: home and library past `DESKTOP_HOME_WIDTH`. */
+export const wideFrame = { width: '100%', maxWidth: 1320, alignSelf: 'center', paddingHorizontal: 36 } as const;
 
 export const row = { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 } as const;
 const styles = StyleSheet.create({
