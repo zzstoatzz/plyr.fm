@@ -2,7 +2,7 @@ import { trackArtwork, collectionArtwork, displayUrl } from './artwork';
 import { MusicNote as Music2, UserCircle as UserRound } from './icons';
 import { Text } from './Text';
 import { Link, type Href } from 'expo-router';
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Animated, PixelRatio, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { PlayGlyph as PlayIcon } from './PlayerGlyph';
 import { PlayerLoader } from './PlayerLoader';
@@ -11,6 +11,7 @@ import { Action, Copy } from './controls';
 import { WaveLoading } from './WaveLoading';
 import { compactCount } from './home-state';
 import { useAppearance } from './appearance';
+import { CompactRows } from './ActionRow';
 import { artworkShadow, cardSurface } from './materials';
 
 export type Play = (track: Track, queue?: Track[], label?: string) => void;
@@ -179,15 +180,16 @@ export function Row({
   title: string; subtitle?: string | null; meta?: string; image?: string | null; action?: ReactNode; round?: boolean; onNavigate?: () => void;
 } & ({ href: Href; onPress?: never } | { href?: never; onPress: () => void })) {
   const colors = useAppearance();
+  const compact = useContext(CompactRows);
   const body = <Pressable accessibilityRole={href ? 'link' : 'button'} onPress={href ? onNavigate : onPress} style={styles.rowLink}>
-    <Cover uri={image} round={round} />
+    <Cover uri={image} round={round} size={compact ? 32 : 48} />
     <View style={styles.rowText}>
-      <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text, fontFamily: colors.fontFamily, fontSize: 16 * colors.scale }]}>{title}</Text>
-      {subtitle ? <Text numberOfLines={1} style={{ color: colors.muted, fontFamily: colors.fontFamily, fontSize: 14 * colors.scale }}>{subtitle}</Text> : null}
+      <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text, fontFamily: colors.fontFamily, fontSize: (compact ? 14 : 16) * colors.scale }]}>{title}</Text>
+      {subtitle ? <Text numberOfLines={1} style={{ color: colors.muted, fontFamily: colors.fontFamily, fontSize: (compact ? 12.5 : 14) * colors.scale }}>{subtitle}</Text> : null}
       {meta ? <Text numberOfLines={1} style={{ color: colors.faint, fontFamily: colors.fontFamily, fontSize: 12 * colors.scale }}>{meta}</Text> : null}
     </View>
   </Pressable>;
-  return <View style={[styles.row, cardSurface(colors)]}>
+  return <View style={compact ? styles.compactRow : [styles.row, cardSurface(colors)]}>
     {href ? <Link href={href} asChild>{body}</Link> : body}
     {action}
   </View>;
@@ -261,6 +263,7 @@ const styles = StyleSheet.create({
   rows: { gap: 8 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6, paddingLeft: 12, paddingRight: 4 },
+  compactRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, borderRadius: 8 },
   rowLink: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 4 },
   rowText: { flex: 1, minWidth: 0, gap: 3 },
   rowTitle: { fontWeight: '600' },
