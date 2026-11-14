@@ -24,3 +24,19 @@ test('sign-in return paths stay on this site and avoid auth loops', () => {
 		assert.equal(returnPath(path), undefined, path);
 	}
 });
+
+test('private grants still match when the provider expands self to the signed-in DID', () => {
+	const config = createAuthConfig();
+	const owner = 'did:plc:fixture';
+	for (const [scope, hasGrant] of [
+		[config.PRIVATE_PUBLISH_SCOPE, config.hasPrivatePublishGrant],
+		[config.PRIVATE_DELETE_SCOPE, config.hasPrivateDeleteGrant]
+	] as const) {
+		assert.ok(hasGrant(scope, owner));
+		const expanded = scope.replace('authority=self', 'authority=' + owner);
+		assert.equal(hasGrant(expanded, owner), true);
+		assert.equal(hasGrant(expanded, 'did:plc:other'), false);
+		assert.equal(hasGrant(expanded), false);
+		assert.equal(hasGrant(expanded.replace('skey=self', 'skey=elsewhere'), owner), false);
+	}
+});

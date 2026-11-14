@@ -553,4 +553,4 @@ max_lines = 501
 
 [[rules]]
 path = "next/core/src/personal-playback.ts"
-max_lines = 518
+max_lines = 546

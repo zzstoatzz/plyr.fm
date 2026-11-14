@@ -230,3 +230,45 @@ test('shared playback restores the server position and waits for output ownershi
     assert.deepEqual(actions, ['load', 'loaded', 'seek', 'play']);
   } finally { stop?.(); }
 });
+
+test('a suspended device-only queue restores its own position and ignores the other audio clock', async () => {
+  let position = 9;
+  const saved: number[] = [];
+  const target: PersonalPlaybackTarget = {
+    ready: true, suspended: false, repeat: 'off', keepPlaying: false,
+    position: () => position, duration: () => 60, playing: () => false,
+    load: async () => true, loaded: async () => {}, seek: async seconds => { position = seconds; },
+    play: () => {}, pause: () => {}, setQueue: () => {}, setRepeat: () => {}, error: assert.fail,
+  };
+  const model = createPersonalPlayback({
+    target: () => target,
+    account: () => ({ ready: true, did: null, accountSync: false }),
+    id: () => 'saved',
+    storage: {
+      load: async () => null, loadMutations: async () => [], saveMutations: async (_, entries) => entries,
+      save: async () => {}, progress: async (_, item) => { saved.push(item.position); },
+    },
+    consumeLogin: () => false, socket: () => new Socket(),
+    resolve: async () => ({ data: [track], missing: [] }),
+    recent: async () => ({ object: 'list', data: [], has_more: false }),
+  });
+  const stop = model.start();
+  try {
+    await tick();
+    model.play(track);
+    model.suspend();
+    target.suspended = true;
+    position = 46;
+    model.checkpoint();
+    target.suspended = false;
+    model.restore();
+    assert.equal(model.getSnapshot().restoredPosition, 9);
+    assert.equal(model.resume(), true);
+    await tick();
+    assert.equal(position, 9);
+    model.suspend();
+    position = 52;
+  } finally { stop?.(); }
+  await tick();
+  assert.deepEqual(saved, [9, 9]);
+});
