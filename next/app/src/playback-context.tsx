@@ -1,8 +1,8 @@
 import { createContext, useContext, useRef, type ReactNode } from 'react';
 import type { useAudioPlayerStatus } from 'expo-audio';
-import type { Track } from './api';
-import type { JamIntent } from './jam-connection';
-import type { RadioStation } from './radio';
+import type { Track } from '../../core/src/api';
+import type { JamIntent } from '../../core/src/jam-connection';
+import type { RadioStation } from '../../core/src/radio';
 import type { ActiveJam } from './use-jam-playback';
 
 export interface Playback {
@@ -17,7 +17,7 @@ export interface Playback {
   jamCommand(intent: JamIntent): boolean;
   leaveJam(restore?: boolean): void;
   play(track: Track, collection?: Track[], label?: string): void;
-  tail?: import('./queue-state').QueueTail;
+  tail?: import('../../core/src/queue-state').QueueTail;
   outputElsewhere: boolean;
   deviceQueue: boolean;
   queueError?: string;

@@ -1,6 +1,6 @@
-import type { Track } from '../api';
+import type { Track } from '../../../core/src/api';
 import { NSID } from '../auth-config.ts';
-import { isPrivateTrack } from './private-track.ts';
+import { isPrivateTrack } from '../../../core/src/track-access.ts';
 
 export function publicTrackReference(track: Track): { uri: string; cid: string } {
   if (isPrivateTrack(track)) throw new Error('private tracks cannot be included in public records.');

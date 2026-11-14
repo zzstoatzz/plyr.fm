@@ -1,6 +1,6 @@
-import type { Track } from './api';
-import type { QueueMutation } from './queue-mutation';
-import type { QueueState } from './queue-state';
+import type { Track } from './api.ts';
+import type { QueueMutation } from './queue-mutation.ts';
+import type { QueueState } from './queue-state.ts';
 
 export interface QueueCheckpoint {
   version: 1;

@@ -1,13 +1,14 @@
-import { recordPlayback, urlHost } from './playback-diagnostics';
+import { recordPlayback, urlHost } from '../../core/src/playback-diagnostics';
 import { LoadingWatchdog } from './loading-watchdog';
 import { trackArtwork } from './artwork';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Platform } from 'react-native';
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
-import type { Track } from './api';
+import type { Track } from '../../core/src/api';
 import { useAuth } from './auth';
 import { getAuth } from './auth-state';
-import { editPrivateQueue, isPrivateTrack, privateSpace, withoutPrivateTrack } from './publishing/private-track';
+import { isPrivateTrack } from '../../core/src/track-access';
+import { editPrivateQueue, privateSpace, withoutPrivateTrack } from './publishing/private-track';
 import { blobUrl } from './identity';
 import { gatedAudioUrl, releaseGatedAudioUrl } from './gated-audio';
 import { useJamPlayback, jamTrack } from './use-jam-playback';

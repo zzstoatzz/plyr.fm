@@ -1,5 +1,5 @@
-import type { Track } from './api';
-import { isPrivateTrack } from './publishing/private-track.ts';
+import type { Track } from './api.ts';
+import { isPrivateTrack } from './track-access.ts';
 import { JamConnection, type JamConnectionOptions, type JamState, type JamTrack, type Pending, type PlaybackIntent } from './jam-connection.ts';
 import { queueCheckpoint, type QueueCheckpoint, type QueueStorage } from './queue-checkpoint.ts';
 import { mergeQueueMutations, type DurableQueueEdit, type QueueMutation } from './queue-mutation.ts';

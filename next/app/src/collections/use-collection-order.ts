@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { ListDetail, Track } from '../api';
+import type { ListDetail, Track } from '../../../core/src/api';
 import { useAuth } from '../auth';
 import { createPds } from '../pds';
 import type { CollectionRevision } from './collection-order';

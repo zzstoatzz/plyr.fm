@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { View } from 'react-native';
 import { useAuth } from '../auth';
-import { trackIdFromUri } from '../api';
+import { trackIdFromUri } from '../../../core/src/api';
 import { Action, Copy } from '../controls';
 import { guardLeave } from './leave-guard';
 import { jobLine } from './upload-queue-model';

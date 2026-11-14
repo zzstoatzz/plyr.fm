@@ -1,7 +1,5 @@
 // Canonical records are read-only here; anonymous play metrics are app-owned.
-import { API_URL } from './config';
-import { PlayDeliveryError, type PlayReceipt, type QualifiedPlay } from './play-outbox';
-import { playListenerId } from './play-listener';
+import { PlayDeliveryError, type PlayReceipt, type QualifiedPlay } from './play-outbox.ts';
 
 export interface Page<T> {
 	object: 'list';
@@ -131,25 +129,6 @@ async function request<T>(url: string, timeout: number, signal?: AbortSignal, in
 	}
 }
 
-async function get<T>(path: string, params?: Record<string, string | number | string[] | undefined>, signal?: AbortSignal): Promise<T> {
-	const url = new URL(API_URL + path);
-	for (const [key, value] of Object.entries(params ?? {})) {
-		if (Array.isArray(value)) for (const item of value) url.searchParams.append(key, item);
-		else if (value !== undefined) url.searchParams.set(key, String(value));
-	}
-	try {
-		return await request<T>(url.toString(), 15_000, signal);
-	} catch (error) {
-		if (signal?.aborted || error instanceof ApiError) throw error;
-		try {
-			return await request<T>(url.toString(), 20_000, signal);
-		} catch (error) {
-			if (signal?.aborted || error instanceof ApiError) throw error;
-			throw new ApiError(0, "couldn't reach the plyr API, try again in a moment");
-		}
-	}
-}
-
 interface TrackLike {
 	record: { uri: string };
 	actor: { did: string; profile?: { handle?: string; display_name?: string; avatar_url?: string | null } | null };
@@ -165,60 +144,81 @@ export interface TrackComment {
 	updated_at: string | null;
 }
 
-export const api = {
-  resolveTracks: (ids: string[], signal?: AbortSignal) => request<{ object: 'list'; data: Track[]; missing: string[] }>(API_URL + '/v1/tracks/resolve', 15_000, signal,
-    { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ids }) }),
-  stats: () => get<{ object: 'platform_stats'; tracks: number; artists: number; duration_seconds: number; plays: number; updated_at_ms: number }>('/v1/stats'),
-	recordPlay: async (play: QualifiedPlay): Promise<PlayReceipt> => {
-		const url = new URL(`${API_URL}/v1/tracks/${encodeURIComponent(play.trackId)}/plays`);
-		url.searchParams.set('occurrence', play.occurrenceId);
-		url.searchParams.set('listener', playListenerId());
-		const controller = new AbortController();
-		const timer = setTimeout(() => controller.abort(), 15_000);
-		try {
-			const response = await fetch(url, { method: 'POST', credentials: 'include', keepalive: true, signal: controller.signal });
-			if (!response.ok) throw new PlayDeliveryError(`play receipt failed (${response.status})`, response.status >= 500 || response.status === 429);
-			const receipt: unknown = await response.json();
-			if (!isPlayReceipt(receipt, play)) throw new PlayDeliveryError('invalid play receipt', true);
-			return receipt;
-		} finally {
-			clearTimeout(timer);
+export function createApi(origin: string, playListenerId: () => string) {
+	async function get<T>(path: string, params?: Record<string, string | number | string[] | undefined>, signal?: AbortSignal): Promise<T> {
+		const url = new URL(origin + path);
+		for (const [key, value] of Object.entries(params ?? {})) {
+			if (Array.isArray(value)) for (const item of value) url.searchParams.append(key, item);
+			else if (value !== undefined) url.searchParams.set(key, String(value));
 		}
-	},
-	trackLikes: (id: string, cursor?: string) =>
-		get<Page<TrackLike>>(`/v1/tracks/${encodeURIComponent(id)}/likes`, { limit: 30, cursor }),
-	trackComments: (id: string, signal?: AbortSignal) =>
-		get<Page<TrackComment>>(`/v1/tracks/${encodeURIComponent(id)}/comments`, {}, signal),
-	tracks: (p: { limit?: number; cursor?: string; artist_did?: string; tag?: string[]; hidden_tag?: string[] } = {}, signal?: AbortSignal) => get<Page<Track>>('/v1/tracks', p, signal),
-	track: (id: string, options?: { fresh?: boolean }) => options?.fresh
-		? request<Track>(`${API_URL}/v1/tracks/${encodeURIComponent(id)}`, 15_000, undefined, { cache: 'no-store' })
-		: get<Track>(`/v1/tracks/${encodeURIComponent(id)}`),
-	playback: (id: string, options?: { fresh?: boolean }) => options?.fresh
-		? request<Playback>(`${API_URL}/v1/tracks/${encodeURIComponent(id)}/playback`, 15_000, undefined, { cache: 'no-store' })
-		: get<Playback>(`/v1/tracks/${encodeURIComponent(id)}/playback`),
-	artist: (didOrHandle: string) => get<Artist>(`/v1/artists/${encodeURIComponent(didOrHandle)}`),
-	artistMetrics: (did: string) => get<ArtistMetrics>(`/v1/artists/${encodeURIComponent(did)}/metrics`),
-	albums: (artist_did: string, p: { limit?: number; cursor?: string } = {}) => get<Page<ListSummary>>('/v1/albums', { artist_did, ...p }),
-	album: (id: string) => get<ListDetail>(`/v1/albums/${encodeURIComponent(id)}`),
-	playlists: (p: { limit?: number; cursor?: string; owner_did?: string } = {}) =>
-		get<Page<ListSummary>>('/v1/playlists', p),
-	playlist: (id: string) => get<ListDetail>(`/v1/playlists/${encodeURIComponent(id)}`),
-	/** an actor's likes are public records, so the appview serves them without a session. */
-	actorLikes: (did: string, p: { limit?: number; cursor?: string } = {}) =>
-		get<Page<Track>>(`/v1/actors/${did}/likes`, p),
-	search: (q: string, options: { limit?: number; types?: SearchHit['type']; signal?: AbortSignal } = {}) =>
-		get<Page<SearchHit>>('/v1/search', { q, limit: options.limit, types: options.types }, options.signal),
-	/** up to 50 tracks; the server has no cursor past that */
-	chart: (period: 'day' | 'week' | 'month' | 'all_time' = 'week', limit?: number) =>
-		get<{ period: string; data: ChartEntry[] }>('/v1/charts/tracks', { period, limit }),
-	/** block (≤ timeout) until the appview has projected a write the client made on its PDS. */
-	awaitRecord: (uri: string, cid?: string, timeout_ms = 8000) =>
-		get<{ uri: string; status: AwaitStatus; cid?: string; reason?: string }>('/v1/records/await', {
-			uri,
-			cid,
-			timeout_ms
-		})
-};
+		try {
+			return await request<T>(url.toString(), 15_000, signal);
+		} catch (error) {
+			if (signal?.aborted || error instanceof ApiError) throw error;
+			try {
+				return await request<T>(url.toString(), 20_000, signal);
+			} catch (error) {
+				if (signal?.aborted || error instanceof ApiError) throw error;
+				throw new ApiError(0, "couldn't reach the plyr API, try again in a moment");
+			}
+		}
+	}
+
+	return {
+		resolveTracks: (ids: string[], signal?: AbortSignal) => request<{ object: 'list'; data: Track[]; missing: string[] }>(origin + '/v1/tracks/resolve', 15_000, signal,
+			{ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ids }) }),
+		stats: () => get<{ object: 'platform_stats'; tracks: number; artists: number; duration_seconds: number; plays: number; updated_at_ms: number }>('/v1/stats'),
+		recordPlay: async (play: QualifiedPlay): Promise<PlayReceipt> => {
+			const url = new URL(`${origin}/v1/tracks/${encodeURIComponent(play.trackId)}/plays`);
+			url.searchParams.set('occurrence', play.occurrenceId);
+			url.searchParams.set('listener', playListenerId());
+			const controller = new AbortController();
+			const timer = setTimeout(() => controller.abort(), 15_000);
+			try {
+				const response = await fetch(url, { method: 'POST', credentials: 'include', keepalive: true, signal: controller.signal });
+				if (!response.ok) throw new PlayDeliveryError(`play receipt failed (${response.status})`, response.status >= 500 || response.status === 429);
+				const receipt: unknown = await response.json();
+				if (!isPlayReceipt(receipt, play)) throw new PlayDeliveryError('invalid play receipt', true);
+				return receipt;
+			} finally {
+				clearTimeout(timer);
+			}
+		},
+		trackLikes: (id: string, cursor?: string) =>
+			get<Page<TrackLike>>(`/v1/tracks/${encodeURIComponent(id)}/likes`, { limit: 30, cursor }),
+		trackComments: (id: string, signal?: AbortSignal) =>
+			get<Page<TrackComment>>(`/v1/tracks/${encodeURIComponent(id)}/comments`, {}, signal),
+		tracks: (p: { limit?: number; cursor?: string; artist_did?: string; tag?: string[]; hidden_tag?: string[] } = {}, signal?: AbortSignal) => get<Page<Track>>('/v1/tracks', p, signal),
+		track: (id: string, options?: { fresh?: boolean }) => options?.fresh
+			? request<Track>(`${origin}/v1/tracks/${encodeURIComponent(id)}`, 15_000, undefined, { cache: 'no-store' })
+			: get<Track>(`/v1/tracks/${encodeURIComponent(id)}`),
+		playback: (id: string, options?: { fresh?: boolean }) => options?.fresh
+			? request<Playback>(`${origin}/v1/tracks/${encodeURIComponent(id)}/playback`, 15_000, undefined, { cache: 'no-store' })
+			: get<Playback>(`/v1/tracks/${encodeURIComponent(id)}/playback`),
+		artist: (didOrHandle: string) => get<Artist>(`/v1/artists/${encodeURIComponent(didOrHandle)}`),
+		artistMetrics: (did: string) => get<ArtistMetrics>(`/v1/artists/${encodeURIComponent(did)}/metrics`),
+		albums: (artist_did: string, p: { limit?: number; cursor?: string } = {}) => get<Page<ListSummary>>('/v1/albums', { artist_did, ...p }),
+		album: (id: string) => get<ListDetail>(`/v1/albums/${encodeURIComponent(id)}`),
+		playlists: (p: { limit?: number; cursor?: string; owner_did?: string } = {}) =>
+			get<Page<ListSummary>>('/v1/playlists', p),
+		playlist: (id: string) => get<ListDetail>(`/v1/playlists/${encodeURIComponent(id)}`),
+		/** an actor's likes are public records, so the appview serves them without a session. */
+		actorLikes: (did: string, p: { limit?: number; cursor?: string } = {}) =>
+			get<Page<Track>>(`/v1/actors/${did}/likes`, p),
+		search: (q: string, options: { limit?: number; types?: SearchHit['type']; signal?: AbortSignal } = {}) =>
+			get<Page<SearchHit>>('/v1/search', { q, limit: options.limit, types: options.types }, options.signal),
+		/** up to 50 tracks; the server has no cursor past that */
+		chart: (period: 'day' | 'week' | 'month' | 'all_time' = 'week', limit?: number) =>
+			get<{ period: string; data: ChartEntry[] }>('/v1/charts/tracks', { period, limit }),
+		/** block (≤ timeout) until the appview has projected a write the client made on its PDS. */
+		awaitRecord: (uri: string, cid?: string, timeout_ms = 8000) =>
+			get<{ uri: string; status: AwaitStatus; cid?: string; reason?: string }>('/v1/records/await', {
+				uri,
+				cid,
+				timeout_ms
+			})
+	};
+}
 
 function isPlayReceipt(value: unknown, play: QualifiedPlay): value is PlayReceipt {
 	if (typeof value !== 'object' || value === null) return false;
@@ -237,4 +237,4 @@ function isPlayReceipt(value: unknown, play: QualifiedPlay): value is PlayReceip
 		'status' in value.dedup && (value.dedup.status === 'claimed' || value.dedup.status === 'duplicate' || value.dedup.status === 'suppressed');
 }
 
-export { albumIdFromUri, playlistIdFromUri, trackIdFromUri } from './record-ids';
+export { albumIdFromUri, playlistIdFromUri, trackIdFromUri } from './record-ids.ts';

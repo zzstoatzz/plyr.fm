@@ -10,7 +10,8 @@ import { ListCards } from './ListCards';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
-import { api, playlistIdFromUri, type AwaitStatus, type ListDetail, type Track } from './api';
+import { api } from './api-client';
+import { playlistIdFromUri, type AwaitStatus, type ListDetail, type Track } from '../../core/src/api';
 import { useAuth } from './auth';
 import { getAuth } from './auth-state';
 import {

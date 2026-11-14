@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import { usePathname } from 'expo-router';
 import { AccessibilityInfo, Platform, useColorScheme } from 'react-native';
 import type { PersonalPreferences } from './preference-sync';
-import { onAccent, palettes, readableAccent } from './colors';
+import { onAccent, palettes, readableAccent } from '../../core/src/colors';
 
 const { light, dark } = palettes;
 const Appearance = createContext({ ...light, accent: '#244fa9', onAccent: '#ffffff', fontFamily: undefined as string | undefined, scale: 1, dark: false, reduceMotion: true });

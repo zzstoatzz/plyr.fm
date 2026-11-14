@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { CryptoDigestAlgorithm, digest, randomUUID } from 'expo-crypto';
 import { getAuth, type Auth, type Did } from '../auth-state';
-import { trackIdFromUri } from '../api';
+import { trackIdFromUri } from '../../../core/src/api';
 import { measureAudioDuration } from '../media-picker';
 import { createPds, type MediaFile, type NewTrack } from '../pds';
 import { toast } from '../toast';

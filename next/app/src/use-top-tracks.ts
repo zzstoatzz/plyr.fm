@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, type Track } from './api';
+import { api } from './api-client';
+import { type Track } from '../../core/src/api';
 import { errorMessage } from './CatalogPieces';
 import { nextPopulatedChart, type ChartPeriod } from './home-state';
 

@@ -1,17 +1,18 @@
-import { EarlyIntents } from './early-intents'; import { openCoordinatorSocket } from './coordinator-origin'; import { recordPlayback } from './playback-diagnostics';
+import { EarlyIntents } from '../../core/src/early-intents'; import { openCoordinatorSocket } from './coordinator-origin'; import { recordPlayback } from '../../core/src/playback-diagnostics';
 import { useEffect, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 import { randomUUID } from 'expo-crypto';
-import { api, type Track } from './api';
+import { api } from './api-client';
+import { type Track } from '../../core/src/api';
 import { useAuth } from './auth';
-import { PersonalQueue, queueReference } from './personal-queue';
-import { QueueContinuation } from './queue-continuation';
+import { PersonalQueue, queueReference } from '../../core/src/personal-queue';
+import { QueueContinuation } from '../../core/src/queue-continuation';
 import { joinPersonalQueue } from './personal-queue-join';
 import { consumeQueueLogin, registerQueueLogin } from './queue-login';
 import { queueStorage } from './queue-storage';
-import { jamPosition, type JamState, type PlaybackIntent } from './jam-connection';
-import { queueCheckpoint, type QueueCheckpoint } from './queue-checkpoint';
-import * as queue from './queue-state';
+import { jamPosition, type JamState, type PlaybackIntent } from '../../core/src/jam-connection';
+import { queueCheckpoint, type QueueCheckpoint } from '../../core/src/queue-checkpoint';
+import * as queue from '../../core/src/queue-state';
 import type { JamPlaybackTarget } from './use-jam-playback';
 
 interface Target extends Pick<JamPlaybackTarget, 'current' | 'ready' | 'position' | 'playing' | 'load' | 'loaded' | 'seek' | 'play' | 'pause' | 'setQueue'> {

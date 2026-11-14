@@ -1,7 +1,7 @@
 import { assertPublicCollection } from '../publishing/track-reference';
 import { ok } from '@atcute/client';
 import type { Auth } from '../auth-state';
-import type { AwaitStatus } from '../api';
+import type { AwaitStatus } from '../../../core/src/api';
 import { orderedCollection, collectionRecord, CollectionOrderConflict, CollectionOrderUnconfirmed, sameRecord, type CollectionRevision, type CollectionRecord, type CollectionItem } from './collection-order';
 
 export function collectionOrdering({ rpc, did, collection, kind, assertSession, settle }: {

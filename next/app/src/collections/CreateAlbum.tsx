@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
-import { albumIdFromUri, type Track } from '../api';
+import { albumIdFromUri, type Track } from '../../../core/src/api';
 import { useAuth } from '../auth';
 import { getAuth, type Auth } from '../auth-state';
 import { createPds } from '../pds';

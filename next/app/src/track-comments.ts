@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
-import { api, type Artist, type Track, type TrackComment } from './api';
+import { api } from './api-client';
+import { type Artist, type Track, type TrackComment } from '../../core/src/api';
 import { getAuth } from './auth-state';
 import { createPds } from './pds';
 

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { api, type SearchHit } from './api';
+import { api } from './api-client';
+import { type SearchHit } from '../../core/src/api';
 import { errorMessage } from './CatalogPieces';
 
 export function useSearch(query: string, type: SearchHit['type'] | undefined, limit: number) {

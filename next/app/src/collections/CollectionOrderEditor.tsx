@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowUp, ArrowDown } from '../icons';
 import { View } from 'react-native';
-import type { ListDetail } from '../api';
+import type { ListDetail } from '../../../core/src/api';
 import { useAppearance } from '../appearance';
 import { artistName, errorMessage, Heading, Status } from '../CatalogPieces';
 import { Action, Copy, row } from '../controls';

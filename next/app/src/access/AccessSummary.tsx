@@ -1,5 +1,5 @@
 import type { TextStyle } from 'react-native';
-import type { Track } from '../api';
+import type { Track } from '../../../core/src/api';
 import { Text } from '../Text';
 import { describePolicy, describeRule } from './policy';
 import { useTrackAccess } from './use-track-access';

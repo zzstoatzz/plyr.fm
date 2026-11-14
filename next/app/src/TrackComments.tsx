@@ -1,7 +1,7 @@
 import { Link } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import type { Track, TrackComment } from './api';
+import type { Track, TrackComment } from '../../core/src/api';
 import { useAppearance } from './appearance';
 import { useAuth } from './auth';
 import { Cover } from './CatalogPieces';

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { Artist, Playback, Track } from '../src/api.ts';
+import type { Artist, Playback, Track } from '../../core/src/api.ts';
 import { attachmentUrl, downloadAllowed, downloadFilename, prepareDownload } from '../src/downloads/model.ts';
 import { parseDownloadManifest } from '../src/downloads/manifest.ts';
 

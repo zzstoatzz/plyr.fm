@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import { P256Keypair } from '@atproto/crypto';
-import { api } from '../../src/api';
+import { api } from '../../src/api-client';
 import { login, useAuth } from '../../src/auth';
 import { getAuth, type Did } from '../../src/auth-state';
 import { Action, Copy, Field, Page } from '../../src/controls';

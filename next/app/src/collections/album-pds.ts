@@ -1,6 +1,6 @@
 import { publicTrackReference } from '../publishing/track-reference';
 import { ok } from '@atcute/client';
-import type { Track, AwaitStatus } from '../api';
+import type { Track, AwaitStatus } from '../../../core/src/api';
 import type { Auth } from '../auth-state';
 import type { CollectionItem, CollectionRevision } from './collection-order';
 import type { collectionOrdering } from './collection-order-pds';

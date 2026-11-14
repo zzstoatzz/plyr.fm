@@ -1,6 +1,6 @@
 import { View, useWindowDimensions } from 'react-native';
 import { Play, MusicNote as Music, Users, Clock } from '../src/icons';
-import { api } from '../src/api';
+import { api } from '../src/api-client';
 import { Text } from '../src/Text';
 import { useAppearance } from '../src/appearance';
 import { useResource, Status } from '../src/CatalogPieces';

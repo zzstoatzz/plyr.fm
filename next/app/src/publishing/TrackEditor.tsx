@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
-import { api } from '../api';
+import { api } from '../api-client';
 import { useAuth } from '../auth';
 import { getAuth, type Auth } from '../auth-state';
 import { useResource } from '../CatalogPieces';

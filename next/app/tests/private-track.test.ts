@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { privateTrack, isPrivateTrack, editPrivateQueue } from '../src/publishing/private-track.ts';
-import { queueReference } from '../src/personal-queue.ts';
-import { queueCheckpoint } from '../src/queue-checkpoint.ts';
+import { isPrivateTrack } from '../../core/src/track-access.ts';
+import { privateTrack, editPrivateQueue } from '../src/publishing/private-track.ts';
+import { queueReference } from '../../core/src/personal-queue.ts';
+import { queueCheckpoint } from '../../core/src/queue-checkpoint.ts';
 
 const track = privateTrack('did:plc:fixture', '3jzfcijpj2z2a', 'fixturecid', {
   $type: 'fm.plyr.track', title: 'private song', artist: 'private artist', createdAt: '2026-11-12T00:00:00Z',

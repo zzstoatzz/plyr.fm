@@ -1,4 +1,4 @@
-import type { DurableQueueEdit } from './queue-mutation';
+import type { DurableQueueEdit } from './queue-mutation.ts';
 export interface JamTrack {
   id: string;
   uri: string;

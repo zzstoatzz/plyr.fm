@@ -1,5 +1,5 @@
 import { View } from 'react-native';
-import type { Track } from '../api';
+import type { Track } from '../../../core/src/api';
 import { useAppearance } from '../appearance';
 import { Text } from '../Text';
 

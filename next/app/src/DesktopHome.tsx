@@ -1,7 +1,7 @@
 import { Link } from 'expo-router';
 import { useCallback, useRef, useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, View, useWindowDimensions, type ScrollViewInstance } from 'react-native';
-import type { Track } from './api';
+import type { Track } from '../../core/src/api';
 import { useAppearance } from './appearance';
 import { AtlasView } from './atlas/AtlasView';
 import { trackArtwork } from './artwork';

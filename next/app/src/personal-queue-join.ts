@@ -1,7 +1,7 @@
 import { coordinatorHeaders } from './coordinator-origin';
 import type { Auth } from './auth-state';
 import { JAM_COORDINATOR_URL, JAM_JOIN_METHOD, JAM_SERVICE_AUDIENCE } from './auth-config';
-import type { JamTrack, PersonalQueueState } from './jam-connection';
+import type { JamTrack, PersonalQueueState } from '../../core/src/jam-connection';
 
 export interface QueueSeed {
   queue: (JamTrack & { key: string })[];

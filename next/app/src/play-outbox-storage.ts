@@ -1,5 +1,5 @@
 import { createMMKV } from 'react-native-mmkv';
-import { pendingPlay, PLAY_OUTBOX_LIMIT, type PendingPlay, type PlayOutboxStorage } from './play-outbox';
+import { pendingPlay, PLAY_OUTBOX_LIMIT, type PendingPlay, type PlayOutboxStorage } from '../../core/src/play-outbox';
 
 const storage = createMMKV({ id: 'plyr-next-play-outbox' });
 
