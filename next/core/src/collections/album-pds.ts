@@ -1,13 +1,12 @@
 import { publicTrackReference } from '../publishing/track-reference';
-import { ok } from '@atcute/client';
-import type { Track, AwaitStatus } from '../../../core/src/api';
-import type { Auth } from '../auth-state';
+import { repoOk as ok, getRecord, type RepoRpc } from '../publishing/repo-rpc';
+import type { Track, AwaitStatus } from '../api';
 import type { CollectionItem, CollectionRevision } from './collection-order';
 import type { collectionOrdering } from './collection-order-pds';
 import { albumName, albumMembership, type AlbumEntry } from './album-membership';
 
 export function albumPublishing({ rpc, did, trackCollection, assertSession, ordering, publish }: {
-  rpc: NonNullable<Auth['rpc']>;
+  rpc: RepoRpc;
   did: `did:${string}:${string}`;
   trackCollection: `${string}.${string}.${string}`;
   assertSession: () => void;
@@ -22,7 +21,7 @@ export function albumPublishing({ rpc, did, trackCollection, assertSession, orde
       const prefix = `at://${did}/${trackCollection}/`;
       const rkey = track.record.uri.startsWith(prefix) ? track.record.uri.slice(prefix.length) : '';
       if (track.artist.did !== did || !track.record.cid || !/^(?!\.{1,2}$)[a-zA-Z0-9._~:-]{1,512}$/.test(rkey)) throw new Error('choose one of your published tracks.');
-      const result = await ok(rpc.get('com.atproto.repo.getRecord', { params: { repo: did, collection: trackCollection, rkey } }));
+      const result = await ok(getRecord(rpc, { params: { repo: did, collection: trackCollection, rkey } }));
       assertSession();
       if (result.uri !== track.record.uri || result.cid !== track.record.cid) throw new Error('a selected track changed. remove it, reload your tracks, and add it again.');
       items.set(track, { subject: { uri: result.uri, cid: result.cid } });

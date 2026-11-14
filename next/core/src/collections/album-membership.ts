@@ -1,4 +1,4 @@
-import type { Track } from '../../../core/src/api';
+import type { Track } from '../api';
 import type { CollectionItem, CollectionRevision } from './collection-order';
 
 export type AlbumEntry = number | Track;

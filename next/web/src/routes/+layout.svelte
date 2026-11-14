@@ -7,11 +7,14 @@
 	import NowPlaying from '$lib/NowPlaying.svelte';
 	import PlayQueue from '$lib/PlayQueue.svelte';
 	import PlayerDock from '$lib/PlayerDock.svelte';
+	import { uploadQueue } from '$lib/upload';
 	import '../app.css';
 
 	let { children } = $props();
 	let dialog: HTMLDialogElement;
 	let account = $state.raw(auth.getAuth());
+	let uploadJobs = $state.raw(uploadQueue.snapshot());
+	let uploading = $derived(uploadJobs.filter(job => job.owner === account.did && job.phase !== 'done' && job.phase !== 'failed').length);
 	const links = [
 		{ path: '/', label: 'home', icon: 'home' },
 		{ path: '/search', label: 'search', icon: 'search' },
@@ -19,10 +22,17 @@
 	] as const;
 
 	onMount(() => {
-		const unsubscribe = auth.subscribe(() => { account = auth.getAuth(); });
+		let resumed = account.rpc;
+		const unsubscribe = auth.subscribe(() => {
+			account = auth.getAuth();
+			if (resumed === account.rpc) return;
+			resumed = account.rpc;
+			if (account.did && account.uploadStorage) void uploadQueue.resume(account.did).catch(() => {});
+		});
+		const stopUploads = uploadQueue.subscribe(() => { uploadJobs = uploadQueue.snapshot(); });
 		const stop = player.mount();
 		void restoreAuth();
-		return () => { unsubscribe(); stop(); };
+		return () => { unsubscribe(); stopUploads(); stop(); };
 	});
 	$effect(() => {
 		// Queue snapshots, rather than the media clock, trigger checkpoint writes.
@@ -56,6 +66,9 @@
 				<Icon name={link.icon} size={21} /> <span>{link.label}</span>
 			</a>
 		{/each}
+		<a href="/upload" class:active={page.url.pathname === '/upload'} aria-current={page.url.pathname === '/upload' ? 'page' : undefined}>
+			<Icon name="upload" size={21} /><span>{uploading ? `uploading ${uploading}` : 'upload'}</span>
+		</a>
 		{#if account.did}
 			<a href="/settings" class:active={page.url.pathname === '/settings'}><Icon name="settings" size={21} /><span>settings</span></a>
 		{:else}

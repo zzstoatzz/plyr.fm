@@ -8,7 +8,7 @@ import { Action, Copy, row } from '../controls';
 import { PlayerControl } from '../PlayerControl';
 import { Text } from '../Text';
 import type { createPds } from '../pds';
-import { CollectionOrderConflict, CollectionOrderUnconfirmed, type CollectionRevision } from './collection-order';
+import { CollectionOrderConflict, CollectionOrderUnconfirmed, type CollectionRevision } from '../../../core/src/collections/collection-order';
 
 export function CollectionOrderEditor({ list, ordering, close, saved }: {
   list: ListDetail;

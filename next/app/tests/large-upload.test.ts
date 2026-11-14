@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert';
 import { createHash } from 'node:crypto';
 import { test } from 'node:test';
 import { createUploadTransport, UploadRequestError } from '../src/publishing/upload-transport.ts';
-import { audioFormat, MAX_SERVICE_AUDIO_BYTES, UPLOAD_PART_BYTES, transferParts, uploadOperation, uploadStatus, uploadPublication, type UploadOperation } from '../src/publishing/upload-model.ts';
+import { audioFormat, MAX_SERVICE_AUDIO_BYTES, UPLOAD_PART_BYTES, transferParts, uploadOperation, uploadStatus, uploadPublication, type UploadOperation } from '../../core/src/publishing/upload-model.ts';
 import { hasUploadGrant, UPLOAD_SCOPE, SYNC_SCOPE, SCOPE_PARTS, SYNC_SCOPE_PARTS } from '../src/auth-config.ts';
 
 const operation: UploadOperation = { owner: 'did:plc:fixture', collection: 'fm.plyr.track', rkey: '3jzfcijpj2z2a', uri: 'at://did:plc:fixture/fm.plyr.track/3jzfcijpj2z2a',

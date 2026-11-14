@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 import { Client } from '@atcute/client';
-import { recordCreator, CreateUnconfirmed } from '../src/publishing/create-record.ts';
+import { recordCreator, CreateUnconfirmed } from '../../core/src/publishing/create-record.ts';
 import { createKey, createOperation, scopedCreate, sameRecord, type CreateOperation, type CreateStorage } from '../../core/src/publishing/create-operation.ts';
 
 const operation: CreateOperation = { owner: 'did:plc:fixture', collection: 'fm.plyr.list', rkey: '3jzfcijpj2z2a', uri: 'at://did:plc:fixture/fm.plyr.list/3jzfcijpj2z2a', record: { $type: 'fm.plyr.list', name: 'night', items: [], createdAt: '2026-11-12T00:00:00Z' } };
@@ -37,7 +37,7 @@ function fixture() {
     }
     return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
   } });
-  const creator = () => recordCreator(rpc, storage, () => { if (!flags.current) throw new Error('account changed'); });
+  const creator = () => recordCreator(rpc, storage, () => { if (!flags.current) throw new Error('account changed'); }, operation.collection);
   return { creator, storage, records, posts, flags, durable };
 }
 
@@ -114,7 +114,7 @@ test('later rejection and absent read cannot erase an earlier in-flight create',
     }
     return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: { 'content-type': 'application/json' } });
   } });
-  const creator = recordCreator(rpc, f.storage, () => {});
+  const creator = recordCreator(rpc, f.storage, () => {}, operation.collection);
   const first = creator.create(operation);
   await started;
   await assert.rejects(creator.retry(operation), CreateUnconfirmed);

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { creditName } from '../src/publishing/credit-name.ts';
+import { creditName } from '../../core/src/publishing/credit-name.ts';
 
 test('a profile name made only of blank characters is no name, so the handle is used', () => {
   assert.equal(creditName('⠀⠀⠀'), undefined);

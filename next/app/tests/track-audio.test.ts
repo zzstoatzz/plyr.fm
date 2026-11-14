@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { canReplaceTrackAudio, replacedTrackAudio, validateReplacementAudio, MAX_AUDIO_BYTES } from '../src/publishing/track-audio.ts';
+import { canReplaceTrackAudio, replacedTrackAudio, validateReplacementAudio, MAX_AUDIO_BYTES } from '../../core/src/publishing/track-audio.ts';
 
 const file = { name: 'new.WAV', type: 'audio/wav', size: 4, async arrayBuffer() { return new ArrayBuffer(4); } };
 const blob = { $type: 'blob', ref: { $link: 'new-cid' }, mimeType: file.type, size: file.size };

@@ -1,4 +1,4 @@
-import type { MediaFile } from '../pds';
+import type { MediaFile } from './private-music';
 
 export const MAX_AUDIO_BYTES = 104_857_600;
 

@@ -4,7 +4,7 @@ import { useAuth } from '../auth';
 import { trackIdFromUri } from '../../../core/src/api';
 import { Action, Copy } from '../controls';
 import { guardLeave } from './leave-guard';
-import { jobLine } from './upload-queue-model';
+import { jobLine } from '../../../core/src/publishing/upload-queue-model';
 import { uploadQueue, useUploadQueue } from './upload-queue';
 
 /** Mounted once at the root: resumes saved uploads for the signed-in account and guards the tab while one runs. */

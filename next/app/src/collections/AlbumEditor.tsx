@@ -7,8 +7,8 @@ import { Action, Copy, row } from '../controls';
 import { errorMessage, Heading, Status } from '../CatalogPieces';
 import { resolveAlbumTracks } from './album-tracks';
 import { AlbumTracks, OwnAlbumTracks } from './AlbumTracks';
-import type { AlbumEntry } from './album-membership';
-import { CollectionOrderConflict, CollectionOrderUnconfirmed, type CollectionRevision } from './collection-order';
+import type { AlbumEntry } from '../../../core/src/collections/album-membership';
+import { CollectionOrderConflict, CollectionOrderUnconfirmed, type CollectionRevision } from '../../../core/src/collections/collection-order';
 
 export function AlbumEditor({ list, close, saved }: { list: ListDetail; close: () => void; saved: (revision: CollectionRevision, tracks: Track[]) => void }) {
   const { did, rpc } = useAuth();

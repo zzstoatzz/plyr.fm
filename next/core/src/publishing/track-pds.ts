@@ -1,11 +1,9 @@
-import { ClientResponseError, ok } from '@atcute/client';
-import type { Auth, Did } from '../auth-state';
-import { api } from '../api-client';
-import { trackIdFromUri, type AwaitStatus } from '../../../core/src/api';
-import type { MediaFile } from '../pds';
-import { NSID } from '../config';
-import { normalizeTrackTags } from '../../../core/src/publishing/track-tags';
-import { sameRecord } from '../../../core/src/publishing/create-operation';
+import { RepoResponseError, repoOk as ok, getRecord, putRecord, uploadRepoBlob, type RepoRpc } from './repo-rpc';
+import type { Did } from '../auth-state';
+import { trackIdFromUri, type AwaitStatus, type createApi } from '../api';
+import type { MediaFile } from './private-music';
+import { normalizeTrackTags } from './track-tags';
+import { sameRecord } from './create-operation';
 import { replacedTrackAudio, validateReplacementAudio, TrackWriteUnconfirmed } from './track-audio';
 
 export class TrackRevisionConflict extends Error {
@@ -22,17 +20,18 @@ export interface TrackEdits {
 	artwork?: MediaFile | null;
 }
 
-export function trackEditor({ session, assertSession, ownedRkey, uploadArtwork, settle }: {
-  session: () => { rpc: NonNullable<Auth['rpc']>; did: Did };
+export function trackEditor({ session, assertSession, ownedRkey, uploadArtwork, settle, trackCollection, readPublicTrack }: {
+  session: () => { rpc: RepoRpc; did: Did };
   assertSession: () => void;
+  trackCollection: `${string}.${string}.${string}`;
+  readPublicTrack: ReturnType<typeof createApi>['track'];
   ownedRkey: (uri: string, did: string, collection: string) => string;
   uploadArtwork: (file: MediaFile) => Promise<{ imageBlob: unknown; imageUrl: string }>;
   settle: (uri: string, cid?: string) => Promise<AwaitStatus>;
 }) {
-  type Nsid = `${string}.${string}.${string}`;
   async function requirePublicAudio(uri: string) {
     assertSession();
-    const track = await api.track(trackIdFromUri(uri), { fresh: true });
+    const track = await readPublicTrack(trackIdFromUri(uri), { fresh: true });
     assertSession();
     if (track.record.uri !== uri || track.artist.did !== session().did || track.access.visibility !== 'public') {
       throw new Error('replace protected or restricted audio in the current app.');
@@ -41,7 +40,7 @@ export function trackEditor({ session, assertSession, ownedRkey, uploadArtwork, 
 	async function editTrack(uri: string, edits: TrackEdits, revision?: Awaited<ReturnType<typeof myTrack>>): Promise<AwaitStatus> {
 		assertSession();
 		const { rpc, did } = session();
-		const rkey = ownedRkey(uri, did, NSID.track);
+		const rkey = ownedRkey(uri, did, trackCollection);
 		const tags = edits.tags === undefined ? undefined : normalizeTrackTags(edits.tags);
 		const current = revision ?? await readTrack(uri, rkey);
 		if (current.uri !== uri) throw new Error('track revision does not match');
@@ -67,17 +66,17 @@ export function trackEditor({ session, assertSession, ownedRkey, uploadArtwork, 
 			const bytes = await edits.audio.file.arrayBuffer();
 			assertSession();
 			if (bytes.byteLength !== edits.audio.file.size) throw new Error('the selected audio changed. choose it again.');
-			const uploaded = await ok(rpc.post('com.atproto.repo.uploadBlob', { input: bytes, headers: { 'content-type': edits.audio.file.type } }));
+			const uploaded = await ok(uploadRepoBlob(rpc, { input: bytes, headers: { 'content-type': edits.audio.file.type } }));
 			assertSession();
 			record = replacedTrackAudio(record, edits.audio.file, uploaded.blob, edits.audio.duration);
 			await requirePublicAudio(uri);
 		}
 		assertSession();
 		const res = await ok(
-			rpc.post('com.atproto.repo.putRecord', {
+			putRecord(rpc, {
 				input: {
 					repo: did,
-					collection: NSID.track as Nsid,
+					collection: trackCollection,
 					rkey,
 					record,
 					swapRecord: current.cid
@@ -96,7 +95,7 @@ export function trackEditor({ session, assertSession, ownedRkey, uploadArtwork, 
 				if (sameRecord(latest.value, record)) return { uri: latest.uri, cid: latest.cid };
 				if (latest.cid !== current.cid) throw new TrackRevisionConflict();
 			}
-			if (error instanceof ClientResponseError && error.error === 'InvalidSwap') throw new TrackRevisionConflict();
+			if (error instanceof RepoResponseError && error.error === 'InvalidSwap') throw new TrackRevisionConflict();
 			throw error;
 		});
 		return await settle(res.uri, res.cid);
@@ -106,7 +105,7 @@ export function trackEditor({ session, assertSession, ownedRkey, uploadArtwork, 
 		assertSession();
 		const { rpc, did } = session();
 		const result = await ok(
-			rpc.get('com.atproto.repo.getRecord', { params: { repo: did, collection: NSID.track as Nsid, rkey } })
+			getRecord(rpc, { params: { repo: did, collection: trackCollection, rkey } })
 		);
 		assertSession();
 		if (result.uri !== uri || !result.cid) throw new Error('could not read your track revision');
@@ -115,17 +114,17 @@ export function trackEditor({ session, assertSession, ownedRkey, uploadArtwork, 
 
 	async function myTrack(uri: string) {
 		const { did } = session();
-		return readTrack(uri, ownedRkey(uri, did, NSID.track));
+		return readTrack(uri, ownedRkey(uri, did, trackCollection));
 	}
 
 	async function deleteTrack(uri: string): Promise<AwaitStatus> {
 		const { rpc, did } = session();
-		const rkey = ownedRkey(uri, did, NSID.track);
+		const rkey = ownedRkey(uri, did, trackCollection);
 		const { cid } = await readTrack(uri, rkey);
 		assertSession();
 		await ok(
 			rpc.post('com.atproto.repo.deleteRecord', {
-				input: { repo: did, collection: NSID.track as Nsid, rkey, swapRecord: cid }
+				input: { repo: did, collection: trackCollection, rkey, swapRecord: cid }
 			})
 		);
 		return await settle(uri);

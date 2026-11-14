@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ListDetail, Track } from '../../../core/src/api';
 import { useAuth } from '../auth';
 import { createPds } from '../pds';
-import type { CollectionRevision } from './collection-order';
+import type { CollectionRevision } from '../../../core/src/collections/collection-order';
 
 export function useCollectionOrder(indexed: ListDetail | undefined) {
   const { did, rpc } = useAuth();
