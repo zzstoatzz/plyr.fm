@@ -41,7 +41,7 @@ function exempt(rule, file) {
   return Boolean(exemptions[rule]?.[file]);
 }
 
-const files = [...walk('src'), ...walk('app')];
+const files = [...walk('src'), ...walk('app'), ...walk('../core/src')];
 const problems = [];
 const report = (rule, file, message) => { if (!exempt(rule, file)) problems.push(`${rule}: ${file}: ${message}`); };
 
@@ -49,6 +49,15 @@ for (const file of files) {
   const source = readFileSync(path.join(app, file), 'utf8');
   const imports = importsOf(source);
   const shared = !platformFile.test(file);
+
+  if (file.startsWith('../core/')) {
+    if (!shared) report('core-boundaries', file, 'has a platform-specific filename');
+    for (const target of imports) {
+      if (target.startsWith('.') && !path.posix.normalize(path.posix.join(path.posix.dirname(file), target)).startsWith('../core/src/')) {
+        report('core-boundaries', file, `imports ${target} from outside core`);
+      }
+    }
+  }
 
   if (file.startsWith('app/')) {
     for (const target of imports) {

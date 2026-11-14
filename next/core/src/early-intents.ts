@@ -1,4 +1,4 @@
-import type { Track } from './api';
+import type { Track } from './api.ts';
 import { recordPlayback, type DiagnosticFields } from './playback-diagnostics.ts';
 
 export type EarlyIntent = { kind: 'play'; track: Track; collection?: Track[]; label?: string } | { kind: 'enqueue'; track: Track };

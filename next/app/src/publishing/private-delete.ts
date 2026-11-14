@@ -1,6 +1,7 @@
-import type { Track } from '../api';
+import type { Track } from '../../../core/src/api';
 import { NSID } from '../auth-config.ts';
-import { isPrivateTrack, privateSpace } from './private-track.ts';
+import { isPrivateTrack } from '../../../core/src/track-access.ts';
+import { privateSpace } from './private-track.ts';
 
 export type PrivateDeletionResult = 'deleted' | 'present';
 export function privateDeletion({ owner, current, policy, allowed, pending, read, send }: {

@@ -6,7 +6,7 @@ import { useAuth } from './auth';
 import Slider from './Slider';
 import { useState, type ReactNode, type RefObject } from 'react';
 import { Pressable, type ScrollViewInstance, StyleSheet, View } from 'react-native';
-import type { Track } from './api';
+import type { Track } from '../../core/src/api';
 import { useAppearance } from './appearance';
 import { trackArtwork } from './artwork';
 import { artistName, Cover, Heading } from './CatalogPieces';

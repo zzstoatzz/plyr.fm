@@ -3,7 +3,7 @@ import { useFocusEffect } from 'expo-router';
 import { Action, Copy } from '../controls';
 import { getAuth, type Auth } from '../auth-state';
 import { createPds, type MediaFile } from '../pds';
-import { trackIdFromUri } from '../api';
+import { trackIdFromUri } from '../../../core/src/api';
 import { pickMedia } from '../media-picker';
 import type { CreateReservation } from './create-operation';
 import type { CreateResult } from './create-record';

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
-import type { ListDetail, Track } from '../api';
+import type { ListDetail, Track } from '../../../core/src/api';
 import { useAuth } from '../auth';
 import { createPds } from '../pds';
 import { Action, Copy, row } from '../controls';

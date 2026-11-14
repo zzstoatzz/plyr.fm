@@ -3,7 +3,8 @@ import { publicTrackReference, assertPublicCollection } from './publishing/track
 import type {} from '@atcute/atproto';
 // from the firehose, and /v1/records/await gives read-after-write.
 import { ok } from '@atcute/client';
-import { api, type AwaitStatus, type Track } from './api';
+import { api } from './api-client';
+import { type AwaitStatus, type Track } from '../../core/src/api';
 import { getAuth, type Auth } from './auth-state';
 import { NSID } from './config';
 import { blobUrl } from './identity';

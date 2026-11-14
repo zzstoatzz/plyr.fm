@@ -5,7 +5,8 @@ import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useRef, useState, type ReactNode } from 'react';
 import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { PauseGlyph as PauseIcon, PlayGlyph as PlayIcon } from './PlayerGlyph';
-import { api, type Track } from './api';
+import { api } from './api-client';
+import { type Track } from '../../core/src/api';
 import {
   Button, Heading, ListRows, Status, trackCount,
   usePages, useResource, type Play, type TrackActions,

@@ -1,4 +1,4 @@
-import type { Track } from '../api.ts';
+import type { Track } from '../../../core/src/api.ts';
 import { AUDIO_SPACE_TYPE, NSID } from '../auth-config.ts';
 
 // mirrors next/backend/src/internal/space/policy.zig: strict parse, unknown

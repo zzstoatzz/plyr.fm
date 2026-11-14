@@ -1,5 +1,5 @@
-import type { Track } from '../api';
-import { isPrivateTrack } from '../publishing/private-track';
+import type { Track } from '../../../core/src/api';
+import { isPrivateTrack } from '../../../core/src/track-access';
 import { describeRule, implicitRule, isOpen, trackSpace } from './policy';
 
 /** A few words on who can listen, read from the track alone (no fetch), for list rows. */

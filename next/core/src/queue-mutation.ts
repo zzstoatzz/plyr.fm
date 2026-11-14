@@ -1,4 +1,4 @@
-import type { JamTrack, Pending } from './jam-connection';
+import type { JamTrack, Pending } from './jam-connection.ts';
 
 type Reference = JamTrack & { key: string };
 export type DurableQueueEdit =

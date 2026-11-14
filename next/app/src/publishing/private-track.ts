@@ -1,13 +1,9 @@
-import * as queue from '../queue-state.ts';
-import type { Track } from '../api';
+import * as queue from '../../../core/src/queue-state.ts';
+import type { Track } from '../../../core/src/api';
 import { NSID, PRIVATE_SPACE_TYPE } from '../auth-config.ts';
 
 export { PRIVATE_SPACE_TYPE } from '../auth-config.ts';
 export function privateSpace(owner: string) { return `at://${owner}/space/${PRIVATE_SPACE_TYPE}/self`; }
-
-export function isPrivateTrack(track: Track): boolean {
-  return track.access.visibility === 'private' || track.record.uri.includes('/space/');
-}
 
 export function privateTrack(owner: string, rkey: string, cid: string, value: unknown): Track {
   if (!/^did:(plc|web):[^/?#]+$/.test(owner) || !/^[a-zA-Z0-9._~:-]{1,512}$/.test(rkey) || rkey === '.' || rkey === '..' || !cid || !value || typeof value !== 'object'

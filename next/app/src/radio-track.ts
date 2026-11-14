@@ -1,5 +1,5 @@
 import { NSID } from './config';
-import { trackIdFromUri } from './api';
+import { trackIdFromUri } from '../../core/src/api';
 
 const resolved = new Map<string, string>();
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { getAuth, type Auth } from '../auth-state';
-import { albumIdFromUri, playlistIdFromUri, trackIdFromUri } from '../api';
+import { albumIdFromUri, playlistIdFromUri, trackIdFromUri } from '../../../core/src/api';
 import { Action, Copy } from '../controls';
 import { createPds } from '../pds';
 import { WaveLoading } from '../WaveLoading';

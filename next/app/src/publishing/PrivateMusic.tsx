@@ -4,7 +4,7 @@ import { useFocusEffect } from 'expo-router';
 import { View } from 'react-native';
 import { useAuth } from '../auth';
 import { getAuth, type Auth } from '../auth-state';
-import type { Track } from '../api';
+import type { Track } from '../../../core/src/api';
 import type { MediaFile } from '../pds';
 import { Action, Copy, Field, Page } from '../controls';
 import { Heading } from '../CatalogPieces';

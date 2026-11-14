@@ -1,4 +1,4 @@
-import type { Artist, Playback, Track } from '../api.ts';
+import type { Artist, Playback, Track } from '../../../core/src/api.ts';
 import { readDownloadManifest, serviceMediaUrl, type DownloadManifest } from './manifest.ts';
 
 export const MAX_BUFFERED_DOWNLOAD_BYTES = 104_857_600;

@@ -2,7 +2,8 @@ import { Link, useFocusEffect, useLocalSearchParams, type Href } from 'expo-rout
 import { MagnifyingGlass as SearchIcon, X, CaretRight as ChevronRight } from './icons';
 import { useCallback, useEffect, useRef, useState, type ComponentRef } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
-import { api, type SearchHit } from './api';
+import { api } from './api-client';
+import { type SearchHit } from '../../core/src/api';
 import { Cover, Heading, Status, errorMessage, useResource, type Play } from './CatalogPieces';
 import { Text } from './Text';
 import { useAppearance } from './appearance';

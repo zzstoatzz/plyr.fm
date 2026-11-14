@@ -1,7 +1,8 @@
 import { useCallback } from 'react';
 import { ArrowUp, ArrowDown, X } from '../icons';
 import { View } from 'react-native';
-import { api, type Track } from '../api';
+import { api } from '../api-client';
+import { type Track } from '../../../core/src/api';
 import { Action, Copy } from '../controls';
 import { Heading, Status, usePages } from '../CatalogPieces';
 import { PlayerControl } from '../PlayerControl';

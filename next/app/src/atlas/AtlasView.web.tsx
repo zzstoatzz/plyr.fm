@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import type { Track } from '../api';
+import type { Track } from '../../../core/src/api';
 import { useAppearance } from '../appearance';
 import { glassSurface } from '../materials';
 import { Text } from '../Text';

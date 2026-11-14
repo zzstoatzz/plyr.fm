@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
-import type { Track } from '../api';
+import type { Track } from '../../../core/src/api';
 import { getAuth, type Auth } from '../auth-state';
 import { Action, Copy, row } from '../controls';
 import type { privatePds } from './private-pds';

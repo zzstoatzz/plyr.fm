@@ -1,4 +1,4 @@
-import type { Track } from './api';
+import type { Track } from './api.ts';
 import { trackIdFromUri } from './record-ids.ts';
 
 export const radioStations = [

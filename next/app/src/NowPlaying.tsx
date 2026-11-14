@@ -7,7 +7,7 @@ import { NextGlyph as SkipForward, PauseGlyph as Pause, PlayGlyph as Play, Previ
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Modal, Platform, Pressable, StyleSheet, View, useWindowDimensions, type ScrollViewInstance, type ViewInstance } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { Track } from './api';
+import type { Track } from '../../core/src/api';
 import { useAppearance } from './appearance';
 import { Cover, artistName } from './CatalogPieces';
 import { ShareLink } from './ShareLink';

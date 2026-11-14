@@ -1,6 +1,6 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Page } from './api';
+import type { Page } from '../../core/src/api';
 import { catalogRevision, type CatalogScope } from './catalog-changes';
 import { errorMessage } from './CatalogPieces';
 

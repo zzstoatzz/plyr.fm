@@ -1,4 +1,4 @@
-import type { Page } from './api';
+import type { Page } from './api.ts';
 
 export class QueueContinuation<T extends { id: string }> {
   private cursor: string | undefined;

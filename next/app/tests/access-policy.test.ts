@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { Track } from '../src/api.ts';
+import type { Track } from '../../core/src/api.ts';
 import { AUDIO_SPACE_TYPE, NSID } from '../src/auth-config.ts';
 import { describePolicy, implicitRule, isOpen, parsePolicy, parsePrice, policyRecord, trackSpace } from '../src/access/policy.ts';
 

@@ -130,9 +130,12 @@ function changedFiles(base) {
   const committed = execFileSync('git', ['diff', '--name-only', `${base}...HEAD`], { cwd: app, encoding: 'utf8' });
   const working = execFileSync('git', ['diff', '--name-only', 'HEAD'], { cwd: app, encoding: 'utf8' });
   const prefix = execFileSync('git', ['rev-parse', '--show-prefix'], { cwd: app, encoding: 'utf8' }).trim();
-  return [...new Set([...committed.split('\n'), ...working.split('\n')])]
-    .filter(file => file.startsWith(prefix))
-    .map(file => file.slice(prefix.length));
+  const corePrefix = path.posix.join(prefix, '../core') + '/';
+  return [...new Set([...committed.split('\n'), ...working.split('\n')])].flatMap(file => {
+    if (file.startsWith(prefix)) return [file.slice(prefix.length)];
+    if (file.startsWith(corePrefix)) return [file.slice(corePrefix.length)];
+    return [];
+  });
 }
 
 function affected(files) {

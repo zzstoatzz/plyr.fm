@@ -7,7 +7,7 @@ import { PauseGlyph as Pause, PlayGlyph as Play } from './PlayerGlyph';
 import { PlayerLoader } from './PlayerLoader';
 import { useState } from 'react';
 import { Image, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
-import type { Track } from './api';
+import type { Track } from '../../core/src/api';
 import { useAppearance } from './appearance';
 import { artistName } from './CatalogPieces';
 import { usePlayback } from './playback';

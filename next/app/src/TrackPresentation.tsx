@@ -4,7 +4,7 @@ import { Text } from './Text';
 import { Link } from 'expo-router';
 import { type ReactNode, useState } from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
-import type { Track } from './api';
+import type { Track } from '../../core/src/api';
 import { useAppearance } from './appearance';
 import { Cover, artistName } from './CatalogPieces';
 

@@ -7,7 +7,7 @@ import { displayUrl } from './artwork';
 import { Cover } from './CatalogPieces';
 import { Copy, InlineLink, Page } from './controls';
 import { playerSheet } from './player-sheet';
-import { radioStations, type RadioStation } from './radio';
+import { radioStations, type RadioStation } from '../../core/src/radio';
 import { useRadio } from './radio-session';
 import { Text } from './Text';
 import { useRadioFeed } from './use-radio-feed';

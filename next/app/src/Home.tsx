@@ -4,7 +4,7 @@ import { FlatList, Pressable, StyleSheet, View, useWindowDimensions } from 'reac
 import { HomeTrackRow } from './HomeTrackRow';
 import { HomeChart } from './HomeChart';
 import { HomeArtists } from './HomeArtists';
-import type { Track } from './api';
+import type { Track } from '../../core/src/api';
 import { useAuth } from './auth';
 import { Heading, Status, type Play } from './CatalogPieces';
 import { Text } from './Text';

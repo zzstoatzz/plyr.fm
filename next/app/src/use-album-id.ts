@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { api, type ListSummary, type Track } from './api';
+import { api } from './api-client';
+import { type ListSummary, type Track } from '../../core/src/api';
 
 const byArtist = new Map<string, Promise<ListSummary[]>>();
 

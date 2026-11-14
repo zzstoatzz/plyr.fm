@@ -1,7 +1,8 @@
 import { openCoordinatorSocket } from './coordinator-origin';
 import { useEffect, useRef, useState } from 'react';
-import { api, type Track } from './api';
-import { JamConnection, jamPosition, type JamIntent, type JamPhase, type JamState, type JamTrack } from './jam-connection';
+import { api } from './api-client';
+import { type Track } from '../../core/src/api';
+import { JamConnection, jamPosition, type JamIntent, type JamPhase, type JamState, type JamTrack } from '../../core/src/jam-connection';
 
 export interface JamPlaybackTarget {
   queue: Track[];

@@ -6,7 +6,7 @@ import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } 
 import { Animated, PixelRatio, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { PlayGlyph as PlayIcon } from './PlayerGlyph';
 import { PlayerLoader } from './PlayerLoader';
-import type { ListSummary, Page, Track } from './api';
+import type { ListSummary, Page, Track } from '../../core/src/api';
 import { Action, Copy } from './controls';
 import { WaveLoading } from './WaveLoading';
 import { compactCount } from './home-state';

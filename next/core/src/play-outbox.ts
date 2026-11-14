@@ -1,5 +1,5 @@
-import type { QualifiedPlay } from './listening-session';
-export type { QualifiedPlay } from './listening-session';
+import type { QualifiedPlay } from './listening-session.ts';
+export type { QualifiedPlay } from './listening-session.ts';
 
 export interface PendingPlay extends QualifiedPlay {
 	createdAt: number;

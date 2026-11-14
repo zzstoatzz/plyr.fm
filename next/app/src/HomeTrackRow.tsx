@@ -3,7 +3,7 @@ import { DotsThree as Ellipsis } from './icons';
 import { Link } from 'expo-router';
 import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, View, type ViewInstance } from 'react-native';
-import type { Track } from './api';
+import type { Track } from '../../core/src/api';
 import { useAppearance } from './appearance';
 import { artistName, Cover, trackMeta, type Play } from './CatalogPieces';
 import { cardSurface } from './materials';

@@ -1,6 +1,7 @@
 import { ClientResponseError, ok } from '@atcute/client';
 import type { Auth, Did } from '../auth-state';
-import { api, trackIdFromUri, type AwaitStatus } from '../api';
+import { api } from '../api-client';
+import { trackIdFromUri, type AwaitStatus } from '../../../core/src/api';
 import type { MediaFile } from '../pds';
 import { NSID } from '../config';
 import { normalizeTrackTags } from './track-tags';

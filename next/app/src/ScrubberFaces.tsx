@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Platform, Pressable, StyleSheet, View } from 'react-native';
-import type { TrackComment } from './api';
+import type { TrackComment } from '../../core/src/api';
 import { useAppearance } from './appearance';
 import { Cover } from './CatalogPieces';
 import { clock } from './chapters';
