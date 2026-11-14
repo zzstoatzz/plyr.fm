@@ -30,9 +30,9 @@
             "description": "Deprecated: one space. Read for older records; write spaces."
           },
           "subject": {
-            "type": "ref",
-            "ref": "com.atproto.repo.strongRef",
-            "description": "What the policy sells or grants, usually an fm.plyr.release, for display."
+            "type": "string",
+            "format": "at-uri",
+            "description": "What the policy sells or grants, for display: an fm.plyr.release or a single fm.plyr.track."
           },
           "rule": {
             "type": "union",

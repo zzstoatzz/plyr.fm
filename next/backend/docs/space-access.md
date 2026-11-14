@@ -16,7 +16,7 @@ records carry a single `space`, still read) and one rule. a space can carry any
 number of policies; a reader who passes any one of them may read the whole
 space. one policy over several spaces is how one purchase opens an album and the
 single that shares a track with it. `subject` optionally names the
-`fm.plyr.release` the policy sells, for display.
+`fm.plyr.release` (or lone track) the policy sells, by at-uri, for display.
 
 | rule | passes |
 | --- | --- |

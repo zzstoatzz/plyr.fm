@@ -24,12 +24,13 @@ test('policies parse the four rules and round-trip what the app writes', () => {
 
 test('one policy can open several spaces and name the release it sells', () => {
   const single = `at://${artist}/space/${AUDIO_SPACE_TYPE}/3single`;
-  const subject = { uri: `at://${artist}/${NSID.release}/3album`, cid: 'bafyrelease' };
+  const subject = `at://${artist}/${NSID.release}/3album`;
   const written = policyRecord([space, single], { kind: 'purchase', amount: 800, currency: 'USD' }, 'buy the album', subject);
   assert.equal('space' in written, false, 'new records write spaces only');
   const parsed = parsePolicy({ uri: `at://${artist}/${NSID.policy}/3p`, cid: 'bafy', value: written }, artist);
   assert.deepEqual(parsed?.spaces, [space, single]);
-  assert.deepEqual(parsed?.subject, subject);
+  assert.equal(parsed?.subject, subject);
+  assert.equal(parsePolicy({ uri: `at://${artist}/${NSID.policy}/3p`, cid: 'bafy', value: { ...written, subject: `at://did:plc:other/${NSID.release}/3x` } }, artist)?.subject, undefined, "another artist's release is not shown as the subject");
   assert.deepEqual(parsePolicy(item({ $type: `${NSID.policy}#signedIn` }), artist)?.spaces, [space], 'older single-space records still read');
   const signedIn = { $type: `${NSID.policy}#signedIn` };
   assert.equal(parsePolicy(item(signedIn, { spaces: [space] }), artist), undefined, 'space and spaces together');

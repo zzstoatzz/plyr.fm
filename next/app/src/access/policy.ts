@@ -10,10 +10,8 @@ export type Rule =
   | { kind: 'supporter'; brokers?: string[] }
   | { kind: 'purchase'; amount: number; currency: string; brokers?: string[] };
 
-export interface StrongRef { uri: string; cid: string }
-
-/** `spaces` are the spaces this policy opens; `subject` is the release it sells or grants, when named */
-export interface Policy { uri: string; cid: string; rkey: string; spaces: string[]; rule: Rule; title?: string; subject?: StrongRef }
+/** `spaces` are the spaces this policy opens; `subject` is the release or track it sells or grants, when named */
+export interface Policy { uri: string; cid: string; rkey: string; spaces: string[]; rule: Rule; title?: string; subject?: string }
 
 const MAX_SPACES = 16;
 
@@ -69,8 +67,7 @@ export function parsePolicy(item: unknown, author: string): Policy | undefined {
   const parsed = rule(item.value.rule);
   if (!parsed) return undefined;
   const title = typeof item.value.title === 'string' && item.value.title.trim() ? item.value.title.trim() : undefined;
-  const subject = object(item.value.subject) && typeof item.value.subject.uri === 'string' && typeof item.value.subject.cid === 'string'
-    ? { uri: item.value.subject.uri, cid: item.value.subject.cid } : undefined;
+  const subject = typeof item.value.subject === 'string' && item.value.subject.startsWith(`at://${author}/`) ? item.value.subject : undefined;
   return { uri: item.uri, cid: item.cid, rkey: item.uri.slice(prefix.length), spaces, rule: parsed, ...(title ? { title } : {}), ...(subject ? { subject } : {}) };
 }
 
@@ -82,7 +79,7 @@ function spaceList(value: Record<string, unknown>): string[] | undefined {
   return Array.isArray(list) && list.length >= 1 && list.length <= MAX_SPACES && list.every(entry => typeof entry === 'string') ? list as string[] : undefined;
 }
 
-export function policyRecord(spaces: string[], value: Rule, title?: string, subject?: StrongRef) {
+export function policyRecord(spaces: string[], value: Rule, title?: string, subject?: string) {
   const { kind, ...fields } = value;
   return {
     $type: NSID.policy, spaces, rule: { $type: `${NSID.policy}#${kind}`, ...fields },
