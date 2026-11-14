@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@atcute/client": "5.1.2",
+    "@atproto/common-web": "file:../app/vendor/space-sdk/atproto-common-web-0.5.11.tgz",
     "@atproto/crypto": "file:../app/vendor/space-sdk/atproto-crypto-0.5.4.tgz",
     "@atproto/lex-data": "file:../app/vendor/space-sdk/atproto-lex-data-0.1.7.tgz",
     "@atproto/lex-json": "file:../app/vendor/space-sdk/atproto-lex-json-0.1.6.tgz",

@@ -6,8 +6,8 @@
 
 <div class="transport" class:compact>
 	<button type="button" class="icon-button previous" aria-label="Previous track" onclick={() => player.previous()}><Icon name="prev_f" size={21} /></button>
-	<button type="button" class="primary-button toggle" aria-label={player.playing && !player.snapshot.outputElsewhere ? 'Pause' : 'Play'} onclick={() => player.toggle()}>
-		<Icon name={player.playing && !player.snapshot.outputElsewhere ? 'pause' : 'play'} size={23} />
+	<button type="button" class="primary-button toggle" aria-label={player.playing && !player.outputElsewhere ? 'Pause' : 'Play'} onclick={() => player.toggle()}>
+		<Icon name={player.playing && !player.outputElsewhere ? 'pause' : 'play'} size={23} />
 	</button>
 	<button type="button" class="icon-button" aria-label="Next track" onclick={() => player.next()}><Icon name="next_f" size={21} /></button>
 </div>

@@ -30,7 +30,7 @@
 		<p class="state">your queue is empty.</p>
 		<a href="/">browse tracks</a>
 	{/if}
-	{#if player.snapshot.queueError}<p class="state" role="status">{player.snapshot.queueError}</p>{/if}
+	{#if !player.privateMode && player.snapshot.queueError}<p class="state" role="status">{player.snapshot.queueError}</p>{/if}
 </section>
 
 {#snippet row(track: NonNullable<typeof player.current>, index: number, current: boolean)}
@@ -39,7 +39,7 @@
 			<Artwork src={trackArtwork(track)} size={40} eager={index - player.index < 8} />
 		</button>
 		<div class="labels">
-			<a class="truncate" href={`/track/${track.id}`}>{track.metadata.title}</a>
+			{#if player.privateMode}<span class="truncate">{track.metadata.title}</span>{:else}<a class="truncate" href={`/track/${track.id}`}>{track.metadata.title}</a>{/if}
 			<span class="subtle truncate">{artistName(track)}</span>
 		</div>
 		<span class="subtle time">{clock(track.metadata.duration_seconds)}</span>

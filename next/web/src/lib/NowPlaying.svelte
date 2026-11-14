@@ -29,7 +29,8 @@
 				<button class="icon-button" type="button" aria-label={`Repeat ${player.repeat}`} aria-pressed={player.repeat !== 'off'} onclick={() => player.cycleRepeat()}><Icon name="repeat" size={19} /></button>
 			</div>
 			{#if player.error}<p class="state" role="status">{player.error}</p>{/if}
-			<a class="track-link" href={`/track/${player.current.id}`} onclick={close}>view track <span aria-hidden="true">→</span></a>
+			{#if player.privateMode}<a class="track-link" href="/private" onclick={close}>private music <span aria-hidden="true">→</span></a>
+			{:else}<a class="track-link" href={`/track/${player.current.id}`} onclick={close}>view track <span aria-hidden="true">→</span></a>{/if}
 			{#if player.current.metadata.description}<p class="description">{player.current.metadata.description}</p>{/if}
 		</div>
 	</div>

@@ -1,9 +1,11 @@
 import type { Track } from '$core/api';
+import { isPrivateTrack } from '$core/track-access';
 import { blobUrl } from '$core/identity';
 import { api } from '$lib/api';
 import { protectedAudio, type AudioSource } from './gated-audio';
 
 export async function playbackSource(track: Track, signal: AbortSignal): Promise<AudioSource> {
+	if (isPrivateTrack(track)) return protectedAudio(track.record.uri, signal);
 	const { availability } = await api.playback(track.id);
 	signal.throwIfAborted();
 	if (availability.status === 'gated' && availability.space) {
