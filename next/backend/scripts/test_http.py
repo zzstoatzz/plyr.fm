@@ -155,6 +155,16 @@ def main() -> None:
             assert headers["connection"].lower() == "close"
             assert _request(base_url, "/health")[0] == 200
 
+        # a browser preflight before every JSON POST; an empty 204 once
+        # crashed the process, so check it answers and the server survives
+        for path in ("/v1/artists/resolve", "/v1/tracks", "/health"):
+            status, headers, body = _request(
+                base_url, path, method="OPTIONS", origin=ALLOWED_ORIGIN
+            )
+            assert status == 204 and body == {}
+            assert headers["access-control-allow-origin"] == ALLOWED_ORIGIN
+            assert _request(base_url, "/health")[0] == 200
+
         status, _, api = _request(base_url, "/v1")
         assert status == 200 and api == {"object": "api", "version": "v1"}
 
