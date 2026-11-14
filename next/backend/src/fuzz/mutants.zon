@@ -101,4 +101,28 @@
         .old = "bio = EXCLUDED.bio,",
         .new = "bio = coalesce(profile_records.bio, EXCLUDED.bio),",
     },
+    .{
+        .name = "a queue takes a raw-codec CID",
+        .file = "src/internal/jams/protocol.zig",
+        .old = "if (cid.codec() != 0x71) return false;",
+        .new = "",
+    },
+    .{
+        .name = "a queue takes a track longer than a day",
+        .file = "src/internal/jams/protocol.zig",
+        .old = " or track.durationMs > max_position_ms) return false;",
+        .new = ") return false;",
+    },
+    .{
+        .name = "a queue track id need not name its uri",
+        .file = "src/internal/jams/protocol.zig",
+        .old = "if (!std.mem.eql(u8, uri, track.uri)) return false;",
+        .new = "",
+    },
+    .{
+        .name = "a non-hex jam ticket reaches redis",
+        .file = "src/internal/jams/tickets.zig",
+        .old = "for (token) |byte| if (!std.ascii.isHex(byte)) return error.InvalidTicket;",
+        .new = "",
+    },
 }

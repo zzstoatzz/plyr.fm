@@ -18,6 +18,7 @@ const groups = .{
     .{ "health", @import("fuzz/health.zig") },
     .{ "like_counts", @import("fuzz/like_counts.zig") },
     .{ "jams", @import("fuzz/jams.zig") },
+    .{ "jams_wire", @import("fuzz/jams_wire.zig") },
     .{ "projector", @import("fuzz/projector.zig") },
 };
 
