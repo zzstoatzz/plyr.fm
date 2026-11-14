@@ -3,7 +3,7 @@ import { createOperation, type CreateOperation } from './create-operation.ts';
 export const UPLOAD_PART_BYTES = 10_485_760;
 export const MAX_SERVICE_AUDIO_BYTES = 1_610_612_736;
 const formats: Record<string, string> = { mp3: 'audio/mpeg', wav: 'audio/wav', flac: 'audio/flac', ogg: 'audio/ogg', m4a: 'audio/mp4', aac: 'audio/aac' };
-const processingFormats: Record<string, string> = { ...formats, aif: 'audio/aiff', aiff: 'audio/aiff', webm: 'audio/webm' };
+const processingFormats: Record<string, string> = { ...formats, aif: 'audio/aiff', aiff: 'audio/aiff', webm: 'audio/webm', opus: 'audio/opus' };
 export type UploadProcessing = { recipe: 'mp3-320k-44100-v1'; outputBudget: number };
 export type UploadRendition = { duration: number; sizeBytes: number; contentType: 'audio/mpeg'; fileType: 'mp3' };
 export type UploadProcessingFailure = 'output_budget_exceeded' | 'executor_failed' | 'lease_expired';
@@ -31,8 +31,12 @@ export function audioFormat(name: string, type: string, processing = false) {
   // Pickers name the same format differently: iOS reports WAV as audio/vnd.wave and WebM as video/webm.
   const normalized = ({ 'audio/x-wav': 'audio/wav', 'audio/wave': 'audio/wav', 'audio/vnd.wave': 'audio/wav', 'audio/x-pn-wav': 'audio/wav',
     'audio/x-flac': 'audio/flac', 'audio/x-m4a': 'audio/mp4', 'audio/m4a': 'audio/mp4', 'audio/x-aiff': 'audio/aiff', 'audio/mp3': 'audio/mpeg',
-    'audio/x-mpeg': 'audio/mpeg', 'audio/x-aac': 'audio/aac', 'audio/vorbis': 'audio/ogg', 'video/webm': 'audio/webm' } as Record<string, string>)[type] ?? type;
-  if (!contentType || (normalized && normalized !== contentType)) throw new Error(processing ? 'choose an MP3, WAV, FLAC, OGG, M4A, AAC, AIFF or WebM file.' : 'choose an MP3, WAV, FLAC, OGG, M4A or AAC file.');
+    'audio/x-mpeg': 'audio/mpeg', 'audio/x-aac': 'audio/aac', 'audio/vorbis': 'audio/ogg', 'video/webm': 'audio/webm',
+    // Some pickers and share sheets send no real type at all; the extension decides then.
+    'application/octet-stream': '', 'binary/octet-stream': '', 'application/x-unknown': '' } as Record<string, string>)[type.toLowerCase()] ?? type.toLowerCase();
+  // Opus usually travels in an Ogg container and is reported as such.
+  if (fileType === 'opus' && (normalized === 'audio/ogg' || normalized === 'audio/x-opus+ogg')) return { fileType, contentType };
+  if (!contentType || (normalized && normalized !== contentType)) throw new Error(processing ? 'choose an MP3, WAV, FLAC, OGG, Opus, M4A, AAC, AIFF or WebM file.' : 'choose an MP3, WAV, FLAC, OGG, M4A or AAC file.');
   return { fileType, contentType };
 }
 function processingRecipe(value: unknown, sourceBytes: number): UploadProcessing {

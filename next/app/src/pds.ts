@@ -9,6 +9,7 @@ import { NSID } from './config';
 import { blobUrl } from './identity';
 import { catalogChanged } from './catalog-changes';
 import { normalizeTrackTags } from './publishing/track-tags';
+import { ARTWORK_TYPES, MAX_ARTWORK_BYTES } from './publishing/artwork-model';
 import { TID } from '@atproto/common-web';
 import { createStorage } from './publishing/create-storage';
 import { recordCreator, CreateUnconfirmed } from './publishing/create-record';
@@ -434,8 +435,8 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 	 */
 	async function uploadArtwork(file: MediaFile): Promise<{ imageBlob: unknown; imageUrl: string }> {
 		const { rpc, did } = session();
-		if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.type)) throw new Error('choose a PNG, JPEG, WebP, or GIF cover');
-		if (file.size > 10_000_000) throw new Error('cover art is limited to 10 MB');
+		if (!(ARTWORK_TYPES as readonly string[]).includes(file.type)) throw new Error('choose a PNG, JPEG, WebP, or GIF cover');
+		if (file.size > MAX_ARTWORK_BYTES) throw new Error('cover art is limited to 10 MB');
 		const uploaded = await uploadBlob(rpc, file);
 		const cid = (uploaded.blob as { ref: { $link: string } }).ref.$link;
 		return { imageBlob: uploaded.blob, imageUrl: await blobUrl(did, cid) };

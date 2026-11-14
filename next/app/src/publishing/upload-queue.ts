@@ -164,9 +164,11 @@ async function drain() {
         patch(job, { phase: 'uploading' });
         const run = job.operation ? () => runService(job!, job!.operation!) : await prepare(job, job.input!);
         await run();
+        job.input = undefined; job.file = undefined;
       } catch (failure) {
+        // The failed job keeps what was entered, files included, so the form can take it back.
         patch(job, { phase: 'failed', error: failure instanceof Error ? failure.message.replace(/\.$/, '') : undefined });
-      } finally { job.input = undefined; job.file = undefined; }
+      }
     }
   } finally { running = false; }
 }
@@ -203,6 +205,15 @@ export const uploadQueue = {
     enqueueSaved(operation, file);
     void drain();
   },
+  /** A failed upload's form entries, taken out of the queue so they can be edited and sent again. */
+  takeBack(id: string): NewTrack | undefined {
+    const job = jobs.find(item => item.id === id && item.phase === 'failed' && item.input);
+    if (!job) return;
+    jobs = jobs.filter(item => item !== job);
+    toast.dismissKey(`upload:${job.id}`);
+    publish();
+    return job.input;
+  },
   /** Creations and transfers the queue is driving, so recovery screens leave them alone. */
   busy() {
     const active = jobs.filter(job => job.phase !== 'done' && job.phase !== 'failed');
@@ -211,6 +222,7 @@ export const uploadQueue = {
   active: () => jobs.some(job => job.phase !== 'done' && job.phase !== 'failed'),
   subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
   snapshot: () => jobs as readonly UploadJobView[],
+  editable: (id: string) => jobs.some(job => job.id === id && job.phase === 'failed' && !!job.input),
 };
 
 export function useUploadQueue() {

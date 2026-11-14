@@ -44,12 +44,16 @@ function dismiss(id: number) {
   setTimeout(() => publish(toasts.filter(item => item.id !== id)), leave);
 }
 
+function dismissKey(key: string) {
+  for (const item of toasts.filter(item => item.key === key)) dismiss(item.id);
+}
+
 function update(id: number, message: string, type?: ToastType) {
   publish(toasts.map(item => item.id === id ? { ...item, message, type: type ?? item.type } : item));
 }
 
 export const toast = {
-  add, dismiss, update, leave,
+  add, dismiss, dismissKey, update, leave,
   success: (message: string, duration = 3000, action?: ToastAction) => add(message, 'success', duration, action),
   error: (message: string, duration = 5000) => add(message, 'error', duration),
   info: (message: string, duration = 3000, action?: ToastAction) => add(message, 'info', duration, action),

@@ -46,6 +46,14 @@
           }
         }
       ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "plyr.fm opens your photos so you can pick cover art.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
       "./plugins/share-extension-name"
     ],
     "extra": {
