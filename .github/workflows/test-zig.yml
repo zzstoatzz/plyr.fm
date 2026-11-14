@@ -8,6 +8,10 @@ on:
       - "next/backend/**"
       - "backend/src/backend/upload_contract.json"
       - ".github/workflows/test-zig.yml"
+  # nightly: the mutants job proves the property harnesses still catch every
+  # planted bug in src/fuzz/mutants.zon
+  schedule:
+    - cron: "17 9 * * *"
   workflow_dispatch:
 
 permissions:
@@ -170,3 +174,48 @@ jobs:
         env:
           PLYR_ZIG_TEST_DATABASE_URL: postgresql://zig_test:zig_test@127.0.0.1:5435/zig_test
         run: scripts/fetch-interop-fixtures && zig build fuzz -Dhegel -Dfuzz-cases=500
+
+  mutants:
+    name: zig property harnesses catch every mutant
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: zig_test
+          POSTGRES_PASSWORD: zig_test
+          POSTGRES_DB: zig_test
+        ports:
+          - 5435:5432
+        options: >-
+          --health-cmd "pg_isready -U zig_test -d zig_test"
+          --health-interval 2s --health-timeout 5s --health-retries 30
+
+    defaults:
+      run:
+        working-directory: next/backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install zig 0.17.0
+        run: |
+          python3 -m pip install --user ziglang==0.17.0
+          ln -s "$(python3 -c 'import ziglang, os; print(os.path.dirname(ziglang.__file__))')/zig" /usr/local/bin/zig || sudo ln -s "$(python3 -c 'import ziglang, os; print(os.path.dirname(ziglang.__file__))')/zig" /usr/local/bin/zig
+          zig version
+
+      - name: install openssl headers
+        run: sudo apt-get update && sudo apt-get install -y libssl-dev
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/hegel-zig
+          key: hegel-zig-${{ hashFiles('next/backend/build.zig.zon') }}
+
+      - name: plant each mutant
+        env:
+          PLYR_ZIG_TEST_DATABASE_URL: postgresql://zig_test:zig_test@127.0.0.1:5435/zig_test
+        run: scripts/fetch-interop-fixtures && zig build mutants -Dhegel
