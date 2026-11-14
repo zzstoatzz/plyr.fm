@@ -11,7 +11,7 @@ import { DesktopTrackHeader, DesktopTrackRow } from './DesktopTrackRow';
 import { compactCount, dayGroup, periodLabels } from './home-state';
 import { HomeFeatured, useFeaturedArtist } from './HomeFeatured';
 import { HomeTagBar } from './HomeTagBar';
-import { ArrowsOut } from './icons';
+import { ArrowRight } from './icons';
 import { cardSurface } from './materials';
 import { wideFrame } from './controls';
 import { Text } from './Text';
@@ -39,23 +39,25 @@ function Section({ title, aside, children, testID }: { title: string; aside?: Re
   </View>;
 }
 
-function AtlasTile({ onPlay }: { onPlay: Play }) {
+/** A still, live picture of the atlas. The whole card opens it; nothing inside is interactive. */
+function AtlasTile() {
   const theme = useAppearance();
   const [summary, setSummary] = useState<string>();
-  return <View testID="home-atlas" style={[cardSurface(theme), styles.atlas]}>
-    <AtlasView preview onPlay={track => onPlay(track)} onSummary={setSummary} />
-    <View pointerEvents="box-none" style={styles.atlasCaption}>
-      <View pointerEvents="none" style={{ flexShrink: 1 }}>
+  const [hovered, setHovered] = useState(false);
+  return <Link href="/atlas" asChild><Pressable testID="home-atlas" accessibilityRole="link" accessibilityLabel={`Open the atlas${summary ? `, ${summary}` : ''}`}
+    onHoverIn={() => setHovered(true)} onHoverOut={() => setHovered(false)}
+    style={StyleSheet.flatten([cardSurface(theme), styles.atlas, hovered && { borderColor: theme.border }])}>
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}><AtlasView preview onSummary={setSummary} /></View>
+    <View pointerEvents="none" style={styles.atlasCaption}>
+      <View style={{ flexShrink: 1 }}>
         <Text style={{ color: theme.text, fontSize: 15 * theme.scale, fontWeight: '700' }}>atlas</Text>
-        <Text numberOfLines={1} style={{ color: theme.muted, fontSize: 12 * theme.scale }}>{summary ?? 'the catalog, mapped by sound'}</Text>
+        <Text numberOfLines={2} style={{ color: theme.muted, fontSize: 12 * theme.scale }}>{summary ?? 'the catalog, mapped by sound'}</Text>
       </View>
-      <Link href="/atlas" asChild><Pressable accessibilityRole="link" accessibilityLabel="Open the atlas"
-        style={StyleSheet.flatten([styles.expand, { backgroundColor: theme.surface, borderColor: theme.line }])}>
-        <ArrowsOut size={15} color={theme.text} />
-        <Text style={{ color: theme.text, fontSize: 13 * theme.scale, fontWeight: '600' }}>explore</Text>
-      </Pressable></Link>
+      <View style={[styles.expand, { backgroundColor: hovered ? theme.text : theme.surface, borderColor: theme.line }]}>
+        <ArrowRight size={16} color={hovered ? theme.background : theme.text} />
+      </View>
     </View>
-  </View>;
+  </Pressable></Link>;
 }
 
 function TopTracks({ onPlay, top, shown }: { onPlay: Play; top: ReturnType<typeof useTopTracks>; shown: number }) {
@@ -139,7 +141,7 @@ export function DesktopHome({ onPlay, hiddenTags }: { onPlay: Play; hiddenTags: 
     onScroll={event => { viewport.current.offset = event.nativeEvent.contentOffset.y; fill(); }}>
     <View style={styles.hero}>
       {featured.status !== 'empty' && <View style={styles.main}><HomeFeatured featured={featured} onPlay={onPlay} /></View>}
-      <View style={[styles.atlasSlot, { width: rail }, featured.status === 'empty' && { flex: 1 }]}><AtlasTile onPlay={onPlay} /></View>
+      <View style={[styles.atlasSlot, { width: rail }, featured.status === 'empty' && { flex: 1 }]}><AtlasTile /></View>
     </View>
     <View style={styles.columns}>
       <View style={styles.main}>
@@ -177,7 +179,7 @@ const styles = StyleSheet.create({
   atlasSlot: { minHeight: 300 },
   atlas: { flex: 1, borderRadius: 18, overflow: 'hidden' },
   atlasCaption: { position: 'absolute', left: 0, right: 0, bottom: 0, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, padding: 14 },
-  expand: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 36, paddingHorizontal: 14, borderRadius: 18, borderWidth: 1 },
+  expand: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 18, borderWidth: 1 },
   columns: { flexDirection: 'row', gap: 40, alignItems: 'flex-start' },
   main: { flex: 1, minWidth: 0 },
   rail: { gap: 34 },
