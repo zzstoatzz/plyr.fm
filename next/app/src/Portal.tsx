@@ -9,7 +9,8 @@ import { useAuth } from './auth';
 import { useAppearance } from './appearance';
 import { Action, Copy, pageFrame, row } from './controls';
 import { Cover, Row, useResource } from './CatalogPieces';
-import { accessLabel } from './access/label';
+import { accessLabel } from '../../core/src/access/label';
+import { AUDIO_SPACE_TYPE } from './auth-config';
 import { usePlayback } from './playback';
 import { privatePds } from './publishing/private-pds';
 import { isPrivateTrack } from '../../core/src/track-access';
@@ -18,7 +19,7 @@ import { Text } from './Text';
 import { WaveLoading } from './WaveLoading';
 import { usePortalPages } from './use-portal-pages';
 import { ShareLink } from './ShareLink';
-import { catalogRevision } from './catalog-changes';
+import { catalogRevision } from '../../core/src/catalog/changes';
 import { useTabs } from './behaviors/use-tabs';
 
 const portalTabs = ['tracks', 'albums'] as const;
@@ -128,7 +129,7 @@ function OwnedTracks({ did, active, tabs }: { did: string; active: boolean; tabs
   return <View style={{ gap: 8 }}>
     {tabs && <CatalogToolbar>{tabs}</CatalogToolbar>}
     {all.map(track => {
-      const subtitle = [accessLabel(track), !isPrivateTrack(track) && plays(track), track.metadata.album].filter(Boolean).join(' · ');
+      const subtitle = [accessLabel(track, AUDIO_SPACE_TYPE), !isPrivateTrack(track) && plays(track), track.metadata.album].filter(Boolean).join(' · ');
       return isPrivateTrack(track)
         ? <Row key={track.record.uri} title={track.metadata.title} image={trackArtwork(track)} subtitle={subtitle}
           onPress={() => player.play(track, own)} action={<Edit label={`manage ${track.metadata.title}`} href="/private" />} />

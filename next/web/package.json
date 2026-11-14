@@ -7,6 +7,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "check:account": "node scripts/check-account.cjs",
+    "check:creator": "node scripts/check-creator.cjs",
     "check:browser": "node scripts/check-shell.cjs",
     "check:upload": "node scripts/check-upload.cjs",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"

@@ -4,7 +4,7 @@ import { createPublicPds } from '../../core/src/pds';
 import { api } from './api-client';
 import { getAuth, type Auth } from './auth-state';
 import { NSID } from './config';
-import { catalogChanged } from './catalog-changes';
+import { catalogChanged } from '../../core/src/catalog/changes';
 import { createStorage } from './publishing/create-storage';
 
 export type { LikeRef, ListRecord, MediaFile, NewTrack, ProfileRecord, TrackEdits } from '../../core/src/pds';
