@@ -59,7 +59,8 @@ function Shell() {
     ...(auth.did ? [{ label: 'Upload', href: '/upload' as Href, icon: CirclePlus, active: path === '/upload' }] : []),
     { label: 'You', href: accountPath, icon: UserRound, active: ['/portal', '/login'].includes(path) || !auth.did && path === '/upload' || !wide && path === '/settings' }
   ];
-  const showBack = !['/', '/search', '/library', '/portal', '/login', '/upload'].includes(path);
+  // the sidebar is the way out of its own destinations on a wide window
+  const showBack = !['/', '/search', '/library', '/portal', '/login', '/upload'].includes(path) && !(wide && ['/radio', '/atlas', '/stats', '/settings'].includes(path));
   const detail = /^\/(track|u|album|playlist|edit-track)\//.test(path);
   const tabTitle = path === '/' ? (wide ? undefined : 'plyr.fm') : path === '/search' ? 'search' : path === '/library' ? 'library' : path === '/portal' ? 'your music' : path === '/atlas' ? 'atlas' : undefined;
   const detailTitle = path.startsWith('/u/') ? 'artist' : path.startsWith('/edit-track/') ? 'edit track'
@@ -104,7 +105,7 @@ function Shell() {
       <View style={{ flex: 1, minWidth: 0 }}>
         {!wide && <Toasts top />}
         {!(wide && path === '/') && <View style={{
-          ...(width >= DESKTOP_HOME_WIDTH && ['/library', '/liked'].includes(path) ? wideFrame : pageFrame), minHeight: tabTitle ? 52 : 48, flexDirection: 'row', alignItems: 'center',
+          ...(path === '/atlas' ? { ...pageFrame, maxWidth: '100%' } : width >= DESKTOP_HOME_WIDTH && ['/library', '/liked'].includes(path) ? wideFrame : pageFrame), minHeight: tabTitle ? 52 : 48, flexDirection: 'row', alignItems: 'center',
           borderBottomWidth: detail ? StyleSheet.hairlineWidth : 0, borderColor: theme.hairline
         }}>
           {showBack && <Pressable accessibilityRole="button" accessibilityLabel="Back"

@@ -78,6 +78,24 @@ export function weekNumber(now = Date.now()): number {
 type LikedTrack = { artist: { did: string }; metrics: { like_count: number } };
 
 /** Artists by the likes their tracks drew, most first; the artist of the week walks this list one week at a time. */
+/** A count in a narrow column: 950, 1.2k, 12k, 3.4m. */
+export function compactCount(count: number): string {
+  if (count < 1000) return String(count);
+  const [value, unit] = count < 1_000_000 ? [count / 1000, 'k'] : [count / 1_000_000, 'm'];
+  return `${value < 10 ? Math.floor(value * 10) / 10 : Math.floor(value)}${unit}`;
+}
+
+/** An artist's tracks without re-uploads: the first of each title, ignoring case and spacing. */
+export function distinctTracks<T extends { metadata: { title: string } }>(tracks: T[]): T[] {
+  const seen = new Set<string>();
+  return tracks.filter(track => {
+    const key = track.metadata.title.trim().replace(/\s+/g, ' ').toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 export function rankedArtists(liked: LikedTrack[]): string[] {
   const score = new Map<string, number>();
   for (const track of liked) score.set(track.artist.did, (score.get(track.artist.did) ?? 0) + Math.max(1, track.metrics.like_count));

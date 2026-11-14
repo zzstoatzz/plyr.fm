@@ -23,6 +23,7 @@ import { WaveLoading } from './WaveLoading';
 /** Window width from which home lays out as a page with a rail instead of the phone feed. */
 export const DESKTOP_HOME_WIDTH = 1100;
 const RAIL = 340;
+const ARTISTS = 16;
 
 function Section({ title, aside, children, testID }: { title: string; aside?: ReactNode; children: ReactNode; testID?: string }) {
   const theme = useAppearance();
@@ -35,10 +36,10 @@ function Section({ title, aside, children, testID }: { title: string; aside?: Re
   </View>;
 }
 
-function AtlasTile({ onPlay, wide }: { onPlay: Play; wide: boolean }) {
+function AtlasTile({ onPlay }: { onPlay: Play }) {
   const theme = useAppearance();
   const [summary, setSummary] = useState<string>();
-  return <View testID="home-atlas" style={[cardSurface(theme), styles.atlas, wide ? { flex: 1, height: 300 } : { width: RAIL }]}>
+  return <View testID="home-atlas" style={[cardSurface(theme), styles.atlas]}>
     <AtlasView preview onPlay={track => onPlay(track)} onSummary={setSummary} />
     <View pointerEvents="box-none" style={styles.atlasCaption}>
       <View pointerEvents="none" style={{ flexShrink: 1 }}>
@@ -85,16 +86,21 @@ function ArtistsYouKnow() {
   const theme = useAppearance();
   const { did, ready } = useAuth();
   const network = useNetworkArtists(did, ready);
+  const [all, setAll] = useState(false);
   if (!did || !network.loading && !network.error && !network.artists.length) return null;
-  return <Section testID="home-artists" title="artists you know">
+  const hidden = network.artists.length - ARTISTS;
+  return <Section testID="home-artists" title="artists you know" aside={network.artists.length ? <Text style={{ color: theme.faint, fontSize: 13 * theme.scale, fontVariant: ['tabular-nums'] }}>{network.artists.length}</Text> : undefined}>
     {network.loading ? <WaveLoading label="finding artists you follow..." /> : <View style={styles.people}>
-      {network.artists.slice(0, 12).map(artist => <Link key={artist.did} href={{ pathname: '/u/[handle]', params: { handle: artist.handle || artist.did } }} asChild>
+      {(all ? network.artists : network.artists.slice(0, ARTISTS)).map(artist => <Link key={artist.did} href={{ pathname: '/u/[handle]', params: { handle: artist.handle || artist.did } }} asChild>
         <Pressable accessibilityRole="link" accessibilityLabel={artist.display_name || artist.handle} style={styles.person}>
           <Cover uri={artist.avatar_url} size={60} round />
           <Text numberOfLines={1} style={{ maxWidth: '100%', color: theme.muted, fontSize: 12 * theme.scale, textAlign: 'center' }}>{artist.display_name || artist.handle}</Text>
         </Pressable>
       </Link>)}
     </View>}
+    {!network.loading && hidden > 0 && <Pressable accessibilityRole="button" accessibilityState={{ expanded: all }} onPress={() => setAll(value => !value)} style={styles.more}>
+      <Text style={{ color: theme.accent, fontSize: 13.5 * theme.scale, fontWeight: '600' }}>{all ? 'show fewer' : `show all ${network.artists.length}`}</Text>
+    </Pressable>}
     <Status error={network.error} retry={network.retry} />
   </Section>;
 }
@@ -120,18 +126,14 @@ export function DesktopHome({ onPlay, hiddenTags }: { onPlay: Play; hiddenTags: 
     }
     return out;
   }, [tracks, now]);
-  const hasFeature = featured.status !== 'empty';
   return <ScrollView ref={scroller} testID="home-feed" style={{ flex: 1, backgroundColor: theme.background }} contentContainerStyle={styles.page}
     accessibilityState={{ busy: latest.loading }} scrollEventThrottle={32}
     onLayout={event => { viewport.current.height = event.nativeEvent.layout.height; fill(); }}
     onContentSizeChange={(_, height) => { viewport.current.content = height; fill(); }}
     onScroll={event => { viewport.current.offset = event.nativeEvent.contentOffset.y; fill(); }}>
-    <View style={styles.top}>
-      {hasFeature && <View style={{ flex: 1, minWidth: 0 }}><HomeFeatured featured={featured} onPlay={onPlay} /></View>}
-      <AtlasTile onPlay={onPlay} wide={!hasFeature} />
-    </View>
     <View style={styles.columns}>
       <View style={styles.main}>
+        <HomeFeatured featured={featured} onPlay={onPlay} />
         <Section title="latest" aside={<Pressable accessibilityRole="button" accessibilityLabel="Refresh tracks" onPress={() => { scroller.current?.scrollTo({ y: 0, animated: false }); latest.reload(); }} style={styles.period}>
           <Text style={{ color: theme.faint, fontSize: 13 * theme.scale }}>newest first</Text>
         </Pressable>}>
@@ -151,6 +153,7 @@ export function DesktopHome({ onPlay, hiddenTags }: { onPlay: Play; hiddenTags: 
         </Section>
       </View>
       <View style={styles.rail}>
+        <AtlasTile onPlay={onPlay} />
         <TopTracks onPlay={onPlay} />
         <ArtistsYouKnow />
       </View>
@@ -159,19 +162,19 @@ export function DesktopHome({ onPlay, hiddenTags }: { onPlay: Play; hiddenTags: 
 }
 
 const styles = StyleSheet.create({
-  page: { ...wideFrame, paddingTop: 28, paddingBottom: 40, gap: 34 },
-  top: { flexDirection: 'row', gap: 28, alignItems: 'stretch', minHeight: 300 },
-  atlas: { borderRadius: 18, overflow: 'hidden', minHeight: 300 },
+  page: { ...wideFrame, paddingTop: 28, paddingBottom: 40 },
+  atlas: { borderRadius: 18, overflow: 'hidden', height: 300 },
   atlasCaption: { position: 'absolute', left: 0, right: 0, bottom: 0, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, padding: 14 },
   expand: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 36, paddingHorizontal: 14, borderRadius: 18, borderWidth: 1 },
   columns: { flexDirection: 'row', gap: 40, alignItems: 'flex-start' },
-  main: { flex: 1, minWidth: 0 },
+  main: { flex: 1, minWidth: 0, gap: 30 },
   rail: { width: RAIL, gap: 34 },
   section: { gap: 10 },
   sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 32 },
   period: { minHeight: 44, minWidth: 44, justifyContent: 'center', alignItems: 'flex-end' },
   railTrack: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 58, paddingHorizontal: 8, marginHorizontal: -8, borderRadius: 10 },
   people: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 16 },
+  more: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
   person: { width: '25%', alignItems: 'center', gap: 6, paddingHorizontal: 4, minHeight: 44 },
   day: { fontWeight: '700', letterSpacing: 0.3, paddingTop: 18, paddingBottom: 6 },
   footer: { minHeight: 96, justifyContent: 'center' },
