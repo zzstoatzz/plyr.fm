@@ -19,7 +19,7 @@
   [collection proofs](docs/collection-proofs.md).
 - Verify service JWTs only through `src/internal/atproto/service_auth.zig`.
   Fetch from PDS or DID hosts only through `src/internal/net/`. Each table has
-  one writing module; see "who writes what" in the [readme](README.md).
+  one writing module; see [structure](docs/structure.md).
 - Extend the owning subsystem and its interface before adding another service
   or shared utility. Extract a responsibility when it has an independent
   contract; do not scatter one operation across forwarding-only modules.

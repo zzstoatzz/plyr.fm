@@ -535,7 +535,7 @@ path = "next/backend/src/internal/jams/store.zig"
 max_lines = 948
 
 [[rules]]
-path = "next/backend/src/internal/jams/server.zig"
+path = "next/backend/src/internal/coordinator/server.zig"
 max_lines = 563
 
 [[rules]]
