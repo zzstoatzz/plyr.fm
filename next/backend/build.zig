@@ -137,6 +137,7 @@ pub fn build(b: *std.Build) void {
                     .{ .name = "hegel", .module = hegel.module("hegel") },
                     .{ .name = "zat", .module = root_module.import_table.get("zat").? },
                     .{ .name = "pg", .module = root_module.import_table.get("pg").? },
+                    .{ .name = "redis", .module = root_module.import_table.get("redis").? },
                 },
             });
             // the stores' test schemas embed migrations, so the harnesses
