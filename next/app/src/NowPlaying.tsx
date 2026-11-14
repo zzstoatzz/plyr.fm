@@ -24,7 +24,7 @@ import { currentChapter, parseChapters } from './chapters';
 import { Coachmark } from './Coachmark';
 import { markHintSeen, useHintPending } from './hints';
 import { measure, playerSheet, setFlying, type Rect } from './player-sheet';
-import { FACES_HEIGHT, ScrubberFaces } from './ScrubberFaces';
+import { ScrubberFaces } from './ScrubberFaces';
 import { CommentComposer } from './CommentComposer';
 import { useTrackComments } from './track-comments';
 
@@ -75,17 +75,14 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
   const sideBySide = width >= 800;
   const commentable = !player.live && !player.privatePlayback;
   const comments = useTrackComments(commentable ? track.id : undefined);
-  const controlRoom = 370 + 64 * (theme.scale - 1) + (commentable ? FACES_HEIGHT - 6 : 0);
-  // The first open after install makes room for the "more below" hint under the controls, taking it from the art if the
-  // screen is short, so the hint never covers like/share/queue. The room stays until close, so dismissing never shifts layout.
+  // The first open after install makes room for the "more below" hint under the controls, so it never covers like/share/queue.
+  // The room stays until close, so dismissing never shifts layout.
   const hintPending = useHintPending('now-playing.more-below');
   const [hintRoom, setHintRoom] = useState(false);
-  const [bodyFit, setBodyFit] = useState<{ track: string; height: number }>();
-  useEffect(() => { if (!present) { setHintRoom(false); setBodyFit(undefined); } else if (hintPending && compact && !sideBySide) setHintRoom(true); }, [present, hintPending, compact, sideBySide]);
+  useEffect(() => { if (!present) { setHintRoom(false); } else if (hintPending && compact && !sideBySide) setHintRoom(true); }, [present, hintPending, compact, sideBySide]);
   const hintSlot = 68 * theme.scale;
-  const fitted = hintRoom && viewport > 0 && bodyFit?.track === track.id ? Math.max(128, viewport - 36 - 20 - bodyFit.height - 20 - hintSlot) : Infinity;
   const artwork = sideBySide ? Math.max(160, Math.min(660, width * 0.48 - 56, height - 144))
-    : Math.max(1, Math.min(width - 40, 372, fitted, Math.max(128, height - controlRoom)));
+    : Math.max(1, Math.min(width - 40, 560));
   const duration = player.status.duration || track.metadata.duration_seconds || 0;
   const position = Math.max(0, Math.min(duration, scrub?.id === track.id ? scrub.seconds : player.seekPreview ?? player.status.currentTime));
   const updateScrub = (seconds: number) => setScrub({ id: track.id, seconds });
@@ -157,7 +154,10 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
   // The resting art loads its own large rendition and fades in. The art flight draws the same image above it and stays opaque
   // until that art has settled and the sheet is still, then swaps in one commit: a crossfade of two copies dims for a few frames.
   const artShown = !art || settledArt === art;
-  const artCarried = flights ? { opacity: artShown ? departed(1, 0) : 0 } : undefined;
+  // The art flight and the resting art swap hard right at the open position, so at rest only the resting art can show,
+  // even if the page moved after the flight was measured (Safari's toolbar, comments arriving).
+  const swap = (open: number, away: number) => playerSheet.translation.interpolate({ inputRange: [0, 0.02], outputRange: [open, away], extrapolate: 'clamp' });
+  const artCarried = flights ? { opacity: artShown ? swap(1, 0) : 0 } : undefined;
   const fade = (open: number, docked: number, from: number, to: number) => morph && !still
     ? playerSheet.translation.interpolate({ inputRange: [rest * from, rest * to], outputRange: [open, docked], extrapolate: 'clamp' }) : open;
   const settle = (progress: number) => { const k = Math.min(1, progress / 0.4); return k * k * (3 - 2 * k); };
@@ -225,7 +225,6 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
             </Animated.View>
             <View onLayout={event => {
               titleEnd.current.body = sideBySide ? 0 : event.nativeEvent.layout.y;
-              if (present && event.nativeEvent.layout.height > 0 && bodyFit?.track !== track.id) setBodyFit({ track: track.id, height: event.nativeEvent.layout.height });
             }} style={[styles.body, sideBySide ? [styles.desktopBody, { maxWidth: 440 }] : { width: artwork }]}>
               <View onLayout={event => { titleEnd.current.meta = event.nativeEvent.layout.y + event.nativeEvent.layout.height; }} style={styles.meta}>
                 <Animated.View ref={titleRef} style={carried}><Text testID="now-playing-title" accessibilityRole="header" accessibilityLabel={track.metadata.title} numberOfLines={2} style={titleStyle}>
@@ -293,7 +292,7 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
         </Animated.View>
         <View ref={panelRef} pointerEvents="none" aria-hidden importantForAccessibility="no-hide-descendants" style={StyleSheet.absoluteFill}>
           {flights && <View testID="now-playing-flights" style={StyleSheet.absoluteFill}>
-            <Animated.View style={[StyleSheet.absoluteFill, { opacity: artShown && still ? 0 : 1 }]}>
+            <Animated.View style={[StyleSheet.absoluteFill, { opacity: artShown ? swap(0, 1) : 1 }]}>
               <PlayerFlight testID="now-playing-flight-art" {...flights.art} rest={rest} left={artLeft} origin={<Cover instant uri={art} size={flights.art.from.width} radius={6} />}>
                 <Cover instant uri={art} size={flights.art.to.width} radius={16} />
               </PlayerFlight>
