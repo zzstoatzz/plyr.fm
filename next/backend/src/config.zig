@@ -11,10 +11,18 @@ pub const Role = enum {
     ingester,
     mirror,
     repair,
+    space_consumer,
 
     pub fn parse(value: []const u8) !Role {
         return std.meta.stringToEnum(Role, value) orelse error.InvalidRole;
     }
+};
+
+pub const SpaceConsumer = struct {
+    stream_host: []const u8,
+    sync_pds: []const u8,
+    sync_identifier: []const u8,
+    sync_password: []const u8,
 };
 
 pub const IndexMode = enum {
@@ -52,6 +60,9 @@ pub const Config = struct {
     /// plyr's managing-app identity for gated-audio spaces; null disables
     /// the did:web document and checkUserAccess.
     managed_space: ?ManagedSpace,
+    /// where MODE=space_consumer reads plyr's space-stream, and the sync
+    /// account it mints delegation tokens with
+    space_consumer: ?SpaceConsumer,
     account_check_interval_us: i64,
     account_check_retry_us: i64,
     account_check_lease_us: i64,
@@ -117,6 +128,16 @@ pub const Config = struct {
             return error.MirrorDatabaseRequired;
         if (role == .catalog_reconciler and (database_url == null or index_mode != .required))
             return error.CatalogReconcilerDatabaseRequired;
+        const space_consumer: ?SpaceConsumer = if (role == .space_consumer) blk: {
+            if (database_url == null or index_mode != .required) return error.SpaceConsumerDatabaseRequired;
+            if (getenv("SPACE_SERVICE_DID") == null) return error.SpaceServiceDidRequired;
+            break :blk .{
+                .stream_host = getenv("SPACE_STREAM_HOST") orelse return error.SpaceStreamHostRequired,
+                .sync_pds = getenv("SPACE_SYNC_PDS") orelse return error.SpaceSyncPdsRequired,
+                .sync_identifier = getenv("SPACE_SYNC_HANDLE") orelse return error.SpaceSyncHandleRequired,
+                .sync_password = getenv("SPACE_SYNC_APP_PASSWORD") orelse return error.SpaceSyncPasswordRequired,
+            };
+        } else null;
 
         return .{
             .role = role,
@@ -150,6 +171,7 @@ pub const Config = struct {
                 .plc_url = getenv("PLC_DIRECTORY_URL") orelse "https://plc.directory",
                 .sync_reader = getenv("SPACE_SYNC_DID"),
             } else null,
+            .space_consumer = space_consumer,
             .account_check_interval_us = try parseSecondsMicros(
                 getenv("ACCOUNT_CHECK_INTERVAL_SECONDS") orelse "21600",
             ),

@@ -56,7 +56,18 @@ worker that does the host work (`authorizeSpaceSync`, `listWriters`,
 - the stream reads as plyr's sync account. `SPACE_SYNC_DID` names it, and the
   access core admits it to read (never write) every plyr space.
 
+- `MODE=space_consumer` (`src/internal/space/consumer.zig`) holds one socket
+  per plyr space a public track points into, re-listed every minute. it logs
+  the sync account in once (`SPACE_SYNC_HANDLE`, `SPACE_SYNC_APP_PASSWORD` on
+  `SPACE_SYNC_PDS`), mints a delegation token per connection, and subscribes
+  to `SPACE_STREAM_HOST` from the space's stored cursor. it never renews:
+  when admission runs out the stream closes with 4401 and the consumer
+  reconnects with a fresh token, which also makes the stream pull. a 4404
+  close drops the space and stops following it.
+- the copy is `plyr_index.space_records` with `plyr_index.space_cursors`
+  (`postgres_sync_store.zig`), both rebuildable by replaying from cursor 0.
+
 reads of synced rows still go through the access `Decider`, so a stale copy
-hides new records but never shows revoked ones. the consumer that holds the
-sockets (`MODE=space_consumer`: mint delegation tokens for the sync account,
-subscribe from the stored cursor, renew under ten minutes) comes next.
+hides new records but never shows revoked ones. nothing reads the copy yet:
+closed tracks keep their metadata public. it is for release-only metadata
+and private playlists.
