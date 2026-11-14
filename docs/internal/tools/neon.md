@@ -374,7 +374,7 @@ GROUP BY a.handle;
 
 -- 3. compare with pdsx output
 -- use pdsx to list records on PDS:
--- uvx pdsx --pds https://pds.zzstoatzz.io -r zzstoatzz.io ls fm.plyr.track
+-- uvx pdsx -r zzstoatzz.io ls fm.plyr.track
 ```
 
 ### verifying backfill success

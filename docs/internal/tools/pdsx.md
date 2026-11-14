@@ -24,13 +24,11 @@ use `-r` flag with handle or DID:
 # read from bluesky PDS (default)
 uvx pdsx -r zzstoatzzdevlog.bsky.social ls fm.plyr.track
 
-# read from custom PDS (requires --pds flag)
-uvx pdsx --pds https://pds.zzstoatzz.io -r zzstoatzz.io ls fm.plyr.track
+# read from any PDS: pdsx resolves it from the handle or DID
+uvx pdsx -r zzstoatzz.io ls fm.plyr.track
 ```
 
-**NOTE** pds.zzstoatzz.io is JUST AN EXAMPLE of a custom PDS for the specific case of zzstoatzz.io. each user has their own PDS URL, whether bsky.social or custom.
-
-**important**: unauthenticated reads assume bsky.social PDS by default. for custom PDS instances (like zzstoatzz.io), you **must** provide `--pds` explicitly.
+**note**: pdsx resolves each account's PDS from its handle or DID, whether that's bsky.social or a self-hosted PDS. never hardcode a PDS host: accounts move (zzstoatzz.io moved to a new PDS on 2026-11-14). pass `--pds` only to force a specific host.
 
 ### authenticated operations (write access)
 
@@ -52,7 +50,7 @@ uvx pdsx --handle you.bsky.social --password xxxx-xxxx create fm.plyr.track titl
 
 ```bash
 # unauthenticated read (public)
-uvx pdsx --pds https://pds.zzstoatzz.io -r zzstoatzz.io ls fm.plyr.track
+uvx pdsx -r zzstoatzz.io ls fm.plyr.track
 
 # authenticated (shows your own tracks)
 uvx pdsx --handle zzstoatzzdevlog.bsky.social --password "$ATPROTO_PASSWORD" ls fm.plyr.track
@@ -64,7 +62,7 @@ track URIs have the format: `at://did/collection/rkey`
 
 ```bash
 # get full record details
-uvx pdsx --pds https://pds.zzstoatzz.io cat at://did:plc:xbtmt2zjwlrfegqvch7fboei/fm.plyr.track/3m5a4wg7i352p
+uvx pdsx cat at://did:plc:xbtmt2zjwlrfegqvch7fboei/fm.plyr.track/3m5a4wg7i352p
 ```
 
 ### find tracks with specific criteria
@@ -73,13 +71,13 @@ use shell tools to filter:
 
 ```bash
 # find tracks with images
-uvx pdsx --pds https://pds.zzstoatzz.io -r zzstoatzz.io ls fm.plyr.track | grep imageUrl
+uvx pdsx -r zzstoatzz.io ls fm.plyr.track | grep imageUrl
 
 # find tracks with features
-uvx pdsx --pds https://pds.zzstoatzz.io -r zzstoatzz.io ls fm.plyr.track | grep features
+uvx pdsx -r zzstoatzz.io ls fm.plyr.track | grep features
 
 # count total tracks
-uvx pdsx --pds https://pds.zzstoatzz.io -r zzstoatzz.io ls fm.plyr.track | head -1
+uvx pdsx -r zzstoatzz.io ls fm.plyr.track | head -1
 ```
 
 ## debugging orphaned/stale records
@@ -88,7 +86,7 @@ uvx pdsx --pds https://pds.zzstoatzz.io -r zzstoatzz.io ls fm.plyr.track | head 
 
 ```bash
 # 1. check what records exist on PDS
-uvx pdsx --pds https://pds.zzstoatzz.io -r zzstoatzz.io ls fm.plyr.track
+uvx pdsx -r zzstoatzz.io ls fm.plyr.track
 
 # 2. query database for tracks with that artist_did
 # (use neon MCP or direct psql)
@@ -100,7 +98,7 @@ uvx pdsx --pds https://pds.zzstoatzz.io -r zzstoatzz.io ls fm.plyr.track
 
 ```bash
 # check for old namespace records (should be none in fm.plyr.track)
-uvx pdsx --pds https://pds.zzstoatzz.io -r zzstoatzz.io ls app.relay.track
+uvx pdsx -r zzstoatzz.io ls app.relay.track
 
 # if you find any, those are stale and should be migrated
 ```
@@ -109,7 +107,7 @@ uvx pdsx --pds https://pds.zzstoatzz.io -r zzstoatzz.io ls app.relay.track
 
 ```bash
 # get a specific record
-uvx pdsx --pds https://pds.zzstoatzz.io cat at://did:plc:xbtmt2zjwlrfegqvch7fboei/fm.plyr.track/3m5a4wg7i352p
+uvx pdsx cat at://did:plc:xbtmt2zjwlrfegqvch7fboei/fm.plyr.track/3m5a4wg7i352p
 
 # compare imageUrl, features, album, etc. with database values
 # mismatches indicate failed updates
@@ -258,13 +256,13 @@ after running `scripts/backfill_atproto_records.py`:
 
 ```bash
 # 1. check how many records were created
-uvx pdsx --pds https://pds.zzstoatzz.io -r zzstoatzz.io ls fm.plyr.track | head -1
+uvx pdsx -r zzstoatzz.io ls fm.plyr.track | head -1
 
 # 2. verify specific tracks have correct data
-uvx pdsx --pds https://pds.zzstoatzz.io -r zzstoatzz.io ls fm.plyr.track | grep -E "webhook|geese"
+uvx pdsx -r zzstoatzz.io ls fm.plyr.track | grep -E "webhook|geese"
 
 # 3. confirm imageUrl present for tracks that should have it
-uvx pdsx --pds https://pds.zzstoatzz.io cat at://did:plc:xbtmt2zjwlrfegqvch7fboei/fm.plyr.track/3m5a4wg7i352p | grep imageUrl
+uvx pdsx cat at://did:plc:xbtmt2zjwlrfegqvch7fboei/fm.plyr.track/3m5a4wg7i352p | grep imageUrl
 ```
 
 ### clean up test records
@@ -283,14 +281,14 @@ when debugging sync issues, you need to compare both sources:
 
 ```bash
 # 1. get record count from PDS
-uvx pdsx --pds https://pds.zzstoatzz.io -r zzstoatzz.io ls fm.plyr.track | head -1
+uvx pdsx -r zzstoatzz.io ls fm.plyr.track | head -1
 # output: "found 15 records"
 
 # 2. get record count from database (use neon MCP)
 # SELECT COUNT(*) FROM tracks WHERE artist_did = 'did:plc:xbtmt2zjwlrfegqvch7fboei'
 
 # 3. if counts don't match, list all records to find missing ones
-uvx pdsx --pds https://pds.zzstoatzz.io -r zzstoatzz.io ls fm.plyr.track | grep -E "rkey|title"
+uvx pdsx -r zzstoatzz.io ls fm.plyr.track | grep -E "rkey|title"
 ```
 
 ## known limitations
@@ -301,7 +299,7 @@ uvx pdsx --pds https://pds.zzstoatzz.io -r zzstoatzz.io ls fm.plyr.track | grep 
    uvx pdsx -r zzstoatzz.io ls fm.plyr.track
 
    # workaround: use explicit --pds flag
-   uvx pdsx --pds https://pds.zzstoatzz.io -r zzstoatzz.io ls fm.plyr.track
+   uvx pdsx -r zzstoatzz.io ls fm.plyr.track
    ```
 
 2. **cat command requires full AT-URI format** ([#31](https://github.com/zzstoatzz/pdsx/issues/31)):
@@ -335,15 +333,15 @@ this usually means you're querying the wrong PDS for the user's DID.
 ```bash
 # resolve PDS for a DID
 curl -s "https://plc.directory/did:plc:xbtmt2zjwlrfegqvch7fboei" | jq -r '.service[] | select(.type == "AtprotoPersonalDataServer") | .serviceEndpoint'
-# output: https://pds.zzstoatzz.io
+# output: the account's current PDS, e.g. https://zds.zzstoatzz.io
 
-# then use that PDS with pdsx
-uvx pdsx --pds https://pds.zzstoatzz.io -r zzstoatzz.io ls fm.plyr.track
+# pdsx does this lookup itself; --pds only forces a host
+uvx pdsx -r zzstoatzz.io ls fm.plyr.track
 ```
 
 **quick reference**:
-- bluesky users: usually `https://bsky.social` (default, no flag needed)
-- custom PDS users: must resolve via PLC directory and provide `--pds` flag
+- any account: pdsx resolves the PDS from the handle or DID, no flag needed
+- `--pds` forces a host, e.g. to read from a PDS the account is moving to
 
 ### "could not find repo" errors
 

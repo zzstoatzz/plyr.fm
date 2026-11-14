@@ -19,7 +19,7 @@ each user's data lives on a specific PDS. to find it:
 ```bash
 curl -s "https://plc.directory/did:plc:xbtmt2zjwlrfegqvch7fboei" | \
   jq -r '.service[] | select(.type == "AtprotoPersonalDataServer") | .serviceEndpoint'
-# output: https://pds.zzstoatzz.io
+# output: the account's current PDS, e.g. https://zds.zzstoatzz.io
 ```
 
 plyr.fm caches resolved PDS URLs in `artists.pds_url` to avoid repeated lookups.
