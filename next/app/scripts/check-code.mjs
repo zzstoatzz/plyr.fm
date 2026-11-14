@@ -75,6 +75,11 @@ for (const file of files) {
     }
   }
 
+  if (/<TextInput\b/.test(source) && !/fontSize: inputFontSize\(/.test(source)) {
+    report('input-zoom', file, 'renders a TextInput without inputFontSize(); iOS Safari zooms into text fields under 16px');
+  }
+  for (const match of source.matchAll(/<Field\b[^>]*fontSize/g)) report('input-zoom', file, 'sets a font size on Field; Field keeps typing at 16px or more so iOS Safari does not zoom');
+
   for (const match of source.matchAll(/(?:^[ \t]*\/\/.*\n){4,}/gm)) {
     const line = source.slice(0, match.index).split('\n').length;
     report('comment-length', file, `comment block at line ${line} runs past three lines; rationale goes in the PR or docs`);

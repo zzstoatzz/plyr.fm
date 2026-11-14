@@ -45,4 +45,5 @@ entry whose file is gone.
 | `hand-rolled-roles` | tab, combobox, listbox, slider, dialog, menu and similar roles come from one shared control | reuse it, or add the behavior under `src/behaviors/` with its tests |
 | `comment-length` | comment blocks stay at three lines or fewer | the rationale goes in the PR or a doc |
 | `fs-sync` | expo-file-system `copy()`/`move()` (async) are awaited, never fire-and-forget | `await` it or call `copySync()`/`moveSync()` |
+| `input-zoom` | every `TextInput` sizes its text with `inputFontSize()`, and nothing passes a font size to `Field` | iOS Safari zooms the page into any text field under 16px; use `inputFontSize(theme.scale)` from `controls` |
 | `browser-checks` | every `scripts/check-*.cjs` is listed in `scripts/checks.mjs` with what it covers | add its entry |

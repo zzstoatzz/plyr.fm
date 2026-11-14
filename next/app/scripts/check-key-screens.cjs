@@ -1,6 +1,7 @@
 // The screens people see most — home, a track, now playing and the queue — on a phone and a desktop, light and dark,
 // against the fixture catalog (no network). Fails on layout that has gone wrong: a page wider than the window, now playing
-// squeezed into a column narrower than the phone, or two covers showing at once. Saves a screenshot of each screen.
+// squeezed into a column narrower than the phone, or two covers showing at once, or a text field under 16px at the
+// smallest interface size (iOS Safari zooms the page into those on focus). Saves a screenshot of each screen.
 // Run after `npm run build:web`. CI runs it before deploying next.plyr.fm.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -85,6 +86,20 @@ async function screens(browser, { width, height, phone, scheme }) {
   } finally { await context.close(); }
 }
 
+// iOS Safari zooms into any text field under 16px when it gets focus, and leaves the page zoomed.
+async function textFields(browser) {
+  const { context, page, errors } = await setup(browser, 390, 664, { phone: true, scheme: 'light', scale: 0.9 });
+  try {
+    for (const [route, field] of [['/login', 'atmosphere account'], ['/search', 'Search tracks, artists, albums and playlists']]) {
+      await page.goto(origin + route);
+      await page.getByLabel(field, { exact: true }).waitFor();
+      const small = await page.$$eval('input, textarea, select', nodes => nodes.map(node => ({ name: node.getAttribute('aria-label') || node.name, size: parseFloat(getComputedStyle(node).fontSize) })).filter(field => field.size < 16));
+      assert.deepEqual(small, [], `${route} at 90% interface size: text fields under 16px make iOS zoom in on focus`);
+    }
+    assert.deepEqual(errors, [], 'text fields: no page errors');
+  } finally { await context.close(); }
+}
+
 (async () => {
   origin = await serve();
   const browser = await chromium.launch();
@@ -93,6 +108,7 @@ async function screens(browser, { width, height, phone, scheme }) {
       await screens(browser, { width: 390, height: 664, phone: true, scheme });
       await screens(browser, { width: 1440, height: 900, phone: false, scheme });
     }
+    await textFields(browser);
     console.log('key screens ok →', output);
   } finally { await browser.close(); close(); }
 })().catch(error => { console.error(error); process.exit(1); });

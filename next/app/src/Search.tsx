@@ -10,7 +10,7 @@ import { usePlayback } from './playback';
 import { HomeTrackRow } from './HomeTrackRow';
 import { WaveLoading } from './WaveLoading';
 import { useSearch } from './use-search';
-import { Action, Copy } from './controls';
+import { Action, Copy, inputFontSize } from './controls';
 import { PlayGlyph } from './PlayerGlyph';
 import { glassSurface } from './materials';
 
@@ -62,7 +62,7 @@ export function Search({ onPlay }: { onPlay: Play }) {
       <SearchIcon size={19} color={theme.muted} />
       <TextInput ref={input} accessibilityLabel="Search tracks, artists, albums and playlists" placeholder="tracks, artists, albums, playlists" placeholderTextColor={theme.muted}
         value={query} onChangeText={change} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} autoCapitalize="none" autoCorrect={false} returnKeyType="search"
-        style={{ flex: 1, minWidth: 0, paddingVertical: 12, color: theme.text, fontFamily: theme.fontFamily, fontSize: 16 * theme.scale, outlineWidth: 0 }} />
+        style={{ flex: 1, minWidth: 0, paddingVertical: 12, color: theme.text, fontFamily: theme.fontFamily, fontSize: inputFontSize(theme.scale), outlineWidth: 0 }} />
       {query.length > 0 && <Pressable accessibilityRole="button" accessibilityLabel="Clear search" style={styles.clear} onPress={() => { change(''); input.current?.focus(); }}><X size={18} color={theme.muted} /></Pressable>}
     </View>
     {Array.from(term).length < 2 ? <Suggestions onPlay={onPlay} /> : <>

@@ -34,7 +34,7 @@ const server = http.createServer((request, response) => {
 async function setup(browser, width, height = 900, options = {}) {
   const scheme = options.scheme || 'dark';
   const context = await browser.newContext({ viewport: { width, height }, colorScheme: scheme, isMobile: !!options.phone, hasTouch: !!options.phone, deviceScaleFactor: Number(process.env.FIXTURE_SCALE || 1) });
-  await context.addInitScript(theme => localStorage.setItem('plyr-next:prefs', JSON.stringify({ theme, scale: 1, playThrough: true })), scheme);
+  await context.addInitScript(({ theme, scale }) => localStorage.setItem('plyr-next:prefs', JSON.stringify({ theme, scale, playThrough: true })), { theme: scheme, scale: options.scale || 1 });
   await context.route('**/*', route => ['GET', 'HEAD', 'OPTIONS'].includes(route.request().method()) ? route.continue() : route.abort());
   await context.route('https://panel-fixture.invalid/**', async route => {
     const url = new URL(route.request().url()).pathname;
