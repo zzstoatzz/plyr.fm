@@ -40,7 +40,7 @@ function HomeFeed({ onPlay, hiddenTags }: { onPlay: Play; hiddenTags: string[] }
   const network = useNetworkArtists(did, ready);
   const header = <View style={styles.home} onLayout={event => setHeaderHeight(event.nativeEvent.layout.height)}>
     <HomeChart onPlay={onPlay} />
-    {(network.loading || network.artists.length > 0) && <HomeArtists artists={network.artists} loading={network.loading} />}
+    {(network.loading || network.artists.length > 0) && <HomeArtists artists={network.artists} loading={network.loading} onPlay={onPlay} />}
     <Status error={network.error} retry={network.retry} />
     <View style={styles.section}>
       <View style={styles.headingRow}>

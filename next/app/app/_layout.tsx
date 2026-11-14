@@ -23,6 +23,8 @@ import { DESKTOP_HOME_WIDTH } from '../src/DesktopHome';
 import { usePreferences } from '../src/preferences';
 import { UploadQueueHost } from '../src/publishing/UploadQueue';
 import { screenLayout } from '../src/screen-freeze';
+import { QUEUE_DOCK_WIDTH, QueuePanel } from '../src/QueuePanel';
+import { setQueuePanel, useQueuePanel } from '../src/queue-panel';
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
@@ -56,6 +58,7 @@ function Shell() {
   useFinishPendingLike();
   const { width } = useWindowDimensions();
   const wide = width >= 800;
+  const queueOpen = useQueuePanel();
   if (path.startsWith('/embed/')) return <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }} />;
   const accountPath = auth.did ? '/portal' : '/login';
   const tabs: { label: string; href: Href; icon: Icon; active: boolean }[] = [
@@ -104,6 +107,7 @@ function Shell() {
     </Link>)}
   </View>;
   const dock = <RadioPlayback><PlayerBar /></RadioPlayback>;
+  const queuePanel = wide && queueOpen && route !== '/queue' && route !== '/now-playing';
   return <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
     <RadioPlayback><KeyboardShortcuts origin={path} /></RadioPlayback>
     <StatusBar style={theme.dark ? 'light' : 'dark'} />
@@ -139,6 +143,11 @@ function Shell() {
         {!wide && <Animated.View aria-hidden={route === '/now-playing'} pointerEvents={route === '/now-playing' ? 'none' : 'auto'}>{dock}</Animated.View>}
         {!wide && nav}
       </View>
+      {queuePanel && width >= QUEUE_DOCK_WIDTH && <QueuePanel floating={false} />}
+      {queuePanel && width < QUEUE_DOCK_WIDTH && <>
+        <Pressable accessibilityLabel="Close queue" aria-hidden onPress={() => setQueuePanel(false)} style={[StyleSheet.absoluteFill, { zIndex: 49, cursor: 'auto' }]} />
+        <QueuePanel floating />
+      </>}
     </View>
     {wide && <Toasts />}
     {wide && <View aria-hidden={route === '/now-playing'} pointerEvents={route === '/now-playing' ? 'none' : 'auto'}>{dock}</View>}

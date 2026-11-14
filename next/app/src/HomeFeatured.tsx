@@ -1,6 +1,7 @@
 import { Link } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { api, type Track } from './api';
 import { useAppearance } from './appearance';
 import { trackArtwork } from './artwork';
@@ -58,6 +59,8 @@ function shuffled<T>(items: T[]): T[] {
 }
 
 const TILES = 5;
+const WALL = 16;
+const COPY_WIDTH = 460;
 const GAP = 14;
 
 export function HomeFeatured({ featured, onPlay }: { featured: Featured; onPlay: Play }) {
@@ -83,47 +86,46 @@ export function HomeFeatured({ featured, onPlay }: { featured: Featured; onPlay:
   const { tracks } = featured;
   const artist = tracks[0].artist;
   const name = artist.profile.display_name || artist.profile.handle;
-  const backdrop = artist.profile.avatar_url || trackArtwork(tracks[0]);
   const profile = { pathname: '/u/[handle]' as const, params: { handle: artist.profile.handle || artist.did } };
-  return <View testID="home-featured" style={card}>
-    {backdrop ? <Image aria-hidden source={{ uri: backdrop }} blurRadius={60} resizeMode="cover" style={[StyleSheet.absoluteFill, { opacity: theme.dark ? 0.22 : 0.16 }]} /> : null}
-    <View style={styles.head}>
-      <Link href={profile} asChild><Pressable accessibilityRole="link" accessibilityLabel={`${name}, artist of the week`}>
-        <Cover uri={artist.profile.avatar_url} size={88} round />
-      </Pressable></Link>
-      <View style={styles.title}>
+  const art = [...new Set(tracks.map(track => trackArtwork(track)).filter((uri): uri is string => !!uri && uri !== artist.profile.avatar_url))];
+  const total = tracks.reduce((sum, track) => sum + (track.metadata.duration_seconds ?? 0), 0);
+  const current = tracks.some(track => track.id === player.current?.id);
+  const playing = current && player.status.playing;
+  const wall = art.length ? Array.from({ length: WALL }, (_, index) => art[index % art.length]) : [];
+  const fade = theme.background;
+  const copyWidth = width ? Math.min(COPY_WIDTH, Math.max(340, Math.round(width * 0.62))) : COPY_WIDTH;
+  const fadeWidth = Math.min(260, Math.max(120, width * 0.22));
+  return <View testID="home-featured" onLayout={measure} style={[styles.wallCard, { backgroundColor: theme.surface }]}>
+    {wall.length ? <View aria-hidden pointerEvents="none" style={[styles.wall, { left: copyWidth - 40 }]}>
+      {wall.map((uri, index) => <Image key={index} source={{ uri }} resizeMode="cover" style={[styles.tile, { backgroundColor: theme.raised }]} />)}
+    </View> : artist.profile.avatar_url ? <Image aria-hidden source={{ uri: artist.profile.avatar_url }} blurRadius={60} resizeMode="cover" style={[StyleSheet.absoluteFill, { opacity: theme.dark ? 0.22 : 0.16 }]} /> : null}
+    <Svg aria-hidden pointerEvents="none" style={StyleSheet.absoluteFill} width="100%" height="100%">
+      <Defs><LinearGradient id="featured-fade" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2={copyWidth + fadeWidth} y2="0">
+        <Stop offset={copyWidth / (copyWidth + fadeWidth)} stopColor={fade} stopOpacity={1} />
+        <Stop offset={1} stopColor={fade} stopOpacity={0} />
+      </LinearGradient></Defs>
+      <Rect width="100%" height="100%" fill="url(#featured-fade)" />
+    </Svg>
+    <View style={[styles.copy, { maxWidth: copyWidth }]}>
+      <Link href={profile} asChild><Pressable accessibilityRole="link" accessibilityLabel={`${name}, artist of the week`} style={styles.byline}>
+        <Cover uri={artist.profile.avatar_url} size={36} round />
         <Text style={{ color: theme.accent, fontSize: 12.5 * theme.scale, fontWeight: '700', letterSpacing: 0.4 }}>artist of the week</Text>
-        <Link href={profile} asChild><Pressable accessibilityRole="link" style={styles.name}>
-          <Text accessibilityRole="header" aria-level={2} numberOfLines={1} style={{ color: theme.text, fontFamily: theme.fontFamily, fontSize: 30 * theme.scale, fontWeight: '800', letterSpacing: -0.8 }}>{name}</Text>
-        </Pressable></Link>
-        {artist.profile.handle ? <Text numberOfLines={1} style={{ color: theme.muted, fontSize: 13.5 * theme.scale }}>@{artist.profile.handle}</Text> : null}
+      </Pressable></Link>
+      <Link href={profile} asChild><Pressable accessibilityRole="link" style={styles.name}>
+        {({ hovered }: { pressed: boolean; hovered?: boolean }) => <Text accessibilityRole="header" aria-level={2} numberOfLines={2}
+          style={{ color: theme.text, fontFamily: theme.fontFamily, fontSize: (copyWidth < 400 ? 34 : 44) * theme.scale, lineHeight: (copyWidth < 400 ? 38 : 48) * theme.scale, fontWeight: '800', letterSpacing: -1.2, textDecorationLine: hovered ? 'underline' : 'none' }}>{name}</Text>}
+      </Pressable></Link>
+      {artist.profile.bio ? <Text numberOfLines={2} style={{ color: theme.muted, fontFamily: theme.fontFamily, fontSize: 14.5 * theme.scale, lineHeight: 21 * theme.scale }}>{artist.profile.bio}</Text> : null}
+      <View style={styles.play}>
+        <Pressable accessibilityRole="button" accessibilityLabel={playing ? `Pause ${name}` : `Play ${tracks.length === 1 ? '' : 'all '}${tracks.length} by ${name}`}
+          onPress={() => current ? player.setPlaying(!player.status.playing) : onPlay(tracks[0], tracks, name)} style={[styles.bigPlay, { backgroundColor: theme.accent }]}>
+          {playing ? <PauseGlyph size={22} color={theme.onAccent} /> : <PlayIcon size={22} color={theme.onAccent} fill={theme.onAccent} />}
+        </Pressable>
+        {tracks.length > 1 && <Pressable accessibilityRole="button" accessibilityLabel={`Shuffle ${name}`} onPress={() => { const order = shuffled(tracks); onPlay(order[0], order, name); }} style={[styles.shuffle, { borderColor: theme.border }]}>
+          <Shuffle size={18} color={theme.text} />
+        </Pressable>}
+        <Text style={{ color: theme.faint, fontSize: 13 * theme.scale, fontVariant: ['tabular-nums'] }}>{tracks.length} {tracks.length === 1 ? 'track' : 'tracks'}{total ? ` · ${formatDuration(total)}` : ''}</Text>
       </View>
-      <View style={styles.actions}>
-        <Action primary icon={PlayIcon} label="Play all" onPress={() => onPlay(tracks[0], tracks, name)} />
-        {tracks.length > 1 && <Action icon={Shuffle} label="Shuffle" onPress={() => { const order = shuffled(tracks); onPlay(order[0], order, name); }} />}
-      </View>
-    </View>
-    {artist.profile.bio ? <Text numberOfLines={2} style={{ color: theme.muted, fontFamily: theme.fontFamily, fontSize: 14.5 * theme.scale, lineHeight: 21 * theme.scale, maxWidth: 680 }}>{artist.profile.bio}</Text> : null}
-    <View onLayout={measure} style={styles.strip}>
-      {tile > 0 && tracks.slice(0, TILES).map(track => {
-        const current = player.current?.id === track.id;
-        const playing = current && player.status.playing;
-        return <Pressable key={track.id} accessibilityRole="button" accessibilityLabel={`${playing ? 'Pause' : current ? 'Resume' : 'Play'} ${track.metadata.title}`}
-          onPress={() => current ? player.setPlaying(!player.status.playing) : onPlay(track, tracks, name)} style={{ width: tile, gap: 8 }}>
-        {({ hovered, pressed }: { pressed: boolean; hovered?: boolean }) => <>
-          <View>
-            <Cover uri={trackArtwork(track) || artist.profile.avatar_url} size={tile} radius={10} />
-            {(hovered || pressed || current) && <View pointerEvents="none" style={[styles.badge, { backgroundColor: theme.accent }]}>
-              {playing && (hovered || pressed) ? <PauseGlyph size={16} color={theme.onAccent} /> : playing ? <Equalizer size={18} color={theme.onAccent} /> : <PlayIcon size={18} color={theme.onAccent} fill={theme.onAccent} />}
-            </View>}
-          </View>
-          <View style={{ gap: 2 }}>
-            <Text numberOfLines={1} style={{ color: current ? theme.accent : theme.text, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale, fontWeight: '600' }}>{track.metadata.title}</Text>
-            <Text numberOfLines={1} style={{ color: theme.faint, fontSize: 12.5 * theme.scale, fontVariant: ['tabular-nums'] }}>{[formatDuration(track.metadata.duration_seconds), `${compactCount(track.metrics.play_count)} ${track.metrics.play_count === 1 ? 'play' : 'plays'}`].filter(Boolean).join(' · ')}</Text>
-          </View>
-        </>}
-      </Pressable>;
-      })}
     </View>
   </View>;
 }
@@ -135,5 +137,12 @@ const styles = StyleSheet.create({
   name: { alignSelf: 'flex-start', maxWidth: '100%' },
   actions: { flexDirection: 'row', gap: 8 },
   strip: { flexDirection: 'row', gap: GAP, minHeight: 1 },
-  badge: { position: 'absolute', right: 8, bottom: 8, width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  wallCard: { borderRadius: 18, overflow: 'hidden', minHeight: 300, justifyContent: 'center' },
+  wall: { position: 'absolute', top: -60, right: -60, width: 4 * 200 + 3 * 6, flexDirection: 'row', flexWrap: 'wrap', gap: 6, transform: [{ rotate: '-4deg' }] },
+  tile: { width: 200, height: 150, borderRadius: 8 },
+  copy: { paddingHorizontal: 32, paddingVertical: 28, gap: 6 },
+  byline: { flexDirection: 'row', alignItems: 'center', gap: 10, alignSelf: 'flex-start', minHeight: 44 },
+  play: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 10 },
+  bigPlay: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
+  shuffle: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
 });

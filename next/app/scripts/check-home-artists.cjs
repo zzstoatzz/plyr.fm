@@ -4,6 +4,10 @@ const path = require('node:path');
 const { chromium, firefox } = require(process.env.PLAYWRIGHT_MODULE || '../../../frontend/node_modules/playwright');
 const origin = 'https://next.plyr.fm';
 const dist = path.resolve(__dirname, '../dist');
+const fixtureTrack = { object: 'track', id: 'trk_fixture', record: { uri: 'at://did:plc:fixture/fm.plyr.track/a', cid: 'bafyfixture', revision: null, collection: 'fm.plyr.track', rkey: 'a' },
+  metadata: { title: 'fixture song', description: null, album: null, duration_seconds: 140, created_at: '2026-11-10T00:00:00Z' },
+  artist: { did: 'did:plc:fixture', profile: { handle: 'fixture.test', display_name: 'Fixture artist', avatar_url: null } },
+  media: { artwork: null }, access: { visibility: 'public' }, metrics: { play_count: 1, like_count: 0 } };
 
 (async () => {
   const browser = await (process.env.HOME_ARTISTS_FIREFOX
@@ -20,7 +24,9 @@ const dist = path.resolve(__dirname, '../dist');
     });
     await page.route('https://public.api.bsky.app/xrpc/app.bsky.graph.getFollows?*', route => route.fulfill({ json: { follows: [{ did: 'did:plc:fixture' }] } }));
     await page.route('https://api.next.plyr.fm/**', route => {
-      if (new URL(route.request().url()).pathname === '/v1/artists/resolve') return route.fulfill({ json: { data: [{ did: 'did:plc:fixture', handle: 'fixture.test', display_name: 'Fixture artist', avatar_url: null, track_count: 1 }] } });
+      const url = new URL(route.request().url());
+      if (url.pathname === '/v1/tracks' && url.searchParams.get('artist_did') === 'did:plc:fixture') return route.fulfill({ json: { object: 'list', has_more: false, data: [fixtureTrack] } });
+      if (url.pathname === '/v1/artists/resolve') return route.fulfill({ json: { data: [{ did: 'did:plc:fixture', handle: 'fixture.test', display_name: 'Fixture artist', avatar_url: null, track_count: 1 }] } });
       return route.request().method() === 'GET' ? route.fallback() : route.abort();
     });
     await page.route('https://plc.directory/did:plc:fixture', route => route.fulfill({ status: 404, json: {} }));
@@ -39,7 +45,7 @@ const dist = path.resolve(__dirname, '../dist');
     }
     assert.ok(authModule, 'Find the exported auth state boundary in the web bundle');
     await page.evaluate(id => globalThis.__r(id).setAuth('did:plc:fixture', { handle: async () => new Response('{}') }, 'atproto'), authModule);
-    const artist = page.getByRole('link', { name: 'Fixture artist', exact: true });
+    const artist = page.getByTestId('following-track').getByRole('link', { name: 'Fixture artist', exact: true });
     await artist.waitFor();
     await artist.click();
     await page.waitForURL('**/u/fixture.test');

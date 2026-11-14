@@ -66,7 +66,7 @@ const queue = 'rpc:fm.plyr.next.jam.join?aud=did:web:jams.next.plyr.fm#jams';
     await first.page.waitForFunction(() => window.__audio.some(item => !item.paused && item.currentTime > 1), undefined, { timeout: 30_000 });
     const dock = first.page.getByTestId('player-dock');
     await dock.getByRole('button', { name: 'Queue', exact: true }).click();
-    await first.page.waitForURL('**/queue');
+    await first.page.getByTestId('queue-panel').waitFor();
     assert.equal(await first.page.getByText('keeps your queue on this device').count(), 0, 'a synced sign-in shows no device-only notice');
 
     const second = await device(`${base} ${queue}`);

@@ -17,6 +17,7 @@ import { wideFrame } from './controls';
 import { Text } from './Text';
 import { useLatestFeed } from './use-latest-feed';
 import { useNetworkArtists } from './use-network-artists';
+import { FollowingTrack, PlayOneFromEach, useFollowingLatest } from './FollowingLatest';
 import { useTopTracks } from './use-top-tracks';
 import { WaveLoading } from './WaveLoading';
 
@@ -25,7 +26,7 @@ export const DESKTOP_HOME_WIDTH = 1240;
 const RAIL = 340;
 /** Below this window width the rail narrows so the main column keeps room for titles. */
 const ROOMY = 1480;
-const ARTISTS = 12;
+const FOLLOWING = 5;
 const RAIL_STEP = 8;
 
 function Section({ title, aside, children, testID }: { title: string; aside?: ReactNode; children: ReactNode; testID?: string }) {
@@ -86,24 +87,21 @@ function DesktopRailTrack({ track, rank, onPress }: { track: Track; rank: number
   </Pressable>;
 }
 
-function ArtistsYouKnow() {
+function ArtistsYouKnow({ onPlay, now }: { onPlay: Play; now: number }) {
   const theme = useAppearance();
   const { did, ready } = useAuth();
   const network = useNetworkArtists(did, ready);
+  const latest = useFollowingLatest(network.artists);
   const [all, setAll] = useState(false);
   if (!did || !network.loading && !network.error && !network.artists.length) return null;
-  const hidden = network.artists.length - ARTISTS;
-  return <Section testID="home-artists" title="artists you know" aside={network.artists.length ? <Text style={{ color: theme.faint, fontSize: 13 * theme.scale, fontVariant: ['tabular-nums'] }}>{network.artists.length}</Text> : undefined}>
-    {network.loading ? <WaveLoading label="finding artists you follow..." /> : <View style={styles.people}>
-      {(all ? network.artists : network.artists.slice(0, ARTISTS)).map(artist => <Link key={artist.did} href={{ pathname: '/u/[handle]', params: { handle: artist.handle || artist.did } }} asChild>
-        <Pressable accessibilityRole="link" accessibilityLabel={artist.display_name || artist.handle} style={styles.person}>
-          <Cover uri={artist.avatar_url} size={60} round />
-          <Text numberOfLines={1} style={{ maxWidth: '100%', color: theme.muted, fontSize: 12 * theme.scale, textAlign: 'center' }}>{artist.display_name || artist.handle}</Text>
-        </Pressable>
-      </Link>)}
+  const loading = network.loading || latest.loading;
+  const hidden = latest.tracks.length - FOLLOWING;
+  return <Section testID="home-artists" title="new from people you follow" aside={<PlayOneFromEach tracks={latest.tracks} onPlay={onPlay} />}>
+    {loading ? <WaveLoading label="finding what people you follow posted..." /> : <View style={styles.following}>
+      {(all ? latest.tracks : latest.tracks.slice(0, FOLLOWING)).map(track => <FollowingTrack key={track.id} track={track} tracks={latest.tracks} onPlay={onPlay} now={now} />)}
     </View>}
-    {!network.loading && hidden > 0 && <Pressable accessibilityRole="button" accessibilityState={{ expanded: all }} onPress={() => setAll(value => !value)} style={styles.more}>
-      <Text style={{ color: theme.accent, fontSize: 13.5 * theme.scale, fontWeight: '600' }}>{all ? 'show fewer' : `show all ${network.artists.length}`}</Text>
+    {!loading && hidden > 0 && <Pressable accessibilityRole="button" accessibilityState={{ expanded: all }} onPress={() => setAll(value => !value)} style={styles.more}>
+      <Text style={{ color: theme.accent, fontSize: 13.5 * theme.scale, fontWeight: '600' }}>{all ? 'show fewer' : `show all ${latest.tracks.length}`}</Text>
     </Pressable>}
     <Status error={network.error} retry={network.retry} />
   </Section>;
@@ -152,7 +150,7 @@ export function DesktopHome({ onPlay, hiddenTags }: { onPlay: Play; hiddenTags: 
         </Section>
       </View>
       <View style={[styles.rail, { width: rail }]}>
-        <ArtistsYouKnow />
+        <ArtistsYouKnow onPlay={onPlay} now={now} />
         <TopTracks onPlay={onPlay} top={top} shown={shown} />
       </View>
     </View>
@@ -174,9 +172,8 @@ const styles = StyleSheet.create({
   sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 32 },
   period: { minHeight: 44, minWidth: 44, justifyContent: 'center', alignItems: 'flex-end' },
   railTrack: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 58, paddingHorizontal: 8, marginHorizontal: -8, borderRadius: 10 },
-  people: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 16 },
+  following: { gap: 8 },
   more: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
-  person: { width: '25%', alignItems: 'center', gap: 6, paddingHorizontal: 4, minHeight: 44 },
   footer: { minHeight: 96, justifyContent: 'center' },
   live: { position: 'absolute', width: 1, height: 1, overflow: 'hidden', color: 'transparent' },
 });
