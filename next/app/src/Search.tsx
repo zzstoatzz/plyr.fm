@@ -1,9 +1,7 @@
 import { Link, useFocusEffect, useLocalSearchParams, type Href } from 'expo-router';
+import { MagnifyingGlass as SearchIcon, X, CaretRight as ChevronRight } from './icons';
 import { useCallback, useEffect, useRef, useState, type ComponentRef } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
-import SearchIcon from 'lucide-react-native/icons/search';
-import X from 'lucide-react-native/icons/x';
-import ChevronRight from 'lucide-react-native/icons/chevron-right';
 import { api, type SearchHit } from './api';
 import { Cover, Heading, Status, errorMessage, useResource, type Play } from './CatalogPieces';
 import { Text } from './Text';

@@ -1,6 +1,5 @@
-import ArrowDown from 'lucide-react-native/icons/arrow-down';
-import ArrowUp from 'lucide-react-native/icons/arrow-up';
 import { useEffect, useRef, useState } from 'react';
+import { ArrowDown, ArrowUp } from './icons';
 import { Animated, Easing, Platform, StyleSheet, View, type StyleProp, type ViewProps, type ViewStyle } from 'react-native';
 import { useAppearance } from './appearance';
 import { Action } from './controls';

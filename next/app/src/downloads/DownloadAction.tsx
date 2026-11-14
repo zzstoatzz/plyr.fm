@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { DownloadSimple as Download } from '../icons';
 import { View } from 'react-native';
-import Download from 'lucide-react-native/icons/download';
 import { api, ApiError, type Track } from '../api';
 import { ActionRow } from '../ActionRow';
 import { Action, Copy, row } from '../controls';

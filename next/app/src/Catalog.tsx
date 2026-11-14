@@ -1,11 +1,10 @@
 import { useAppearance } from './appearance';
+import { ListPlus, DotsThree as Ellipsis } from './icons';
 import { collectionArtwork } from './artwork';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useRef, useState, type ReactNode } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { PauseGlyph as PauseIcon, PlayGlyph as PlayIcon } from './PlayerGlyph';
-import ListPlus from 'lucide-react-native/icons/list-plus';
-import Ellipsis from 'lucide-react-native/icons/ellipsis';
 import { api, type Track } from './api';
 import {
   Button, Heading, ListRows, Status, trackCount,

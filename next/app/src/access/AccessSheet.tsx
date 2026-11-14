@@ -1,7 +1,7 @@
 import { useState } from 'react';
+import { Trash } from '../icons';
 import { View } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
-import Trash from 'lucide-react-native/icons/trash';
 import type { Track } from '../api';
 import { useAuth } from '../auth';
 import { Action, Copy, Field } from '../controls';

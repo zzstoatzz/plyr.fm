@@ -1,11 +1,8 @@
 import type { ReactNode } from 'react';
+import { PencilSimple as Pencil, ListPlus, SignIn as LogIn, ArrowLeft, Lock } from './icons';
 import { useState } from 'react';
 import { Platform, View } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
-import Pencil from 'lucide-react-native/icons/pencil';
-import ListPlus from 'lucide-react-native/icons/list-plus';
-import LogIn from 'lucide-react-native/icons/log-in';
-import ArrowLeft from 'lucide-react-native/icons/arrow-left';
 import type { Track } from './api';
 import { isPrivateTrack } from './publishing/private-track';
 import { useAuth } from './auth';
@@ -17,7 +14,6 @@ import { usePlayback } from './playback';
 import { Sheet } from './Sheet';
 import { DownloadAction } from './downloads/DownloadAction';
 import { AccessSheet } from './access/AccessSheet';
-import Lock from 'lucide-react-native/icons/lock';
 
 export function TrackMenu({ track, close, actions, returnTo }: { track: Track; close: () => void; actions?: ReactNode; returnTo?: string }) {
   const { did } = useAuth();

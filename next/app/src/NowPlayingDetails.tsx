@@ -1,5 +1,5 @@
 import type { Href } from 'expo-router';
-import ChevronRight from 'lucide-react-native/icons/chevron-right';
+import { CaretRight as ChevronRight } from './icons';
 import { Pressable, StyleSheet, View, type ViewProps } from 'react-native';
 import type { Track } from './api';
 import { isPrivateTrack } from './publishing/private-track';

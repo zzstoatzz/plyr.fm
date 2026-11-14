@@ -1,9 +1,6 @@
 import { trackArtwork } from './artwork';
-import X from 'lucide-react-native/icons/x';
+import { X, ListPlus, MusicNote as Music2, ArrowsClockwise as RefreshCw } from './icons';
 import { PlayerControl } from './PlayerControl';
-import ListPlus from 'lucide-react-native/icons/list-plus';
-import Music2 from 'lucide-react-native/icons/eighth-note';
-import RefreshCw from 'lucide-react-native/icons/refresh-cw';
 import { AccountSection } from './AccountPieces';
 import { ActionRow } from './ActionRow';
 import { WaveLoading } from './WaveLoading';

@@ -1,6 +1,5 @@
-import Volume2 from 'lucide-react-native/icons/volume-2';
-import VolumeX from 'lucide-react-native/icons/volume-x';
 import { useRef } from 'react';
+import { SpeakerHigh as Volume2, SpeakerX as VolumeX } from './icons';
 import { View } from 'react-native';
 import { useAppPreferences } from './preference-context';
 import { PlayerControl } from './PlayerControl';

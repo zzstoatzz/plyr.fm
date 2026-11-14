@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ArrowUp, ArrowDown } from '../icons';
 import { View } from 'react-native';
-import ArrowUp from 'lucide-react-native/icons/arrow-up';
-import ArrowDown from 'lucide-react-native/icons/arrow-down';
 import type { ListDetail } from '../api';
 import { useAppearance } from '../appearance';
 import { artistName, errorMessage, Heading, Status } from '../CatalogPieces';

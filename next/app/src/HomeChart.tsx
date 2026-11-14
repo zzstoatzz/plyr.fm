@@ -1,39 +1,16 @@
 import { useAppearance } from './appearance';
 import { trackArtwork } from './artwork';
-import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { api, type Track } from './api';
-import { Cover, Heading, Status, artistName, errorMessage, type Play } from './CatalogPieces';
+import { Cover, Heading, Status, artistName, type Play } from './CatalogPieces';
 import { HomeShelf } from './HomeShelf';
 import { cardSurface } from './materials';
-import { nextPopulatedChart, periodLabels, type ChartPeriod } from './home-state';
+import { periodLabels } from './home-state';
+import { useTopTracks } from './use-top-tracks';
 import { Text } from './Text';
 
 export function HomeChart({ onPlay }: { onPlay: Play }) {
   const colors = useAppearance();
-  const [period, setPeriod] = useState<ChartPeriod>('month');
-  const [tracks, setTracks] = useState<Track[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string>();
-  const generation = useRef(0);
-  const pending = useRef(false);
-  const load = useCallback(async (candidate: ChartPeriod, cycle = false) => {
-    if (pending.current) return;
-    pending.current = true;
-    const request = ++generation.current;
-    setLoading(true);
-    setError(undefined);
-    try {
-      const read = async (period: ChartPeriod) => (await api.chart(period)).data.slice(0, 10).map(({ track }) => track);
-      const result = cycle ? await nextPopulatedChart(candidate, read) : { period: candidate, tracks: await read(candidate) };
-      if (request === generation.current) { setPeriod(result.period); setTracks(result.tracks); }
-    } catch (cause) {
-      if (request === generation.current) setError(errorMessage(cause));
-    } finally {
-      if (request === generation.current) { pending.current = false; setLoading(false); }
-    }
-  }, []);
-  useEffect(() => { void load('month'); return () => { generation.current++; pending.current = false; }; }, [load]);
+  const { period, tracks, loading, error, retry, cycle } = useTopTracks();
   const lines = [14, 12, 11].map(size => Math.ceil(size * colors.scale * 1.3));
   const card = [cardSurface(colors), styles.card, { width: 220 * colors.scale }];
   return <View style={styles.section}>
@@ -41,7 +18,7 @@ export function HomeChart({ onPlay }: { onPlay: Play }) {
       <Heading>top tracks</Heading>
       <Pressable accessibilityRole="button" accessibilityLabel={`Top tracks period: ${periodLabels[period]}`}
         accessibilityHint="Show the next period with tracks" accessibilityState={{ busy: loading, disabled: loading }} disabled={loading}
-        onPress={() => void load(period, true)}
+        onPress={cycle}
         style={({ pressed }) => [styles.period, { opacity: pressed || loading ? 0.6 : 1 }]}>
         <Text style={{ color: colors.accent, fontSize: 13 * colors.scale }}>{periodLabels[period]}</Text>
       </Pressable>
@@ -59,7 +36,7 @@ export function HomeChart({ onPlay }: { onPlay: Play }) {
         </View>
       </Pressable>)}
     </HomeShelf>
-    {!loading && <Status error={error} retry={() => void load(period)}
+    {!loading && <Status error={error} retry={retry}
       empty={!tracks.length ? period === 'all_time' ? 'nothing liked yet' : `nothing liked in the ${periodLabels[period]}` : undefined} />}
   </View>;
 }

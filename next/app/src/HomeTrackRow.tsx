@@ -1,8 +1,8 @@
 import { trackArtwork } from './artwork';
+import { DotsThree as Ellipsis } from './icons';
 import { Link } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import Ellipsis from 'lucide-react-native/icons/ellipsis';
 import type { Track } from './api';
 import { useAppearance } from './appearance';
 import { artistName, Cover, trackMeta, type Play } from './CatalogPieces';

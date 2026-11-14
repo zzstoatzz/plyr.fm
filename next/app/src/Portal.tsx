@@ -1,9 +1,8 @@
 import { trackArtwork, collectionArtwork } from './artwork';
+import { CaretRight as ChevronRight, PencilSimple as Pencil } from './icons';
 import { Link, useFocusEffect, type Href } from 'expo-router';
-import ChevronRight from 'lucide-react-native/icons/chevron-right';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react';
 import { Pressable, ScrollView, StyleSheet, View, type ScrollViewProps, type ScrollViewInstance } from 'react-native';
-import Pencil from 'lucide-react-native/icons/pencil';
 import { api, ApiError, type Artist, type ListSummary, type Track } from './api';
 import { useAuth } from './auth';
 import { useAppearance } from './appearance';

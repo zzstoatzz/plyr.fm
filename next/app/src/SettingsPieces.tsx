@@ -1,12 +1,12 @@
 import { type ReactNode, useState } from 'react';
+import { CaretRight as ChevronRight } from './icons';
+import type { Icon } from './icons';
 import { Link, type Href } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
-import ChevronRight from 'lucide-react-native/icons/chevron-right';
-import type Palette from 'lucide-react-native/icons/palette';
 import { Text } from './Text';
 import { useAppearance } from './appearance';
 
-export function SettingsSection({ title, icon: Icon, children }: { title: string; icon: typeof Palette; children: ReactNode }) {
+export function SettingsSection({ title, icon: Icon, children }: { title: string; icon: Icon; children: ReactNode }) {
   const theme = useAppearance();
   return <View style={{ gap: 10 }}>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4 }}>
