@@ -9,6 +9,8 @@ link to.
   before a change; add a line when something bites.
 - [decisions.md](decisions.md): what is settled for the client. Reviews never
   re-raise a settled item.
+- [design.md](design.md): lessons on alignment, hierarchy and density, and
+  the mockups-first rule. Read it before any visible change.
 - [checks.md](checks.md): every kind of check, what it needs, and how to run
   only the ones a change reaches.
 
