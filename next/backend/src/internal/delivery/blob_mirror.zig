@@ -15,8 +15,8 @@
 const std = @import("std");
 const pg = @import("pg");
 const zat = @import("zat");
-const pinned_tls = @import("../ingest/pinned_tls.zig");
-const safe_endpoint = @import("../ingest/safe_endpoint.zig");
+const pinned_tls = @import("../net/pinned_tls.zig");
+const safe_endpoint = @import("../net/safe_endpoint.zig");
 const store_module = @import("postgres_mirror_store.zig");
 
 const log = std.log.scoped(.blob_mirror);
