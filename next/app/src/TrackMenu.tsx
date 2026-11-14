@@ -11,11 +11,11 @@ import { TrackPlaylistPicker } from './AccountCatalog';
 import { ShareLink } from './ShareLink';
 import { TrackLikes } from './TrackLikes';
 import { usePlayback } from './playback';
-import { Sheet } from './Sheet';
+import { Sheet, type Anchor } from './Sheet';
 import { DownloadAction } from './downloads/DownloadAction';
 import { AccessSheet } from './access/AccessSheet';
 
-export function TrackMenu({ track, close, actions, returnTo }: { track: Track; close: () => void; actions?: ReactNode; returnTo?: string }) {
+export function TrackMenu({ track, close, actions, returnTo, anchor }: { track: Track; close: () => void; actions?: ReactNode; returnTo?: string; anchor?: Anchor }) {
   const { did } = useAuth();
   const player = usePlayback();
   const router = useRouter();
@@ -33,10 +33,10 @@ export function TrackMenu({ track, close, actions, returnTo }: { track: Track; c
     else { close(); router.push(login); }
   }
   if (access) return <AccessSheet subject={{ noun: 'track', tracks: [track], skey: track.record.rkey, returnTo: `/track/${track.id}` }} close={close} />;
-  if (isPrivateTrack(track)) return <Sheet title="private track" close={close}>
+  if (isPrivateTrack(track)) return <Sheet title="private track" close={close} anchor={anchor}>
     <ActionRow icon={ListPlus} label="add to private queue" onPress={() => { player.enqueue(track); close(); }} />
   </Sheet>;
-  return <Sheet title={playlists && did ? 'add to playlist' : 'track options'} close={close} visible={!destination} onDismiss={finishNavigation}>
+  return <Sheet title={playlists && did ? 'add to playlist' : 'track options'} close={close} visible={!destination} onDismiss={finishNavigation} anchor={anchor}>
 
     <View style={{ gap: 0 }}>
       {playlists && did ? <>

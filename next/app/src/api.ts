@@ -196,8 +196,9 @@ export const api = {
 		get<Page<Track>>(`/v1/actors/${did}/likes`, p),
 	search: (q: string, options: { limit?: number; types?: SearchHit['type']; signal?: AbortSignal } = {}) =>
 		get<Page<SearchHit>>('/v1/search', { q, limit: options.limit, types: options.types }, options.signal),
-	chart: (period: 'day' | 'week' | 'month' | 'all_time' = 'week') =>
-		get<{ period: string; data: ChartEntry[] }>('/v1/charts/tracks', { period }),
+	/** up to 50 tracks; the server has no cursor past that */
+	chart: (period: 'day' | 'week' | 'month' | 'all_time' = 'week', limit?: number) =>
+		get<{ period: string; data: ChartEntry[] }>('/v1/charts/tracks', { period, limit }),
 	/** block (≤ timeout) until the appview has projected a write the client made on its PDS. */
 	awaitRecord: (uri: string, cid?: string, timeout_ms = 8000) =>
 		get<{ uri: string; status: AwaitStatus; cid?: string; reason?: string }>('/v1/records/await', {

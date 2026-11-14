@@ -78,11 +78,12 @@ export function weekNumber(now = Date.now()): number {
 type LikedTrack = { artist: { did: string }; metrics: { like_count: number } };
 
 /** Artists by the likes their tracks drew, most first; the artist of the week walks this list one week at a time. */
-/** A count in a narrow column: 950, 1.2k, 12k, 3.4m. */
+/** A count for a fixed-width column, at most six characters: 950, 1.2k, 132.1k, 3.4m. Never rounds up. */
 export function compactCount(count: number): string {
   if (count < 1000) return String(count);
-  const [value, unit] = count < 1_000_000 ? [count / 1000, 'k'] : [count / 1_000_000, 'm'];
-  return `${value < 10 ? Math.floor(value * 10) / 10 : Math.floor(value)}${unit}`;
+  const [value, unit] = count < 1_000_000 ? [count / 1000, 'k'] : count < 1_000_000_000 ? [count / 1_000_000, 'm'] : [count / 1_000_000_000, 'b'];
+  const tenths = Math.floor(value * 10) / 10;
+  return `${Number.isInteger(tenths) ? tenths : tenths.toFixed(1)}${unit}`;
 }
 
 /** An artist's tracks without re-uploads: the first of each title, ignoring case and spacing. */

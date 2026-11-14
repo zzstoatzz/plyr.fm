@@ -5,7 +5,7 @@ import { AccountSection } from './AccountPieces';
 import { ActionRow } from './ActionRow';
 import { WaveLoading } from './WaveLoading';
 import { DESKTOP_HOME_WIDTH } from './DesktopHome';
-import { DesktopTrackRow } from './DesktopTrackRow';
+import { DesktopTrackHeader, DesktopTrackRow } from './DesktopTrackRow';
 import { ListCards } from './ListCards';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -117,7 +117,7 @@ function AccountLibrary({ did, likesOnly, onPlay }: { did: string; likesOnly: bo
     });
   }
   const likedTracks = <>
-    {wide ? <View>{likes.data.map(track => <DesktopTrackRow key={track.id} track={track} tracks={likes.data} onPlay={onPlay} returnTo={likesOnly ? '/liked' : '/library'} />)}</View>
+    {wide ? <View>{likes.data.length > 0 && <DesktopTrackHeader />}{likes.data.map(track => <DesktopTrackRow key={track.id} track={track} tracks={likes.data} onPlay={onPlay} returnTo={likesOnly ? '/liked' : '/library'} />)}</View>
       : <TrackRows tracks={likes.data} onPlay={onPlay} />}
     <Status loading={likes.loading} error={likes.error} retry={likes.more} empty={!likes.data.length ? 'no liked tracks yet.' : undefined} />
     {likesOnly && likes.cursor && !likes.loading && !likes.error && <Button label="More liked tracks" onPress={likes.more} />}

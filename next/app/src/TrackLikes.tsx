@@ -40,9 +40,9 @@ export function TrackLikes({ track, compact = false, returnTo, menu = false, ico
 }
 
 /** The viewer's like as loaded from their PDS and as it stands now; the count moves by the difference. */
-type Viewer = { did: string; uri: string; loaded: boolean; liked: boolean };
+export type Viewer = { did: string; uri: string; loaded: boolean; liked: boolean };
 
-function LikeButton({ track, reportLiked, menu }: { track: Track; reportLiked: (state: Viewer) => void; menu?: boolean }) {
+export function LikeButton({ track, reportLiked, menu, small = false }: { track: Track; reportLiked: (state: Viewer) => void; menu?: boolean; small?: boolean }) {
   const { did, rpc } = useAuth();
   const pds = useMemo(() => createPds({ did, rpc }), [did, rpc]);
   const load = useCallback(() => pds.myLikes().then(likes => likes.has(track.record.uri)), [pds, track.record.uri]);
@@ -67,12 +67,12 @@ function LikeButton({ track, reportLiked, menu }: { track: Track; reportLiked: (
   return menu ? <ActionRow icon={Heart} label={retry ? 'retry like status' : liked ? 'unlike' : 'like'} disabled={loading} onPress={() => void toggle()} />
     : <Pressable accessibilityRole="button" accessibilityLabel={retry ? 'retry like status' : liked ? 'Unlike' : 'Like'}
       accessibilityState={{ selected: liked ?? false, busy: loading, disabled: loading }}
-      disabled={loading} onPress={() => void toggle()} style={[target, { opacity: liked === undefined ? 0.5 : 1 }]}>
-      <LikeHeart liked={liked} />
+      disabled={loading} onPress={() => void toggle()} style={[small ? smallTarget : target, { opacity: liked === undefined ? 0.5 : 1 }]}>
+      <LikeHeart liked={liked} size={small ? 18 : 21} />
     </Pressable>;
 }
 
-function People({ id, viewer, close }: { id: string; viewer?: Viewer; close: () => void }) {
+export function People({ id, viewer, close }: { id: string; viewer?: Viewer; close: () => void }) {
   const load = useCallback((cursor?: string) => api.trackLikes(id, cursor), [id]);
   const likes = usePages(load);
   const auth = useAuth();
@@ -98,3 +98,4 @@ function People({ id, viewer, close }: { id: string; viewer?: Viewer; close: () 
 }
 
 const target = { minWidth: 44, height: 44, alignItems: 'center', justifyContent: 'center' } as const;
+const smallTarget = { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' } as const;

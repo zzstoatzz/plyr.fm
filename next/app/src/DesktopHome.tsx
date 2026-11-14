@@ -1,14 +1,14 @@
 import { Link } from 'expo-router';
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, View, type ScrollViewInstance } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View, useWindowDimensions, type ScrollViewInstance } from 'react-native';
 import type { Track } from './api';
 import { useAppearance } from './appearance';
 import { AtlasView } from './atlas/AtlasView';
 import { trackArtwork } from './artwork';
 import { useAuth } from './auth';
 import { Cover, Status, type Play } from './CatalogPieces';
-import { DesktopTrackRow } from './DesktopTrackRow';
-import { dayGroup, periodLabels } from './home-state';
+import { DesktopTrackHeader, DesktopTrackRow } from './DesktopTrackRow';
+import { compactCount, dayGroup, periodLabels } from './home-state';
 import { HomeFeatured, useFeaturedArtist } from './HomeFeatured';
 import { HomeTagBar } from './HomeTagBar';
 import { ArrowsOut } from './icons';
@@ -21,9 +21,12 @@ import { useTopTracks } from './use-top-tracks';
 import { WaveLoading } from './WaveLoading';
 
 /** Window width from which home lays out as a page with a rail instead of the phone feed. */
-export const DESKTOP_HOME_WIDTH = 1100;
+export const DESKTOP_HOME_WIDTH = 1240;
 const RAIL = 340;
-const ARTISTS = 16;
+/** Below this window width the rail narrows so the main column keeps room for titles. */
+const ROOMY = 1480;
+const ARTISTS = 12;
+const RAIL_STEP = 8;
 
 function Section({ title, aside, children, testID }: { title: string; aside?: ReactNode; children: ReactNode; testID?: string }) {
   const theme = useAppearance();
@@ -55,15 +58,14 @@ function AtlasTile({ onPlay }: { onPlay: Play }) {
   </View>;
 }
 
-function TopTracks({ onPlay }: { onPlay: Play }) {
+function TopTracks({ onPlay, top, shown }: { onPlay: Play; top: ReturnType<typeof useTopTracks>; shown: number }) {
   const theme = useAppearance();
-  const top = useTopTracks('month', 6);
   return <Section testID="home-chart" title="top tracks" aside={<Pressable accessibilityRole="button" accessibilityLabel={`Top tracks period: ${periodLabels[top.period]}`}
     accessibilityHint="Show the next period with tracks" disabled={top.loading} onPress={top.cycle} style={styles.period}>
     <Text style={{ color: theme.accent, fontSize: 13 * theme.scale, opacity: top.loading ? 0.6 : 1 }}>{periodLabels[top.period]}</Text>
   </Pressable>}>
     {top.loading && !top.tracks.length ? <WaveLoading label="loading top tracks..." />
-      : top.tracks.map((track, index) => <DesktopRailTrack key={track.id} rank={index + 1} track={track} onPress={() => onPlay(track, top.tracks)} />)}
+      : top.tracks.slice(0, shown).map((track, index) => <DesktopRailTrack key={track.id} rank={index + 1} track={track} onPress={() => onPlay(track, top.tracks)} />)}
     {!top.loading && <Status error={top.error} retry={top.retry} empty={!top.tracks.length ? `nothing liked in the ${periodLabels[top.period]}` : undefined} />}
   </Section>;
 }
@@ -78,7 +80,7 @@ function DesktopRailTrack({ track, rank, onPress }: { track: Track; rank: number
       <Text numberOfLines={1} style={{ color: theme.text, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale, fontWeight: '600' }}>{track.metadata.title}</Text>
       <Text numberOfLines={1} style={{ color: theme.muted, fontFamily: theme.fontFamily, fontSize: 12.5 * theme.scale }}>{track.metadata.artist_name || track.artist.profile.display_name || track.artist.profile.handle}</Text>
     </View>
-    <Text style={{ color: theme.faint, fontSize: 12 * theme.scale, fontVariant: ['tabular-nums'] }}>{track.metrics.like_count} {track.metrics.like_count === 1 ? 'like' : 'likes'}</Text>
+    <Text style={{ color: theme.faint, fontSize: 12.5 * theme.scale, fontVariant: ['tabular-nums'] }}>{compactCount(track.metrics.like_count)} {track.metrics.like_count === 1 ? 'like' : 'likes'}</Text>
   </Pressable>;
 }
 
@@ -110,6 +112,8 @@ export function DesktopHome({ onPlay, hiddenTags }: { onPlay: Play; hiddenTags: 
   const feed = useLatestFeed(hiddenTags);
   const { latest, tracks, pending, selected } = feed;
   const featured = useFeaturedArtist();
+  const top = useTopTracks('month', 50);
+  const rail = useWindowDimensions().width >= ROOMY ? RAIL : 300;
   const scroller = useRef<ScrollViewInstance>(null);
   const viewport = useRef({ height: 0, content: 0, offset: 0 });
   const [now] = useState(() => Date.now());
@@ -117,6 +121,8 @@ export function DesktopHome({ onPlay, hiddenTags }: { onPlay: Play; hiddenTags: 
     const { height, content, offset } = viewport.current;
     if (height > 0 && content > 0 && content - offset - height <= height * 1.5 && latest.cursor && !latest.loading && !latest.error) latest.more();
   }, [latest.cursor, latest.loading, latest.error, latest.more]);
+  // the rail keeps pace with latest, a row of top tracks for each row loaded there, up to the chart's 50
+  const shown = Math.max(RAIL_STEP, tracks.length - RAIL_STEP);
   const groups = useMemo(() => {
     const out: { label: string; tracks: typeof tracks }[] = [];
     for (const track of tracks) {
@@ -131,13 +137,17 @@ export function DesktopHome({ onPlay, hiddenTags }: { onPlay: Play; hiddenTags: 
     onLayout={event => { viewport.current.height = event.nativeEvent.layout.height; fill(); }}
     onContentSizeChange={(_, height) => { viewport.current.content = height; fill(); }}
     onScroll={event => { viewport.current.offset = event.nativeEvent.contentOffset.y; fill(); }}>
+    <View style={styles.hero}>
+      {featured.status !== 'empty' && <View style={styles.main}><HomeFeatured featured={featured} onPlay={onPlay} /></View>}
+      <View style={[styles.atlasSlot, { width: rail }, featured.status === 'empty' && { flex: 1 }]}><AtlasTile onPlay={onPlay} /></View>
+    </View>
     <View style={styles.columns}>
       <View style={styles.main}>
-        <HomeFeatured featured={featured} onPlay={onPlay} />
         <Section title="latest" aside={<Pressable accessibilityRole="button" accessibilityLabel="Refresh tracks" onPress={() => { scroller.current?.scrollTo({ y: 0, animated: false }); latest.reload(); }} style={styles.period}>
           <Text style={{ color: theme.faint, fontSize: 13 * theme.scale }}>newest first</Text>
         </Pressable>}>
           <HomeTagBar feed={feed} hiddenTags={hiddenTags} />
+          {tracks.length > 0 && <DesktopTrackHeader />}
           <View style={{ opacity: pending ? 0.5 : 1 }}>
             {groups.map(group => <View key={group.label + group.tracks[0].id}>
               <Text accessibilityRole="header" aria-level={3} style={[styles.day, { color: theme.faint, fontSize: 12 * theme.scale }]}>{group.label}</Text>
@@ -152,23 +162,25 @@ export function DesktopHome({ onPlay, hiddenTags }: { onPlay: Play; hiddenTags: 
           </View>
         </Section>
       </View>
-      <View style={styles.rail}>
-        <AtlasTile onPlay={onPlay} />
-        <TopTracks onPlay={onPlay} />
+      <View style={[styles.rail, { width: rail }]}>
         <ArtistsYouKnow />
+        <TopTracks onPlay={onPlay} top={top} shown={shown} />
       </View>
     </View>
   </ScrollView>;
 }
 
 const styles = StyleSheet.create({
-  page: { ...wideFrame, paddingTop: 28, paddingBottom: 40 },
-  atlas: { borderRadius: 18, overflow: 'hidden', height: 300 },
+  page: { ...wideFrame, paddingTop: 28, paddingBottom: 40, gap: 36 },
+  // the atlas takes the artist card's height, so the two read as one band
+  hero: { flexDirection: 'row', gap: 40, alignItems: 'stretch' },
+  atlasSlot: { minHeight: 300 },
+  atlas: { flex: 1, borderRadius: 18, overflow: 'hidden' },
   atlasCaption: { position: 'absolute', left: 0, right: 0, bottom: 0, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, padding: 14 },
   expand: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 36, paddingHorizontal: 14, borderRadius: 18, borderWidth: 1 },
   columns: { flexDirection: 'row', gap: 40, alignItems: 'flex-start' },
-  main: { flex: 1, minWidth: 0, gap: 30 },
-  rail: { width: RAIL, gap: 34 },
+  main: { flex: 1, minWidth: 0 },
+  rail: { gap: 34 },
   section: { gap: 10 },
   sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 32 },
   period: { minHeight: 44, minWidth: 44, justifyContent: 'center', alignItems: 'flex-end' },
