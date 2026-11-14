@@ -137,13 +137,13 @@ pub fn build(b: *std.Build) void {
                     .{ .name = "hegel", .module = hegel.module("hegel") },
                     .{ .name = "zat", .module = root_module.import_table.get("zat").? },
                     .{ .name = "pg", .module = root_module.import_table.get("pg").? },
-                    .{ .name = "migration_0029_like_counts", .module = root_module.import_table.get("migration_0029_like_counts").? },
-                    .{ .name = "migration_0030_like_counts", .module = root_module.import_table.get("migration_0030_like_counts").? },
-                    .{ .name = "migration_0032_track_tags", .module = root_module.import_table.get("migration_0032_track_tags").? },
-                    .{ .name = "migration_0033_tag_annotations", .module = root_module.import_table.get("migration_0033_tag_annotations").? },
-                    .{ .name = "migration_0034_tag_normalization", .module = root_module.import_table.get("migration_0034_tag_normalization").? },
                 },
             });
+            // the stores' test schemas embed migrations, so the harnesses
+            // see every one the backend does
+            for (root_module.import_table.keys(), root_module.import_table.values()) |name, module| {
+                if (std.mem.startsWith(u8, name, "migration_")) fuzz_module.addImport(name, module);
+            }
             // libhegel is a rust staticlib: off darwin, _Unwind_* come from zig's libunwind
             if (!target.result.os.tag.isDarwin()) fuzz_module.link_libcpp = true;
             const fuzz = b.addExecutable(.{ .name = "fuzz", .root_module = fuzz_module });

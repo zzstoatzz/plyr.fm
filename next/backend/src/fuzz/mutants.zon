@@ -83,4 +83,22 @@
         .old = "return @min(state.queue[state.index].durationMs, state.positionMs +| elapsed);",
         .new = "return state.positionMs +| elapsed;",
     },
+    .{
+        .name = "a rewritten list keeps its old members",
+        .file = "src/internal/projection/postgres_list_store.zig",
+        .old = "DELETE FROM plyr_index.list_members WHERE list_uri = $1",
+        .new = "DELETE FROM plyr_index.list_members WHERE false AND list_uri = $1",
+    },
+    .{
+        .name = "a rewritten track keeps its old featured artists",
+        .file = "src/internal/projection/postgres_track_store.zig",
+        .old = "featured_dids = EXCLUDED.featured_dids,",
+        .new = "featured_dids = track_records.featured_dids,",
+    },
+    .{
+        .name = "a rewritten profile keeps its old bio",
+        .file = "src/internal/projection/postgres_profile_store.zig",
+        .old = "bio = EXCLUDED.bio,",
+        .new = "bio = coalesce(profile_records.bio, EXCLUDED.bio),",
+    },
 }
