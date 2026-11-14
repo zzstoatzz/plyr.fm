@@ -51,6 +51,23 @@ jobs:
           test -s dist/oauth-native-client-metadata.json
           test ! -e dist/404.html
 
+      # home, a track, now playing and the queue at phone and desktop widths, light and dark, against fixtures.
+      # a layout regression here stops the deploy (on main) and fails the PR.
+      - name: check key screens
+        working-directory: next/app
+        run: |
+          npm install --no-save --no-package-lock playwright@1.61.1
+          npx --no-install playwright install --with-deps chromium
+          PLAYWRIGHT_MODULE="$PWD/node_modules/playwright" SCREENS_OUTPUT="$RUNNER_TEMP/screens" node scripts/check-key-screens.cjs
+
+      - name: upload key screens
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: next-key-screens
+          path: ${{ runner.temp }}/screens
+          if-no-files-found: ignore
+
       - name: bundle iOS and Android
         if: github.event_name == 'pull_request'
         working-directory: next/app
