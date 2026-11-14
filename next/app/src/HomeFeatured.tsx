@@ -61,6 +61,7 @@ function shuffled<T>(items: T[]): T[] {
 const TILES = 5;
 const WALL = 16;
 const COPY_WIDTH = 460;
+const STRIP = 120;
 const GAP = 14;
 
 export function HomeFeatured({ featured, onPlay }: { featured: Featured; onPlay: Play }) {
@@ -93,27 +94,29 @@ export function HomeFeatured({ featured, onPlay }: { featured: Featured; onPlay:
   const playing = current && player.status.playing;
   const wall = art.length ? Array.from({ length: WALL }, (_, index) => art[index % art.length]) : [];
   const fade = theme.background;
-  const copyWidth = width ? Math.min(COPY_WIDTH, Math.max(340, Math.round(width * 0.62))) : COPY_WIDTH;
-  const fadeWidth = Math.min(260, Math.max(120, width * 0.22));
-  return <View testID="home-featured" onLayout={measure} style={[styles.wallCard, { backgroundColor: theme.surface }]}>
-    {wall.length ? <View aria-hidden pointerEvents="none" style={[styles.wall, { left: copyWidth - 40 }]}>
+  // Too narrow for covers beside the copy (e.g. the queue panel is docked): the covers run along the top instead.
+  const stacked = width > 0 && width < COPY_WIDTH + 200;
+  const copyWidth = stacked ? width : COPY_WIDTH;
+  const gradient = stacked ? { x1: 0, y1: STRIP - 70, x2: 0, y2: STRIP } : { x1: 0, y1: 0, x2: COPY_WIDTH + 260, y2: 0 };
+  return <View testID="home-featured" onLayout={measure} style={[styles.wallCard, { backgroundColor: fade }]}>
+    {wall.length ? <View aria-hidden pointerEvents="none" style={[styles.wall, stacked ? { left: -40, top: STRIP - 2 * 150 - 30 } : { left: COPY_WIDTH - 40 }]}>
       {wall.map((uri, index) => <Image key={index} source={{ uri }} resizeMode="cover" style={[styles.tile, { backgroundColor: theme.raised }]} />)}
     </View> : artist.profile.avatar_url ? <Image aria-hidden source={{ uri: artist.profile.avatar_url }} blurRadius={60} resizeMode="cover" style={[StyleSheet.absoluteFill, { opacity: theme.dark ? 0.22 : 0.16 }]} /> : null}
     <Svg aria-hidden pointerEvents="none" style={StyleSheet.absoluteFill} width="100%" height="100%">
-      <Defs><LinearGradient id="featured-fade" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2={copyWidth + fadeWidth} y2="0">
-        <Stop offset={copyWidth / (copyWidth + fadeWidth)} stopColor={fade} stopOpacity={1} />
-        <Stop offset={1} stopColor={fade} stopOpacity={0} />
+      <Defs><LinearGradient id="featured-fade" gradientUnits="userSpaceOnUse" {...gradient}>
+        <Stop offset={stacked ? 0 : COPY_WIDTH / (COPY_WIDTH + 260)} stopColor={fade} stopOpacity={stacked ? 0 : 1} />
+        <Stop offset={1} stopColor={fade} stopOpacity={stacked ? 1 : 0} />
       </LinearGradient></Defs>
       <Rect width="100%" height="100%" fill="url(#featured-fade)" />
     </Svg>
-    <View style={[styles.copy, { maxWidth: copyWidth }]}>
+    <View style={[styles.copy, { maxWidth: copyWidth }, stacked && wall.length ? { paddingTop: STRIP - 20 } : undefined]}>
       <Link href={profile} asChild><Pressable accessibilityRole="link" accessibilityLabel={`${name}, artist of the week`} style={styles.byline}>
         <Cover uri={artist.profile.avatar_url} size={36} round />
         <Text style={{ color: theme.accent, fontSize: 12.5 * theme.scale, fontWeight: '700', letterSpacing: 0.4 }}>artist of the week</Text>
       </Pressable></Link>
       <Link href={profile} asChild><Pressable accessibilityRole="link" style={styles.name}>
         {({ hovered }: { pressed: boolean; hovered?: boolean }) => <Text accessibilityRole="header" aria-level={2} numberOfLines={2}
-          style={{ color: theme.text, fontFamily: theme.fontFamily, fontSize: (copyWidth < 400 ? 34 : 44) * theme.scale, lineHeight: (copyWidth < 400 ? 38 : 48) * theme.scale, fontWeight: '800', letterSpacing: -1.2, textDecorationLine: hovered ? 'underline' : 'none' }}>{name}</Text>}
+          style={{ color: theme.text, fontFamily: theme.fontFamily, fontSize: (stacked ? 34 : 44) * theme.scale, lineHeight: (stacked ? 38 : 48) * theme.scale, fontWeight: '800', letterSpacing: -1.2, textDecorationLine: hovered ? 'underline' : 'none' }}>{name}</Text>}
       </Pressable></Link>
       {artist.profile.bio ? <Text numberOfLines={2} style={{ color: theme.muted, fontFamily: theme.fontFamily, fontSize: 14.5 * theme.scale, lineHeight: 21 * theme.scale }}>{artist.profile.bio}</Text> : null}
       <View style={styles.play}>
