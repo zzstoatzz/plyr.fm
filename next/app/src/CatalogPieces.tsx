@@ -1,4 +1,4 @@
-import { trackArtwork, collectionArtwork, displayUrl } from './artwork';
+import { trackArtwork, collectionArtwork, displayUrl } from '../../core/src/artwork';
 import { MusicNote as Music2, UserCircle as UserRound } from './icons';
 import { Text } from './Text';
 import { Link, type Href } from 'expo-router';

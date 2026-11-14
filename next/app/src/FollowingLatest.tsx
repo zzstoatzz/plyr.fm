@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { api } from './api-client';
 import { type Track } from '../../core/src/api';
 import { useAppearance } from './appearance';
-import { trackArtwork } from './artwork';
+import { trackArtwork } from '../../core/src/artwork';
 import { Cover, type Play } from './CatalogPieces';
 import type { NetworkArtist } from './home-api';
 import { formatDuration, timeAgo } from './home-state';

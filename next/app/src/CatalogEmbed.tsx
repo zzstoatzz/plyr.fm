@@ -1,4 +1,4 @@
-import { trackArtwork, collectionArtwork } from './artwork';
+import { trackArtwork, collectionArtwork } from '../../core/src/artwork';
 import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef } from 'react';
 import { View } from 'react-native';

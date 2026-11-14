@@ -2,7 +2,7 @@ import { Link } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 import type { ListSummary } from '../../core/src/api';
 import { useAppearance } from './appearance';
-import { collectionArtwork } from './artwork';
+import { collectionArtwork } from '../../core/src/artwork';
 import { Cover, trackCount } from './CatalogPieces';
 import { Text } from './Text';
 

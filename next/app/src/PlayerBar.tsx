@@ -1,4 +1,4 @@
-import { displayUrl, trackArtwork } from './artwork';
+import { displayUrl, trackArtwork } from '../../core/src/artwork';
 import { Playlist as ListMusic, X } from './icons';
 import { Text } from './Text';
 import { router, usePathname, type Href } from 'expo-router';

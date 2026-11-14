@@ -1,4 +1,4 @@
-import { trackArtwork, collectionArtwork } from './artwork';
+import { trackArtwork, collectionArtwork } from '../../core/src/artwork';
 import { CaretRight as ChevronRight, PencilSimple as Pencil } from './icons';
 import { Link, useFocusEffect, type Href } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react';

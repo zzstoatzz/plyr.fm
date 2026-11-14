@@ -1,4 +1,4 @@
-import { trackArtwork } from './artwork';
+import { trackArtwork } from '../../core/src/artwork';
 import { DotsThree as Ellipsis } from './icons';
 import { Link } from 'expo-router';
 import { useRef, useState } from 'react';

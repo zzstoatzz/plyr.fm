@@ -1,4 +1,4 @@
-import { trackArtwork } from './artwork';
+import { trackArtwork } from '../../core/src/artwork';
 import { MusicNote as Music, ArrowCounterClockwise as RotateCcw } from './icons';
 import { Text } from './Text';
 import Slider from './Slider';

@@ -1,4 +1,4 @@
-import type { ListSummary, Track } from '../../core/src/api';
+import type { ListSummary, Track } from './api.ts';
 
 export function trackArtwork(track: Track): string | undefined {
   return track.media.artwork?.url || track.artist.profile.avatar_url || undefined;
