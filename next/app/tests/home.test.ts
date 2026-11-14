@@ -125,3 +125,14 @@ test('artist of the week ranks liked artists and changes on mondays', async () =
   assert.equal(weekNumber(monday) + 1, weekNumber(monday + 7 * 86_400_000));
   assert.equal(weekNumber(monday - 1) + 1, weekNumber(monday), 'weeks turn over at monday 00:00 utc');
 });
+
+test('artist of the week shows each title once', async () => {
+  const { distinctTracks } = await import('../src/home-state.ts');
+  const t = (id: string, title: string) => ({ id, metadata: { title } });
+  assert.deepEqual(distinctTracks([t('1', 'First Circle'), t('2', 'first  circle '), t('3', 'April')]).map(track => track.id), ['1', '3']);
+});
+
+test('desktop rows shorten big counts without rounding up', async () => {
+  const { compactCount } = await import('../src/home-state.ts');
+  assert.deepEqual([0, 999, 1000, 1299, 12_900, 999_999, 3_450_000].map(compactCount), ['0', '999', '1k', '1.2k', '12k', '999k', '3.4m']);
+});
