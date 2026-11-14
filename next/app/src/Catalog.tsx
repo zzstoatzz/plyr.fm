@@ -14,6 +14,7 @@ import { Search } from './Search';
 import { Home } from './Home';
 import { DetailHeader } from './DetailHeader';
 import { TrackPresentation } from './TrackPresentation';
+import { TrackComments } from './TrackComments';
 import { PlayerControl } from './PlayerControl';
 import { usePlayback } from './playback';
 import { TrackLikes } from './TrackLikes';
@@ -56,7 +57,8 @@ function TrackDetail({ id, onPlay, onEnqueue, trackActions }: {
       utilities={<>
         <ShareLink compact path={`/track/${encodeURIComponent(track.id)}`} />
         <PlayerControl icon={Ellipsis} label="More" onPress={() => setActionsOpen(true)} />
-      </>} />
+      </>}
+      comments={<TrackComments track={track} play={() => onPlay(track)} />} />
     {actionsOpen && <TrackMenu track={track} close={() => setActionsOpen(false)} actions={trackActions?.(track)} />}
   </>;
 }

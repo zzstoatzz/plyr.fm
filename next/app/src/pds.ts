@@ -221,6 +221,28 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 		return waitForIndex ? settle(existing.uri) : 'pending';
 	}
 
+	async function comment(track: Track, text: string, timestampMs: number): Promise<{ uri: string; cid: string; rkey: string; subject: { uri: string; cid: string } }> {
+		const { rpc, did } = session();
+		const subject = publicTrackReference(track);
+		const res = await ok(
+			rpc.post('com.atproto.repo.createRecord', {
+				input: {
+					repo: did,
+					collection: NSID.comment as `${string}.${string}.${string}`,
+					record: { $type: NSID.comment, subject, text, timestampMs: Math.max(0, Math.round(timestampMs)), createdAt: new Date().toISOString() }
+				}
+			})
+		);
+		return { uri: res.uri, cid: res.cid, rkey: ownedRkey(res.uri, did, NSID.comment), subject };
+	}
+
+	async function deleteComment(rkey: string, cid: string): Promise<void> {
+		const { rpc, did } = session();
+		await ok(rpc.post('com.atproto.repo.deleteRecord', {
+			input: { repo: did, collection: NSID.comment as `${string}.${string}.${string}`, rkey, swapRecord: cid }
+		}));
+	}
+
 	// playlists are fm.plyr.*.list records with listType "playlist". edits are a
 	// read-modify-write of the whole record, guarded by swapRecord so a
 	// concurrent edit from another client fails instead of being clobbered.
@@ -453,5 +475,5 @@ export function createPds(auth: Pick<Auth, 'did' | 'rpc'>) {
 			}),
 		});
 	}
-	return { albumOrganization, collectionOrder, myLikes, like, unlike, createPlaylist, addToPlaylist, removeFromPlaylist, renameCollection, deletePlaylist, uploadTrack, myProfile, saveProfile, myTrack, editTrack, deleteTrack, reserveCreate, pendingCreates, recoverCreate, dismissCreate, archiveCreate, prepareTrackRecord, uploadedTrack, archiveUploadedTrack };
+	return { albumOrganization, collectionOrder, myLikes, like, unlike, comment, deleteComment, createPlaylist, addToPlaylist, removeFromPlaylist, renameCollection, deletePlaylist, uploadTrack, myProfile, saveProfile, myTrack, editTrack, deleteTrack, reserveCreate, pendingCreates, recoverCreate, dismissCreate, archiveCreate, prepareTrackRecord, uploadedTrack, archiveUploadedTrack };
 }
