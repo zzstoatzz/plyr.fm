@@ -27,7 +27,7 @@
 			{#if list.owner.profile}<a class="subtle" href={`/u/${list.owner.did}`}>{list.owner.profile.display_name}</a>{/if}
 			<div class="actions">
 				<button type="button" class="primary-button" aria-label={`Play ${title}`} disabled={!tracks.length} onclick={playAll}><Icon name="play" /></button>
-				<button type="button" class="text-button" disabled={!tracks.length} onclick={enqueue}><Icon name="queue" /> add to queue</button>
+				<button type="button" class="text-button" disabled={!tracks.length || player.privateMode} title={player.privateMode ? "play a public track to change queues" : undefined} onclick={enqueue}><Icon name="queue" /> add to queue</button>
 			</div>
 		</div>
 	</header>

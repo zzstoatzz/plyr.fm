@@ -21,7 +21,7 @@
 			<span class="cover"><Artwork src={trackArtwork(player.current)} size={48} /></span>
 			<span class="description">
 				<strong class="truncate">{player.current.metadata.title}</strong>
-				<span class="truncate">{player.snapshot.outputElsewhere ? 'playing on another device' : artistName(player.current)}</span>
+				<span class="truncate">{player.outputElsewhere ? 'playing on another device' : artistName(player.current)}</span>
 			</span>
 		</button>
 		<div class="controls">

@@ -5,6 +5,9 @@ import { createQueueAdmission } from '$core/personal-queue-join';
 import { PlayOutbox } from '$core/play-outbox';
 import { playMetrics } from '$core/play-metrics';
 import { trackArtwork } from '$core/artwork';
+import { editPrivateQueue, withoutPrivateTrack } from '$core/publishing/private-music';
+import { isPrivateTrack } from '$core/track-access';
+import { privateLibrary } from './private-library';
 import { api } from './api';
 import { auth } from './auth';
 import { authConfig } from './auth-config';
@@ -30,6 +33,9 @@ class Player {
 	keepPlaying = $state(false);
 	nowPlaying = $state(false);
 	queueOpen = $state(false);
+	privateMode = $state(false);
+	get outputElsewhere() { return !this.privateMode && this.snapshot.outputElsewhere; }
+	#publicRepeat: PersonalPlaybackTarget['repeat'] = 'off';
 	#audio: HTMLAudioElement | undefined;
 	#audioSource: AbortController | undefined;
 	#releaseMedia: (() => void) | undefined;
@@ -49,8 +55,8 @@ class Player {
 			seek: seconds => this.#seekMedia(seconds),
 			play: () => this.#playMedia(),
 			pause: () => this.#audio?.pause(),
-			setQueue: (tracks, index) => { this.queue = tracks; this.index = index; },
-			suspended: false,
+			setQueue: (tracks, index) => { if (!this.privateMode) { this.queue = tracks; this.index = index; } },
+			suspended: this.privateMode,
 			repeat: this.repeat,
 			keepPlaying: this.keepPlaying,
 			duration: () => this.length,
@@ -95,6 +101,8 @@ class Player {
 				this.#detachMedia();
 				this.#mediaTrack = undefined;
 				this.#listening.stop();
+				this.privateMode = false;
+				this.repeat = 'off';
 				this.queue = [];
 				this.index = -1;
 				this.nowPlaying = false;
@@ -137,12 +145,62 @@ class Player {
 
 	play(track: Track, collection?: Track[], label?: string) {
 		this.#audioElement();
-		this.#model.play(track, collection, label);
+		if (isPrivateTrack(track)) {
+			const { did } = auth.getAuth();
+			if (!privateLibrary.ownsPrivateTrack(track, did)) return;
+			if (!this.privateMode) {
+				this.#publicRepeat = this.repeat;
+				this.#model.suspend();
+			}
+			this.privateMode = true;
+			const tracks = collection?.filter(item => privateLibrary.ownsPrivateTrack(item, did)) ?? [track];
+			const at = tracks.findIndex(item => item.record.uri === track.record.uri);
+			this.#startPrivate(at >= 0 ? tracks : [track], Math.max(0, at));
+			return;
+		}
+		if (this.privateMode) this.#leavePrivate();
+		this.#model.play(track, collection?.filter(item => !isPrivateTrack(item)), label);
+	}
+
+	#startPrivate(tracks: Track[], at: number) {
+		this.queue = tracks;
+		this.index = at;
+		void this.#load(tracks, at).then(ready => { if (ready) this.#playMedia(); });
+	}
+
+	#leavePrivate() {
+		this.#detachMedia();
+		this.#mediaTrack = undefined;
+		this.privateMode = false;
+		this.repeat = this.#publicRepeat;
+		this.queue = [];
+		this.index = -1;
+		this.nowPlaying = false;
+		this.time = 0;
+		this.length = 0;
+		this.playing = false;
+		this.loading = false;
+		this.error = undefined;
+		if (navigator.mediaSession) navigator.mediaSession.metadata = null;
+		this.#model.restore();
+	}
+
+	forgetPrivateTrack(uri: string) {
+		if (!this.privateMode) return;
+		const remaining = withoutPrivateTrack(this.queue, this.index, uri);
+		if (remaining.currentRemoved) this.#leavePrivate();
+		else { this.queue = remaining.queue; this.index = remaining.index; }
 	}
 
 	toggle() {
 		if (!this.current) return;
-		const pause = this.playing && !this.snapshot.outputElsewhere;
+		const pause = this.playing && !this.outputElsewhere;
+		if (this.privateMode) {
+			if (pause) this.#audio?.pause();
+			else if (this.#mediaTrack && this.#audio?.src) this.#playMedia();
+			else this.#startPrivate(this.queue, this.index);
+			return;
+		}
 		if (pause) { this.#model.checkpoint(); this.#audio?.pause(); }
 		if (this.#model.command({ action: pause ? 'pause' : 'play' }) || pause) return;
 		if (!this.#model.resume()) {
@@ -156,6 +214,7 @@ class Player {
 		const duration = this.duration;
 		const position = Math.min(Math.max(0, seconds), duration);
 		if (!Number.isFinite(position) || duration <= 0) return;
+		if (this.privateMode) { this.#setPosition(position); return; }
 		if (this.snapshot.remote) {
 			if (this.#model.ownsOutput()) this.#setPosition(position);
 			this.#model.command({ action: 'seek', positionMs: Math.round(position * 1000) });
@@ -163,10 +222,10 @@ class Player {
 	}
 
 	get position() {
-		return this.snapshot.restoredPosition ?? this.time;
+		return this.privateMode ? this.time : this.snapshot.restoredPosition ?? this.time;
 	}
 	get duration() {
-		return this.snapshot.remote ? this.#model.duration() : this.length || this.current?.metadata.duration_seconds || 0;
+		return !this.privateMode && this.snapshot.remote ? this.#model.duration() : this.length || this.current?.metadata.duration_seconds || 0;
 	}
 	setVolume(value: number) {
 		this.volume = Math.min(1, Math.max(0, value));
@@ -174,18 +233,47 @@ class Player {
 	}
 	previous() {
 		if (this.position > 3 || this.index === 0) this.seek(0);
-		else this.#model.select(this.index - 1);
+		else this.jump(this.index - 1);
 	}
-	next = () => this.#model.next();
-	jump = (index: number) => this.#model.select(index);
-	enqueue = (track: Track) => this.current ? this.#model.enqueue(track) : this.play(track);
-	remove = (index: number) => this.#model.remove(index);
-	move = (from: number, to: number) => this.#model.move(from, to);
-	clear = () => this.#model.clear();
-	shuffle = () => this.#model.shuffle();
+	next() {
+		if (!this.privateMode) return this.#model.next();
+		if (this.index + 1 < this.queue.length) this.jump(this.index + 1);
+		else if (this.repeat === 'all' && this.queue.length) this.jump(0);
+	}
+	jump(index: number) {
+		if (!this.privateMode) this.#model.select(index);
+		else if (this.queue[index]) this.#startPrivate(this.queue, index);
+	}
+	enqueue(track: Track) {
+		if (isPrivateTrack(track)) {
+			if (!privateLibrary.ownsPrivateTrack(track, auth.getAuth().did)) return;
+			if (this.privateMode) this.queue = [...this.queue, track];
+			else this.play(track);
+		} else if (!this.privateMode) {
+			if (this.current) this.#model.enqueue(track);
+			else this.play(track);
+		}
+	}
+	remove(index: number) {
+		if (this.privateMode) this.queue = editPrivateQueue(this.queue, this.index, { action: 'remove', at: index });
+		else this.#model.remove(index);
+	}
+	move(from: number, to: number) {
+		if (this.privateMode) this.queue = editPrivateQueue(this.queue, this.index, { action: 'move', from, to });
+		else this.#model.move(from, to);
+	}
+	clear() {
+		if (this.privateMode) this.queue = editPrivateQueue(this.queue, this.index, { action: 'clear' });
+		else this.#model.clear();
+	}
+	shuffle() {
+		if (this.privateMode) this.queue = editPrivateQueue(this.queue, this.index, { action: 'shuffle' });
+		else this.#model.shuffle();
+	}
 	cycleRepeat() {
-		this.#model.setRepeat(this.repeat === 'off' ? 'all' : this.repeat === 'all' ? 'one' : 'off');
-		this.#model.save();
+		const repeat = this.repeat === 'off' ? 'all' : this.repeat === 'all' ? 'one' : 'off';
+		if (this.privateMode) this.repeat = repeat;
+		else { this.#model.setRepeat(repeat); this.#model.save(); }
 	}
 	save() {
 		this.#model.save();
@@ -221,8 +309,9 @@ class Player {
 		audio.addEventListener('seeked', () => { this.#listening.settle(this.#token); this.#setMediaPosition(audio); });
 		audio.addEventListener('error', () => { if (audio.src) this.error = 'could not load this audio'; this.loading = false; });
 		audio.addEventListener('ended', () => {
-			if (!this.snapshot.remote && this.repeat === 'one') { this.#repeatTrack(); return; }
-			void this.#model.next(false);
+			if ((this.privateMode || !this.snapshot.remote) && this.repeat === 'one') { this.#repeatTrack(); return; }
+			if (this.privateMode) void this.next();
+			else void this.#model.next(false);
 		});
 		this.#audio = audio;
 		return audio;
@@ -231,7 +320,7 @@ class Player {
 	#repeatTrack() {
 		const track = this.#mediaTrack;
 		if (!track) return;
-		this.#token = this.#listening.begin(track.id, crypto.randomUUID(), track.metadata.duration_seconds);
+		if (!this.privateMode) this.#token = this.#listening.begin(track.id, crypto.randomUUID(), track.metadata.duration_seconds);
 		this.#setPosition(0);
 		this.#playMedia();
 	}
@@ -249,7 +338,8 @@ class Player {
 
 	async #load(tracks: Track[], index: number) {
 		const track = tracks[index];
-		if (!track) return false;
+		if (!track || this.privateMode !== isPrivateTrack(track)) return false;
+		if (this.privateMode && !privateLibrary.ownsPrivateTrack(track, auth.getAuth().did)) return false;
 		const audio = this.#audioElement();
 		this.#detachMedia();
 		const source = new AbortController();
@@ -267,7 +357,7 @@ class Player {
 			this.#releaseMedia = media.release;
 			audio.src = media.url;
 			this.#mediaTrack = track;
-			this.#token = this.#listening.begin(track.id, crypto.randomUUID(), track.metadata.duration_seconds);
+			if (!this.privateMode) this.#token = this.#listening.begin(track.id, crypto.randomUUID(), track.metadata.duration_seconds);
 			this.#describeMedia(track);
 			return true;
 		} catch (error) {

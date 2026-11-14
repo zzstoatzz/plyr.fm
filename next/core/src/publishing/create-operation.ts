@@ -1,4 +1,4 @@
-import type { Did } from '../auth-state';
+import type { Did } from '../auth-state.ts';
 
 export type CreateReservation = { owner: Did; collection: string; rkey: string; uri: string };
 export type CreateOperation = CreateReservation & { record: Record<string, unknown>; cid?: string; archived?: boolean };

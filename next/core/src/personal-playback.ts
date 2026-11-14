@@ -272,10 +272,11 @@ export function createPersonalPlayback(options: Options) {
     });
 
     return () => {
+      if (stale()) return;
       synchronization++;
       playRequest++;
       pendingPlay = undefined;
-      current.progress(current.wire && !owned ? jamPosition(current.wire, current.position(Date.now())) / 1000 : localPosition());
+      checkpoint();
       current.close();
       generation++;
     };
@@ -499,6 +500,34 @@ export function createPersonalPlayback(options: Options) {
     if (current && !(playback().suspended || held)) current.progress(position ?? (current.wire && !owned
       ? jamPosition(current.wire, current.position(Date.now())) / 1000 : localPosition()));
   }
+  function suspend() {
+    const current = session;
+    const entry = current?.state.entries[current.state.index];
+    if (!held && !playback().suspended) {
+      checkpoint();
+      if (entry && !current?.wire) deferred = { key: entry.key, position: localPosition() };
+    }
+    held = true;
+    playRequest++;
+    pendingPlay = undefined;
+    update('waiting', false);
+    if (owned) command({ action: 'pause' });
+    owned = false;
+    synchronization++;
+  }
+
+  function restore() {
+    held = false;
+    const current = session;
+    if (!current) return;
+    playback().setQueue(current.state.entries.map(entry => entry.track), current.state.index);
+    if (current.wire) {
+      loaded = '';
+      update('restoredPosition', position());
+      if (current.wire.personal?.output?.clientId === client && current.wire.playing) command({ action: 'pause' });
+    } else if (deferred) update('restoredPosition', position());
+  }
+
   return { subscribe, getSnapshot: () => snapshot, start, save, tick, prepareLogin, refresh, configureContinuation,
     ensureContinuation, hasRemoteClock, keepPlaying,
     diagnose: () => ({ waiting: snapshot.waiting, pendingPlay: pendingPlay !== undefined, session: !!session, synchronized: !!session?.synchronized, online: !!session?.online, owned: owned, early: early.length }), unstick: () => { playRequest++; pendingPlay = undefined; early.drain(); update('waiting', false); }, position, duration, setKeepPlaying: (value: boolean) => edit({ action: 'setContinuation', keepPlaying: value }), checkpoint, ownsOutput: () => owned, next, resume, defer, command, play, select, local, remember,
@@ -512,7 +541,6 @@ export function createPersonalPlayback(options: Options) {
     clear: () => edit({ action: 'clearPicks' }),
     shuffle: () => { const current = session; if (current) edit({ action: 'shufflePicks', queue: queue.shufflePicks(current.state).entries.slice(current.state.index + 1, queue.explicitEnd(current.state)).map(entry => queueReference(entry.track, entry.key)) }); },
     setRepeat: (repeat: QueueCheckpoint['repeat']) => { playback().setRepeat(repeat); edit({ action: 'setRepeat', repeat }); },
-    suspend: () => { held = true; playRequest++; pendingPlay = undefined; update('waiting', false); if (owned) command({ action: 'pause' }); owned = false; synchronization++; },
-    restore: () => { held = false; const current = session; if (current) { playback().setQueue(current.state.entries.map(entry => entry.track), current.state.index); if (current.wire) { loaded = ''; if (current.wire.personal?.output?.clientId === client && current.wire.playing) command({ action: 'pause' }); } } },
+    suspend, restore,
   };
 }

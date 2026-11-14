@@ -85,7 +85,7 @@ async function run(browser, width, theme) {
       handle: async (url, init) => { const result = await window.__privateRpc(String(url), typeof init?.body === 'string' ? init.body : null, init?.body instanceof ArrayBuffer ? init.body.byteLength : null);
         if (result.drop) throw new TypeError('fixture response lost'); return new Response(JSON.stringify(result.body), { status: result.status, headers: { 'content-type': 'application/json' } }); },
     }, scope), [authModule, owner, grant ? scope : 'atproto repo:fm.plyr.track blob:*/*']);
-    const enter = async () => { await page.goto(new URL('/private', page.url()).href); await page.getByRole('link', { name: 'Sign in', exact: true }).waitFor(); await signIn(); };
+    const enter = async () => { await page.goto(new URL('/private', page.url()).href); await page.getByRole('link', { name: 'Sign in', exact: true }).and(page.locator('a[href*="return_to"]')).waitFor(); await signIn(); };
     const choose = async () => { const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.getByRole('button', { name: 'Choose private audio', exact: true }).click()]); await chooser.setFiles({ name: 'private.wav', mimeType: 'audio/wav', buffer: audio }); };
     await enter(); await signIn(did, false);
     await page.getByRole('link', { name: 'Sign in for private uploads' }).waitFor(); assert.equal(blobs, 0);

@@ -83,7 +83,7 @@ const checks = {
   'check-portal-layout': [/^src\/(Portal|use-portal-pages)/, /^app\/portal/],
   'check-private-audio': [/^src\/(gated-audio|private-audio)/],
   'check-private-audio-zds': [/^src\/(gated-audio|private-audio)/],
-  'check-private-delete': [/^src\/publishing\/(PrivateTrackDelete|private-delete)/],
+  'check-private-delete': [/^src\/publishing\/(PrivateTrackDelete|private-delete|private-music)/],
   'check-private-publishing': [/^src\/publishing\/(PrivateMusic|private-)/, /^app\/private/],
   'check-protected-downloads': [/^src\/downloads\//, /^src\/gated-audio-shared/],
   'check-profile-editor': [/^src\/profile\//, /^app\/edit-profile/],

@@ -1,4 +1,4 @@
-import { sameRecord } from './create-operation';
+import { sameRecord } from '../../../core/src/publishing/create-operation';
 import { uploadOperation, type UploadStorage } from './upload-model';
 let database: Promise<IDBDatabase> | undefined;
 function open() {

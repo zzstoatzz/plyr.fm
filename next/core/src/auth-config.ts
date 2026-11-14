@@ -46,20 +46,24 @@ export function createAuthConfig(options: Options = {}) {
 
   const PRIVATE_SPACE_TYPE = `${prefix}.privateMedia`;
   const PRIVATE_DELETE_SCOPE = `space:${PRIVATE_SPACE_TYPE}?authority=self&skey=self&collection=${NSID.track}&action=read&action=delete`;
-  function hasPrivateDeleteGrant(scope: string): boolean {
+  function isOwnedPrivateGrant(type: string, grant: URLSearchParams, owner?: string): boolean {
+    const authority = grant.get('authority');
+    return type === `space:${PRIVATE_SPACE_TYPE}` && grant.getAll('authority').length === 1
+      && (authority === 'self' || authority === owner) && grant.get('skey') === 'self'
+      && grant.getAll('collection').includes(NSID.track);
+  }
+  function hasPrivateDeleteGrant(scope: string, owner?: string): boolean {
     return scope.split(' ').some(value => {
       const [type, query] = value.split('?'), grant = new URLSearchParams(query);
-      return type === `space:${PRIVATE_SPACE_TYPE}` && grant.get('authority') === 'self' && grant.get('skey') === 'self'
-        && grant.getAll('collection').includes(NSID.track) && grant.getAll('action').includes('read') && grant.getAll('action').includes('delete');
+      return isOwnedPrivateGrant(type, grant, owner) && grant.getAll('action').includes('read') && grant.getAll('action').includes('delete');
     });
   }
 
   const PRIVATE_PUBLISH_SCOPE = `space:${PRIVATE_SPACE_TYPE}?authority=self&skey=self&collection=${NSID.track}&action=read&action=create&manage=create`;
-  function hasPrivatePublishGrant(scope: string): boolean {
+  function hasPrivatePublishGrant(scope: string, owner?: string): boolean {
     return scope.split(' ').some(value => {
       const [type, query] = value.split('?'), grant = new URLSearchParams(query);
-      return type === `space:${PRIVATE_SPACE_TYPE}` && grant.get('authority') === 'self' && grant.get('skey') === 'self'
-        && grant.getAll('collection').includes(NSID.track) && grant.getAll('action').includes('read') && grant.getAll('action').includes('create') && grant.getAll('manage').includes('create');
+      return isOwnedPrivateGrant(type, grant, owner) && grant.getAll('action').includes('read') && grant.getAll('action').includes('create') && grant.getAll('manage').includes('create');
     });
   }
 

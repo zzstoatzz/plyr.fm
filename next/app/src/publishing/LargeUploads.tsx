@@ -5,7 +5,7 @@ import { getAuth, type Auth } from '../auth-state';
 import { createPds, type MediaFile } from '../pds';
 import { trackIdFromUri } from '../../../core/src/api';
 import { pickMedia } from '../media-picker';
-import type { CreateReservation } from './create-operation';
+import type { CreateReservation } from '../../../core/src/publishing/create-operation';
 import type { CreateResult } from './create-record';
 import { uploadPublication, type UploadOperation, type UploadStatus } from './upload-model';
 import { uploadQueue } from './upload-queue';

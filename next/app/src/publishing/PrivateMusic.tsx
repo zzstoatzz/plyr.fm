@@ -12,7 +12,7 @@ import { measureAudioDuration, pickMedia } from '../media-picker';
 import { usePlayback } from '../playback';
 import { TagsField } from './TagsField';
 import { privatePds, type PrivateResult } from './private-pds';
-import type { PrivateCreate } from './private-create';
+import type { PrivateCreate } from '../../../core/src/publishing/private-music';
 import { useArtistName } from './artist-name';
 
 export default function PrivateMusic() {

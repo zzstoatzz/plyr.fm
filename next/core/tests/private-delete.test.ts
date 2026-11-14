@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { privateDeletion } from '../src/publishing/private-delete.ts';
-import { privateTrack, withoutPrivateTrack } from '../src/publishing/private-track.ts';
-import { hasPrivateDeleteGrant, PRIVATE_DELETE_SCOPE } from '../src/auth-config.ts';
+import { createAuthConfig } from '../src/auth-config.ts';
+import { createPrivateLibrary, withoutPrivateTrack } from '../src/publishing/private-music.ts';
+
+const config = createAuthConfig();
+const { hasPrivateDeleteGrant, PRIVATE_DELETE_SCOPE } = config;
+const { privateDeletion, privateTrack } = createPrivateLibrary(config);
 
 const owner = 'did:plc:fixture';
 const track = privateTrack(owner, '3jzfcijpj2z2a', 'oldcid', { $type: 'fm.plyr.track', title: 'private', artist: 'artist', createdAt: '2026-11-12T00:00:00Z' });

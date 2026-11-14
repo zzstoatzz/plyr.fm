@@ -9,26 +9,20 @@ import { getAuth, type Auth } from './auth-state';
 import { NSID } from './config';
 import { blobUrl } from '../../core/src/identity';
 import { catalogChanged } from './catalog-changes';
-import { normalizeTrackTags } from './publishing/track-tags';
+import { normalizeTrackTags } from '../../core/src/publishing/track-tags';
 import { ARTWORK_TYPES, MAX_ARTWORK_BYTES } from './publishing/artwork-model';
 import { TID } from '@atproto/common-web';
 import { createStorage } from './publishing/create-storage';
 import { recordCreator, CreateUnconfirmed } from './publishing/create-record';
-import { sameRecord, type CreateOperation, type CreateReservation } from './publishing/create-operation';
+import { sameRecord, type CreateOperation, type CreateReservation } from '../../core/src/publishing/create-operation';
 import { albumPublishing } from './collections/album-pds';
 import { collectionOrdering } from './collections/collection-order-pds';
 import { MAX_AUDIO_BYTES } from './publishing/track-audio';
 import { trackEditor } from './publishing/track-pds';
 import { assertPublicUploadRecord } from './publishing/upload-model';
+import type { MediaFile } from '../../core/src/publishing/private-music';
 
-
-export interface MediaFile {
-	name: string;
-	uri?: string;
-	type: string;
-	size: number;
-	arrayBuffer(): Promise<ArrayBuffer>;
-}
+export type { MediaFile } from '../../core/src/publishing/private-music';
 
 export interface LikeRef {
 	uri: string;

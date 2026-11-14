@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { privateCreate, requirePrivatePolicy } from '../src/publishing/private-create.ts';
-import { privateSpace } from '../src/publishing/private-track.ts';
-import { hasPrivatePublishGrant, PRIVATE_PUBLISH_SCOPE, SCOPE_PARTS } from '../src/auth-config.ts';
+import { createAuthConfig } from '../src/auth-config.ts';
+import { createPrivateLibrary } from '../src/publishing/private-music.ts';
+
+const config = createAuthConfig();
+const { hasPrivatePublishGrant, PRIVATE_PUBLISH_SCOPE, SCOPE_PARTS } = config;
+const { privateCreate, requirePrivatePolicy, privateSpace } = createPrivateLibrary(config);
 
 const owner = 'did:plc:fixture', space = privateSpace(owner);
 const policy = { $type: 'com.atproto.memberspace.policy', publicRead: false, publicWrite: false, publishPolicy: false, publishMembers: false };

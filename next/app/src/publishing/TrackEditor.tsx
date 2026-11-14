@@ -9,7 +9,7 @@ import { Sheet } from '../Sheet';
 import { Action, Copy, Field, row } from '../controls';
 import { measureAudioDuration, pickMedia } from '../media-picker';
 import { createPds, TrackRevisionConflict, type MediaFile } from '../pds';
-import { recordTags } from './track-tags';
+import { recordTags } from '../../../core/src/publishing/track-tags';
 import { TagsField } from './TagsField';
 import { pickArtwork } from './artwork';
 import { canReplaceTrackAudio, validateReplacementAudio, TrackWriteUnconfirmed } from './track-audio';

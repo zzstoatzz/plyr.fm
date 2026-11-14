@@ -12,6 +12,9 @@ const { fixtureAccounts, fixturePage, authorizeFixture } = require('./pds-browse
 const pds = process.env.PRIVATE_AUDIO_PDS || 'http://127.0.0.1:5197';
 const origin = process.env.PRIVATE_AUDIO_ORIGIN || 'http://127.0.0.1:5310';
 const svelte = process.env.PRIVATE_AUDIO_CLIENT === 'svelte';
+const phone = process.env.PRIVATE_AUDIO_PHONE === '1';
+const ownerFlow = svelte && process.env.PRIVATE_AUDIO_OWNER === '1';
+const ownerTitle = 'Owner-only recording fixture';
 const output = process.env.PRIVATE_AUDIO_OUTPUT || '/tmp/plyr-private-audio-zds';
 const list = data => ({ object: 'list', data, has_more: false });
 async function rpc(method, body, token) {
@@ -20,6 +23,50 @@ async function rpc(method, body, token) {
   if (!response.ok) throw new Error(method + ' failed: ' + response.status + ' ' + (value.error || ''));
   return value;
 }
+async function checkPrivateMusic(page, audio, previousSource, origin, appView, coordinator) {
+  await page.getByRole('link', { name: 'private music', exact: true }).click();
+  await page.getByText('no private tracks yet.').waitFor();
+  const shortAudio = Buffer.from(audio.subarray(0, 44 + 8000 * 2 * 4));
+  shortAudio.writeUInt32LE(shortAudio.length - 8, 4);
+  shortAudio.writeUInt32LE(shortAudio.length - 44, 40);
+  await page.getByLabel('audio', { exact: true }).setInputFiles({ name: 'fixture.wav', mimeType: 'audio/wav', buffer: shortAudio });
+  await page.getByLabel('title', { exact: true }).fill(ownerTitle);
+  await page.getByLabel('artist', { exact: true }).fill('fixture artist');
+  await page.getByRole('checkbox', { name: 'use my private space' }).check();
+  await page.getByRole('button', { name: 'upload privately', exact: true }).click();
+  await page.getByText('saved in your private space.').waitFor();
+  await page.getByRole('button', { name: 'done with private upload' }).click();
+  const play = page.getByRole('button', { name: 'Play ' + ownerTitle, exact: true });
+  await play.click();
+  await page.getByTestId('player-dock').getByText(ownerTitle).waitFor();
+  await page.waitForFunction(() => window.jamAudio.some(media => !media.paused && media.currentTime > 2.2));
+  const source = await page.evaluate(() => window.jamAudio.find(media => !media.paused).src);
+  assert.ok(source.startsWith(origin + '/__plyr_private_audio/'));
+  assert.notEqual(source, previousSource);
+  assert.equal(await page.evaluate(async url => (await fetch(url)).status, previousSource), 410);
+  const publicCheckpoints = await page.evaluate(() => new Promise((resolve, reject) => {
+    const request = indexedDB.open('plyr-next-queue', 1);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const database = request.result;
+      const items = database.transaction('checkpoints').objectStore('checkpoints').getAll();
+      items.onsuccess = () => { database.close(); resolve(JSON.stringify(items.result)); };
+      items.onerror = () => { database.close(); reject(items.error); };
+    };
+  }));
+  for (const messages of [appView, coordinator, [publicCheckpoints]]) {
+    assert.ok(!messages.some(message => /private_|privateMedia|Owner-only recording fixture/i.test(message)),
+      'private track stayed out of public API requests, queue messages and checkpoints');
+  }
+  await page.screenshot({ path: output + '/private-music-playing.png' });
+  await page.getByRole('button', { name: 'Delete ' + ownerTitle, exact: true }).click();
+  await page.getByRole('button', { name: 'delete current track', exact: true }).click();
+  await page.getByText('no private tracks yet.').waitFor();
+  assert.equal(await page.evaluate(async url => (await fetch(url)).status, source), 410);
+  await page.getByTestId('player-dock').getByText('Protected streaming fixture').waitFor();
+  console.log('Svelte private upload, recovery, isolated playback, deletion and public queue restoration passed');
+}
+
 (async () => {
   await fs.mkdir(output, { recursive: true });
   const accounts = await fixtureAccounts(['mvpjamhost']);
@@ -71,11 +118,14 @@ async function rpc(method, body, token) {
   await new Promise(resolve => workerServer.listen(Number(new URL(origin).port), '127.0.0.1', resolve));
   const browser = await chromium.launch({ channel: 'chrome', args: ['--disable-features=LocalNetworkAccessChecks', '--ignore-certificate-errors', '--no-proxy-server', `--host-rules=MAP pds.fixture.test:443 127.0.0.1:${proxy.address().port}`] });
   try {
-    const { page, context } = await fixturePage(browser, accounts, { origin, dist: process.env.PRIVATE_AUDIO_DIST || (svelte ? path.resolve(__dirname, '../../web/build') : '/tmp/plyr-jam-mvp-web'), context: { viewport: { width: 1280, height: 900 }, ignoreHTTPSErrors: true } });
+    const { page, context } = await fixturePage(browser, accounts, { origin, dist: process.env.PRIVATE_AUDIO_DIST || (svelte ? path.resolve(__dirname, '../../web/build') : '/tmp/plyr-jam-mvp-web'), context: { viewport: phone ? { width: 390, height: 844 } : { width: 1280, height: 900 }, colorScheme: phone ? 'dark' : 'light', isMobile: phone, hasTouch: phone, ignoreHTTPSErrors: true } });
+    const requestsToAppView = [], coordinatorMessages = [];
     if (svelte) {
       let clientId;
       await context.route('https://jams.next.plyr.fm/v1/playback/join', route => {
-        clientId = route.request().postDataJSON().clientId;
+        const request = route.request().postDataJSON();
+        coordinatorMessages.push(JSON.stringify(request.initial));
+        clientId = request.clientId;
         return route.fulfill({ json: { ticket: 'protected-fixture', connectionId: 'protected-fixture' } });
       });
       await context.routeWebSocket('wss://jams.next.plyr.fm/v1/jams/socket?ticket=protected-fixture', socket => {
@@ -83,6 +133,7 @@ async function rpc(method, body, token) {
         let state = { epoch: 'protected-fixture', revision: 0, occurrence: 0, queue: [], index: 0, playing: false, positionMs: 0, updatedAtMs: Date.now(), personal };
         socket.send(JSON.stringify({ type: 'state', state }));
         socket.onMessage(message => {
+          coordinatorMessages.push(String(message));
           const command = JSON.parse(String(message));
           if (command.action === 'playContext') {
             state = { ...state, revision: 1, occurrence: 1, queue: command.queue, index: command.index, playing: true,
@@ -94,6 +145,7 @@ async function rpc(method, body, token) {
     }
     await context.route('https://typeahead.waow.tech/**', route => route.fulfill({ json: { actors: [] } }));
     await context.route('https://api.next.plyr.fm/**', route => {
+      requestsToAppView.push(route.request().url() + (route.request().postData() ?? ''));
       const url = new URL(route.request().url());
       if (route.request().method() !== 'GET') return route.abort();
       if (url.pathname === `/v1/tracks/${id}`) return route.fulfill({ json: track });
@@ -142,6 +194,10 @@ async function rpc(method, body, token) {
     if (svelte) {
       await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
       await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'settings' }).click();
+      if (ownerFlow) {
+        await checkPrivateMusic(page, audio, active, origin, requestsToAppView, coordinatorMessages);
+        await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'settings' }).click();
+      }
       await page.getByRole('button', { name: 'sign out', exact: true }).click();
       await page.getByTestId('player-dock').waitFor({ state: 'detached' });
       const status = await page.evaluate(async source => (await fetch(source)).status, active);

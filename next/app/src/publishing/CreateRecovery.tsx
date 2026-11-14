@@ -5,7 +5,7 @@ import { albumIdFromUri, playlistIdFromUri, trackIdFromUri } from '../../../core
 import { Action, Copy } from '../controls';
 import { createPds } from '../pds';
 import { WaveLoading } from '../WaveLoading';
-import type { CreateOperation } from './create-operation';
+import type { CreateOperation } from '../../../core/src/publishing/create-operation';
 
 export function useCreateRecovery(auth: Auth, kind: 'track' | 'playlist' | 'album') {
   const pds = useMemo(() => createPds(auth), [auth.did, auth.rpc]);
