@@ -19,24 +19,16 @@ import { LikeButton, People, type Viewer } from './TrackLikes';
 const pendingKey = 'plyr-next:pending-like';
 const pendingFor = 30 * 60_000;
 
-/** A heart and add-to-queue for a wide row. They show while the row is hovered or focused, and the heart stays while the track is liked. */
-export function RowActions({ track, shown, onViewer }: { track: Track; shown: boolean; onViewer: (viewer: Viewer) => void }) {
-  const auth = useAuth();
+/** Add-to-queue for a wide row, shown while the row is hovered or focused. */
+export function QueueButton({ track, shown }: { track: Track; shown: boolean }) {
   const player = usePlayback();
   const theme = useAppearance();
-  const [liked, setLiked] = useState(false);
   const [focused, setFocused] = useState(false);
-  const report = (viewer: Viewer) => { setLiked(viewer.liked); onViewer(viewer); };
   const visible = shown || focused;
-  return <View onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} style={styles.actions}>
-    <View style={{ opacity: visible || liked ? 1 : 0 }}>
-      {auth.did && auth.rpc ? <LikeButton key={`${auth.did}:${track.record.uri}`} small track={track} reportLiked={report} /> : <SignedOutHeart track={track} />}
-    </View>
-    <Pressable accessibilityRole="button" accessibilityLabel={`Add ${track.metadata.title} to queue`} onPress={() => { player.enqueue(track); toast.success(`queued ${track.metadata.title}`); }}
+  return <Pressable onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} accessibilityRole="button" accessibilityLabel={`Add ${track.metadata.title} to queue`} onPress={() => { player.enqueue(track); toast.success(`queued ${track.metadata.title}`); }}
       style={({ hovered }: { pressed: boolean; hovered?: boolean }) => [styles.button, { opacity: visible ? 1 : 0, backgroundColor: hovered ? theme.raised : 'transparent' }]}>
       <ListPlus size={18} color={theme.muted} />
-    </Pressable>
-  </View>;
+    </Pressable>;
 }
 
 /** Signed out, the heart shakes its head and offers sign-in, which comes back here and finishes the like. */
@@ -91,15 +83,15 @@ export function firstLikers(id: string) {
   return load;
 }
 
-/** The likes column: hover for who liked it, click for everyone. */
-export function LikesCell({ track, count, width, mine = false }: { track: Track; count: number; width: number; mine?: boolean }) {
+/** The likes column: the heart, and beside it the count. Hover the count for who liked it, click for everyone. */
+export function LikesCell({ track, count, width, mine = false, onViewer }: { track: Track; count: number; width: number; mine?: boolean; onViewer: (viewer: Viewer) => void }) {
   const theme = useAppearance();
+  const auth = useAuth();
   const [peek, setPeek] = useState<Liker[]>();
   const [open, setOpen] = useState<Anchor>();
   const cell = useRef<ViewInstance>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const style = { color: mine ? theme.accent : theme.muted, fontSize: 13.5 * theme.scale, fontVariant: ['tabular-nums' as const], textAlign: 'right' as const };
-  if (count === 0) return <Text style={[style, { width, color: theme.faint }]}>–</Text>;
+  const style = { color: mine ? theme.accent : theme.muted, fontSize: 13.5 * theme.scale, fontVariant: ['tabular-nums' as const], textAlign: 'left' as const };
   const enter = () => {
     clearTimeout(timer.current);
     timer.current = setTimeout(() => void firstLikers(track.id).then(setPeek, () => setPeek([])), 250);
@@ -108,11 +100,13 @@ export function LikesCell({ track, count, width, mine = false }: { track: Track;
   const label = `${count} ${count === 1 ? 'like' : 'likes'}${mine ? ', including you' : ''}`;
   const names = peek?.slice(0, 2).map(liker => liker.name) ?? [];
   const others = count - names.length;
-  return <View ref={cell} style={{ width, alignItems: 'flex-end', zIndex: peek ? 10 : 0 }}>
-    <Pressable accessibilityRole="button" accessibilityLabel={`See who liked ${track.metadata.title}, ${label}`} onHoverIn={enter} onHoverOut={leave} onFocus={enter} onBlur={leave}
+  const heart = auth.did && auth.rpc ? <LikeButton key={`${auth.did}:${track.record.uri}`} small track={track} reportLiked={onViewer} /> : <SignedOutHeart track={track} />;
+  return <View ref={cell} style={[styles.likes, { width, zIndex: peek ? 10 : 0 }]}>
+    {heart}
+    {count > 0 && <Pressable accessibilityRole="button" accessibilityLabel={`See who liked ${track.metadata.title}, ${label}`} onHoverIn={enter} onHoverOut={leave} onFocus={enter} onBlur={leave}
       onPress={() => { leave(); cell.current?.measureInWindow((x, y, w, h) => setOpen({ x, y, width: w, height: h })); }} style={styles.count}>
       {({ hovered }: { pressed: boolean; hovered?: boolean }) => <Text style={[style, hovered ? { color: theme.text, textDecorationLine: 'underline' } : null]}>{compactCount(count)}</Text>}
-    </Pressable>
+    </Pressable>}
     {peek && peek.length > 0 && <View pointerEvents="none" style={[styles.peek, { backgroundColor: theme.surface, borderColor: theme.line, boxShadow: theme.dark ? '0px 10px 30px #000000a6' : '0px 10px 30px #00000026' }]}>
       <View style={styles.stack}>{peek.slice(0, 5).map((liker, index) => <View key={liker.did} style={[styles.face, { marginLeft: index ? -8 : 0, borderColor: theme.surface }]}><Cover uri={liker.avatar} size={28} round instant /></View>)}</View>
       <View style={{ flexShrink: 1 }}>
@@ -125,10 +119,10 @@ export function LikesCell({ track, count, width, mine = false }: { track: Track;
 }
 
 const styles = StyleSheet.create({
-  actions: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  likes: { flexDirection: 'row', alignItems: 'center' },
   button: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  count: { minHeight: 36, minWidth: 36, justifyContent: 'center', alignItems: 'flex-end' },
-  peek: { position: 'absolute', bottom: 40, right: -12, width: 320, flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 14, borderWidth: 1 },
+  count: { minHeight: 36, minWidth: 28, justifyContent: 'center', alignItems: 'flex-start' },
+  peek: { position: 'absolute', bottom: 40, right: -24, width: 320, flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 14, borderWidth: 1 },
   stack: { flexDirection: 'row' },
   face: { borderWidth: 2, borderRadius: 16 },
 });
