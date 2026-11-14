@@ -14,6 +14,7 @@ pub fn run() error{PropertyFailed}!void {
         .{ "http.query_pairs", queryPairs },
         .{ "http.path_segment", pathSegment },
         .{ "http.encode_decode", encodeDecode },
+        .{ "http.decimal", decimal },
     });
 }
 
@@ -146,4 +147,24 @@ fn encodeDecode(_: void, case: *hegel.TestCase) !void {
     case.note("raw {x} encoded {s}", .{ raw, encoded.items });
     const decoded = query.decodeComponent(a, encoded.items) catch return case.fail("a percent-encoded component does not decode");
     if (!std.mem.eql(u8, decoded, raw)) return case.fail("percent encoding does not round-trip");
+}
+
+/// limits and timeouts are decimal digits and nothing else; std's parseInt
+/// alone would also take a sign and `_` separators
+fn decimal(_: void, case: *hegel.TestCase) !void {
+    var buffer: [24]u8 = undefined;
+    const text = buffer[0..try case.int(usize, 0, buffer.len)];
+    for (text) |*c| c.* = try gen.pick(case, u8, "0123456789012345678901234567890123456789+-_ x");
+    case.note("text {s}", .{text});
+    var digits_only = text.len > 0;
+    for (text) |c| digits_only = digits_only and std.ascii.isDigit(c);
+    const parsed = query.parseDecimal(u64, text) catch |err| {
+        if (digits_only and err != error.Overflow) return case.fail("digits were refused");
+        return;
+    };
+    if (!digits_only) return case.fail("a non-digit was accepted");
+    var expected: u64 = 0;
+    for (text) |c| expected = expected * 10 + (c - '0');
+    if (parsed != expected) return case.fail("digits parse to the wrong value");
+    case.event("accepted");
 }

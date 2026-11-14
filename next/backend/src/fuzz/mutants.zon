@@ -59,4 +59,28 @@
         .old = "FROM old_rows WHERE subject_uri IS NOT NULL\n              UNION",
         .new = "FROM old_rows WHERE false\n              UNION",
     },
+    .{
+        .name = "a jam command applies against a stale revision",
+        .file = "src/internal/jams/model.zig",
+        .old = "if (command.expectedRevision != state.revision or state.revision >= max_counter",
+        .new = "if (state.revision >= max_counter",
+    },
+    .{
+        .name = "a jam guest can seek",
+        .file = "src/internal/jams/model.zig",
+        .old = "if (command.action == .seek and !std.mem.eql(u8, actor_did, host_did))",
+        .new = "if (command.action == .seek and false)",
+    },
+    .{
+        .name = "a selected jam track resumes the old position",
+        .file = "src/internal/jams/model.zig",
+        .old = "next.index = command.index.?;\n            next.playing = command.playing orelse state.playing;\n            if (next.index != state.index) {\n                next.occurrence += 1;\n                next.positionMs = 0;",
+        .new = "next.index = command.index.?;\n            next.playing = command.playing orelse state.playing;\n            if (next.index != state.index) {\n                next.occurrence += 1;",
+    },
+    .{
+        .name = "a playing jam runs past the end of the track",
+        .file = "src/internal/jams/model.zig",
+        .old = "return @min(state.queue[state.index].durationMs, state.positionMs +| elapsed);",
+        .new = "return state.positionMs +| elapsed;",
+    },
 }
