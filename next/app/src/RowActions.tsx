@@ -32,7 +32,7 @@ export function QueueButton({ track, shown }: { track: Track; shown: boolean }) 
 }
 
 /** Signed out, the heart shakes its head and offers sign-in, which comes back here and finishes the like. */
-function SignedOutHeart({ track }: { track: Track }) {
+export function SignedOutHeart({ track }: { track: Track }) {
   const theme = useAppearance();
   const path = usePathname();
   const shake = useRef(new Animated.Value(0)).current;
@@ -71,58 +71,6 @@ export function useFinishPendingLike() {
   }, [did, rpc]);
 }
 
-type Liker = { did: string; name: string; avatar?: string | null };
-const likers = new Map<string, Promise<Liker[]>>();
-export function firstLikers(id: string) {
-  let load = likers.get(id);
-  if (!load) {
-    load = api.trackLikes(id).then(page => page.data.map(({ actor }) => ({ did: actor.did, name: actor.profile?.display_name || actor.profile?.handle || 'someone', avatar: actor.profile?.avatar_url })));
-    load.catch(() => likers.delete(id));
-    likers.set(id, load);
-  }
-  return load;
-}
-
-/** The likes column: the heart, and beside it the count. Hover the count for who liked it, click for everyone. */
-export function LikesCell({ track, count, width, mine = false, onViewer }: { track: Track; count: number; width: number; mine?: boolean; onViewer: (viewer: Viewer) => void }) {
-  const theme = useAppearance();
-  const auth = useAuth();
-  const [peek, setPeek] = useState<Liker[]>();
-  const [open, setOpen] = useState<Anchor>();
-  const cell = useRef<ViewInstance>(null);
-  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const style = { color: mine ? theme.accent : theme.muted, fontSize: 13.5 * theme.scale, fontVariant: ['tabular-nums' as const], textAlign: 'left' as const };
-  const enter = () => {
-    clearTimeout(timer.current);
-    timer.current = setTimeout(() => void firstLikers(track.id).then(setPeek, () => setPeek([])), 250);
-  };
-  const leave = () => { clearTimeout(timer.current); setPeek(undefined); };
-  const label = `${count} ${count === 1 ? 'like' : 'likes'}${mine ? ', including you' : ''}`;
-  const names = peek?.slice(0, 2).map(liker => liker.name) ?? [];
-  const others = count - names.length;
-  const heart = auth.did && auth.rpc ? <LikeButton key={`${auth.did}:${track.record.uri}`} small track={track} reportLiked={onViewer} /> : <SignedOutHeart track={track} />;
-  return <View ref={cell} style={[styles.likes, { width, zIndex: peek ? 10 : 0 }]}>
-    {heart}
-    {count > 0 && <Pressable accessibilityRole="button" accessibilityLabel={`See who liked ${track.metadata.title}, ${label}`} onHoverIn={enter} onHoverOut={leave} onFocus={enter} onBlur={leave}
-      onPress={() => { leave(); cell.current?.measureInWindow((x, y, w, h) => setOpen({ x, y, width: w, height: h })); }} style={styles.count}>
-      {({ hovered }: { pressed: boolean; hovered?: boolean }) => <Text style={[style, hovered ? { color: theme.text, textDecorationLine: 'underline' } : null]}>{compactCount(count)}</Text>}
-    </Pressable>}
-    {peek && peek.length > 0 && <View pointerEvents="none" style={[styles.peek, { backgroundColor: theme.surface, borderColor: theme.line, boxShadow: theme.dark ? '0px 10px 30px #000000a6' : '0px 10px 30px #00000026' }]}>
-      <View style={styles.stack}>{peek.slice(0, 5).map((liker, index) => <View key={liker.did} style={[styles.face, { marginLeft: index ? -8 : 0, borderColor: theme.surface }]}><Cover uri={liker.avatar} size={28} round instant /></View>)}</View>
-      <View style={{ flexShrink: 1 }}>
-        <Text numberOfLines={1} style={{ color: theme.text, fontSize: 13 * theme.scale }}>liked by {names.join(', ')}</Text>
-        <Text numberOfLines={1} style={{ color: theme.faint, fontSize: 12.5 * theme.scale }}>{others > 0 ? `and ${others} ${others === 1 ? 'other' : 'others'} · ` : ''}click for all</Text>
-      </View>
-    </View>}
-    {open && <Sheet title="liked by" anchor={open} close={() => setOpen(undefined)}><People id={track.id} close={() => setOpen(undefined)} /></Sheet>}
-  </View>;
-}
-
 const styles = StyleSheet.create({
-  likes: { flexDirection: 'row', alignItems: 'center' },
   button: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  count: { minHeight: 36, minWidth: 28, justifyContent: 'center', alignItems: 'flex-start' },
-  peek: { position: 'absolute', bottom: 40, right: -24, width: 320, flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 14, borderWidth: 1 },
-  stack: { flexDirection: 'row' },
-  face: { borderWidth: 2, borderRadius: 16 },
 });
