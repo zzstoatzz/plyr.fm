@@ -41,3 +41,10 @@ export async function measureAudioDuration(file: MediaFile): Promise<number | un
     if (objectUrl) URL.revokeObjectURL(objectUrl);
   }
 }
+
+/** The same picked file under another content type, e.g. an MP3 a share sheet sent as application/octet-stream. */
+export function retype(file: MediaFile, type: string): MediaFile {
+  if (file.type === type) return file;
+  if (Platform.OS === 'web' && file instanceof Blob) return new File([file], file.name, { type, lastModified: file instanceof File ? file.lastModified : undefined }) as unknown as MediaFile;
+  return { name: file.name, uri: file.uri, size: file.size, type, arrayBuffer: () => file.arrayBuffer() };
+}

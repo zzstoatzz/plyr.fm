@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
-import { genreTags, jobLine, outputBudget, processingStep, transient, uploadRoute } from '../src/publishing/upload-queue-model.ts';
+import { canonicalAudioType, genreTags, jobLine, outputBudget, processingStep, transient, uploadRoute } from '../src/publishing/upload-queue-model.ts';
 import { audioFormat, MAX_SERVICE_AUDIO_BYTES, UPLOAD_PART_BYTES, type UploadStatus } from '../src/publishing/upload-model.ts';
 
 const MIB = 1_048_576;
@@ -16,7 +16,8 @@ test('small playable audio goes to the PDS; lossless and large go through plyr s
   }
   assert.throws(() => uploadRoute({ name: 'huge.wav', type: 'audio/wav', size: MAX_SERVICE_AUDIO_BYTES + 1 }), /1\.5 GiB/);
   assert.throws(() => uploadRoute({ name: 'empty.mp3', type: 'audio/mpeg', size: 0 }), /nonempty/);
-  assert.throws(() => uploadRoute({ name: 'big.opus', type: 'audio/opus', size: 200 * MIB }), /choose an/);
+  assert.throws(() => uploadRoute({ name: 'notes.txt', type: 'text/plain', size: 2 * MIB }), /choose an/, 'a non-audio file is refused at pick time, not in the queue');
+  assert.throws(() => uploadRoute({ name: 'clip.mp4', type: 'video/mp4', size: 2 * MIB }), /choose an/);
 });
 
 test('mp3 budget follows duration, falls back to source size, and stays inside the admission bound', () => {
@@ -73,4 +74,17 @@ test('auto-tag adds genres within half the top score, at most five, after the ar
   const full = Array.from({ length: 20 }, (_, index) => `t${index}`);
   assert.deepEqual(genreTags(full, genres), full);
   assert.deepEqual(genreTags(['x'], []), ['x']);
+});
+
+test('files whose picker sends no real type, and Ogg or Opus voice notes, are taken and given a playable copy', () => {
+  assert.equal(canonicalAudioType({ name: 'demo.mp3', type: 'application/octet-stream', size: 3 * MIB }), 'audio/mpeg');
+  assert.equal(canonicalAudioType({ name: 'demo.MP3', type: '', size: 3 * MIB }), 'audio/mpeg');
+  assert.deepEqual(uploadRoute({ name: 'demo.mp3', type: 'application/octet-stream', size: 3 * MIB }), { kind: 'pds' });
+  for (const [name, type] of [['note.opus', 'audio/ogg'], ['note.opus', 'audio/opus'], ['note.opus', 'application/octet-stream'], ['take.ogg', 'audio/ogg']]) {
+    const route = uploadRoute({ name, type, size: 2 * MIB }, 60);
+    assert.equal(route.kind === 'service' && route.processing?.recipe, 'mp3-320k-44100-v1', `${name} ${type}`);
+  }
+  assert.equal(canonicalAudioType({ name: 'note.opus', type: 'audio/ogg', size: MIB }), 'audio/opus');
+  assert.equal(audioFormat('take.ogg', 'audio/ogg', true).contentType, 'audio/ogg');
+  assert.throws(() => uploadRoute({ name: 'demo.mp3', type: 'audio/wav', size: MIB }), /choose an/, 'a real but contradicting type still stops');
 });

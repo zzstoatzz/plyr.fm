@@ -78,16 +78,54 @@ async function run(browser, width, theme) {
       const details = page.getByRole('button', { name: 'add album, description or tags', exact: true });
       if (await details.count()) await details.click();
     }
+    // Nothing typed is lost: a picked file never renames a typed title, a bad cover only reports itself, and a reload keeps the draft.
+    const bmp = (() => {
+      const pixels = Buffer.alloc(16, 0x80), header = Buffer.alloc(54);
+      header.write('BM'); header.writeUInt32LE(54 + pixels.length, 2); header.writeUInt32LE(54, 10); header.writeUInt32LE(40, 14);
+      header.writeInt32LE(2, 18); header.writeInt32LE(2, 22); header.writeUInt16LE(1, 26); header.writeUInt16LE(24, 28); header.writeUInt32LE(pixels.length, 34);
+      return Buffer.concat([header, pixels]);
+    })();
+    async function chooseCover(name, mimeType, buffer) {
+      const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.getByRole('button', { name: /^(Choose cover art|.+\.(jpg|png|gif|webp))$/ }).first().click()]);
+      await chooser.setFiles({ name, mimeType, buffer });
+    }
+    await title.fill('kept title');
+    await choose();
+    assert.equal(await title.inputValue(), 'kept title', 'choosing audio never replaces a typed title');
+    await tags.fill('dub');
+    await chooseCover('IMG_0001.HEIC', 'image/heic', Buffer.from('not really an image'));
+    await page.getByRole('alert').filter({ hasText: "couldn't read that image" }).waitFor();
+    assert.equal(await title.inputValue(), 'kept title', 'a bad cover leaves the title');
+    assert.equal(await tags.inputValue(), 'dub', 'a bad cover leaves the tags');
+    await page.getByRole('button', { name: 'quiet room.mp3', exact: true }).waitFor();
+    await chooseCover('scan.bmp', 'image/bmp', bmp);
+    await page.getByRole('button', { name: 'scan.jpg', exact: true }).waitFor();
+    assert.equal(await page.getByRole('button', { name: 'scan.jpg', exact: true }).locator('img').count(), 1, 'the converted cover shows as a preview');
+    assert.equal(await page.getByRole('alert').filter({ hasText: "couldn't read that image" }).count(), 0, 'a good cover clears the cover error');
+    await screenshot(page, `upload-cover-${width}-${theme}`);
+    await page.reload();
+    await page.getByRole('link', { name: 'Sign in', exact: true }).waitFor();
+    await signIn(did);
+    await title.waitFor();
+    assert.equal(await title.inputValue(), 'kept title', 'a reload keeps the typed draft');
+    await page.getByText('your draft is still here. choose the audio file again.', { exact: true }).waitFor();
+    assert.equal(await tags.inputValue(), 'dub');
+    await title.fill('');
+    await tags.fill('');
     await choose();
     await tags.fill('é'.repeat(26));
-    await submit().click();
-    await page.getByText(/a tag is too long/).waitFor();
+    await page.getByRole('alert').filter({ hasText: /a tag is too long/ }).waitFor();
+    assert.equal(await submit().isDisabled(), true, 'an invalid tag is reported at the field before upload');
     assert.equal(writes.length, 0, 'invalid Unicode tag cannot publish');
     await title.fill('private draft');
     await signIn(other);
     assert.equal(await title.inputValue(), '', 'draft does not cross accounts');
     await page.getByRole('button', { name: 'Choose audio', exact: true }).waitFor();
     await signIn(did);
+    await title.waitFor();
+    assert.equal(await title.inputValue(), 'private draft', 'each account gets its own draft back');
+    await title.fill('');
+    await tags.fill('');
     await choose();
     holdBlob = true;
     const blobHeld = waitForHold();
@@ -108,10 +146,14 @@ async function run(browser, width, theme) {
     await submit().click();
     await toast(/fixture upload unavailable/).waitFor();
     assert.equal(writes.length, 0);
+    assert.equal(await title.inputValue(), '', 'the form was free for the next track while this one uploaded');
+    await page.getByRole('button', { name: 'Put back in the form', exact: true }).click();
+    assert.equal(await title.inputValue(), 'quiet room', 'a failed upload puts its title back');
+    assert.equal(await tags.inputValue(), ' AI \n--Hip-Hop--\nai', 'and its tags');
+    await page.getByRole('button', { name: 'quiet room.mp3', exact: true }).waitFor();
+    assert.equal(await page.getByRole('button', { name: 'Put back in the form', exact: true }).count(), 0);
     await screenshot(page, `upload-error-${width}-${theme}`);
     reject = false; holdCreate = true;
-    await choose();
-    await tags.fill(' AI \n--Hip-Hop--\nai');
     const createHeld = waitForHold();
     await submit().click();
     await createHeld;
@@ -171,7 +213,7 @@ async function run(browser, width, theme) {
     await page.getByRole('heading', { name: 'sign in to plyr.fm', exact: true }).waitFor();
     assert.equal(new URL(page.url()).searchParams.get('return_to'), '/upload');
     assert.deepEqual(errors, []);
-    console.log(`${width}/${theme}: queued upload resets the form, toasts progress, isolates accounts, survives same-DID reauth, and returns to login passed`);
+    console.log(`${width}/${theme}: kept drafts, inline cover and tag errors, converted covers, put-back after failure, queued progress, account isolation, same-DID reauth and login return passed`);
   } catch (error) { console.error(await page.locator('body').innerText()); throw error; }
   finally { await page.unrouteAll({ behavior: 'ignoreErrors' }); await context.close(); }
 }

@@ -152,6 +152,16 @@ write and sending an ignored public-repo swapRecord field are not substitutes.
 
 ## Uploads
 
+The form never throws away what was typed. Each problem shows under the field
+that caused it, and a bad pick touches nothing else. The text fields are kept
+per account on each device, so they survive a reload or the sign-in-again round
+trip. Picking audio names the track only when no title was typed. A failed
+upload keeps its entries, files included, and "Put back in the form" restores
+them. Covers can be any photo: HEIC, oversized and other formats are converted to
+a JPEG of at most 2000 px when picked, and iOS opens the photo library for them.
+Audio is checked against its extension when the picker sends no real type. Ogg
+and Opus get an mp3 playback copy, because iOS can't play either.
+
 Uploads run in an app-level queue above the route stack
 (`src/publishing/upload-queue.ts`), one at a time, with one persistent toast
 each. The page queues a track and resets, so leaving it or queueing more never

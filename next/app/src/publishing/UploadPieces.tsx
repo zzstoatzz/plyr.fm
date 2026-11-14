@@ -7,6 +7,7 @@ import Check from 'lucide-react-native/icons/check';
 import { useAppearance } from '../appearance';
 import { Text } from '../Text';
 import type { MediaFile } from '../pds';
+import { usePreviewUri } from './preview-uri';
 
 export function formatSize(bytes: number) {
   return bytes >= 1_048_576 ? `${(bytes / 1_048_576).toFixed(1)} MiB` : `${Math.max(1, Math.round(bytes / 1024))} KiB`;
@@ -17,7 +18,8 @@ export function PickTile({ kind, file, hint, disabled, onPress }: { kind: 'audio
   const theme = useAppearance();
   const Icon = kind === 'audio' ? FileAudio : ImagePlus;
   const empty = kind === 'audio' ? 'Choose audio' : 'Choose cover art';
-  const preview = kind === 'artwork' && file?.uri ? file.uri : undefined;
+  const uri = usePreviewUri(kind === 'artwork' ? file : null);
+  const preview = kind === 'artwork' ? uri : undefined;
   return <Pressable accessibilityRole="button" accessibilityLabel={file?.name ?? empty} accessibilityHint={file ? 'choose a different file' : undefined}
     disabled={disabled} onPress={onPress}
     style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 14, padding: 14, minHeight: 72, borderRadius: 10, borderWidth: 1,
@@ -58,4 +60,10 @@ export function CheckRow({ label, checked, onChange }: { label: string; checked:
     </View>
     <Text style={{ color: theme.text, fontFamily: theme.fontFamily, fontSize: 15 * theme.scale }}>{label}</Text>
   </Pressable>;
+}
+
+/** An error under the field that caused it, announced as it appears. */
+export function FieldError({ children }: { children: ReactNode }) {
+  const theme = useAppearance();
+  return <Text role="alert" accessibilityLiveRegion="polite" style={{ color: theme.danger, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale, lineHeight: 20 * theme.scale }}>{children}</Text>;
 }

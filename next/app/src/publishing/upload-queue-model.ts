@@ -2,7 +2,8 @@ import { MAX_AUDIO_BYTES } from './track-audio.ts';
 import { audioFormat, MAX_SERVICE_AUDIO_BYTES, type UploadProcessing, type UploadStatus } from './upload-model.ts';
 
 /** Lossless or browser-unfriendly sources get an MP3 playback copy, as production does; the original stays downloadable. */
-const PROCESSED = new Set(['wav', 'flac', 'aif', 'aiff', 'webm']);
+// Ogg and Opus too: iOS can't play either, so they get an MP3 copy like the lossless formats.
+const PROCESSED = new Set(['wav', 'flac', 'aif', 'aiff', 'webm', 'ogg', 'opus']);
 const MP3_BYTES_PER_SECOND = 40_000;
 const MIB = 1_048_576;
 
@@ -18,7 +19,7 @@ export function outputBudget(sizeBytes: number, type: string, duration?: number)
   const ceiling = 2 * MAX_SERVICE_AUDIO_BYTES - sizeBytes;
   const estimate = duration && Number.isFinite(duration) && duration > 0
     ? Math.ceil(duration * MP3_BYTES_PER_SECOND * 1.1) + 4 * MIB
-    : type === 'webm' ? sizeBytes * 4 : sizeBytes + 4 * MIB;
+    : type === 'webm' || type === 'ogg' || type === 'opus' ? sizeBytes * 4 : sizeBytes + 4 * MIB;
   return Math.max(MIB, Math.min(ceiling, estimate));
 }
 
@@ -31,8 +32,8 @@ export function uploadRoute(file: { name: string; type: string; size: number }, 
     audioFormat(file.name, file.type, true);
     return { kind: 'service', processing: { recipe: 'mp3-320k-44100-v1', outputBudget: outputBudget(file.size, type, duration) } };
   }
-  if (file.size > MAX_AUDIO_BYTES) { audioFormat(file.name, file.type); return { kind: 'service' }; }
-  return { kind: 'pds' };
+  audioFormat(file.name, file.type);
+  return file.size > MAX_AUDIO_BYTES ? { kind: 'service' } : { kind: 'pds' };
 }
 
 export function needsPlyrStorage(file: { name: string; size: number }) {
@@ -77,4 +78,10 @@ export function jobLine(job: UploadJobView): string {
     case 'done': return `${name} uploaded`;
     case 'failed': return job.error ? `${name} didn't upload: ${job.error}` : `${name} didn't upload`;
   }
+}
+
+/** The canonical audio type for a picked file, whatever its picker called it. */
+export function canonicalAudioType(file: { name: string; type: string; size: number }) {
+  const route = uploadRoute(file);
+  return audioFormat(file.name, file.type, route.kind === 'service' && !!route.processing).contentType;
 }

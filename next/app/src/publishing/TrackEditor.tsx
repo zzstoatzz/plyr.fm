@@ -11,6 +11,7 @@ import { measureAudioDuration, pickMedia } from '../media-picker';
 import { createPds, TrackRevisionConflict, type MediaFile } from '../pds';
 import { recordTags } from './track-tags';
 import { TagsField } from './TagsField';
+import { pickArtwork } from './artwork';
 import { canReplaceTrackAudio, validateReplacementAudio, TrackWriteUnconfirmed } from './track-audio';
 
 function close(id: string) { router.canGoBack() ? router.back() : router.replace(`/track/${id}`); }
@@ -126,9 +127,9 @@ function TrackForm({ auth, data, reload, feedback }: { auth: Auth; data: Data; r
       <Field label="Description" value={description} onChangeText={setDescription} maxLength={5000} multiline editable={!busy} />
       <TagsField value={tags} onChange={value => { setTags(value); setTagsEdited(true); }} disabled={busy} />
       <View style={row}>
-        <Action label={artwork?.name ?? 'Change cover'} disabled={busy} onPress={() => void pickMedia('image/*').then(file => {
+        <Action label={artwork?.name ?? 'Change cover'} disabled={busy} onPress={() => void pickArtwork().then(file => {
           if (file && current()) setArtwork(file);
-        }).catch(() => { if (current()) setError('could not open cover art.'); })} />
+        }).catch(failure => { if (current()) setError(failure instanceof Error ? failure.message : 'could not open cover art.'); })} />
         <Action label={artwork === null ? 'cover will be removed' : 'remove cover'} disabled={busy} onPress={() => setArtwork(null)} />
       </View>
       <Action primary label="Save" disabled={busy || conflict || !title.trim()} onPress={() => void save(false)} />
