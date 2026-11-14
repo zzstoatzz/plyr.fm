@@ -108,7 +108,7 @@ const dist = path.resolve(__dirname, '../dist');
     };
     await leaveBy(/^Artist: /, 'link', '**/u/**');
     await leaveBy('Queue', 'button', '**/queue');
-    await leaveBy('Open track page', 'button', '**/track/**');
+    await leaveBy(/^About /, 'link', '**/track/**');
     console.log('393: now playing rises from the dock under the finger, artwork and title fly between the two, it settles both ways, and its links change the page before the sheet leaves');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

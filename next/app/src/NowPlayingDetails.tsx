@@ -47,9 +47,9 @@ export function NowPlayingDetails({ track, plays, protect, navigate, wide, posit
     <View testID="now-playing-about" style={[styles.about, { borderColor: wide ? theme.hairline : theme.line }]}>
       {!privateTrack && <Facts track={track} plays={plays} protect={protect} />}
       {!privateTrack && <View {...protect}>
-        <Pressable accessibilityRole="link" accessibilityLabel="Open track page" onPress={() => navigate(`/track/${track.id}`)}
+        <Pressable accessibilityRole="link" accessibilityLabel={`About ${track.metadata.title}`} onPress={() => navigate(`/track/${track.id}`)}
           style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [styles.open, { backgroundColor: pressed || hovered ? theme.hover : theme.raised, borderColor: theme.border }]}>
-          <Text style={{ ...body, fontWeight: '600' }}>open track page</Text>
+          <Text style={{ ...body, fontWeight: '600' }}>about this track</Text>
           <ArrowRight size={16} color={theme.text} />
         </Pressable>
       </View>}
