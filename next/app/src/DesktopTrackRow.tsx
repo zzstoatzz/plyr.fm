@@ -7,11 +7,11 @@ import { trackArtwork } from './artwork';
 import { artistName, Cover, type Play } from './CatalogPieces';
 import { compactCount, formatDuration, timeAgo } from './home-state';
 import { HomeTrackActions } from './HomeTrackRow';
-import { LikesCell, RowActions } from './RowActions';
+import { LikesCell, QueueButton } from './RowActions';
 import { Text } from './Text';
 import type { Viewer } from './TrackLikes';
 
-const COLUMNS = { actions: 76, plays: 64, likes: 56, time: 58, menu: 44 };
+const COLUMNS = { queue: 40, plays: 64, likes: 84, time: 58, menu: 44 };
 
 /** Labels for the number columns of `DesktopTrackRow`, so the numbers need no icons. */
 export function DesktopTrackHeader({ rank = false }: { rank?: boolean }) {
@@ -20,15 +20,15 @@ export function DesktopTrackHeader({ rank = false }: { rank?: boolean }) {
   return <View aria-hidden style={[styles.header, { borderBottomColor: theme.hairline }]}>
     {rank && <View style={styles.rank} />}
     <Text style={[label, { flex: 1, paddingLeft: 62 }]}>title</Text>
-    <View style={{ width: COLUMNS.actions }} />
+    <View style={{ width: COLUMNS.queue }} />
     <Text style={[label, styles.right, { width: COLUMNS.plays }]}>plays</Text>
-    <Text style={[label, styles.right, { width: COLUMNS.likes }]}>likes</Text>
+    <Text style={[label, { width: COLUMNS.likes, paddingLeft: 36 }]}>likes</Text>
     <Text style={[label, styles.right, { width: COLUMNS.time }]}>time</Text>
     <View style={{ width: COLUMNS.menu }} />
   </View>;
 }
 
-/** A track as one line of a wide list: cover, title, artist and age, then plays, likes and length in labelled columns. */
+/** A track as one line of a wide list: cover, title, artist and age, then plays, the heart with its count, and length in labelled columns. */
 export function DesktopTrackRow({ track, tracks, onPlay, rank, now, returnTo = '/' }: { track: Track; tracks: Track[]; onPlay: Play; rank?: number; now?: number; returnTo?: string }) {
   const theme = useAppearance();
   const [hovered, setHovered] = useState(false);
@@ -53,9 +53,9 @@ export function DesktopTrackRow({ track, tracks, onPlay, rank, now, returnTo = '
         {when ? <Text pointerEvents="none" numberOfLines={1} style={{ color: theme.faint, fontFamily: theme.fontFamily, fontSize: 13.5 * theme.scale }}>· {when}</Text> : null}
       </View>
     </View>
-    <View style={{ width: COLUMNS.actions, alignItems: 'flex-end' }}><RowActions track={track} shown={hovered} onViewer={setViewer} /></View>
+    <View style={{ width: COLUMNS.queue, alignItems: 'flex-end' }}><QueueButton track={track} shown={hovered} /></View>
     <Text pointerEvents="none" accessibilityLabel={`${track.metrics.play_count} ${track.metrics.play_count === 1 ? 'play' : 'plays'}`} style={[number, { width: COLUMNS.plays }]}>{compactCount(track.metrics.play_count)}</Text>
-    <LikesCell track={track} count={likes} width={COLUMNS.likes} mine={viewer?.liked} />
+    <LikesCell track={track} count={likes} width={COLUMNS.likes} mine={viewer?.liked} onViewer={setViewer} />
     <Text pointerEvents="none" style={[number, { width: COLUMNS.time }]}>{formatDuration(track.metadata.duration_seconds)}</Text>
     <View style={{ width: COLUMNS.menu, alignItems: 'flex-end' }}><HomeTrackActions track={track} returnTo={returnTo} /></View>
   </View>;
