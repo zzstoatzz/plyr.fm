@@ -3,7 +3,7 @@ import { CaretDown as ChevronDown, Screencast as Cast } from './icons';
 import { Image, PixelRatio, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { useAppearance } from './appearance';
-import { displayUrl } from './artwork';
+import { displayUrl } from '../../core/src/artwork';
 import { Cover } from './CatalogPieces';
 import { Copy, InlineLink, Page } from './controls';
 import { playerSheet } from './player-sheet';

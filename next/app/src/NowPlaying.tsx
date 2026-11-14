@@ -1,4 +1,4 @@
-import { trackArtwork } from './artwork';
+import { trackArtwork } from '../../core/src/artwork';
 import { ChatCircle, CaretDown as ChevronDown, Playlist as ListMusic, Radio as RadioTower, X } from './icons';
 import { Text } from './Text';
 import Slider from './Slider';

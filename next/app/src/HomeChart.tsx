@@ -1,5 +1,5 @@
 import { useAppearance } from './appearance';
-import { trackArtwork } from './artwork';
+import { trackArtwork } from '../../core/src/artwork';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Cover, Heading, Status, artistName, type Play } from './CatalogPieces';
 import { HomeShelf } from './HomeShelf';

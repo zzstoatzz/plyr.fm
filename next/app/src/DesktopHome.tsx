@@ -4,7 +4,7 @@ import { Pressable, ScrollView, StyleSheet, View, useWindowDimensions, type Scro
 import type { Track } from '../../core/src/api';
 import { useAppearance } from './appearance';
 import { AtlasView } from './atlas/AtlasView';
-import { trackArtwork } from './artwork';
+import { trackArtwork } from '../../core/src/artwork';
 import { useAuth } from './auth';
 import { Cover, Status, type Play } from './CatalogPieces';
 import { DesktopTrackRow } from './DesktopTrackRow';

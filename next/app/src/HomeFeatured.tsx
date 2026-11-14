@@ -5,7 +5,7 @@ import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { api } from './api-client';
 import { type Track } from '../../core/src/api';
 import { useAppearance } from './appearance';
-import { trackArtwork } from './artwork';
+import { trackArtwork } from '../../core/src/artwork';
 import { Cover, type Play } from './CatalogPieces';
 import { Action } from './controls';
 import { compactCount, distinctTracks, formatDuration, rankedArtists, weekNumber } from './home-state';

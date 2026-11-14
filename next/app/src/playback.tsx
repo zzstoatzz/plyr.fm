@@ -1,6 +1,6 @@
 import { recordPlayback, urlHost } from '../../core/src/playback-diagnostics';
 import { LoadingWatchdog } from './loading-watchdog';
-import { trackArtwork } from './artwork';
+import { trackArtwork } from '../../core/src/artwork';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Platform } from 'react-native';
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';

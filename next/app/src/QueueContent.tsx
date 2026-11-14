@@ -8,7 +8,7 @@ import { useState, type ReactNode, type RefObject } from 'react';
 import { Pressable, type ScrollViewInstance, StyleSheet, View } from 'react-native';
 import type { Track } from '../../core/src/api';
 import { useAppearance } from './appearance';
-import { trackArtwork } from './artwork';
+import { trackArtwork } from '../../core/src/artwork';
 import { artistName, Cover, Heading } from './CatalogPieces';
 import { Action, Copy, InlineLink, row } from './controls';
 import { usePlayback } from './playback';

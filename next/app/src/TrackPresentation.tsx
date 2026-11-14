@@ -1,5 +1,5 @@
 import { Copy } from './controls';
-import { trackArtwork } from './artwork';
+import { trackArtwork } from '../../core/src/artwork';
 import { Text } from './Text';
 import { Link } from 'expo-router';
 import { type ReactNode, useState } from 'react';

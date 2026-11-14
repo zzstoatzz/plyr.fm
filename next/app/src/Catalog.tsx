@@ -1,6 +1,6 @@
 import { useAppearance } from './appearance';
 import { ListPlus, DotsThree as Ellipsis } from './icons';
-import { collectionArtwork } from './artwork';
+import { collectionArtwork } from '../../core/src/artwork';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useRef, useState, type ReactNode } from 'react';
 import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';

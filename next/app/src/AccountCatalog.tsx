@@ -1,4 +1,4 @@
-import { trackArtwork } from './artwork';
+import { trackArtwork } from '../../core/src/artwork';
 import { X, ListPlus, MusicNote as Music2, ArrowsClockwise as RefreshCw } from './icons';
 import { PlayerControl } from './PlayerControl';
 import { AccountSection } from './AccountPieces';
