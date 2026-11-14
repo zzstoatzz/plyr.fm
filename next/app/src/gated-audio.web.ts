@@ -1,7 +1,7 @@
 import { P256Keypair } from '@atproto/crypto';
 import type { Auth } from './auth-state';
 import { resolveGatedAudio, type GatedAudioSource } from './gated-audio-shared';
-import { privateAudioUrl, releasePrivateAudio } from './private-audio.web';
+import { privateAudioUrl, releasePrivateAudio } from '../../web/src/lib/media/private-audio';
 
 export async function gatedAudioUrl(uri: string, auth: Auth): Promise<string> {
 	const source = await resolveGatedAudio(uri, auth, {
