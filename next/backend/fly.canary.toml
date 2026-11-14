@@ -11,6 +11,8 @@ primary_region = "sjc"
 [processes]
   app = "serve"
   ingester = "ingester"
+  # follows every plyr space on the space-stream as the plyr.fm account
+  space_consumer = "space_consumer"
 
 [env]
   CORS_ALLOWED_ORIGINS = "https://next.plyr.fm,https://plyr-fm-next.pages.dev,http://127.0.0.1:5174"
@@ -31,6 +33,12 @@ primary_region = "sjc"
   SPACE_SERVICE_DID = "did:web:api.next.plyr.fm"
   SPACE_SERVICE_ENDPOINT = "https://api.next.plyr.fm"
   SPACE_TYPE_NSID = "fm.plyr.next.audio"
+  # the plyr.fm account reads plyr spaces through plyr's space-stream
+  # (next/services/space-stream); its app password is SPACE_SYNC_APP_PASSWORD
+  SPACE_SYNC_DID = "did:plc:vs3hnzq2daqbszxlysywzy54"
+  SPACE_SYNC_HANDLE = "plyr.fm"
+  SPACE_SYNC_PDS = "https://chalciporus.us-west.host.bsky.network"
+  SPACE_STREAM_HOST = "plyr-space-stream.n8-3e9.workers.dev"
   # catalog bootstrap: every repo the relay has seen write fm.plyr.*
   CATALOG_DISCOVERY_RELAY = "https://relay1.us-east.bsky.network"
 
@@ -56,7 +64,7 @@ primary_region = "sjc"
 
 [[restart]]
   policy = "always"
-  processes = ["ingester"]
+  processes = ["ingester", "space_consumer"]
 
 [[vm]]
   processes = ["app"]
@@ -69,3 +77,9 @@ primary_region = "sjc"
   cpu_kind = "shared"
   cpus = 2
   memory = "1gb"
+
+[[vm]]
+  processes = ["space_consumer"]
+  cpu_kind = "shared"
+  cpus = 1
+  memory = "256mb"
