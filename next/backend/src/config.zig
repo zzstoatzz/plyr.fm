@@ -148,6 +148,7 @@ pub const Config = struct {
                 // lives as long as the process
                 .policy_collection = try policyCollection(std.heap.page_allocator, track_collection),
                 .plc_url = getenv("PLC_DIRECTORY_URL") orelse "https://plc.directory",
+                .sync_reader = getenv("SPACE_SYNC_DID"),
             } else null,
             .account_check_interval_us = try parseSecondsMicros(
                 getenv("ACCOUNT_CHECK_INTERVAL_SECONDS") orelse "21600",

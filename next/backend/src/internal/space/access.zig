@@ -3,8 +3,9 @@
 //! through `Decider`, so neither knows how the answer is reached.
 //!
 //! `Core` answers from the space authority's policy records (see policy.zig)
-//! and attested payment evidence. The authority always passes; nobody else
-//! writes; a space of another type, or one with no policy, stays closed.
+//! and attested payment evidence. The authority always passes; plyr's own
+//! sync account may read, so it can keep a copy; nobody else writes; a space
+//! of another type, or one with no policy, stays closed.
 
 const std = @import("std");
 const managed_space = @import("managed_space.zig");
@@ -48,6 +49,8 @@ pub const Core = struct {
     policy_collection: []const u8,
     policies: PolicySource,
     evidence: policy.Evidence,
+    /// the account plyr's space-stream reads with (SPACE_SYNC_DID)
+    sync_reader: ?[]const u8 = null,
 
     pub fn decider(self: *Core) Decider {
         return .{ .context = self, .decide_fn = decideErased };
@@ -63,6 +66,7 @@ pub const Core = struct {
         if (!std.mem.eql(u8, space.space_type, self.space_type)) return false;
         if (std.mem.eql(u8, request.user, space.authority)) return true;
         if (request.access == .write) return false;
+        if (self.sync_reader) |reader| if (std.mem.eql(u8, request.user, reader)) return true;
         const space_uri = try std.fmt.allocPrint(a, "at://{s}/space/{s}/{s}", .{ space.authority, space.space_type, space.skey });
         const all = try self.policies.list(a, space.authority, self.policy_collection, self.space_type);
         var matching: std.ArrayList(policy.Policy) = .empty;
@@ -127,6 +131,20 @@ test "the authority always passes, writers never do, foreign types stay closed" 
     try std.testing.expect(try ask(&core, a, "at://did:plc:artist/space/fm.plyr.dev.audio/3album", "did:plc:fan", .read));
     try std.testing.expect(!try ask(&core, a, "at://did:plc:artist/space/fm.plyr.dev.audio/3album", "did:plc:fan", .write));
     try std.testing.expect(!try ask(&core, a, "at://did:plc:artist/space/com.example.space/3album", "did:plc:fan", .read));
+    try std.testing.expectEqual(@as(usize, 1), fixture.listed);
+}
+
+test "plyr's sync account reads every plyr space but writes none" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var fixture: Fixture = .{};
+    var core = fixture.core();
+    core.sync_reader = "did:plc:plyrsync";
+    try std.testing.expect(try ask(&core, a, "at://did:plc:artist/space/fm.plyr.dev.audio/3album", "did:plc:plyrsync", .read));
+    try std.testing.expect(!try ask(&core, a, "at://did:plc:artist/space/fm.plyr.dev.audio/3album", "did:plc:plyrsync", .write));
+    try std.testing.expect(!try ask(&core, a, "at://did:plc:artist/space/com.example.space/3album", "did:plc:plyrsync", .read));
+    try std.testing.expect(!try ask(&core, a, "at://did:plc:artist/space/fm.plyr.dev.audio/3album", "did:plc:fan", .read));
     try std.testing.expectEqual(@as(usize, 1), fixture.listed);
 }
 
