@@ -216,7 +216,7 @@
   ul { list-style: none; padding: 0; margin: 0 0 0.65rem; }
   li { display: flex; align-items: center; gap: 0.7rem; padding: 0.45rem 0; border-bottom: 1px solid var(--line); }
   .thumb { width: 3.25rem; flex: 0 0 3.25rem; border-radius: 0.35rem; }
-  h1 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-size: clamp(1.35rem, 4.8vw, 1.85rem); line-height: 1.25; }
+  h1 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; font-size: clamp(1.35rem, 4.8vw, 1.85rem); line-height: 1.25; }
   .names { flex: 1; min-width: 0; overflow-wrap: anywhere; }
   .names a, .private-play { font-weight: 600; }
   .private-play { text-align: left; padding: 0; border: 0; background: none; overflow-wrap: anywhere; }

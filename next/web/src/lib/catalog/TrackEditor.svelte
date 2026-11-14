@@ -37,7 +37,7 @@
   let conflict = $state(false);
   let confirm = $state(false);
   let failure = $state('');
-  let conflictNotice: HTMLDivElement;
+  let conflictNotice = $state<HTMLDivElement>();
   let saved = $state<{ status: AwaitStatus; deleting: boolean }>();
   const trackPath = $derived(`/track/${encodeURIComponent(id)}`);
   const close = $derived(returnTo ?? trackPath);
