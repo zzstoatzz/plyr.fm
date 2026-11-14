@@ -7,7 +7,8 @@ import { trackArtwork } from './artwork';
 import { artistName, Cover, type Play } from './CatalogPieces';
 import { compactCount, formatDuration, timeAgo } from './home-state';
 import { HomeTrackActions } from './HomeTrackRow';
-import { LikesCell, QueueButton } from './RowActions';
+import { LikesCell } from './Likers';
+import { QueueButton } from './RowActions';
 import { Text } from './Text';
 import type { Viewer } from './TrackLikes';
 
@@ -22,7 +23,7 @@ export function DesktopTrackHeader({ rank = false }: { rank?: boolean }) {
     <Text style={[label, { flex: 1, paddingLeft: 62 }]}>title</Text>
     <View style={{ width: COLUMNS.queue }} />
     <Text style={[label, styles.right, { width: COLUMNS.plays }]}>plays</Text>
-    <Text style={[label, { width: COLUMNS.likes, paddingLeft: 36 }]}>likes</Text>
+    <Text style={[label, { width: COLUMNS.likes, paddingLeft: 9 }]}>likes</Text>
     <Text style={[label, styles.right, { width: COLUMNS.time }]}>time</Text>
     <View style={{ width: COLUMNS.menu }} />
   </View>;
@@ -32,13 +33,14 @@ export function DesktopTrackHeader({ rank = false }: { rank?: boolean }) {
 export function DesktopTrackRow({ track, tracks, onPlay, rank, now, returnTo = '/' }: { track: Track; tracks: Track[]; onPlay: Play; rank?: number; now?: number; returnTo?: string }) {
   const theme = useAppearance();
   const [hovered, setHovered] = useState(false);
+  const [likersOpen, setLikersOpen] = useState(false);
   const [viewer, setViewer] = useState<Viewer>();
   const number = { color: theme.muted, fontSize: 13.5 * theme.scale, fontVariant: ['tabular-nums' as const], textAlign: 'right' as const };
   const likes = Math.max(0, track.metrics.like_count + (viewer ? Number(viewer.liked) - Number(viewer.loaded) : 0));
   const age = now === undefined ? '' : timeAgo(track.metadata.created_at, now);
   const when = age === 'now' ? 'just now' : /^\d+[mhd]$/.test(age) ? `${age} ago` : age;
   return <View testID="home-track-row" onPointerEnter={() => setHovered(true)} onPointerLeave={() => setHovered(false)}
-    style={[styles.row, { backgroundColor: hovered ? theme.hover : 'transparent', zIndex: hovered ? 2 : 0 }]}>
+    style={[styles.row, { backgroundColor: hovered ? theme.hover : 'transparent', zIndex: hovered || likersOpen ? 2 : 0 }]}>
     <Pressable testID="track-play-control" accessibilityRole="button" accessibilityLabel={`Play ${track.metadata.title}`} onPress={() => onPlay(track, tracks)} style={StyleSheet.absoluteFill} />
     {rank !== undefined && <Text pointerEvents="none" style={[number, styles.rank, { color: theme.faint }]}>{rank}</Text>}
     <View pointerEvents="none"><Cover uri={trackArtwork(track)} size={48} radius={6} /></View>
@@ -55,7 +57,7 @@ export function DesktopTrackRow({ track, tracks, onPlay, rank, now, returnTo = '
     </View>
     <View style={{ width: COLUMNS.queue, alignItems: 'flex-end' }}><QueueButton track={track} shown={hovered} /></View>
     <Text pointerEvents="none" accessibilityLabel={`${track.metrics.play_count} ${track.metrics.play_count === 1 ? 'play' : 'plays'}`} style={[number, { width: COLUMNS.plays }]}>{compactCount(track.metrics.play_count)}</Text>
-    <LikesCell track={track} count={likes} width={COLUMNS.likes} mine={viewer?.liked} onViewer={setViewer} />
+    <LikesCell track={track} count={likes} width={COLUMNS.likes} mine={viewer?.liked} onViewer={setViewer} onOpen={setLikersOpen} />
     <Text pointerEvents="none" style={[number, { width: COLUMNS.time }]}>{formatDuration(track.metadata.duration_seconds)}</Text>
     <View style={{ width: COLUMNS.menu, alignItems: 'flex-end' }}><HomeTrackActions track={track} returnTo={returnTo} /></View>
   </View>;
