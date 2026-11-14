@@ -17,7 +17,7 @@ pub fn inspect(a: std.mem.Allocator, io: std.Io, settings: admission.Settings, b
     try admission.requireAllowed(a, request.owner);
     var resolver = zat.DidResolver.init(io, a);
     defer resolver.deinit();
-    resolver.plc_url = settings.auth_config.plc_url;
+    resolver.plc_url = settings.identity.plc_url;
     var transport = zat.HttpTransport.init(io, a);
     defer transport.deinit();
     var source: Repository = .{ .io = io, .identity_resolver = &resolver, .transport = &transport };

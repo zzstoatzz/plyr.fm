@@ -1,6 +1,6 @@
 const std = @import("std");
 const zat = @import("zat");
-const auth = @import("../jams/auth.zig");
+const service_auth = @import("../atproto/service_auth.zig");
 const track_record = @import("../atproto/track_record.zig");
 const access = @import("../space/access.zig");
 const policy = @import("../space/policy.zig");
@@ -11,7 +11,7 @@ const verifier = @import("../projection/record_proof_verifier.zig");
 
 pub const Request = struct { serviceToken: []const u8, recordUri: []const u8, recordCid: []const u8 };
 pub const Settings = struct {
-    auth_config: auth.Config,
+    identity: service_auth.Resolved,
     track_collection: []const u8,
     audio_space_type: ?[]const u8 = null,
     budget_ns: u64 = 15 * std.time.ns_per_s,
@@ -51,10 +51,10 @@ fn waitBudget(io: std.Io, ns: u64) std.Io.Cancelable!void {
 
 fn execute(a: std.mem.Allocator, io: std.Io, settings: Settings, request: Request) anyerror!Decision {
     const started = std.Io.Clock.awake.now(io).nanoseconds;
-    const viewer = try auth.admitOwner(a, io, settings.auth_config, request.serviceToken);
+    const viewer = (try service_auth.verifyResolved(a, io, request.serviceToken, settings.identity)).issuer;
     try io.checkCancel();
     const at = zat.AtUri.parse(request.recordUri).?;
-    var network = Network.init(io, a, settings.auth_config.plc_url);
+    var network = Network.init(io, a, settings.identity.plc_url);
     defer network.deinit();
     network.deadline_ns = started + settings.budget_ns;
     try network.checkDeadline();
@@ -72,9 +72,9 @@ fn execute(a: std.mem.Allocator, io: std.Io, settings: Settings, request: Reques
         .policies = network.policies(),
         .evidence = network.evidence(),
     };
-    try evaluate(a, state, request.recordCid, at.authority(), viewer.actor, settings.track_collection, settings.audio_space_type, core.decider(), network.evidence());
+    try evaluate(a, state, request.recordCid, at.authority(), viewer, settings.track_collection, settings.audio_space_type, core.decider(), network.evidence());
     try network.checkDeadline();
-    return .{ .viewer = viewer.actor, .recordUri = request.recordUri, .recordCid = request.recordCid, .expiresAt = (std.Io.Timestamp.now(io, .real).toSeconds() + 30) * 1000 };
+    return .{ .viewer = viewer, .recordUri = request.recordUri, .recordCid = request.recordCid, .expiresAt = (std.Io.Timestamp.now(io, .real).toSeconds() + 30) * 1000 };
 }
 
 /// May `viewer` download this exact record through plyr? The record must

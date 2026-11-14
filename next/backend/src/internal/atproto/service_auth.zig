@@ -8,7 +8,6 @@
 //! caller's decision.
 
 const std = @import("std");
-const Exchange = @import("../../api/exchange.zig").Exchange;
 const zat = @import("zat");
 
 /// Clock skew tolerated on expiry, in seconds.
@@ -77,23 +76,81 @@ pub fn verify(
     return allocator.dupe(u8, issuer);
 }
 
+/// Where a service that resolves issuers itself (no injected key source)
+/// finds them: the coordinator's endpoints, uploads and downloads.
+pub const Resolved = struct {
+    audience: []const u8,
+    method: []const u8,
+    plc_url: []const u8 = "https://plc.directory",
+};
+
+/// A verified issuer and the `#atproto` key that signed its token, both owned
+/// by the caller's allocator. The key lets a caller check further tokens the
+/// same account signed (a space delegation).
+pub const Identity = struct { issuer: []const u8, public_key: []const u8 };
+
+pub const ResolvedError = error{ OutOfMemory, InvalidIdentity, IdentityUnavailable };
+
+/// `verify` against the issuer's current DID document. The token must also
+/// declare `typ: JWT`, so a space delegation token (same key, other type) is
+/// never accepted as service auth. A document that cannot be fetched is
+/// `IdentityUnavailable`; every other failure is `InvalidIdentity`.
+pub fn verifyResolved(allocator: std.mem.Allocator, io: std.Io, token: []const u8, config: Resolved) ResolvedError!Identity {
+    if (!declaresJwt(allocator, token)) return error.InvalidIdentity;
+    var resolver = zat.DidResolver.init(io, allocator);
+    defer resolver.deinit();
+    resolver.plc_url = config.plc_url;
+    var keys: DocumentKeys = .{ .resolver = &resolver };
+    const now = std.Io.Timestamp.now(io, .real).toSeconds();
+    const issuer = verify(allocator, now, token, .{ .audiences = &.{config.audience}, .method = config.method }, keys.lookup()) catch |err| return switch (err) {
+        error.OutOfMemory => error.OutOfMemory,
+        error.IssuerKeyUnavailable => if (keys.unresolved) error.IdentityUnavailable else error.InvalidIdentity,
+        else => error.InvalidIdentity,
+    };
+    return .{ .issuer = issuer, .public_key = keys.key orelse return error.InvalidIdentity };
+}
+
+/// Keys from DID documents, only when the document is the issuer's own and
+/// the `#atproto` key is controlled by it. Remembers the key it handed out.
+const DocumentKeys = struct {
+    resolver: *zat.DidResolver,
+    key: ?[]const u8 = null,
+    unresolved: bool = false,
+
+    fn lookup(self: *DocumentKeys) KeyLookup {
+        return .{ .context = self, .lookup_fn = find };
+    }
+
+    fn find(context: *anyopaque, allocator: std.mem.Allocator, did_text: []const u8) anyerror![]const u8 {
+        const self: *DocumentKeys = @ptrCast(@alignCast(context));
+        const did = zat.Did.parse(did_text) orelse return error.InvalidIdentity;
+        var document = self.resolver.resolve(did) catch |err| {
+            self.unresolved = true;
+            return err;
+        };
+        defer document.deinit();
+        if (!std.mem.eql(u8, document.id, did_text)) return error.InvalidIdentity;
+        const signing_key = document.signingKey() orelse return error.InvalidIdentity;
+        if (!std.mem.eql(u8, signing_key.controller, did_text)) return error.InvalidIdentity;
+        self.key = try allocator.dupe(u8, signing_key.public_key_multibase);
+        return allocator.dupe(u8, signing_key.public_key_multibase);
+    }
+};
+
+fn declaresJwt(allocator: std.mem.Allocator, token: []const u8) bool {
+    const end = std.mem.indexOfScalar(u8, token, '.') orelse return false;
+    const bytes = zat.jwt.base64UrlDecode(allocator, token[0..end]) catch return false;
+    defer allocator.free(bytes);
+    const header = std.json.parseFromSlice(std.json.Value, allocator, bytes, .{}) catch return false;
+    defer header.deinit();
+    if (header.value != .object) return false;
+    const typ = header.value.object.get("typ") orelse return false;
+    return typ == .string and std.mem.eql(u8, typ.string, "JWT");
+}
+
 fn oneOf(value: []const u8, candidates: []const []const u8) bool {
     for (candidates) |candidate| if (std.mem.eql(u8, value, candidate)) return true;
     return false;
-}
-
-/// `Authorization: Bearer <token>`; null when absent, repeated or malformed.
-pub fn bearerToken(request: *const Exchange) ?[]const u8 {
-    var token: ?[]const u8 = null;
-    var headers = request.iterateHeaders();
-    while (headers.next()) |header| {
-        if (!std.ascii.eqlIgnoreCase(header.name, "authorization")) continue;
-        if (token != null) return null;
-        if (header.value.len <= "Bearer ".len or
-            !std.ascii.eqlIgnoreCase(header.value[0.."Bearer ".len], "Bearer ")) return null;
-        token = std.mem.trim(u8, header.value["Bearer ".len..], " ");
-    }
-    return token;
 }
 
 // --- tests -----------------------------------------------------------------
@@ -175,4 +232,11 @@ test "service JWTs bind audience, method, lifetime and the issuer's key" {
     try std.testing.expectError(error.BadSignature, verify(arena, now, forged, expectation, keys.keys()));
 
     try std.testing.expectError(error.MalformedToken, verify(arena, now, "not.a.jwt", expectation, keys.keys()));
+}
+
+test "resolved service auth only accepts tokens typed as JWT" {
+    try std.testing.expect(declaresJwt(std.testing.allocator, "eyJ0eXAiOiJKV1QifQ.e30.signature"));
+    try std.testing.expect(!declaresJwt(std.testing.allocator, "eyJ0eXAiOiJhdHByb3RvLXNwYWNlLWRlbGVnYXRpb24rand0In0.e30.signature"));
+    try std.testing.expect(!declaresJwt(std.testing.allocator, "e30.e30.signature"));
+    try std.testing.expect(!declaresJwt(std.testing.allocator, "missing-separators"));
 }

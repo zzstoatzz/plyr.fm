@@ -4,6 +4,7 @@
 
 const std = @import("std");
 const Exchange = @import("exchange.zig").Exchange;
+const bearer = @import("bearer.zig");
 const response = @import("response.zig");
 const application = @import("../internal/application/notifications.zig");
 const service_auth = @import("../internal/atproto/service_auth.zig");
@@ -42,7 +43,7 @@ pub fn handle(
         return;
     }
     const response_cors = try response.captureCors(request, allocator, cors);
-    const token = try allocator.dupe(u8, service_auth.bearerToken(request) orelse {
+    const token = try allocator.dupe(u8, bearer.fromRequest(request) orelse {
         try xrpcError(request, .unauthorized, "AuthenticationRequired", "service auth required", request_id, response_cors);
         return;
     });

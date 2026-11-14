@@ -38,7 +38,7 @@ pub fn main() !void {
         return err;
     };
 
-    if (settings.role == .jams) return @import("internal/jams/server.zig").run(allocator, io, settings);
+    if (settings.role == .jams) return @import("internal/coordinator/server.zig").run(allocator, io, settings);
 
     var postgres_store: ?postgres.PostgresTrackStore = if (settings.database_url) |url|
         try postgres.PostgresTrackStore.init(allocator, io, url, settings.database_pool_size)
@@ -245,6 +245,8 @@ test {
     _ = @import("api/notifications.zig");
     _ = @import("internal/application/notifications.zig");
     _ = @import("internal/atproto/service_auth.zig");
+    _ = @import("internal/atproto/space_uri.zig");
+    _ = @import("api/bearer.zig");
     _ = @import("internal/notification/postgres_store.zig");
     _ = @import("internal/notification/service.zig");
     _ = @import("internal/space/managed_space.zig");
@@ -337,12 +339,12 @@ test {
     _ = @import("internal/atproto/json_record.zig");
     _ = @import("internal/ingest/postgres_relay_cursor.zig");
     _ = @import("internal/ingest/postgres_repository_candidates.zig");
-    _ = @import("internal/ingest/pinned_tls.zig");
+    _ = @import("internal/net/pinned_tls.zig");
     _ = @import("internal/ingest/relay_cursor.zig");
     _ = @import("internal/ingest/repository_source.zig");
     _ = @import("internal/ingest/repository_candidates.zig");
     _ = @import("internal/ingest/repair_runner.zig");
-    _ = @import("internal/ingest/safe_endpoint.zig");
+    _ = @import("internal/net/safe_endpoint.zig");
     _ = @import("internal/ingest/projector.zig");
     _ = @import("internal/ingest/signing_key.zig");
     _ = @import("internal/ingest/zat_repository_source.zig");
@@ -374,9 +376,9 @@ test {
     _ = @import("internal/jams/model.zig");
     _ = @import("internal/jams/store.zig");
     _ = @import("internal/jams/queue_record.zig");
-    _ = @import("internal/jams/account_preferences.zig");
+    _ = @import("internal/coordinator/preferences.zig");
     _ = @import("internal/jams/auth.zig");
-    _ = @import("internal/jams/server.zig");
+    _ = @import("internal/coordinator/server.zig");
     _ = @import("internal/uploads/admission.zig");
     _ = @import("internal/uploads/inspection.zig");
     _ = @import("server.zig");

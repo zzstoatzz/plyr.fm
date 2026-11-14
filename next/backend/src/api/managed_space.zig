@@ -4,6 +4,7 @@
 
 const std = @import("std");
 const Exchange = @import("exchange.zig").Exchange;
+const bearer = @import("bearer.zig");
 const response = @import("response.zig");
 const query = @import("../internal/http/query.zig");
 const managed_space = @import("../internal/space/managed_space.zig");
@@ -53,19 +54,6 @@ fn parseParams(allocator: std.mem.Allocator, target: []const u8) !Params {
     };
 }
 
-fn bearerToken(request: *const Exchange) ?[]const u8 {
-    var token: ?[]const u8 = null;
-    var headers = request.iterateHeaders();
-    while (headers.next()) |header| {
-        if (!std.ascii.eqlIgnoreCase(header.name, "authorization")) continue;
-        if (token != null) return null;
-        if (header.value.len <= "Bearer ".len or
-            !std.ascii.eqlIgnoreCase(header.value[0.."Bearer ".len], "Bearer ")) return null;
-        token = std.mem.trim(u8, header.value["Bearer ".len..], " ");
-    }
-    return token;
-}
-
 fn xrpcError(
     request: *Exchange,
     status: std.http.Status,
@@ -89,7 +77,7 @@ pub fn checkUserAccess(
         try xrpcError(request, .bad_request, "InvalidRequest", "space, user and access are required", request_id, cors);
         return;
     };
-    const token = bearerToken(request) orelse {
+    const token = bearer.fromRequest(request) orelse {
         try xrpcError(request, .unauthorized, "AuthenticationRequired", "service auth required", request_id, cors);
         return;
     };

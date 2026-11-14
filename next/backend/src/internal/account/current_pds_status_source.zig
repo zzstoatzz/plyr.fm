@@ -6,8 +6,8 @@
 
 const std = @import("std");
 const zat = @import("zat");
-const pinned_tls = @import("../ingest/pinned_tls.zig");
-const safe_endpoint = @import("../ingest/safe_endpoint.zig");
+const pinned_tls = @import("../net/pinned_tls.zig");
+const safe_endpoint = @import("../net/safe_endpoint.zig");
 const repo_status = @import("repo_status.zig");
 
 const max_response_bytes = 64 * 1024;

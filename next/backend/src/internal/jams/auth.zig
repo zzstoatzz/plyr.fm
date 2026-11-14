@@ -1,7 +1,8 @@
 const std = @import("std");
 const zat = @import("zat");
-const safe_endpoint = @import("../ingest/safe_endpoint.zig");
-const pinned_tls = @import("../ingest/pinned_tls.zig");
+const safe_endpoint = @import("../net/safe_endpoint.zig");
+const pinned_tls = @import("../net/pinned_tls.zig");
+const service_auth = @import("../atproto/service_auth.zig");
 
 pub const Config = struct {
     audience: []const u8,
@@ -9,6 +10,12 @@ pub const Config = struct {
     space_type: []const u8,
     plc_url: []const u8 = "https://plc.directory",
     test_pds_origin: ?[]const u8 = null,
+
+    /// The service-auth half of this config: who the coordinator is and
+    /// which method a join token must name.
+    pub fn identity(self: Config) service_auth.Resolved {
+        return .{ .audience = self.audience, .method = self.method, .plc_url = self.plc_url };
+    }
 };
 
 pub const Admission = struct {
@@ -18,23 +25,8 @@ pub const Admission = struct {
     expires_ms: i64,
 };
 
-const Identity = struct { actor: []const u8, public_key: []const u8 };
-
-fn identify(allocator: std.mem.Allocator, resolver: *zat.DidResolver, config: Config, service: []const u8, now: i64) !Identity {
-    var identity = zat.Jwt.parse(allocator, service) catch return error.InvalidIdentity;
-    defer identity.deinit();
-    if (!std.mem.eql(u8, try tokenType(allocator, service), "JWT") or !std.mem.eql(u8, identity.payload.aud, config.audience) or
-        !std.mem.eql(u8, identity.payload.lxm orelse "", config.method) or identity.payload.exp <= now or identity.payload.exp > now + 300)
-        return error.InvalidIdentity;
-    const actor = identity.payload.iss;
-    const did = zat.Did.parse(actor) orelse return error.InvalidIdentity;
-    var document = try resolver.resolve(did);
-    defer document.deinit();
-    if (!std.mem.eql(u8, document.id, actor)) return error.InvalidIdentity;
-    const signing_key = document.signingKey() orelse return error.InvalidIdentity;
-    if (!std.mem.eql(u8, signing_key.controller, actor)) return error.InvalidIdentity;
-    identity.verify(signing_key.public_key_multibase) catch return error.InvalidIdentity;
-    return .{ .actor = try allocator.dupe(u8, actor), .public_key = try allocator.dupe(u8, signing_key.public_key_multibase) };
+fn identify(allocator: std.mem.Allocator, io: std.Io, config: Config, service: []const u8) !service_auth.Identity {
+    return service_auth.verifyResolved(allocator, io, service, config.identity());
 }
 
 const queue_prefix = "queue:";
@@ -50,11 +42,8 @@ pub fn queueOwner(room: []const u8) ?[]const u8 {
 /// A personal queue belongs to whoever proves the identity; no Space is involved.
 pub fn admitOwner(allocator: std.mem.Allocator, io: std.Io, config: Config, service: []const u8) !Admission {
     const now = std.Io.Timestamp.now(io, .real).toSeconds();
-    var resolver = zat.DidResolver.init(io, allocator);
-    defer resolver.deinit();
-    resolver.plc_url = config.plc_url;
-    const owner = try identify(allocator, &resolver, config, service, now);
-    return .{ .actor = owner.actor, .host = owner.actor, .room = try queueRoom(allocator, owner.actor), .expires_ms = (now + 600) * 1000 };
+    const owner = try identify(allocator, io, config, service);
+    return .{ .actor = owner.issuer, .host = owner.issuer, .room = try queueRoom(allocator, owner.issuer), .expires_ms = (now + 600) * 1000 };
 }
 
 pub fn admit(allocator: std.mem.Allocator, io: std.Io, config: Config, host: []const u8, key: []const u8, service: []const u8, delegation: []const u8) !Admission {
@@ -63,8 +52,8 @@ pub fn admit(allocator: std.mem.Allocator, io: std.Io, config: Config, host: []c
     var resolver = zat.DidResolver.init(io, allocator);
     defer resolver.deinit();
     resolver.plc_url = config.plc_url;
-    const member = try identify(allocator, &resolver, config, service, now);
-    const actor = member.actor;
+    const member = try identify(allocator, io, config, service);
+    const actor = member.issuer;
     const space = try std.fmt.allocPrint(allocator, "at://{s}/space/{s}/{s}", .{ host, config.space_type, key });
     var delegated = zat.Jwt.parse(allocator, delegation) catch return error.InvalidDelegation;
     defer delegated.deinit();
