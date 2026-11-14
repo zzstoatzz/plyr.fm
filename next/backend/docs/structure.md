@@ -12,6 +12,7 @@ table has one writing module; everything else reads.
 | ingester (side thread) / mirror | `internal/delivery` | `plyr_index.track_delivery_origins`, `track_mirror_attempts` |
 | ingester (side thread) | `internal/identity` | `plyr_index.actor_identities` |
 | ingester (side thread) | `internal/moderation` | `plyr_index.track_policies`, `account_label_policies`, the labeler's `relay_cursors` row |
+| space_consumer | `internal/space` (`postgres_sync_store`) | `plyr_index.space_records`, `space_cursors` |
 | account_reconciler | `internal/account` | `plyr_index.account_availability`, `account_status_checks` |
 | api | `internal/metrics` | `plyr_index.track_metrics` through `plyr_index.record_play()` |
 | api | `internal/notification` | `plyr_account.notification_seen` |
