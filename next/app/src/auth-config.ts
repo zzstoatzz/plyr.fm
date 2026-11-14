@@ -75,7 +75,7 @@ export function hasUploadGrant(scope: string): boolean {
 export const SYNC_SCOPE = `rpc:${JAM_JOIN_METHOD}?aud=${JAM_SERVICE_AUDIENCE}`;
 export const JAM_SCOPE_PARTS = [
 	`space:${JAM_SPACE.type}?authority=self&collection=${JAM_SPACE.collection}&action=create&action=update&manage=create&manage=update`,
-	`space:${JAM_SPACE.type}?authority=*&action=read`
+	`space:${JAM_SPACE.type}?authority=*&collection=${JAM_SPACE.collection}&action=read`
 ];
 
 export function hasSyncGrant(scope: string): boolean {
