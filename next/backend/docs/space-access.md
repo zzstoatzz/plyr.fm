@@ -37,3 +37,25 @@ provider is wired in.
 
 unknown rule types and malformed records are ignored (they open nothing).
 lookup failures fail closed unless another policy already allowed the reader.
+
+## syncing space records
+
+closed tracks keep their metadata on the public record, so the firehose
+ingester indexes them and nothing needs syncing. once metadata itself lives
+only in a space (a members-only release, a private playlist), plyr keeps a
+copy with `src/internal/space/sync.zig`:
+
+- `Source` is the host-facing engine: credential via `authorizeSpaceSync`,
+  `listWriters`, `listRepoOps` from a held rev, `getRepo` when the op log
+  can't bridge, each result verified against the repo's LtHash commit.
+- `Store` is plyr's copy, one transaction per repo so a rev only moves with
+  its records.
+- `Syncer.sync(space)` reconciles the full writer set each run: unchanged
+  repos are skipped, removed or unlisted ones dropped, and `SpaceDeleted`
+  drops the whole copy. any other failure keeps the copy.
+
+reads of synced rows still go through the access `Decider`, so a stale copy
+hides new records but never shows revoked ones. the plan for driving it is a
+`MODE=space_syncer` process claiming spaces from a postgres schedule (the
+account reconciler's lease pattern), hinted by `notifySpaceUpdate` webhooks
+and by `spaceRev` gaps.
