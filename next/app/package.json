@@ -47,6 +47,7 @@
     "phosphor-react-native": "^3.0.6",
     "react": "19.3.0",
     "react-dom": "19.3.0",
+    "react-freeze": "1.0.4",
     "react-native": "0.88.1",
     "react-native-gesture-handler": "~3.4.0",
     "react-native-mmkv": "^4.3.2",

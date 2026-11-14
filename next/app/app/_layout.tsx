@@ -22,6 +22,7 @@ import { useMyAvatar } from '../src/use-my-avatar';
 import { DESKTOP_HOME_WIDTH } from '../src/DesktopHome';
 import { usePreferences } from '../src/preferences';
 import { UploadQueueHost } from '../src/publishing/UploadQueue';
+import { screenLayout } from '../src/screen-freeze';
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
@@ -131,7 +132,7 @@ function Shell() {
           </Pressable></Link>}
         </View>}
         <NowPlayingOriginContext.Provider value={path}>
-          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.background } }}>
+          <Stack screenLayout={screenLayout} screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.background } }}>
             <Stack.Screen name="now-playing" options={{ presentation: Platform.OS === 'web' ? 'transparentModal' : 'card', animation: 'none', gestureEnabled: false, contentStyle: { backgroundColor: 'transparent' } }} />
           </Stack>
         </NowPlayingOriginContext.Provider>
