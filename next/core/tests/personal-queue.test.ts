@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createPersonalPlayback, type PersonalPlaybackTarget } from '../src/personal-playback.ts';
 import { PersonalQueue } from '../src/personal-queue.ts';
 import type { Track } from '../src/api.ts';
 import type { JamSocket, JamState } from '../src/jam-connection.ts';
@@ -158,4 +159,74 @@ test('progress is recorded synchronously before queued storage writes', async ()
   release();
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.deepEqual(order, ['latest:42', 'queued']);
+});
+
+test('shared playback restores the server position and waits for output ownership before loading audio', async () => {
+  const socket = new Socket();
+  const storage: QueueStorage = {
+    load: async () => null,
+    loadMutations: async () => [],
+    saveMutations: async (_, entries) => entries,
+    save: async () => {},
+    progress: async () => {},
+  };
+  let active = false;
+  let position = 0;
+  let visible: Track | undefined;
+  const actions: string[] = [];
+  const target: PersonalPlaybackTarget = {
+    ready: false,
+    suspended: false,
+    repeat: 'off',
+    keepPlaying: false,
+    position: () => position,
+    duration: () => 60,
+    playing: () => active,
+    load: async (tracks, index) => {
+      assert.equal(tracks[index], track);
+      actions.push('load');
+      return true;
+    },
+    loaded: async () => { actions.push('loaded'); },
+    seek: async seconds => { position = seconds; actions.push('seek'); },
+    play: () => { active = true; actions.push('play'); },
+    pause: () => { active = false; },
+    setQueue: (tracks, index) => { visible = tracks[index]; },
+    setRepeat: repeat => { target.repeat = repeat; },
+    error: assert.fail,
+  };
+  const model = createPersonalPlayback({
+    target: () => target,
+    account: () => ({ did: track.artist.did, ready: true, accountSync: true,
+      join: async () => ({ ticket: 'test', websocketUrl: 'wss://test' }) }),
+    id: () => 'client',
+    storage,
+    consumeLogin: () => false,
+    socket: () => socket,
+    resolve: async () => ({ data: [track], missing: [] }),
+    recent: async () => ({ object: 'list', data: [], has_more: false }),
+  });
+  const stop = model.start();
+  try {
+    await tick();
+    socket.receive({ type: 'state', state: base });
+    await tick();
+    assert.equal(visible, track);
+    assert.equal(model.getSnapshot().restoredPosition, 1.234);
+    assert.equal(model.position(), 1.234);
+    assert.deepEqual(actions, []);
+    assert.equal(model.command({ action: 'play' }), true);
+    assert.ok(socket.sent.some(frame => frame.action === 'play'));
+    socket.receive({ type: 'state', state: {
+      ...base,
+      revision: 2,
+      playing: true,
+      updatedAtMs: Date.now(),
+      personal: { ...base.personal, output: { clientId: 'client', connectionId: 'socket' } },
+    } });
+    await tick();
+    assert.equal(model.ownsOutput(), true);
+    assert.equal(position, 1.234);
+    assert.deepEqual(actions, ['load', 'loaded', 'seek', 'play']);
+  } finally { stop?.(); }
 });
