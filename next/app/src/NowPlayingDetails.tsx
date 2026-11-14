@@ -1,6 +1,6 @@
 import type { Href } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, CaretDown, CaretRight as ChevronRight, CaretUp, Equalizer, Play } from './icons';
+import { ArrowRight, CaretDown, CaretRight as ChevronRight, CaretUp, Disc, Equalizer, Play } from './icons';
 import { Pressable, StyleSheet, View, type ViewInstance, type ViewProps } from 'react-native';
 import type { Track } from './api';
 import { isPrivateTrack } from './publishing/private-track';
@@ -13,6 +13,7 @@ import { compactCount } from './home-state';
 import { firstLikers } from './Likers';
 import { Sheet, type Anchor } from './Sheet';
 import { People } from './TrackLikes';
+import { useAlbumId } from './use-album-id';
 
 const SHOWN = 7;
 
@@ -45,23 +46,35 @@ export function NowPlayingDetails({ track, plays, protect, navigate, wide, posit
     </View>}
     <View testID="now-playing-about" style={[styles.about, { borderColor: wide ? theme.hairline : theme.line }]}>
       {!privateTrack && <Facts track={track} plays={plays} protect={protect} />}
-      {prose ? <Text style={body}>{prose}</Text> : null}
-      {track.metadata.album ? <Text style={quiet}>from <Text style={{ ...quiet, color: theme.text, fontWeight: '600' }}>{track.metadata.album}</Text></Text> : null}
-      <AccessSummary track={track} style={quiet} />
-      {(chapters.length > 0 || !privateTrack) && <View style={styles.heading}>
-        {chapters.length > 0 ? <Text accessibilityRole="header" aria-level={2} style={{ ...body, fontWeight: '700' }}>tracklist <Text style={{ ...body, color: theme.faint }}>{chapters.length}</Text></Text> : <View />}
-        {!privateTrack && <View {...protect}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Open track page" onPress={() => navigate(`/track/${track.id}`)} style={styles.link}>
-            {({ hovered }: { pressed: boolean; hovered?: boolean }) => <>
-              <Text style={{ ...quiet, color: hovered ? theme.text : theme.muted }}>track page</Text>
-              <ArrowRight size={14} color={hovered ? theme.text : theme.muted} />
-            </>}
-          </Pressable>
-        </View>}
+      {!privateTrack && <View {...protect}>
+        <Pressable accessibilityRole="link" accessibilityLabel="Open track page" onPress={() => navigate(`/track/${track.id}`)}
+          style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [styles.open, { backgroundColor: pressed || hovered ? theme.hover : theme.raised, borderColor: theme.border }]}>
+          <Text style={{ ...body, fontWeight: '600' }}>open track page</Text>
+          <ArrowRight size={16} color={theme.text} />
+        </Pressable>
       </View>}
+      {prose ? <Text style={body}>{prose}</Text> : null}
+      <AccessSummary track={track} style={quiet} />
+      {chapters.length > 0 && <Text accessibilityRole="header" aria-level={2} style={{ ...body, fontWeight: '700' }}>tracklist <Text style={{ ...body, color: theme.faint }}>{chapters.length}</Text></Text>}
       {chapters.length > 0 && <Chapters chapters={chapters} position={position} seek={seek} protect={protect} />}
     </View>
   </View>;
+}
+
+/** The album under the artist; a plain label when the artist has no album record by that name. */
+export function AlbumLink({ track, wide, navigate }: { track: Track; wide: boolean; navigate: (target: Href) => void }) {
+  const theme = useAppearance();
+  const id = useAlbumId(track);
+  const name = track.metadata.album;
+  const text = (hovered?: boolean) => ({ color: hovered ? theme.text : theme.muted, fontFamily: theme.fontFamily, fontSize: 15 * theme.scale, textDecorationLine: hovered ? 'underline' : 'none' } as const);
+  const content = (hovered?: boolean) => <>
+    <View style={wide ? styles.albumIcon : undefined}><Disc size={16 * theme.scale} color={hovered ? theme.text : theme.muted} /></View>
+    <Text numberOfLines={1} style={text(hovered)}>{name}</Text>
+  </>;
+  if (!id) return <View style={styles.album}>{content()}</View>;
+  return <Pressable accessibilityRole="link" accessibilityLabel={`Album: ${name}`} onPress={() => navigate({ pathname: '/album/[id]', params: { id } })} style={styles.album}>
+    {({ hovered }: { pressed: boolean; hovered?: boolean }) => content(hovered)}
+  </Pressable>;
 }
 
 /** Plays, likes (with who), when it was added and how long it runs, labelled like the columns of a track list. */
@@ -155,8 +168,10 @@ const styles = StyleSheet.create({
   likers: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 24 },
   faces: { flexDirection: 'row' },
   face: { borderWidth: 2, borderRadius: 11 },
-  heading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 32 },
   link: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 44, minWidth: 44 },
+  open: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48, borderRadius: 12, borderWidth: 1 },
+  album: { alignSelf: 'flex-start', maxWidth: '100%', minHeight: 28, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  albumIcon: { width: 22, alignItems: 'center' },
   chapters: { marginTop: -10 },
   chapter: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 36, paddingHorizontal: 8, marginHorizontal: -8, borderRadius: 8 },
   stamp: { textAlign: 'right', fontVariant: ['tabular-nums'] },

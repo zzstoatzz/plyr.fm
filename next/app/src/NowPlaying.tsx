@@ -19,7 +19,7 @@ import { usePlayback } from './playback';
 import { usePlayerDismiss } from './use-player-dismiss';
 import { PullDetector, PullRoot, usePlayerPull } from './player-pull';
 import { PlayerFlight } from './PlayerFlight';
-import { NowPlayingDetails } from './NowPlayingDetails';
+import { AlbumLink, NowPlayingDetails } from './NowPlayingDetails';
 import { currentChapter, parseChapters } from './chapters';
 import { Coachmark } from './Coachmark';
 import { markHintSeen, useHintPending } from './hints';
@@ -224,13 +224,17 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
                 <Animated.View ref={titleRef} style={carried}><Text testID="now-playing-title" accessibilityRole="header" accessibilityLabel={track.metadata.title} numberOfLines={2} style={titleStyle}>
                   {track.metadata.title}
                 </Text></Animated.View>
-                <View {...dismiss.protect} style={{ alignSelf: 'flex-start', maxWidth: '100%' }}><Pressable accessibilityRole="link" accessibilityLabel={sideBySide ? `Artist: ${artistName(track)}` : undefined} style={styles.artist} onPress={() => {
+                <View {...dismiss.protect} style={{ alignSelf: 'flex-start', maxWidth: '100%' }}><Pressable accessibilityRole="link" accessibilityLabel={`Artist: ${artistName(track)}`} style={styles.artist} onPress={() => {
                   navigate(`/u/${encodeURIComponent(track.artist.profile.handle || track.artist.did)}`);
                 }}>
-                  {sideBySide && <Cover uri={track.artist.profile.avatar_url} size={22} round instant />}
-                  <Text numberOfLines={1} style={{ ...caption, fontSize: 15 * theme.scale, color: sideBySide ? theme.text : theme.muted }}>{artistName(track)}</Text>
-                  {sideBySide && !!track.artist.profile.handle && track.artist.profile.handle !== artistName(track) && <Text numberOfLines={1} style={{ ...caption, fontSize: 14 * theme.scale, flexShrink: 1 }}>@{track.artist.profile.handle}</Text>}
+                  {({ hovered }: { pressed: boolean; hovered?: boolean }) => <>
+                    {sideBySide && <Cover uri={track.artist.profile.avatar_url} size={22} round instant />}
+                    <Text numberOfLines={1} style={{ ...caption, fontSize: 15 * theme.scale, color: sideBySide || hovered ? theme.text : theme.muted, textDecorationLine: hovered ? 'underline' : 'none' }}>{artistName(track)}</Text>
+                  </>}
                 </Pressable></View>
+                {!!track.metadata.album && <View {...dismiss.protect} style={{ alignSelf: 'flex-start', maxWidth: '100%' }}>
+                  <AlbumLink track={track} wide={sideBySide} navigate={navigate} />
+                </View>}
               </View>
               <View>
                 {player.live ? <View testID="now-playing-live-progress" accessibilityRole="progressbar" accessibilityLabel="Song progress"
