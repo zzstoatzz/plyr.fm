@@ -11,6 +11,7 @@ const list_change = @import("list_change.zig");
 const track_change = @import("track_change.zig");
 const profile_change = @import("profile_change.zig");
 const like_change = @import("like_change.zig");
+const comment_change = @import("comment_change.zig");
 const record_rejection = @import("record_rejection.zig");
 
 pub const Commit = struct {
@@ -24,6 +25,7 @@ pub const Commit = struct {
     track_changes: []const track_change.Change = &.{},
     profile_changes: []const profile_change.Change = &.{},
     like_changes: []const like_change.Change = &.{},
+    comment_changes: []const comment_change.Change = &.{},
     rejections: []const record_rejection.Rejection = &.{},
 
     pub fn validate(self: Commit) Error!void {
@@ -108,6 +110,26 @@ pub const Commit = struct {
                 identity.record_uri,
                 profileIdentityOf(prior).record_uri,
             )) return error.DuplicateRecord;
+        }
+        for (self.comment_changes, 0..) |change, index| {
+            const identity = commentIdentityOf(change);
+            if (!std.mem.eql(u8, identity.owner_did, self.repo_did) or
+                !std.mem.eql(u8, identity.proof.commit_rev, self.commit_rev) or
+                identity.proof.indexed_at_us != self.indexed_at_us or
+                !sameCommit(identity.proof.commit_cid, self.commit_cid))
+                return error.InvalidCommit;
+            for (self.comment_changes[0..index]) |prior| {
+                if (std.mem.eql(u8, identity.record_uri, commentIdentityOf(prior).record_uri))
+                    return error.DuplicateRecord;
+            }
+            for (self.list_changes) |prior| if (std.mem.eql(u8, identity.record_uri, identityOf(prior).record_uri))
+                return error.DuplicateRecord;
+            for (self.track_changes) |prior| if (std.mem.eql(u8, identity.record_uri, trackIdentityOf(prior).record_uri))
+                return error.DuplicateRecord;
+            for (self.profile_changes) |prior| if (std.mem.eql(u8, identity.record_uri, profileIdentityOf(prior).record_uri))
+                return error.DuplicateRecord;
+            for (self.like_changes) |prior| if (std.mem.eql(u8, identity.record_uri, likeIdentityOf(prior).record_uri))
+                return error.DuplicateRecord;
         }
         for (self.rejections, 0..) |rejection, index| {
             rejection.validate() catch return error.InvalidCommit;
@@ -221,6 +243,21 @@ fn likeIdentityOf(change: like_change.Change) Identity {
     };
 }
 
+fn commentIdentityOf(change: comment_change.Change) Identity {
+    return switch (change) {
+        .upsert => |value| .{
+            .record_uri = value.record_uri,
+            .owner_did = value.owner_did,
+            .proof = value.proof,
+        },
+        .delete => |value| .{
+            .record_uri = value.record_uri,
+            .owner_did = value.owner_did,
+            .proof = value.proof,
+        },
+    };
+}
+
 fn validateDagCborCid(cid: zat.Cid) Error!void {
     const parsed = zat.Cid.fromBytes(cid.raw) catch return error.InvalidCommit;
     if (parsed.codec() != zat.cbor.Codec.dag_cbor) return error.InvalidCommit;
@@ -240,6 +277,10 @@ fn hasMatchingDelete(commit: Commit, uri: []const u8) bool {
         .delete => |value| if (std.mem.eql(u8, value.record_uri, uri)) return true,
     };
     for (commit.like_changes) |change| switch (change) {
+        .upsert => {},
+        .delete => |value| if (std.mem.eql(u8, value.record_uri, uri)) return true,
+    };
+    for (commit.comment_changes) |change| switch (change) {
         .upsert => {},
         .delete => |value| if (std.mem.eql(u8, value.record_uri, uri)) return true,
     };

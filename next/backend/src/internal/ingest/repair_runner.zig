@@ -22,7 +22,7 @@ pub const Runner = struct {
     commits: commit_store.PostgresVerifiedCommitStore,
     snapshots: snapshot_store.PostgresVerifiedSnapshotStore,
     projector: projector_module.Projector,
-    collection_list: [4][]const u8,
+    collection_list: [5][]const u8,
 
     pub fn init(
         self: *Runner,
@@ -33,6 +33,7 @@ pub const Runner = struct {
         track_collection: []const u8,
         profile_collection: []const u8,
         like_collection: []const u8,
+        comment_collection: []const u8,
     ) void {
         self.io = io;
         self.identity = zat.DidResolver.init(io, allocator);
@@ -49,7 +50,7 @@ pub const Runner = struct {
             1024,
             self.key_upstream.port(),
         );
-        self.collection_list = .{ list_collection, track_collection, profile_collection, like_collection };
+        self.collection_list = .{ list_collection, track_collection, profile_collection, like_collection, comment_collection };
         self.repositories = .{
             .io = io,
             .identity_resolver = &self.identity,
@@ -68,6 +69,7 @@ pub const Runner = struct {
             .track_collection = track_collection,
             .profile_collection = profile_collection,
             .like_collection = like_collection,
+            .comment_collection = comment_collection,
         };
     }
 
@@ -99,6 +101,7 @@ pub fn run(
     track_collection: []const u8,
     profile_collection: []const u8,
     like_collection: []const u8,
+    comment_collection: []const u8,
 ) !projector_module.RepairOutcome {
     var runner: Runner = undefined;
     runner.init(
@@ -109,6 +112,7 @@ pub fn run(
         track_collection,
         profile_collection,
         like_collection,
+        comment_collection,
     );
     defer runner.deinit();
     return runner.repair(allocator, did);

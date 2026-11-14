@@ -102,8 +102,8 @@ test "collection repository fetches hash-linked ranges without a record listing"
     defer arena.deinit();
     const a = arena.allocator();
     var source = try Fixture.init(a);
-    const result = try fetch(a, source.car.roots[0], &.{ "fm.plyr.dev.track", "fm.plyr.dev.list", "fm.plyr.dev.actor.profile", "fm.plyr.dev.like" }, source.port());
-    const snapshot = try record_verifier.verifyProofs(a, &.{result.bytes}, source.fixture.did, source.fixture.public_key, "fm.plyr.dev.list", "fm.plyr.dev.track", "fm.plyr.dev.actor.profile", "fm.plyr.dev.like", 42);
+    const result = try fetch(a, source.car.roots[0], &.{ "fm.plyr.dev.track", "fm.plyr.dev.list", "fm.plyr.dev.actor.profile", "fm.plyr.dev.like", "fm.plyr.dev.comment" }, source.port());
+    const snapshot = try record_verifier.verifyProofs(a, &.{result.bytes}, source.fixture.did, source.fixture.public_key, "fm.plyr.dev.list", "fm.plyr.dev.track", "fm.plyr.dev.actor.profile", "fm.plyr.dev.like", "fm.plyr.dev.comment", 42);
     try std.testing.expectEqual(@as(usize, 1), snapshot.track_changes.len);
     try std.testing.expectEqual(@as(usize, 1), snapshot.list_changes.len);
     try std.testing.expect(source.calls > 1 and source.calls < 10);
@@ -137,8 +137,8 @@ test "empty collections are established from the tree rather than an empty listi
     defer arena.deinit();
     const a = arena.allocator();
     var source = try Fixture.init(a);
-    const result = try fetch(a, source.car.roots[0], &.{ "fm.other.track", "fm.other.list", "fm.other.actor.profile", "fm.other.like" }, source.port());
-    const snapshot = try record_verifier.verifyProofs(a, &.{result.bytes}, source.fixture.did, source.fixture.public_key, "fm.other.list", "fm.other.track", "fm.other.actor.profile", "fm.other.like", 42);
+    const result = try fetch(a, source.car.roots[0], &.{ "fm.other.track", "fm.other.list", "fm.other.actor.profile", "fm.other.like", "fm.other.comment" }, source.port());
+    const snapshot = try record_verifier.verifyProofs(a, &.{result.bytes}, source.fixture.did, source.fixture.public_key, "fm.other.list", "fm.other.track", "fm.other.actor.profile", "fm.other.like", "fm.other.comment", 42);
     try std.testing.expectEqual(@as(usize, 0), snapshot.track_changes.len);
     try std.testing.expectEqual(@as(usize, 0), snapshot.list_changes.len);
 }

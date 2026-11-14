@@ -26,6 +26,7 @@ pub const Projector = struct {
     track_collection: []const u8,
     profile_collection: []const u8,
     like_collection: []const u8,
+    comment_collection: []const u8,
 
     const verifyFetched = verifyFetchedImpl;
 
@@ -102,6 +103,7 @@ fn verifyFetchedImpl(
         self.track_collection,
         self.profile_collection,
         self.like_collection,
+        self.comment_collection,
         indexed_at_us,
     );
     return snapshot_verifier.verify(
@@ -113,6 +115,7 @@ fn verifyFetchedImpl(
         self.track_collection,
         self.profile_collection,
         self.like_collection,
+        self.comment_collection,
         indexed_at_us,
     );
 }
@@ -216,6 +219,7 @@ test "repair releases an invalid fetched repository without projecting it" {
         .track_collection = "fm.plyr.dev.track",
         .profile_collection = "fm.plyr.dev.actor.profile",
         .like_collection = "fm.plyr.dev.like",
+        .comment_collection = "fm.plyr.dev.comment",
     };
     try std.testing.expectEqual(
         RepairOutcome.invalid_repository,
@@ -330,6 +334,7 @@ test "repair refreshes a rotated signing key before one atomic snapshot apply" {
         .track_collection = "fm.plyr.dev.track",
         .profile_collection = "fm.plyr.dev.actor.profile",
         .like_collection = "fm.plyr.dev.like",
+        .comment_collection = "fm.plyr.dev.comment",
     };
     try std.testing.expectEqual(
         RepairOutcome.applied,

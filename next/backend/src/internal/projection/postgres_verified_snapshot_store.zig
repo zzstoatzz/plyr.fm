@@ -13,6 +13,7 @@ const postgres_list = @import("postgres_list_store.zig");
 const postgres_track = @import("postgres_track_store.zig");
 const postgres_profile = @import("postgres_profile_store.zig");
 const postgres_like = @import("postgres_like_store.zig");
+const postgres_comment = @import("postgres_comment_store.zig");
 const postgres_rejections = @import("postgres_record_rejection_store.zig");
 const track_change = @import("track_change.zig");
 const record_rejection = @import("record_rejection.zig");
@@ -23,7 +24,7 @@ const verified = @import("verified_snapshot.zig");
 /// that used to reject valid records). A complete snapshot at the same
 /// revision as a head with an older version is then rebuilt instead of being
 /// treated as idempotent, so reconciliation repairs stale projections.
-pub const projection_version: i32 = 4;
+pub const projection_version: i32 = 5;
 
 const HeadDecision = union(enum) {
     done: verified.ApplyResult,
@@ -94,6 +95,15 @@ pub const PostgresVerifiedSnapshotStore = struct {
                 .delete => return error.InvalidSnapshot,
             };
         }
+        const comment_uris = allocator.alloc([]const u8, snapshot.comment_changes.len) catch
+            return error.OutOfMemory;
+        defer allocator.free(comment_uris);
+        for (snapshot.comment_changes, comment_uris) |change, *uri| {
+            uri.* = switch (change) {
+                .upsert => |value| value.record_uri,
+                .delete => return error.InvalidSnapshot,
+            };
+        }
 
         var conn = self.pool.acquire() catch |err| {
             std.log.err("verified snapshot connection acquisition failed: {}", .{err});
@@ -135,6 +145,7 @@ pub const PostgresVerifiedSnapshotStore = struct {
             snapshot.like_collection,
             snapshot.commit_rev,
             commit_cid,
+            snapshot.comment_collection,
         }) catch |err| {
             logPgError(conn, "verified snapshot proof guard failed", err);
             return error.ProjectionUnavailable;
@@ -192,12 +203,22 @@ pub const PostgresVerifiedSnapshotStore = struct {
             };
             if (result != .applied and result != .idempotent) return error.CorruptProjection;
         }
+        var comments: postgres_comment.PostgresCommentStore = .{ .pool = self.pool };
+        for (snapshot.comment_changes) |change| {
+            const result = comments.applyInTransaction(conn, allocator, change) catch |err| switch (err) {
+                error.RevisionConflict => return error.RevisionConflict,
+                error.CorruptProjection => return error.CorruptProjection,
+                error.ProjectionUnavailable => return error.ProjectionUnavailable,
+                error.OutOfMemory => return error.OutOfMemory,
+            };
+            if (result != .applied and result != .idempotent) return error.CorruptProjection;
+        }
         var rejection_store: postgres_rejections.PostgresRecordRejectionStore = .{ .pool = self.pool };
         rejection_store.replaceForSnapshot(
             conn,
             allocator,
             snapshot.repo_did,
-            &.{ snapshot.list_collection, snapshot.track_collection, snapshot.profile_collection, snapshot.like_collection },
+            &.{ snapshot.list_collection, snapshot.track_collection, snapshot.profile_collection, snapshot.like_collection, snapshot.comment_collection },
             snapshot.rejections,
         ) catch |err| return mapRejectionError(err);
         var accounts: postgres_availability.PostgresAvailabilityStore = .{ .pool = self.pool };
@@ -266,6 +287,17 @@ pub const PostgresVerifiedSnapshotStore = struct {
             logPgError(conn, "verified snapshot like absence reconciliation failed", err);
             return error.ProjectionUnavailable;
         };
+        _ = conn.exec(tombstone_absent_comments_sql, .{
+            snapshot.repo_did,
+            snapshot.comment_collection,
+            comment_uris,
+            commit_cid,
+            snapshot.commit_rev,
+            snapshot.indexed_at_us,
+        }) catch |err| {
+            logPgError(conn, "verified snapshot comment absence reconciliation failed", err);
+            return error.ProjectionUnavailable;
+        };
         const advanced = conn.exec(install_head_sql, .{
             snapshot.repo_did,
             snapshot.commit_rev,
@@ -329,6 +361,7 @@ fn clearRepository(conn: *pg.Conn, snapshot: verified.Snapshot) verified.Error!v
         snapshot.track_collection,
         snapshot.profile_collection,
         snapshot.like_collection,
+        snapshot.comment_collection,
     };
     for (clear_repository_sql) |sql| {
         _ = conn.exec(sql, .{ snapshot.repo_did, @as([]const []const u8, &collections) }) catch |err| {
@@ -343,6 +376,7 @@ const clear_repository_sql = [_][]const u8{
     "DELETE FROM plyr_index.track_records WHERE owner_did = $1 AND collection = ANY($2::text[])",
     "DELETE FROM plyr_index.profile_records WHERE owner_did = $1 AND collection = ANY($2::text[])",
     "DELETE FROM plyr_index.like_records WHERE owner_did = $1 AND collection = ANY($2::text[])",
+    "DELETE FROM plyr_index.comment_records WHERE owner_did = $1 AND collection = ANY($2::text[])",
     "DELETE FROM plyr_index.record_rejections WHERE owner_did = $1 AND collection = ANY($2::text[])",
 };
 
@@ -420,6 +454,9 @@ const snapshot_guard_sql =
     \\  UNION ALL
     \\  SELECT commit_rev, commit_cid FROM plyr_index.like_records
     \\  WHERE owner_did = $1 AND collection = $5 AND commit_rev >= $6
+    \\  UNION ALL
+    \\  SELECT commit_rev, commit_cid FROM plyr_index.comment_records
+    \\  WHERE owner_did = $1 AND collection = $8 AND commit_rev >= $6
     \\)
     \\SELECT EXISTS (SELECT 1 FROM projected_proofs WHERE commit_rev > $6),
     \\  EXISTS (SELECT 1 FROM projected_proofs
@@ -510,6 +547,24 @@ const tombstone_absent_likes_sql =
     \\  AND commit_rev <= $5
 ;
 
+const tombstone_absent_comments_sql =
+    \\UPDATE plyr_index.comment_records SET
+    \\  record_cid = NULL,
+    \\  subject_uri = NULL,
+    \\  subject_cid = NULL,
+    \\  text = NULL,
+    \\  timestamp_ms = NULL,
+    \\  record_created_at = NULL,
+    \\  record_updated_at = NULL,
+    \\  deleted = TRUE,
+    \\  commit_cid = $4,
+    \\  commit_rev = $5,
+    \\  indexed_at_us = $6
+    \\WHERE owner_did = $1 AND collection = $2
+    \\  AND NOT (record_uri = ANY($3::text[]))
+    \\  AND commit_rev <= $5
+;
+
 const install_head_sql =
     \\INSERT INTO plyr_index.repo_heads (
     \\  repo_did, commit_rev, commit_cid, data_cid, indexed_at_us, projection_version
@@ -542,6 +597,7 @@ test "PostgreSQL complete snapshot bootstraps and reconciles atomically" {
     try postgres_track.createTestTable(pool);
     try postgres_profile.createTestTable(pool);
     try postgres_like.createTestTable(pool);
+    try postgres_comment.createTestTable(pool);
     try postgres_availability.createTestTable(pool);
     try postgres_rejections.createTestTable(pool);
     _ = try pool.exec(
@@ -591,6 +647,7 @@ test "PostgreSQL complete snapshot bootstraps and reconciles atomically" {
         1_000,
     )};
     initial.like_changes = &.{likeUpsert(&rev_1.str(), commit_1, 1_000)};
+    initial.comment_changes = &.{commentUpsert(&rev_1.str(), commit_1, 1_000)};
     var implementation: PostgresVerifiedSnapshotStore = .{ .pool = pool };
     const store = implementation.store();
     try std.testing.expectEqual(verified.ApplyResult.applied, try store.apply(a, initial));
@@ -618,6 +675,7 @@ test "PostgreSQL complete snapshot bootstraps and reconciles atomically" {
 
     try expectProfileState(pool, "first bio", &rev_1.str(), false);
     try expectLikeState(pool, &rev_1.str(), false);
+    try expectCommentState(pool, &rev_1.str(), false);
     try expectAvailability(pool, &rev_1.str(), 1_000);
 
     const one_2 = listUpsert("one", record_cid, &rev_2.str(), commit_2, 2_000);
@@ -657,6 +715,7 @@ test "PostgreSQL complete snapshot bootstraps and reconciles atomically" {
     try expectTrackState(pool, "track-two", &rev_2.str(), true);
     try expectProfileState(pool, null, &rev_2.str(), true);
     try expectLikeState(pool, &rev_2.str(), true);
+    try expectCommentState(pool, &rev_2.str(), true);
     try expectAvailability(pool, &rev_2.str(), 2_000);
     try expectRejection(pool, rejected.record_uri, "InvalidStrongRefCid");
 
@@ -704,6 +763,7 @@ fn makeSnapshot(
         .track_collection = "fm.plyr.dev.track",
         .profile_collection = "fm.plyr.dev.actor.profile",
         .like_collection = "fm.plyr.dev.like",
+        .comment_collection = "fm.plyr.dev.comment",
         .indexed_at_us = indexed_at_us,
         .list_changes = changes,
     };
@@ -823,6 +883,42 @@ fn expectState(pool: *pg.Pool, head_rev: []const u8, rkey: []const u8, deleted: 
     try std.testing.expectEqual(deleted, try row.get(bool, 1));
 }
 
+fn commentUpsert(
+    rev: []const u8,
+    commit_cid: zat.Cid,
+    indexed_at_us: i64,
+) @import("comment_change.zig").Change {
+    return .{ .upsert = .{
+        .record_uri = "at://did:plc:artist/fm.plyr.dev.comment/comment-one",
+        .record_cid = "bafyreiaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        .owner_did = "did:plc:artist",
+        .collection = "fm.plyr.dev.comment",
+        .rkey = "comment-one",
+        .subject_uri = "at://did:plc:artist/fm.plyr.dev.track/track-one",
+        .subject_cid = "bafyreihdcss27ihlhmjofustbdvksrwyxnjj3hhk7azqs2626paka66c2a",
+        .text = "the sax here",
+        .timestamp_ms = 250_000,
+        .created_at = "2026-08-08T12:00:00Z",
+        .updated_at = null,
+        .proof = .{
+            .commit_cid = commit_cid,
+            .commit_rev = rev,
+            .indexed_at_us = indexed_at_us,
+        },
+    } };
+}
+
+fn expectCommentState(pool: *pg.Pool, rev: []const u8, deleted: bool) !void {
+    var row = (try pool.row(
+        "SELECT commit_rev, deleted, text IS NULL FROM plyr_index.comment_records WHERE rkey = 'comment-one'",
+        .{},
+    )).?;
+    defer row.deinit() catch {};
+    try std.testing.expectEqualStrings(rev, try row.get([]const u8, 0));
+    try std.testing.expectEqual(deleted, try row.get(bool, 1));
+    try std.testing.expectEqual(deleted, try row.get(bool, 2));
+}
+
 fn expectLikeState(pool: *pg.Pool, rev: []const u8, deleted: bool) !void {
     var row = (try pool.row(
         "SELECT commit_rev, deleted FROM plyr_index.like_records WHERE rkey = 'like-one'",
@@ -925,6 +1021,7 @@ test "decoder upgrades rebuild newer snapshots even when streamed records overla
     try postgres_track.createTestTable(pool);
     try postgres_profile.createTestTable(pool);
     try postgres_like.createTestTable(pool);
+    try postgres_comment.createTestTable(pool);
     try postgres_availability.createTestTable(pool);
     try postgres_rejections.createTestTable(pool);
     _ = try pool.exec(
@@ -1026,6 +1123,7 @@ test "current decoder snapshots accept proof-identical streamed records in every
     try postgres_track.createTestTable(pool);
     try postgres_profile.createTestTable(pool);
     try postgres_like.createTestTable(pool);
+    try postgres_comment.createTestTable(pool);
     try postgres_availability.createTestTable(pool);
     try postgres_rejections.createTestTable(pool);
     _ = try pool.exec(

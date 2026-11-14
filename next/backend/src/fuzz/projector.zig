@@ -26,6 +26,7 @@ const postgres_list = @import("../internal/projection/postgres_list_store.zig");
 const postgres_track = @import("../internal/projection/postgres_track_store.zig");
 const postgres_profile = @import("../internal/projection/postgres_profile_store.zig");
 const postgres_like = @import("../internal/projection/postgres_like_store.zig");
+const postgres_comment = @import("../internal/projection/postgres_comment_store.zig");
 const postgres_rejections = @import("../internal/projection/postgres_record_rejection_store.zig");
 const postgres_availability = @import("../internal/account/postgres_availability_store.zig");
 
@@ -87,6 +88,7 @@ fn reset(pool: *pg.Pool) !void {
     try postgres_track.createTestTable(pool);
     try postgres_profile.createTestTable(pool);
     try postgres_like.createTestTable(pool);
+    try postgres_comment.createTestTable(pool);
     try postgres_availability.createTestTable(pool);
     try postgres_rejections.createTestTable(pool);
     _ = try pool.exec(
@@ -254,6 +256,7 @@ fn snapshotOf(a: std.mem.Allocator, state: State, seq: u64) !verified_snapshot.S
         .track_collection = track_nsid,
         .profile_collection = profile_nsid,
         .like_collection = like_nsid,
+        .comment_collection = "fm.plyr.dev.comment",
         .indexed_at_us = at.indexed_at_us,
         .list_changes = lists.items,
         .track_changes = tracks.items,

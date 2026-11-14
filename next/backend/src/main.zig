@@ -6,6 +6,7 @@ const postgres = @import("internal/index/postgres_track_store.zig");
 const postgres_composed_tracks = @import("internal/index/postgres_composed_track_store.zig");
 const postgres_track_charts = @import("internal/index/postgres_track_chart_store.zig");
 const postgres_likes = @import("internal/index/postgres_like_query_store.zig");
+const postgres_comments = @import("internal/index/postgres_comment_query_store.zig");
 const postgres_notifications = @import("internal/notification/postgres_store.zig");
 const notification_service_config = @import("internal/notification/service.zig");
 const postgres_playback = @import("internal/index/postgres_playback_store.zig");
@@ -75,6 +76,11 @@ pub fn main() !void {
         null;
     const like_store = if (postgres_like_store) |*store| store.store() else null;
     const viewer_like_store = if (postgres_like_store) |*store| store.viewerStore() else null;
+    var postgres_comment_store: ?postgres_comments.PostgresCommentQueryStore = if (postgres_store) |*store|
+        .{ .pool = store.pool }
+    else
+        null;
+    const comment_store = if (postgres_comment_store) |*store| store.store() else null;
     var postgres_playback_store: ?postgres_playback.PostgresPlaybackStore = if (postgres_store) |*store|
         .{ .pool = store.pool }
     else
@@ -153,6 +159,7 @@ pub fn main() !void {
                 .track_store = track_store,
                 .track_chart_store = track_chart_store,
                 .like_store = like_store,
+                .comment_store = comment_store,
                 .viewer_like_store = viewer_like_store,
                 .liked_track_store = liked_track_store,
                 .playback_store = playback_store,
@@ -168,6 +175,7 @@ pub fn main() !void {
                 .list_collection = settings.list_collection,
                 .profile_collection = settings.profile_collection,
                 .like_collection = settings.like_collection,
+                .comment_collection = settings.comment_collection,
                 .cors = .{ .allowed_origins = settings.cors_allowed_origins },
                 .managed_space = settings.managed_space,
                 .notifications = notification_service,
@@ -199,6 +207,7 @@ pub fn main() !void {
                 settings.track_collection,
                 settings.profile_collection,
                 settings.like_collection,
+                settings.comment_collection,
                 settings.discovery_relay,
             );
             std.log.info(
@@ -219,6 +228,7 @@ pub fn main() !void {
                 settings.track_collection,
                 settings.profile_collection,
                 settings.like_collection,
+                settings.comment_collection,
             );
             std.log.info("verified repository repair for {s}: {s}", .{ did, @tagName(outcome) });
             if (!repair_runner.succeeded(outcome)) return error.RepairNotApplied;
@@ -233,6 +243,7 @@ pub fn main() !void {
                 .track = settings.track_collection,
                 .profile = settings.profile_collection,
                 .like = settings.like_collection,
+                .comment = settings.comment_collection,
             });
         },
     }
@@ -305,6 +316,7 @@ test {
     _ = @import("internal/atproto/lexicon_value.zig");
     _ = @import("internal/atproto/profile_record.zig");
     _ = @import("internal/atproto/like_record.zig");
+    _ = @import("internal/atproto/comment_record.zig");
     _ = @import("internal/atproto/track_record.zig");
     _ = @import("internal/index/artist_store.zig");
     _ = @import("internal/index/postgres_artist_store.zig");
@@ -366,6 +378,7 @@ test {
     _ = @import("internal/projection/list_change.zig");
     _ = @import("internal/projection/profile_change.zig");
     _ = @import("internal/projection/like_change.zig");
+    _ = @import("internal/projection/comment_change.zig");
     _ = @import("internal/projection/like_counts.zig");
     _ = @import("internal/projection/track_change.zig");
     _ = @import("internal/projection/snapshot_verifier.zig");
@@ -378,6 +391,10 @@ test {
     _ = @import("internal/projection/postgres_profile_store.zig");
     _ = @import("internal/projection/like_store.zig");
     _ = @import("internal/projection/postgres_like_store.zig");
+    _ = @import("internal/projection/comment_store.zig");
+    _ = @import("internal/projection/postgres_comment_store.zig");
+    _ = @import("internal/index/postgres_comment_query_store.zig");
+    _ = @import("internal/application/list_track_comments.zig");
     _ = @import("internal/projection/postgres_record_rejection_store.zig");
     _ = @import("internal/projection/postgres_verified_commit_store.zig");
     _ = @import("internal/projection/postgres_verified_snapshot_store.zig");
