@@ -1,0 +1,36 @@
+{
+  "name": "space-stream",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "tsc --noEmit && oxlint src test live vitest.config.ts && vitest run",
+    "test": "vitest run",
+    "lint": "oxlint src test live vitest.config.ts",
+    "deploy": "wrangler deploy",
+    "try": "bun run live/try.ts",
+    "soak": "bun run live/soak.ts"
+  },
+  "dependencies": {
+    "@atproto/crypto": "0.0.0-spaces-alpha-20261112204144",
+    "@atproto/space": "0.0.0-spaces-alpha-20261112204144",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.22.0",
+    "@cloudflare/workers-types": "^4",
+    "@oxlint/plugins": "1.93.0",
+    "@vitest/runner": "4.1.11",
+    "@vitest/snapshot": "4.1.11",
+    "oxlint": "1.93.0",
+    "typescript": "^6",
+    "vitest": "^4.1",
+    "wrangler": "^4"
+  },
+  "overrides": {
+    "@atproto/lex-cbor": "0.0.0-spaces-alpha-20261112204144",
+    "@atproto/lex-data": "0.0.0-spaces-alpha-20261112204144",
+    "@atproto/lex-json": "0.0.0-spaces-alpha-20261112204144",
+    "@atproto/lex-schema": "0.0.0-spaces-alpha-20261112204144",
+    "@atproto/star": "0.0.0-spaces-alpha-20261112204144"
+  }
+}

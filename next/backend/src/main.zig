@@ -24,6 +24,7 @@ const account_reconciler = @import("internal/account/reconciler.zig");
 const blob_mirror = @import("internal/delivery/blob_mirror.zig");
 const label_sync = @import("internal/moderation/label_sync.zig");
 const actor_identity_refresher = @import("internal/identity/actor_identity_refresher.zig");
+const space_consumer = @import("internal/space/consumer.zig");
 
 var threaded_io: std.Io.Threaded = undefined;
 pub const std_options_debug_threaded_io: ?*std.Io.Threaded = &threaded_io;
@@ -173,6 +174,17 @@ pub fn main() !void {
                 .notification_store = notification_store,
             });
         },
+        .space_consumer => {
+            const store = if (postgres_store) |*value| value else return error.SpaceConsumerDatabaseRequired;
+            const consumer = settings.space_consumer.?;
+            try space_consumer.run(io, allocator, store.pool, .{
+                .stream_host = consumer.stream_host,
+                .sync_pds = consumer.sync_pds,
+                .sync_identifier = consumer.sync_identifier,
+                .sync_password = consumer.sync_password,
+                .space_type = settings.managed_space.?.space_type,
+            });
+        },
         .mirror => {
             const store = if (postgres_store) |*value| value else return error.MirrorDatabaseRequired;
             try blob_mirror.run(io, allocator, store.pool);
@@ -255,6 +267,8 @@ test {
     _ = @import("internal/space/access.zig");
     _ = @import("internal/space/policy.zig");
     _ = @import("internal/space/sync.zig");
+    _ = @import("internal/space/postgres_sync_store.zig");
+    _ = @import("internal/space/consumer.zig");
     _ = @import("internal/ingest/relay_repository_candidates.zig");
     _ = @import("api/artists.zig");
     _ = @import("api/charts.zig");

@@ -121,6 +121,7 @@ pub fn checkUserAccess(
         .policy_collection = config.policy_collection,
         .policies = network.policies(),
         .evidence = network.evidence(),
+        .sync_reader = config.sync_reader,
     };
     // anything short of a definite yes is no: the PDS treats it the same
     const authorized = core.decider().decide(allocator, .{

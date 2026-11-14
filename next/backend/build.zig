@@ -54,6 +54,9 @@ pub fn build(b: *std.Build) void {
     root_module.addAnonymousImport("migration_0039_notification_seen", .{
         .root_source_file = b.path("migrations/0039_add_notification_seen.sql"),
     });
+    root_module.addAnonymousImport("migration_0040_space_copies", .{
+        .root_source_file = b.path("migrations/0040_add_space_copies.sql"),
+    });
     const zat_module = b.dependency("zat", .{
         .target = target,
         .optimize = optimize,
@@ -137,6 +140,7 @@ pub fn build(b: *std.Build) void {
                     .{ .name = "hegel", .module = hegel.module("hegel") },
                     .{ .name = "zat", .module = root_module.import_table.get("zat").? },
                     .{ .name = "pg", .module = root_module.import_table.get("pg").? },
+                    .{ .name = "redis", .module = root_module.import_table.get("redis").? },
                 },
             });
             // the stores' test schemas embed migrations, so the harnesses

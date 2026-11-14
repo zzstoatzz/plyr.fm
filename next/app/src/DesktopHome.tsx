@@ -1,5 +1,5 @@
 import { Link } from 'expo-router';
-import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useRef, useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, View, useWindowDimensions, type ScrollViewInstance } from 'react-native';
 import type { Track } from './api';
 import { useAppearance } from './appearance';
@@ -7,8 +7,8 @@ import { AtlasView } from './atlas/AtlasView';
 import { trackArtwork } from './artwork';
 import { useAuth } from './auth';
 import { Cover, Status, type Play } from './CatalogPieces';
-import { DesktopTrackHeader, DesktopTrackRow } from './DesktopTrackRow';
-import { compactCount, dayGroup, periodLabels } from './home-state';
+import { DesktopTrackRow } from './DesktopTrackRow';
+import { compactCount, periodLabels } from './home-state';
 import { HomeFeatured, useFeaturedArtist } from './HomeFeatured';
 import { HomeTagBar } from './HomeTagBar';
 import { ArrowRight } from './icons';
@@ -125,15 +125,6 @@ export function DesktopHome({ onPlay, hiddenTags }: { onPlay: Play; hiddenTags: 
   }, [latest.cursor, latest.loading, latest.error, latest.more]);
   // the rail keeps pace with latest, a row of top tracks for each row loaded there, up to the chart's 50
   const shown = Math.max(RAIL_STEP, tracks.length - RAIL_STEP);
-  const groups = useMemo(() => {
-    const out: { label: string; tracks: typeof tracks }[] = [];
-    for (const track of tracks) {
-      const label = dayGroup(track.metadata.created_at, now);
-      if (out.at(-1)?.label === label) out.at(-1)!.tracks.push(track);
-      else out.push({ label, tracks: [track] });
-    }
-    return out;
-  }, [tracks, now]);
   return <ScrollView ref={scroller} testID="home-feed" style={{ flex: 1, backgroundColor: theme.background }} contentContainerStyle={styles.page}
     accessibilityState={{ busy: latest.loading }} scrollEventThrottle={32}
     onLayout={event => { viewport.current.height = event.nativeEvent.layout.height; fill(); }}
@@ -149,12 +140,8 @@ export function DesktopHome({ onPlay, hiddenTags }: { onPlay: Play; hiddenTags: 
           <Text style={{ color: theme.faint, fontSize: 13 * theme.scale }}>newest first</Text>
         </Pressable>}>
           <HomeTagBar feed={feed} hiddenTags={hiddenTags} />
-          {tracks.length > 0 && <DesktopTrackHeader />}
           <View style={{ opacity: pending ? 0.5 : 1 }}>
-            {groups.map(group => <View key={group.label + group.tracks[0].id}>
-              <Text accessibilityRole="header" aria-level={3} style={[styles.day, { color: theme.faint, fontSize: 12 * theme.scale }]}>{group.label}</Text>
-              {group.tracks.map(track => <DesktopTrackRow key={track.id} track={track} tracks={tracks} onPlay={onPlay} now={now} />)}
-            </View>)}
+            {tracks.map(track => <DesktopTrackRow key={track.id} track={track} tracks={tracks} onPlay={onPlay} now={now} />)}
           </View>
           <View testID="home-feed-footer" style={styles.footer}>
             {latest.loading ? <WaveLoading label={tracks.length ? 'loading more...' : 'loading tracks...'} /> :
@@ -190,7 +177,6 @@ const styles = StyleSheet.create({
   people: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 16 },
   more: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
   person: { width: '25%', alignItems: 'center', gap: 6, paddingHorizontal: 4, minHeight: 44 },
-  day: { fontWeight: '700', letterSpacing: 0.3, paddingTop: 18, paddingBottom: 6 },
   footer: { minHeight: 96, justifyContent: 'center' },
   live: { position: 'absolute', width: 1, height: 1, overflow: 'hidden', color: 'transparent' },
 });

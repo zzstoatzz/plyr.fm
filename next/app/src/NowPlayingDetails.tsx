@@ -10,7 +10,7 @@ import { Text } from './Text';
 import { AccessSummary } from './access/AccessSummary';
 import { clock, currentChapter, parseChapters, type Chapter } from './chapters';
 import { compactCount } from './home-state';
-import { firstLikers } from './RowActions';
+import { firstLikers } from './Likers';
 import { Sheet, type Anchor } from './Sheet';
 import { People } from './TrackLikes';
 
@@ -96,7 +96,7 @@ function Likers({ track, count, style, protect }: { track: Track; count: number;
     setFaces([]);
     if (!count) return;
     let live = true;
-    firstLikers(track.id).then(people => { if (live) setFaces(people.slice(0, 3)); }, () => {});
+    firstLikers(track.id, count).then(people => { if (live) setFaces(people.slice(0, 3)); }, () => {});
     return () => { live = false; };
   }, [track.id, count]);
   if (!count) return <Text style={style}>0</Text>;

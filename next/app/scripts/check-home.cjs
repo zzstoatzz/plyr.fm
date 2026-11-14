@@ -51,6 +51,23 @@ async function main() {
       const initial = await (await initialResponse).json();
       await page.getByRole('button', { name: 'Refresh tracks', exact: true }).waitFor();
       await page.getByRole('button', { name: /Top tracks period:/ }).waitFor();
+      const likers = page.getByTestId('home-feed').getByRole('button', { name: /^Who liked / }).first();
+      if (width >= 1024 && await likers.count()) {
+        // The likers card stays open with the pointer parked on it, and the first click doesn't close what hover opened.
+        await likers.scrollIntoViewIfNeeded();
+        const box = await likers.boundingBox();
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+        await page.waitForFunction(() => document.querySelector('[aria-label^="Who liked "][aria-expanded="true"]'));
+        for (let step = 1; step <= 10; step++) await page.mouse.move(box.x + box.width / 2, box.y - 2 * step);
+        await page.waitForTimeout(600);
+        assert.equal(await likers.getAttribute('aria-expanded'), 'true', 'likers card stays open under the pointer');
+        await likers.click();
+        await page.waitForTimeout(300);
+        assert.equal(await likers.getAttribute('aria-expanded'), 'true', 'clicking an open likers card keeps it open');
+        await page.keyboard.press('Escape');
+        await page.waitForFunction(() => !document.querySelector('[aria-label^="Who liked "][aria-expanded="true"]'));
+        await page.mouse.move(1, 1);
+      }
       if (process.env.HOME_FAIL_TAG_ONCE === '1') {
         await page.getByRole('button', { name: 'Retry', exact: true }).waitFor();
         await page.getByTestId('home-feed').getByRole('link').first().waitFor();
