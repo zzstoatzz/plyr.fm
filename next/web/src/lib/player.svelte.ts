@@ -8,6 +8,8 @@ import { trackArtwork } from '$core/artwork';
 import { api } from './api';
 import { auth } from './auth';
 import { authConfig } from './auth-config';
+import { playbackSource } from './media/playback-source';
+import type { AudioSource } from './media/gated-audio';
 import { consumeQueueLogin, registerQueueLogin } from './storage/queue-login';
 import { playOutboxStorage } from './storage/play-outbox-storage';
 import { queueStorage } from './storage/queue-storage';
@@ -30,6 +32,7 @@ class Player {
 	queueOpen = $state(false);
 	#audio: HTMLAudioElement | undefined;
 	#audioSource: AbortController | undefined;
+	#releaseMedia: (() => void) | undefined;
 	#mediaTrack: Track | undefined;
 	#listening = new ListeningSession();
 	#token = 0;
@@ -88,13 +91,8 @@ class Player {
 			const account = auth.getAuth();
 			if (!account.ready || previous && account.did === previous.did && account.agent === previous.agent && account.accountSync === previous.accountSync) return;
 			this.#stop?.();
-			if (previous?.did && previous.did !== account.did) {
-				this.#audioSource?.abort();
-				if (this.#audio) {
-					this.#audio.pause();
-					this.#audio.removeAttribute('src');
-					this.#audio.load();
-				}
+			if (previous?.did && previous.agent !== account.agent) {
+				this.#detachMedia();
 				this.#mediaTrack = undefined;
 				this.#listening.stop();
 				this.queue = [];
@@ -128,8 +126,7 @@ class Player {
 			unregisterLogin();
 			this.#stop?.();
 			this.#outbox?.dispose();
-			this.#audioSource?.abort();
-			this.#audio?.pause();
+			this.#detachMedia();
 			clearMediaSession?.();
 			window.removeEventListener('pagehide', progress);
 			window.removeEventListener('online', retry);
@@ -239,32 +236,47 @@ class Player {
 		this.#playMedia();
 	}
 
+	#detachMedia() {
+		this.#audioSource?.abort();
+		if (this.#audio?.hasAttribute('src')) {
+			this.#audio.pause();
+			this.#audio.removeAttribute('src');
+			this.#audio.load();
+		}
+		this.#releaseMedia?.();
+		this.#releaseMedia = undefined;
+	}
+
 	async #load(tracks: Track[], index: number) {
 		const track = tracks[index];
 		if (!track) return false;
 		const audio = this.#audioElement();
-		this.#audioSource?.abort();
+		this.#detachMedia();
 		const source = new AbortController();
 		this.#audioSource = source;
 		this.#mediaTrack = undefined;
 		this.#listening.stop();
-		audio.pause();
 		this.time = 0;
 		this.length = 0;
 		this.loading = true;
 		this.error = undefined;
+		let media: AudioSource | undefined;
 		try {
-			const playback = await api.playback(track.id);
-			if (source.signal.aborted) return false;
-			const url = playback.availability.delivery?.url;
-			if (playback.availability.status !== 'available' || !url) throw new Error('this track is unavailable');
+			media = await playbackSource(track, source.signal);
+			source.signal.throwIfAborted();
+			this.#releaseMedia = media.release;
+			audio.src = media.url;
 			this.#mediaTrack = track;
 			this.#token = this.#listening.begin(track.id, crypto.randomUUID(), track.metadata.duration_seconds);
-			audio.src = url;
 			this.#describeMedia(track);
 			return true;
-		} catch {
-			if (!source.signal.aborted) { this.loading = false; this.error = 'could not load this audio'; }
+		} catch (error) {
+			if (source.signal.aborted) media?.release?.();
+			else {
+				this.#detachMedia();
+				this.loading = false;
+				this.error = error instanceof Error ? error.message : 'could not load this audio';
+			}
 			return false;
 		}
 	}

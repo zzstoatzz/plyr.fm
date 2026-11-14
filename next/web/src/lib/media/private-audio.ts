@@ -1,4 +1,4 @@
-import type { GatedAudioSource } from './gated-audio-shared';
+import type { GatedAudioSource } from '../../../../core/src/gated-audio';
 
 const prefix = '/__plyr_private_audio/';
 const sources = new Map<string, GatedAudioSource>();

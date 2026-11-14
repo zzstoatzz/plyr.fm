@@ -39,7 +39,7 @@ const pds = http.createServer((request, response) => {
   write();
 });
 const web = http.createServer(async (request, response) => {
-  const filename = request.url === '/private-audio-worker.js' ? path.join(root, 'public/private-audio-worker.js') : request.url === '/bridge.js' ? path.join(output, 'bridge.js') : null;
+  const filename = request.url === '/private-audio-worker.js' ? path.join(root, '../web/static/private-audio-worker.js') : request.url === '/bridge.js' ? path.join(output, 'bridge.js') : null;
   if (filename) { response.setHeader('content-type', 'text/javascript'); response.end(await fs.readFile(filename)); return; }
   response.setHeader('content-type', 'text/html');
   response.end('<button id="play">play</button><audio preload="metadata"></audio><script type="module">import {privateAudioUrl,releasePrivateAudio} from "/bridge.js";window.bridge={privateAudioUrl,releasePrivateAudio};document.querySelector("button").onclick=()=>document.querySelector("audio").play()</script>');
@@ -49,7 +49,7 @@ const close = server => new Promise(resolve => server.close(resolve));
 
 (async () => {
   await fs.mkdir(output, { recursive: true });
-  execFileSync('bun', ['build', path.join(root, 'src/private-audio.web.ts'), '--target', 'browser', '--outfile', path.join(output, 'bridge.js')], { stdio: 'pipe' });
+  execFileSync('bun', ['build', path.join(root, '../web/src/lib/media/private-audio.ts'), '--target', 'browser', '--outfile', path.join(output, 'bridge.js')], { stdio: 'pipe' });
   await listen(pds); await listen(web);
   origin = `http://127.0.0.1:${web.address().port}`;
   const endpoint = `http://127.0.0.1:${pds.address().port}/xrpc/com.atproto.space.getBlob?space=fixture&repo=fixture&cid=fixture`;

@@ -93,7 +93,14 @@ async function authorizeFixture(page,accounts,handle) {
   await page.getByLabel('atmosphere account').fill(handle);
   await page.getByRole('button',{name:/^(sign in|continue at .+)$/i}).last().click();
   await page.waitForURL('https://pds.fixture.test/**').catch(async error => { console.log(await page.locator('body').innerText()); throw error; });
-  await page.locator('input[name=password]').fill(accounts[handle].pass);
+  const password = page.locator('input[name=password]');
+  if (!await password.isVisible()) {
+    const showPassword = page.getByRole('link', { name: 'Use password' });
+    if (await showPassword.isVisible()) await showPassword.click();
+  }
+  await password.fill(accounts[handle].pass);
+  const providerSignIn = page.getByRole('button', { name: 'Sign in', exact: true });
+  if (await providerSignIn.isVisible()) await providerSignIn.click();
   await page.getByRole('button',{name:/^authorize$/i}).click();
 
 }

@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { chromium } = require('playwright');
-const { fixtureAccounts, fixturePage } = require('../../app/scripts/pds-browser-fixture.cjs');
+const { fixtureAccounts, fixturePage, authorizeFixture } = require('../../app/scripts/pds-browser-fixture.cjs');
 const { tracks, serveAudio } = require('../../app/scripts/fixture-catalog.cjs');
 
 const origin = 'https://next.plyr.fm';
@@ -57,15 +57,7 @@ const coordinator = 'https://jams.next.plyr.fm';
     });
     const trackPath = '/track/' + track.id;
     await page.goto(origin + '/login?' + new URLSearchParams({ return_to: trackPath }));
-    await page.getByLabel('atmosphere account').fill(handle);
-    await page.getByRole('button', { name: 'sign in', exact: true }).click();
-    await page.waitForURL('https://pds.fixture.test/**');
-    const password = page.locator('input[name=password]');
-    if (!await password.isVisible()) await page.getByRole('link', { name: 'Use password' }).click();
-    await password.fill(accounts[handle].pass);
-    const providerSignIn = page.getByRole('button', { name: 'Sign in', exact: true });
-    if (await providerSignIn.isVisible()) await providerSignIn.click();
-    await page.getByRole('button', { name: /^authorize$/i }).click();
+    await authorizeFixture(page, accounts, handle);
     await page.waitForURL(origin + trackPath);
     const dock = page.getByTestId('player-dock');
     await dock.getByText(track.metadata.title).waitFor();

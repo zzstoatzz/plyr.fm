@@ -1,6 +1,6 @@
 /// <reference types="node" />
 
-import { readFile, writeFile } from 'node:fs/promises';
+import { copyFile, readFile, writeFile } from 'node:fs/promises';
 import { URL } from 'node:url';
 import * as config from '../src/auth-config.ts';
 import { oauthMetadata } from '../../core/src/oauth-metadata.ts';
@@ -42,3 +42,5 @@ if (location.pathname === '/') {
 }
 </script>`;
 await writeFile(htmlPath, html.replace('</head>', '<link rel="icon" href="/favicon.ico" type="image/x-icon"><link rel="apple-touch-icon" href="/apple-touch-icon.png">' + preload + '</head>'));
+
+await copyFile(new URL('../../web/static/private-audio-worker.js', import.meta.url), new URL('../dist/private-audio-worker.js', import.meta.url));

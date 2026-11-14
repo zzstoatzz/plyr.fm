@@ -7,7 +7,7 @@ import { MessageChannel } from 'node:worker_threads';
 const id = '12345678-1234-1234-1234-123456789abc';
 const url = `https://next.fixture.test/__plyr_private_audio/${id}`;
 const source = { url: 'https://pds.fixture.test/xrpc/com.atproto.space.getBlob?space=private&repo=owner&cid=blob', size: 100, mimeType: 'audio/wav', headers: { authorization: 'fixture-credential' } };
-const worker = await readFile(new URL('../public/private-audio-worker.js', import.meta.url), 'utf8');
+const worker = await readFile(new URL('../../web/static/private-audio-worker.js', import.meta.url), 'utf8');
 
 type FetchEvent = { clientId: string; request: Request; respondWith(response: Promise<Response>): void };
 type MessageEvent = { source: { id: string }; data: { type: string; id: string } };
