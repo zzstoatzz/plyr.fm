@@ -1,5 +1,5 @@
 import { trackArtwork } from './artwork';
-import { CaretDown as ChevronDown, Playlist as ListMusic, Radio as RadioTower, X } from './icons';
+import { ChatCircle, CaretDown as ChevronDown, Playlist as ListMusic, Radio as RadioTower, X } from './icons';
 import { Text } from './Text';
 import Slider from './Slider';
 import type { Href } from 'expo-router';
@@ -24,6 +24,9 @@ import { currentChapter, parseChapters } from './chapters';
 import { Coachmark } from './Coachmark';
 import { markHintSeen, useHintPending } from './hints';
 import { measure, playerSheet, setFlying, type Rect } from './player-sheet';
+import { FACES_HEIGHT, ScrubberFaces } from './ScrubberFaces';
+import { CommentComposer } from './CommentComposer';
+import { useTrackComments } from './track-comments';
 
 const AnimatedSafeAreaView = Animated.createAnimatedComponent(SafeAreaView);
 const touchHeader = { touchAction: 'none', cursor: 'auto' } as const;
@@ -70,7 +73,9 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
   const [rects, setRects] = useState<Record<'art' | 'title', { from: Rect; to: Rect }>>();
   const scrollTouch = { touchAction: dismiss.directionalTouch && dismiss.atTop ? 'pan-x pan-down' : 'pan-x pan-y', cursor: 'auto' } as const;
   const sideBySide = width >= 800;
-  const controlRoom = 370 + 64 * (theme.scale - 1);
+  const commentable = !player.live && !player.privatePlayback;
+  const comments = useTrackComments(commentable ? track.id : undefined);
+  const controlRoom = 370 + 64 * (theme.scale - 1) + (commentable ? FACES_HEIGHT - 6 : 0);
   // The first open after install makes room for the "more below" hint under the controls, taking it from the art if the
   // screen is short, so the hint never covers like/share/queue. The room stays until close, so dismissing never shifts layout.
   const hintPending = useHintPending('now-playing.more-below');
@@ -174,6 +179,8 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
   const plays = usePlayCount(track.id, track.metrics.play_count);
 
   const seek = player.canSeek && !player.live && !error ? player.seek : undefined;
+  const seeAll = { label: comments.comments.length === 1 ? 'See the comment' : `See all ${comments.comments.length} comments`, open: () => navigate(`/track/${encodeURIComponent(track.id)}`) };
+  const composer = <View {...dismiss.protect}><CommentComposer track={track} positionMs={position * 1000} returnTo="/now-playing" /></View>;
   const details = <NowPlayingDetails track={track} plays={plays} protect={dismiss.protect} navigate={navigate} wide={sideBySide} position={position} seek={seek} />;
   const chapters = useMemo(() => parseChapters(track.metadata.description, track.metadata.duration_seconds ?? undefined).chapters, [track.metadata.description, track.metadata.duration_seconds]);
   const chapter = player.live ? undefined : chapters[currentChapter(chapters, position)];
@@ -240,11 +247,12 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
                 {player.live ? <View testID="now-playing-live-progress" accessibilityRole="progressbar" accessibilityLabel="Song progress"
                   aria-valuemin={0} aria-valuemax={Math.round(duration)} aria-valuenow={Math.round(position)} style={[styles.liveTrack, { backgroundColor: theme.line }]}>
                   <View style={[styles.liveFill, { backgroundColor: theme.accent, width: `${duration ? Math.min(100, position / duration * 100) : 0}%` }]} />
-                </View> : <View {...dismiss.protectSlider}><Slider accessibilityLabel="Playback position" minimumValue={0} maximumValue={duration || 1}
+                </View> : <>{commentable && <View {...dismiss.protect}><ScrubberFaces comments={comments.comments} durationMs={duration * 1000} positionMs={position * 1000}
+                  playing={playing && !scrub} onSeek={seek ? ms => seek(ms / 1000) : undefined} seeAll={seeAll} /></View>}<View {...dismiss.protectSlider}><Slider accessibilityLabel="Playback position" minimumValue={0} maximumValue={duration || 1}
                   value={position} minimumTrackTintColor={theme.accent} maximumTrackTintColor={theme.border}
                   thumbTintColor={theme.accent} disabled={!player.canSeek || !duration || !!error}
                   onSlidingStart={updateScrub} onValueChange={updateScrub}
-                  onSlidingComplete={(seconds) => { player.seek(seconds); setScrub(null); }} /></View>}
+                  onSlidingComplete={(seconds) => { player.seek(seconds); setScrub(null); }} /></View></>}
                 <View testID="now-playing-time" style={styles.time}>
                   <Text style={[caption, styles.numeric]}>{time(position)}</Text>
                   <Text accessibilityLiveRegion="polite" style={[caption, styles.status]}>
@@ -262,17 +270,24 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
               <View style={[styles.utilities, sideBySide && styles.utilitiesWide]}>
                 {!player.privatePlayback && <View {...dismiss.protect}><TrackLikes key={track.id} track={track} iconOnly returnTo="/now-playing" /></View>}
                 {!player.privatePlayback && <View {...dismiss.protect}><ShareLink compact path={`/track/${encodeURIComponent(track.id)}`} /></View>}
+                {commentable && comments.comments.length > 0 && <View {...dismiss.protect}><Pressable accessibilityRole="link" accessibilityLabel={seeAll.label} onPress={seeAll.open} style={styles.commentCount}>
+                  {({ hovered }: { pressed: boolean; hovered?: boolean }) => <>
+                    <ChatCircle size={22} color={hovered ? theme.text : theme.muted} />
+                    <Text style={[caption, styles.numeric, hovered && { color: theme.text }]}>{comments.comments.length}</Text>
+                  </>}
+                </Pressable></View>}
                 <View {...dismiss.protect}>{player.live ? <PlayerControl icon={RadioTower} label="Stations" onPress={() => navigate('/radio')} />
                   : <PlayerControl icon={ListMusic} label="Queue" onPress={() => navigate('/queue')} />}</View>
                 {sideBySide && <View style={{ marginLeft: 'auto' }}><PlayerVolume /></View>}
               </View>
+              {sideBySide && commentable && composer}
               {sideBySide && details}
             </View>
             {hintRoom && <View style={{ width: Math.min(width - 32, 440), height: hintSlot, justifyContent: 'flex-end' }}>
               <Coachmark hint="now-playing.more-below" ready={present && measured && dismiss.atTop && !dismiss.dragging} touch={dismiss.protect} />
             </View>}
             </View>
-            {!sideBySide && <View style={{ width: artwork }}>{details}</View>}
+            {!sideBySide && <View style={{ width: artwork, gap: 20 }}>{commentable && composer}{details}</View>}
           </Animated.ScrollView></PullDetector>
         </Animated.View>
         </Animated.View>
@@ -324,4 +339,5 @@ const styles = StyleSheet.create({
   utilities: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   utilitiesWide: { justifyContent: 'flex-start', gap: 4, marginLeft: -10 },
   transportWide: { justifyContent: 'center', gap: 36 },
+  commentCount: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44, minWidth: 44, paddingHorizontal: 10 },
 });

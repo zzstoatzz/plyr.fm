@@ -97,6 +97,7 @@ const checks = {
   'check-aria-patterns': [/^src\/behaviors\//, /^src\/(ArtistProfile|AccountPieces|AccountPicker|controls)/, /^app\/login/],
   'check-supporter-downloads': [/^src\/downloads\//, /^src\/(auth-config|auth-state|TrackMenu)/],
   'check-tag-scroll-dynamics': [/^src\/TagScroller/],
+  'check-track-comments': [/^src\/(ScrubberFaces|CommentComposer|TrackComments|track-comments|comment-faces|TrackPresentation)/],
   'check-track-actions': [/^src\/(TrackMenu|ActionRow|ShareLink|TrackLikes|LikeHeart)/, /^app\/track/],
   'check-track-tags': [/^src\/publishing\/(TagsField|track-tags)/],
   'check-ui-consistency': shared,

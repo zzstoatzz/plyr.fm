@@ -8,8 +8,8 @@ import type { Track } from './api';
 import { useAppearance } from './appearance';
 import { Cover, artistName } from './CatalogPieces';
 
-export function TrackPresentation({ track, controls, stats, utilities }: {
-  track: Track; controls: ReactNode; stats: ReactNode; utilities: ReactNode;
+export function TrackPresentation({ track, controls, stats, utilities, comments }: {
+  track: Track; controls: ReactNode; stats: ReactNode; utilities: ReactNode; comments?: ReactNode;
 }) {
   const theme = useAppearance();
   const { width, height } = useWindowDimensions();
@@ -32,6 +32,7 @@ export function TrackPresentation({ track, controls, stats, utilities }: {
     <View style={styles.stats}>{stats}</View>
     <View style={styles.utilities}>{utilities}</View>
     {track.metadata.description && <View style={styles.description}><Copy>{track.metadata.description}</Copy></View>}
+    {comments}
   </View>;
 }
 

@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { Client } from '@atcute/client';
-import { BASE_SCOPE_PARTS, SCOPE_PARTS, SYNC_SCOPE_PARTS, hasJamGrant, hasSyncGrant, hasPrivatePublishGrant, hasPrivateDeleteGrant, hasUploadGrant, hasDownloadGrant, hasPolicyGrant, hasCloseGrant } from './auth-config';
+import { BASE_SCOPE_PARTS, SCOPE_PARTS, SYNC_SCOPE_PARTS, hasJamGrant, hasSyncGrant, hasPrivatePublishGrant, hasPrivateDeleteGrant, hasUploadGrant, hasDownloadGrant, hasPolicyGrant, hasCommentGrant, hasCloseGrant } from './auth-config';
 import { didDocument, pdsEndpoint, pdsSupportsSpaces } from './identity';
 
 export type Did = `did:${string}:${string}`;
@@ -18,6 +18,7 @@ export type Auth = {
 	uploadStorage: boolean;
 	supporterDownloads: boolean;
 	policyEditing: boolean;
+	commenting: boolean;
 	closing: boolean;
 	error: string | null;
 	scopeRejected: boolean;
@@ -25,7 +26,7 @@ export type Auth = {
 
 const initial: Auth = {
 	did: null, ready: false, handle: null, agent: null, rpc: null,
-	jamSpace: false, accountSync: false, privatePublishing: false, privateDeleting: false, uploadStorage: false, supporterDownloads: false, policyEditing: false, closing: false, error: null, scopeRejected: false
+	jamSpace: false, accountSync: false, privatePublishing: false, privateDeleting: false, uploadStorage: false, supporterDownloads: false, policyEditing: false, commenting: false, closing: false, error: null, scopeRejected: false
 };
 
 let state = initial;
@@ -48,7 +49,7 @@ export function getAuth(): Auth {
 }
 
 export function setAuth(did: Did, agent: Agent, scope: string) {
-	update({ ...initial, ready: true, did, agent, rpc: new Client({ handler: agent }), jamSpace: hasJamGrant(scope), accountSync: hasSyncGrant(scope), privatePublishing: hasPrivatePublishGrant(scope), privateDeleting: hasPrivateDeleteGrant(scope), uploadStorage: hasUploadGrant(scope), supporterDownloads: hasDownloadGrant(scope), policyEditing: hasPolicyGrant(scope), closing: hasCloseGrant(scope) });
+	update({ ...initial, ready: true, did, agent, rpc: new Client({ handler: agent }), jamSpace: hasJamGrant(scope), accountSync: hasSyncGrant(scope), privatePublishing: hasPrivatePublishGrant(scope), privateDeleting: hasPrivateDeleteGrant(scope), uploadStorage: hasUploadGrant(scope), supporterDownloads: hasDownloadGrant(scope), policyEditing: hasPolicyGrant(scope), commenting: hasCommentGrant(scope), closing: hasCloseGrant(scope) });
 	void didDocument(did).then(doc => {
 		if (state.agent !== agent) return;
 		update({ ...state, handle: doc.alsoKnownAs?.find(value => value.startsWith('at://'))?.slice(5) ?? null });

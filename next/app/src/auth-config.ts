@@ -6,6 +6,7 @@ export const NSID = {
 	track: `${prefix}.track`,
 	list: `${prefix}.list`,
 	like: `${prefix}.like`,
+	comment: `${prefix}.comment`,
 	profile: `${prefix}.actor.profile`,
 	policy: `${prefix}.policy`
 } as const;
@@ -22,6 +23,9 @@ export function hasCloseGrant(scope: string): boolean {
 }
 export function hasPolicyGrant(scope: string): boolean {
   return scope.split(' ').includes(`repo:${NSID.policy}`);
+}
+export function hasCommentGrant(scope: string): boolean {
+  return scope.split(' ').includes(`repo:${NSID.comment}`);
 }
 
 export const PRIVATE_SPACE_TYPE = `${prefix}.privateMedia`;
