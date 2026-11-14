@@ -1,8 +1,5 @@
 import { View, useWindowDimensions } from 'react-native';
-import Play from 'lucide-react-native/icons/play';
-import Music from 'lucide-react-native/icons/eighth-note';
-import Users from 'lucide-react-native/icons/users';
-import Clock from 'lucide-react-native/icons/clock';
+import { Play, MusicNote as Music, Users, Clock } from '../src/icons';
 import { api } from '../src/api';
 import { Text } from '../src/Text';
 import { useAppearance } from '../src/appearance';

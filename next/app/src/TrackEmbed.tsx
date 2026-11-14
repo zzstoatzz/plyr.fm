@@ -1,11 +1,10 @@
 import { trackArtwork } from './artwork';
+import { MusicNote as Music, ArrowCounterClockwise as RotateCcw } from './icons';
 import { Text } from './Text';
 import Slider from './Slider';
 import { Link } from 'expo-router';
-import Music from 'lucide-react-native/icons/eighth-note';
 import { PauseGlyph as Pause, PlayGlyph as Play } from './PlayerGlyph';
 import { PlayerLoader } from './PlayerLoader';
-import RotateCcw from 'lucide-react-native/icons/rotate-ccw';
 import { useState } from 'react';
 import { Image, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import type { Track } from './api';

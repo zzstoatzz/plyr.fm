@@ -1,4 +1,5 @@
 import { Text } from '../src/Text';
+import { type Icon, ArrowLeft, House, MagnifyingGlass as Search, Books as Library, UserCircle as UserRound, PlusCircle as CirclePlus, Radio, GearSix as Settings, ChartBar as ChartNoAxesColumn, Graph } from '../src/icons';
 import { Link, Stack, router, usePathname, type Href } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { useFonts } from 'expo-font';
@@ -7,14 +8,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Animated, Platform, Pressable, View, useWindowDimensions, StyleSheet } from 'react-native';
 import { AppearanceProvider, useAppearance } from '../src/appearance';
 import { restoreAuth, useAuth } from '../src/auth';
-import ArrowLeft from 'lucide-react-native/icons/arrow-left';
-import House from 'lucide-react-native/icons/house';
-import Search from 'lucide-react-native/icons/search';
-import Library from 'lucide-react-native/icons/library';
-import UserRound from 'lucide-react-native/icons/user-round';
-import CirclePlus from 'lucide-react-native/icons/circle-plus';
-import Radio from 'lucide-react-native/icons/radio';
-import Settings from 'lucide-react-native/icons/settings';
 import { PlaybackProvider } from '../src/playback';
 import { RadioPlayback, RadioProvider } from '../src/radio-session';
 import { KeyboardShortcuts } from '../src/KeyboardShortcuts';
@@ -22,7 +15,6 @@ import { PlayerBar } from '../src/PlayerBar';
 import { Toasts } from '../src/Toasts';
 import { NowPlayingOriginContext } from '../src/now-playing-origin';
 import { PreferencesProvider } from '../src/preference-context';
-import ChartNoAxesColumn from 'lucide-react-native/icons/chart-no-axes-column';
 import { pageFrame } from '../src/controls';
 import { usePreferences } from '../src/preferences';
 import { UploadQueueHost } from '../src/publishing/UploadQueue';
@@ -59,7 +51,7 @@ function Shell() {
   const wide = width >= 800;
   if (path.startsWith('/embed/')) return <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }} />;
   const accountPath = auth.did ? '/portal' : '/login';
-  const tabs: { label: string; href: Href; icon: typeof House; active: boolean }[] = [
+  const tabs: { label: string; href: Href; icon: Icon; active: boolean }[] = [
     { label: 'Home', href: '/', icon: House, active: path === '/' },
     { label: 'Search', href: '/search', icon: Search, active: path === '/search' },
     { label: 'Library', href: '/library', icon: Library, active: ['/library', '/liked', '/playlists'].includes(path) },
@@ -68,11 +60,11 @@ function Shell() {
   ];
   const showBack = !['/', '/search', '/library', '/portal', '/login', '/upload'].includes(path);
   const detail = /^\/(track|u|album|playlist|edit-track)\//.test(path);
-  const tabTitle = path === '/' ? (wide ? undefined : 'plyr.fm') : path === '/search' ? 'search' : path === '/library' ? 'library' : path === '/portal' ? 'your music' : undefined;
+  const tabTitle = path === '/' ? (wide ? undefined : 'plyr.fm') : path === '/search' ? 'search' : path === '/library' ? 'library' : path === '/portal' ? 'your music' : path === '/atlas' ? 'atlas' : undefined;
   const detailTitle = path.startsWith('/u/') ? 'artist' : path.startsWith('/edit-track/') ? 'edit track'
     : path.startsWith('/album/') ? 'album' : path.startsWith('/playlist/') ? 'playlist' : 'track';
   const nav = <View role="navigation" accessibilityLabel="Main navigation" style={{
-    flexDirection: wide ? 'column' : 'row', padding: wide ? 12 : 0, paddingHorizontal: wide ? 12 : 8, gap: wide ? 8 : 0, width: wide ? 180 : '100%',
+    flexDirection: wide ? 'column' : 'row', padding: wide ? 14 : 0, paddingHorizontal: wide ? 14 : 8, gap: wide ? 4 : 0, width: wide ? 216 : '100%',
     backgroundColor: theme.surface,
     borderRightWidth: wide ? 1 : 0, borderTopWidth: wide ? 0 : 1, borderColor: wide ? theme.hairline : theme.line
   }}>
@@ -84,20 +76,21 @@ function Shell() {
         style={{ minHeight: 48, flex: wide ? undefined : 1, paddingHorizontal: wide ? 12 : 8, borderRadius: 12, gap: wide ? 12 : 2,
           flexDirection: wide ? 'row' : 'column', alignItems: 'center', justifyContent: wide ? 'flex-start' : 'center',
           backgroundColor: active && wide ? theme.hover : 'transparent' }}>
-        <Icon size={wide ? 21 : 20} color={active ? wide ? theme.text : theme.accent : theme.muted} strokeWidth={active ? 2.4 : 1.8} />
-        <Text style={{ color: active ? wide ? theme.text : theme.accent : theme.muted, fontSize: (wide ? 15 : 10) * theme.scale, fontWeight: active ? '700' : '500', textTransform: 'lowercase' }}>{label}</Text>
+        <Icon size={wide ? 22 : 22} color={active ? wide ? theme.text : theme.accent : theme.muted} weight={active ? 'fill' : 'regular'} />
+        <Text style={{ color: active ? wide ? theme.text : theme.accent : theme.muted, fontSize: (wide ? 15.5 : 10) * theme.scale, fontWeight: active ? '700' : '500', textTransform: 'lowercase' }}>{label}</Text>
       </Pressable>
     </Link>)}
     {wide && <View style={{ flex: 1, minHeight: 24 }} />}
     {wide && ([
       { label: 'Radio', href: '/radio', icon: Radio },
+      { label: 'Atlas', href: '/atlas', icon: Graph },
       { label: 'Stats', href: '/stats', icon: ChartNoAxesColumn },
       { label: 'Settings', href: '/settings', icon: Settings },
     ] as const).map(({ label, href, icon: Icon }) => <Link key={label} href={href} asChild>
       <Pressable accessibilityRole="link" accessibilityLabel={label} aria-current={path === href ? 'page' : undefined}
-        style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, borderRadius: 10, backgroundColor: path === href ? theme.surface : 'transparent' }}>
-        <Icon size={20} color={path === href ? theme.accent : theme.muted} />
-        <Text style={{ color: path === href ? theme.accent : theme.muted, fontSize: 14 * theme.scale, textTransform: 'lowercase' }}>{label}</Text>
+        style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, borderRadius: 10, backgroundColor: path === href ? theme.hover : 'transparent' }}>
+        <Icon size={20} color={path === href ? theme.text : theme.faint} weight={path === href ? 'fill' : 'regular'} />
+        <Text style={{ color: path === href ? theme.text : theme.faint, fontSize: 14 * theme.scale, fontWeight: path === href ? '600' : '400', textTransform: 'lowercase' }}>{label}</Text>
       </Pressable>
     </Link>)}
   </View>;

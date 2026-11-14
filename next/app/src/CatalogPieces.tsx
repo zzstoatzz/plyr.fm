@@ -1,12 +1,11 @@
 import { trackArtwork, collectionArtwork, displayUrl } from './artwork';
+import { MusicNote as Music2, UserCircle as UserRound } from './icons';
 import { Text } from './Text';
 import { Link, type Href } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Animated, PixelRatio, Platform, Pressable, StyleSheet, View } from 'react-native';
-import Music2 from 'lucide-react-native/icons/eighth-note';
 import { PlayGlyph as PlayIcon } from './PlayerGlyph';
 import { PlayerLoader } from './PlayerLoader';
-import UserRound from 'lucide-react-native/icons/user-round';
 import type { ListSummary, Page, Track } from './api';
 import { Action, Copy } from './controls';
 import { WaveLoading } from './WaveLoading';

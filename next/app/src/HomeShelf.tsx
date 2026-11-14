@@ -1,8 +1,7 @@
 import { useAppearance } from './appearance';
+import { CaretLeft as ChevronLeft, CaretRight as ChevronRight } from './icons';
 import { useRef, useState, type ReactNode } from 'react';
 import { ScrollView, StyleSheet, View, type ScrollViewInstance } from 'react-native';
-import ChevronLeft from 'lucide-react-native/icons/chevron-left';
-import ChevronRight from 'lucide-react-native/icons/chevron-right';
 import { PlayerControl } from './PlayerControl';
 
 export function HomeShelf({ testID, heading, label, busy = false, children }: {

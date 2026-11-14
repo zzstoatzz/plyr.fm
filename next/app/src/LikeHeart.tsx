@@ -1,5 +1,5 @@
-import Heart from 'lucide-react-native/icons/heart';
 import { useEffect, useRef } from 'react';
+import { Heart } from './icons';
 import { Animated, Easing, Platform, StyleSheet, View } from 'react-native';
 import { useAppearance } from './appearance';
 

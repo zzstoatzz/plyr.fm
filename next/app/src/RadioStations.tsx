@@ -1,6 +1,5 @@
-import ChevronDown from 'lucide-react-native/icons/chevron-down';
-import Cast from 'lucide-react-native/icons/cast';
 import { useEffect, useState } from 'react';
+import { CaretDown as ChevronDown, Screencast as Cast } from './icons';
 import { Image, PixelRatio, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { useAppearance } from './appearance';

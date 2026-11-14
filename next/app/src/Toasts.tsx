@@ -1,8 +1,5 @@
 import { Link } from 'expo-router';
-import Check from 'lucide-react-native/icons/check';
-import Info from 'lucide-react-native/icons/info';
-import TriangleAlert from 'lucide-react-native/icons/triangle-alert';
-import X from 'lucide-react-native/icons/x';
+import { Check, Info, Warning as TriangleAlert, X } from './icons';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Platform, Pressable, StyleSheet, View, useWindowDimensions, type ViewInstance } from 'react-native';
 import { useAppearance } from './appearance';

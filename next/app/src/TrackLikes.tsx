@@ -1,10 +1,9 @@
 import { useLikeInteraction, wantLike } from './like-interactions';
+import { Heart, ArrowsClockwise as RefreshCw } from './icons';
 import { Text } from './Text';
 import { Link } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
-import Heart from 'lucide-react-native/icons/heart';
-import RefreshCw from 'lucide-react-native/icons/refresh-cw';
 import { api, type Track } from './api';
 import { Row, usePages, useResource } from './CatalogPieces';
 import { useAuth } from './auth';

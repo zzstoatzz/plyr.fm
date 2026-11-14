@@ -82,3 +82,46 @@ test('catalog tags expanded by Unicode lowercase survive selection persistence',
   assert.deepEqual(parseSelectedTags(JSON.stringify([catalog])), [catalog]);
   assert.deepEqual(parseSelectedTags(JSON.stringify(['x'.repeat(200), 'x'.repeat(201)])), ['x'.repeat(200)]);
 });
+
+test('track ages read as short columns and fall back to dates', async () => {
+  const { timeAgo } = await import('../src/home-state.ts');
+  const now = Date.parse('2026-11-14T12:00:00Z');
+  assert.equal(timeAgo('2026-11-14T11:59:30Z', now), 'now');
+  assert.equal(timeAgo('2026-11-14T11:15:00Z', now), '45m');
+  assert.equal(timeAgo('2026-11-14T02:00:00Z', now), '10h');
+  assert.equal(timeAgo('2026-11-11T12:00:00Z', now), '3d');
+  assert.match(timeAgo('2026-10-01T12:00:00Z', now), /^oct \d+$/);
+  assert.match(timeAgo('2025-10-01T12:00:00Z', now), /, 2025$/);
+  assert.equal(timeAgo('not a date', now), '');
+  assert.equal(timeAgo('2026-11-14T12:05:00Z', now), 'now', 'clock skew never shows a negative age');
+});
+
+test('chronological groups follow calendar days, then months and years', async () => {
+  const { dayGroup } = await import('../src/home-state.ts');
+  const now = new Date(2026, 10, 14, 12).getTime();
+  assert.equal(dayGroup(new Date(2026, 10, 14, 0, 5).toISOString(), now), 'today');
+  assert.equal(dayGroup(new Date(2026, 10, 13, 23, 55).toISOString(), now), 'yesterday');
+  assert.equal(dayGroup(new Date(2026, 10, 10).toISOString(), now), 'this week');
+  assert.equal(dayGroup(new Date(2026, 10, 3).toISOString(), now), 'last week');
+  assert.equal(dayGroup(new Date(2026, 9, 20).toISOString(), now), 'october');
+  assert.equal(dayGroup(new Date(2025, 9, 20).toISOString(), now), '2025');
+});
+
+test('durations format for list columns', async () => {
+  const { formatDuration } = await import('../src/home-state.ts');
+  assert.equal(formatDuration(181), '3:01');
+  assert.equal(formatDuration(4520), '1:15:20');
+  assert.equal(formatDuration(null), '');
+  assert.equal(formatDuration(0), '');
+});
+
+test('artist of the week ranks liked artists and changes on mondays', async () => {
+  const { rankedArtists, weekNumber } = await import('../src/home-state.ts');
+  const t = (did: string, likes: number) => ({ artist: { did }, metrics: { like_count: likes } });
+  assert.deepEqual(rankedArtists([t('did:b', 1), t('did:a', 3), t('did:b', 1), t('did:c', 0)]), ['did:a', 'did:b', 'did:c']);
+  assert.deepEqual(rankedArtists([]), []);
+  const monday = Date.parse('2026-11-09T00:00:00Z');
+  assert.equal(weekNumber(monday), weekNumber(monday + 6.9 * 86_400_000), 'the pick holds all week');
+  assert.equal(weekNumber(monday) + 1, weekNumber(monday + 7 * 86_400_000));
+  assert.equal(weekNumber(monday - 1) + 1, weekNumber(monday), 'weeks turn over at monday 00:00 utc');
+});

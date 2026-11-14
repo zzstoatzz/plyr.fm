@@ -1,5 +1,5 @@
-import GripHorizontal from 'lucide-react-native/icons/grip-horizontal';
 import { Fragment, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { DotsSix as GripHorizontal } from './icons';
 import { PanResponder, Platform, StyleSheet, useWindowDimensions, View, type ScrollViewInstance, type ViewInstance } from 'react-native';
 import type { Track } from './api';
 import { useAppearance } from './appearance';

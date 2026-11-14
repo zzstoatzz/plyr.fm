@@ -1,6 +1,5 @@
-import RotateCcw from 'lucide-react-native/icons/rotate-ccw';
-import RotateCw from 'lucide-react-native/icons/rotate-cw';
 import { View } from 'react-native';
+import { ArrowCounterClockwise as RotateCcw, ArrowClockwise as RotateCw } from './icons';
 import { useAppearance } from './appearance';
 import { usePlayback } from './playback';
 import { PlayerControl } from './PlayerControl';

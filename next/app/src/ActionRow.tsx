@@ -1,12 +1,12 @@
 import { Link, type Href } from 'expo-router';
+import type { Icon } from './icons';
 import { useState } from 'react';
-import type Play from 'lucide-react-native/icons/play';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Text } from './Text';
 import { useAppearance } from './appearance';
 
 export function ActionRow({ label, icon: Icon, onPress, href, disabled }: {
-  label: string; icon: typeof Play; onPress?: () => void; href?: Href; disabled?: boolean;
+  label: string; icon: Icon; onPress?: () => void; href?: Href; disabled?: boolean;
 }) {
   const theme = useAppearance();
   const [pressed, setPressed] = useState(false);

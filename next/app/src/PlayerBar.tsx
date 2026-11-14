@@ -1,4 +1,5 @@
 import { displayUrl, trackArtwork } from './artwork';
+import { Playlist as ListMusic, X } from './icons';
 import { Text } from './Text';
 import { router, usePathname, type Href } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -6,7 +7,6 @@ import { BodyPortal } from './BodyPortal';
 import { Animated, Image, PanResponder, PixelRatio, Platform, Pressable, View, useWindowDimensions, type ViewInstance } from 'react-native';
 import { playerSheet, useFlying, useSheetPresent } from './player-sheet';
 import { PlaybackFreeze } from './playback';
-import ListMusic from 'lucide-react-native/icons/list-music';
 import Slider from './Slider';
 import { PlayerVolume } from './PlayerVolume';
 import { NextGlyph as SkipForward, PauseGlyph as Pause, PlayGlyph as Play, PreviousGlyph as SkipBack } from './PlayerGlyph';
@@ -19,7 +19,6 @@ import { NowPlaying } from './NowPlaying';
 import { PlayerSeek } from './PlayerSeek';
 import { PlayerControl } from './PlayerControl';
 import { useRadio } from './radio-session';
-import X from 'lucide-react-native/icons/x';
 
 const liftTouch = { touchAction: 'none', cursor: 'auto' } as const;
 

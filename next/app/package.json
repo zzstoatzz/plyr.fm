@@ -44,7 +44,7 @@
     "expo-sharing": "~58.0.23",
     "expo-status-bar": "~58.0.4",
     "expo-web-browser": "~58.0.7",
-    "lucide-react-native": "^1.67.0",
+    "phosphor-react-native": "^3.0.6",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-native": "0.88.1",

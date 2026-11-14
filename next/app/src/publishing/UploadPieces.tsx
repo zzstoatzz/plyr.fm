@@ -1,9 +1,7 @@
 import type { ReactNode } from 'react';
+import { FileAudio, ImageSquare as ImagePlus, Check } from '../icons';
 import { Image, Pressable, View } from 'react-native';
 import { router } from 'expo-router';
-import FileAudio from 'lucide-react-native/icons/file-music';
-import ImagePlus from 'lucide-react-native/icons/image-plus';
-import Check from 'lucide-react-native/icons/check';
 import { useAppearance } from '../appearance';
 import { Text } from '../Text';
 import type { MediaFile } from '../pds';

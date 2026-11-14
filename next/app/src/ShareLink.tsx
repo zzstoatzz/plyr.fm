@@ -1,5 +1,5 @@
 import { Platform, Share, View } from 'react-native';
-import ShareIcon from 'lucide-react-native/icons/share-2';
+import { ShareNetwork as ShareIcon } from './icons';
 import { SITE_URL } from './config';
 import { Button } from './CatalogPieces';
 import { PlayerControl } from './PlayerControl';

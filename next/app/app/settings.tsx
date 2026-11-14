@@ -1,10 +1,6 @@
 import { useState } from 'react';
+import { ChartBar as ChartNoAxesColumn, Check, Palette, Headphones, UserCircle as UserRound } from '../src/icons';
 import { Platform, Pressable, Switch, View } from 'react-native';
-import ChartNoAxesColumn from 'lucide-react-native/icons/chart-no-axes-column';
-import Check from 'lucide-react-native/icons/check';
-import Palette from 'lucide-react-native/icons/palette';
-import Headphones from 'lucide-react-native/icons/headphones';
-import UserRound from 'lucide-react-native/icons/user-round';
 import { useAuth, logout } from '../src/auth';
 import { useAppearance } from '../src/appearance';
 import { Action, Copy, Field, Page, row } from '../src/controls';

@@ -1,12 +1,9 @@
 import { trackArtwork } from './artwork';
+import { CaretDown as ChevronDown, Playlist as ListMusic, Radio as RadioTower, X } from './icons';
 import { Text } from './Text';
 import Slider from './Slider';
 import type { Href } from 'expo-router';
-import ChevronDown from 'lucide-react-native/icons/chevron-down';
-import ListMusic from 'lucide-react-native/icons/list-music';
-import RadioTower from 'lucide-react-native/icons/radio';
 import { NextGlyph as SkipForward, PauseGlyph as Pause, PlayGlyph as Play, PreviousGlyph as SkipBack } from './PlayerGlyph';
-import X from 'lucide-react-native/icons/x';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Animated, Modal, Platform, Pressable, StyleSheet, View, useWindowDimensions, type ScrollViewInstance, type ViewInstance } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';

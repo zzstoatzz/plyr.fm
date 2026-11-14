@@ -5,10 +5,13 @@ import { readLocal, writeLocal } from './storage';
 
 const expectedKey = 'plyr-next:artists-you-know';
 
+// fetch and graph errors arrive in browser wording ("NetworkError when attempting…"); say what failed instead
+const failure = "couldn't load artists you know";
 const cache = new Map<string, { artists: NetworkArtist[]; at: number }>();
 
 export function useNetworkArtists(did: string | null, ready: boolean) {
   const [result, setResult] = useState<{ did: string | null; artists: NetworkArtist[]; error?: string }>({ did: null, artists: [] });
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     if (!did) return;
     const saved = cache.get(did);
@@ -18,7 +21,7 @@ export function useNetworkArtists(did: string | null, ready: boolean) {
     }
     const controller = new AbortController();
     const timer = setTimeout(() => {
-      setResult({ did, artists: [], error: "could not load artists you know. try again later" });
+      setResult({ did, artists: [], error: failure });
       controller.abort();
     }, 60_000);
     void readFollows(did, controller.signal)
@@ -32,17 +35,18 @@ export function useNetworkArtists(did: string | null, ready: boolean) {
           if (first) cache.delete(first);
         }
         setResult({ did, artists });
-      }, (error: unknown) => {
+      }, () => {
         if (!controller.signal.aborted) {
-          setResult({ did, artists: [], error: error instanceof Error ? error.message : 'could not load artists you know.' });
+          setResult({ did, artists: [], error: failure });
           controller.abort();
         }
       }).finally(() => clearTimeout(timer));
     return () => { controller.abort(); clearTimeout(timer); };
-  }, [did]);
+  }, [did, attempt]);
   const settled = ready && (!did || result.did === did);
   const shown = settled && result.did === did && result.artists.length > 0;
   useEffect(() => { if (settled) writeLocal(expectedKey, shown ? '1' : '0'); }, [settled, shown]);
-  if (result.did === did && did) return { ...result, loading: false };
-  return { did, artists: [], error: undefined, loading: !settled && readLocal(expectedKey) === '1' };
+  const retry = () => { setResult({ did: null, artists: [] }); setAttempt(value => value + 1); };
+  if (result.did === did && did) return { ...result, loading: false, retry };
+  return { did, artists: [], error: undefined, loading: !settled && readLocal(expectedKey) === '1', retry };
 }

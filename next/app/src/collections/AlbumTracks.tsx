@@ -1,8 +1,6 @@
 import { useCallback } from 'react';
+import { ArrowUp, ArrowDown, X } from '../icons';
 import { View } from 'react-native';
-import ArrowUp from 'lucide-react-native/icons/arrow-up';
-import ArrowDown from 'lucide-react-native/icons/arrow-down';
-import X from 'lucide-react-native/icons/x';
 import { api, type Track } from '../api';
 import { Action, Copy } from '../controls';
 import { Heading, Status, usePages } from '../CatalogPieces';

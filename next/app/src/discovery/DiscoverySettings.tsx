@@ -1,6 +1,6 @@
 import { useState } from 'react';
+import { Compass } from '../icons';
 import { View } from 'react-native';
-import Compass from 'lucide-react-native/icons/compass';
 import { Action, Copy, Field, row } from '../controls';
 import { DEFAULT_HIDDEN_TAGS, hiddenTags } from './preferences';
 import { useAppPreferences } from '../preference-context';
