@@ -8,6 +8,7 @@ import { useState, type ReactNode, type RefObject } from 'react';
 import { Pressable, type ScrollViewInstance, StyleSheet, View } from 'react-native';
 import type { Track } from './api';
 import { useAppearance } from './appearance';
+import { trackArtwork } from './artwork';
 import { artistName, Cover, Heading } from './CatalogPieces';
 import { Action, Copy, InlineLink, row } from './controls';
 import { usePlayback } from './playback';
@@ -103,7 +104,7 @@ function QueueTrack({ track, play, remove }: { track: Track; play?: () => void; 
   const title = track.metadata.title;
   const artist = artistName(track);
   const contents = <>
-    <Cover uri={track.media.artwork?.url} size={44} />
+    <Cover uri={trackArtwork(track)} size={44} />
     <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
       <Text numberOfLines={1} style={{ color: theme.text, fontFamily: theme.fontFamily, fontSize: 15 * theme.scale, fontWeight: '600' }}>{title}</Text>
       <Text numberOfLines={1} style={{ color: theme.muted, fontFamily: theme.fontFamily, fontSize: 13 * theme.scale }}>{artist}</Text>
