@@ -153,6 +153,12 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
   const carried = flights ? { opacity: departed(1, 0) } : undefined;
   // The resting art loads its own large rendition and fades in. The art flight draws the same image above it and stays opaque
   // until that art has settled and the sheet is still, then swaps in one commit: a crossfade of two copies dims for a few frames.
+  // If the large cover never reports in (a stalled or cached load), hand over anyway so the flying copy can't stay on screen.
+  useEffect(() => {
+    if (!present || !art || settledArt === art) return;
+    const timer = setTimeout(() => setSettledArt(art), 1500);
+    return () => clearTimeout(timer);
+  }, [present, art, settledArt]);
   const artShown = !art || settledArt === art;
   // The art flight and the resting art swap hard right at the open position, so at rest only the resting art can show,
   // even if the page moved after the flight was measured (Safari's toolbar, comments arriving).
@@ -227,7 +233,7 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
               titleEnd.current.body = sideBySide ? 0 : event.nativeEvent.layout.y;
             }} style={[styles.body, sideBySide ? [styles.desktopBody, { maxWidth: 440 }] : { width: artwork }]}>
               <View onLayout={event => { titleEnd.current.meta = event.nativeEvent.layout.y + event.nativeEvent.layout.height; }} style={styles.meta}>
-                <Animated.View ref={titleRef} style={carried}><Text testID="now-playing-title" accessibilityRole="header" accessibilityLabel={track.metadata.title} numberOfLines={2} style={titleStyle}>
+                <Animated.View ref={titleRef} style={carried}><Text testID="now-playing-title" accessibilityRole="header" accessibilityLabel={track.metadata.title} style={titleStyle}>
                   {track.metadata.title}
                 </Text></Animated.View>
                 <View {...dismiss.protect} style={{ alignSelf: 'flex-start', maxWidth: '100%' }}><Pressable accessibilityRole="link" accessibilityLabel={`Artist: ${artistName(track)}`} style={styles.artist} onPress={() => {
@@ -299,7 +305,7 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
             </Animated.View>
             <Animated.View style={[StyleSheet.absoluteFill, { opacity: departed(0, 1) }]}><PlayerFlight testID="now-playing-flight-title" {...flights.title} rest={rest} left={titleLeft} originFade={[0.05, 0.25]} fade={[0.6, 0.8]}
               origin={<Text numberOfLines={1} style={{ color: theme.text, fontSize: 14 * theme.scale, fontWeight: '700' }}>{track.metadata.title}</Text>}>
-              <Text numberOfLines={2} style={titleStyle}>{track.metadata.title}</Text>
+              <Text style={titleStyle}>{track.metadata.title}</Text>
             </PlayerFlight></Animated.View>
           </View>}
         </View>
