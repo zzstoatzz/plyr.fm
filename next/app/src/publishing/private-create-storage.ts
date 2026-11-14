@@ -1,5 +1,8 @@
 import { createMMKV } from 'react-native-mmkv';
-import { privateCreate, samePrivateCreate, type PrivateCreate, type PrivateCreateStorage } from './private-create';
+import type { PrivateCreate, PrivateCreateStorage } from '../../../core/src/publishing/private-music';
+import { privateLibrary } from './private-config';
+
+const { privateCreate, samePrivateCreate } = privateLibrary;
 const storage = createMMKV({ id: 'plyr-next-private-creates' });
 const key = (operation: PrivateCreate) => `${operation.owner}/${operation.rkey}`;
 export const privateCreateStorage: PrivateCreateStorage = {

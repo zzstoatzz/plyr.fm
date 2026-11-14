@@ -8,7 +8,8 @@ import type { Track } from '../../core/src/api';
 import { useAuth } from './auth';
 import { getAuth } from './auth-state';
 import { isPrivateTrack } from '../../core/src/track-access';
-import { editPrivateQueue, privateSpace, withoutPrivateTrack } from './publishing/private-track';
+import { editPrivateQueue, withoutPrivateTrack } from '../../core/src/publishing/private-music';
+import { privateLibrary } from './publishing/private-config';
 import { blobUrl } from '../../core/src/identity';
 import { gatedAudioUrl, releaseGatedAudioUrl } from './gated-audio';
 import { useJamPlayback, jamTrack } from './use-jam-playback';
@@ -136,7 +137,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     if (!track) return false;
     const privateTrack = isPrivateTrack(track);
     if (privateTrack !== privateMode.current || tracks.some(item => isPrivateTrack(item) !== privateTrack)) return false;
-    if (privateTrack && (!auth.did || track.artist.did !== auth.did || !track.record.uri.startsWith(privateSpace(auth.did) + '/' + auth.did + '/'))) return false;
+    if (privateTrack && !privateLibrary.ownsPrivateTrack(track, auth.did)) return false;
     const request = ++sequence.current;
     const startedAt = Date.now();
     if (!privateTrack) console.info("[playback] load", { request, track: track.id, start });

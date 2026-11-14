@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
-import { normalizeTrackTags, recordTags } from '../src/publishing/track-tags.ts';
+import { normalizeTrackTags, recordTags } from '../../core/src/publishing/track-tags.ts';
 
 test('creator tags follow canonical normalization with stable deduplication', () => {
   assert.deepEqual(normalizeTrackTags(['  AI  ', 'ai', '--Hip-Hop--', 'AI   Generated', '', '---']), ['ai', 'hip-hop', 'ai generated']);

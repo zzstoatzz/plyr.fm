@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 import { Client } from '@atcute/client';
 import { recordCreator, CreateUnconfirmed } from '../src/publishing/create-record.ts';
-import { createKey, createOperation, scopedCreate, sameRecord, type CreateOperation, type CreateStorage } from '../src/publishing/create-operation.ts';
+import { createKey, createOperation, scopedCreate, sameRecord, type CreateOperation, type CreateStorage } from '../../core/src/publishing/create-operation.ts';
 
 const operation: CreateOperation = { owner: 'did:plc:fixture', collection: 'fm.plyr.list', rkey: '3jzfcijpj2z2a', uri: 'at://did:plc:fixture/fm.plyr.list/3jzfcijpj2z2a', record: { $type: 'fm.plyr.list', name: 'night', items: [], createdAt: '2026-11-12T00:00:00Z' } };
 function fixture() {

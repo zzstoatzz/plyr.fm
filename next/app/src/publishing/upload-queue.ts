@@ -5,7 +5,7 @@ import { trackIdFromUri } from '../../../core/src/api';
 import { measureAudioDuration } from '../media-picker';
 import { createPds, type MediaFile, type NewTrack } from '../pds';
 import { toast } from '../toast';
-import type { CreateReservation } from './create-operation';
+import type { CreateReservation } from '../../../core/src/publishing/create-operation';
 import { audioFormat, uploadPublication, type UploadOperation, type UploadStatus } from './upload-model';
 import { jobLine, processingStep, retryDelay, transient, uploadRoute, type UploadJobView } from './upload-queue-model';
 import { openUploadReader } from './upload-reader';

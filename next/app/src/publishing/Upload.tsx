@@ -12,7 +12,7 @@ import { uploadQueue, useUploadQueue } from './upload-queue';
 import { UploadQueueList } from './UploadQueue';
 import { usePendingSharedAudio, useSharedAudio } from './shared-audio';
 import { TagsField } from './TagsField';
-import { normalizeTrackTags } from './track-tags';
+import { normalizeTrackTags } from '../../../core/src/publishing/track-tags';
 import { CreateRecovery, EarlierCreates, useCreateRecovery } from './CreateRecovery';
 import { AudienceToggle, CheckRow, FieldError, FormCard, PickTile } from './UploadPieces';
 import { pickArtwork } from './artwork';

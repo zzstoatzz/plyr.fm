@@ -1,7 +1,7 @@
 import { assertPublicCollection } from './track-reference.ts';
 import { ok } from '@atcute/client';
 import type { Auth } from '../auth-state';
-import { sameRecord, type CreateOperation, type CreateStorage } from './create-operation.ts';
+import { sameRecord, type CreateOperation, type CreateStorage } from '../../../core/src/publishing/create-operation.ts';
 
 type Rpc = NonNullable<Auth['rpc']>;
 type Nsid = `${string}.${string}.${string}`;

@@ -1,4 +1,4 @@
-import { createKey, scopedCreate, sameRecord, type CreateStorage } from './create-operation';
+import { createKey, scopedCreate, sameRecord, type CreateStorage } from '../../../core/src/publishing/create-operation';
 
 let database: Promise<IDBDatabase> | undefined;
 function open(): Promise<IDBDatabase> {

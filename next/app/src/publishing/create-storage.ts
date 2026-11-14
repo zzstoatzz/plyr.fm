@@ -1,5 +1,5 @@
 import { createMMKV } from 'react-native-mmkv';
-import { createKey, scopedCreate, sameRecord, type CreateStorage } from './create-operation';
+import { createKey, scopedCreate, sameRecord, type CreateStorage } from '../../../core/src/publishing/create-operation';
 
 const storage = createMMKV({ id: 'plyr-next-pending-creates' });
 export const createStorage: CreateStorage = {

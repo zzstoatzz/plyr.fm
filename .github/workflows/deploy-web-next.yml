@@ -8,6 +8,7 @@ on:
       - "next/core/**"
       - "next/web/src/lib/media/private-audio.ts"
       - "next/web/static/private-audio-worker.js"
+      - "next/web/src/lib/storage/private-create-storage.ts"
       - ".github/workflows/deploy-web-next.yml"
 
 jobs:
