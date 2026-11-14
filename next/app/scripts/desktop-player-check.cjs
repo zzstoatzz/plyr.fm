@@ -26,8 +26,11 @@ async function runDesktop(browser, width, theme, { setup, track, screenshot }) {
   await continuity();await screenshot(page,`desktop-${width}-${theme}-expanded`);
   await dialog.getByRole('slider',{name:'Playback position',exact:true}).focus();await page.keyboard.press('ArrowRight');
   await page.waitForFunction(()=>window.__desktopMedia.currentTime>=1);
-  await dialog.getByRole('button',{name:'Forward 15 seconds',exact:true}).dblclick();await page.waitForFunction(()=>window.__desktopMedia.currentTime>30);
-  await dialog.getByRole('button',{name:'Rewind 15 seconds',exact:true}).click();await page.waitForFunction(()=>window.__desktopMedia.currentTime>15&&window.__desktopMedia.currentTime<25);
+  const chapters=dialog.getByTestId('now-playing-chapters');
+  await chapters.getByRole('button',{name:'Jump to 1:50, chorus',exact:true}).click();await page.waitForFunction(()=>window.__desktopMedia.currentTime>=110&&window.__desktopMedia.currentTime<115);
+  await dialog.getByText('now: chorus',{exact:true}).waitFor();
+  assert.equal(await chapters.getByRole('button',{name:'Jump to 1:50, chorus',exact:true}).getAttribute('aria-current'),'true','The playing chapter is marked');
+  await chapters.getByRole('button',{name:'Jump to 0:40, first verse',exact:true}).click();await page.waitForFunction(()=>window.__desktopMedia.currentTime>=40&&window.__desktopMedia.currentTime<45);
   await dialog.getByRole('slider',{name:'Volume',exact:true}).focus();await page.keyboard.press('Home');await page.waitForFunction(()=>window.__desktopMedia.volume===0);
   await page.keyboard.press('End');await page.waitForFunction(()=>window.__desktopMedia.volume===1);
   await dialog.getByRole('button',{name:'Pause',exact:true}).click();await page.waitForFunction(()=>window.__desktopMedia.paused);

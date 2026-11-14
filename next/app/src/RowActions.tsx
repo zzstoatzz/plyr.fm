@@ -81,7 +81,7 @@ export function useFinishPendingLike() {
 
 type Liker = { did: string; name: string; avatar?: string | null };
 const likers = new Map<string, Promise<Liker[]>>();
-function firstLikers(id: string) {
+export function firstLikers(id: string) {
   let load = likers.get(id);
   if (!load) {
     load = api.trackLikes(id).then(page => page.data.map(({ actor }) => ({ did: actor.did, name: actor.profile?.display_name || actor.profile?.handle || 'someone', avatar: actor.profile?.avatar_url })));

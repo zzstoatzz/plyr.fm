@@ -79,7 +79,7 @@ async function run(browser, width, theme) {
       handle: async (url, init) => { const result = await window.__privateRpc(String(url), typeof init?.body === 'string' ? init.body : null, init?.body instanceof ArrayBuffer ? init.body.byteLength : null);
         if (result.drop) throw new TypeError('fixture response lost'); return new Response(JSON.stringify(result.body), { status: result.status, headers: { 'content-type': 'application/json' } }); },
     }, scope), [authModule, owner, grant ? scope : 'atproto repo:fm.plyr.track blob:*/*']);
-    const enter = async () => { await page.goto(new URL('/private', page.url()).href); await page.getByRole('link', { name: 'Sign in', exact: true }).waitFor(); await signIn(); };
+    const enter = async () => { await page.goto(new URL('/private', page.url()).href); await page.getByRole('link', { name: 'Sign in', exact: true }).and(page.locator(':not([role=navigation] *)')).waitFor(); await signIn(); };
     const choose = async () => { const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.getByRole('button', { name: 'Choose private audio', exact: true }).click()]); await chooser.setFiles({ name: 'private.wav', mimeType: 'audio/wav', buffer: audio }); };
     await enter(); await signIn(did, false);
     await page.getByRole('link', { name: 'Sign in for private uploads' }).waitFor(); assert.equal(blobs, 0);
@@ -132,7 +132,7 @@ async function run(browser, width, theme) {
     assert.deepEqual(publicLeaks, []);
     console.log('private audio verified; handing off to public');
     await page.getByRole('link', { name: 'Home', exact: true }).click();
-    await page.getByRole('button', { name: `Play ${track.metadata.title}`, exact: true }).click();
+    await page.getByRole('button', { name: `Play ${track.metadata.title}`, exact: true }).click({ position: { x: 30, y: 30 } });
     await page.waitForFunction(() => window.__playerPresentationMedia && !window.__playerPresentationMedia.paused && window.__playerPresentationMedia.currentSrc.includes('player-fixture.invalid'), null, { timeout: 20000 });
     console.log('public handoff verified; returning to private');
     await page.getByRole('link', { name: 'You', exact: true }).click();
