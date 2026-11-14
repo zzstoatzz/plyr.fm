@@ -4,7 +4,7 @@ import { Text } from './Text';
 import Slider from './Slider';
 import type { Href } from 'expo-router';
 import { NextGlyph as SkipForward, PauseGlyph as Pause, PlayGlyph as Play, PreviousGlyph as SkipBack } from './PlayerGlyph';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Modal, Platform, Pressable, StyleSheet, View, useWindowDimensions, type ScrollViewInstance, type ViewInstance } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Track } from './api';
@@ -14,13 +14,13 @@ import { ShareLink } from './ShareLink';
 import { TrackLikes } from './TrackLikes';
 import { usePlayCount } from './use-play-count';
 import { PlayerVolume } from './PlayerVolume';
-import { PlayerSeek } from './PlayerSeek';
 import { PlayerControl } from './PlayerControl';
 import { usePlayback } from './playback';
 import { usePlayerDismiss } from './use-player-dismiss';
 import { PullDetector, PullRoot, usePlayerPull } from './player-pull';
 import { PlayerFlight } from './PlayerFlight';
 import { NowPlayingDetails } from './NowPlayingDetails';
+import { currentChapter, parseChapters } from './chapters';
 import { Coachmark } from './Coachmark';
 import { markHintSeen, useHintPending } from './hints';
 import { measure, playerSheet, setFlying, type Rect } from './player-sheet';
@@ -173,7 +173,10 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
   const caption = { color: theme.muted, fontFamily: theme.fontFamily, fontSize: 13 * theme.scale };
   const plays = usePlayCount(track.id, track.metrics.play_count);
 
-  const details = <NowPlayingDetails track={track} plays={plays} protect={dismiss.protect} navigate={navigate} />;
+  const seek = player.canSeek && !player.live && !error ? player.seek : undefined;
+  const details = <NowPlayingDetails track={track} plays={plays} protect={dismiss.protect} navigate={navigate} wide={sideBySide} position={position} seek={seek} />;
+  const chapters = useMemo(() => parseChapters(track.metadata.description, track.metadata.duration_seconds ?? undefined).chapters, [track.metadata.description, track.metadata.duration_seconds]);
+  const chapter = player.live ? undefined : chapters[currentChapter(chapters, position)];
 
   closeRef.current = close;
   dismiss.scrolled.current = event => {
@@ -221,10 +224,12 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
                 <Animated.View ref={titleRef} style={carried}><Text testID="now-playing-title" accessibilityRole="header" accessibilityLabel={track.metadata.title} numberOfLines={2} style={titleStyle}>
                   {track.metadata.title}
                 </Text></Animated.View>
-                <View {...dismiss.protect} style={{ alignSelf: 'flex-start', maxWidth: '100%' }}><Pressable accessibilityRole="link" style={styles.artist} onPress={() => {
+                <View {...dismiss.protect} style={{ alignSelf: 'flex-start', maxWidth: '100%' }}><Pressable accessibilityRole="link" accessibilityLabel={sideBySide ? `Artist: ${artistName(track)}` : undefined} style={styles.artist} onPress={() => {
                   navigate(`/u/${encodeURIComponent(track.artist.profile.handle || track.artist.did)}`);
                 }}>
-                  <Text numberOfLines={1} style={{ ...caption, fontSize: 15 * theme.scale }}>{artistName(track)}</Text>
+                  {sideBySide && <Cover uri={track.artist.profile.avatar_url} size={22} round instant />}
+                  <Text numberOfLines={1} style={{ ...caption, fontSize: 15 * theme.scale, color: sideBySide ? theme.text : theme.muted }}>{artistName(track)}</Text>
+                  {sideBySide && !!track.artist.profile.handle && track.artist.profile.handle !== artistName(track) && <Text numberOfLines={1} style={{ ...caption, fontSize: 14 * theme.scale, flexShrink: 1 }}>@{track.artist.profile.handle}</Text>}
                 </Pressable></View>
               </View>
               <View>
@@ -239,26 +244,24 @@ export function NowPlaying({ track, close: leave, navigate: go, overlay = false,
                 <View testID="now-playing-time" style={styles.time}>
                   <Text style={[caption, styles.numeric]}>{time(position)}</Text>
                   <Text accessibilityLiveRegion="polite" style={[caption, styles.status]}>
-                    {error ? 'couldn’t play this track' : ''}
+                    {error ? 'couldn’t play this track' : chapter ? <Text numberOfLines={1} style={{ ...caption, color: theme.accent }}>now: {chapter.title}</Text> : ''}
                   </Text>
                   <Text style={[caption, styles.numeric]}>{time(duration)}</Text>
                 </View>
               </View>
-              <View style={styles.transport}>
+              <View style={[styles.transport, sideBySide && styles.transportWide]}>
                 {!player.live && <View {...dismiss.protect}><PlayerControl large icon={SkipBack} label="Previous" onPress={player.previous} /></View>}
-                {sideBySide && !player.live && <PlayerSeek />}
                 <View {...dismiss.protect}><PlayerControl icon={playing ? Pause : Play} label={playing ? 'Pause' : 'Play'}
                   onPress={() => player.setPlaying(!playing)} primary large busy={player.loading} /></View>
-                {sideBySide && !player.live && <PlayerSeek forward />}
                 {!player.live && <View {...dismiss.protect}><PlayerControl large icon={SkipForward} label="Next" onPress={() => void player.next()} /></View>}
               </View>
-              <View style={styles.utilities}>
+              <View style={[styles.utilities, sideBySide && styles.utilitiesWide]}>
                 {!player.privatePlayback && <View {...dismiss.protect}><TrackLikes key={track.id} track={track} iconOnly returnTo="/now-playing" /></View>}
                 {!player.privatePlayback && <View {...dismiss.protect}><ShareLink compact path={`/track/${encodeURIComponent(track.id)}`} /></View>}
                 <View {...dismiss.protect}>{player.live ? <PlayerControl icon={RadioTower} label="Stations" onPress={() => navigate('/radio')} />
                   : <PlayerControl icon={ListMusic} label="Queue" onPress={() => navigate('/queue')} />}</View>
+                {sideBySide && <View style={{ marginLeft: 'auto' }}><PlayerVolume /></View>}
               </View>
-              {sideBySide && <View style={{ alignItems: 'center' }}><PlayerVolume /></View>}
               {sideBySide && details}
             </View>
             {hintRoom && <View style={{ width: Math.min(width - 32, 440), height: hintSlot, justifyContent: 'flex-end' }}>
@@ -307,7 +310,7 @@ const styles = StyleSheet.create({
   body: { gap: 16, minWidth: 0 },
   desktopBody: { flex: 1 },
   meta: { gap: 2 },
-  artist: { alignSelf: 'flex-start', maxWidth: '100%', minHeight: 28, justifyContent: 'center' },
+  artist: { alignSelf: 'flex-start', maxWidth: '100%', minHeight: 28, flexDirection: 'row', alignItems: 'center', gap: 8 },
   time: { minHeight: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 6 },
   status: { flex: 1, textAlign: 'center' },
   numeric: { fontVariant: ['tabular-nums'] },
@@ -315,4 +318,6 @@ const styles = StyleSheet.create({
   liveFill: { height: 4, borderRadius: 2 },
   transport: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly' },
   utilities: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  utilitiesWide: { justifyContent: 'flex-start', gap: 4, marginLeft: -10 },
+  transportWide: { justifyContent: 'center', gap: 36 },
 });
