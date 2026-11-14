@@ -6,7 +6,7 @@ import { useAppearance } from './appearance';
 import { trackArtwork } from './artwork';
 import { Cover, type Play } from './CatalogPieces';
 import { Action } from './controls';
-import { distinctTracks, formatDuration, rankedArtists, weekNumber } from './home-state';
+import { compactCount, distinctTracks, formatDuration, rankedArtists, weekNumber } from './home-state';
 import { Play as PlayIcon, Shuffle } from './icons';
 import { cardSurface } from './materials';
 import { Text } from './Text';
@@ -16,7 +16,7 @@ type Featured = { status: 'loading' } | { status: 'empty' } | { status: 'ready';
 let daily: { day: string; load: Promise<Track[]> } | undefined;
 
 async function loadFeatured(): Promise<Track[]> {
-  const liked = (await api.chart('all_time')).data.map(({ track }) => track);
+  const liked = (await api.chart('all_time', 50)).data.map(({ track }) => track);
   const ranked = rankedArtists(liked);
   if (!ranked.length) return [];
   const start = weekNumber() % ranked.length;
@@ -110,7 +110,7 @@ export function HomeFeatured({ featured, onPlay }: { featured: Featured; onPlay:
           </View>
           <View style={{ gap: 2 }}>
             <Text numberOfLines={1} style={{ color: theme.text, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale, fontWeight: '600' }}>{track.metadata.title}</Text>
-            <Text numberOfLines={1} style={{ color: theme.faint, fontSize: 12.5 * theme.scale, fontVariant: ['tabular-nums'] }}>{[formatDuration(track.metadata.duration_seconds), `${track.metrics.play_count} ${track.metrics.play_count === 1 ? 'play' : 'plays'}`].filter(Boolean).join(' · ')}</Text>
+            <Text numberOfLines={1} style={{ color: theme.faint, fontSize: 12.5 * theme.scale, fontVariant: ['tabular-nums'] }}>{[formatDuration(track.metadata.duration_seconds), `${compactCount(track.metrics.play_count)} ${track.metrics.play_count === 1 ? 'play' : 'plays'}`].filter(Boolean).join(' · ')}</Text>
           </View>
         </>}
       </Pressable>)}
@@ -120,8 +120,8 @@ export function HomeFeatured({ featured, onPlay }: { featured: Featured; onPlay:
 
 const styles = StyleSheet.create({
   card: { borderRadius: 18, overflow: 'hidden', padding: 22, gap: 18 },
-  head: { flexDirection: 'row', alignItems: 'center', gap: 18 },
-  title: { flex: 1, minWidth: 0, gap: 2 },
+  head: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 18, rowGap: 14 },
+  title: { flex: 1, minWidth: 220, gap: 2 },
   name: { alignSelf: 'flex-start', maxWidth: '100%' },
   actions: { flexDirection: 'row', gap: 8 },
   strip: { flexDirection: 'row', gap: GAP, minHeight: 1 },

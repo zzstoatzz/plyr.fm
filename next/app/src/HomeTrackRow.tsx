@@ -1,14 +1,15 @@
 import { trackArtwork } from './artwork';
 import { DotsThree as Ellipsis } from './icons';
 import { Link } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { Pressable, StyleSheet, View, type ViewInstance } from 'react-native';
 import type { Track } from './api';
 import { useAppearance } from './appearance';
 import { artistName, Cover, trackMeta, type Play } from './CatalogPieces';
 import { cardSurface } from './materials';
 import { Text } from './Text';
 import { TrackMenu } from './TrackMenu';
+import type { Anchor } from './Sheet';
 import { PlayerControl } from './PlayerControl';
 
 export function HomeTrackRow({ track, tracks, onPlay, returnTo = '/', height }: { height?: number; track: Track; tracks: Track[]; onPlay: Play; returnTo?: string }) {
@@ -27,10 +28,16 @@ export function HomeTrackRow({ track, tracks, onPlay, returnTo = '/', height }: 
 }
 
 export function HomeTrackActions({ track, returnTo = '/' }: { track: Track; returnTo?: string }) {
-  const [menu, setMenu] = useState(false);
-  return <View style={styles.actions}>
-    <PlayerControl icon={Ellipsis} label={`More options for ${track.metadata.title}`} onPress={() => setMenu(true)} />
-    {menu && <TrackMenu track={track} returnTo={returnTo} close={() => setMenu(false)} />}
+  const [menu, setMenu] = useState<Anchor>();
+  const button = useRef<ViewInstance>(null);
+  const open = () => {
+    const fallback = { x: 0, y: 0, width: 0, height: 0 };
+    if (!button.current) return setMenu(fallback);
+    button.current.measureInWindow((x, y, width, height) => setMenu({ x, y, width, height }));
+  };
+  return <View ref={button} style={styles.actions}>
+    <PlayerControl icon={Ellipsis} label={`More options for ${track.metadata.title}`} onPress={open} />
+    {menu && <TrackMenu track={track} returnTo={returnTo} anchor={menu.width ? menu : undefined} close={() => setMenu(undefined)} />}
   </View>;
 }
 

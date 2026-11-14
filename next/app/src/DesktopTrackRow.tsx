@@ -33,8 +33,8 @@ export function DesktopTrackRow({ track, tracks, onPlay, rank, now, returnTo = '
       </View>
     </View>
     <View pointerEvents="none" accessibilityLabel={`${plays} ${plays === 1 ? 'play' : 'plays'}, ${likes} ${likes === 1 ? 'like' : 'likes'}`} style={styles.stats}>
-      <View style={[styles.stat, { width: 64 }]}><Headphones size={15} color={theme.faint} /><Text style={stat}>{compactCount(plays)}</Text></View>
-      <View style={[styles.stat, { width: 48, opacity: likes ? 1 : 0 }]}><Heart size={14} color={theme.faint} /><Text style={stat}>{compactCount(likes)}</Text></View>
+      <View style={styles.stat}><Headphones size={15} color={theme.faint} /><Text style={[stat, styles.count]}>{compactCount(plays)}</Text></View>
+      <View style={styles.stat}>{likes > 0 && <><Heart size={14} color={theme.faint} /><Text style={[stat, styles.count]}>{compactCount(likes)}</Text></>}</View>
       <Text style={[stat, styles.duration]}>{formatDuration(track.metadata.duration_seconds)}</Text>
     </View>
     <HomeTrackActions track={track} returnTo={returnTo} />
@@ -47,7 +47,9 @@ const styles = StyleSheet.create({
   meta: { flex: 1, minWidth: 0 },
   byline: { flexDirection: 'row', alignItems: 'center', gap: 5, minWidth: 0 },
   link: { minHeight: 22, justifyContent: 'center', alignSelf: 'flex-start', maxWidth: '100%' },
-  stats: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  stat: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6 },
-  duration: { width: 44, textAlign: 'right' },
+  // fixed cells with the icon first, so icons stay in a column whatever the count (132.1k at most)
+  stats: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  stat: { width: 70, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  count: { flex: 1, textAlign: 'left' },
+  duration: { width: 58, textAlign: 'right' },
 });

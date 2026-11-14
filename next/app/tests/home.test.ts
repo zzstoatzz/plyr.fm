@@ -134,5 +134,6 @@ test('artist of the week shows each title once', async () => {
 
 test('desktop rows shorten big counts without rounding up', async () => {
   const { compactCount } = await import('../src/home-state.ts');
-  assert.deepEqual([0, 999, 1000, 1299, 12_900, 999_999, 3_450_000].map(compactCount), ['0', '999', '1k', '1.2k', '12k', '999k', '3.4m']);
+  assert.deepEqual([0, 999, 1000, 1299, 12_900, 132_150, 999_999, 3_450_000].map(compactCount), ['0', '999', '1k', '1.2k', '12.9k', '132.1k', '999.9k', '3.4m']);
+  for (const count of [7, 1_000_000_000 - 1, 999_999_999_999]) assert.ok(compactCount(count).length <= 6, `${count} fits the column`);
 });
