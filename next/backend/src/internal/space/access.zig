@@ -67,11 +67,11 @@ pub const Core = struct {
         const all = try self.policies.list(a, space.authority, self.policy_collection, self.space_type);
         var matching: std.ArrayList(policy.Policy) = .empty;
         for (all) |entry| {
-            if (std.mem.eql(u8, entry.space, space_uri)) try matching.append(a, entry);
+            if (policy.opens(entry, space_uri)) try matching.append(a, entry);
         }
         if (matching.items.len == 0) {
             const rule = policy.implicit(space) orelse return false;
-            try matching.append(a, .{ .uri = space_uri, .space = space_uri, .rule = rule });
+            try matching.append(a, .{ .uri = space_uri, .spaces = &.{space_uri}, .rule = rule });
         }
         return policy.allows(a, matching.items, request.user, space.authority, self.evidence);
     }
@@ -121,7 +121,7 @@ test "the authority always passes, writers never do, foreign types stay closed" 
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
-    var fixture: Fixture = .{ .policies = &.{.{ .uri = "at://did:plc:artist/fm.plyr.dev.policy/3o", .space = "at://did:plc:artist/space/fm.plyr.dev.audio/3album", .rule = .signed_in }} };
+    var fixture: Fixture = .{ .policies = &.{.{ .uri = "at://did:plc:artist/fm.plyr.dev.policy/3o", .spaces = &.{"at://did:plc:artist/space/fm.plyr.dev.audio/3album"}, .rule = .signed_in }} };
     var core = fixture.core();
     try std.testing.expect(try ask(&core, a, "at://did:plc:artist/space/fm.plyr.dev.audio/3album", "did:plc:artist", .write));
     try std.testing.expect(try ask(&core, a, "at://did:plc:artist/space/fm.plyr.dev.audio/3album", "did:plc:fan", .read));
@@ -134,8 +134,19 @@ test "policies open only the space they name; an unnamed space stays closed" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
-    var fixture: Fixture = .{ .policies = &.{.{ .uri = "at://did:plc:artist/fm.plyr.dev.policy/3o", .space = "at://did:plc:artist/space/fm.plyr.dev.audio/3album", .rule = .signed_in }} };
+    var fixture: Fixture = .{ .policies = &.{.{ .uri = "at://did:plc:artist/fm.plyr.dev.policy/3o", .spaces = &.{"at://did:plc:artist/space/fm.plyr.dev.audio/3album"}, .rule = .signed_in }} };
     var core = fixture.core();
+    try std.testing.expect(!try ask(&core, a, "at://did:plc:artist/space/fm.plyr.dev.audio/3other", "did:plc:fan", .read));
+}
+
+test "one policy can open several spaces" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var fixture: Fixture = .{ .policies = &.{.{ .uri = "at://did:plc:artist/fm.plyr.dev.policy/3o", .spaces = &.{ "at://did:plc:artist/space/fm.plyr.dev.audio/3album", "at://did:plc:artist/space/fm.plyr.dev.audio/3single" }, .rule = .signed_in }} };
+    var core = fixture.core();
+    try std.testing.expect(try ask(&core, a, "at://did:plc:artist/space/fm.plyr.dev.audio/3album", "did:plc:fan", .read));
+    try std.testing.expect(try ask(&core, a, "at://did:plc:artist/space/fm.plyr.dev.audio/3single", "did:plc:fan", .read));
     try std.testing.expect(!try ask(&core, a, "at://did:plc:artist/space/fm.plyr.dev.audio/3other", "did:plc:fan", .read));
 }
 
@@ -151,7 +162,7 @@ test "legacy gate names keep working until their artist writes a policy" {
     try std.testing.expect(try ask(&core, a, "at://did:plc:artist/space/fm.plyr.dev.audio/supporters", "did:plc:fan", .read));
     // an explicit policy replaces the legacy reading
     const members = [_][]const u8{"did:plc:friend"};
-    fixture.policies = &.{.{ .uri = "at://did:plc:artist/fm.plyr.dev.policy/3m", .space = "at://did:plc:artist/space/fm.plyr.dev.audio/supporters", .rule = .{ .members = &members } }};
+    fixture.policies = &.{.{ .uri = "at://did:plc:artist/fm.plyr.dev.policy/3m", .spaces = &.{"at://did:plc:artist/space/fm.plyr.dev.audio/supporters"}, .rule = .{ .members = &members } }};
     try std.testing.expect(!try ask(&core, a, "at://did:plc:artist/space/fm.plyr.dev.audio/supporters", "did:plc:fan", .read));
     try std.testing.expect(try ask(&core, a, "at://did:plc:artist/space/fm.plyr.dev.audio/supporters", "did:plc:friend", .read));
 }

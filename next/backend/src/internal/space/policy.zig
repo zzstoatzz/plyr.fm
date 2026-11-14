@@ -1,9 +1,11 @@
 //! Space access policies.
 //!
 //! An artist opens a space by writing public policy records in their own repo
-//! (`{namespace}.policy`). Each policy names one space and one rule a reader
-//! can satisfy; a space may carry any number of policies, of any kinds, and
-//! passing one is enough. What sits in the space (a track, an album's tracks,
+//! (`{namespace}.policy`). Each policy names the spaces it opens (`spaces`,
+//! or the older single `space`) and one rule a reader can satisfy; a space
+//! may carry any number of policies, of any kinds, and passing one is enough.
+//! One policy over several spaces lets one purchase open, say, an album and
+//! the single it shares a track with. What sits in the space (a track, an album's tracks,
 //! a playlist) is the artist's choice: the policy only answers who may read it.
 //!
 //! Rules:
@@ -22,6 +24,7 @@ const SpaceUri = @import("managed_space.zig").SpaceUri;
 
 pub const max_members = 512;
 pub const max_brokers = 16;
+pub const max_spaces = 16;
 
 pub const Rule = union(enum) {
     signed_in,
@@ -43,8 +46,8 @@ pub const Purchase = struct {
 pub const Policy = struct {
     /// the policy record itself; a purchase's entitlement points here
     uri: []const u8,
-    /// `at://{authority}/space/{type}/{skey}`
-    space: []const u8,
+    /// the spaces it opens, each `at://{authority}/space/{type}/{skey}`
+    spaces: []const []const u8,
     rule: Rule,
 };
 
@@ -144,11 +147,13 @@ pub fn parse(a: std.mem.Allocator, item: std.json.Value, collection: []const u8,
     if (zat.Rkey.parse(at.rkey() orelse return null) == null) return null;
     const value = (if (item == .object) item.object.get("value") else null) orelse return null;
     if (!std.mem.eql(u8, stringField(value, "$type") orelse return null, collection)) return null;
-    const space_text = stringField(value, "space") orelse return null;
-    const space = SpaceUri.parse(space_text) orelse return null;
-    // an artist can only open their own spaces
-    if (!std.mem.eql(u8, space.authority, at.authority())) return null;
-    if (!std.mem.eql(u8, space.space_type, space_type)) return null;
+    const spaces = (try spaceList(a, value)) orelse return null;
+    for (spaces) |text| {
+        const space = SpaceUri.parse(text) orelse return null;
+        // an artist can only open their own spaces
+        if (!std.mem.eql(u8, space.authority, at.authority())) return null;
+        if (!std.mem.eql(u8, space.space_type, space_type)) return null;
+    }
     const rule_value = value.object.get("rule") orelse return null;
     const rule_type = stringField(rule_value, "$type") orelse return null;
     const hash = std.mem.indexOfScalar(u8, rule_type, '#') orelse return null;
@@ -170,7 +175,35 @@ pub fn parse(a: std.mem.Allocator, item: std.json.Value, collection: []const u8,
             .brokers = try optionalDids(a, rule_value, "brokers") orelse return null,
         } };
     } else return null;
-    return .{ .uri = uri, .space = space_text, .rule = rule };
+    return .{ .uri = uri, .spaces = spaces, .rule = rule };
+}
+
+/// `spaces` (1..max_spaces strings), else the single `space` older records
+/// carry; null when neither is well formed or both are present.
+fn spaceList(a: std.mem.Allocator, value: std.json.Value) !?[]const []const u8 {
+    const many = value.object.get("spaces");
+    const one = value.object.get("space");
+    if (many != null and one != null) return null;
+    if (one) |field| {
+        if (field != .string) return null;
+        const out = try a.alloc([]const u8, 1);
+        out[0] = field.string;
+        return out;
+    }
+    const field = many orelse return null;
+    if (field != .array or field.array.items.len == 0 or field.array.items.len > max_spaces) return null;
+    const out = try a.alloc([]const u8, field.array.items.len);
+    for (field.array.items, out) |entry, *text| {
+        if (entry != .string) return null;
+        text.* = entry.string;
+    }
+    return out;
+}
+
+/// Does `policy` name `space`?
+pub fn opens(policy: Policy, space: []const u8) bool {
+    for (policy.spaces) |entry| if (std.mem.eql(u8, entry, space)) return true;
+    return false;
 }
 
 /// `null` when the field is malformed; `.{null}` when absent.
@@ -231,9 +264,9 @@ const offer = "at://did:plc:artist/fm.plyr.dev.policy/3offer";
 test "rules without evidence never touch the network" {
     var evidence: FakeEvidence = .{ .fail = true };
     const a = std.testing.allocator;
-    try std.testing.expect(try allows(a, &.{.{ .uri = offer, .space = space_uri, .rule = .signed_in }}, "did:plc:fan", "did:plc:artist", evidence.port()));
+    try std.testing.expect(try allows(a, &.{.{ .uri = offer, .spaces = &.{space_uri}, .rule = .signed_in }}, "did:plc:fan", "did:plc:artist", evidence.port()));
     const members = [_][]const u8{ "did:plc:friend", "did:plc:fan" };
-    try std.testing.expect(try allows(a, &.{.{ .uri = offer, .space = space_uri, .rule = .{ .members = &members } }}, "did:plc:fan", "did:plc:artist", evidence.port()));
+    try std.testing.expect(try allows(a, &.{.{ .uri = offer, .spaces = &.{space_uri}, .rule = .{ .members = &members } }}, "did:plc:fan", "did:plc:artist", evidence.port()));
     try std.testing.expectEqual(@as(usize, 0), evidence.calls);
     try std.testing.expect(!try allows(a, &.{}, "did:plc:fan", "did:plc:artist", evidence.port()));
 }
@@ -242,7 +275,7 @@ test "a purchase needs an entitlement to this policy at its price" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
-    const policies = [_]Policy{.{ .uri = offer, .space = space_uri, .rule = .{ .purchase = .{ .amount = 800, .currency = "USD" } } }};
+    const policies = [_]Policy{.{ .uri = offer, .spaces = &.{space_uri}, .rule = .{ .purchase = .{ .amount = 800, .currency = "USD" } } }};
     var evidence: FakeEvidence = .{ .payments = &.{
         .{ .amount = 2500, .currency = "USD", .entitlements = &.{} },
         .{ .amount = 800, .currency = "EUR", .entitlements = &.{offer} },
@@ -259,8 +292,8 @@ test "a supporter rule takes any verified payment and payments load once per bro
     defer arena.deinit();
     const a = arena.allocator();
     const policies = [_]Policy{
-        .{ .uri = offer, .space = space_uri, .rule = .{ .purchase = .{ .amount = 800, .currency = "USD" } } },
-        .{ .uri = "at://did:plc:artist/fm.plyr.dev.policy/3sup", .space = space_uri, .rule = .{ .supporter = null } },
+        .{ .uri = offer, .spaces = &.{space_uri}, .rule = .{ .purchase = .{ .amount = 800, .currency = "USD" } } },
+        .{ .uri = "at://did:plc:artist/fm.plyr.dev.policy/3sup", .spaces = &.{space_uri}, .rule = .{ .supporter = null } },
     };
     var evidence: FakeEvidence = .{ .payments = &.{.{ .amount = 100, .currency = "USD" }} };
     try std.testing.expect(try allows(a, &policies, "did:plc:fan", "did:plc:artist", evidence.port()));
@@ -274,10 +307,10 @@ test "an unreachable broker is unavailable, not a denial, unless another policy 
     defer arena.deinit();
     const a = arena.allocator();
     var evidence: FakeEvidence = .{ .fail = true };
-    const supporter = Policy{ .uri = offer, .space = space_uri, .rule = .{ .supporter = null } };
+    const supporter = Policy{ .uri = offer, .spaces = &.{space_uri}, .rule = .{ .supporter = null } };
     try std.testing.expectError(error.BrokerUnavailable, allows(a, &.{supporter}, "did:plc:fan", "did:plc:artist", evidence.port()));
     const members = [_][]const u8{"did:plc:fan"};
-    try std.testing.expect(try allows(a, &.{ supporter, .{ .uri = offer, .space = space_uri, .rule = .{ .members = &members } } }, "did:plc:fan", "did:plc:artist", evidence.port()));
+    try std.testing.expect(try allows(a, &.{ supporter, .{ .uri = offer, .spaces = &.{space_uri}, .rule = .{ .members = &members } } }, "did:plc:fan", "did:plc:artist", evidence.port()));
 }
 
 test "legacy skeys keep their old meaning" {
@@ -295,6 +328,12 @@ test "policy records parse strictly" {
         .{ true, "{\"uri\":\"at://did:plc:artist/fm.plyr.dev.policy/3m\",\"value\":{\"$type\":\"fm.plyr.dev.policy\",\"space\":\"" ++ space_uri ++ "\",\"rule\":{\"$type\":\"fm.plyr.dev.policy#members\",\"members\":[\"did:plc:fan\"]}}}" },
         .{ true, "{\"uri\":\"at://did:plc:artist/fm.plyr.dev.policy/3s\",\"value\":{\"$type\":\"fm.plyr.dev.policy\",\"space\":\"" ++ space_uri ++ "\",\"rule\":{\"$type\":\"fm.plyr.dev.policy#supporter\",\"brokers\":[\"did:plc:broker\"]}}}" },
         .{ true, "{\"uri\":\"at://did:plc:artist/fm.plyr.dev.policy/3o\",\"value\":{\"$type\":\"fm.plyr.dev.policy\",\"space\":\"" ++ space_uri ++ "\",\"rule\":{\"$type\":\"fm.plyr.dev.policy#signedIn\"}}}" },
+        // several spaces, one purchase opens them all
+        .{ true, "{\"uri\":\"at://did:plc:artist/fm.plyr.dev.policy/3both\",\"value\":{\"$type\":\"fm.plyr.dev.policy\",\"spaces\":[\"" ++ space_uri ++ "\",\"at://did:plc:artist/space/fm.plyr.dev.audio/3single\"],\"subject\":{\"uri\":\"at://did:plc:artist/fm.plyr.dev.release/3album\",\"cid\":\"bafy\"},\"rule\":{\"$type\":\"fm.plyr.dev.policy#purchase\",\"amount\":800,\"currency\":\"USD\"}}}" },
+        // both fields, an empty list, one space that is not the author's
+        .{ false, "{\"uri\":\"at://did:plc:artist/fm.plyr.dev.policy/3o\",\"value\":{\"$type\":\"fm.plyr.dev.policy\",\"space\":\"" ++ space_uri ++ "\",\"spaces\":[\"" ++ space_uri ++ "\"],\"rule\":{\"$type\":\"fm.plyr.dev.policy#signedIn\"}}}" },
+        .{ false, "{\"uri\":\"at://did:plc:artist/fm.plyr.dev.policy/3o\",\"value\":{\"$type\":\"fm.plyr.dev.policy\",\"spaces\":[],\"rule\":{\"$type\":\"fm.plyr.dev.policy#signedIn\"}}}" },
+        .{ false, "{\"uri\":\"at://did:plc:artist/fm.plyr.dev.policy/3o\",\"value\":{\"$type\":\"fm.plyr.dev.policy\",\"spaces\":[\"" ++ space_uri ++ "\",\"at://did:plc:mallory/space/fm.plyr.dev.audio/x\"],\"rule\":{\"$type\":\"fm.plyr.dev.policy#signedIn\"}}}" },
         // someone else's space
         .{ false, "{\"uri\":\"at://did:plc:mallory/fm.plyr.dev.policy/3o\",\"value\":{\"$type\":\"fm.plyr.dev.policy\",\"space\":\"" ++ space_uri ++ "\",\"rule\":{\"$type\":\"fm.plyr.dev.policy#signedIn\"}}}" },
         // a space type plyr does not manage
@@ -318,4 +357,10 @@ test "policy records parse strictly" {
     try std.testing.expectEqualStrings(offer, purchase.uri);
     try std.testing.expectEqual(@as(i64, 800), purchase.rule.purchase.amount);
     try std.testing.expect(purchase.rule.purchase.brokers == null);
+    try std.testing.expectEqual(@as(usize, 1), purchase.spaces.len);
+    const both_item = try std.json.parseFromSliceLeaky(std.json.Value, a, cases[4][1], .{});
+    const both = (try parse(a, both_item, "fm.plyr.dev.policy", "fm.plyr.dev.audio")).?;
+    try std.testing.expect(opens(both, space_uri));
+    try std.testing.expect(opens(both, "at://did:plc:artist/space/fm.plyr.dev.audio/3single"));
+    try std.testing.expect(!opens(both, "at://did:plc:artist/space/fm.plyr.dev.audio/3other"));
 }

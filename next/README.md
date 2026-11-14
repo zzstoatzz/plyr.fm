@@ -42,7 +42,8 @@ wrote; they are the user's.
 
 NSIDs follow the domain that owns them. Users' catalog records are `fm.plyr.*`
 (`track`, `list`, `like`, `comment`, `actor.profile`, shared with production,
-plus `policy`, which only Next writes so far). Anything only Next defines (the audio space type, Jams and their join method)
+plus `policy` and `release`, which only Next writes so far). Types that only
+Next uses (the audio space type, Jams and their join method)
 lives under `fm.plyr.next.*`, the authority of next.plyr.fm; their lexicons are
 in [app/lexicons](app/lexicons). `fm.plyr.stg.*` belongs to the legacy staging
 app, so Next never reads or writes it. `fm.plyr.dev.*` is for local runs and

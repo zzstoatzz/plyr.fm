@@ -1,0 +1,71 @@
+{
+  "lexicon": 1,
+  "id": "fm.plyr.release",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "description": "Something an artist puts out: an album, single, EP or compilation. It orders the artist's track records and carries the release's own metadata. A track may sit on several releases. Prices and access are not here: they are fm.plyr.policy records, which may name a release as their subject.",
+      "record": {
+        "type": "object",
+        "required": ["title", "releaseType", "tracks", "createdAt"],
+        "properties": {
+          "title": { "type": "string", "minLength": 1, "maxLength": 2560, "maxGraphemes": 256 },
+          "releaseType": {
+            "type": "string",
+            "knownValues": ["album", "single", "ep", "compilation", "other"],
+            "description": "Primary type, after MusicBrainz release groups and DDEX ReleaseType."
+          },
+          "secondaryTypes": {
+            "type": "array",
+            "maxLength": 8,
+            "items": { "type": "string", "knownValues": ["live", "remix", "soundtrack", "mixtape", "demo", "dj-mix"] }
+          },
+          "tracks": {
+            "type": "array",
+            "minLength": 1,
+            "maxLength": 500,
+            "items": { "type": "ref", "ref": "#item" },
+            "description": "In play order."
+          },
+          "artwork": {
+            "type": "blob",
+            "accept": ["image/png", "image/jpeg", "image/webp", "image/gif"],
+            "maxSize": 10000000
+          },
+          "description": { "type": "string", "maxLength": 50000, "maxGraphemes": 5000, "description": "Liner notes." },
+          "releaseDate": {
+            "type": "string",
+            "maxLength": 10,
+            "description": "When it came out: YYYY, YYYY-MM or YYYY-MM-DD."
+          },
+          "artists": {
+            "type": "array",
+            "maxLength": 20,
+            "items": { "type": "string", "format": "did" },
+            "description": "Credited artists besides the repo's owner."
+          },
+          "label": { "type": "string", "maxLength": 2560, "maxGraphemes": 256 },
+          "catalogNumber": { "type": "string", "maxLength": 64 },
+          "upc": { "type": "string", "minLength": 12, "maxLength": 14, "description": "UPC or EAN barcode digits." },
+          "labels": {
+            "type": "union",
+            "refs": ["com.atproto.label.defs#selfLabels"],
+            "description": "Self-applied content warnings."
+          },
+          "createdAt": { "type": "string", "format": "datetime" },
+          "updatedAt": { "type": "string", "format": "datetime" }
+        }
+      }
+    },
+    "item": {
+      "type": "object",
+      "required": ["track"],
+      "properties": {
+        "track": { "type": "ref", "ref": "com.atproto.repo.strongRef", "description": "An fm.plyr.track record." },
+        "disc": { "type": "integer", "minimum": 1, "maximum": 99 },
+        "position": { "type": "integer", "minimum": 1, "maximum": 999, "description": "Track number on its disc." }
+      }
+    }
+  }
+}

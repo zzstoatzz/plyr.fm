@@ -228,7 +228,7 @@ const Fake = struct {
     }
 };
 
-const space_uri = "at://did:plc:artist/space/fm.plyr.stg.audio/3album";
+const space_uri = "at://did:plc:artist/space/fm.plyr.dev.audio/3album";
 
 test "writers are synced from their held rev and left alone once current" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);

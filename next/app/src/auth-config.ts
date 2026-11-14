@@ -7,7 +7,8 @@ export const NSID = {
 	list: `${prefix}.list`,
 	like: `${prefix}.like`,
 	profile: `${prefix}.actor.profile`,
-	policy: `${prefix}.policy`
+	policy: `${prefix}.policy`,
+	release: `${prefix}.release`
 } as const;
 
 export const AUDIO_SPACE_TYPE = process.env.EXPO_PUBLIC_AUDIO_SPACE_TYPE || 'fm.plyr.next.audio';
