@@ -13,6 +13,7 @@ import { HomeFeatured, useFeaturedArtist } from './HomeFeatured';
 import { HomeTagBar } from './HomeTagBar';
 import { ArrowsOut } from './icons';
 import { cardSurface } from './materials';
+import { wideFrame } from './controls';
 import { Text } from './Text';
 import { useLatestFeed } from './use-latest-feed';
 import { useNetworkArtists } from './use-network-artists';
@@ -158,7 +159,7 @@ export function DesktopHome({ onPlay, hiddenTags }: { onPlay: Play; hiddenTags: 
 }
 
 const styles = StyleSheet.create({
-  page: { width: '100%', maxWidth: 1320, alignSelf: 'center', paddingHorizontal: 36, paddingTop: 28, paddingBottom: 40, gap: 34 },
+  page: { ...wideFrame, paddingTop: 28, paddingBottom: 40, gap: 34 },
   top: { flexDirection: 'row', gap: 28, alignItems: 'stretch', minHeight: 300 },
   atlas: { borderRadius: 18, overflow: 'hidden', minHeight: 300 },
   atlasCaption: { position: 'absolute', left: 0, right: 0, bottom: 0, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, padding: 14 },
