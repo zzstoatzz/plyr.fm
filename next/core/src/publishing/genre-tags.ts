@@ -1,7 +1,6 @@
 import { audioOrigin } from '../downloads/manifest';
-import { createPds } from '../pds';
-import type { Auth } from '../auth-state';
-import { genreTags, type Genre } from './upload-queue-model';
+import type { createPublicPds } from '../pds';
+import { genreTags, type Genre } from '../../../core/src/publishing/upload-queue-model';
 
 const POLL_MS = 5_000, GIVE_UP_MS = 5 * 60_000;
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -21,11 +20,11 @@ async function genres(uri: string): Promise<Genre[] | undefined> {
  * Production's auto-tag: once the track is up, ask for genre suggestions and add the strongest to the record's tags.
  * It runs beside the queue, so the next upload doesn't wait on classification; a miss leaves the tags as they were.
  */
-export async function applyGenreTags(session: () => Auth, uri: string) {
+export async function applyGenreTags(session: () => ReturnType<typeof createPublicPds>, uri: string) {
   const found = await genres(uri);
   if (!found?.length) return;
   for (let attempt = 0; attempt < 2; attempt++) {
-    const pds = createPds(session());
+    const pds = session();
     const revision = await pds.myTrack(uri);
     const value = revision.value as { title?: string; album?: string; description?: string; tags?: string[] };
     const current = Array.isArray(value.tags) ? value.tags : [];

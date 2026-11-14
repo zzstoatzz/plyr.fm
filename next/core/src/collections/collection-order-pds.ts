@@ -1,11 +1,10 @@
 import { assertPublicCollection } from '../publishing/track-reference';
-import { ok } from '@atcute/client';
-import type { Auth } from '../auth-state';
-import type { AwaitStatus } from '../../../core/src/api';
+import { repoOk as ok, getRecord, putRecord, type RepoRpc } from '../publishing/repo-rpc';
+import type { AwaitStatus } from '../api';
 import { orderedCollection, collectionRecord, CollectionOrderConflict, CollectionOrderUnconfirmed, sameRecord, type CollectionRevision, type CollectionRecord, type CollectionItem } from './collection-order';
 
 export function collectionOrdering({ rpc, did, collection, kind, assertSession, settle }: {
-  rpc: NonNullable<Auth['rpc']>;
+  rpc: RepoRpc;
   did: `did:${string}:${string}`;
   collection: `${string}.${string}.${string}`;
   kind: CollectionRecord['listType'];
@@ -21,7 +20,7 @@ export function collectionOrdering({ rpc, did, collection, kind, assertSession, 
 
   async function read(uri: string): Promise<CollectionRevision> {
     assertSession();
-    const result = await ok(rpc.get('com.atproto.repo.getRecord', { params: { repo: did, collection, rkey: rkey(uri) } }));
+    const result = await ok(getRecord(rpc, { params: { repo: did, collection, rkey: rkey(uri) } }));
     assertSession();
     if (result.uri !== uri || !result.cid) throw new Error(`could not verify this ${kind}.`);
     return { uri, cid: result.cid, value: collectionRecord(result.value, kind) };
@@ -34,10 +33,10 @@ export function collectionOrdering({ rpc, did, collection, kind, assertSession, 
   async function write(revision: CollectionRevision, items: CollectionItem[]) {
     assertSession();
     const value = { ...collectionRecord({ ...revision.value, items }, kind), $type: collection, updatedAt: new Date().toISOString() };
-    assertPublicCollection(value);
+    assertPublicCollection(value, collection);
     let saved: CollectionRevision;
     try {
-      const result = await ok(rpc.post('com.atproto.repo.putRecord', { input: {
+      const result = await ok(putRecord(rpc, { input: {
         repo: did, collection, rkey: rkey(revision.uri), swapRecord: revision.cid, record: value,
       } }));
       assertSession();

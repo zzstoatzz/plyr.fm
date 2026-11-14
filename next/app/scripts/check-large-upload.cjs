@@ -109,7 +109,7 @@ async function run(browser, width, theme) {
     }, scope), [authModule, account, 'atproto repo:fm.plyr.track ' + (grant ? scope : '')]);
     async function enter() {
       await page.goto(new URL('/upload', page.url()).href);
-      await page.getByRole('link', { name: 'Sign in', exact: true }).waitFor(); await signIn();
+      await page.getByRole('link', { name: 'Sign in', exact: true }).and(page.locator('a[href*="return_to"]')).waitFor(); await signIn();
     }
     async function choose(name, bytes = audio, button = 'Choose audio') {
       const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.getByRole('button', { name: button, exact: true }).click()]);

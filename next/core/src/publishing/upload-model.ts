@@ -1,4 +1,4 @@
-import { createOperation, type CreateOperation } from '../../../core/src/publishing/create-operation.ts';
+import { createOperation, type CreateOperation } from './create-operation.ts';
 
 export const UPLOAD_PART_BYTES = 10_485_760;
 export const MAX_SERVICE_AUDIO_BYTES = 1_610_612_736;

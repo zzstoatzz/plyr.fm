@@ -1,6 +1,5 @@
-import type { Track } from '../../../core/src/api';
-import { NSID } from '../auth-config.ts';
-import { isPrivateTrack } from '../../../core/src/track-access.ts';
+import type { Track } from '../api';
+import { isPrivateTrack } from '../track-access.ts';
 
 export function publicTrackReference(track: Track): { uri: string; cid: string } {
   if (isPrivateTrack(track)) throw new Error('private tracks cannot be included in public records.');
@@ -8,8 +7,8 @@ export function publicTrackReference(track: Track): { uri: string; cid: string }
   return { uri: track.record.uri, cid: track.record.cid };
 }
 
-export function assertPublicCollection(value: unknown): void {
-  if (!value || typeof value !== 'object' || !('$type' in value) || value.$type !== NSID.list
+export function assertPublicCollection(value: unknown, listCollection: string): void {
+  if (!value || typeof value !== 'object' || !('$type' in value) || value.$type !== listCollection
     || !('items' in value) || !Array.isArray(value.items)) return;
   for (const item of value.items) {
     const subject: unknown = item && typeof item === 'object' && 'subject' in item ? item.subject : undefined;

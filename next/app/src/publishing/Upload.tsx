@@ -7,7 +7,7 @@ import { pickMedia, retype } from '../media-picker';
 import type { MediaFile } from '../pds';
 import { readLocal, removeLocal, writeLocal } from '../storage';
 import { LargeUploads, useLargeUploads } from './LargeUploads';
-import { canonicalAudioType, needsPlyrStorage } from './upload-queue-model';
+import { canonicalAudioType, needsPlyrStorage } from '../../../core/src/publishing/upload-queue-model';
 import { uploadQueue, useUploadQueue } from './upload-queue';
 import { UploadQueueList } from './UploadQueue';
 import { usePendingSharedAudio, useSharedAudio } from './shared-audio';

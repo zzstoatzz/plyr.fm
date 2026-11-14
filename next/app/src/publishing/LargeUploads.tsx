@@ -6,17 +6,16 @@ import { createPds, type MediaFile } from '../pds';
 import { trackIdFromUri } from '../../../core/src/api';
 import { pickMedia } from '../media-picker';
 import type { CreateReservation } from '../../../core/src/publishing/create-operation';
-import type { CreateResult } from './create-record';
-import { uploadPublication, type UploadOperation, type UploadStatus } from './upload-model';
+import type { UploadOperation } from '../../../core/src/publishing/upload-model';
+import { recoverUpload, type UploadRecoveryAction, type UploadRecoveryView } from '../../../core/src/publishing/upload-recovery';
 import { uploadQueue } from './upload-queue';
 import { uploadStorage } from './upload-storage';
-import { createUploadTransport, UploadRequestError } from './upload-transport';
+import { createUploadTransport } from './upload-transport';
 
-type TransferView = { archived?: boolean; status?: UploadStatus; publication?: CreateResult; message?: string };
 export function useLargeUploads(auth: Auth, onChange: () => Promise<unknown>, onDismiss: (operation: CreateReservation) => void) {
   const pds = useMemo(() => createPds(auth), [auth.did, auth.rpc]);
   const [operations, setOperations] = useState<UploadOperation[]>([]);
-  const [views, setViews] = useState<Record<string, TransferView>>({});
+  const [views, setViews] = useState<Record<string, UploadRecoveryView>>({});
   const [loading, setLoading] = useState(true), [error, setError] = useState<string>();
   const [busy, setBusy] = useState<string>();
   const controller = useRef<AbortController | undefined>(undefined), live = useRef(true);
@@ -31,56 +30,17 @@ export function useLargeUploads(auth: Auth, onChange: () => Promise<unknown>, on
     finally { if (live.current && getAuth().did === auth.did && getAuth().rpc === auth.rpc) setLoading(false); }
   }, [auth.did, auth.rpc]);
   useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
-  const update = (operation: UploadOperation, patch: TransferView) => { if (current()) setViews(values => ({ ...values, [operation.uploadId]: { ...values[operation.uploadId], ...patch } })); };
-  async function run(operation: UploadOperation, action: 'check' | 'publish' | 'activate' | 'cancel' | 'done' | 'archive') {
+  const update = (operation: UploadOperation, patch: UploadRecoveryView) => { if (current()) setViews(values => ({ ...values, [operation.uploadId]: { ...values[operation.uploadId], ...patch } })); };
+  async function run(operation: UploadOperation, action: UploadRecoveryAction) {
     if (controller.current || !current()) return;
     const abort = new AbortController(); controller.current = abort; setBusy(operation.uploadId);
     update(operation, { message: undefined });
     const transport = createUploadTransport(auth, operation, assertCurrent, abort.signal);
     try {
-      if (!(await uploadStorage.load(operation.owner)).some(item => item.uploadId === operation.uploadId && item.uri === operation.uri)) throw new Error('this upload was already dismissed.');
-      assertCurrent();
-      if (action === 'archive') {
-        const status = await transport.status();
-        if (status.state !== 'complete' || !status.audioUrl) throw new Error('only an unpublished completed upload can be set aside.');
-        await pds.archiveUploadedTrack(operation, status.audioUrl);
-        if (current()) onDismiss(operation);
-        update(operation, { status, archived: true, message: 'creation set aside. the uploaded audio remains available for recovery.' });
-      } else if (action === 'done') {
-        const status = await transport.status();
-        if (status.state !== 'published' && status.state !== 'cancelled') throw new Error('this upload still needs recovery.');
-        const pending = (await pds.pendingCreates('track')).find(item => item.rkey === operation.rkey);
-        assertCurrent();
-        if (pending) await pds.dismissCreate(pending, true);
-        await uploadStorage.delete(operation); if (current()) onDismiss(operation);
-      } else if (action === 'cancel') {
-        let status: UploadStatus;
-        try { status = await transport.cancel(); }
-        catch (failure) {
-          if (!(failure instanceof UploadRequestError) || failure.status !== 404) throw failure;
-          await transport.start();
-          status = await transport.cancel();
-        }
-        update(operation, { status });
-        if (status.state !== 'cancelled') throw new Error('cancellation is not confirmed. check this upload again.');
-        assertCurrent(); await uploadStorage.delete(operation); if (current()) onDismiss(operation);
-      } else {
-        let status = await transport.status();
-        update(operation, { status });
-        if (status.audioUrl) {
-          const pending = (await pds.pendingCreates('track')).find(item => item.rkey === operation.rkey);
-          assertCurrent();
-          const publish = status.state !== 'published' && action === 'publish';
-          if (!(await uploadStorage.load(operation.owner)).some(item => item.uploadId === operation.uploadId && item.uri === operation.uri)) throw new Error('this upload was already dismissed.');
-          assertCurrent();
-          const publication = await pds.uploadedTrack(operation.processing ? uploadPublication(operation, status) : operation, status.audioUrl, publish);
-          assertCurrent(); update(operation, { publication, archived: !!pending?.archived });
-          if (publication.state === 'accepted' && (publish || action === 'activate')) {
-            status = await transport.activate(); update(operation, { status });
-          }
-          if (pending?.archived && !publish) update(operation, { message: 'creation is set aside. publish only if you want to resume this attempt.' });
-        }
-      }
+      const dismissed = await recoverUpload({
+        operation, action, pds, storage: uploadStorage, transport, assertCurrent, update: patch => update(operation, patch),
+      });
+      if (dismissed && current()) onDismiss(operation);
     } catch (failure) { update(operation, { message: failure instanceof Error ? failure.message : 'upload stopped. check its status.' }); }
     finally {
       controller.current = undefined;

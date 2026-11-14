@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
-import { canonicalAudioType, genreTags, jobLine, outputBudget, processingStep, transient, uploadRoute } from '../src/publishing/upload-queue-model.ts';
-import { audioFormat, MAX_SERVICE_AUDIO_BYTES, UPLOAD_PART_BYTES, type UploadStatus } from '../src/publishing/upload-model.ts';
+import { canonicalAudioType, genreTags, jobLine, outputBudget, processingStep, transient, uploadRoute } from '../../core/src/publishing/upload-queue-model.ts';
+import { audioFormat, MAX_SERVICE_AUDIO_BYTES, UPLOAD_PART_BYTES, type UploadStatus } from '../../core/src/publishing/upload-model.ts';
 
 const MIB = 1_048_576;
 

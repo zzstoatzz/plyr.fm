@@ -65,7 +65,7 @@ async function run(browser, width, theme) {
       },
     }, 'atproto repo:fm.plyr.track'), [authModule, account]);
     await page.goto(new URL('/upload', page.url()).href);
-    await page.getByRole('link', { name: 'Sign in', exact: true }).waitFor();
+    await page.getByRole('link', { name: 'Sign in', exact: true }).and(page.locator('a[href*="return_to"]')).waitFor();
     await signIn(did);
     const title = page.getByRole('textbox', { name: 'Title', exact: true });
     const tags = page.getByRole('textbox', { name: 'Tags', exact: true });
@@ -104,7 +104,7 @@ async function run(browser, width, theme) {
     assert.equal(await page.getByRole('alert').filter({ hasText: "couldn't read that image" }).count(), 0, 'a good cover clears the cover error');
     await screenshot(page, `upload-cover-${width}-${theme}`);
     await page.reload();
-    await page.getByRole('link', { name: 'Sign in', exact: true }).waitFor();
+    await page.getByRole('link', { name: 'Sign in', exact: true }).and(page.locator('a[href*="return_to"]')).waitFor();
     await signIn(did);
     await title.waitFor();
     assert.equal(await title.inputValue(), 'kept title', 'a reload keeps the typed draft');
@@ -209,7 +209,7 @@ async function run(browser, width, theme) {
     await toast('"quiet room" uploaded').first().waitFor();
     assert.equal(writes.length, 5, 'same-DID reauth finishes its held upload once and the next upload once');
     await page.evaluate(id => globalThis.__r(id).clearAuth(), authModule);
-    await page.getByRole('link', { name: 'Sign in', exact: true }).click();
+    await page.getByRole('link', { name: 'Sign in', exact: true }).and(page.locator('a[href*="return_to"]')).click();
     await page.getByRole('heading', { name: 'sign in to plyr.fm', exact: true }).waitFor();
     assert.equal(new URL(page.url()).searchParams.get('return_to'), '/upload');
     assert.deepEqual(errors, []);

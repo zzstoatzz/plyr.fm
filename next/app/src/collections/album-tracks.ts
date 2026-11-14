@@ -1,6 +1,6 @@
 import { api } from '../api-client';
 import { trackIdFromUri, type Track } from '../../../core/src/api';
-import type { CollectionRevision } from './collection-order';
+import type { CollectionRevision } from '../../../core/src/collections/collection-order';
 
 export async function resolveAlbumTracks(revision: CollectionRevision, known: Track[], signal: AbortSignal) {
   const tracks = new Map(known.map(track => [track.record.uri, track]));

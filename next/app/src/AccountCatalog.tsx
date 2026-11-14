@@ -24,7 +24,7 @@ import { CreateRecovery, EarlierCreates, useCreateRecovery } from './publishing/
 import { AlbumEditor } from './collections/AlbumEditor';
 import { CollectionOrderEditor } from './collections/CollectionOrderEditor';
 import { AccessSheet } from './access/AccessSheet';
-import type { CollectionRevision } from './collections/collection-order';
+import type { CollectionRevision } from '../../core/src/collections/collection-order';
 
 function usePds() {
   const { did, rpc } = useAuth();
