@@ -7,11 +7,11 @@ import { AtlasView } from './atlas/AtlasView';
 import { trackArtwork } from './artwork';
 import { useAuth } from './auth';
 import { Cover, Status, type Play } from './CatalogPieces';
-import { DesktopTrackRow } from './DesktopTrackRow';
+import { DesktopTrackHeader, DesktopTrackRow } from './DesktopTrackRow';
 import { compactCount, dayGroup, periodLabels } from './home-state';
 import { HomeFeatured, useFeaturedArtist } from './HomeFeatured';
 import { HomeTagBar } from './HomeTagBar';
-import { ArrowsOut, Heart } from './icons';
+import { ArrowsOut } from './icons';
 import { cardSurface } from './materials';
 import { wideFrame } from './controls';
 import { Text } from './Text';
@@ -80,10 +80,7 @@ function DesktopRailTrack({ track, rank, onPress }: { track: Track; rank: number
       <Text numberOfLines={1} style={{ color: theme.text, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale, fontWeight: '600' }}>{track.metadata.title}</Text>
       <Text numberOfLines={1} style={{ color: theme.muted, fontFamily: theme.fontFamily, fontSize: 12.5 * theme.scale }}>{track.metadata.artist_name || track.artist.profile.display_name || track.artist.profile.handle}</Text>
     </View>
-    <View accessibilityLabel={`${track.metrics.like_count} ${track.metrics.like_count === 1 ? 'like' : 'likes'}`} style={styles.likes}>
-      <Heart size={14} color={theme.faint} />
-      <Text style={{ flex: 1, color: theme.muted, fontSize: 13 * theme.scale, fontVariant: ['tabular-nums'] }}>{compactCount(track.metrics.like_count)}</Text>
-    </View>
+    <Text style={{ color: theme.faint, fontSize: 12.5 * theme.scale, fontVariant: ['tabular-nums'] }}>{compactCount(track.metrics.like_count)} {track.metrics.like_count === 1 ? 'like' : 'likes'}</Text>
   </Pressable>;
 }
 
@@ -150,6 +147,7 @@ export function DesktopHome({ onPlay, hiddenTags }: { onPlay: Play; hiddenTags: 
           <Text style={{ color: theme.faint, fontSize: 13 * theme.scale }}>newest first</Text>
         </Pressable>}>
           <HomeTagBar feed={feed} hiddenTags={hiddenTags} />
+          {tracks.length > 0 && <DesktopTrackHeader />}
           <View style={{ opacity: pending ? 0.5 : 1 }}>
             {groups.map(group => <View key={group.label + group.tracks[0].id}>
               <Text accessibilityRole="header" aria-level={3} style={[styles.day, { color: theme.faint, fontSize: 12 * theme.scale }]}>{group.label}</Text>
@@ -188,7 +186,6 @@ const styles = StyleSheet.create({
   period: { minHeight: 44, minWidth: 44, justifyContent: 'center', alignItems: 'flex-end' },
   railTrack: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 58, paddingHorizontal: 8, marginHorizontal: -8, borderRadius: 10 },
   people: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 16 },
-  likes: { width: 64, flexDirection: 'row', alignItems: 'center', gap: 6 },
   more: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
   person: { width: '25%', alignItems: 'center', gap: 6, paddingHorizontal: 4, minHeight: 44 },
   day: { fontWeight: '700', letterSpacing: 0.3, paddingTop: 18, paddingBottom: 6 },

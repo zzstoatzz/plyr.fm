@@ -1,5 +1,5 @@
 import { Text } from '../src/Text';
-import { type Icon, ArrowLeft, House, MagnifyingGlass as Search, Books as Library, UserCircle as UserRound, PlusCircle as CirclePlus, Radio, GearSix as Settings, ChartBar as ChartNoAxesColumn, Graph } from '../src/icons';
+import { type Icon, ArrowLeft, House, MagnifyingGlass as Search, Books as Library, UserCircle as UserRound, PlusCircle as CirclePlus, Radio, GearSix as Settings, ChartBar as ChartNoAxesColumn, Graph, SignIn } from '../src/icons';
 import { Link, Stack, router, usePathname, type Href } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { useFonts } from 'expo-font';
@@ -16,6 +16,9 @@ import { Toasts } from '../src/Toasts';
 import { NowPlayingOriginContext } from '../src/now-playing-origin';
 import { PreferencesProvider } from '../src/preference-context';
 import { pageFrame, wideFrame } from '../src/controls';
+import { Cover } from '../src/CatalogPieces';
+import { useFinishPendingLike } from '../src/RowActions';
+import { useMyAvatar } from '../src/use-my-avatar';
 import { DESKTOP_HOME_WIDTH } from '../src/DesktopHome';
 import { usePreferences } from '../src/preferences';
 import { UploadQueueHost } from '../src/publishing/UploadQueue';
@@ -48,6 +51,8 @@ function Shell() {
   if (route !== '/now-playing') lastPage.current = route;
   const path = route === '/now-playing' ? lastPage.current : route;
   const auth = useAuth();
+  const avatar = useMyAvatar(auth.did);
+  useFinishPendingLike();
   const { width } = useWindowDimensions();
   const wide = width >= 800;
   if (path.startsWith('/embed/')) return <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }} />;
@@ -57,7 +62,7 @@ function Shell() {
     { label: 'Search', href: '/search', icon: Search, active: path === '/search' },
     { label: 'Library', href: '/library', icon: Library, active: ['/library', '/liked', '/playlists'].includes(path) },
     ...(auth.did ? [{ label: 'Upload', href: '/upload' as Href, icon: CirclePlus, active: path === '/upload' }] : []),
-    { label: 'You', href: accountPath, icon: UserRound, active: ['/portal', '/login'].includes(path) || !auth.did && path === '/upload' || !wide && path === '/settings' }
+    { label: auth.did ? 'You' : 'Sign in', href: accountPath, icon: auth.did ? UserRound : SignIn, active: ['/portal', '/login'].includes(path) || !auth.did && path === '/upload' || !wide && path === '/settings' }
   ];
   // the sidebar is the way out of its own destinations on a wide window
   const showBack = !['/', '/search', '/library', '/portal', '/login', '/upload'].includes(path) && !(wide && ['/radio', '/atlas', '/stats', '/settings'].includes(path));
@@ -78,7 +83,8 @@ function Shell() {
         style={{ minHeight: 48, flex: wide ? undefined : 1, paddingHorizontal: wide ? 12 : 8, borderRadius: 12, gap: wide ? 12 : 2,
           flexDirection: wide ? 'row' : 'column', alignItems: 'center', justifyContent: wide ? 'flex-start' : 'center',
           backgroundColor: active && wide ? theme.hover : 'transparent' }}>
-        <Icon size={wide ? 22 : 22} color={active ? wide ? theme.text : theme.accent : theme.muted} weight={active ? 'fill' : 'regular'} />
+        {label === 'You' && avatar ? <View style={{ borderRadius: 13, borderWidth: 1.5, borderColor: active ? wide ? theme.text : theme.accent : 'transparent', padding: 1 }}><Cover uri={avatar} size={22} round instant /></View>
+          : <Icon size={22} color={active ? wide ? theme.text : theme.accent : theme.muted} weight={active ? 'fill' : 'regular'} />}
         <Text style={{ color: active ? wide ? theme.text : theme.accent : theme.muted, fontSize: (wide ? 15.5 : 10) * theme.scale, fontWeight: active ? '700' : '500', textTransform: 'lowercase' }}>{label}</Text>
       </Pressable>
     </Link>)}
