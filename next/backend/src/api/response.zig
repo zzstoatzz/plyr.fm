@@ -1,4 +1,5 @@
 const std = @import("std");
+const Exchange = @import("exchange.zig").Exchange;
 
 const http = std.http;
 
@@ -66,7 +67,7 @@ pub const CorsPolicy = struct {
 };
 
 pub fn json(
-    request: *http.Server.Request,
+    request: *Exchange,
     status: http.Status,
     body: []const u8,
     request_id: []const u8,
@@ -76,7 +77,7 @@ pub fn json(
 }
 
 pub fn jsonWithHeaders(
-    request: *http.Server.Request,
+    request: *Exchange,
     status: http.Status,
     body: []const u8,
     request_id: []const u8,
@@ -114,12 +115,11 @@ pub fn jsonWithHeaders(
     try request.respond(body, .{
         .status = status,
         .extra_headers = headers[0..count],
-        .keep_alive = request.head.method != .HEAD,
     });
 }
 
 pub fn empty(
-    request: *http.Server.Request,
+    request: *Exchange,
     status: http.Status,
     request_id: []const u8,
     cors: CorsPolicy,
@@ -128,7 +128,7 @@ pub fn empty(
 }
 
 pub fn redirect(
-    request: *http.Server.Request,
+    request: *Exchange,
     location: []const u8,
     request_id: []const u8,
 ) !void {
@@ -136,7 +136,7 @@ pub fn redirect(
 }
 
 pub fn redirectWithHeaders(
-    request: *http.Server.Request,
+    request: *Exchange,
     location: []const u8,
     request_id: []const u8,
     additional_headers: []const http.Header,
@@ -164,7 +164,7 @@ pub fn redirectWithHeaders(
 }
 
 pub fn apiError(
-    request: *http.Server.Request,
+    request: *Exchange,
     kind: ApiError,
     request_id: []const u8,
     cors: CorsPolicy,
@@ -173,7 +173,7 @@ pub fn apiError(
 }
 
 pub fn apiErrorWithHeaders(
-    request: *http.Server.Request,
+    request: *Exchange,
     kind: ApiError,
     request_id: []const u8,
     cors: CorsPolicy,
@@ -199,7 +199,7 @@ fn formatError(buffer: []u8, kind: ApiError, request_id: []const u8) ![]const u8
     );
 }
 
-fn requestOrigin(request: *const http.Server.Request, cors: CorsPolicy) ?[]const u8 {
+fn requestOrigin(request: *const Exchange, cors: CorsPolicy) ?[]const u8 {
     if (cors.origin_captured) return cors.captured_origin;
     var candidate: ?[]const u8 = null;
     var headers = request.iterateHeaders();
@@ -212,7 +212,7 @@ fn requestOrigin(request: *const http.Server.Request, cors: CorsPolicy) ?[]const
     return if (cors.allows(origin)) origin else null;
 }
 
-pub fn captureCors(request: *const http.Server.Request, allocator: std.mem.Allocator, cors: CorsPolicy) !CorsPolicy {
+pub fn captureCors(request: *const Exchange, allocator: std.mem.Allocator, cors: CorsPolicy) !CorsPolicy {
     const origin = requestOrigin(request, cors);
     return .{
         .allowed_origins = cors.allowed_origins,
@@ -221,14 +221,14 @@ pub fn captureCors(request: *const http.Server.Request, allocator: std.mem.Alloc
     };
 }
 
-pub fn allowsRequestOrigin(request: *const http.Server.Request, cors: CorsPolicy) bool {
+pub fn allowsRequestOrigin(request: *const Exchange, cors: CorsPolicy) bool {
     return requestOrigin(request, cors) != null;
 }
 
 /// Authentication mutations have exactly one browser principal. A broader
 /// development CORS allowlist must not silently expand that authority.
 pub fn hasExactRequestOrigin(
-    request: *const http.Server.Request,
+    request: *const Exchange,
     expected: []const u8,
 ) bool {
     var candidate: ?[]const u8 = null;

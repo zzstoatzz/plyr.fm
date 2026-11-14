@@ -1,4 +1,5 @@
 const std = @import("std");
+const Exchange = @import("exchange.zig").Exchange;
 const resolve_tracks = @import("../internal/application/resolve_tracks.zig");
 const get_track = @import("../internal/application/get_track.zig");
 const get_playback = @import("../internal/application/get_playback.zig");
@@ -14,14 +15,14 @@ const query = @import("../internal/http/query.zig");
 const response = @import("response.zig");
 
 pub fn list(
-    request: *std.http.Server.Request,
+    request: *Exchange,
     allocator: std.mem.Allocator,
     store: ?TrackStore,
     collection: []const u8,
     cors: response.CorsPolicy,
     request_id: []const u8,
 ) !void {
-    switch (list_tracks.execute(allocator, store, collection, request.head.target)) {
+    switch (list_tracks.execute(allocator, store, collection, request.target)) {
         .found => |value| {
             const body = try std.json.Stringify.valueAlloc(allocator, value, .{});
             try response.json(request, .ok, body, request_id, cors);
@@ -33,7 +34,7 @@ pub fn list(
 }
 
 pub fn get(
-    request: *std.http.Server.Request,
+    request: *Exchange,
     allocator: std.mem.Allocator,
     store: ?TrackStore,
     collection: []const u8,
@@ -54,7 +55,7 @@ pub fn get(
 }
 
 pub fn likes(
-    request: *std.http.Server.Request,
+    request: *Exchange,
     allocator: std.mem.Allocator,
     track_store: ?TrackStore,
     like_store: ?LikeQueryStore,
@@ -73,7 +74,7 @@ pub fn likes(
         like_collection,
         profile_collection,
         id,
-        request.head.target,
+        request.target,
     )) {
         .found => |value| {
             const body = try std.json.Stringify.valueAlloc(allocator, value, .{});
@@ -87,7 +88,7 @@ pub fn likes(
 }
 
 pub fn playback(
-    request: *std.http.Server.Request,
+    request: *Exchange,
     allocator: std.mem.Allocator,
     store: ?PlaybackStore,
     collection: []const u8,
@@ -114,7 +115,7 @@ pub fn playback(
 }
 
 pub fn recordPlay(
-    request: *std.http.Server.Request,
+    request: *Exchange,
     allocator: std.mem.Allocator,
     metric_store: ?PlayMetricStore,
     collection: []const u8,
@@ -124,7 +125,7 @@ pub fn recordPlay(
     request_id: []const u8,
 ) !void {
     const started = std.Io.Timestamp.now(io, .awake);
-    const play = parsePlayQuery(allocator, request.head.target) catch {
+    const play = parsePlayQuery(allocator, request.target) catch {
         try response.apiError(request, .invalid_request, request_id, cors);
         return;
     };
@@ -171,7 +172,7 @@ const ListenerIdentity = struct {
 };
 
 fn listenerIdentity(
-    request: *const std.http.Server.Request,
+    request: *const Exchange,
     allocator: std.mem.Allocator,
     io: std.Io,
     client_listener: ?[]const u8,
@@ -200,7 +201,7 @@ fn listenerIdentity(
     };
 }
 
-fn playCookie(request: *const std.http.Server.Request) ?[]const u8 {
+fn playCookie(request: *const Exchange) ?[]const u8 {
     var headers = request.iterateHeaders();
     while (headers.next()) |header| {
         if (!std.ascii.eqlIgnoreCase(header.name, "cookie")) continue;
@@ -370,8 +371,8 @@ test "v1 playback JSON exposes authorization availability and integrity" {
     try std.testing.expect(root.get("r2_url") == null);
 }
 
-pub fn tags(request: *std.http.Server.Request, allocator: std.mem.Allocator, store: ?TrackStore, collection: []const u8, cors: response.CorsPolicy, request_id: []const u8) !void {
-    switch (list_tags.execute(allocator, store, collection, request.head.target)) {
+pub fn tags(request: *Exchange, allocator: std.mem.Allocator, store: ?TrackStore, collection: []const u8, cors: response.CorsPolicy, request_id: []const u8) !void {
+    switch (list_tags.execute(allocator, store, collection, request.target)) {
         .found => |value| try response.json(request, .ok, try std.json.Stringify.valueAlloc(allocator, value, .{}), request_id, cors),
         .invalid_request => try response.apiError(request, .invalid_request, request_id, cors),
         .unavailable => try response.apiError(request, .service_unavailable, request_id, cors),
@@ -379,13 +380,9 @@ pub fn tags(request: *std.http.Server.Request, allocator: std.mem.Allocator, sto
     }
 }
 
-pub fn resolve(request: *std.http.Server.Request, allocator: std.mem.Allocator, store: ?TrackStore, collection: []const u8, cors: response.CorsPolicy, request_id: []const u8) !void {
+pub fn resolve(request: *Exchange, allocator: std.mem.Allocator, store: ?TrackStore, collection: []const u8, cors: response.CorsPolicy, request_id: []const u8) !void {
     const response_cors = try response.captureCors(request, allocator, cors);
-    const reader = request.readerExpectContinue(&.{}) catch {
-        try response.apiError(request, .invalid_request, request_id, response_cors);
-        return;
-    };
-    const body = reader.allocRemaining(allocator, std.Io.Limit.limited(64 * 1024)) catch {
+    const body = request.readBody(64 * 1024) catch {
         try response.apiError(request, .invalid_request, request_id, response_cors);
         return;
     };

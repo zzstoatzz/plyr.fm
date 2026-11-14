@@ -77,30 +77,38 @@ def _wait_until_ready(base_url: str, process: subprocess.Popen[bytes]) -> None:
     raise TimeoutError("Zig API did not become ready")
 
 
-def _assert_connection_backpressure(port: int) -> None:
+def _assert_idle_connections_time_out(port: int) -> None:
+    """Idle sockets must not wedge the API.
+
+    The server runs with MAX_CONNECTIONS=2 and REQUEST_TIMEOUT_SECONDS=1. Two
+    clients that connect and send nothing fill every slot; the server has to
+    drop them on its own so a third, real request is still answered.
+    """
     blockers = [socket.create_connection(("127.0.0.1", port)) for _ in range(2)]
     queued = socket.create_connection(("127.0.0.1", port))
     try:
-        time.sleep(0.05)
         queued.sendall(
             b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
         )
-        queued.settimeout(0.1)
-        try:
-            queued.recv(1)
-        except TimeoutError:
-            pass
-        else:
-            raise AssertionError("connection limit accepted a third active handler")
-
-        blockers[0].close()
-        blockers = blockers[1:]
-        queued.settimeout(1)
+        queued.settimeout(5)
         assert b"HTTP/1.1 200" in queued.recv(4096)
+        for blocker in blockers:
+            blocker.settimeout(5)
+            assert blocker.recv(1) == b"", "server kept an idle connection open"
     finally:
         queued.close()
         for blocker in blockers:
             blocker.close()
+
+
+def _assert_partial_request_times_out(port: int) -> None:
+    """A client that starts a request and stalls is dropped, not waited on."""
+    with socket.create_connection(("127.0.0.1", port)) as stalled:
+        stalled.sendall(b"GET /health HTTP/1.1\r\nHost: local")
+        stalled.settimeout(5)
+        started = time.monotonic()
+        assert stalled.recv(4096) == b""
+        assert time.monotonic() - started < 4
 
 
 def main() -> None:
@@ -116,6 +124,7 @@ def main() -> None:
         "LIKE_COLLECTION_NSID": "fm.plyr.dev.like",
         "INDEX_MODE": "disabled",
         "MAX_CONNECTIONS": "2",
+        "REQUEST_TIMEOUT_SECONDS": "1",
         "CORS_ALLOWED_ORIGINS": ALLOWED_ORIGIN,
     }
     # This smoke test intentionally exercises the unavailable-index contract.
@@ -130,7 +139,8 @@ def main() -> None:
     )
     try:
         _wait_until_ready(base_url, process)
-        _assert_connection_backpressure(port)
+        _assert_idle_connections_time_out(port)
+        _assert_partial_request_times_out(port)
 
         for payload in (None, b"", b"ignored"):
             status, headers, body = _request(
@@ -142,7 +152,17 @@ def main() -> None:
             )
             assert status == 405 and body == {}
             assert headers["access-control-allow-origin"] == ALLOWED_ORIGIN
-            assert headers["connection"] == "close"
+            assert headers["connection"].lower() == "close"
+            assert _request(base_url, "/health")[0] == 200
+
+        # a browser preflight before every JSON POST; an empty 204 once
+        # crashed the process, so check it answers and the server survives
+        for path in ("/v1/artists/resolve", "/v1/tracks", "/health"):
+            status, headers, body = _request(
+                base_url, path, method="OPTIONS", origin=ALLOWED_ORIGIN
+            )
+            assert status == 204 and body == {}
+            assert headers["access-control-allow-origin"] == ALLOWED_ORIGIN
             assert _request(base_url, "/health")[0] == 200
 
         status, _, api = _request(base_url, "/v1")

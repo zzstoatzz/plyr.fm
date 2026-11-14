@@ -8,6 +8,7 @@
 //! caller's decision.
 
 const std = @import("std");
+const Exchange = @import("../../api/exchange.zig").Exchange;
 const zat = @import("zat");
 
 /// Clock skew tolerated on expiry, in seconds.
@@ -82,7 +83,7 @@ fn oneOf(value: []const u8, candidates: []const []const u8) bool {
 }
 
 /// `Authorization: Bearer <token>`; null when absent, repeated or malformed.
-pub fn bearerToken(request: *const std.http.Server.Request) ?[]const u8 {
+pub fn bearerToken(request: *const Exchange) ?[]const u8 {
     var token: ?[]const u8 = null;
     var headers = request.iterateHeaders();
     while (headers.next()) |header| {

@@ -126,7 +126,7 @@ Direct SQL is reserved for projection adapter tests and benchmark fixtures.
 | `DATABASE_ROLE` | no | expected effective PostgreSQL role; startup opens the pool and fails closed if `current_user` differs |
 | `DATABASE_POOL_SIZE` | no | bounded PostgreSQL connection pool size, default `8` |
 | `INDEX_MODE` | no | `required` by default; `disabled` is an explicit test/development mode whose readiness is `503` |
-| `MAX_CONNECTIONS` | no | hard cap on accepted connection handlers, default `128` |
+| `MAX_CONNECTIONS`, `HANDLER_THREADS`, `REQUEST_TIMEOUT_SECONDS`, `KEEPALIVE_TIMEOUT_SECONDS` | no | listener limits: open connections (default `1024`), handler threads (`64`; a `records/await` call holds one for up to 10 s), seconds to send one complete request (`10`), seconds an idle keep-alive connection is kept (`75`) |
 | `PORT` | no | listener port, default `8001` |
 | `CORS_ALLOWED_ORIGINS` | no | comma-separated exact browser origins; empty disables CORS |
 | `INGEST_STREAM_HOSTS` | no | comma-separated jetstream hostnames the ingester subscribes to, in failover order; default `stream.waow.tech` then the bsky jetstreams |

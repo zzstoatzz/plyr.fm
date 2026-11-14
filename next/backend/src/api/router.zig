@@ -1,4 +1,5 @@
 const std = @import("std");
+const Exchange = @import("exchange.zig").Exchange;
 const albums = @import("albums.zig");
 const artists = @import("artists.zig");
 const stats = @import("stats.zig");
@@ -30,7 +31,6 @@ const VerifiedListStore = @import("../internal/index/verified_list_store.zig").V
 const RecordStatusStore = @import("../internal/index/record_status_store.zig").RecordStatusStore;
 const IngestStatusStore = @import("../internal/index/ingest_status_store.zig").IngestStatusStore;
 
-const http = std.http;
 const mem = std.mem;
 
 pub const prefix = "/v1";
@@ -63,32 +63,24 @@ pub const App = struct {
 };
 
 pub fn handle(
-    request: *http.Server.Request,
+    request: *Exchange,
     allocator: std.mem.Allocator,
     app: App,
     request_id: []const u8,
 ) !void {
-    // std.http assumes body-capable methods have either Content-Length or a
-    // transfer encoding when respond() discards an unread request body. An
-    // empty POST without either header is valid and common in generic clients;
-    // normalize it instead of letting the stdlib assertion terminate a worker.
-    if (request.head.content_length == null and request.head.transfer_encoding == .none) {
-        request.head.content_length = 0;
-    }
-
-    const target = request.head.target;
+    const target = request.target;
     const path = pathFromTarget(target);
 
-    if (request.head.method == .OPTIONS) {
+    if (request.method == .OPTIONS) {
         try response.empty(request, .no_content, request_id, app.cors);
     } else if (mem.eql(u8, path, "/health")) {
-        if (request.head.method != .GET) {
+        if (request.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
             return;
         }
         try response.json(request, .ok, "{\"status\":\"ok\",\"role\":\"api\"}", request_id, app.cors);
     } else if (mem.eql(u8, path, "/ready")) {
-        if (request.head.method != .GET) {
+        if (request.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
             return;
         }
@@ -106,7 +98,7 @@ pub fn handle(
             try response.apiError(request, .not_found, request_id, app.cors);
             return;
         };
-        if (request.head.method != .GET) {
+        if (request.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
             return;
         }
@@ -116,7 +108,7 @@ pub fn handle(
             try response.apiError(request, .not_found, request_id, app.cors);
             return;
         };
-        if (request.head.method != .GET) {
+        if (request.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
             return;
         }
@@ -133,7 +125,7 @@ pub fn handle(
             request_id,
         );
     } else if (mem.eql(u8, path, prefix ++ "/albums")) {
-        if (request.head.method != .GET) {
+        if (request.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
             return;
         }
@@ -147,7 +139,7 @@ pub fn handle(
             request_id,
         );
     } else if (mem.eql(u8, path, prefix ++ "/playlists")) {
-        if (request.head.method != .GET) {
+        if (request.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
             return;
         }
@@ -161,10 +153,10 @@ pub fn handle(
             request_id,
         );
     } else if (mem.eql(u8, path, prefix ++ "/stats")) {
-        if (request.head.method != .GET) return response.apiError(request, .method_not_allowed, request_id, app.cors);
+        if (request.method != .GET) return response.apiError(request, .method_not_allowed, request_id, app.cors);
         try stats.get(request, allocator, app.stats_store, app.cors, request_id);
     } else if (mem.eql(u8, path, prefix ++ "/tracks")) {
-        if (request.head.method != .GET) {
+        if (request.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
             return;
         }
@@ -177,7 +169,7 @@ pub fn handle(
             request_id,
         );
     } else if (actorLikesDid(path)) |did| {
-        if (request.head.method != .GET) {
+        if (request.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
             return;
         }
@@ -191,7 +183,7 @@ pub fn handle(
             request_id,
         );
     } else if (actorLikesResolveDid(path)) |did| {
-        if (request.head.method != .POST) {
+        if (request.method != .POST) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
             return;
         }
@@ -206,7 +198,7 @@ pub fn handle(
             request_id,
         );
     } else if (mem.eql(u8, path, prefix ++ "/charts/tracks")) {
-        if (request.head.method != .GET) {
+        if (request.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
             return;
         }
@@ -222,13 +214,13 @@ pub fn handle(
             request_id,
         );
     } else if (mem.eql(u8, path, prefix ++ "/health/ingest")) {
-        if (request.head.method != .GET) {
+        if (request.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
             return;
         }
         try health.ingest(request, allocator, app.io, app.ingest_status_store, app.cors, request_id);
     } else if (mem.eql(u8, path, prefix ++ "/records/await")) {
-        if (request.head.method != .GET) {
+        if (request.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
             return;
         }
@@ -239,7 +231,7 @@ pub fn handle(
             .profile = app.profile_collection,
         }, app.cors, request_id);
     } else if (mem.eql(u8, path, prefix ++ "/search")) {
-        if (request.head.method != .GET) {
+        if (request.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
             return;
         }
@@ -254,7 +246,7 @@ pub fn handle(
             request_id,
         );
     } else if (albumId(path)) |id| {
-        if (request.head.method != .GET) {
+        if (request.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
             return;
         }
@@ -270,7 +262,7 @@ pub fn handle(
             request_id,
         );
     } else if (playlistId(path)) |id| {
-        if (request.head.method != .GET) {
+        if (request.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
             return;
         }
@@ -286,7 +278,7 @@ pub fn handle(
             request_id,
         );
     } else if (trackLikesId(path)) |id| {
-        if (request.head.method != .GET) {
+        if (request.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
             return;
         }
@@ -303,7 +295,7 @@ pub fn handle(
             request_id,
         );
     } else if (trackPlaybackId(path)) |id| {
-        if (request.head.method != .GET) {
+        if (request.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
             return;
         }
@@ -317,7 +309,7 @@ pub fn handle(
             request_id,
         );
     } else if (trackPlayId(path)) |id| {
-        if (request.head.method != .POST) {
+        if (request.method != .POST) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
             return;
         }
@@ -332,13 +324,13 @@ pub fn handle(
             request_id,
         );
     } else if (mem.eql(u8, path, prefix ++ "/tracks/resolve")) {
-        if (request.head.method != .POST) {
+        if (request.method != .POST) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
             return;
         }
         try tracks.resolve(request, allocator, app.track_store, app.track_collection, app.cors, request_id);
     } else if (trackId(path)) |id| {
-        if (request.head.method != .GET) {
+        if (request.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
             return;
         }
@@ -352,19 +344,19 @@ pub fn handle(
             request_id,
         );
     } else if (mem.eql(u8, path, prefix ++ "/tags")) {
-        if (request.head.method != .GET) {
+        if (request.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
             return;
         }
         try tracks.tags(request, allocator, app.track_store, app.track_collection, app.cors, request_id);
     } else if (mem.eql(u8, path, prefix ++ "/artists/resolve")) {
-        if (request.head.method != .POST) {
+        if (request.method != .POST) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
             return;
         }
         try artists.resolve(request, allocator, app.artist_store, app.track_collection, app.cors, request_id);
     } else if (artistMetricsIdentifier(path)) |identifier| {
-        if (request.head.method != .GET) {
+        if (request.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
             return;
         }
@@ -383,7 +375,7 @@ pub fn handle(
             request_id,
         );
     } else if (artistIdentifier(path)) |identifier| {
-        if (request.head.method != .GET) {
+        if (request.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
             return;
         }
@@ -400,13 +392,13 @@ pub fn handle(
             request_id,
         );
     } else if (mem.eql(u8, path, prefix)) {
-        if (request.head.method != .GET) {
+        if (request.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
             return;
         }
         try response.json(request, .ok, "{\"object\":\"api\",\"version\":\"v1\"}", request_id, app.cors);
     } else if (mem.eql(u8, path, "/")) {
-        if (request.head.method != .GET) {
+        if (request.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
             return;
         }

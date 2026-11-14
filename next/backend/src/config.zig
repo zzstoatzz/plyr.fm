@@ -34,7 +34,10 @@ pub const Config = struct {
     index_mode: IndexMode,
     database_pool_size: u16,
     redis_url: ?[]const u8,
-    max_connections: usize,
+    max_connections: u16,
+    handler_threads: u16,
+    request_timeout_s: u32,
+    keepalive_timeout_s: u32,
     track_collection: []const u8,
     list_collection: []const u8,
     profile_collection: []const u8,
@@ -123,7 +126,10 @@ pub const Config = struct {
             .index_mode = index_mode,
             .database_pool_size = try parsePositiveU16(getenv("DATABASE_POOL_SIZE") orelse "8"),
             .redis_url = getenv("DOCKET_URL"),
-            .max_connections = try parsePositiveUsize(getenv("MAX_CONNECTIONS") orelse "128"),
+            .max_connections = try parsePositiveU16(getenv("MAX_CONNECTIONS") orelse "1024"),
+            .handler_threads = try parsePositiveU16(getenv("HANDLER_THREADS") orelse "64"),
+            .request_timeout_s = try parsePositiveU32(getenv("REQUEST_TIMEOUT_SECONDS") orelse "10"),
+            .keepalive_timeout_s = try parsePositiveU32(getenv("KEEPALIVE_TIMEOUT_SECONDS") orelse "75"),
             .track_collection = track_collection,
             .list_collection = list_collection,
             .profile_collection = profile_collection,
@@ -175,6 +181,12 @@ fn parsePositiveUsize(value: []const u8) !usize {
 
 fn parsePositiveU16(value: []const u8) !u16 {
     const parsed = std.fmt.parseInt(u16, value, 10) catch return error.InvalidPositiveInteger;
+    if (parsed == 0) return error.InvalidPositiveInteger;
+    return parsed;
+}
+
+fn parsePositiveU32(value: []const u8) !u32 {
+    const parsed = std.fmt.parseInt(u32, value, 10) catch return error.InvalidPositiveInteger;
     if (parsed == 0) return error.InvalidPositiveInteger;
     return parsed;
 }
