@@ -245,10 +245,14 @@ class Player {
 		else if (this.queue[index]) this.#startPrivate(this.queue, index);
 	}
 	enqueue(track: Track) {
-		if (isPrivateTrack(track) && this.privateMode && privateLibrary.ownsPrivateTrack(track, auth.getAuth().did)) {
-			this.queue = [...this.queue, track];
-		} else if (this.privateMode || isPrivateTrack(track) || !this.current) this.play(track);
-		else this.#model.enqueue(track);
+		if (isPrivateTrack(track)) {
+			if (!privateLibrary.ownsPrivateTrack(track, auth.getAuth().did)) return;
+			if (this.privateMode) this.queue = [...this.queue, track];
+			else this.play(track);
+		} else if (!this.privateMode) {
+			if (this.current) this.#model.enqueue(track);
+			else this.play(track);
+		}
 	}
 	remove(index: number) {
 		if (this.privateMode) this.queue = editPrivateQueue(this.queue, this.index, { action: 'remove', at: index });

@@ -35,7 +35,7 @@
 	<div class="actions">
 		<button class="icon-button" type="button" aria-label="Share track" onclick={share}><Icon name="share" /></button>
 		<button class="primary-button" type="button" aria-label={active && player.playing ? 'Pause' : 'Play'} onclick={play}><Icon name={active && player.playing ? 'pause' : 'play'} size={27} /></button>
-		<button class="icon-button" type="button" aria-label="Add to queue" onclick={() => player.enqueue(track)}><Icon name="queue" /></button>
+		<button class="icon-button" type="button" aria-label="Add to queue" disabled={player.privateMode} title={player.privateMode ? "play a public track to change queues" : undefined} onclick={() => player.enqueue(track)}><Icon name="queue" /></button>
 	</div>
 	<p class="subtle">{track.metrics.play_count} {track.metrics.play_count === 1 ? 'listen' : 'listens'}</p>
 	{#if shared}<p role="status">link copied</p>{/if}
