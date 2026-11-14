@@ -218,4 +218,6 @@ jobs:
       - name: plant each mutant
         env:
           PLYR_ZIG_TEST_DATABASE_URL: postgresql://zig_test:zig_test@127.0.0.1:5435/zig_test
+          # the PR job's case count; at the default 100 some mutants slip a seed
+          HEGEL_TEST_CASES: "500"
         run: scripts/fetch-interop-fixtures && zig build mutants -Dhegel
