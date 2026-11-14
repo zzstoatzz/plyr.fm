@@ -89,6 +89,7 @@ const checks = {
   'check-profile-editor': [/^src\/profile\//, /^app\/edit-profile/],
   'check-queue-drag': [/^src\/(QueueReorder|HomeTrackRow)/, /^src\/behaviors\/(reorder|use-reorder-handle|use-cancel-on-leave)/, /^app\/queue/],
   'check-queue-sync': [/^src\/(personal-queue|use-personal-queue|queue-)/],
+  'check-queue-panel': [/^src\/(QueuePanel|queue-panel|QueueContent|HomeFeatured|FollowingLatest)/, /^app\/(_layout|queue)/],
   'check-radio-stations': [/^src\/(radio|Radio|use-radio-feed)/, /^app\/radio/, /^src\/(PlayerBar|NowPlaying)/],
   'check-radio-accounting': [/^src\/(radio|Radio|use-radio-feed)/, /^app\/(radio|embed\/radio)/],
   'check-search-layout': [/^src\/(Search|use-search)/, /^app\/search/],

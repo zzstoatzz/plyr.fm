@@ -7,7 +7,7 @@ import { autoscrollVelocity, dragTarget, landingTop, rowShift, type Row } from '
 import { useCancelOnLeave } from './behaviors/use-cancel-on-leave';
 import { useReorderHandle } from './behaviors/use-reorder-handle';
 
-interface ScrollMetrics { offset: number; height: number; contentHeight: number }
+export interface ScrollMetrics { offset: number; height: number; contentHeight: number }
 interface Drag {
   queue: Track[]; start: number; from: number; to: number;
   initialY: number; pointerY: number; initialScroll: number; offset: number;

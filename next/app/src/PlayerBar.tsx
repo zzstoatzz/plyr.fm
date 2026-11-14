@@ -19,6 +19,7 @@ import { NowPlaying } from './NowPlaying';
 import { PlayerSeek } from './PlayerSeek';
 import { PlayerControl } from './PlayerControl';
 import { useRadio } from './radio-session';
+import { toggleQueuePanel } from './queue-panel';
 
 const liftTouch = { touchAction: 'none', cursor: 'auto' } as const;
 
@@ -169,7 +170,7 @@ export function PlayerBar() {
             </View>
           </View>
           <View style={{ flex: 1, minWidth: 188, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' }}>
-            {player.live ? stopRadio : <PlayerControl label="Queue" icon={ListMusic} onPress={() => router.navigate('/queue')} />}<PlayerVolume />
+            {player.live ? stopRadio : <PlayerControl label="Queue" icon={ListMusic} onPress={toggleQueuePanel} />}<PlayerVolume />
           </View>
         </> : <>{play}{player.live ? stopRadio : <PlayerControl label="Next" icon={SkipForward} onPress={() => void player.next()} />}</>}
       </View>
