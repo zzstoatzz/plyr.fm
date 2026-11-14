@@ -1,14 +1,18 @@
 import type { Track } from '$core/api';
 import { ListeningSession } from '$core/listening-session';
-import { createPersonalPlayback, type PersonalPlaybackAccount, type PersonalPlaybackTarget } from '$core/personal-playback';
+import { createPersonalPlayback, type PersonalPlaybackTarget } from '$core/personal-playback';
+import { createQueueAdmission } from '$core/personal-queue-join';
 import { PlayOutbox } from '$core/play-outbox';
 import { playMetrics } from '$core/play-metrics';
 import { trackArtwork } from '$core/artwork';
 import { api } from './api';
+import { auth } from './auth';
+import { authConfig } from './auth-config';
+import { consumeQueueLogin, registerQueueLogin } from './storage/queue-login';
 import { playOutboxStorage } from './storage/play-outbox-storage';
 import { queueStorage } from './storage/queue-storage';
 
-const anonymous: PersonalPlaybackAccount = { ready: true, did: null, accountSync: false };
+const admit = createQueueAdmission(authConfig);
 
 class Player {
 	queue = $state.raw<Track[]>([]);
@@ -50,12 +54,20 @@ class Player {
 			setRepeat: value => { this.repeat = value; },
 			error: message => { this.error = message; }
 		}),
-		account: () => anonymous,
+		account: () => {
+			const account = auth.getAuth();
+			return {
+				ready: account.ready,
+				did: account.did,
+				accountSync: account.accountSync,
+				join: account.agent ? (client, seed, resume) => admit(account, client, seed, resume) : undefined
+			};
+		},
 		storage: queueStorage,
 		id: () => crypto.randomUUID(),
 		resolve: api.resolveTracks,
 		recent: (cursor, signal) => api.tracks({ limit: 10, cursor }, signal),
-		consumeLogin: () => false,
+		consumeLogin: consumeQueueLogin,
 		socket: url => new WebSocket(url)
 	});
 	snapshot = $state.raw(this.#model.getSnapshot());
@@ -71,7 +83,35 @@ class Player {
 			if (this.#model.hasRemoteClock()) this.time = this.#model.position();
 		};
 		const unsubscribe = this.#model.subscribe(update);
-		this.#stop = this.#model.start();
+		let previous: ReturnType<typeof auth.getAuth> | undefined;
+		const changeAccount = () => {
+			const account = auth.getAuth();
+			if (!account.ready || previous && account.did === previous.did && account.agent === previous.agent && account.accountSync === previous.accountSync) return;
+			this.#stop?.();
+			if (previous?.did && previous.did !== account.did) {
+				this.#audioSource?.abort();
+				if (this.#audio) {
+					this.#audio.pause();
+					this.#audio.removeAttribute('src');
+					this.#audio.load();
+				}
+				this.#mediaTrack = undefined;
+				this.#listening.stop();
+				this.queue = [];
+				this.index = -1;
+				this.nowPlaying = false;
+				this.time = 0;
+				this.length = 0;
+				this.loading = false;
+				this.error = undefined;
+				if (navigator.mediaSession) navigator.mediaSession.metadata = null;
+			}
+			previous = account;
+			this.#stop = this.#model.start();
+		};
+		const unsubscribeAuth = auth.subscribe(changeAccount);
+		const unregisterLogin = registerQueueLogin(this.#model.prepareLogin);
+		changeAccount();
 		const progress = () => this.#model.checkpoint();
 		const retry = () => this.#outbox?.retry();
 		const sync = setInterval(this.#model.tick, 5_000);
@@ -84,6 +124,8 @@ class Player {
 		return () => {
 			progress();
 			unsubscribe();
+			unsubscribeAuth();
+			unregisterLogin();
 			this.#stop?.();
 			this.#outbox?.dispose();
 			this.#audioSource?.abort();

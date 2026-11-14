@@ -6,6 +6,7 @@
     "dev": "vite dev",
     "build": "vite build",
     "preview": "vite preview",
+    "check:account": "node scripts/check-account.cjs",
     "check:browser": "node scripts/check-shell.cjs",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"
   },
@@ -19,5 +20,9 @@
     "svelte-check": "^4.3.2",
     "typescript": "~6.0.3",
     "vite": "^7.1.7"
+  },
+  "dependencies": {
+    "@atcute/client": "5.1.2",
+    "@atproto/oauth-client-browser": "0.5.14"
   }
 }

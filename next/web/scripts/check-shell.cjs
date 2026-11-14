@@ -54,6 +54,28 @@ async function screen(browser, phone, scheme) {
   } finally { await context.close(); }
 }
 
+async function loginScreen(browser) {
+  const { context, page, errors } = await setup(browser, 390, 844, { phone: true });
+  try {
+    await context.route('https://typeahead.waow.tech/**', route => route.fulfill({ json: {
+      actors: [{ did: 'did:plc:fixture', handle: 'example.test', displayName: 'Example' }]
+    } }));
+    await page.goto(origin + '/oauth/callback?error=access_denied');
+    await page.waitForURL(origin + '/login');
+    await page.getByRole('alert').getByText('sign-in was cancelled.').waitFor();
+    const input = page.getByRole('combobox', { name: 'atmosphere account' });
+    await input.fill('exa');
+    await page.getByRole('option', { name: /example.test/ }).waitFor();
+    await input.press('ArrowDown');
+    assert.equal(await input.getAttribute('aria-activedescendant'), 'account-match-0');
+    await input.press('Escape');
+    assert.equal(await input.getAttribute('aria-expanded'), 'false');
+    assert.ok(await input.evaluate(element => parseFloat(getComputedStyle(element).fontSize) >= 16));
+    await page.screenshot({ path: path.join(output, '390-login.png') });
+    assert.deepEqual(errors, []);
+  } finally { await context.close(); }
+}
+
 (async () => {
   await mkdir(output, { recursive: true });
   const staticBuild = !origin;
@@ -63,6 +85,7 @@ async function screen(browser, phone, scheme) {
     for (const phone of [true, false]) {
       for (const scheme of ['light', 'dark']) await screen(browser, phone, scheme);
     }
-    console.log(`Svelte shell and queue passed at phone and desktop widths → ${output}`);
+    await loginScreen(browser);
+    console.log(`Svelte shell, queue and sign-in passed at phone and desktop widths → ${output}`);
   } finally { await browser.close(); if (staticBuild) close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

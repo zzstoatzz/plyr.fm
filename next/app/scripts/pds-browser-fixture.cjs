@@ -28,7 +28,7 @@ async function fixturePage(browser,accounts,options={}) {
    const pathname=decodeURIComponent(new URL(route.request().url()).pathname);
    let file=path.join(options.dist,pathname);
    try{if(!(await fs.stat(file)).isFile()) throw Error();}catch{if(pathname.endsWith('.js')) console.log('Missing JS asset',pathname);file=path.join(options.dist,'index.html');}
-   const type=file.endsWith('.js')?'text/javascript':file.endsWith('.json')?'application/json':file.endsWith('.png')?'image/png':file.endsWith('.jpg')?'image/jpeg':file.endsWith('.ttf')?'font/ttf':file.endsWith('.woff2')?'font/woff2':'text/html';
+   const type=file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':file.endsWith('.json')?'application/json':file.endsWith('.png')?'image/png':file.endsWith('.jpg')?'image/jpeg':file.endsWith('.ttf')?'font/ttf':file.endsWith('.woff2')?'font/woff2':'text/html';
    await route.fulfill({body:await fs.readFile(file),contentType:type});
   });
   await context.route('https://api.plyr.fm/**',route=>route.request().method()==='POST'?route.abort():route.continue());
@@ -55,9 +55,10 @@ async function fixturePage(browser,accounts,options={}) {
    options.onPdsResponse?.(url.pathname,response.status);
    if(response.ok && options.discardPdsResponse?.(url.pathname)) { await response.arrayBuffer(); await route.abort('failed'); return; }
    const location=response.headers.get('location');
-   if(response.status>=300 && response.status<400 && location?.startsWith(origin+'/')) {
+   const destination=location ? new URL(location, url) : undefined;
+   if ([302, 303].includes(response.status) && destination && [origin, url.origin].includes(destination.origin)) {
     const cookie=response.headers.get('set-cookie');
-    await route.fulfill({status:200,contentType:'text/html',headers:cookie?{'set-cookie':cookie}:{},body:'<script>location.replace('+JSON.stringify(location)+')</script>'});
+    await route.fulfill({status:200,contentType:'text/html',headers:cookie?{'set-cookie':cookie}:{},body:'<script>location.replace('+JSON.stringify(destination.href)+')</script>'});
     return;
    }
    const out=Object.fromEntries(response.headers);
