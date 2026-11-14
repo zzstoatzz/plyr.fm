@@ -31,6 +31,15 @@ const server = http.createServer((request, response) => {
   response.end(fs.readFileSync(filename));
 });
 
+async function serveAudio(route) {
+  const range = /^bytes=(\d+)-(\d*)$/.exec(route.request().headers().range || '');
+  const start = range ? Number(range[1]) : 0;
+  const end = range?.[2] ? Math.min(Number(range[2]), audio.length - 1) : audio.length - 1;
+  const body = audio.subarray(start, end + 1);
+  await route.fulfill({ status: range ? 206 : 200, body, headers: { 'content-type': 'audio/wav', 'content-length': String(body.length), 'accept-ranges': 'bytes',
+    'access-control-allow-origin': '*', ...(range ? { 'content-range': `bytes ${start}-${end}/${audio.length}` } : {}) } });
+}
+
 async function setup(browser, width, height = 900, options = {}) {
   const scheme = options.scheme || 'dark';
   const context = await browser.newContext({ viewport: { width, height }, colorScheme: scheme, isMobile: !!options.phone, hasTouch: !!options.phone, deviceScaleFactor: Number(process.env.FIXTURE_SCALE || 1) });
@@ -45,12 +54,7 @@ async function setup(browser, width, height = 900, options = {}) {
       else await route.fulfill({ body: tile(picture ? Number(picture[1]) : 99), contentType: 'image/svg+xml' });
       return;
     }
-    const range = /^bytes=(\d+)-(\d*)$/.exec(route.request().headers().range || '');
-    const start = range ? Number(range[1]) : 0;
-    const end = range?.[2] ? Math.min(Number(range[2]), audio.length - 1) : audio.length - 1;
-    const body = audio.subarray(start, end + 1);
-    await route.fulfill({ status: range ? 206 : 200, body, headers: { 'content-type': 'audio/wav', 'content-length': String(body.length), 'accept-ranges': 'bytes',
-      'access-control-allow-origin': '*', ...(range ? { 'content-range': `bytes ${start}-${end}/${audio.length}` } : {}) } });
+    await serveAudio(route);
   });
   const page = await context.newPage();
   page.setDefaultTimeout(20_000);
@@ -83,4 +87,4 @@ async function serve() {
   return `http://127.0.0.1:${server.address().port}`;
 }
 
-module.exports = { artistDid, tracks, setup, serve, close: () => server.close() };
+module.exports = { artistDid, tracks, serveAudio, setup, serve, close: () => server.close() };

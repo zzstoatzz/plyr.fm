@@ -10,7 +10,7 @@ import { coordinatorHeaders } from '../../src/coordinator-origin';
 import { usePlayback } from '../../src/playback';
 import { jamTrack } from '../../src/use-jam-playback';
 import { useResource } from '../../src/CatalogPieces';
-import { pdsEndpoint, pdsSupportsSpaces } from '../../src/identity';
+import { pdsEndpoint, pdsSupportsSpaces } from '../../../core/src/identity';
 
 function legacyTrack(value: unknown): { trackId: string; cid: string; playing: boolean; positionMs: number } {
   if (!value || typeof value !== 'object') throw new Error('could not read this jam');

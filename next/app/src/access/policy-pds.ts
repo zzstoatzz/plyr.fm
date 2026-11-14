@@ -2,7 +2,7 @@ import { ok } from '@atcute/client';
 import type { Auth } from '../auth-state';
 import { resolveHandle } from '../auth-state';
 import { NSID } from '../auth-config';
-import { pdsEndpoint } from '../identity';
+import { pdsEndpoint } from '../../../core/src/identity';
 import { parsePolicy, policyRecord, type Policy, type Rule } from './policy';
 
 const PAGES = 5;

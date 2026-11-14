@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount, untrack } from 'svelte';
 	import { page } from '$app/state';
+	import { auth, restoreAuth } from '$lib/auth';
 	import { player } from '$lib/player.svelte';
 	import Icon from '$lib/ui/Icon.svelte';
 	import NowPlaying from '$lib/NowPlaying.svelte';
@@ -10,13 +11,19 @@
 
 	let { children } = $props();
 	let dialog: HTMLDialogElement;
+	let account = $state.raw(auth.getAuth());
 	const links = [
 		{ path: '/', label: 'home', icon: 'home' },
 		{ path: '/search', label: 'search', icon: 'search' },
 		{ path: '/queue', label: 'queue', icon: 'queue' }
 	] as const;
 
-	onMount(() => player.mount());
+	onMount(() => {
+		const unsubscribe = auth.subscribe(() => { account = auth.getAuth(); });
+		const stop = player.mount();
+		void restoreAuth();
+		return () => { unsubscribe(); stop(); };
+	});
 	$effect(() => {
 		// Queue snapshots, rather than the media clock, trigger checkpoint writes.
 		player.snapshot.state;
@@ -49,6 +56,11 @@
 				<Icon name={link.icon} size={21} /> <span>{link.label}</span>
 			</a>
 		{/each}
+		{#if account.did}
+			<a href="/settings" class:active={page.url.pathname === '/settings'}><Icon name="settings" size={21} /><span>settings</span></a>
+		{:else}
+			<a href={'/login?' + new URLSearchParams({ return_to: page.url.pathname + page.url.search })} class:active={page.url.pathname === '/login'}><Icon name="logout" size={21} /><span>sign in</span></a>
+		{/if}
 	</nav>
 	<main id="main" tabindex="-1">{@render children()}</main>
 	{#if player.queueOpen}

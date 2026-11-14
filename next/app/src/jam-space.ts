@@ -4,7 +4,7 @@ import { isLexMap } from '@atproto/lex-data';
 import { lexParse } from '@atproto/lex-json';
 import type { Agent, Auth, Did } from './auth-state';
 import { credentialFor, signedFetch, type SpaceAudioTransport } from './gated-audio-shared.ts';
-import { didDocument, pdsEndpoint } from './identity.ts';
+import { didDocument, pdsEndpoint } from '../../core/src/identity.ts';
 
 import { JAM_SPACE, JAM_COORDINATOR_URL, JAM_SERVICE_AUDIENCE, JAM_JOIN_METHOD } from './auth-config.ts';
 
