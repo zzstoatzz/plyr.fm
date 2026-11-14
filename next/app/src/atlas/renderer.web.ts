@@ -162,7 +162,7 @@ export class AtlasRenderer {
     this.dpr = window.devicePixelRatio || 1;
     this.resizeObserver = new ResizeObserver(() => this.resize());
     if (canvas.parentElement) this.resizeObserver.observe(canvas.parentElement);
-    this.bindInput();
+    if (!options.preview) this.bindInput();
     this.resize();
   }
 
@@ -803,6 +803,9 @@ export class AtlasRenderer {
       ctx.globalAlpha = 1;
     }
 
+    // the home preview is a still picture: dots and artists, no labels to crowd it
+    if (this.options.preview) return;
+
     // --- label economy: one collision pass, priority order ---
     const placed: { x: number; y: number; hw: number; hh: number }[] = [];
     const PAD = small ? 2 : 4;
@@ -936,8 +939,6 @@ export class AtlasRenderer {
     const canvas = this.canvas;
 
     const onWheel = (e: WheelEvent): void => {
-      // in the home preview a plain wheel scrolls the page; pinch and ctrl/cmd+wheel zoom
-      if (this.options.preview && !e.ctrlKey && !e.metaKey) return;
       e.preventDefault();
       this.interacted = true;
       const dy = e.deltaMode === 1 ? e.deltaY * 40 : e.deltaY;
@@ -1018,7 +1019,7 @@ export class AtlasRenderer {
     };
 
     const onTouchStart = (e: TouchEvent): void => {
-      if (!this.options.preview || e.touches.length > 1) e.preventDefault();
+      e.preventDefault();
       for (const t of Array.from(e.changedTouches)) {
         this.touches.set(t.identifier, { x: t.clientX, y: t.clientY });
       }
@@ -1041,17 +1042,13 @@ export class AtlasRenderer {
     };
 
     const onTouchMove = (e: TouchEvent): void => {
-      if (this.options.preview && this.touches.size < 2) {
-        this.touchMoved = true;
-        return;
-      }
       e.preventDefault();
       for (const t of Array.from(e.changedTouches)) {
         this.touches.set(t.identifier, { x: t.clientX, y: t.clientY });
       }
       this.touchMoved = true;
       this.interacted = true;
-      if (this.touches.size === 1 && this.dragging && !this.options.preview) {
+      if (this.touches.size === 1 && this.dragging) {
         const t = this.touches.values().next().value!;
         this.cacheTransform();
         this.view.panX = this.dragStartPanX + (t.x - this.dragStartX) / this.scale;
