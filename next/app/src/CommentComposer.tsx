@@ -5,6 +5,7 @@ import type { Track } from './api';
 import { useAppearance } from './appearance';
 import { useAuth } from './auth';
 import { clock } from './chapters';
+import { inputFontSize } from './controls';
 import { ArrowUp } from './icons';
 import { Text } from './Text';
 import { toast } from './toast';
@@ -62,7 +63,7 @@ export function CommentComposer({ track, positionMs, returnTo }: { track: Track;
         onChangeText={next => { setText(next); setError(undefined); if (!next) setPinned(undefined); else if (pinned === undefined) setPinned(positionMs); }}
         onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} onSubmitEditing={() => void send()} returnKeyType="send" submitBehavior="submit"
         editable={!sending} maxLength={MAX_BYTES * 2}
-        style={[styles.input, { color: theme.text, fontFamily: theme.fontFamily, fontSize: 16 * theme.scale }]} />
+        style={[styles.input, { color: theme.text, fontFamily: theme.fontFamily, fontSize: inputFontSize(theme.scale) }]} />
       <Pressable accessibilityRole="button" accessibilityLabel="Post comment" accessibilityState={{ disabled: !ready, busy: sending }} disabled={!ready}
         onPress={() => void send()} style={[styles.send, { backgroundColor: ready ? theme.accent : theme.raised }]}>
         <ArrowUp size={16} color={ready ? theme.onAccent : theme.faint} weight="bold" />
