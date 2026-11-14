@@ -7,7 +7,9 @@ import { trackArtwork } from './artwork';
 import { Cover, type Play } from './CatalogPieces';
 import { Action } from './controls';
 import { compactCount, distinctTracks, formatDuration, rankedArtists, weekNumber } from './home-state';
-import { Play as PlayIcon, Shuffle } from './icons';
+import { Equalizer, Play as PlayIcon, Shuffle } from './icons';
+import { usePlayback } from './playback';
+import { PauseGlyph } from './PlayerGlyph';
 import { cardSurface } from './materials';
 import { Text } from './Text';
 
@@ -60,6 +62,7 @@ const GAP = 14;
 
 export function HomeFeatured({ featured, onPlay }: { featured: Featured; onPlay: Play }) {
   const theme = useAppearance();
+  const player = usePlayback();
   const [width, setWidth] = useState(0);
   if (featured.status === 'empty') return null;
   const tile = width ? Math.floor((width - GAP * (TILES - 1)) / TILES) : 0;
@@ -102,18 +105,25 @@ export function HomeFeatured({ featured, onPlay }: { featured: Featured; onPlay:
     </View>
     {artist.profile.bio ? <Text numberOfLines={2} style={{ color: theme.muted, fontFamily: theme.fontFamily, fontSize: 14.5 * theme.scale, lineHeight: 21 * theme.scale, maxWidth: 680 }}>{artist.profile.bio}</Text> : null}
     <View onLayout={measure} style={styles.strip}>
-      {tile > 0 && tracks.slice(0, TILES).map(track => <Pressable key={track.id} accessibilityRole="button" accessibilityLabel={`Play ${track.metadata.title}`} onPress={() => onPlay(track, tracks, name)} style={{ width: tile, gap: 8 }}>
+      {tile > 0 && tracks.slice(0, TILES).map(track => {
+        const current = player.current?.id === track.id;
+        const playing = current && player.status.playing;
+        return <Pressable key={track.id} accessibilityRole="button" accessibilityLabel={`${playing ? 'Pause' : current ? 'Resume' : 'Play'} ${track.metadata.title}`}
+          onPress={() => current ? player.setPlaying(!player.status.playing) : onPlay(track, tracks, name)} style={{ width: tile, gap: 8 }}>
         {({ hovered, pressed }: { pressed: boolean; hovered?: boolean }) => <>
           <View>
             <Cover uri={trackArtwork(track) || artist.profile.avatar_url} size={tile} radius={10} />
-            {(hovered || pressed) && <View pointerEvents="none" style={[styles.badge, { backgroundColor: theme.accent }]}><PlayIcon size={18} color={theme.onAccent} fill={theme.onAccent} /></View>}
+            {(hovered || pressed || current) && <View pointerEvents="none" style={[styles.badge, { backgroundColor: theme.accent }]}>
+              {playing && (hovered || pressed) ? <PauseGlyph size={16} color={theme.onAccent} /> : playing ? <Equalizer size={18} color={theme.onAccent} /> : <PlayIcon size={18} color={theme.onAccent} fill={theme.onAccent} />}
+            </View>}
           </View>
           <View style={{ gap: 2 }}>
-            <Text numberOfLines={1} style={{ color: theme.text, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale, fontWeight: '600' }}>{track.metadata.title}</Text>
+            <Text numberOfLines={1} style={{ color: current ? theme.accent : theme.text, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale, fontWeight: '600' }}>{track.metadata.title}</Text>
             <Text numberOfLines={1} style={{ color: theme.faint, fontSize: 12.5 * theme.scale, fontVariant: ['tabular-nums'] }}>{[formatDuration(track.metadata.duration_seconds), `${compactCount(track.metrics.play_count)} ${track.metrics.play_count === 1 ? 'play' : 'plays'}`].filter(Boolean).join(' · ')}</Text>
           </View>
         </>}
-      </Pressable>)}
+      </Pressable>;
+      })}
     </View>
   </View>;
 }
