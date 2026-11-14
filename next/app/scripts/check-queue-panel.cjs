@@ -115,6 +115,15 @@ async function wide(browser) {
     await page.reload();
     await page.getByTestId('home-featured').waitFor();
     assert.equal(await page.getByTestId('queue-panel').count(), 0, 'a closed panel stays closed after reload');
+    await page.getByTestId('player-dock').getByRole('button', { name: 'Queue', exact: true }).click();
+    await page.getByTestId('queue-panel').waitFor();
+    await page.waitForTimeout(400);
+    const covers = await page.getByTestId('home-featured').evaluate(card => {
+      const box = card.getBoundingClientRect();
+      const name = card.querySelector('[role="heading"]').getBoundingClientRect();
+      return [...card.querySelectorAll('img')].filter(img => { const r = img.getBoundingClientRect(); return r.width > 100 && r.bottom > box.top + 10 && r.top < name.top && r.right > box.left && r.left < box.left + 200; }).length;
+    });
+    assert.ok(covers > 0, 'opening the queue beside home moves the covers above the name instead of hiding them');
     assert.deepEqual(errors, []);
   } finally { await context.close(); }
 }
