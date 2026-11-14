@@ -10,11 +10,17 @@ async function run(browser, width) {
     await options.click();
     const sheet = page.getByRole('dialog', { name: 'track options' });
     await sheet.waitFor();
+    if (width >= 800) {
+      const button = await options.boundingBox();
+      const item = await sheet.getByRole('button', { name: 'add to queue', exact: true }).boundingBox();
+      assert.ok(Math.abs(item.y - button.y) < 160 && Math.abs(item.x + item.width - button.x) < 80, 'the wide menu opens beside the button that opened it');
+    }
     await page.evaluate(() => document.activeElement?.blur());
     await page.keyboard.press('q');
     await page.waitForTimeout(300);
     assert.equal(new URL(page.url()).pathname, '/', 'q does nothing while a sheet is open');
-    await page.getByRole('button', { name: 'Close', exact: true }).click();
+    // a wide window opens the menu as a dropdown with no close button; Escape closes either form
+    await page.keyboard.press('Escape');
     await sheet.waitFor({ state: 'hidden' });
     await page.evaluate(() => document.activeElement?.blur());
     await page.keyboard.press('q');

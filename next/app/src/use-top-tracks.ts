@@ -18,7 +18,7 @@ export function useTopTracks(initial: ChartPeriod = 'month', limit = 10) {
     setLoading(true);
     setError(undefined);
     try {
-      const read = async (period: ChartPeriod) => (await api.chart(period)).data.slice(0, limit).map(({ track }) => track);
+      const read = async (period: ChartPeriod) => (await api.chart(period, limit)).data.slice(0, limit).map(({ track }) => track);
       const result = cycle ? await nextPopulatedChart(candidate, read) : { period: candidate, tracks: await read(candidate) };
       if (request === generation.current) { setPeriod(result.period); setTracks(result.tracks); }
     } catch (cause) {

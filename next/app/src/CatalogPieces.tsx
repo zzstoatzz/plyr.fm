@@ -9,6 +9,7 @@ import { PlayerLoader } from './PlayerLoader';
 import type { ListSummary, Page, Track } from './api';
 import { Action, Copy } from './controls';
 import { WaveLoading } from './WaveLoading';
+import { compactCount } from './home-state';
 import { useAppearance } from './appearance';
 import { artworkShadow, cardSurface } from './materials';
 
@@ -198,7 +199,7 @@ export function artistName(track: Track) {
 
 export function trackMeta(track: Track) {
   const { play_count: plays, like_count: likes } = track.metrics;
-  return `${plays} ${plays === 1 ? 'play' : 'plays'}` + (likes > 0 ? ` · ${likes} ${likes === 1 ? 'like' : 'likes'}` : '');
+  return `${compactCount(plays)} ${plays === 1 ? 'play' : 'plays'}` + (likes > 0 ? ` · ${compactCount(likes)} ${likes === 1 ? 'like' : 'likes'}` : '');
 }
 
 export function TrackRows({ tracks, onPlay }: { tracks: Track[]; onPlay: Play }) {
