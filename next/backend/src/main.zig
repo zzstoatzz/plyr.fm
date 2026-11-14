@@ -142,7 +142,12 @@ pub fn main() !void {
             });
         },
         .api => {
-            try server.run(io, settings.port, settings.max_connections, .{
+            try server.run(io, settings.port, .{
+                .max_connections = settings.max_connections,
+                .handler_threads = settings.handler_threads,
+                .request_timeout_s = settings.request_timeout_s,
+                .keepalive_timeout_s = settings.keepalive_timeout_s,
+            }, .{
                 .io = io,
                 .track_store = track_store,
                 .track_chart_store = track_chart_store,

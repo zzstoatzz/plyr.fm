@@ -1,10 +1,11 @@
 const std = @import("std");
+const Exchange = @import("exchange.zig").Exchange;
 const await_record = @import("../internal/application/await_record.zig");
 const RecordStatusStore = @import("../internal/index/record_status_store.zig").RecordStatusStore;
 const response = @import("response.zig");
 
 pub fn awaitRecord(
-    request: *std.http.Server.Request,
+    request: *Exchange,
     allocator: std.mem.Allocator,
     io: std.Io,
     store: ?RecordStatusStore,
@@ -12,7 +13,7 @@ pub fn awaitRecord(
     cors: response.CorsPolicy,
     request_id: []const u8,
 ) !void {
-    switch (await_record.execute(allocator, io, store, collections, request.head.target)) {
+    switch (await_record.execute(allocator, io, store, collections, request.target)) {
         .found => |value| {
             const body = try std.json.Stringify.valueAlloc(allocator, value, .{ .emit_null_optional_fields = false });
             try response.json(request, .ok, body, request_id, cors);

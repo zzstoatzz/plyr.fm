@@ -3,14 +3,13 @@
 //! this method), the way Tangled's and Grain's notification services are.
 
 const std = @import("std");
+const Exchange = @import("exchange.zig").Exchange;
 const response = @import("response.zig");
 const application = @import("../internal/application/notifications.zig");
 const service_auth = @import("../internal/atproto/service_auth.zig");
 const service = @import("../internal/notification/service.zig");
 const NotificationStore = @import("../internal/notification/store.zig").NotificationStore;
 const Network = @import("../internal/space/network.zig").Network;
-
-const http = std.http;
 
 const maximum_body_bytes = 4 * 1024;
 
@@ -28,7 +27,7 @@ pub fn match(config: service.Config, path: []const u8) ?Method {
 }
 
 pub fn handle(
-    request: *http.Server.Request,
+    request: *Exchange,
     allocator: std.mem.Allocator,
     io: std.Io,
     config: service.Config,
@@ -37,12 +36,11 @@ pub fn handle(
     cors: response.CorsPolicy,
     request_id: []const u8,
 ) !void {
-    const expected: http.Method = if (method == .seen) .POST else .GET;
-    if (request.head.method != expected) {
+    const expected: @import("exchange.zig").Method = if (method == .seen) .POST else .GET;
+    if (request.method != expected) {
         try xrpcError(request, .method_not_allowed, "InvalidRequest", "method not allowed", request_id, cors);
         return;
     }
-    // headers do not survive reading the body: take what is needed first
     const response_cors = try response.captureCors(request, allocator, cors);
     const token = try allocator.dupe(u8, service_auth.bearerToken(request) orelse {
         try xrpcError(request, .unauthorized, "AuthenticationRequired", "service auth required", request_id, response_cors);
@@ -56,7 +54,7 @@ pub fn handle(
     const recipient = (try authenticate(request, allocator, io, config, nsid, token, request_id, response_cors)) orelse return;
 
     switch (method) {
-        .list => switch (application.list(allocator, store, recipient, config.collections, request.head.target)) {
+        .list => switch (application.list(allocator, store, recipient, config.collections, request.target)) {
             .found => |page| {
                 const body = try std.json.Stringify.valueAlloc(allocator, page, .{ .emit_null_optional_fields = false });
                 try response.json(request, .ok, body, request_id, response_cors);
@@ -74,11 +72,7 @@ pub fn handle(
             .unavailable => try xrpcError(request, .service_unavailable, "ServiceUnavailable", "notifications are temporarily unavailable", request_id, response_cors),
         },
         .seen => {
-            const body_reader = request.readerExpectContinue(&.{}) catch {
-                try xrpcError(request, .bad_request, "InvalidRequest", "unreadable body", request_id, response_cors);
-                return;
-            };
-            const body = body_reader.allocRemaining(allocator, std.Io.Limit.limited(maximum_body_bytes)) catch {
+            const body = request.readBody(maximum_body_bytes) catch {
                 try xrpcError(request, .bad_request, "InvalidRequest", "unreadable body", request_id, response_cors);
                 return;
             };
@@ -94,7 +88,7 @@ pub fn handle(
 
 /// The caller's DID, or null after answering 401.
 fn authenticate(
-    request: *http.Server.Request,
+    request: *Exchange,
     allocator: std.mem.Allocator,
     io: std.Io,
     config: service.Config,
@@ -132,8 +126,8 @@ fn authenticate(
 }
 
 fn xrpcError(
-    request: *http.Server.Request,
-    status: http.Status,
+    request: *Exchange,
+    status: std.http.Status,
     comptime name: []const u8,
     comptime message: []const u8,
     request_id: []const u8,

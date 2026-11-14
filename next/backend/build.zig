@@ -80,6 +80,22 @@ pub fn build(b: *std.Build) void {
             .openssl = true,
         });
     root_module.addImport("pg", pg_dependency.module("pg"));
+    // httpz is assembled here, as zds does, so it shares next's websocket
+    // module instead of building a second copy with a clashing options file
+    const httpz_module = b.createModule(.{
+        .root_source_file = b.dependency("httpz", .{}).path("src/httpz.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+        .imports = &.{
+            .{ .name = "metrics", .module = b.dependency("metrics", .{ .target = target, .optimize = optimize }).module("metrics") },
+            .{ .name = "websocket", .module = websocket_module },
+        },
+    });
+    const httpz_options = b.addOptions();
+    httpz_options.addOption(bool, "httpz_blocking", false);
+    httpz_module.addOptions("build", httpz_options);
+    root_module.addImport("httpz", httpz_module);
     root_module.addImport("redis", b.dependency("redis", .{
         .target = target,
         .optimize = optimize,

@@ -1,11 +1,12 @@
 const std = @import("std");
+const Exchange = @import("exchange.zig").Exchange;
 const get_playlist = @import("../internal/application/get_playlist.zig");
 const list_playlists = @import("../internal/application/list_playlists.zig");
 const VerifiedListStore = @import("../internal/index/verified_list_store.zig").VerifiedListStore;
 const response = @import("response.zig");
 
 pub fn list(
-    request: *std.http.Server.Request,
+    request: *Exchange,
     allocator: std.mem.Allocator,
     store: ?VerifiedListStore,
     list_collection: []const u8,
@@ -18,7 +19,7 @@ pub fn list(
         store,
         list_collection,
         profile_collection,
-        request.head.target,
+        request.target,
     )) {
         .found => |value| {
             const body = try std.json.Stringify.valueAlloc(allocator, value, .{});
@@ -31,7 +32,7 @@ pub fn list(
 }
 
 pub fn get(
-    request: *std.http.Server.Request,
+    request: *Exchange,
     allocator: std.mem.Allocator,
     store: ?VerifiedListStore,
     list_collection: []const u8,

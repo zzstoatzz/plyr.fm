@@ -1,4 +1,5 @@
 const std = @import("std");
+const Exchange = @import("exchange.zig").Exchange;
 const get_artist = @import("../internal/application/get_artist.zig");
 const get_artist_metrics = @import("../internal/application/get_artist_metrics.zig");
 const ArtistStore = @import("../internal/index/artist_store.zig").ArtistStore;
@@ -6,7 +7,7 @@ const ArtistMetricStore = @import("../internal/metrics/artist_metric_store.zig")
 const response = @import("response.zig");
 
 pub fn get(
-    request: *std.http.Server.Request,
+    request: *Exchange,
     allocator: std.mem.Allocator,
     store: ?ArtistStore,
     cors: response.CorsPolicy,
@@ -26,7 +27,7 @@ pub fn get(
 }
 
 pub fn getMetrics(
-    request: *std.http.Server.Request,
+    request: *Exchange,
     allocator: std.mem.Allocator,
     artist_store: ?ArtistStore,
     metric_store: ?ArtistMetricStore,
@@ -128,14 +129,10 @@ test "artist metric JSON uses opaque track identity and explicit sources" {
     );
 }
 
-pub fn resolve(request: *std.http.Server.Request, allocator: std.mem.Allocator, store: ?ArtistStore, collection: []const u8, cors: response.CorsPolicy, request_id: []const u8) !void {
+pub fn resolve(request: *Exchange, allocator: std.mem.Allocator, store: ?ArtistStore, collection: []const u8, cors: response.CorsPolicy, request_id: []const u8) !void {
     const response_cors = try response.captureCors(request, allocator, cors);
     const application = @import("../internal/application/resolve_artists.zig");
-    const reader = request.readerExpectContinue(&.{}) catch {
-        try response.apiError(request, .invalid_request, request_id, response_cors);
-        return;
-    };
-    const body = reader.allocRemaining(allocator, std.Io.Limit.limited(64 * 1024)) catch {
+    const body = request.readBody(64 * 1024) catch {
         try response.apiError(request, .invalid_request, request_id, response_cors);
         return;
     };

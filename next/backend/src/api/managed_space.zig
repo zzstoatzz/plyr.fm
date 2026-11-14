@@ -3,16 +3,15 @@
 //! may read (or write) a gated space.
 
 const std = @import("std");
+const Exchange = @import("exchange.zig").Exchange;
 const response = @import("response.zig");
 const query = @import("../internal/http/query.zig");
 const managed_space = @import("../internal/space/managed_space.zig");
 const space_access = @import("../internal/space/access.zig");
 const Network = @import("../internal/space/network.zig").Network;
 
-const http = std.http;
-
 pub fn didDocument(
-    request: *http.Server.Request,
+    request: *Exchange,
     allocator: std.mem.Allocator,
     config: managed_space.Config,
     cors: response.CorsPolicy,
@@ -54,7 +53,7 @@ fn parseParams(allocator: std.mem.Allocator, target: []const u8) !Params {
     };
 }
 
-fn bearerToken(request: *const http.Server.Request) ?[]const u8 {
+fn bearerToken(request: *const Exchange) ?[]const u8 {
     var token: ?[]const u8 = null;
     var headers = request.iterateHeaders();
     while (headers.next()) |header| {
@@ -68,8 +67,8 @@ fn bearerToken(request: *const http.Server.Request) ?[]const u8 {
 }
 
 fn xrpcError(
-    request: *http.Server.Request,
-    status: http.Status,
+    request: *Exchange,
+    status: std.http.Status,
     comptime name: []const u8,
     comptime message: []const u8,
     request_id: []const u8,
@@ -79,14 +78,14 @@ fn xrpcError(
 }
 
 pub fn checkUserAccess(
-    request: *http.Server.Request,
+    request: *Exchange,
     allocator: std.mem.Allocator,
     io: std.Io,
     config: managed_space.Config,
     cors: response.CorsPolicy,
     request_id: []const u8,
 ) !void {
-    const params = parseParams(allocator, request.head.target) catch {
+    const params = parseParams(allocator, request.target) catch {
         try xrpcError(request, .bad_request, "InvalidRequest", "space, user and access are required", request_id, cors);
         return;
     };

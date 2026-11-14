@@ -1,10 +1,11 @@
 const std = @import("std");
+const Exchange = @import("exchange.zig").Exchange;
 const get_ingest_status = @import("../internal/application/get_ingest_status.zig");
 const IngestStatusStore = @import("../internal/index/ingest_status_store.zig").IngestStatusStore;
 const response = @import("response.zig");
 
 pub fn ingest(
-    request: *std.http.Server.Request,
+    request: *Exchange,
     allocator: std.mem.Allocator,
     io: std.Io,
     store: ?IngestStatusStore,
