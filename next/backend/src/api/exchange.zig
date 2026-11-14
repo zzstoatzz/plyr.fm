@@ -56,15 +56,23 @@ pub const Exchange = struct {
         const headers = try self.arena.alloc(Header, options.extra_headers.len);
         for (options.extra_headers, headers) |source, *copy| {
             copy.* = .{
-                .name = try self.arena.dupe(u8, source.name),
-                .value = try self.arena.dupe(u8, source.value),
+                .name = try self.own(source.name),
+                .value = try self.own(source.value),
             };
         }
         self.response = .{
             .status = options.status,
             .headers = headers,
-            .body = try self.arena.dupe(u8, body),
+            .body = try self.own(body),
         };
+    }
+
+    /// An empty slice from an allocator has an undefined pointer, and httpz
+    /// hands body pointers straight to writev, which faults on one. Keep
+    /// empty slices pointing at a real (static) address.
+    fn own(self: *Exchange, bytes: []const u8) ![]const u8 {
+        if (bytes.len == 0) return "";
+        return self.arena.dupe(u8, bytes);
     }
 
     /// A request built in memory, for tests.
@@ -108,4 +116,15 @@ test "readBody applies the handler's limit and header lookup ignores case" {
     try std.testing.expectError(error.BodyTooLarge, exchange.readBody(4));
     try std.testing.expectEqualStrings("application/json", exchange.header("content-type").?);
     try std.testing.expect(exchange.header("origin") == null);
+}
+
+test "an empty response body still points at real memory" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    var exchange = Exchange.initTest(arena_state.allocator(), .OPTIONS, "/", &.{}, "");
+    try exchange.respond("", .{ .status = .no_content, .extra_headers = &.{.{ .name = "vary", .value = "" }} });
+    const response = exchange.response.?;
+    // writev faults on the undefined pointer an allocator gives a zero-length slice
+    try std.testing.expectEqual(@intFromPtr(@as([]const u8, "").ptr), @intFromPtr(response.body.ptr));
+    try std.testing.expectEqual(@intFromPtr(@as([]const u8, "").ptr), @intFromPtr(response.headers[0].value.ptr));
 }
