@@ -6,6 +6,7 @@ const list_change = @import("list_change.zig");
 const track_change = @import("track_change.zig");
 const profile_change = @import("profile_change.zig");
 const like_change = @import("like_change.zig");
+const comment_change = @import("comment_change.zig");
 const record_rejection = @import("record_rejection.zig");
 
 pub const Snapshot = struct {
@@ -17,11 +18,13 @@ pub const Snapshot = struct {
     track_collection: []const u8,
     profile_collection: []const u8,
     like_collection: []const u8,
+    comment_collection: []const u8,
     indexed_at_us: i64,
     list_changes: []const list_change.Change,
     track_changes: []const track_change.Change = &.{},
     profile_changes: []const profile_change.Change = &.{},
     like_changes: []const like_change.Change = &.{},
+    comment_changes: []const comment_change.Change = &.{},
     rejections: []const record_rejection.Rejection = &.{},
 
     pub fn validate(self: Snapshot) Error!void {
@@ -31,6 +34,7 @@ pub const Snapshot = struct {
             zat.Nsid.parse(self.track_collection) == null or
             zat.Nsid.parse(self.profile_collection) == null or
             zat.Nsid.parse(self.like_collection) == null or
+            zat.Nsid.parse(self.comment_collection) == null or
             self.indexed_at_us < 0) return error.InvalidSnapshot;
         try validateDagCborCid(self.commit_cid);
         try validateDagCborCid(self.data_cid);
@@ -115,13 +119,34 @@ pub const Snapshot = struct {
                     return error.DuplicateRecord;
             }
         }
+        for (self.comment_changes, 0..) |change, index| {
+            const upsert = switch (change) {
+                .upsert => |value| value,
+                .delete => return error.InvalidSnapshot,
+            };
+            if (!std.mem.eql(u8, upsert.owner_did, self.repo_did) or
+                !std.mem.eql(u8, upsert.collection, self.comment_collection) or
+                !std.mem.eql(u8, upsert.proof.commit_rev, self.commit_rev) or
+                upsert.proof.indexed_at_us != self.indexed_at_us or
+                !sameCommit(upsert.proof.commit_cid, self.commit_cid))
+                return error.InvalidSnapshot;
+            for (self.comment_changes[0..index]) |prior| {
+                const prior_uri = switch (prior) {
+                    .upsert => |value| value.record_uri,
+                    .delete => return error.InvalidSnapshot,
+                };
+                if (std.mem.eql(u8, upsert.record_uri, prior_uri))
+                    return error.DuplicateRecord;
+            }
+        }
         for (self.rejections, 0..) |rejection, index| {
             rejection.validate() catch return error.InvalidSnapshot;
             if (!std.mem.eql(u8, rejection.owner_did, self.repo_did) or
                 (!std.mem.eql(u8, rejection.collection, self.list_collection) and
                     !std.mem.eql(u8, rejection.collection, self.track_collection) and
                     !std.mem.eql(u8, rejection.collection, self.profile_collection) and
-                    !std.mem.eql(u8, rejection.collection, self.like_collection)) or
+                    !std.mem.eql(u8, rejection.collection, self.like_collection) and
+                    !std.mem.eql(u8, rejection.collection, self.comment_collection)) or
                 !std.mem.eql(u8, rejection.proof.commit_rev, self.commit_rev) or
                 rejection.proof.indexed_at_us != self.indexed_at_us or
                 !sameCommit(rejection.proof.commit_cid, self.commit_cid))
@@ -186,6 +211,11 @@ fn containsProjectedUri(snapshot: Snapshot, uri: []const u8) bool {
         change.upsert.record_uri,
         uri,
     )) return true;
+    for (snapshot.comment_changes) |change| if (std.mem.eql(
+        u8,
+        change.upsert.record_uri,
+        uri,
+    )) return true;
     return false;
 }
 
@@ -221,6 +251,7 @@ test "complete snapshot accepts only unique upserts with one proof" {
         .track_collection = "fm.plyr.dev.track",
         .profile_collection = "fm.plyr.dev.actor.profile",
         .like_collection = "fm.plyr.dev.like",
+        .comment_collection = "fm.plyr.dev.comment",
         .indexed_at_us = 1,
         .list_changes = &.{change},
     };

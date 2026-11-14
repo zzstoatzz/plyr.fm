@@ -62,6 +62,7 @@ const candidate_query =
     \\  UNION SELECT owner_did FROM plyr_index.track_records
     \\  UNION SELECT owner_did FROM plyr_index.list_records
     \\  UNION SELECT owner_did FROM plyr_index.like_records
+    \\  UNION SELECT owner_did FROM plyr_index.comment_records
     \\  UNION SELECT owner_did FROM plyr_index.profile_records
     \\) AS source
     \\ORDER BY source.did
@@ -89,18 +90,20 @@ test "PostgreSQL candidates are distinct DIDs the projection has seen" {
     defer _ = pool.exec("DROP SCHEMA IF EXISTS plyr_index CASCADE", .{}) catch null;
     _ = try pool.exec("CREATE SCHEMA plyr_index", .{});
     _ = try pool.exec("CREATE TABLE plyr_index.repo_heads (repo_did text PRIMARY KEY)", .{});
-    inline for (.{ "track_records", "list_records", "like_records", "profile_records" }) |table|
+    inline for (.{ "track_records", "list_records", "like_records", "comment_records", "profile_records" }) |table|
         _ = try pool.exec("CREATE TABLE plyr_index." ++ table ++ " (owner_did text NOT NULL)", .{});
     _ = try pool.exec("INSERT INTO plyr_index.repo_heads VALUES ('did:plc:two')", .{});
     _ = try pool.exec("INSERT INTO plyr_index.track_records VALUES ('did:plc:two'), ('did:plc:one')", .{});
     _ = try pool.exec("INSERT INTO plyr_index.list_records VALUES ('did:plc:one')", .{});
     _ = try pool.exec("INSERT INTO plyr_index.like_records VALUES ('did:plc:three')", .{});
+    _ = try pool.exec("INSERT INTO plyr_index.comment_records VALUES ('did:plc:four')", .{});
 
     var adapter: PostgresRepositoryCandidates = .{ .pool = pool };
     var found = try adapter.source().list(allocator);
     defer found.deinit(allocator);
-    try std.testing.expectEqual(@as(usize, 3), found.items.len);
-    try std.testing.expectEqualStrings("did:plc:one", found.items[0]);
-    try std.testing.expectEqualStrings("did:plc:three", found.items[1]);
-    try std.testing.expectEqualStrings("did:plc:two", found.items[2]);
+    try std.testing.expectEqual(@as(usize, 4), found.items.len);
+    try std.testing.expectEqualStrings("did:plc:four", found.items[0]);
+    try std.testing.expectEqualStrings("did:plc:one", found.items[1]);
+    try std.testing.expectEqualStrings("did:plc:three", found.items[2]);
+    try std.testing.expectEqualStrings("did:plc:two", found.items[3]);
 }

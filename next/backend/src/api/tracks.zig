@@ -4,11 +4,13 @@ const resolve_tracks = @import("../internal/application/resolve_tracks.zig");
 const get_track = @import("../internal/application/get_track.zig");
 const get_playback = @import("../internal/application/get_playback.zig");
 const list_track_likes = @import("../internal/application/list_track_likes.zig");
+const list_track_comments = @import("../internal/application/list_track_comments.zig");
 const list_tags = @import("../internal/application/list_tags.zig");
 const list_tracks = @import("../internal/application/list_tracks.zig");
 const record_play = @import("../internal/application/record_play.zig");
 const PlaybackStore = @import("../internal/index/playback_store.zig").PlaybackStore;
 const LikeQueryStore = @import("../internal/index/like_query_store.zig").LikeQueryStore;
+const CommentQueryStore = @import("../internal/index/comment_query_store.zig").CommentQueryStore;
 const TrackStore = @import("../internal/index/track_store.zig").TrackStore;
 const PlayMetricStore = @import("../internal/metrics/play_metric_store.zig").PlayMetricStore;
 const query = @import("../internal/http/query.zig");
@@ -72,6 +74,39 @@ pub fn likes(
         like_store,
         track_collection,
         like_collection,
+        profile_collection,
+        id,
+        request.target,
+    )) {
+        .found => |value| {
+            const body = try std.json.Stringify.valueAlloc(allocator, value, .{});
+            try response.json(request, .ok, body, request_id, cors);
+        },
+        .invalid_request, .invalid_id => try response.apiError(request, .invalid_request, request_id, cors),
+        .not_found => try response.apiError(request, .not_found, request_id, cors),
+        .internal_error => try response.apiError(request, .internal_error, request_id, cors),
+        .unavailable => try response.apiError(request, .service_unavailable, request_id, cors),
+    }
+}
+
+pub fn comments(
+    request: *Exchange,
+    allocator: std.mem.Allocator,
+    track_store: ?TrackStore,
+    comment_store: ?CommentQueryStore,
+    track_collection: []const u8,
+    comment_collection: []const u8,
+    profile_collection: []const u8,
+    cors: response.CorsPolicy,
+    id: []const u8,
+    request_id: []const u8,
+) !void {
+    switch (list_track_comments.execute(
+        allocator,
+        track_store,
+        comment_store,
+        track_collection,
+        comment_collection,
         profile_collection,
         id,
         request.target,

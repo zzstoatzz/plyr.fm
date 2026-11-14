@@ -40,12 +40,14 @@ pub const Collections = struct {
     track: []const u8,
     profile: []const u8,
     like: []const u8,
+    comment: []const u8,
 
     fn contains(self: Collections, collection: []const u8) bool {
         return std.mem.eql(u8, collection, self.list) or
             std.mem.eql(u8, collection, self.track) or
             std.mem.eql(u8, collection, self.profile) or
-            std.mem.eql(u8, collection, self.like);
+            std.mem.eql(u8, collection, self.like) or
+            std.mem.eql(u8, collection, self.comment);
     }
 };
 
@@ -77,7 +79,7 @@ pub fn run(
     var key_upstream: zat_keys.ZatSigningKeyResolver = .{ .resolver = &identity };
     var key_cache = cached_keys.CachedSigningKeyResolver.init(allocator, io, 1024, key_upstream.port());
     defer key_cache.deinit();
-    const wanted = [_][]const u8{ collections.list, collections.track, collections.profile, collections.like };
+    const wanted = [_][]const u8{ collections.list, collections.track, collections.profile, collections.like, collections.comment };
     var repositories: pds_source.ZatPdsRepositorySource = .{
         .io = io,
         .identity_resolver = &identity,
@@ -102,6 +104,7 @@ pub fn run(
             .track_collection = collections.track,
             .profile_collection = collections.profile,
             .like_collection = collections.like,
+            .comment_collection = collections.comment,
         },
         .collections = collections,
         .key_cache = &key_cache,

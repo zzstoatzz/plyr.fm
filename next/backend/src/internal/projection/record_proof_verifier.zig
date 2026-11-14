@@ -22,6 +22,7 @@ pub fn verifyProofs(
     track_collection: []const u8,
     profile_collection: []const u8,
     like_collection: []const u8,
+    comment_collection: []const u8,
     indexed_at_us: i64,
 ) !verified.Snapshot {
     if (proofs.len == 0 or proofs.len > max_proof_records)
@@ -44,7 +45,7 @@ pub fn verifyProofs(
     const data_cid = commit.data;
 
     var blocks: CarBlocks = .{ .cars = cars };
-    const selected = try coverage.inspect(allocator, data_cid, blocks.reader(), &.{ list_collection, track_collection, profile_collection, like_collection });
+    const selected = try coverage.inspect(allocator, data_cid, blocks.reader(), &.{ list_collection, track_collection, profile_collection, like_collection, comment_collection });
     if (selected.missing.len != 0) return error.IncompleteRepo;
     var collector: snapshot_verifier.Collector = .{
         .allocator = allocator,
@@ -54,6 +55,7 @@ pub fn verifyProofs(
         .track_collection = track_collection,
         .profile_collection = profile_collection,
         .like_collection = like_collection,
+        .comment_collection = comment_collection,
         .proof = .{ .commit_cid = commit_cid, .commit_rev = commit_rev, .indexed_at_us = indexed_at_us },
     };
     for (selected.entries) |entry| try snapshot_verifier.Collector.entry(&collector, entry);
@@ -66,11 +68,13 @@ pub fn verifyProofs(
         .track_collection = track_collection,
         .profile_collection = profile_collection,
         .like_collection = like_collection,
+        .comment_collection = comment_collection,
         .indexed_at_us = indexed_at_us,
         .list_changes = try collector.changes.toOwnedSlice(allocator),
         .track_changes = try collector.track_changes.toOwnedSlice(allocator),
         .profile_changes = try collector.profile_changes.toOwnedSlice(allocator),
         .like_changes = try collector.like_changes.toOwnedSlice(allocator),
+        .comment_changes = try collector.comment_changes.toOwnedSlice(allocator),
         .rejections = try collector.rejections.toOwnedSlice(allocator),
     };
     try snapshot.validate();
@@ -175,7 +179,7 @@ test "record proofs extract every selected collection from the signed tree" {
     defer arena.deinit();
     const a = arena.allocator();
     const fixture = try snapshot_verifier.buildFixture(a, true, false);
-    const full = try snapshot_verifier.verify(a, fixture.car_bytes, fixture.did, fixture.public_key, "fm.plyr.dev.list", "fm.plyr.dev.track", "fm.plyr.dev.actor.profile", "fm.plyr.dev.like", 42);
+    const full = try snapshot_verifier.verify(a, fixture.car_bytes, fixture.did, fixture.public_key, "fm.plyr.dev.list", "fm.plyr.dev.track", "fm.plyr.dev.actor.profile", "fm.plyr.dev.like", "fm.plyr.dev.comment", 42);
     const snapshot = try verifyProofs(
         a,
         &.{ fixture.car_bytes, fixture.car_bytes },
@@ -185,6 +189,7 @@ test "record proofs extract every selected collection from the signed tree" {
         "fm.plyr.dev.track",
         "fm.plyr.dev.actor.profile",
         "fm.plyr.dev.like",
+        "fm.plyr.dev.comment",
         42,
     );
     try std.testing.expectEqual(@as(usize, 1), snapshot.track_changes.len);
@@ -192,7 +197,7 @@ test "record proofs extract every selected collection from the signed tree" {
     try std.testing.expectEqual(@as(usize, 1), snapshot.profile_changes.len);
     try std.testing.expectEqual(@as(usize, 1), snapshot.like_changes.len);
     try std.testing.expectEqualStrings(full.commit_rev, snapshot.commit_rev);
-    try std.testing.expectError(error.InvalidSnapshot, verifyProofs(a, &.{}, fixture.did, fixture.public_key, "fm.plyr.dev.list", "fm.plyr.dev.track", "fm.plyr.dev.actor.profile", "fm.plyr.dev.like", 42));
+    try std.testing.expectError(error.InvalidSnapshot, verifyProofs(a, &.{}, fixture.did, fixture.public_key, "fm.plyr.dev.list", "fm.plyr.dev.track", "fm.plyr.dev.actor.profile", "fm.plyr.dev.like", "fm.plyr.dev.comment", 42));
 }
 
 test "a single record proof yields the record, or proven absence, at the signed commit" {
@@ -200,7 +205,7 @@ test "a single record proof yields the record, or proven absence, at the signed 
     defer arena.deinit();
     const a = arena.allocator();
     const fixture = try snapshot_verifier.buildFixture(a, true, false);
-    const full = try snapshot_verifier.verify(a, fixture.car_bytes, fixture.did, fixture.public_key, "fm.plyr.dev.list", "fm.plyr.dev.track", "fm.plyr.dev.actor.profile", "fm.plyr.dev.like", 42);
+    const full = try snapshot_verifier.verify(a, fixture.car_bytes, fixture.did, fixture.public_key, "fm.plyr.dev.list", "fm.plyr.dev.track", "fm.plyr.dev.actor.profile", "fm.plyr.dev.like", "fm.plyr.dev.comment", 42);
     const track_path = try std.fmt.allocPrint(a, "fm.plyr.dev.track/{s}", .{full.track_changes[0].upsert.rkey});
     const present = try verifyRecord(a, fixture.car_bytes, track_path, fixture.did, fixture.public_key);
     try std.testing.expectEqualStrings(full.commit_rev, present.commit_rev);
@@ -217,5 +222,5 @@ test "a proof bundle with an omitted record cannot become a complete snapshot" {
     defer arena.deinit();
     const a = arena.allocator();
     const fixture = try snapshot_verifier.buildFixture(a, false, false);
-    try std.testing.expectError(error.IncompleteRepo, verifyProofs(a, &.{fixture.car_bytes}, fixture.did, fixture.public_key, "fm.plyr.dev.list", "fm.plyr.dev.track", "fm.plyr.dev.actor.profile", "fm.plyr.dev.like", 42));
+    try std.testing.expectError(error.IncompleteRepo, verifyProofs(a, &.{fixture.car_bytes}, fixture.did, fixture.public_key, "fm.plyr.dev.list", "fm.plyr.dev.track", "fm.plyr.dev.actor.profile", "fm.plyr.dev.like", "fm.plyr.dev.comment", 42));
 }
