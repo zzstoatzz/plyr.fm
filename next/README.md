@@ -61,8 +61,9 @@ cd app && npm run build:web                     # client: static web export
 cd backend && just check                        # appview and coordinator: format, build, tests
 ```
 
-Merging to `main` deploys whichever half changed. Ship a backend change before
-the client change that depends on it.
+Next web stays on the current Expo deployment during the Svelte port (#2650).
+Pull requests still build and check the Expo export. Ship a Next backend
+change before the client change that depends on it.
 
 ## docs
 
