@@ -43,6 +43,14 @@ const dist = path.resolve(__dirname, '../dist');
     await artist.waitFor();
     await artist.click();
     await page.waitForURL('**/u/fixture.test');
+    await page.goBack();
+    const atlas = page.getByTestId('home-atlas');
+    await atlas.waitFor();
+    assert.equal(await atlas.getAttribute('role'), 'link', 'The home atlas is one link');
+    assert.equal(await atlas.locator('a, button, [tabindex]').count(), 0, 'Nothing inside the home atlas takes focus or clicks');
+    const box = await atlas.boundingBox();
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 3);
+    await page.waitForURL('**/atlas');
     assert.deepEqual(errors, []);
     console.log('Authenticated homepage artist rendering and navigation passed without page errors');
   } finally { await browser.close(); }

@@ -56,6 +56,13 @@ jobs:
           ln -s "$(python3 -c 'import ziglang, os; print(os.path.dirname(ziglang.__file__))')/zig" /usr/local/bin/zig || sudo ln -s "$(python3 -c 'import ziglang, os; print(os.path.dirname(ziglang.__file__))')/zig" /usr/local/bin/zig
           zig version
 
+      # every dependency is a tangled.org archive; keep the fetched packages
+      # so a tangled outage cannot fail a build whose deps have not changed
+      - uses: actions/cache@v4
+        with:
+          path: next/backend/zig-pkg
+          key: zig-pkg-${{ hashFiles('next/backend/build.zig.zon') }}
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -164,6 +171,13 @@ jobs:
       - name: install openssl headers
         run: sudo apt-get update && sudo apt-get install -y libssl-dev
 
+      # every dependency is a tangled.org archive; keep the fetched packages
+      # so a tangled outage cannot fail a build whose deps have not changed
+      - uses: actions/cache@v4
+        with:
+          path: next/backend/zig-pkg
+          key: zig-pkg-${{ hashFiles('next/backend/build.zig.zon') }}
+
       # libhegel is a cargo build of one pinned hegel-rust revision
       - uses: actions/cache@v4
         with:
@@ -209,6 +223,13 @@ jobs:
 
       - name: install openssl headers
         run: sudo apt-get update && sudo apt-get install -y libssl-dev
+
+      # every dependency is a tangled.org archive; keep the fetched packages
+      # so a tangled outage cannot fail a build whose deps have not changed
+      - uses: actions/cache@v4
+        with:
+          path: next/backend/zig-pkg
+          key: zig-pkg-${{ hashFiles('next/backend/build.zig.zon') }}
 
       - uses: actions/cache@v4
         with:

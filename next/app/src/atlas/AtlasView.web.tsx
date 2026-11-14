@@ -12,7 +12,7 @@ import type { AtlasData } from './types';
 
 type Tip = { x: number; y: number; title: string; meta: string; hint: string };
 
-export function AtlasView({ preview = false, onPlay, onSummary }: { preview?: boolean; onPlay: (track: Track) => void; onSummary?: (summary: string) => void }) {
+export function AtlasView({ preview = false, onPlay, onSummary }: { preview?: boolean; onPlay?: (track: Track) => void; onSummary?: (summary: string) => void }) {
   const theme = useAppearance();
   const canvas = useRef<HTMLCanvasElement>(null);
   const renderer = useRef<AtlasRenderer | null>(null);
@@ -29,7 +29,7 @@ export function AtlasView({ preview = false, onPlay, onSummary }: { preview?: bo
     const controller = new AbortController();
     pending.current = controller;
     setStarting(title);
-    atlasTrack(id, controller.signal).then(track => { if (!controller.signal.aborted) play.current(track); },
+    atlasTrack(id, controller.signal).then(track => { if (!controller.signal.aborted) play.current?.(track); },
       () => { if (!controller.signal.aborted) toast.error(`couldn't start ${title}`); })
       .finally(() => { if (pending.current === controller) { pending.current = null; setStarting(undefined); } });
   }, []);
@@ -68,7 +68,8 @@ export function AtlasView({ preview = false, onPlay, onSummary }: { preview?: bo
   }
   const label = data ? `Atlas of ${atlasSummary(data)}. Arrow keys pan, plus and minus zoom.` : 'Atlas';
   return <View style={[styles.stage, { backgroundColor: theme.background }]}>
-    <canvas ref={canvas} tabIndex={0} aria-label={label} onKeyDown={key} style={{ position: 'absolute', left: 0, top: 0, display: 'block', touchAction: preview ? 'pan-y' : 'none', outlineOffset: -2 }} />
+    {preview ? <canvas ref={canvas} aria-hidden style={{ position: 'absolute', left: 0, top: 0, display: 'block', pointerEvents: 'none' }} />
+      : <canvas ref={canvas} tabIndex={0} aria-label={label} onKeyDown={key} style={{ position: 'absolute', left: 0, top: 0, display: 'block', touchAction: 'none', outlineOffset: -2 }} />}
     {!data && <View style={styles.center} pointerEvents="box-none">
       {error ? <>
         <Text style={{ color: theme.muted, fontSize: 14 * theme.scale }}>{error}</Text>

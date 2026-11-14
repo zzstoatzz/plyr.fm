@@ -50,7 +50,7 @@ const checks = {
   'check-feedback': [/^src\/(toast|Toasts|like-interactions|LikeHeart)/],
   'check-font-settings': [/^src\/(Text|appearance|preferences|SettingsPieces)/, /^app\/settings/],
   'check-home': [/^src\/(Home|home-|use-home-|TagScroller|tag-colors|RowActions|DesktopTrackRow)/, /^app\/index/],
-  'check-home-artists': [/^src\/(HomeArtists|use-network-artists)/],
+  'check-home-artists': [/^src\/(HomeArtists|use-network-artists|DesktopHome|atlas\/)/],
   'check-home-feed-pagination': [/^src\/(Home\.|HomeShelf|home-state|home-api)/],
   'check-home-layout': [/^src\/(Home|HomeShelf|HomeChart|HomeTrackRow)/, /^app\/index/],
   'check-home-listening': [/^src\/(Home|listening-session)/],
