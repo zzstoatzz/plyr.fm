@@ -21,7 +21,7 @@ export async function listPolicies(author: string, space: string, signal?: Abort
     const records = body && typeof body === 'object' && 'records' in body && Array.isArray(body.records) ? body.records : [];
     for (const item of records) {
       const policy = parsePolicy(item, author);
-      if (policy?.space === space) found.push(policy);
+      if (policy?.spaces.includes(space)) found.push(policy);
     }
     cursor = body && typeof body === 'object' && 'cursor' in body && typeof body.cursor === 'string' && records.length ? body.cursor : undefined;
     if (!cursor) return found;
@@ -38,7 +38,7 @@ function session(auth: Auth) {
 export async function addPolicy(auth: Auth, space: string, rule: Rule, title?: string): Promise<void> {
   const { did, rpc } = session(auth);
   if (!space.startsWith(`at://${did}/space/`)) throw new Error('you can only open your own music.');
-  await ok(rpc.post('com.atproto.repo.createRecord', { input: { repo: did, collection: collection(), record: policyRecord(space, rule, title) } }));
+  await ok(rpc.post('com.atproto.repo.createRecord', { input: { repo: did, collection: collection(), record: policyRecord([space], rule, title) } }));
 }
 
 export async function removePolicy(auth: Auth, policy: Policy): Promise<void> {

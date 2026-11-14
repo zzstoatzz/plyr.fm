@@ -11,8 +11,12 @@ anything gated (a track, an album's tracks, a playlist) lives in a space,
 
 the artist opens a space by writing `fm.plyr.policy` records (lexicon in
 `next/app/lexicons/policy.json`, collection `<track namespace>.policy`) in their
-own repo. each record names one space and one rule. a space can carry any number
-of policies; a reader who passes any one of them may read the whole space.
+own repo. each record names the spaces it opens (`spaces`, 1 to 16 uris; older
+records carry a single `space`, still read) and one rule. a space can carry any
+number of policies; a reader who passes any one of them may read the whole
+space. one policy over several spaces is how one purchase opens an album and the
+single that shares a track with it. `subject` optionally names the
+`fm.plyr.release` (or lone track) the policy sells, by at-uri, for display.
 
 | rule | passes |
 | --- | --- |
