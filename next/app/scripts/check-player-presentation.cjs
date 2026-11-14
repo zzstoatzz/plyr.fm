@@ -321,7 +321,7 @@ async function longContent(browser) {
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     await page.waitForTimeout(550);
     assert.equal(await header.isVisible(), true, 'Upward intent cannot reverse into dismissal in same touch');
-    await page.getByRole('button', { name: 'Open track page', exact: true }).scrollIntoViewIfNeeded();
+    await page.getByRole('link', { name: /^About / }).scrollIntoViewIfNeeded();
     await screenshot(page, '390-dark-short-player-scrolled-scale-1.4');
     await page.getByRole('button', { name: 'Close', exact: true }).click();
     assert.deepEqual(errors, []);

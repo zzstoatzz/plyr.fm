@@ -121,7 +121,7 @@ async function run(browser, width, theme) {
     assert.ok(await page.evaluate(() => !window.__playerPresentationMedia.paused && window.__playerPresentationMedia.currentTime < 10), 'late personal/Jam callbacks cannot control private output');
     await page.getByRole('button', { name: 'Open now playing', exact: true }).click();
     await page.getByTestId('now-playing-title').filter({ hasText: 'private song' }).waitFor();
-    assert.equal(await page.getByRole('button', { name: 'Open track page', exact: true }).count(), 0);
+    assert.equal(await page.getByRole('link', { name: /^About / }).count(), 0);
     assert.equal(await page.getByRole('button', { name: /like track|share link/i }).count(), 0);
     await page.waitForTimeout(600);
     await screenshot(page, `private-playing-${width}-${theme}`);

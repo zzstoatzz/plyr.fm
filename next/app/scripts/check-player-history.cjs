@@ -55,10 +55,10 @@ async function run(browser, width) {
     await open();
     await page.keyboard.press('Escape'); await home();
     await open();
-    await page.getByRole('button', { name: 'Open track page', exact: true }).click();
+    await page.getByRole('link', { name: /^About / }).click();
     await page.waitForURL('**/track/' + track.id); await continuity();
     await open();
-    await page.getByRole('button', { name: 'Open track page', exact: true }).click();
+    await page.getByRole('link', { name: /^About / }).click();
     await page.waitForURL('**/track/' + track.id);
     await page.goBack(); await home();
     await open();
@@ -83,10 +83,10 @@ async function run(browser, width) {
     await page.evaluate(() => { window.__historyMedia = window.__playerPresentationMedia; });
     baselineRequests = audioRequests;
     await open();
-    await page.getByRole('button', { name: 'Open track page', exact: true }).click();
+    await page.getByRole('link', { name: /^About / }).click();
     await page.waitForURL('**/track/' + track.id); await continuity();
     await open();
-    await page.getByRole('button', { name: 'Open track page', exact: true }).click();
+    await page.getByRole('link', { name: /^About / }).click();
     await page.waitForURL('**/track/' + track.id);
     await page.goBack(); await page.waitForURL('**/search');
     assert.equal(await search.inputValue(), 'quiet', 'Back preserves originating Search query');

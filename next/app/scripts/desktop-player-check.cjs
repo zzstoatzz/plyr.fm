@@ -43,7 +43,7 @@ async function runDesktop(browser, width, theme, { setup, track, screenshot }) {
   await page.getByRole('button',{name:'Open now playing',exact:true}).click();await page.waitForURL('**/now-playing');
   await dialog.getByRole('button',{name:'Queue',exact:true}).click();await page.waitForURL('**/queue');await continuity();
   await dock.getByRole('button',{name:'Open now playing',exact:true}).click();await page.waitForURL('**/now-playing');
-  await dialog.getByRole('button',{name:'Open track page',exact:true}).click();await page.waitForURL(original);await continuity();
+  await dialog.getByRole('link',{name:/^About /}).click();await page.waitForURL(original);await continuity();
   assert.deepEqual(errors,[]);
   console.log(`${width}/${theme}: full-width dock, full-screen artwork, single transport, volume/seek, Back/Escape/queue/detail and continuous audio passed`);
  }catch(error){await screenshot(page,`desktop-${width}-${theme}-failure`);throw error;}finally{await context.unrouteAll({behavior:'ignoreErrors'});await context.close();}
