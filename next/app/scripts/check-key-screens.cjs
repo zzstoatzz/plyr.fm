@@ -60,6 +60,8 @@ async function screens(browser, { width, height, phone, scheme }) {
     const cover = await art.boundingBox();
     if (phone) {
       assert.ok(cover.width >= width - 41, `${label} now playing: the cover is ${Math.round(cover.width)}px wide on a ${width}px phone`);
+      const clipped = await page.getByTestId('now-playing-title').evaluate(node => node.scrollHeight > node.clientHeight + 1 || getComputedStyle(node).webkitLineClamp !== 'none');
+      assert.ok(!clipped, `${label} now playing: the whole title shows`);
       const title = await page.getByTestId('now-playing-title').boundingBox();
       assert.ok(title.x - cover.x < 1 && title.x + title.width > cover.x + cover.width * 0.5, `${label} now playing: the title sits in the cover's column`);
     } else assert.ok(cover.width >= 300, `${label} now playing: the cover is ${Math.round(cover.width)}px wide`);
