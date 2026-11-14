@@ -119,7 +119,7 @@ test "a missing requested block refuses the repair instead of authorizing deleti
     try std.testing.expectEqual(@as(usize, 1), source.calls);
     source.calls = 0;
     source.omit = source.car.blocks[source.car.blocks.len - 1].cid_raw;
-    try std.testing.expectError(error.IncompleteRepo, fetch(a, source.car.roots[0], &.{ "fm.plyr.dev.track", "fm.plyr.dev.like" }, source.port()));
+    try std.testing.expectError(error.IncompleteRepo, fetch(a, source.car.roots[0], &.{ "fm.plyr.dev.track", "fm.plyr.dev.like", "fm.plyr.dev.comment" }, source.port()));
     try std.testing.expect(source.calls > 1);
 }
 
