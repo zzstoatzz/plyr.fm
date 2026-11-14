@@ -13,6 +13,7 @@ import { usePlayback } from './playback';
 import { PauseGlyph } from './PlayerGlyph';
 import { cardSurface } from './materials';
 import { Text } from './Text';
+import { useWidth } from './use-width';
 
 type Featured = { status: 'loading' } | { status: 'empty' } | { status: 'ready'; tracks: Track[] };
 
@@ -67,11 +68,10 @@ const GAP = 14;
 export function HomeFeatured({ featured, onPlay }: { featured: Featured; onPlay: Play }) {
   const theme = useAppearance();
   const player = usePlayback();
-  const [width, setWidth] = useState(0);
+  const { width, ref, onLayout } = useWidth();
   if (featured.status === 'empty') return null;
   const tile = width ? Math.floor((width - GAP * (TILES - 1)) / TILES) : 0;
   const card = [cardSurface(theme), styles.card];
-  const measure = (event: { nativeEvent: { layout: { width: number } } }) => setWidth(event.nativeEvent.layout.width);
   if (featured.status === 'loading') return <View testID="home-featured" accessibilityRole="progressbar" accessibilityLabel="loading artist of the week" style={card}>
     <View style={styles.head}>
       <View style={{ width: 88, height: 88, borderRadius: 44, backgroundColor: theme.raised }} />
@@ -80,7 +80,7 @@ export function HomeFeatured({ featured, onPlay }: { featured: Featured; onPlay:
         <View style={{ width: '45%', height: 28, borderRadius: 8, backgroundColor: theme.raised }} />
       </View>
     </View>
-    <View onLayout={measure} style={styles.strip}>
+    <View ref={ref} onLayout={onLayout} style={styles.strip}>
       {tile > 0 && Array.from({ length: TILES }, (_, index) => <View key={index} style={{ width: tile, height: tile, borderRadius: 10, backgroundColor: theme.raised }} />)}
     </View>
   </View>;
@@ -98,7 +98,7 @@ export function HomeFeatured({ featured, onPlay }: { featured: Featured; onPlay:
   const stacked = width > 0 && width < COPY_WIDTH + 200;
   const copyWidth = stacked ? width : COPY_WIDTH;
   const gradient = stacked ? { x1: 0, y1: STRIP - 70, x2: 0, y2: STRIP } : { x1: 0, y1: 0, x2: COPY_WIDTH + 260, y2: 0 };
-  return <View testID="home-featured" onLayout={measure} style={[styles.wallCard, { backgroundColor: fade }]}>
+  return <View testID="home-featured" ref={ref} onLayout={onLayout} style={[styles.wallCard, { backgroundColor: fade }]}>
     {wall.length ? <View aria-hidden pointerEvents="none" style={[styles.wall, stacked ? { left: -40, top: STRIP - 2 * 150 - 30 } : { left: COPY_WIDTH - 40 }]}>
       {wall.map((uri, index) => <Image key={index} source={{ uri }} resizeMode="cover" style={[styles.tile, { backgroundColor: theme.raised }]} />)}
     </View> : artist.profile.avatar_url ? <Image aria-hidden source={{ uri: artist.profile.avatar_url }} blurRadius={60} resizeMode="cover" style={[StyleSheet.absoluteFill, { opacity: theme.dark ? 0.22 : 0.16 }]} /> : null}
