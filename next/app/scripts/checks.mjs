@@ -44,6 +44,7 @@ const checks = {
   'check-browser-branding': [/^app\/_layout/, /^public\//, /^src\/appearance/],
   'check-collection-sessions': [/^src\/(collections|CatalogRoute|listening-session)/, /^app\/(album|playlist)/],
   'check-contoured-ui': [/^src\/(controls|materials|ActionRow|DetailHeader)/],
+  'check-covered-screens': [/^app\/_layout/, /^src\/(screen-freeze|playback\.tsx|playback-context)/],
   'check-create-recovery': [/^src\/publishing\/(CreateRecovery|create-)/],
   'check-discovery-preferences': [/^src\/discovery\//, /^app\/settings/],
   'check-downloads': [/^src\/downloads\//],
