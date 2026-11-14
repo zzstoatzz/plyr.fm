@@ -550,3 +550,7 @@ max_lines = 1160
 [[rules]]
 path = "next/app/src/use-personal-queue.ts"
 max_lines = 501
+
+[[rules]]
+path = "next/core/src/personal-playback.ts"
+max_lines = 518

@@ -1,15 +1,7 @@
 import { coordinatorHeaders } from './coordinator-origin';
 import type { Auth } from './auth-state';
 import { JAM_COORDINATOR_URL, JAM_JOIN_METHOD, JAM_SERVICE_AUDIENCE } from './auth-config';
-import type { JamTrack, PersonalQueueState } from '../../core/src/jam-connection';
-
-export interface QueueSeed {
-  queue: (JamTrack & { key: string })[];
-  index: number;
-  playing: boolean;
-  positionMs: number;
-  personal: Pick<PersonalQueueState, 'explicitEnd' | 'tailKind' | 'label' | 'repeat' | 'keepPlaying' | 'cursor'>;
-}
+import type { QueueSeed } from '../../core/src/personal-playback';
 
 export async function joinPersonalQueue(auth: Auth, clientId: string, initial: QueueSeed | undefined, resumePlaying: boolean) {
   if (!auth.agent || !auth.did) throw new Error('sign in to save your queue across devices');
