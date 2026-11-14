@@ -1,282 +1,263 @@
-//! Keeping plyr's copy of a space's records current. The engine that talks to
-//! hosts (credential, listWriters, listRepoOps/getRepo, LtHash checks) sits
-//! behind `Source`; what plyr keeps sits behind `Store`. `Syncer` only decides
-//! what to fetch and what to drop, so either side can be swapped.
+//! Keeping plyr's copy of a space's records current from a space-stream
+//! (next/services/space-stream). The stream does the host work (credential,
+//! listWriters, listRepoOps with its commit MAC) and emits each verified op
+//! in order with a `time_us` cursor; `Projector` turns one event into one
+//! `Store` transaction that also moves the cursor, so a replay from the
+//! stored cursor rebuilds the copy.
 
 const std = @import("std");
-
-/// One repo the space host says has written to the space.
-pub const Writer = struct {
-    repo: []const u8,
-    /// absent when the host reports the repo removed from the space
-    repo_rev: ?[]const u8,
-};
 
 pub const Op = union(enum) {
     put: struct { collection: []const u8, rkey: []const u8, cid: []const u8, value_json: []const u8 },
     delete: struct { collection: []const u8, rkey: []const u8 },
 };
 
-/// Ops from a `since` rev up to `rev`, already verified against the repo's commit.
-pub const Ops = struct { rev: []const u8, ops: []const Op };
+pub const Event = struct {
+    /// the stream's cursor for this event
+    time_us: u64,
+    body: Body,
 
-/// A repo's full verified state at `rev`, for when the op log can't bridge.
-pub const Snapshot = struct {
-    rev: []const u8,
-    records: []const Record,
-
-    pub const Record = struct { collection: []const u8, rkey: []const u8, cid: []const u8, value_json: []const u8 };
+    pub const Body = union(enum) {
+        commit: struct { repo: []const u8, rev: []const u8, op: Op },
+        /// a write the stream saw but sent without its record value
+        incomplete: struct { repo: []const u8, collection: []const u8, rkey: []const u8 },
+        writer_removed: []const u8,
+        space_deleted,
+    };
 };
 
-pub const SourceError = error{
-    /// the only signal that the space is gone and its copy should be dropped
-    SpaceDeleted,
-    /// `since` is older than the host's op log; fetch a snapshot
-    SinceUnavailable,
-    /// the space refused plyr; keep the copy, try again later
-    Unauthorized,
-    Unavailable,
-    Unverified,
-    OutOfMemory,
-};
-
-/// The host-facing sync engine. Implementations verify before returning.
-pub const Source = struct {
-    context: *anyopaque,
-    writers_fn: *const fn (*anyopaque, std.mem.Allocator, []const u8) SourceError![]const Writer,
-    ops_fn: *const fn (*anyopaque, std.mem.Allocator, []const u8, []const u8, ?[]const u8) SourceError!Ops,
-    snapshot_fn: *const fn (*anyopaque, std.mem.Allocator, []const u8, []const u8) SourceError!Snapshot,
-
-    /// every writer of `space`, complete (implementations page internally)
-    pub fn writers(self: Source, a: std.mem.Allocator, space: []const u8) SourceError![]const Writer {
-        return self.writers_fn(self.context, a, space);
-    }
-    /// `repo`'s ops in `space` after `since` (null: from the start)
-    pub fn ops(self: Source, a: std.mem.Allocator, space: []const u8, repo: []const u8, since: ?[]const u8) SourceError!Ops {
-        return self.ops_fn(self.context, a, space, repo, since);
-    }
-    pub fn snapshot(self: Source, a: std.mem.Allocator, space: []const u8, repo: []const u8) SourceError!Snapshot {
-        return self.snapshot_fn(self.context, a, space, repo);
-    }
-};
-
-/// plyr's copy. Each call is one transaction: a rev only moves with its records.
+/// plyr's copy. Each call is one transaction and leaves `cursor` at the
+/// given value, so a cursor only moves with its records.
 pub const Store = struct {
     context: *anyopaque,
-    rev_fn: *const fn (*anyopaque, std.mem.Allocator, []const u8, []const u8) anyerror!?[]const u8,
-    apply_fn: *const fn (*anyopaque, []const u8, []const u8, Ops) anyerror!void,
-    replace_fn: *const fn (*anyopaque, []const u8, []const u8, Snapshot) anyerror!void,
-    drop_repo_fn: *const fn (*anyopaque, []const u8, []const u8) anyerror!void,
+    cursor_fn: *const fn (*anyopaque, []const u8) anyerror!?u64,
+    apply_fn: *const fn (*anyopaque, []const u8, u64, []const u8, []const u8, Op) anyerror!void,
+    drop_repo_fn: *const fn (*anyopaque, []const u8, u64, []const u8) anyerror!void,
     drop_space_fn: *const fn (*anyopaque, []const u8) anyerror!void,
-    repos_fn: *const fn (*anyopaque, std.mem.Allocator, []const u8) anyerror![]const []const u8,
+    advance_fn: *const fn (*anyopaque, []const u8, u64) anyerror!void,
 
-    pub fn rev(self: Store, a: std.mem.Allocator, space: []const u8, repo: []const u8) !?[]const u8 {
-        return self.rev_fn(self.context, a, space, repo);
+    /// where to resume `space` (null: from the start)
+    pub fn cursor(self: Store, space: []const u8) !?u64 {
+        return self.cursor_fn(self.context, space);
     }
-    pub fn apply(self: Store, space: []const u8, repo: []const u8, ops: Ops) !void {
-        return self.apply_fn(self.context, space, repo, ops);
+    pub fn apply(self: Store, space: []const u8, at: u64, repo: []const u8, rev: []const u8, op: Op) !void {
+        return self.apply_fn(self.context, space, at, repo, rev, op);
     }
-    pub fn replace(self: Store, space: []const u8, repo: []const u8, snapshot: Snapshot) !void {
-        return self.replace_fn(self.context, space, repo, snapshot);
+    pub fn dropRepo(self: Store, space: []const u8, at: u64, repo: []const u8) !void {
+        return self.drop_repo_fn(self.context, space, at, repo);
     }
-    pub fn dropRepo(self: Store, space: []const u8, repo: []const u8) !void {
-        return self.drop_repo_fn(self.context, space, repo);
-    }
+    /// forgets the space and its cursor
     pub fn dropSpace(self: Store, space: []const u8) !void {
         return self.drop_space_fn(self.context, space);
     }
-    /// repos plyr holds a copy of in `space`
-    pub fn repos(self: Store, a: std.mem.Allocator, space: []const u8) ![]const []const u8 {
-        return self.repos_fn(self.context, a, space);
+    /// moves the cursor past an event that changes no records
+    pub fn advance(self: Store, space: []const u8, at: u64) !void {
+        return self.advance_fn(self.context, space, at);
     }
 };
 
-pub const Outcome = enum { current, synced, dropped, unavailable };
+pub const Outcome = enum { applied, dropped, skipped };
 
-pub const Syncer = struct {
-    source: Source,
+pub const Projector = struct {
     store: Store,
 
-    /// Bring `space` current. Called on a schedule, after a notification, or
-    /// after a `spaceRev` gap; it reconciles the full writer set each time.
-    pub fn sync(self: Syncer, a: std.mem.Allocator, space: []const u8) !Outcome {
-        const writers = self.source.writers(a, space) catch |err| return self.failed(space, err);
-        var changed = false;
-        for (writers) |writer| {
-            const held = try self.store.rev(a, space, writer.repo);
-            const target = writer.repo_rev orelse {
-                if (held != null) {
-                    try self.store.dropRepo(space, writer.repo);
-                    changed = true;
-                }
-                continue;
-            };
-            if (held) |h| if (std.mem.eql(u8, h, target)) continue;
-            if (self.source.ops(a, space, writer.repo, held)) |ops| {
-                try self.store.apply(space, writer.repo, ops);
-            } else |err| switch (err) {
-                error.SinceUnavailable => try self.store.replace(space, writer.repo, self.source.snapshot(a, space, writer.repo) catch |e| return self.failed(space, e)),
-                else => return self.failed(space, err),
-            }
-            changed = true;
-        }
-        // a repo the host no longer lists at all left the space too
-        for (try self.store.repos(a, space)) |repo| {
-            const listed = for (writers) |writer| {
-                if (std.mem.eql(u8, writer.repo, repo)) break true;
-            } else false;
-            if (!listed) {
-                try self.store.dropRepo(space, repo);
-                changed = true;
-            }
-        }
-        return if (changed) .synced else .current;
-    }
-
-    fn failed(self: Syncer, space: []const u8, err: SourceError) !Outcome {
-        return switch (err) {
-            error.SpaceDeleted => {
+    /// Apply one event of `space`. Events arrive in cursor order; anything at
+    /// or before the stored cursor was already applied.
+    pub fn handle(self: Projector, space: []const u8, held: ?u64, event: Event) !Outcome {
+        if (held) |cursor| if (event.time_us <= cursor) return .skipped;
+        switch (event.body) {
+            .commit => |commit| try self.store.apply(space, event.time_us, commit.repo, commit.rev, commit.op),
+            .writer_removed => |repo| try self.store.dropRepo(space, event.time_us, repo),
+            .space_deleted => {
                 try self.store.dropSpace(space);
                 return .dropped;
             },
-            error.OutOfMemory => error.OutOfMemory,
-            // keep what we have: a stale copy hides new records, it never shows revoked ones,
-            // because reads still pass through the access Decider
-            error.Unauthorized, error.Unavailable, error.Unverified, error.SinceUnavailable => .unavailable,
-        };
+            .incomplete => |write| {
+                // reads of the copy still pass the access Decider, so a missing record only hides
+                std.log.warn("space write without a record: {s} {s}/{s}/{s}", .{ space, write.repo, write.collection, write.rkey });
+                try self.store.advance(space, event.time_us);
+                return .skipped;
+            },
+        }
+        return .applied;
     }
 };
+
+/// One space-stream event (src/wire.ts `StreamEvent`); null for kinds plyr
+/// does not project (`authorized`, `sync_error`) or a different space.
+pub fn parseEvent(a: std.mem.Allocator, space: []const u8, text: []const u8) !?Event {
+    const value = std.json.parseFromSliceLeaky(std.json.Value, a, text, .{}) catch return error.InvalidEvent;
+    const object = switch (value) {
+        .object => |o| o,
+        else => return error.InvalidEvent,
+    };
+    const kind = string(object, "kind") orelse return error.InvalidEvent;
+    const known = std.meta.stringToEnum(enum { commit, writer, space_deleted }, kind) orelse return null;
+    if (!std.mem.eql(u8, string(object, "space") orelse return error.InvalidEvent, space)) return null;
+    const time_us: u64 = switch (object.get("time_us") orelse return error.InvalidEvent) {
+        .integer => |n| std.math.cast(u64, n) orelse return error.InvalidEvent,
+        else => return error.InvalidEvent,
+    };
+    const repo = string(object, "did") orelse return error.InvalidEvent;
+    const body: Event.Body = switch (known) {
+        .space_deleted => .space_deleted,
+        .writer => blk: {
+            const writer = switch (object.get("writer") orelse return error.InvalidEvent) {
+                .object => |o| o,
+                else => return error.InvalidEvent,
+            };
+            if (!std.mem.eql(u8, string(writer, "status") orelse "", "removed")) return null;
+            break :blk .{ .writer_removed = repo };
+        },
+        .commit => blk: {
+            const commit = switch (object.get("commit") orelse return error.InvalidEvent) {
+                .object => |o| o,
+                else => return error.InvalidEvent,
+            };
+            const rev = string(commit, "rev") orelse return error.InvalidEvent;
+            const collection = string(commit, "collection") orelse return error.InvalidEvent;
+            const rkey = string(commit, "rkey") orelse return error.InvalidEvent;
+            const operation = string(commit, "operation") orelse return error.InvalidEvent;
+            if (std.mem.eql(u8, operation, "delete")) break :blk .{ .commit = .{ .repo = repo, .rev = rev, .op = .{ .delete = .{ .collection = collection, .rkey = rkey } } } };
+            if (!std.mem.eql(u8, operation, "create") and !std.mem.eql(u8, operation, "update")) return error.InvalidEvent;
+            const cid = string(commit, "cid") orelse return error.InvalidEvent;
+            const record = commit.get("record") orelse break :blk .{ .incomplete = .{ .repo = repo, .collection = collection, .rkey = rkey } };
+            if (record != .object) return error.InvalidEvent;
+            const value_json = try std.json.Stringify.valueAlloc(a, record, .{});
+            break :blk .{ .commit = .{ .repo = repo, .rev = rev, .op = .{ .put = .{ .collection = collection, .rkey = rkey, .cid = cid, .value_json = value_json } } } };
+        },
+    };
+    return .{ .time_us = time_us, .body = body };
+}
+
+fn string(object: std.json.ObjectMap, key: []const u8) ?[]const u8 {
+    return switch (object.get(key) orelse return null) {
+        .string => |s| s,
+        else => null,
+    };
+}
 
 // --- tests -----------------------------------------------------------------
 
 const Fake = struct {
-    writers: []const Writer = &.{},
-    log_from: ?[]const u8 = null,
-    deleted: bool = false,
-    unavailable: bool = false,
-    snapshots: usize = 0,
-    held: std.StringHashMapUnmanaged([]const u8) = .empty,
+    gpa: std.mem.Allocator,
+    cursor: ?u64 = null,
     records: std.StringHashMapUnmanaged(void) = .empty,
     dropped_space: bool = false,
-    gpa: std.mem.Allocator,
 
-    fn source(self: *Fake) Source {
-        return .{ .context = self, .writers_fn = writersFn, .ops_fn = opsFn, .snapshot_fn = snapshotFn };
-    }
     fn store(self: *Fake) Store {
-        return .{ .context = self, .rev_fn = revFn, .apply_fn = applyFn, .replace_fn = replaceFn, .drop_repo_fn = dropRepoFn, .drop_space_fn = dropSpaceFn, .repos_fn = reposFn };
+        return .{ .context = self, .cursor_fn = cursorFn, .apply_fn = applyFn, .drop_repo_fn = dropRepoFn, .drop_space_fn = dropSpaceFn, .advance_fn = advanceFn };
     }
     fn of(c: *anyopaque) *Fake {
         return @ptrCast(@alignCast(c));
     }
-    fn writersFn(c: *anyopaque, _: std.mem.Allocator, _: []const u8) SourceError![]const Writer {
-        const self = of(c);
-        if (self.deleted) return error.SpaceDeleted;
-        if (self.unavailable) return error.Unavailable;
-        return self.writers;
+    fn cursorFn(c: *anyopaque, _: []const u8) anyerror!?u64 {
+        return of(c).cursor;
     }
-    fn opsFn(c: *anyopaque, _: std.mem.Allocator, _: []const u8, repo: []const u8, since: ?[]const u8) SourceError!Ops {
+    fn applyFn(c: *anyopaque, _: []const u8, at: u64, repo: []const u8, _: []const u8, op: Op) anyerror!void {
         const self = of(c);
-        if (self.log_from) |floor| if (since == null or !std.mem.eql(u8, since.?, floor)) return error.SinceUnavailable;
-        const rev = for (self.writers) |w| {
-            if (std.mem.eql(u8, w.repo, repo)) break w.repo_rev.?;
-        } else unreachable;
-        const ops = [_]Op{.{ .put = .{ .collection = "fm.plyr.track", .rkey = "3new", .cid = "c", .value_json = "{}" } }};
-        return .{ .rev = rev, .ops = self.gpa.dupe(Op, &ops) catch return error.OutOfMemory };
+        switch (op) {
+            .put => try self.records.put(self.gpa, repo, {}),
+            .delete => _ = self.records.remove(repo),
+        }
+        self.cursor = at;
     }
-    fn snapshotFn(c: *anyopaque, _: std.mem.Allocator, _: []const u8, repo: []const u8) SourceError!Snapshot {
+    fn dropRepoFn(c: *anyopaque, _: []const u8, at: u64, repo: []const u8) anyerror!void {
         const self = of(c);
-        self.snapshots += 1;
-        const rev = for (self.writers) |w| {
-            if (std.mem.eql(u8, w.repo, repo)) break w.repo_rev.?;
-        } else unreachable;
-        return .{ .rev = rev, .records = &.{} };
-    }
-    fn revFn(c: *anyopaque, _: std.mem.Allocator, _: []const u8, repo: []const u8) anyerror!?[]const u8 {
-        return of(c).held.get(repo);
-    }
-    fn applyFn(c: *anyopaque, _: []const u8, repo: []const u8, ops: Ops) anyerror!void {
-        const self = of(c);
-        self.gpa.free(ops.ops);
-        try self.held.put(self.gpa, repo, ops.rev);
-        try self.records.put(self.gpa, repo, {});
-    }
-    fn replaceFn(c: *anyopaque, _: []const u8, repo: []const u8, snapshot: Snapshot) anyerror!void {
-        const self = of(c);
-        try self.held.put(self.gpa, repo, snapshot.rev);
-    }
-    fn dropRepoFn(c: *anyopaque, _: []const u8, repo: []const u8) anyerror!void {
-        const self = of(c);
-        _ = self.held.remove(repo);
         _ = self.records.remove(repo);
+        self.cursor = at;
     }
     fn dropSpaceFn(c: *anyopaque, _: []const u8) anyerror!void {
         const self = of(c);
-        self.held.clearRetainingCapacity();
+        self.records.clearRetainingCapacity();
+        self.cursor = null;
         self.dropped_space = true;
     }
-    fn reposFn(c: *anyopaque, a: std.mem.Allocator, _: []const u8) anyerror![]const []const u8 {
-        const self = of(c);
-        var out: std.ArrayList([]const u8) = .empty;
-        var it = self.held.keyIterator();
-        while (it.next()) |key| try out.append(a, key.*);
-        return out.items;
-    }
-    fn deinit(self: *Fake) void {
-        self.held.deinit(self.gpa);
-        self.records.deinit(self.gpa);
+    fn advanceFn(c: *anyopaque, _: []const u8, at: u64) anyerror!void {
+        of(c).cursor = at;
     }
 };
 
-const space_uri = "at://did:plc:artist/space/fm.plyr.stg.audio/3album";
+const space_uri = "at://did:plc:artist/space/fm.plyr.next.audio/3album";
 
-test "writers are synced from their held rev and left alone once current" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    var fake: Fake = .{ .gpa = std.testing.allocator, .writers = &.{.{ .repo = "did:plc:artist", .repo_rev = "r2" }} };
-    defer fake.deinit();
-    const syncer: Syncer = .{ .source = fake.source(), .store = fake.store() };
-    try std.testing.expectEqual(Outcome.synced, try syncer.sync(arena.allocator(), space_uri));
-    try std.testing.expectEqualStrings("r2", fake.held.get("did:plc:artist").?);
-    try std.testing.expectEqual(Outcome.current, try syncer.sync(arena.allocator(), space_uri));
+fn feed(projector: Projector, fake: *Fake, a: std.mem.Allocator, line: []const u8) !Outcome {
+    const event = (try parseEvent(a, space_uri, line)) orelse return .skipped;
+    return projector.handle(space_uri, fake.cursor, event);
 }
 
-test "a truncated op log falls back to a snapshot" {
+test "commits move records and the cursor together; a replay is skipped" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var fake: Fake = .{ .gpa = std.testing.allocator, .writers = &.{.{ .repo = "did:plc:artist", .repo_rev = "r9" }}, .log_from = "r5" };
-    defer fake.deinit();
-    try fake.held.put(fake.gpa, "did:plc:artist", "r1");
-    const syncer: Syncer = .{ .source = fake.source(), .store = fake.store() };
-    try std.testing.expectEqual(Outcome.synced, try syncer.sync(arena.allocator(), space_uri));
-    try std.testing.expectEqual(@as(usize, 1), fake.snapshots);
-    try std.testing.expectEqualStrings("r9", fake.held.get("did:plc:artist").?);
+    const a = arena.allocator();
+    var fake: Fake = .{ .gpa = std.testing.allocator };
+    defer fake.records.deinit(fake.gpa);
+    const projector: Projector = .{ .store = fake.store() };
+    const put =
+        \\{"did":"did:plc:artist","time_us":10,"kind":"commit","space":"at://did:plc:artist/space/fm.plyr.next.audio/3album",
+        \\ "commit":{"rev":"r1","operation":"create","collection":"fm.plyr.track","rkey":"3song","cid":"bafy","record":{"title":"song"}}}
+    ;
+    try std.testing.expectEqual(Outcome.applied, try feed(projector, &fake, a, put));
+    try std.testing.expectEqual(@as(?u64, 10), fake.cursor);
+    try std.testing.expect(fake.records.contains("did:plc:artist"));
+    try std.testing.expectEqual(Outcome.skipped, try feed(projector, &fake, a, put));
+    const delete =
+        \\{"did":"did:plc:artist","time_us":11,"kind":"commit","space":"at://did:plc:artist/space/fm.plyr.next.audio/3album",
+        \\ "commit":{"rev":"r2","operation":"delete","collection":"fm.plyr.track","rkey":"3song"}}
+    ;
+    try std.testing.expectEqual(Outcome.applied, try feed(projector, &fake, a, delete));
+    try std.testing.expect(!fake.records.contains("did:plc:artist"));
 }
 
-test "removed and unlisted repos are dropped; a deleted space drops everything" {
+test "removed writers and deleted spaces drop the copy" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var fake: Fake = .{ .gpa = std.testing.allocator, .writers = &.{.{ .repo = "did:plc:gone", .repo_rev = null }} };
-    defer fake.deinit();
-    try fake.held.put(fake.gpa, "did:plc:gone", "r1");
-    try fake.held.put(fake.gpa, "did:plc:unlisted", "r1");
-    const syncer: Syncer = .{ .source = fake.source(), .store = fake.store() };
-    try std.testing.expectEqual(Outcome.synced, try syncer.sync(arena.allocator(), space_uri));
-    try std.testing.expectEqual(@as(usize, 0), fake.held.count());
-    try fake.held.put(fake.gpa, "did:plc:artist", "r1");
-    fake.deleted = true;
-    try std.testing.expectEqual(Outcome.dropped, try syncer.sync(arena.allocator(), space_uri));
+    const a = arena.allocator();
+    var fake: Fake = .{ .gpa = std.testing.allocator };
+    defer fake.records.deinit(fake.gpa);
+    try fake.records.put(fake.gpa, "did:plc:fan", {});
+    try fake.records.put(fake.gpa, "did:plc:artist", {});
+    const projector: Projector = .{ .store = fake.store() };
+    try std.testing.expectEqual(Outcome.applied, try feed(projector, &fake, a,
+        \\{"did":"did:plc:fan","time_us":5,"kind":"writer","space":"at://did:plc:artist/space/fm.plyr.next.audio/3album","writer":{"status":"removed"}}
+    ));
+    try std.testing.expect(!fake.records.contains("did:plc:fan"));
+    try std.testing.expectEqual(Outcome.dropped, try feed(projector, &fake, a,
+        \\{"did":"did:plc:artist","time_us":6,"kind":"space_deleted","space":"at://did:plc:artist/space/fm.plyr.next.audio/3album"}
+    ));
     try std.testing.expect(fake.dropped_space);
-    try std.testing.expectEqual(@as(usize, 0), fake.held.count());
+    try std.testing.expectEqual(@as(?u64, null), fake.cursor);
 }
 
-test "an unavailable host keeps the copy" {
+test "a write without its record only advances the cursor" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var fake: Fake = .{ .gpa = std.testing.allocator, .unavailable = true };
-    defer fake.deinit();
-    try fake.held.put(fake.gpa, "did:plc:artist", "r1");
-    const syncer: Syncer = .{ .source = fake.source(), .store = fake.store() };
-    try std.testing.expectEqual(Outcome.unavailable, try syncer.sync(arena.allocator(), space_uri));
-    try std.testing.expectEqual(@as(usize, 1), fake.held.count());
+    const a = arena.allocator();
+    var fake: Fake = .{ .gpa = std.testing.allocator };
+    defer fake.records.deinit(fake.gpa);
+    const projector: Projector = .{ .store = fake.store() };
+    try std.testing.expectEqual(Outcome.skipped, try feed(projector, &fake, a,
+        \\{"did":"did:plc:artist","time_us":7,"kind":"commit","space":"at://did:plc:artist/space/fm.plyr.next.audio/3album",
+        \\ "commit":{"rev":"r1","operation":"update","collection":"fm.plyr.track","rkey":"3song","cid":"bafy"}}
+    ));
+    try std.testing.expectEqual(@as(?u64, 7), fake.cursor);
+    try std.testing.expectEqual(@as(usize, 0), fake.records.count());
+}
+
+test "stream events plyr does not project, or for another space, are ignored; malformed ones are refused" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    try std.testing.expectEqual(@as(?Event, null), try parseEvent(a, space_uri, "{\"kind\":\"authorized\",\"expires_at\":\"2026-11-14T00:00:00Z\"}"));
+    try std.testing.expectEqual(@as(?Event, null), try parseEvent(a, space_uri, "{\"kind\":\"sync_error\",\"message\":\"listWriters 502\"}"));
+    try std.testing.expectEqual(@as(?Event, null), try parseEvent(a, space_uri,
+        \\{"did":"did:plc:x","time_us":1,"kind":"space_deleted","space":"at://did:plc:x/space/fm.plyr.next.audio/other"}
+    ));
+    try std.testing.expectError(error.InvalidEvent, parseEvent(a, space_uri, "[1]"));
+    try std.testing.expectError(error.InvalidEvent, parseEvent(a, space_uri,
+        \\{"did":"did:plc:artist","time_us":-1,"kind":"space_deleted","space":"at://did:plc:artist/space/fm.plyr.next.audio/3album"}
+    ));
+    try std.testing.expectError(error.InvalidEvent, parseEvent(a, space_uri,
+        \\{"did":"did:plc:artist","time_us":2,"kind":"commit","space":"at://did:plc:artist/space/fm.plyr.next.audio/3album",
+        \\ "commit":{"rev":"r1","operation":"create","collection":"fm.plyr.track","rkey":"3song","cid":"bafy","record":"nope"}}
+    ));
 }

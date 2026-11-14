@@ -43,19 +43,31 @@ lookup failures fail closed unless another policy already allowed the reader.
 closed tracks keep their metadata on the public record, so the firehose
 ingester indexes them and nothing needs syncing. once metadata itself lives
 only in a space (a members-only release, a private playlist), plyr keeps a
-copy with `src/internal/space/sync.zig`:
+copy fed by its space-stream (`next/services/space-stream`), a Cloudflare
+worker that does the host work (`authorizeSpaceSync`, `listWriters`,
+`listRepoOps` with the commit MAC) and emits each verified op in order with a
+`time_us` cursor.
 
-- `Source` is the host-facing engine: credential via `authorizeSpaceSync`,
-  `listWriters`, `listRepoOps` from a held rev, `getRepo` when the op log
-  can't bridge, each result verified against the repo's LtHash commit.
-- `Store` is plyr's copy, one transaction per repo so a rev only moves with
-  its records.
-- `Syncer.sync(space)` reconciles the full writer set each run: unchanged
-  repos are skipped, removed or unlisted ones dropped, and `SpaceDeleted`
-  drops the whole copy. any other failure keeps the copy.
+- `src/internal/space/sync.zig` is the seam: `parseEvent` reads one stream
+  event, `Projector.handle` applies it as one `Store` transaction that also
+  moves the space's cursor, so a replay from the stored cursor rebuilds the
+  copy. `writer` removed drops that repo, `space_deleted` drops the space.
+  a write the stream sent without its record only advances the cursor.
+- the stream reads as plyr's sync account. `SPACE_SYNC_DID` names it, and the
+  access core admits it to read (never write) every plyr space.
+
+- `MODE=space_consumer` (`src/internal/space/consumer.zig`) holds one socket
+  per plyr space a public track points into, re-listed every minute. it logs
+  the sync account in once (`SPACE_SYNC_HANDLE`, `SPACE_SYNC_APP_PASSWORD` on
+  `SPACE_SYNC_PDS`), mints a delegation token per connection, and subscribes
+  to `SPACE_STREAM_HOST` from the space's stored cursor. it never renews:
+  when admission runs out the stream closes with 4401 and the consumer
+  reconnects with a fresh token, which also makes the stream pull. a 4404
+  close drops the space and stops following it.
+- the copy is `plyr_index.space_records` with `plyr_index.space_cursors`
+  (`postgres_sync_store.zig`), both rebuildable by replaying from cursor 0.
 
 reads of synced rows still go through the access `Decider`, so a stale copy
-hides new records but never shows revoked ones. the plan for driving it is a
-`MODE=space_syncer` process claiming spaces from a postgres schedule (the
-account reconciler's lease pattern), hinted by `notifySpaceUpdate` webhooks
-and by `spaceRev` gaps.
+hides new records but never shows revoked ones. nothing reads the copy yet:
+closed tracks keep their metadata public. it is for release-only metadata
+and private playlists.

@@ -27,6 +27,8 @@ pub const Config = struct {
     space_type: []const u8,
     /// where artists publish space policies, e.g. `fm.plyr.policy`
     policy_collection: []const u8 = "fm.plyr.policy",
+    /// the account plyr's space-stream reads spaces with; always admitted to read
+    sync_reader: ?[]const u8 = null,
     /// where did:plc documents resolve (a local stub in dev/e2e)
     plc_url: []const u8 = "https://plc.directory",
 
