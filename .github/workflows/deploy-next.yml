@@ -64,6 +64,7 @@ jobs:
           required = {
               "DATABASE_URL",
               "DOCKET_URL",
+              "SPACE_SYNC_APP_PASSWORD",
           }
           missing = sorted(required - configured)
           if missing:
