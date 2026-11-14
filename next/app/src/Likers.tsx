@@ -5,10 +5,9 @@ import { api, type Track } from './api';
 import { useAppearance } from './appearance';
 import { useAuth } from './auth';
 import { Cover } from './CatalogPieces';
+import { Heart } from './icons';
 import { compactCount } from './home-state';
-import { SignedOutHeart } from './RowActions';
 import { Text } from './Text';
-import { LikeButton, type Viewer } from './TrackLikes';
 
 export type Liker = { did: string; name: string; handle?: string; avatar?: string | null };
 
@@ -31,13 +30,10 @@ const FACE = 26;
 const MOST = 8;
 const skeleton: Liker[] = [0, 1, 2].map(index => ({ did: `loading-${index}`, name: '' }));
 
-/** The likes column of a wide row: the heart, then the count. Pointing at, focusing or clicking the count opens who liked it,
- *  and the card stays open while the pointer or focus is on the count or the card, the way prod's likers tooltip does. Escape closes it. */
-export function LikesCell({ track, count, width, mine = false, onViewer, onOpen }: {
-  track: Track; count: number; width: number; mine?: boolean; onViewer: (viewer: Viewer) => void; onOpen?: (open: boolean) => void;
-}) {
+/** The likes in a row's stat line: a small heart (filled when it includes yours) and the count. Pointing at, focusing or clicking it
+ *  opens who liked it, and the card stays open while the pointer or focus is on the count or the card, the way prod's likers tooltip does. Escape closes it. */
+export function LikersCount({ track, count, mine = false, onOpen }: { track: Track; count: number; mine?: boolean; onOpen?: (open: boolean) => void }) {
   const theme = useAppearance();
-  const auth = useAuth();
   const [open, setOpen] = useState(false);
   const [below, setBelow] = useState(false);
   const anchor = useRef<ViewInstance>(null);
@@ -63,21 +59,19 @@ export function LikesCell({ track, count, width, mine = false, onViewer, onOpen 
     timer.current = setTimeout(() => { if (!inside.current.count && !inside.current.card) setOpen(false); }, CLOSE_AFTER);
   };
   const close = () => { clearTimeout(timer.current); setOpen(false); };
+  if (count <= 0) return null;
   const label = `${count} ${count === 1 ? 'like' : 'likes'}${mine ? ', including yours' : ''}`;
-  const heart = auth.did && auth.rpc ? <LikeButton key={`${auth.did}:${track.record.uri}`} small track={track} reportLiked={onViewer} /> : <SignedOutHeart track={track} />;
-  return <View style={[styles.cell, { width, zIndex: open ? 10 : 0 }]}>
-    {heart}
-    {count > 0 && <View ref={anchor} style={styles.anchor}>
-      <Pressable accessibilityRole="button" accessibilityLabel={`Who liked ${track.metadata.title}, ${label}`} aria-expanded={open}
-        onHoverIn={() => enter('count')} onHoverOut={() => leave('count')} onFocus={() => enter('count', 0)} onBlur={() => leave('count')}
-        onPress={() => { clearTimeout(timer.current); if (!open) reveal(); }}
-        onKeyDown={(event: { nativeEvent: { key?: string } }) => { if (event.nativeEvent.key === 'Escape') close(); }} style={styles.count}>
-        {({ hovered }: { pressed: boolean; hovered?: boolean }) => <Text style={{ color: mine ? theme.accent : hovered || open ? theme.text : theme.muted, fontSize: 13.5 * theme.scale, fontVariant: ['tabular-nums'] }}>
-          {compactCount(count)}
-        </Text>}
-      </Pressable>
-      {open && <LikersCard track={track} count={count} mine={mine} below={below} enter={() => enter('card')} leave={() => leave('card')} />}
-    </View>}
+  return <View ref={anchor} style={[styles.anchor, { zIndex: open ? 10 : 0 }]}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`Who liked ${track.metadata.title}, ${label}`} aria-expanded={open}
+      onHoverIn={() => enter('count')} onHoverOut={() => leave('count')} onFocus={() => enter('count', 0)} onBlur={() => leave('count')}
+      onPress={() => { clearTimeout(timer.current); if (!open) reveal(); }}
+      onKeyDown={(event: { nativeEvent: { key?: string } }) => { if (event.nativeEvent.key === 'Escape') close(); }} style={styles.count}>
+      {({ hovered }: { pressed: boolean; hovered?: boolean }) => <>
+        <Heart size={12 * theme.scale} weight={mine ? 'fill' : 'regular'} color={mine ? theme.accent : hovered || open ? theme.text : theme.faint} />
+        <Text style={{ color: hovered || open ? theme.text : theme.faint, fontSize: 12.5 * theme.scale, fontVariant: ['tabular-nums'], textDecorationLine: hovered ? 'underline' : 'none' }}>{compactCount(count)}</Text>
+      </>}
+    </Pressable>
+    {open && <LikersCard track={track} count={count} mine={mine} below={below} enter={() => enter('card')} leave={() => leave('card')} />}
   </View>;
 }
 
@@ -127,9 +121,8 @@ function LikersCard({ track, count, mine, below, enter, leave }: { track: Track;
 }
 
 const styles = StyleSheet.create({
-  cell: { flexDirection: 'row', alignItems: 'center' },
   anchor: { position: 'relative' },
-  count: { minHeight: 36, justifyContent: 'center', paddingHorizontal: 4, marginLeft: -4 },
+  count: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 24, paddingHorizontal: 4, marginHorizontal: -4 },
   card: { position: 'absolute', left: '50%', maxWidth: 280, padding: 8, borderRadius: 12, borderWidth: 1, alignItems: 'center' },
   above: { bottom: '100%', marginBottom: -2 },
   below: { top: '100%', marginTop: -2 },
