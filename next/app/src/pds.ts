@@ -7,7 +7,7 @@ import { api } from './api-client';
 import { type AwaitStatus, type Track } from '../../core/src/api';
 import { getAuth, type Auth } from './auth-state';
 import { NSID } from './config';
-import { blobUrl } from './identity';
+import { blobUrl } from '../../core/src/identity';
 import { catalogChanged } from './catalog-changes';
 import { normalizeTrackTags } from './publishing/track-tags';
 import { ARTWORK_TYPES, MAX_ARTWORK_BYTES } from './publishing/artwork-model';

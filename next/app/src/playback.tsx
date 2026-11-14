@@ -9,7 +9,7 @@ import { useAuth } from './auth';
 import { getAuth } from './auth-state';
 import { isPrivateTrack } from '../../core/src/track-access';
 import { editPrivateQueue, privateSpace, withoutPrivateTrack } from './publishing/private-track';
-import { blobUrl } from './identity';
+import { blobUrl } from '../../core/src/identity';
 import { gatedAudioUrl, releaseGatedAudioUrl } from './gated-audio';
 import { useJamPlayback, jamTrack } from './use-jam-playback';
 import { usePersonalQueue } from './use-personal-queue';

@@ -3,7 +3,7 @@ import { P256Keypair } from '@atproto/crypto';
 import { createSpaceSigHeaders, encapsulate, formatMacRequest, parseSpaceToken, RECORD_MAC_PROFILE, verifyRecord } from '@atproto/space';
 import { isCid, isLexMap, type LexMap } from '@atproto/lex-data';
 import { lexParse } from '@atproto/lex-json';
-import { didDocument, pdsEndpoint } from './identity.ts';
+import { didDocument, pdsEndpoint } from '../../core/src/identity.ts';
 import type { Agent, Auth, Did } from './auth-state';
 
 interface Credential {
