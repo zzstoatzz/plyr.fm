@@ -1,81 +1,106 @@
+//! The API's HTTP listener. httpz owns sockets, parsing, timeouts and the
+//! handler pool; everything past that is an `Exchange` handed to the router.
+
 const std = @import("std");
+const httpz = @import("httpz");
 const router = @import("api/router.zig");
+const exchange = @import("api/exchange.zig");
 
 const Io = std.Io;
-const http = std.http;
 
-const buffer_size = 16 * 1024;
+pub const Limits = struct {
+    /// open connections, idle or not
+    max_connections: u16,
+    /// threads running handlers; a records/await call holds one for up to 10s
+    handler_threads: u16,
+    /// seconds a connection has to send one complete request
+    request_timeout_s: u32,
+    /// seconds an idle keep-alive connection is kept
+    keepalive_timeout_s: u32,
+    /// Bound on any request body. Handlers apply their own, tighter limit so
+    /// an oversized body still gets the API's error envelope.
+    max_body_bytes: usize = 1024 * 1024,
+};
+
 var request_sequence = std.atomic.Value(u64).init(0);
 
-pub fn run(io: Io, port: u16, max_connections: usize, app: router.App) !void {
-    const address = Io.net.Ip4Address.unspecified(port);
-    var listener = try (Io.net.IpAddress{ .ip4 = address }).listen(io, .{
-        .reuse_address = true,
-    });
-    defer listener.deinit(io);
+const Handler = struct {
+    app: router.App,
 
-    std.log.info("plyr api listening on port {d} (max connections: {d})", .{ port, max_connections });
-
-    var capacity: Io.Semaphore = .{ .permits = max_connections };
-
-    while (true) {
-        // Stop accepting before allocating another thread. The kernel backlog
-        // supplies bounded backpressure while all permits are in use.
-        capacity.waitUncancelable(io);
-        const stream = listener.accept(io) catch |err| {
-            capacity.post(io);
-            std.log.err("accept failed: {}", .{err});
-            continue;
+    pub fn handle(self: *Handler, req: *httpz.Request, res: *httpz.Response) void {
+        serve(self.app, req, res) catch |err| {
+            std.log.err("request failed: {}", .{err});
+            res.status = 500;
+            res.body = "";
+            res.keepalive = false;
         };
+    }
+};
 
-        const thread = std.Thread.spawn(.{}, handleConnection, .{ stream, io, app, &capacity }) catch |err| {
-            capacity.post(io);
-            std.log.err("failed to spawn connection handler: {}", .{err});
-            stream.close(io);
-            continue;
-        };
-        thread.detach();
+fn serve(app: router.App, req: *httpz.Request, res: *httpz.Response) !void {
+    var request_id_buffer: [64]u8 = undefined;
+    const request_id = try makeRequestId(app.io, &request_id_buffer);
+
+    var headers: std.ArrayList(exchange.Header) = .empty;
+    var iterator = req.headers.iterator();
+    while (iterator.next()) |kv| try headers.append(req.arena, .{ .name = kv.key, .value = kv.value });
+
+    var ex: exchange.Exchange = .{
+        .method = method(req.method),
+        .target = req.url.raw,
+        .headers = headers.items,
+        .body = req.body() orelse "",
+        .arena = req.arena,
+    };
+    try router.handle(&ex, req.arena, app, request_id);
+
+    const response = ex.response orelse return error.NoResponse;
+    res.status = @backingInt(response.status);
+    for (response.headers) |h| res.header(h.name, h.value);
+    if (ex.method == .HEAD) {
+        // a HEAD response carries no content; close so a client that sent a
+        // body with it cannot desynchronize the connection
+        res.body = "";
+        res.keepalive = false;
+    } else {
+        res.body = response.body;
     }
 }
 
-fn handleConnection(stream: Io.net.Stream, io: Io, app: router.App, capacity: *Io.Semaphore) void {
-    defer capacity.post(io);
-    defer stream.close(io);
+fn method(m: httpz.Method) exchange.Method {
+    return switch (m) {
+        inline else => |tag| @field(exchange.Method, @tagName(tag)),
+    };
+}
 
-    var read_buffer: [buffer_size]u8 = undefined;
-    var write_buffer: [buffer_size]u8 = undefined;
-    var reader = stream.reader(io, &read_buffer);
-    var writer = stream.writer(io, &write_buffer);
-    var server = http.Server.init(&reader.interface, &writer.interface);
+pub fn run(io: Io, port: u16, limits: Limits, app: router.App) !void {
+    var handler: Handler = .{ .app = app };
+    var server = try httpz.Server(*Handler).init(io, std.heap.smp_allocator, .{
+        .address = .all(port),
+        .workers = .{ .max_conn = limits.max_connections },
+        .thread_pool = .{ .count = limits.handler_threads },
+        .request = .{ .max_body_size = limits.max_body_bytes },
+        .timeout = .{
+            .request = limits.request_timeout_s,
+            .keepalive = limits.keepalive_timeout_s,
+        },
+    }, &handler);
+    defer server.deinit();
 
-    while (true) {
-        var request = server.receiveHead() catch |err| {
-            if (err != error.HttpConnectionClosing and err != error.EndOfStream) {
-                std.log.debug("receive failed: {}", .{err});
-            }
-            return;
-        };
-
-        var request_id_buffer: [64]u8 = undefined;
-        const request_id = makeRequestId(io, &request_id_buffer) catch {
-            std.log.err("request id generation failed", .{});
-            return;
-        };
-
-        var request_arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
-        defer request_arena.deinit();
-
-        router.handle(&request, request_arena.allocator(), app, request_id) catch |err| {
-            std.log.err("request failed: {}", .{err});
-            return;
-        };
-
-        if (!request.head.keep_alive) return;
-    }
+    std.log.info("plyr api listening on port {d} (connections: {d}, handlers: {d})", .{
+        port, limits.max_connections, limits.handler_threads,
+    });
+    try server.listen();
 }
 
 fn makeRequestId(io: Io, buffer: []u8) ![]const u8 {
     const timestamp = Io.Timestamp.now(io, .real).toMicroseconds();
     const sequence = request_sequence.fetchAdd(1, .monotonic);
     return std.fmt.bufPrint(buffer, "req_{x}_{x}", .{ timestamp, sequence });
+}
+
+test "every httpz method maps to an exchange method of the same name" {
+    inline for (comptime std.enums.values(httpz.Method)) |tag| {
+        try std.testing.expectEqualStrings(@tagName(tag), @tagName(method(tag)));
+    }
 }

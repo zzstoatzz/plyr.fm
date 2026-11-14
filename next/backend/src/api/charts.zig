@@ -1,10 +1,11 @@
 const std = @import("std");
+const Exchange = @import("exchange.zig").Exchange;
 const list_track_chart = @import("../internal/application/list_track_chart.zig");
 const TrackChartStore = @import("../internal/index/track_chart_store.zig").TrackChartStore;
 const response = @import("response.zig");
 
 pub fn tracks(
-    request: *std.http.Server.Request,
+    request: *Exchange,
     allocator: std.mem.Allocator,
     store: ?TrackChartStore,
     track_collection: []const u8,
@@ -25,7 +26,7 @@ pub fn tracks(
         track_collection,
         profile_collection,
         like_collection,
-        request.head.target,
+        request.target,
         now_us,
     )) {
         .found => |value| {

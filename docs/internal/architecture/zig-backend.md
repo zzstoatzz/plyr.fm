@@ -113,8 +113,10 @@ exists only for deliberate contract tests and indexless development; it does not
 silently turn a production configuration mistake into a healthy deployment.
 `/health` reports liveness and `/ready` reports whether the product dependency is
 configured. PostgreSQL work is bounded independently by `DATABASE_POOL_SIZE`
-(default `8`), while connection handlers are bounded by `MAX_CONNECTIONS`
-before accept.
+(default `8`). The listener is httpz (the fork zds runs): open connections are
+bounded by `MAX_CONNECTIONS`, handlers by `HANDLER_THREADS`, and a connection
+that sends nothing or stalls mid-request is closed after
+`REQUEST_TIMEOUT_SECONDS`.
 
 ## migration rules
 

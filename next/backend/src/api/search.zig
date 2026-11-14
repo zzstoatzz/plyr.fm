@@ -1,10 +1,11 @@
 const std = @import("std");
+const Exchange = @import("exchange.zig").Exchange;
 const search_catalog = @import("../internal/application/search_catalog.zig");
 const SearchStore = @import("../internal/index/search_store.zig").SearchStore;
 const response = @import("response.zig");
 
 pub fn list(
-    request: *std.http.Server.Request,
+    request: *Exchange,
     allocator: std.mem.Allocator,
     store: ?SearchStore,
     track_collection: []const u8,
@@ -19,7 +20,7 @@ pub fn list(
         track_collection,
         list_collection,
         profile_collection,
-        request.head.target,
+        request.target,
     )) {
         .found => |value| {
             const body = try std.json.Stringify.valueAlloc(allocator, value, .{});

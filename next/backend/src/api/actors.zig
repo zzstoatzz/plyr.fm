@@ -1,4 +1,5 @@
 const std = @import("std");
+const Exchange = @import("exchange.zig").Exchange;
 const list_viewer_liked_tracks = @import("../internal/application/list_viewer_liked_tracks.zig");
 const resolve_viewer_likes = @import("../internal/application/resolve_viewer_likes.zig");
 const ViewerLikeStore = @import("../internal/index/viewer_like_store.zig").Store;
@@ -10,7 +11,7 @@ const maximum_body_bytes = 32 * 1024;
 /// Likes are public records in the actor's repo, so the appview serves them
 /// without a session: GET /v1/actors/{did}/likes.
 pub fn listLikes(
-    request: *std.http.Server.Request,
+    request: *Exchange,
     allocator: std.mem.Allocator,
     store: ?LikedTrackStore,
     actor_did: []const u8,
@@ -23,7 +24,7 @@ pub fn listLikes(
         store,
         actor_did,
         track_collection,
-        request.head.target,
+        request.target,
     )) {
         .found => |value| {
             const encoded = try std.json.Stringify.valueAlloc(allocator, value, .{});
@@ -39,7 +40,7 @@ pub fn listLikes(
 /// POST /v1/actors/{did}/likes/resolve. POST only because the subject list can
 /// be long; nothing is written.
 pub fn resolveLikes(
-    request: *std.http.Server.Request,
+    request: *Exchange,
     allocator: std.mem.Allocator,
     store: ?ViewerLikeStore,
     actor_did: []const u8,
@@ -49,14 +50,7 @@ pub fn resolveLikes(
     request_id: []const u8,
 ) !void {
     const response_cors = try response.captureCors(request, allocator, cors);
-    const body_reader = request.readerExpectContinue(&.{}) catch {
-        try response.apiError(request, .invalid_request, request_id, response_cors);
-        return;
-    };
-    const body = body_reader.allocRemaining(
-        allocator,
-        std.Io.Limit.limited(maximum_body_bytes),
-    ) catch {
+    const body = request.readBody(maximum_body_bytes) catch {
         try response.apiError(request, .invalid_request, request_id, response_cors);
         return;
     };

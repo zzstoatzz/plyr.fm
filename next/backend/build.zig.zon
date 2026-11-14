@@ -18,6 +18,14 @@
             .url = "https://tangled.org/zzstoatzz.io/redis/archive/89b1157.tar.gz",
             .hash = "redis-0.2.0-NGPoviplAgBRUhJJ4KgOg9vdXMNmyPTu5yFHUuBVaqBo",
         },
+        .httpz = .{
+            .url = "https://tangled.org/zzstoatzz.io/http.zig/archive/32df781d1a28743436ab5f2620d294d3287a5b0f.tar.gz",
+            .hash = "httpz-0.0.0-PNVzrIybCQDv1ZMj9sPAWoQYDc7d_peS_kGV-LaBP69N",
+        },
+        .metrics = .{
+            .url = "https://tangled.org/zzstoatzz.io/metrics.zig/archive/428addbfc8f5744d274f07a79e578250bff2affa.tar.gz",
+            .hash = "metrics-0.0.0-W7G4eFWgAQC0Mi5mL4KefHjyCUc5lN0QL8YAk4QH7_XN",
+        },
         .hegel = .{
             .url = "https://tangled.org/zzstoatzz.io/hegel-zig/archive/c948972.tar.gz",
             .hash = "hegel-0.0.0-1OMgSZbIAABtEfpAd5lzuNhQ71p5zvcijzvKKXKFGF7J",
