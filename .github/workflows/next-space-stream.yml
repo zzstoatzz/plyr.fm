@@ -1,0 +1,29 @@
+name: next space stream
+
+on:
+  pull_request:
+    paths:
+      - "next/services/space-stream/**"
+      - ".github/workflows/next-space-stream.yml"
+  push:
+    branches: [main]
+    paths:
+      - "next/services/space-stream/**"
+      - ".github/workflows/next-space-stream.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: next/services/space-stream
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run check
+      - run: bunx wrangler deploy --dry-run
