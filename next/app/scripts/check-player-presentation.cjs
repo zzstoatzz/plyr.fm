@@ -13,7 +13,7 @@ const uri = 'at://did:plc:fixture/fm.plyr.track/player-presentation';
 const track = {
   object: 'track', id: 'trk_' + Buffer.from(uri).toString('base64url'),
   record: { uri, cid: 'fixture', revision: null, collection: 'fm.plyr.track', rkey: 'player-presentation' },
-  metadata: { title: 'acoustic guitar cover of vodka cranberry (one take)', description: 'A quiet recording from one afternoon.', album: 'A quiet room', duration_seconds: 236, created_at: '2026-11-04T00:00:00Z' },
+  metadata: { title: 'acoustic guitar cover of vodka cranberry (one take)', description: 'A quiet recording from one afternoon.\n\n0:00 tuning\n0:40 first verse\n1:50 chorus', album: 'A quiet room', duration_seconds: 236, created_at: '2026-11-04T00:00:00Z' },
   artist: { did: 'did:plc:fixture', profile: { handle: 'fixture.test', display_name: 'jack', avatar_url: null } },
   media: { artwork: { url: 'https://player-fixture.invalid/cover.jpg' } }, access: { visibility: 'public' }, metrics: { play_count: 12, like_count: 7 }
 };
