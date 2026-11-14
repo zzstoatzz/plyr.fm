@@ -66,6 +66,8 @@ test("processing admission retains full source size and reserves source plus out
   const f = await setup(undefined, MAX_UPLOAD_BYTES, MAX_UPLOAD_BYTES);
   expect(validClaim(f.value)).toBe(true);
   expect(validClaim({ ...f.value, processing: { recipe: "mp3-320k-44100-v1", outputBudget: MAX_UPLOAD_BYTES + 1 } })).toBe(false);
+  expect(validClaim({ ...f.value, fileType: "opus", contentType: "audio/opus" })).toBe(true);
+  expect(validClaim({ ...f.value, fileType: "opus", contentType: "audio/opus", processing: undefined })).toBe(false);
   expect(validClaim({ ...f.value, processing: null })).toBe(false);
   expect(await (await f.send("POST")).json()).toMatchObject({ reservedBytes: MAX_UPLOAD_BYTES * 2 });
   expect((await (await setup(f.value.owner)).send("POST")).status).toBe(429);

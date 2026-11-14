@@ -8,7 +8,7 @@ const formats = new Map([
   ["mp3", "audio/mpeg"], ["wav", "audio/wav"], ["flac", "audio/flac"],
   ["ogg", "audio/ogg"], ["m4a", "audio/mp4"], ["aac", "audio/aac"],
 ]);
-const processingFormats = new Map([...formats, ["aif", "audio/aiff"], ["aiff", "audio/aiff"], ["webm", "audio/webm"]]);
+const processingFormats = new Map([...formats, ["aif", "audio/aiff"], ["aiff", "audio/aiff"], ["webm", "audio/webm"], ["opus", "audio/opus"]]);
 
 export function validProcessing(value: unknown, sourceBytes: number): value is ProcessingRecipe {
   return value !== null && typeof value === "object" && "recipe" in value && value.recipe === "mp3-320k-44100-v1"
