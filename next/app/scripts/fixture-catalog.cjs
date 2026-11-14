@@ -27,7 +27,7 @@ const pictures = images ? fs.readdirSync(images).filter(name => name.endsWith('.
 const server = http.createServer((request, response) => {
   let filename = path.join(dist, decodeURIComponent(request.url.split('?')[0]));
   if (!fs.existsSync(filename) || fs.statSync(filename).isDirectory()) filename = path.join(dist, 'index.html');
-  response.setHeader('Content-Type', filename.endsWith('.js') ? 'text/javascript' : filename.endsWith('.json') ? 'application/json' : 'text/html');
+  response.setHeader('Content-Type', filename.endsWith('.js') ? 'text/javascript' : filename.endsWith('.css') ? 'text/css' : filename.endsWith('.json') ? 'application/json' : 'text/html');
   response.end(fs.readFileSync(filename));
 });
 

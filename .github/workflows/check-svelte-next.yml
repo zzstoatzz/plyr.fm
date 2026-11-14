@@ -1,0 +1,36 @@
+name: check next svelte web
+
+on:
+  pull_request:
+    paths:
+      - "next/web/**"
+      - "next/core/**"
+      - "next/app/scripts/fixture-catalog.cjs"
+      - ".github/workflows/check-svelte-next.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: next/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run check
+      - run: bun run build
+      - run: bun run playwright install --with-deps --only-shell chromium
+      - run: bun run check:browser
+        env:
+          SCREENS_OUTPUT: ${{ runner.temp }}/next-svelte-screens
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: next-svelte-screens
+          path: ${{ runner.temp }}/next-svelte-screens
+          if-no-files-found: ignore
