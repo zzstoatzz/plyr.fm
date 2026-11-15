@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import { player } from './player.svelte';
 	import { trackArtwork } from '@plyr/next-core/artwork';
 	import { artistName } from './tracks';
@@ -8,10 +7,7 @@
 	import Transport from './Transport.svelte';
 	import Scrub from './Scrub.svelte';
 
-	function queue() {
-		if (matchMedia('(max-width: 720px)').matches) void goto('/queue');
-		else player.queueOpen = !player.queueOpen;
-	}
+	let { onQueue }: { onQueue: () => void } = $props();
 </script>
 
 {#if player.current}
@@ -36,7 +32,7 @@
 			{#if player.liveStation}
 				<button type="button" class="icon-button" aria-label="Stop radio" onclick={() => player.stopRadio()}><Icon name="x" /></button>
 			{:else}
-				<button type="button" class="icon-button" aria-label="Queue" aria-pressed={player.queueOpen} onclick={queue}><Icon name="queue" /></button>
+				<button type="button" class="icon-button" aria-label="Queue" aria-pressed={player.queueOpen} onclick={onQueue}><Icon name="queue" /></button>
 			{/if}
 		</div>
 	</div>

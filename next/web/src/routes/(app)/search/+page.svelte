@@ -19,7 +19,7 @@
 <section class="page-content">
 	<h1>search</h1>
 	<form action="/search" onsubmit={event => { event.preventDefault(); void goto(`/search?${new URLSearchParams({ q: query.trim() })}`); }}>
-		<input aria-label="Search tracks, artists, albums and playlists" type="search" name="q" bind:value={query} placeholder="tracks, artists, albums and playlists" />
+		<input id="search-query" aria-label="Search tracks, artists, albums and playlists" type="search" name="q" bind:value={query} placeholder="tracks, artists, albums and playlists" />
 		<button class="icon-button" type="submit" aria-label="Search"><Icon name="search" /></button>
 	</form>
 	{#await data.results}
