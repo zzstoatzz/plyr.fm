@@ -8,7 +8,7 @@ import { useTrackAccess } from './use-track-access';
 export function AccessSummary({ track, style }: { track: Track; style: TextStyle }) {
   const access = useTrackAccess(track);
   if (access.state === 'open') return null;
-  if (access.state === 'owner-only') return <Text style={style}>only you · listening stays on this device</Text>;
+  if (access.state === 'owner-only') return <Text style={style}>only you</Text>;
   const { policies, fallback, error, space } = access;
   const ways = policies?.length ? policies.map(describePolicy) : fallback ? [describeRule(fallback)] : [];
   const line = !space || error ? 'closed' : !policies ? 'closed · checking who can listen' : ways.length ? `open to ${ways.join(' · ')}` : 'closed · only the artist can listen';

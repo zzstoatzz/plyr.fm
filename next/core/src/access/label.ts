@@ -6,7 +6,7 @@ import { describeRule, implicitRule, isOpen, trackSpace } from './policy.ts';
 export function accessLabel(track: Track, audioSpaceType: string): string {
   const space = trackSpace(track, audioSpaceType);
   if (isPrivateTrack(track) && !space) return 'only you';
-  if (isOpen(track)) return 'open';
+  if (isOpen(track)) return track.access.visibility === 'unlisted' ? 'anyone with the link' : 'everyone';
   const rule = space ? implicitRule(space) : undefined;
   return rule ? `open to ${describeRule(rule)}` : 'closed';
 }

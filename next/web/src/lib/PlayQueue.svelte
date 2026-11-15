@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import { auth } from './auth';
@@ -10,6 +11,9 @@
 	import Artwork from './ui/Artwork.svelte';
 	import Icon from './ui/Icon.svelte';
 	let { close }: { close?: () => void } = $props();
+	let account = $state.raw(auth.getAuth());
+	onMount(() => auth.subscribe(() => { account = auth.getAuth(); }));
+	const deviceQueue = $derived(account.did && !account.accountSync && !player.privateMode && !player.jam && !player.liveStation);
 	const start = $derived(player.index + 1);
 	const queueState = $derived(player.snapshot.state);
 	const tail = $derived(player.localMode ? undefined : queueState.tail);
@@ -108,6 +112,9 @@
 		<p class="state">your queue is empty.</p>
 		<a href={resolve('/')}>browse tracks</a>
 	{/if}
+	{#if deviceQueue}
+		<p class="empty">your queue is saved on this device. <a class="queue-signin" href={resolve('/login?return_to=%2Fqueue')} onclick={close}>sign in again</a> to use it on other devices.</p>
+	{/if}
 	{#if !player.localMode && player.snapshot.queueError}<p class="state" role="status">{player.snapshot.queueError}</p>{/if}
 	{#if player.jam?.error}<p class="state" role="status">{player.jam.error}</p>{/if}
 </section>
@@ -119,7 +126,7 @@
 			<span class="play"><Icon name={current && player.playing ? 'pause' : 'play'} size={18} /></span>
 		</button>
 		<div class="labels">
-			{#if player.privateMode}<span class="truncate">{track.metadata.title}</span>{:else}<a class="truncate" href={trackHref(track)}>{track.metadata.title}</a>{/if}
+			<a class="truncate" href={trackHref(track)}>{track.metadata.title}</a>
 			<span class="subtle truncate">{artistName(track)}</span>
 		</div>
 		<span class="subtle time">{clock(track.metadata.duration_seconds)}</span>
@@ -151,6 +158,7 @@
 	.labels span, .time { font-size: 0.75rem; }
 	.time { font-variant-numeric: tabular-nums; }
 	.move :global(svg) { transform: rotate(180deg); }
+	.queue-signin { color: var(--accent); text-decoration: underline; text-underline-offset: 0.2em; }
 	.empty { color: var(--muted); margin: 0; font-size: 0.88rem; }
 	@container (max-width: 24rem) { .time { display: none; } }
 </style>

@@ -11,9 +11,9 @@ const owner = 'did:plc:fixture', space = privateSpace(owner);
 const policy = { $type: 'com.atproto.memberspace.policy', publicRead: false, publicWrite: false, publishPolicy: false, publishMembers: false };
 test('private publishing uses the existing self space and rejects any public or unsupported policy', () => {
   requirePrivatePolicy({ space, policy }, owner);
-  for (const key of ['publicRead', 'publicWrite', 'publishPolicy', 'publishMembers']) assert.throws(() => requirePrivatePolicy({ space, policy: { ...policy, [key]: true } }, owner), /not private/);
-  assert.throws(() => requirePrivatePolicy({ space, policy: { ...policy, allowedApps: [] } }, owner), /restricts/);
-  assert.throws(() => requirePrivatePolicy({ space, policy: { $type: 'com.atproto.managedspace.policy' } }, owner), /unsupported/);
+  for (const key of ['publicRead', 'publicWrite', 'publishPolicy', 'publishMembers']) assert.throws(() => requirePrivatePolicy({ space, policy: { ...policy, [key]: true } }, owner), /can’t save tracks with this visibility setting/);
+  assert.throws(() => requirePrivatePolicy({ space, policy: { ...policy, allowedApps: [] } }, owner), /doesn’t allow plyr.fm/);
+  assert.throws(() => requirePrivatePolicy({ space, policy: { $type: 'com.atproto.managedspace.policy' } }, owner), /can’t use the selected visibility setting/);
   assert.throws(() => requirePrivatePolicy({ space: privateSpace('did:plc:other'), policy }, owner));
 });
 test('private recovery cannot be routed to a public repo, another owner, or a public audio source', () => {

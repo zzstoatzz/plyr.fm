@@ -55,7 +55,7 @@ async function openSettings(page) {
   const account = nav.getByRole('button', { name: 'account', exact: true });
   if (await account.isVisible()) {
     await account.click();
-    await page.getByRole('dialog', { name: 'account', exact: true }).getByRole('link', { name: /settings queue sync/ }).click();
+    await page.getByRole('dialog', { name: 'account', exact: true }).getByRole('link', { name: 'settings', exact: true }).click();
   } else {
     await nav.getByRole('link', { name: 'settings', exact: true }).click();
   }
@@ -299,11 +299,11 @@ async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'reg
         await page.getByText(/fixture interrupted draft cleanup/).waitFor({ timeout: 5000 });
         assert.equal(writes.length, 0, 'the draft handoff runs before the PDS record write');
         await page.reload();
-        await draft.getByRole('button', { name: 'resume creation' }).waitFor();
+        await draft.getByRole('button', { name: 'try saving again' }).waitFor();
         assert.equal(await draft.getByRole('button', { name: 'resume queued upload' }).count(), 0);
-        await draft.getByRole('button', { name: 'resume creation' }).click();
+        await draft.getByRole('button', { name: 'try saving again' }).click();
         const genreRequest = page.waitForRequest(genreEndpoint, { timeout: 5000 });
-        await draft.getByRole('button', { name: 'done with creation' }).click();
+        await draft.getByRole('button', { name: 'done' }).click();
         assert.equal((await genreRequest).postDataJSON().uri, `at://${did}/${collection}/${writes[0].rkey}`);
         await draft.waitFor({ state: 'detached', timeout: 5000 });
       }

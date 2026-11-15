@@ -46,13 +46,13 @@ export function NowPlayingDetails({ track, plays, navigate, position, seek }: {
     </View>
     <View testID="now-playing-about" style={[styles.about, { borderColor: theme.line }]}>
       {!privateTrack && <Facts track={track} plays={plays} />}
-      {!privateTrack && <View >
+      <View>
         <Pressable accessibilityRole="link" accessibilityLabel={`About ${track.metadata.title}`} onPress={() => navigate(`/track/${track.id}`)}
           style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [styles.open, { backgroundColor: pressed || hovered ? theme.hover : theme.raised, borderColor: theme.border }]}>
           <Text style={{ ...body, fontWeight: '600' }}>about this track</Text>
           <ArrowRight size={16} color={theme.text} />
         </Pressable>
-      </View>}
+      </View>
       {prose ? <Text style={body}>{prose}</Text> : null}
       <AccessSummary track={track} style={quiet} />
       {chapters.length > 0 && <Text accessibilityRole="header" aria-level={2} style={{ ...body, fontWeight: '700' }}>tracklist <Text style={{ ...body, color: theme.faint }}>{chapters.length}</Text></Text>}

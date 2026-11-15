@@ -152,7 +152,7 @@ const coordinator = 'https://jams.next.plyr.fm';
     await menu.waitFor();
     assert.equal(new URL(page.url()).pathname, activePath, 'opening the account menu keeps the current page');
     await menu.getByRole('link', { name: 'portal @' + handle }).waitFor();
-    await menu.getByRole('link', { name: /private music/ }).waitFor();
+    assert.equal(await menu.getByRole('link', { name: /private music/ }).count(), 0);
     assert.ok(await menu.evaluate(node => node.scrollWidth <= node.clientWidth));
     if (process.env.SCREENS_OUTPUT) {
       await mkdir(process.env.SCREENS_OUTPUT, { recursive: true });
@@ -169,10 +169,10 @@ const coordinator = 'https://jams.next.plyr.fm';
     await page.waitForURL(origin + activePath);
     await menu.waitFor({ state: 'hidden' });
     await account.click();
-    await menu.getByRole('link', { name: /settings queue sync/ }).click();
+    await menu.getByRole('link', { name: 'settings', exact: true }).click();
     await page.waitForURL(origin + '/settings');
     await menu.waitFor({ state: 'hidden' });
-    await page.getByText('your queue syncs across devices.').waitFor();
+    assert.equal(await page.getByText(/queue sync|queue stays|queue is saved/i).count(), 0);
     if (process.env.SCREENS_OUTPUT) {
       await page.screenshot({ path: path.join(process.env.SCREENS_OUTPUT, 'next-settings-mobile.png') });
     }
