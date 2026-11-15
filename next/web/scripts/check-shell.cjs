@@ -16,6 +16,10 @@ async function screen(browser, phone, scheme) {
     await page.screenshot({ path: path.join(output, `${width}-${scheme}-${name}.png`) });
   };
   try {
+    const commentsRequests = [];
+    page.on('request', request => {
+      if (new URL(request.url()).pathname.endsWith('/comments')) commentsRequests.push(request);
+    });
     await page.goto(origin);
     await page.getByTestId('home-track-row').first().waitFor();
     await page.getByTestId('home-chart').waitFor();
@@ -23,9 +27,44 @@ async function screen(browser, phone, scheme) {
 
     await page.getByRole('link', { name: tracks[0].metadata.title, exact: true }).first().click();
     await page.getByRole('heading', { name: tracks[0].metadata.title, exact: true }).waitFor();
+    const tags = page.getByRole('navigation', { name: 'Tags', exact: true });
+    const tag = tags.getByRole('link', { name: 'field & nature', exact: true });
+    assert.equal(new URL(await tag.getAttribute('href'), origin).searchParams.get('tag'), 'field & nature');
+    assert.equal(await page.getByText('A recording made at dawn.', { exact: false }).isVisible(), false);
+    await page.getByText('details', { exact: true }).click();
+    await page.getByText('A recording made at dawn.', { exact: false }).waitFor();
     await capture('track');
-    await page.getByRole('button', { name: 'Play', exact: true }).click();
+    assert.equal(commentsRequests.length, 0, 'track render leaves comment fetch deferred');
+    const opener = page.getByRole('button', { name: 'comments', exact: true });
+    await opener.click();
+    const comments = page.getByRole('dialog', { name: 'comments', exact: true });
+    await comments.getByText('I love this moment.').waitFor();
+    assert.equal(commentsRequests.length, 1);
+    await comments.getByRole('link', { name: 'A Listener' }).waitFor();
+    await capture('track-comments');
+    await page.keyboard.press('Escape');
+    await comments.waitFor({ state: 'hidden' });
+    assert.ok(await opener.evaluate(node => node === document.activeElement));
+    let releaseDelivery;
+    let deliveries = 0;
+    const waiting = new Promise(resolve => { releaseDelivery = resolve; });
+    const playbackUrl = 'https://api.next.plyr.fm/v1/tracks/' + tracks[0].id + '/playback';
+    await page.route(playbackUrl, async route => { deliveries++; await waiting; await route.fallback(); });
+    const loading = page.waitForRequest(playbackUrl);
+    await page.getByRole('article').getByRole('button', { name: 'Play', exact: true }).click();
+    await loading;
+    await opener.click();
+    await comments.getByRole('button', { name: 'Play from 0:14' }).click();
+    await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'home', exact: true }).click();
+    await page.waitForURL(origin + '/');
+    releaseDelivery();
     const dock = page.getByTestId('player-dock');
+    const slider = dock.getByRole('slider', { name: 'Playback position' });
+    await page.waitForFunction(node => node.valueAsNumber >= 14, await slider.elementHandle());
+    assert.equal(deliveries, 1, 'choosing a timestamp during delivery does not start it again');
+    await page.getByTestId('home-track-row').first().getByRole('link', { name: tracks[0].metadata.title, exact: true }).click();
+    await dock.getByRole('button', { name: 'Pause', exact: true }).click();
+    await page.getByRole('article').getByRole('button', { name: 'Play', exact: true }).click();
     await dock.getByRole('button', { name: 'Pause', exact: true }).waitFor();
     await page.getByRole('button', { name: 'Add to queue', exact: true }).click();
     await dock.getByRole('button', { name: 'Open now playing' }).click();
@@ -50,6 +89,12 @@ async function screen(browser, phone, scheme) {
     await dock.getByRole('button', { name: 'Play', exact: true }).waitFor();
     const position = Number(await dock.getByRole('slider', { name: 'Playback position' }).inputValue());
     assert.ok(position >= 11 && position < 18, 'reload restores the seek position without autoplay');
+    await page.goto(origin + '/track/missing-track');
+    await page.getByRole('heading', { name: '404', exact: true }).waitFor();
+    await page.getByText("we couldn't find what you're looking for").waitFor();
+    const backHome = page.getByRole('link', { name: 'go home', exact: true });
+    await backHome.click();
+    await page.waitForURL(origin + '/');
     assert.deepEqual(errors, []);
   } finally { await context.close(); }
 }

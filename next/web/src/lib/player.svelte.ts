@@ -50,6 +50,7 @@ class Player {
 	#audioSource: AbortController | undefined;
 	#releaseMedia: (() => void) | undefined;
 	#mediaTrack: Track | undefined;
+	#startAt: { uri: string; cid: string | null; seconds: number } | undefined;
 	#listening = new ListeningSession();
 	#token = 0;
 	#outbox: PlayOutbox | undefined;
@@ -145,6 +146,7 @@ class Player {
 	}
 
 	play(track: Track, collection?: Track[], label?: string) {
+		this.#startAt = undefined;
 		this.#audioElement();
 		if (this.#embedded) {
 			if (isPrivateTrack(track)) return;
@@ -168,6 +170,25 @@ class Player {
 		this.#model.play(track, collection?.filter(item => !isPrivateTrack(item)), label);
 	}
 
+	playFrom(track: Track, seconds: number) {
+		if (!Number.isFinite(seconds) || seconds < 0 || isPrivateTrack(track)) return;
+		const { uri, cid } = track.record;
+		const current = !this.liveStation && this.current?.record.uri === uri && this.current.record.cid === cid;
+		const waiting = this.loading || this.snapshot.waiting;
+		if (current && this.playing && this.#mediaTrack?.record.uri === uri && this.#mediaTrack.record.cid === cid && this.#audio && this.#audio.readyState >= 1) {
+			this.seek(seconds);
+			return;
+		}
+		const start = { uri, cid, seconds };
+		if (!current || (!waiting && !this.#mediaTrack && !this.snapshot.remote)) {
+			this.play(track);
+			this.#startAt = start;
+		} else {
+			this.#startAt = start;
+			if (!waiting) this.toggle();
+		}
+	}
+
 	#startLocal(tracks: Track[], at: number) {
 		this.queue = tracks;
 		this.index = at;
@@ -175,6 +196,7 @@ class Player {
 	}
 
 	#resetOutput() {
+		this.#startAt = undefined;
 		this.#dropRadio();
 		this.#detachMedia();
 		this.#mediaTrack = undefined;
@@ -363,12 +385,14 @@ class Player {
 		else this.jump(this.index - 1);
 	}
 	next() {
+		this.#startAt = undefined;
 		if (this.liveStation) return;
 		if (!this.privateMode && !this.#embedded) return this.#model.next();
 		if (this.index + 1 < this.queue.length) this.jump(this.index + 1);
 		else if (this.repeat === 'all' && this.queue.length) this.jump(0);
 	}
 	jump(index: number) {
+		this.#startAt = undefined;
 		if (this.liveStation) return;
 		if (!this.privateMode && !this.#embedded) this.#model.select(index);
 		else if (this.queue[index]) this.#startLocal(this.queue, index);
@@ -437,7 +461,7 @@ class Player {
 		for (const event of ['timeupdate', 'durationchange', 'play', 'pause', 'playing', 'waiting', 'ended']) {
 			audio.addEventListener(event, observe);
 		}
-		audio.addEventListener('playing', () => { this.loading = false; this.error = undefined; this.#updateMediaStatus(); });
+		audio.addEventListener('playing', () => { this.#seekToStart(); this.loading = false; this.error = undefined; this.#updateMediaStatus(); });
 		audio.addEventListener('pause', () => { this.#updateMediaStatus(); });
 		audio.addEventListener('waiting', () => { if (!audio.paused) this.loading = true; });
 		audio.addEventListener('timeupdate', () => this.#setMediaPosition(audio));
@@ -480,6 +504,7 @@ class Player {
 	}
 
 	async #loadMedia(track: Track, resolve: (signal: AbortSignal) => Promise<AudioSource>, count: boolean) {
+		if (this.#startAt?.uri !== track.record.uri || this.#startAt.cid !== track.record.cid) this.#startAt = undefined;
 		const audio = this.#audioElement();
 		this.#detachMedia();
 		const source = new AbortController();
@@ -503,6 +528,7 @@ class Player {
 		} catch (error) {
 			if (source.signal.aborted) media?.release?.();
 			else {
+				this.#startAt = undefined;
 				this.#detachMedia();
 				this.loading = false;
 				this.error = error instanceof Error ? error.message : 'could not load this audio';
@@ -535,12 +561,23 @@ class Player {
 		const audio = this.#audio;
 		if (!audio?.src || !this.#mediaTrack) return;
 		const source = this.#audioSource;
-		void audio.play().catch(() => {
+		const playing = this.#startAt ? this.#ready().then(() => {
+			source?.signal.throwIfAborted();
+			this.#seekToStart();
+			return audio.play();
+		}) : audio.play();
+		void playing.catch(() => {
 			if (source?.signal.aborted || (this.liveStation && !this.liveListening)) return;
 			this.loading = false;
 			if (this.liveStation) this.liveListening = false;
 			this.error = 'could not start playback. press play to try again.';
 		});
+	}
+	#seekToStart() {
+		const at = this.#startAt;
+		if (!at || at.uri !== this.#mediaTrack?.record.uri || at.cid !== this.#mediaTrack.record.cid) return;
+		this.#startAt = undefined;
+		this.seek(at.seconds);
 	}
 	async #seekMedia(position: number) {
 		await this.#ready();
