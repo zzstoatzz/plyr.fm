@@ -36,7 +36,9 @@
 
 <div class="page-content home">
 	<header class="mobile-brand"><h1><span aria-hidden="true">✻</span> plyr.fm</h1></header>
-	{#await data.featured then featured}
+	{#await data.featured}
+		<div class="featured" aria-hidden="true"></div>
+	{:then featured}
 		{#if featured.length}
 			{@const top = featured[Math.floor(Date.now() / 604800000) % featured.length]}
 			{@const byArtist = featured.filter(track => track.artist.did === top.artist.did)}
@@ -54,6 +56,21 @@
 			</section>
 		{/if}
 	{/await}
+	<section class="chart" data-testid="home-chart">
+		<header><h2>top tracks</h2><span>past month</span></header>
+		{#await data.chart}
+			<div class="chart-loading"><Loading label="loading top tracks" inline /></div>
+		{:then chart}
+			{@const tracks = chart.map(item => item.track)}
+			<ol>
+				{#each chart as item (item.track.id)}
+					<li><TrackRow track={item.track} collection={tracks} label="top tracks" /></li>
+				{:else}
+					<li class="chart-empty">no top tracks yet.</li>
+				{/each}
+			</ol>
+		{/await}
+	</section>
 	<section class="latest">
 		<header><h2>latest</h2>{#if data.tags.length}<a href="/">clear filters</a>{:else}<span>newest first</span>{/if}</header>
 		{#await data.latest}
@@ -71,30 +88,22 @@
 			<p role="status" class="state">could not load tracks. <a href="/">try again</a></p>
 		{/await}
 	</section>
-	{#await data.chart then chart}
-		{#if chart.length}
-			<section class="chart" data-testid="home-chart">
-				<header><h2>top tracks</h2><span>past month</span></header>
-				<ol>
-					{#each chart as item (item.track.id)}
-						<li><TrackRow track={item.track} collection={chart.map(entry => entry.track)} label="top tracks" /></li>
-					{/each}
-				</ol>
-			</section>
-		{/if}
-	{/await}
+
 </div>
 
 <style>
-	.home { display: grid; grid-template-columns: minmax(0, 2.6fr) minmax(12rem, 1fr); gap: 2.2rem; }
-	.mobile-brand { display: none; }
-	.featured { grid-column: 1 / -1; position: relative; isolation: isolate; display: grid; align-items: center; min-height: 17rem; overflow: hidden; border: 1px solid var(--line); border-radius: 1.15rem; background: var(--surface); }
+	.home { display: grid; grid-template-columns: minmax(0, 2.6fr) minmax(12rem, 1fr); grid-template-areas: "featured featured" "latest chart"; gap: 2.2rem; }
+	.mobile-brand { grid-area: brand; display: none; }
+	.featured { grid-area: featured; position: relative; isolation: isolate; display: grid; align-items: center; min-height: 17rem; overflow: hidden; border: 1px solid var(--line); border-radius: 1.15rem; background: var(--surface); }
 	.wall { position: absolute; inset: -15% -5% -15% 32%; z-index: -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.4rem; align-content: center; transform: rotate(-4deg); mask-image: linear-gradient(90deg, transparent 0%, #000 55%); }
 	.feature-content { max-width: 65%; padding: clamp(1.2rem, 3vw, 2.5rem); }
 	.feature-content span { font-weight: 650; color: var(--accent); font-size: 0.8rem; }
 	h1 { line-height: 1.1; letter-spacing: -0.035em; }
 	.feature-content h1 { font-size: clamp(1.75rem, 4vw, 3.25rem); margin-block: 0.5rem 1.2rem; }
-	.latest, .chart { min-width: 0; }
+	.latest { grid-area: latest; min-width: 0; }
+	.chart { grid-area: chart; min-width: 0; }
+	.chart-loading, .chart-empty { display: grid; align-items: center; min-height: 4.75rem; color: var(--muted); }
+	.chart-empty { list-style: none; }
 	.latest header, .chart header { display: flex; justify-content: space-between; align-items: baseline; gap: 0.65rem; padding-bottom: 0.65rem; }
 	h2 { font-size: 1.07rem; }
 	header span, header a { color: var(--muted); font-size: 0.8rem; }
@@ -103,10 +112,13 @@
 	.chart :global(.track) { grid-template-columns: 2.5rem minmax(0, 1fr); min-height: 3.6rem; }
 	.chart :global(.duration), .chart :global(.add), .chart :global(.metrics) { display: none; }
 	@media (max-width: 900px) {
-		.home { grid-template-columns: minmax(0, 1fr); gap: 1.5rem; }
-		.chart { grid-row: 3; }
+		.home { grid-template-columns: minmax(0, 1fr); grid-template-areas: "featured" "chart" "latest"; gap: 1.5rem; }
+		.chart ol { display: grid; grid-auto-flow: column; grid-auto-columns: min(14rem, 78vw); gap: 0.65rem; min-height: 4.75rem; padding: 0; overflow-x: auto; scrollbar-width: none; }
+		.chart li { display: grid; align-items: center; min-width: 0; padding-inline: 0.7rem; border: 1px solid var(--line); border-radius: 0.6rem; background: var(--surface); }
+		.chart li::marker { content: ''; }
 	}
 	@media (max-width: 720px) {
+		.home { grid-template-areas: "brand" "featured" "chart" "latest"; }
 		.mobile-brand { display: block; }
 		.mobile-brand span { color: var(--accent); }
 		.featured { min-height: 11.5rem; }

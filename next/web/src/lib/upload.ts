@@ -3,6 +3,7 @@ import { uploadTransport } from '$core/publishing/upload-transport';
 import { transferParts, type UploadOperation } from '$core/publishing/upload-model';
 import { applyGenreTags } from '$core/publishing/genre-tags';
 import { auth } from './auth';
+import { uploadActivity } from './upload-activity.svelte';
 import { authConfig } from './auth-config';
 import { createPds } from './pds';
 import { fileDuration } from './media/file-duration';
@@ -22,3 +23,5 @@ export const uploadQueue = createUploadQueue({
   sha256: bytes => crypto.subtle.digest('SHA-256', bytes),
   applyGenreTags: (session, uri) => applyGenreTags(() => createPds(session()), uri),
 });
+
+uploadQueue.subscribe(() => { uploadActivity.jobs = uploadQueue.snapshot(); });
