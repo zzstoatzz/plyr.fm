@@ -499,7 +499,7 @@ max_lines = 668
 
 [[rules]]
 path = "next/backend/src/internal/index/postgres_composed_track_store.zig"
-max_lines = 1726
+max_lines = 1732
 
 [[rules]]
 path = "next/backend/src/internal/ingest/projector.zig"
@@ -566,3 +566,7 @@ max_lines = 1140
 [[rules]]
 path = "next/web/scripts/check-shell.cjs"
 max_lines = 529
+
+[[rules]]
+path = "next/backend/src/internal/projection/postgres_list_store.zig"
+max_lines = 511

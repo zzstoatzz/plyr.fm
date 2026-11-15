@@ -100,7 +100,7 @@ pub const PostgresVerifiedListStore = struct {
             };
             items.append(allocator, .{
                 .value = decoded,
-                .created_at_us = row.get(i64, 19) catch return error.CorruptProjection,
+                .created_at_us = row.get(i64, 20) catch return error.CorruptProjection,
             }) catch return error.OutOfMemory;
         }
         return items.toOwnedSlice(allocator) catch return error.OutOfMemory;
@@ -152,11 +152,11 @@ pub const PostgresVerifiedListStore = struct {
                 row.get([]const u8, 0) catch return error.CorruptProjection,
             )) return error.CorruptProjection;
 
-            const position = row.get(?i16, 16) catch return error.CorruptProjection;
+            const position = row.get(?i16, 17) catch return error.CorruptProjection;
             if (position == null) {
                 if (members.items.len != 0 or
-                    (row.get(?[]const u8, 17) catch return error.CorruptProjection) != null or
-                    (row.get(?[]const u8, 18) catch return error.CorruptProjection) != null)
+                    (row.get(?[]const u8, 18) catch return error.CorruptProjection) != null or
+                    (row.get(?[]const u8, 19) catch return error.CorruptProjection) != null)
                     return error.CorruptProjection;
                 continue;
             }
@@ -164,22 +164,22 @@ pub const PostgresVerifiedListStore = struct {
                 return error.CorruptProjection;
             const subject_uri = try duplicate(
                 allocator,
-                row.get([]const u8, 17) catch return error.CorruptProjection,
+                row.get([]const u8, 18) catch return error.CorruptProjection,
             );
             validateRecordUri(subject_uri, request.track_collection) catch
                 return error.CorruptProjection;
             const subject_cid = try duplicate(
                 allocator,
-                row.get([]const u8, 18) catch return error.CorruptProjection,
+                row.get([]const u8, 19) catch return error.CorruptProjection,
             );
             validateCid(allocator, subject_cid, zat.cbor.Codec.dag_cbor) catch |err| switch (err) {
                 error.OutOfMemory => return error.OutOfMemory,
                 else => return error.CorruptProjection,
             };
 
-            const is_available = row.get(bool, 19) catch return error.CorruptProjection;
+            const is_available = row.get(bool, 20) catch return error.CorruptProjection;
             const resolved = if (is_available)
-                composed_track.decodeRow(allocator, shiftedRow(row, 20)) catch |err| switch (err) {
+                composed_track.decodeRow(allocator, shiftedRow(row, 21)) catch |err| switch (err) {
                     error.OutOfMemory => return error.OutOfMemory,
                     else => return error.CorruptProjection,
                 }
@@ -259,12 +259,12 @@ fn decodeSummary(
     kind: verified_list.Kind,
 ) !verified_list.Summary {
     const header = try decodeHeader(allocator, row, kind, null);
-    const member_count = try nonnegativeUsize(try row.get(i64, 16));
-    const available_count = try nonnegativeUsize(try row.get(i64, 17));
+    const member_count = try nonnegativeUsize(try row.get(i64, 17));
+    const available_count = try nonnegativeUsize(try row.get(i64, 18));
     if (available_count > member_count) return error.CorruptMetrics;
-    const total_plays = try row.get(i64, 18);
+    const total_plays = try row.get(i64, 19);
     if (total_plays < 0) return error.CorruptMetrics;
-    const cover = try public_media.canonicalOwned(allocator, try duplicateOptional(allocator, try row.get(?[]const u8, 20)));
+    const cover = try public_media.canonicalOwned(allocator, try duplicateOptional(allocator, try row.get(?[]const u8, 21)));
     if (cover) |url| if (!lexicon_value.validUri(url)) return error.CorruptArtwork;
     return .{
         .object = kind,
@@ -320,6 +320,8 @@ fn decodeHeader(
     const authored_avatar = try row.get(bool, 14);
     if (authored_avatar and avatar == null) return error.CorruptOwnerProfile;
     const account_source = try parseAccountSource(try row.get([]const u8, 15));
+    const cover_blob_cid = try duplicateOptional(allocator, try row.get(?[]const u8, 16));
+    if (cover_blob_cid) |cid| try validateCid(allocator, cid, zat.cbor.Codec.raw);
     const id = try allocator.alloc(u8, switch (kind) {
         .album => album_id.encodedLength(uri),
         .playlist => playlist_id.encodedLength(uri),
@@ -334,6 +336,7 @@ fn decodeHeader(
         .record = .{ .uri = uri, .cid = record_cid, .collection = collection, .rkey = rkey },
         .metadata = .{
             .name = try duplicateOptional(allocator, try row.get(?[]const u8, 5)),
+            .cover_blob_cid = cover_blob_cid,
             .created_at = try duplicate(allocator, try row.get([]const u8, 6)),
             .updated_at = try duplicateOptional(allocator, try row.get(?[]const u8, 7)),
         },
@@ -406,7 +409,8 @@ const header_columns =
     \\  owner_a.display_name,
     \\  CASE WHEN owner_a.avatar_url IS NOT NULL AND owner_p.avatar LIKE 'https://cdn.bsky.app/img/avatar/plain/%' THEN owner_a.avatar_url ELSE COALESCE(NULLIF(owner_p.avatar, ''), owner_a.avatar_url) END,
     \\  owner_p.avatar IS NOT NULL AND owner_p.avatar <> '' AND (owner_a.avatar_url IS NULL OR owner_p.avatar NOT LIKE 'https://cdn.bsky.app/img/avatar/plain/%'),
-    \\  owner_aa.evidence_source
+    \\  owner_aa.evidence_source,
+    \\  records.cover_blob_cid
 ;
 
 const collection_joins =

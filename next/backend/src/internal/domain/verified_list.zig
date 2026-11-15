@@ -53,6 +53,7 @@ pub const Record = struct {
 
 pub const Metadata = struct {
     name: ?[]const u8,
+    cover_blob_cid: ?[]const u8 = null,
     created_at: []const u8,
     updated_at: ?[]const u8,
 };

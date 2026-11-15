@@ -88,6 +88,7 @@ pub const PostgresListStore = struct {
             .rkey = change.rkey,
             .list_type = @tagName(change.list_type),
             .name = change.name,
+            .cover_blob_cid = change.cover_blob_cid,
             .created_at = change.created_at,
             .updated_at = change.updated_at,
             .deleted = false,
@@ -119,6 +120,7 @@ pub const PostgresListStore = struct {
             .rkey = change.rkey,
             .list_type = null,
             .name = null,
+            .cover_blob_cid = null,
             .created_at = null,
             .updated_at = null,
             .deleted = true,
@@ -140,6 +142,7 @@ const RecordWrite = struct {
     rkey: []const u8,
     list_type: ?[]const u8,
     name: ?[]const u8,
+    cover_blob_cid: ?[]const u8,
     created_at: ?[]const u8,
     updated_at: ?[]const u8,
     deleted: bool,
@@ -163,6 +166,7 @@ fn applyRecord(conn: *pg.Conn, write: RecordWrite) ListStore.Error!ApplyResult {
         write.commit_cid,
         write.commit_rev,
         write.indexed_at_us,
+        write.cover_blob_cid,
     }) catch |err| {
         std.log.err("list projection record upsert failed: {}", .{err});
         return error.ProjectionUnavailable;
@@ -242,9 +246,9 @@ const upsert_record_sql =
     \\INSERT INTO plyr_index.list_records (
     \\  record_uri, record_cid, owner_did, collection, rkey, list_type, name,
     \\  record_created_at, record_updated_at, deleted, commit_cid, commit_rev,
-    \\  indexed_at_us
+    \\  indexed_at_us, cover_blob_cid
     \\) VALUES (
-    \\  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+    \\  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
     \\)
     \\ON CONFLICT (record_uri) DO UPDATE SET
     \\  record_cid = EXCLUDED.record_cid,
@@ -258,7 +262,8 @@ const upsert_record_sql =
     \\  deleted = EXCLUDED.deleted,
     \\  commit_cid = EXCLUDED.commit_cid,
     \\  commit_rev = EXCLUDED.commit_rev,
-    \\  indexed_at_us = EXCLUDED.indexed_at_us
+    \\  indexed_at_us = EXCLUDED.indexed_at_us,
+    \\  cover_blob_cid = EXCLUDED.cover_blob_cid
     \\WHERE plyr_index.list_records.commit_rev < EXCLUDED.commit_rev
 ;
 
@@ -327,7 +332,10 @@ test "PostgreSQL list projection is atomic and replay safe" {
         .{ .position = 0, .track_uri = track_a, .track_cid = track_cid },
         .{ .position = 1, .track_uri = track_b, .track_cid = track_cid },
     };
-    const change_1 = listUpsert(record_uri, record_cid_1, &tid_1.str(), commit_1, &members_1);
+    const old_cover = try zat.Cid.create(a, 1, zat.cbor.Codec.raw, zat.cbor.HashFn.sha2_256, "old cover");
+    const new_cover = try zat.Cid.create(a, 1, zat.cbor.Codec.raw, zat.cbor.HashFn.sha2_256, "new cover");
+    var change_1 = listUpsert(record_uri, record_cid_1, &tid_1.str(), commit_1, &members_1);
+    change_1.upsert.cover_blob_cid = try old_cover.toString(a);
     try std.testing.expectEqual(ApplyResult.applied, try store.apply(a, change_1));
     try std.testing.expectEqual(ApplyResult.idempotent, try store.apply(a, change_1));
     try expectMembers(pool, record_uri, &.{ track_a, track_b });
@@ -336,7 +344,8 @@ test "PostgreSQL list projection is atomic and replay safe" {
         .{ .position = 0, .track_uri = track_b, .track_cid = track_cid },
         .{ .position = 1, .track_uri = track_a, .track_cid = track_cid },
     };
-    const change_2 = listUpsert(record_uri, record_cid_2, &tid_2.str(), commit_2, &members_2);
+    var change_2 = listUpsert(record_uri, record_cid_2, &tid_2.str(), commit_2, &members_2);
+    change_2.upsert.cover_blob_cid = try new_cover.toString(a);
     try std.testing.expectEqual(ApplyResult.applied, try store.apply(a, change_2));
     try std.testing.expectEqual(ApplyResult.stale, try store.apply(a, change_1));
     try expectMembers(pool, record_uri, &.{ track_b, track_a });
@@ -354,7 +363,7 @@ test "PostgreSQL list projection is atomic and replay safe" {
     var constrained_memory: [96]u8 = undefined;
     var constrained = std.heap.FixedBufferAllocator.init(&constrained_memory);
     try std.testing.expectError(error.OutOfMemory, store.apply(constrained.allocator(), rejected));
-    try expectRecord(pool, record_uri, record_cid_2, &tid_2.str(), false);
+    try expectRecord(pool, record_uri, record_cid_2, &tid_2.str(), false, change_2.upsert.cover_blob_cid);
     try expectMembers(pool, record_uri, &.{ track_b, track_a });
 
     const deletion: list_change.Change = .{ .delete = .{
@@ -371,7 +380,7 @@ test "PostgreSQL list projection is atomic and replay safe" {
     try std.testing.expectEqual(ApplyResult.applied, try store.apply(a, deletion));
     try std.testing.expectEqual(ApplyResult.idempotent, try store.apply(a, deletion));
     try std.testing.expectEqual(ApplyResult.stale, try store.apply(a, change_2));
-    try expectRecord(pool, record_uri, null, &tid_4.str(), true);
+    try expectRecord(pool, record_uri, null, &tid_4.str(), true, null);
     try expectMembers(pool, record_uri, &.{});
 }
 
@@ -427,6 +436,7 @@ pub fn createTestTables(pool: *pg.Pool) !void {
         \\  commit_cid text,
         \\  commit_rev text NOT NULL,
         \\  indexed_at_us bigint NOT NULL,
+        \\  cover_blob_cid text,
         \\  CONSTRAINT ck_list_records_canonical_uri CHECK (
         \\    record_uri = 'at://' || owner_did || '/' || collection || '/' || rkey
         \\  ),
@@ -462,15 +472,17 @@ fn expectRecord(
     record_cid: ?[]const u8,
     commit_rev: []const u8,
     deleted: bool,
+    cover_blob_cid: ?[]const u8,
 ) !void {
     var row = (try pool.row(
-        "SELECT record_cid, commit_rev, deleted FROM plyr_index.list_records WHERE record_uri = $1",
+        "SELECT record_cid, commit_rev, deleted, cover_blob_cid FROM plyr_index.list_records WHERE record_uri = $1",
         .{record_uri},
     )).?;
     defer row.deinit() catch {};
     try std.testing.expect(optionalEql(try row.get(?[]const u8, 0), record_cid));
     try std.testing.expectEqualStrings(commit_rev, try row.get([]const u8, 1));
     try std.testing.expectEqual(deleted, try row.get(bool, 2));
+    try std.testing.expect(optionalEql(cover_blob_cid, try row.get(?[]const u8, 3)));
 }
 
 fn expectMembers(

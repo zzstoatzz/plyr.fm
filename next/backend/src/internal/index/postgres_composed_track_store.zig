@@ -1131,6 +1131,9 @@ test "composed PostgreSQL reads use verified records and authoritative account s
         .like_collection = "fm.plyr.dev.like",
     };
     const list_store = verified_list_implementation.store();
+    const cover_cid = try zat.Cid.create(a, 1, zat.cbor.Codec.raw, zat.cbor.HashFn.sha2_256, "album cover");
+    const cover_cid_text = try cover_cid.toString(a);
+    _ = try pool.exec("UPDATE plyr_index.list_records SET cover_blob_cid = $1 WHERE record_uri = $2", .{ cover_cid_text, album_list_uri });
     const playlist_page = try list_store.listByOwner(a, .{
         .collection = "fm.plyr.dev.list",
         .profile_collection = "fm.plyr.dev.actor.profile",
@@ -1156,6 +1159,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     try std.testing.expectEqual(verified_list.Kind.album, album_page[0].value.object);
     try std.testing.expectEqualStrings(album_list_uri, album_page[0].value.record.uri);
     try std.testing.expectEqualStrings("Verified Album", album_page[0].value.metadata.name.?);
+    try std.testing.expectEqualStrings(cover_cid_text, album_page[0].value.metadata.cover_blob_cid.?);
     try std.testing.expectEqual(@as(usize, 1), album_page[0].value.metrics.member_count);
     try std.testing.expectEqual(@as(usize, 1), album_page[0].value.metrics.available_count);
     try std.testing.expectEqual(track.Source.verified_repo, album_page[0].value.sources.record);
@@ -1181,6 +1185,8 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     })).?;
     try std.testing.expectEqual(@import("../domain/verified_list.zig").Kind.album, album_detail.object);
     try std.testing.expect(std.mem.startsWith(u8, album_detail.id, "alb_"));
+    try std.testing.expectEqualStrings(cover_cid_text, album_detail.metadata.cover_blob_cid.?);
+    try std.testing.expectEqual(@as(?[]const u8, null), playlist_detail.metadata.cover_blob_cid);
     try std.testing.expectEqualStrings("Verified Title", album_detail.members[0].track.?.metadata.title);
 
     _ = try pool.exec(
