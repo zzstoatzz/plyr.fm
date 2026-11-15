@@ -30,6 +30,7 @@ pub const StrongRef = struct {
 pub const Record = struct {
     list_type: ListType,
     name: ?[]const u8,
+    cover_blob: ?zat.Cid,
     items: []StrongRef,
     created_at: []const u8,
     updated_at: ?[]const u8,
@@ -83,10 +84,27 @@ pub fn parse(
     return .{
         .list_type = list_type,
         .name = name,
+        .cover_blob = coverBlob(value),
         .items = items,
         .created_at = created_at,
         .updated_at = updated_at,
     };
+}
+
+fn coverBlob(value: zat.cbor.Value) ?zat.Cid {
+    const field = value.get("imageBlob") orelse return null;
+    const blob_type = field.getString("$type") orelse return null;
+    if (!std.mem.eql(u8, blob_type, "blob")) return null;
+    const cid = field.getCid("ref") orelse return null;
+    const parsed = zat.Cid.fromBytes(cid.raw) catch return null;
+    if (parsed.codec() != zat.cbor.Codec.raw) return null;
+    const size = field.getUint("size") orelse return null;
+    if (size == 0 or size > 10_000_000) return null;
+    const mime_type = field.getString("mimeType") orelse return null;
+    for ([_][]const u8{ "image/png", "image/jpeg", "image/webp", "image/gif" }) |accepted| {
+        if (std.mem.eql(u8, accepted, mime_type)) return cid;
+    }
+    return null;
 }
 
 fn optionalString(value: zat.cbor.Value, key: []const u8) !?[]const u8 {
