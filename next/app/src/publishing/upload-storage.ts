@@ -1,7 +1,7 @@
 import { createMMKV } from 'react-native-mmkv';
 import { sameRecord } from '@plyr/next-core/publishing/create-operation';
 import { uploadOperation, type UploadStorage } from '@plyr/next-core/publishing/upload-model';
-import { queuedUploadKey, readQueuedUploadDraft, type QueuedUploadDrafts } from '@plyr/next-core/publishing/queued-upload-draft';
+import { queuedUploadKey, queuedUploadPrefix, readQueuedUploadDraft, type QueuedUploadDrafts } from '@plyr/next-core/publishing/queued-upload-draft';
 const storage = createMMKV({ id: 'plyr-next-uploads' });
 export const uploadStorage: UploadStorage = {
   async load(owner) {
@@ -30,7 +30,7 @@ const drafts = createMMKV({ id: 'plyr-next-upload-drafts' });
 const lockedDrafts = new Set<string>();
 export const queuedDrafts: QueuedUploadDrafts = {
   async load(owner) {
-    return drafts.getAllKeys().filter(key => key.startsWith(`${owner}/`))
+    return drafts.getAllKeys().filter(key => key.startsWith(queuedUploadPrefix(owner)) || key.startsWith(queuedUploadPrefix(owner, true)))
       .map(key => readQueuedUploadDraft(JSON.parse(drafts.getString(key) ?? 'null'), owner, key));
   },
   async put(draft) {

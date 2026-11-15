@@ -254,7 +254,7 @@ async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'reg
         assert.equal(await page.getByRole('textbox', { name: 'tags', exact: true }).inputValue(), 'ambient\nfield recording');
         assert.equal(writes.length, 0);
       } else {
-        await page.waitForFunction(key => localStorage.getItem(key) === null, `plyr-upload-draft:${did}`);
+        await page.waitForFunction(key => localStorage.getItem(key) === null, `plyr-upload-draft:${did}:v2`);
         await page.getByText('"direct from Svelte" uploaded').waitFor({ timeout: 5000 });
         assert.equal(await title.inputValue(), '');
         assert.equal(writes.length, 1);

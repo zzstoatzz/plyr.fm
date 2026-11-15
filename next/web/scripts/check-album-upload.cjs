@@ -149,6 +149,17 @@ async function fixture(browser, accounts, handle, width, scheme, scenario, audio
 
     if (scenario === 'reload') {
       await pausedBlob.promise;
+      const oldAlbum = await page.evaluate(did => new Promise((resolve, reject) => {
+        const open = indexedDB.open('plyr-next-album-uploads', 1);
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const db = open.result;
+          const request = db.transaction('albums').objectStore('albums').get(did);
+          request.onsuccess = () => { db.close(); resolve(request.result); };
+          request.onerror = () => { db.close(); reject(request.error); };
+        };
+      }), did);
+      assert.equal(oldAlbum, undefined, 'an older tab cannot load the unlisted album as a public plan');
       assert.equal((await records(trackCollection)).filter(record => !tracksAtStart.has(record.uri)).length, 2);
       await page.reload();
       releaseBlob.resolve();

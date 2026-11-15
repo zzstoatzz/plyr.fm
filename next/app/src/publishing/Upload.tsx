@@ -65,8 +65,9 @@ function tagProblem(tags: string) {
 
 function AccountUpload({ auth }: { auth: Auth }) {
   const live = useRef(true);
-  const draftKey = `plyr-upload-draft:${auth.did}`;
-  const [restored] = useState(() => readDraft(draftKey));
+  const legacyDraftKey = `plyr-upload-draft:${auth.did}`;
+  const draftKey = `${legacyDraftKey}:v2`;
+  const [restored] = useState(() => readDraft(draftKey) ?? readDraft(legacyDraftKey));
   const [file, setFile] = useState<MediaFile | null>(null);
   const [artwork, setArtwork] = useState<MediaFile | null>(null);
   const [title, setTitle] = useState(restored?.title ?? '');
@@ -117,9 +118,10 @@ function AccountUpload({ auth }: { auth: Auth }) {
         writeLocal(draftKey, editorDraft);
         if (readLocal(draftKey) !== editorDraft) throw new Error('draft was not saved');
       } else removeLocal(draftKey);
+      removeLocal(legacyDraftKey);
       setDraftProblem('');
     } catch { setDraftProblem('changes to this draft could not be saved on this device.'); }
-  }, [draftKey, editorDraft, title, album, description, tags]);
+  }, [draftKey, legacyDraftKey, editorDraft, title, album, description, tags]);
   const artist = useArtistName(auth);
   const current = () => live.current && getAuth().did === auth.did && getAuth().rpc === auth.rpc;
   const tagError = tagProblem(tags);

@@ -37,7 +37,8 @@
 
   const owner = untrack(() => account.did);
   const pds = untrack(() => createPds(account));
-  const draftKey = `plyr-upload-draft:${owner}`;
+  const legacyDraftKey = `plyr-upload-draft:${owner}`;
+  const draftKey = `${legacyDraftKey}:v2`;
   const consentKey = `plyr-storage-consent:${owner}`;
   const autoTagKey = `plyr-auto-tag:${owner}`;
   let live = false;
@@ -103,7 +104,12 @@
   function restoreEditor() {
     if (!current()) return;
     try {
-      const draft: unknown = JSON.parse(localStorage.getItem(draftKey) ?? 'null');
+      const legacy = localStorage.getItem(legacyDraftKey);
+      const draft: unknown = JSON.parse(localStorage.getItem(draftKey) ?? legacy ?? 'null');
+      if (legacy !== null) {
+        if (localStorage.getItem(draftKey) === null) localStorage.setItem(draftKey, legacy);
+        localStorage.removeItem(legacyDraftKey);
+      }
       title = draftField(draft, 'title');
       if (draft && typeof draft === 'object' && 'named' in draft && draft.named === true) autoTitle = title;
       album = draftField(draft, 'album');

@@ -21,8 +21,15 @@ export interface QueuedUploadDrafts {
 
 export type QueuedUploadKey = Pick<QueuedUploadDraft, 'owner' | 'id'>;
 
+const unlistedPrefix = 'unlisted/';
+
+export function queuedUploadPrefix(owner: Did, unlisted = false) {
+  return `${unlisted ? unlistedPrefix : ''}${owner}/`;
+}
+
 export function queuedUploadKey(draft: QueuedUploadKey) {
-  return `${draft.owner}/${draft.id}`;
+  const unlisted = draft.id.startsWith(unlistedPrefix);
+  return queuedUploadPrefix(draft.owner, unlisted) + (unlisted ? draft.id.slice(unlistedPrefix.length) : draft.id);
 }
 
 export function draftInRecovery(draft: QueuedUploadKey, ...records: readonly CreateOperation[][]) {
@@ -31,6 +38,7 @@ export function draftInRecovery(draft: QueuedUploadKey, ...records: readonly Cre
 
 export function queuedUploadDraft(input: NewTrack, owner: Did, id: string, reservedRkey?: string): QueuedUploadDraft {
   const { file, artwork, duration: _duration, ...fields } = input;
+  if (input.unlisted && !id.startsWith(unlistedPrefix)) id = unlistedPrefix + id;
   return { ...fields, owner, id, audio: { name: file.name, type: file.type, size: file.size },
     ...(artwork ? { coverName: artwork.name } : {}), ...(reservedRkey ? { reservedRkey } : {}) };
 }
@@ -42,7 +50,7 @@ export function readQueuedUploadDraft(value: unknown, owner: Did, key: unknown):
     typeof title !== 'string' || typeof artist !== 'string' ||
     (album !== undefined && typeof album !== 'string') || (description !== undefined && typeof description !== 'string') ||
     (tags !== undefined && (!Array.isArray(tags) || !tags.every(tag => typeof tag === 'string'))) ||
-    (unlisted !== undefined && typeof unlisted !== 'boolean') ||
+    (unlisted !== undefined && typeof unlisted !== 'boolean') || !!unlisted !== id.startsWith(unlistedPrefix) ||
     (autoTag !== undefined && typeof autoTag !== 'boolean') || (coverName !== undefined && typeof coverName !== 'string') ||
     (reservedRkey !== undefined && !isCreateRkey(reservedRkey)) ||
     !audio || typeof audio !== 'object' || !('name' in audio) || typeof audio.name !== 'string' ||
