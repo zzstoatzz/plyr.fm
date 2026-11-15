@@ -18,3 +18,14 @@ function listenerId(): string {
 }
 
 export const api = createApi(apiOrigin, listenerId);
+
+export async function accountAvatar(did: string, signal: AbortSignal): Promise<string | undefined> {
+	const artist = await api.artist(did, signal).catch(() => undefined);
+	if (artist?.avatar_url) return artist.avatar_url;
+	if (signal.aborted) return;
+	const request = new URL('https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile');
+	request.searchParams.set('actor', did);
+	const response = await fetch(request, { signal });
+	const profile: { avatar?: unknown } | undefined = response.ok ? await response.json() : undefined;
+	return typeof profile?.avatar === 'string' ? profile.avatar : undefined;
+}

@@ -11,6 +11,7 @@ import { trackArtwork } from '@plyr/next-core/artwork';
 import { editPrivateQueue, withoutPrivateTrack } from '@plyr/next-core/publishing/private-music';
 import { isPrivateTrack } from '@plyr/next-core/track-access';
 import { privateLibrary } from './private-library';
+import { prefs, setPrefs } from './prefs.svelte';
 import { api } from './api';
 import { auth } from './auth';
 import { authConfig } from './auth-config';
@@ -34,7 +35,12 @@ class Player {
 	#lastAudibleVolume = 1;
 	error = $state<string>();
 	repeat = $state<PersonalPlaybackTarget['repeat']>('off');
-	keepPlaying = $state(false);
+	get keepPlaying() { return prefs.keepPlaying; }
+	get continuesPlaying() { return this.snapshot.remote?.personal?.keepPlaying ?? this.keepPlaying; }
+	setKeepPlaying(value: boolean) {
+		setPrefs({ keepPlaying: value });
+		this.#model.setKeepPlaying(value);
+	}
 	nowPlaying = $state(false);
 	#keyboardOpenedNowPlaying = false;
 	get focusNowPlayingSheet() { return !this.#keyboardOpenedNowPlaying; }

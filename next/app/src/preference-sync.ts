@@ -1,3 +1,4 @@
+import { preferenceTransport } from '@plyr/next-core/preference-transport';
 import type { Agent } from './auth-state';
 import { JAM_COORDINATOR_URL, JAM_JOIN_METHOD, JAM_SERVICE_AUDIENCE } from './auth-config';
 import { hiddenTags } from './discovery/preferences';
@@ -28,23 +29,12 @@ export function decodePreferences(value: unknown): Partial<PersonalPreferences> 
 }
 
 export function accountPreferences(agent: Agent, signal: AbortSignal) {
-	async function call(patch?: Record<string, unknown>) {
-		const identity = await agent.handle(`/xrpc/com.atproto.server.getServiceAuth?${new URLSearchParams({ aud: JAM_SERVICE_AUDIENCE, lxm: JAM_JOIN_METHOD })}`, { signal });
-		const service: unknown = identity.ok ? await identity.json() : null;
-		if (!service || typeof service !== 'object' || !('token' in service) || typeof service.token !== 'string') throw new Error('could not authorize settings');
-		const response = await fetch(`${JAM_COORDINATOR_URL}/v1/preferences`, {
-			method: 'POST', signal, headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ serviceToken: service.token, ...(patch ? { patch } : {}) })
-		});
-		const body: unknown = response.ok ? await response.json() : null;
-		if (!body || typeof body !== 'object' || !('preferences' in body)) throw new Error('could not reach your settings');
-		return decodePreferences(body.preferences);
-	}
+	const call = preferenceTransport(agent, { JAM_COORDINATOR_URL, JAM_JOIN_METHOD, JAM_SERVICE_AUDIENCE }, signal);
 
 	return {
-		read: () => call(),
-		write({ scale, ...fields }: Partial<PersonalPreferences>) {
-			return call({ ...fields, ...(scale === undefined ? {} : { scale: Math.round(scale * 100) }) });
+		read: async () => decodePreferences(await call()),
+		async write({ scale, ...fields }: Partial<PersonalPreferences>) {
+			return decodePreferences(await call({ ...fields, ...(scale === undefined ? {} : { scale: Math.round(scale * 100) }) }));
 		}
 	};
 }

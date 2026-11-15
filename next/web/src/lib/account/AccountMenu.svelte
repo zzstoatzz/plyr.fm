@@ -12,7 +12,7 @@
 	const entries = $derived([
 		{ label: 'portal', detail: identity, icon: 'portal', href: resolve('/(app)/portal') },
 		{ label: 'upload', detail: uploadDetail, icon: 'upload', href: resolve('/(app)/upload') },
-		{ label: 'settings', detail: null, icon: 'settings', href: resolve('/(app)/settings') }
+		{ label: 'settings', detail: 'appearance and playback', icon: 'settings', href: resolve('/(app)/settings') }
 	] as const);
 
 	afterNavigate(({ from }) => {
@@ -43,7 +43,7 @@
 			{#each entries as entry (entry.label)}
 				<a href={entry.href} onclick={() => dialog.close()}>
 					<Icon name={entry.icon} size={22} />
-					<span class="row-label"><strong>{entry.label}</strong>{#if entry.detail}<small>{entry.detail}</small>{/if}</span>
+					<span class="row-label"><strong>{entry.label}</strong><small>{entry.detail}</small></span>
 					{#if entry.icon === 'settings'}<Icon name="chevron" size={17} />{/if}
 				</a>
 			{/each}

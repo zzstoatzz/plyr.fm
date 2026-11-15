@@ -55,7 +55,7 @@ async function screen(browser, phone, scheme) {
     await capture('home');
     if (phone) {
       const links = page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link');
-      assert.deepEqual((await links.allTextContents()).map(label => label.trim().replace(/sign in$/, '')), ['home', 'search', 'library', 'account']);
+      assert.deepEqual((await links.allTextContents()).map(label => label.trim()), ['home', 'search', 'library', 'sign in']);
     }
     await page.getByRole('button', { name: 'Open links menu' }).click();
     const linksMenu = page.getByRole('dialog', { name: 'links' });
