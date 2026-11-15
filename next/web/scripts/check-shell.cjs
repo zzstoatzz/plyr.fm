@@ -260,7 +260,7 @@ async function statsScreen(browser, phone, scheme) {
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
     assert.equal(await page.getByLabel('Catalog totals').evaluate(node =>
       getComputedStyle(node).gridTemplateColumns.split(' ').filter(size => Number.parseFloat(size) > 0).length
-    ), phone ? 2 : 4);
+    ), phone ? 3 : 4);
     const chart = page.getByRole('region', { name: 'most liked tracks', exact: true });
     await chart.getByText('12 likes').waitFor();
     await page.screenshot({ path: path.join(output, `${width}-${scheme}-stats.png`) });
@@ -272,12 +272,12 @@ async function statsScreen(browser, phone, scheme) {
     await chart.getByRole('button', { name: 'all time', exact: true }).click();
     await chart.getByText('no likes in this time range.').waitFor();
     assert.equal(artistLookups, 0, 'artist metrics are fetched only after selection');
-    const input = page.getByRole('searchbox', { name: 'find an artist', exact: true });
+    const input = page.getByRole('searchbox', { name: 'find an artist', description: 'type at least two characters.', exact: true });
     await input.fill('unknown');
     await page.getByText('no artists found for “unknown”.').waitFor();
     await input.fill('@alice');
+    await page.getByRole('status').filter({ hasText: '1 artist found' }).waitFor();
     const link = page.getByRole('link', { name: 'Alice Example @alice.test' });
-    await link.waitFor();
     await input.press('Tab');
     assert.ok(await link.evaluate(item => item === document.activeElement));
     await page.keyboard.press('Enter');
