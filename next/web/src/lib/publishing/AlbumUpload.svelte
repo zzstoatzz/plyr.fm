@@ -38,6 +38,7 @@
   let mounted = false;
   let revision = 0;
   let name = $state('');
+  let unlisted = $state(false);
   let selections = $state<Selected[]>([]);
   let songInput = $state<HTMLInputElement>();
   let cover = $state<File>();
@@ -184,7 +185,7 @@
       const signIn = usesStorage && !account.uploadStorage;
       const entries = selections.map(item => ({
         id: item.key, reservedRkey: TID.nextStr(),
-        input: { file: item.file, title: item.title.trim(), artist, album: title }
+        input: { file: item.file, title: item.title.trim(), artist, album: title, unlisted }
       }));
       await albumUploads.withLock(owner, async () => {
         if (!current()) return;
@@ -267,6 +268,7 @@
         selections = [];
         cover = undefined;
         name = '';
+      unlisted = false;
         omitCover = false;
         confirming = false;
       });
@@ -407,6 +409,8 @@
         {/snippet}
       </OrderRows>
     {/if}
+    <label class="consent"><input type="checkbox" bind:checked={unlisted} /> unlisted songs</label>
+    {#if unlisted}<p class="subtle">the songs stay out of home, search, and radio.</p>{/if}
     {#if usesStorage}
       <p class="subtle">plyr stores these files and makes an mp3 for playback when needed. playback and downloads are public.</p>
       <label class="consent"><input type="checkbox" bind:checked={consent} /> use plyr storage</label>

@@ -57,7 +57,7 @@ pub fn recordKey(uri: []const u8, owner: []const u8, collection: []const u8) ![]
 
 pub fn validate(request: Request, owner: []const u8, collection: []const u8) !void {
     if (!validId(request.uploadId) or request.sizeBytes == 0 or request.sizeBytes > max_bytes or
-        !std.mem.eql(u8, request.visibility, "public") or !std.mem.eql(u8, request.downloadPolicy, "open")) return error.InvalidUpload;
+        (!std.mem.eql(u8, request.visibility, "public") and !std.mem.eql(u8, request.visibility, "unlisted")) or !std.mem.eql(u8, request.downloadPolicy, "open")) return error.InvalidUpload;
     _ = try recordKey(request.recordUri, owner, collection);
     if (request.processing) |processing| {
         if (!std.mem.eql(u8, processing.recipe, "mp3-320k-44100-v1") or processing.outputBudget == 0 or processing.outputBudget > 2 * max_bytes - request.sizeBytes) return error.InvalidUpload;
@@ -133,6 +133,8 @@ test "upload reservation binds owner collection size and public open policy" {
     request.downloadPolicy = "off";
     try std.testing.expectError(error.InvalidUpload, validate(request, owner, "fm.plyr.dev.track"));
     request.downloadPolicy = "open";
+    request.visibility = "unlisted";
+    try validate(request, owner, "fm.plyr.dev.track");
     request.visibility = "private";
     try std.testing.expectError(error.InvalidUpload, validate(request, owner, "fm.plyr.dev.track"));
 }

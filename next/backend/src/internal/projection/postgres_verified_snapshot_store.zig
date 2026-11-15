@@ -505,6 +505,7 @@ const tombstone_absent_tracks_sql =
     \\  support_gate_type = NULL,
     \\  audio_space = NULL,
     \\  download_policy = NULL,
+    \\  unlisted = false,
     \\  description = NULL,
     \\  self_labels = '{}',
     \\  deleted = TRUE,

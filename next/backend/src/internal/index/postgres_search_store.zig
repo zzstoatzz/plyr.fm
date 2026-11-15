@@ -250,6 +250,7 @@ const search_query =
     \\  WHERE $5::boolean AND v.collection = $2 AND NOT v.deleted
     \\    AND v.support_gate_type IS DISTINCT FROM 'owner'
     \\    AND COALESCE(pol.visibility, 'public') IN ('public', 'supporters')
+    \\    AND NOT v.unlisted
     \\    AND pol.moderation_decision IS DISTINCT FROM 'exclude'
     \\    AND (
     \\      pol.moderation_decision IS NOT DISTINCT FROM 'allow'

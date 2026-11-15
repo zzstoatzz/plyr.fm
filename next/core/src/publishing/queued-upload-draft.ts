@@ -21,8 +21,15 @@ export interface QueuedUploadDrafts {
 
 export type QueuedUploadKey = Pick<QueuedUploadDraft, 'owner' | 'id'>;
 
+const unlistedPrefix = 'unlisted/';
+
+export function queuedUploadPrefix(owner: Did, unlisted = false) {
+  return `${unlisted ? unlistedPrefix : ''}${owner}/`;
+}
+
 export function queuedUploadKey(draft: QueuedUploadKey) {
-  return `${draft.owner}/${draft.id}`;
+  const unlisted = draft.id.startsWith(unlistedPrefix);
+  return queuedUploadPrefix(draft.owner, unlisted) + (unlisted ? draft.id.slice(unlistedPrefix.length) : draft.id);
 }
 
 export function draftInRecovery(draft: QueuedUploadKey, ...records: readonly CreateOperation[][]) {
@@ -31,17 +38,19 @@ export function draftInRecovery(draft: QueuedUploadKey, ...records: readonly Cre
 
 export function queuedUploadDraft(input: NewTrack, owner: Did, id: string, reservedRkey?: string): QueuedUploadDraft {
   const { file, artwork, duration: _duration, ...fields } = input;
+  if (input.unlisted && !id.startsWith(unlistedPrefix)) id = unlistedPrefix + id;
   return { ...fields, owner, id, audio: { name: file.name, type: file.type, size: file.size },
     ...(artwork ? { coverName: artwork.name } : {}), ...(reservedRkey ? { reservedRkey } : {}) };
 }
 
 export function readQueuedUploadDraft(value: unknown, owner: Did, key: unknown): QueuedUploadDraft {
   if (!value || typeof value !== 'object') throw new Error('could not read a queued upload.');
-  const { id, title, artist, album, description, tags, autoTag, audio, coverName, reservedRkey } = value as Record<string, unknown>;
+  const { id, title, artist, album, description, tags, autoTag, unlisted, audio, coverName, reservedRkey } = value as Record<string, unknown>;
   if (typeof id !== 'string' || key !== queuedUploadKey({ owner, id }) || !('owner' in value) || value.owner !== owner ||
     typeof title !== 'string' || typeof artist !== 'string' ||
     (album !== undefined && typeof album !== 'string') || (description !== undefined && typeof description !== 'string') ||
     (tags !== undefined && (!Array.isArray(tags) || !tags.every(tag => typeof tag === 'string'))) ||
+    (unlisted !== undefined && typeof unlisted !== 'boolean') || !!unlisted !== id.startsWith(unlistedPrefix) ||
     (autoTag !== undefined && typeof autoTag !== 'boolean') || (coverName !== undefined && typeof coverName !== 'string') ||
     (reservedRkey !== undefined && !isCreateRkey(reservedRkey)) ||
     !audio || typeof audio !== 'object' || !('name' in audio) || typeof audio.name !== 'string' ||
@@ -50,7 +59,7 @@ export function readQueuedUploadDraft(value: unknown, owner: Did, key: unknown):
   }
   const file = { name: audio.name, type: audio.type, size: audio.size };
   canonicalAudioType(file);
-  return { owner, id, title, artist, album, description, tags, autoTag, audio: file, coverName, ...(reservedRkey ? { reservedRkey } : {}) };
+  return { owner, id, title, artist, album, description, tags, autoTag, ...(unlisted ? { unlisted } : {}), audio: file, coverName, ...(reservedRkey ? { reservedRkey } : {}) };
 }
 
 export function reattachQueuedUpload(draft: QueuedUploadDraft, file: MediaFile, artwork?: MediaFile): NewTrack {
@@ -58,6 +67,6 @@ export function reattachQueuedUpload(draft: QueuedUploadDraft, file: MediaFile, 
     throw new Error('choose the original audio file.');
   }
   if (draft.coverName && !artwork) throw new Error('choose the cover again.');
-  const { title, artist, album, description, tags, autoTag } = draft;
-  return { title, artist, album, description, tags, autoTag, file, artwork };
+  const { title, artist, album, description, tags, autoTag, unlisted } = draft;
+  return { title, artist, album, description, tags, autoTag, ...(unlisted ? { unlisted } : {}), file, artwork };
 }

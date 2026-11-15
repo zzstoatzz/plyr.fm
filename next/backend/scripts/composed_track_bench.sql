@@ -41,7 +41,8 @@ CREATE TABLE plyr_index.track_records (
     deleted boolean NOT NULL,
     commit_cid text NOT NULL,
     commit_rev text NOT NULL,
-    indexed_at_us bigint NOT NULL
+    indexed_at_us bigint NOT NULL,
+    unlisted boolean NOT NULL DEFAULT false
 );
 CREATE TABLE plyr_index.profile_records (
     record_uri text PRIMARY KEY,

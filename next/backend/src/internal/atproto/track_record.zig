@@ -36,6 +36,7 @@ pub const Record = struct {
     image_url: ?[]const u8,
     support_gate_type: ?[]const u8,
     download_policy: []const u8,
+    unlisted: bool = false,
     /// gated audio: the artist's space record holding the audio blob
     audio_space: ?managed_space.SpaceRecordUri = null,
     description: ?[]const u8,
@@ -96,6 +97,7 @@ pub fn parse(
         .image_url = try optionalUri(value, "imageUrl"),
         .support_gate_type = try parseSupportGate(value),
         .download_policy = (try optionalBoundedString(value, "downloadPolicy", 0, max_unbounded_string)) orelse (if (audio_space != null) "off" else "open"),
+        .unlisted = std.mem.eql(u8, value.getString("visibility") orelse "", "unlisted"),
         .audio_space = audio_space,
         .description = try optionalBoundedString(value, "description", 0, 5000),
         .self_labels = try parseLabels(allocator, value),

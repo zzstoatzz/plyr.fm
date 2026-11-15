@@ -30,11 +30,12 @@ return the same record URI, canonical ID and current CID.
 
 ## unlisted visibility
 
-Record identity and legacy visibility are separate. The shared track record
-does not carry the legacy application's unlisted setting. Before exposing an
-index rebuilt from records, refresh the unlisted policy snapshot from the
-legacy source in a read-only transaction. Use the same canonical URI and
-owner checks as the link export, with `visibility = 'unlisted'`.
+Next authors can set `visibility: "unlisted"` on a track record. The verifier
+projects that declaration with the signed revision. Existing unlisted tracks
+published by the legacy application may have no declaration. Before exposing
+a rebuilt index, refresh the legacy policy snapshot in a read-only transaction.
+Use the same canonical URI and owner checks as the link export, with
+`visibility = 'unlisted'`.
 
 On the database marked `plyr-zig-next`, write these URIs to
 `plyr_index.track_policies` with `visibility='unlisted'`,

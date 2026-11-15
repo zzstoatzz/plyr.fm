@@ -31,6 +31,7 @@ pub const Upsert = struct {
     image_url: ?[]const u8,
     support_gate_type: ?[]const u8,
     download_policy: ?[]const u8 = null,
+    unlisted: bool = false,
     /// space record URI holding gated audio, always in the owner's own space
     audio_space: ?[]const u8 = null,
     description: ?[]const u8,
@@ -129,6 +130,7 @@ pub fn fromVerifiedOperation(
         .image_url = parsed.image_url,
         .support_gate_type = parsed.support_gate_type,
         .download_policy = parsed.download_policy,
+        .unlisted = parsed.unlisted,
         .audio_space = if (parsed.audio_space) |space|
             try std.fmt.allocPrint(allocator, "{s}/{s}/{s}/{s}", .{ space.space_uri, space.repo, space.collection, space.rkey })
         else

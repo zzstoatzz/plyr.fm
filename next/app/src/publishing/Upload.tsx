@@ -43,7 +43,7 @@ function SignedOut({ onlyYou }: { onlyYou: boolean }) {
   </>;
 }
 
-type Draft = { title: string; album: string; description: string; tags: string; named?: boolean; autoTag?: boolean };
+type Draft = { title: string; album: string; description: string; tags: string; named?: boolean; autoTag?: boolean; unlisted?: boolean };
 type Problems = { audio?: string; artwork?: string; tags?: string; form?: string };
 
 function readDraft(key: string): Draft | undefined {
@@ -55,6 +55,7 @@ function readDraft(key: string): Draft | undefined {
     return Object.values(draft).some(Boolean) ? {
       ...draft,
       named: 'named' in value && value.named === true,
+      unlisted: 'unlisted' in value && value.unlisted === true,
       autoTag: 'autoTag' in value && typeof value.autoTag === 'boolean' ? value.autoTag : undefined,
     } : undefined;
   } catch { return; }
@@ -66,7 +67,8 @@ function tagProblem(tags: string) {
 }
 
 function TrackUpload({ auth, onlyYou }: { auth: Auth; onlyYou: boolean }) {
-  const [restored] = useState(() => readDraft(`plyr-upload-draft:${auth.did}`));
+  const legacyDraftKey = `plyr-upload-draft:${auth.did}`;
+  const [restored] = useState(() => readDraft(`${legacyDraftKey}:v2`) ?? readDraft(legacyDraftKey));
   const [file, setFile] = useState<MediaFile | null>(null);
   const [title, setTitle] = useState(restored?.title ?? '');
   const [description, setDescription] = useState(restored?.description ?? '');
@@ -90,7 +92,8 @@ function TrackUpload({ auth, onlyYou }: { auth: Auth; onlyYou: boolean }) {
 
 function AccountUpload({ auth, restored, onBusy, file, setFile, title, setTitle, description, setDescription, tags, setTags }: TrackDraftFields & { auth: Auth; restored?: Draft; onBusy: (value: boolean) => void }) {
   const live = useRef(true);
-  const draftKey = `plyr-upload-draft:${auth.did}`;
+  const legacyDraftKey = `plyr-upload-draft:${auth.did}`;
+  const draftKey = `${legacyDraftKey}:v2`;
   const [artwork, setArtwork] = useState<MediaFile | null>(null);
   // The title the last audio file gave, so a later pick may replace it; a typed title is never replaced.
   const autoTitle = useRef<string | undefined>(restored?.named ? restored.title : undefined);
@@ -102,6 +105,7 @@ function AccountUpload({ auth, restored, onBusy, file, setFile, title, setTitle,
   const autoTagKey = `plyr-auto-tag:${auth.did}`;
   const [autoTag, setAutoTag] = useState(() => restored?.autoTag ?? readLocal(autoTagKey) === 'yes');
   const [problems, setProblems] = useState<Problems>({});
+  const [unlisted, setUnlisted] = useState(!!restored?.unlisted);
   const [draftProblem, setDraftProblem] = useState('');
   const [queuedProblem, setQueuedProblem] = useState('');
   const [savedDrafts, setSavedDrafts] = useState<QueuedUploadDraft[]>([]);
@@ -130,7 +134,7 @@ function AccountUpload({ auth, restored, onBusy, file, setFile, title, setTitle,
   const linkedDrafts = [...recovery.operations, ...recovery.archived, ...uploads.operations].map(operation => operation.draftId).join();
   useEffect(() => { void refreshDrafts(); }, [refreshDrafts, settled, linkedDrafts]);
   // Everything typed survives a reload, a crash or the sign-in-again round trip; files are chosen again.
-  const editorDraft = JSON.stringify({ title, album, description, tags, autoTag, named: !!title && title === autoTitle.current });
+  const editorDraft = JSON.stringify({ title, album, description, tags, autoTag, unlisted, named: !!title && title === autoTitle.current });
   const latestDraft = useRef({ file, artwork, editorDraft });
   latestDraft.current = { file, artwork, editorDraft };
   useEffect(() => {
@@ -139,9 +143,10 @@ function AccountUpload({ auth, restored, onBusy, file, setFile, title, setTitle,
         writeLocal(draftKey, editorDraft);
         if (readLocal(draftKey) !== editorDraft) throw new Error('draft was not saved');
       } else removeLocal(draftKey);
+      removeLocal(legacyDraftKey);
       setDraftProblem('');
     } catch { setDraftProblem('changes to this draft could not be saved on this device.'); }
-  }, [draftKey, editorDraft, title, album, description, tags]);
+  }, [draftKey, legacyDraftKey, editorDraft, title, album, description, tags]);
   const artist = useArtistName(auth);
   const current = () => live.current && getAuth().did === auth.did && getAuth().rpc === auth.rpc;
   const tagError = tagProblem(tags);
@@ -187,7 +192,7 @@ function AccountUpload({ auth, restored, onBusy, file, setFile, title, setTitle,
     const input = await uploadQueue.takeBack(id, input => {
       if (!current()) throw new Error('reopen the upload page to edit this draft.');
       const previous = readLocal(draftKey);
-      const saved = JSON.stringify({ title: input.title, album: input.album, description: input.description, tags: input.tags?.join('\n'), autoTag: !!input.autoTag });
+      const saved = JSON.stringify({ title: input.title, album: input.album, description: input.description, tags: input.tags?.join('\n'), autoTag: !!input.autoTag, unlisted: !!input.unlisted });
       writeLocal(draftKey, saved);
       if (readLocal(draftKey) !== saved) throw new Error('could not save the editor draft.');
       return () => {
@@ -201,7 +206,7 @@ function AccountUpload({ auth, restored, onBusy, file, setFile, title, setTitle,
     if (!input || !current()) return;
     setFile(input.file); setArtwork(input.artwork ?? null); setTitle(input.title); setAlbum(input.album ?? '');
     setDescription(input.description ?? ''); setTags(input.tags?.join('\n') ?? '');
-    setDetails(!!(input.album || input.description || input.tags?.length)); setAutoTag(!!input.autoTag); setReattach(false);
+    setDetails(!!(input.album || input.description || input.tags?.length)); setAutoTag(!!input.autoTag); setUnlisted(!!input.unlisted); setReattach(false);
     setProblems({});
   }
 
@@ -212,7 +217,7 @@ function AccountUpload({ auth, restored, onBusy, file, setFile, title, setTitle,
     setSaving(true);
     try {
       const list = tags.trim() ? tags.split('\n') : undefined;
-      await uploadQueue.add({ file, artwork, title, artist, album, description, tags: list, autoTag });
+      await uploadQueue.add({ file, artwork, title, artist, album, description, tags: list, autoTag, unlisted });
       try {
         if (readLocal(draftKey) === editorDraft) removeLocal(draftKey);
       } catch {
@@ -220,7 +225,7 @@ function AccountUpload({ auth, restored, onBusy, file, setFile, title, setTitle,
       }
       if (!current() || latestDraft.current.file !== file || latestDraft.current.artwork !== artwork || latestDraft.current.editorDraft !== editorDraft) return;
       autoTitle.current = undefined;
-      setFile(null); setArtwork(null); setTitle(''); setAlbum(''); setDetails(false); setDescription(''); setTags(''); setProblems({});
+      setFile(null); setArtwork(null); setTitle(''); setAlbum(''); setDetails(false); setDescription(''); setTags(''); setUnlisted(false); setProblems({});
     } catch (failure) {
       if (current()) setProblems(previous => ({ ...previous, form: failure instanceof Error ? failure.message : 'could not start the upload.' }));
     } finally {
@@ -263,6 +268,8 @@ function AccountUpload({ auth, restored, onBusy, file, setFile, title, setTitle,
             {tagError && <FieldError>{tagError}</FieldError>}
           </View>
         </> : <Action label="add album, description or tags" onPress={() => setDetails(true)} />}
+        <CheckRow label="unlisted" checked={unlisted} onChange={setUnlisted} />
+        {unlisted && <Copy>people can play this track from its link. it stays out of home, search, and radio.</Copy>}
         <CheckRow label="auto-tag with recommended genres" checked={autoTag} onChange={value => { setAutoTag(value); if (value) writeLocal(autoTagKey, 'yes'); else removeLocal(autoTagKey); }} />
         <View style={{ gap: 8 }}>
           {draftProblem && <FieldError>{draftProblem}</FieldError>}

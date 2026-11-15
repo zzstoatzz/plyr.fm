@@ -188,7 +188,7 @@ const query =
     \\  v.record_uri,
     \\  v.record_cid,
     \\  v.commit_rev,
-    \\  COALESCE(pol.visibility, 'public'),
+    \\  CASE WHEN v.unlisted AND COALESCE(pol.visibility, 'public') = 'public' THEN 'unlisted' ELSE COALESCE(pol.visibility, 'public') END,
     \\  v.support_gate_type,
     \\  v.audio_blob_cid,
     \\  v.audio_blob_media_type,

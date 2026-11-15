@@ -1,7 +1,7 @@
 import { readAlbumUploadPlan, type AlbumUploadPlan } from '@plyr/next-core/publishing/album-upload-plan';
 import { sameRecord } from '@plyr/next-core/publishing/create-operation';
 import { uploadOperation, type UploadStorage } from '@plyr/next-core/publishing/upload-model';
-import { queuedUploadKey, readQueuedUploadDraft, type QueuedUploadDrafts } from '@plyr/next-core/publishing/queued-upload-draft';
+import { queuedUploadKey, queuedUploadPrefix, readQueuedUploadDraft, type QueuedUploadDrafts } from '@plyr/next-core/publishing/queued-upload-draft';
 function databaseFor(name: string, store: string) {
   let database: Promise<IDBDatabase> | undefined;
   return () => database ??= new Promise((resolve, reject) => {
@@ -61,11 +61,13 @@ export const queuedDrafts: QueuedUploadDrafts = {
     return new Promise((resolve, reject) => {
       const transaction = db.transaction('drafts');
       const store = transaction.objectStore('drafts');
-      const range = IDBKeyRange.bound(`${owner}/`, `${owner}/\uffff`);
-      const values = store.getAll(range);
-      const keys = store.getAllKeys(range);
+      const reads = [false, true].map(unlisted => {
+        const prefix = queuedUploadPrefix(owner, unlisted);
+        const range = IDBKeyRange.bound(prefix, prefix + '\uffff');
+        return { values: store.getAll(range), keys: store.getAllKeys(range) };
+      });
       transaction.oncomplete = () => {
-        try { resolve(values.result.map((value, index) => readQueuedUploadDraft(value, owner, keys.result[index]))); }
+        try { resolve(reads.flatMap(({ values, keys }) => values.result.map((value, index) => readQueuedUploadDraft(value, owner, keys.result[index])))); }
         catch (failure) { reject(failure); }
       };
       transaction.onabort = () => reject(transaction.error ?? new Error('could not load queued uploads.'));
@@ -110,37 +112,45 @@ export const queuedDrafts: QueuedUploadDrafts = {
   },
 };
 
+function albumKey(plan: Pick<AlbumUploadPlan, 'owner' | 'slots'>) {
+  return plan.slots.some(slot => slot.unlisted) ? `unlisted/${plan.owner}` : plan.owner;
+}
+
 export const albumUploads = {
   async load(owner: AlbumUploadPlan['owner']) {
     const db = await openAlbums();
     return new Promise<AlbumUploadPlan | undefined>((resolve, reject) => {
-      const request = db.transaction('albums').objectStore('albums').get(owner);
-      request.onsuccess = () => {
-        try { resolve(request.result === undefined ? undefined : readAlbumUploadPlan(request.result, owner)); }
+      const transaction = db.transaction('albums');
+      const albums = transaction.objectStore('albums');
+      const unlisted = albums.get(`unlisted/${owner}`), listed = albums.get(owner);
+      transaction.oncomplete = () => {
+        const value = unlisted.result ?? listed.result;
+        try { resolve(value === undefined ? undefined : readAlbumUploadPlan(value, owner)); }
         catch (failure) { reject(failure); }
       };
-      request.onerror = () => reject(request.error);
+      transaction.onabort = () => reject(transaction.error ?? new Error('could not load the saved album upload.'));
     });
   },
   async add(plan: AlbumUploadPlan) {
     const db = await openAlbums();
     await new Promise<void>((resolve, reject) => {
       const transaction = db.transaction('albums', 'readwrite');
-      transaction.objectStore('albums').add(readAlbumUploadPlan(plan, plan.owner), plan.owner);
+      transaction.objectStore('albums').add(readAlbumUploadPlan(plan, plan.owner), albumKey(plan));
       transaction.oncomplete = () => resolve();
       transaction.onabort = () => reject(transaction.error ?? new Error('could not save the album upload.'));
     });
   },
-  async finish(plan: Pick<AlbumUploadPlan, 'owner' | 'id'>) {
+  async finish(plan: AlbumUploadPlan) {
     const db = await openAlbums();
     await new Promise<void>((resolve, reject) => {
       const transaction = db.transaction('albums', 'readwrite');
       const albums = transaction.objectStore('albums');
-      const request = albums.get(plan.owner);
+      const key = albumKey(plan);
+      const request = albums.get(key);
       request.onsuccess = () => {
         try {
           if (request.result === undefined) return;
-          if (readAlbumUploadPlan(request.result, plan.owner).id === plan.id) albums.delete(plan.owner);
+          if (readAlbumUploadPlan(request.result, plan.owner).id === plan.id) albums.delete(key);
           else transaction.abort();
         } catch { transaction.abort(); }
       };
