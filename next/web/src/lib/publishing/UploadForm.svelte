@@ -33,8 +33,8 @@
   import LargeUpload from './LargeUpload.svelte';
   import QueuedUpload from './QueuedUpload.svelte';
 
-  let { account, audio = $bindable(), title = $bindable(''), description = $bindable(''), tags = $bindable('') }: {
-    account: ReturnType<typeof auth.getAuth>; audio: File | undefined; title: string; description: string; tags: string;
+  let { account, submitting = $bindable(false), audio = $bindable(), title = $bindable(''), description = $bindable(''), tags = $bindable('') }: {
+    account: ReturnType<typeof auth.getAuth>; submitting: boolean; audio: File | undefined; title: string; description: string; tags: string;
   } = $props();
 
   const owner = untrack(() => account.did);
@@ -64,7 +64,6 @@
   let coverProblem = $state('');
   let formProblem = $state('');
   let draftProblem = $state('');
-  let submitting = $state(false);
   let recoveryProblem = $state('');
   let queuedProblem = $state('');
   let loading = $state(true);
@@ -268,7 +267,7 @@
           if (current()) draftProblem = 'the upload was queued, but this device could not clear the editor draft.';
         }
       });
-      if (!current()) return;
+      if (!current() || audio !== input.file || cover !== input.artwork || editorDraft !== submittedDraft) return;
       audio = undefined;
       cover = undefined;
       if (audioInput) audioInput.value = '';

@@ -74,7 +74,7 @@ function TrackDetail({ id, onPlay, onEnqueue, trackActions }: {
     const waiting = !!pending.data?.some(upload => upload.uri === track.record.uri);
     return <TrackPresentation track={track}
       controls={<PlayerControl primary large glow={playing} icon={playing ? PauseIcon : PlayIcon} label={playing ? 'Pause' : 'Play'}
-        busy={active && player.loading} onPress={() => active ? player.setPlaying(!player.status.playing) : onPlay(track, queue)} />}
+        busy={active ? player.loading : !collection.data && !collection.error} onPress={() => active ? player.setPlaying(!player.status.playing) : onPlay(track, queue)} />}
       stats={<Copy>only you</Copy>}
       utilities={waiting
         ? <InlineLink href={{ pathname: '/upload', params: { visibility: 'only-you' } }}>finish upload</InlineLink>

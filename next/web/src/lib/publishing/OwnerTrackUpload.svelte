@@ -84,7 +84,7 @@
 			results[result.operation.rkey] = result.result;
 			if (result.result.state === 'accepted') {
 				await pds.dismiss(result.operation);
-				if (current() && selected) reset(result.operation);
+				if (current() && audio === file && title === input.title && description === input.description && tags === input.tags.join('\n')) reset(result.operation);
 				if (current() && selected) await goto(resolve('/(app)/portal'));
 			}
 		});

@@ -72,14 +72,15 @@ function TrackUpload({ auth, onlyYou }: { auth: Auth; onlyYou: boolean }) {
   const [description, setDescription] = useState(restored?.description ?? '');
   const [tags, setTags] = useState(restored?.tags ?? '');
   const [ownerBusy, setOwnerBusy] = useState(false);
+  const [openBusy, setOpenBusy] = useState(false);
   const [ownerVisited, setOwnerVisited] = useState(onlyYou);
   useEffect(() => { if (onlyYou) setOwnerVisited(true); }, [onlyYou]);
   const draft = { file, setFile, title, setTitle, description, setDescription, tags, setTags };
   return <>
     <Copy>who can listen?</Copy>
-    <AudienceToggle onlyYou={onlyYou} disabled={ownerBusy} select={value => router.setParams({ visibility: value ? 'only-you' : undefined })} />
+    <AudienceToggle onlyYou={onlyYou} disabled={ownerBusy || openBusy} select={value => router.setParams({ visibility: value ? 'only-you' : undefined })} />
     <View style={onlyYou ? { display: 'none' } : { gap: 14 }}>
-      <AccountUpload {...draft} auth={auth} restored={restored} />
+      <AccountUpload {...draft} auth={auth} restored={restored} onBusy={setOpenBusy} />
     </View>
     {(onlyYou || ownerVisited) && <View style={onlyYou ? { gap: 14 } : { display: 'none' }}>
       <OwnerTrackUpload {...draft} auth={auth} selected={onlyYou} onBusy={setOwnerBusy} />
@@ -87,7 +88,7 @@ function TrackUpload({ auth, onlyYou }: { auth: Auth; onlyYou: boolean }) {
   </>;
 }
 
-function AccountUpload({ auth, restored, file, setFile, title, setTitle, description, setDescription, tags, setTags }: TrackDraftFields & { auth: Auth; restored?: Draft }) {
+function AccountUpload({ auth, restored, onBusy, file, setFile, title, setTitle, description, setDescription, tags, setTags }: TrackDraftFields & { auth: Auth; restored?: Draft; onBusy: (value: boolean) => void }) {
   const live = useRef(true);
   const draftKey = `plyr-upload-draft:${auth.did}`;
   const [artwork, setArtwork] = useState<MediaFile | null>(null);
@@ -130,6 +131,8 @@ function AccountUpload({ auth, restored, file, setFile, title, setTitle, descrip
   useEffect(() => { void refreshDrafts(); }, [refreshDrafts, settled, linkedDrafts]);
   // Everything typed survives a reload, a crash or the sign-in-again round trip; files are chosen again.
   const editorDraft = JSON.stringify({ title, album, description, tags, autoTag, named: !!title && title === autoTitle.current });
+  const latestDraft = useRef({ file, artwork, editorDraft });
+  latestDraft.current = { file, artwork, editorDraft };
   useEffect(() => {
     try {
       if (title || album || description || tags) {
@@ -205,6 +208,7 @@ function AccountUpload({ auth, restored, file, setFile, title, setTitle, descrip
   async function upload() {
     if (submitting.current || !current() || !file || !title.trim() || !artist || tagError || (service && (!serviceConsent || !auth.uploadStorage))) return;
     submitting.current = true;
+    onBusy(true);
     setSaving(true);
     try {
       const list = tags.trim() ? tags.split('\n') : undefined;
@@ -214,14 +218,14 @@ function AccountUpload({ auth, restored, file, setFile, title, setTitle, descrip
       } catch {
         if (current()) setDraftProblem('the upload was queued, but this device could not clear the editor draft.');
       }
-      if (!current()) return;
+      if (!current() || latestDraft.current.file !== file || latestDraft.current.artwork !== artwork || latestDraft.current.editorDraft !== editorDraft) return;
       autoTitle.current = undefined;
       setFile(null); setArtwork(null); setTitle(''); setAlbum(''); setDetails(false); setDescription(''); setTags(''); setProblems({});
     } catch (failure) {
       if (current()) setProblems(previous => ({ ...previous, form: failure instanceof Error ? failure.message : 'could not start the upload.' }));
     } finally {
       submitting.current = false;
-      if (current()) setSaving(false);
+      if (current()) { onBusy(false); setSaving(false); }
     }
   }
 

@@ -15,6 +15,8 @@ export function OwnerTrackUpload({ auth, selected, onBusy, file, setFile, title,
   const navigation = useNavigation();
   const selection = useRef(selected);
   selection.current = selected;
+  const latestDraft = useRef({ file, title, description, tags });
+  latestDraft.current = { file, title, description, tags };
   const artist = useArtistName(auth);
   const pds = useMemo(() => privatePds(auth), [auth.did, auth.rpc]);
   const [pending, setPending] = useState<PrivateCreate[]>([]), [results, setResults] = useState<Record<string, PrivateResult>>({});
@@ -79,7 +81,8 @@ export function OwnerTrackUpload({ auth, selected, onBusy, file, setFile, title,
         setResults(values => ({ ...values, [result.operation.rkey]: result.result }));
         if (result.result.state === 'accepted') {
           await pds.dismiss(result.operation);
-          if (current() && selection.current && navigation.isFocused()) { reset(result.operation); router.replace('/portal'); }
+          if (current() && latestDraft.current.file === file && latestDraft.current.title === title && latestDraft.current.description === description && latestDraft.current.tags === tags) reset(result.operation);
+          if (current() && selection.current && navigation.isFocused()) router.replace('/portal');
         }
       }, true, 'upload')} />
     </>}
