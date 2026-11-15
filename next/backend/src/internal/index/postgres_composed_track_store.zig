@@ -806,6 +806,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     try projected_profiles.createTestTable(pool);
     try projected_availability.createTestTable(pool);
     try projected_lists.createTestTables(pool);
+    _ = try pool.exec(@embedFile("migration_0043_legacy_album_covers"), .{});
     try projected_likes.createTestTable(pool);
     try @import("../projection/like_counts.zig").applyTestMigration(pool);
     _ = try pool.exec(
@@ -1131,6 +1132,10 @@ test "composed PostgreSQL reads use verified records and authoritative account s
         .like_collection = "fm.plyr.dev.like",
     };
     const list_store = verified_list_implementation.store();
+    const legacy_cover_url = "https://images.plyr.fm/images/legacy-cover.png";
+    _ = try pool.exec("INSERT INTO plyr_index.legacy_album_covers VALUES ($1, $2)", .{
+        album_list_uri, legacy_cover_url,
+    });
     const cover_cid = try zat.Cid.create(a, 1, zat.cbor.Codec.raw, zat.cbor.HashFn.sha2_256, "album cover");
     const cover_cid_text = try cover_cid.toString(a);
     _ = try pool.exec("UPDATE plyr_index.list_records SET cover_blob_cid = $1 WHERE record_uri = $2", .{ cover_cid_text, album_list_uri });
@@ -1160,6 +1165,8 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     try std.testing.expectEqualStrings(album_list_uri, album_page[0].value.record.uri);
     try std.testing.expectEqualStrings("Verified Album", album_page[0].value.metadata.name.?);
     try std.testing.expectEqualStrings(cover_cid_text, album_page[0].value.metadata.cover_blob_cid.?);
+    try std.testing.expectEqualStrings(legacy_cover_url, album_page[0].value.media.artwork.?.url);
+    try std.testing.expectEqual(track.Source.legacy_projection, album_page[0].value.media.artwork.?.source);
     try std.testing.expectEqual(@as(usize, 1), album_page[0].value.metrics.member_count);
     try std.testing.expectEqual(@as(usize, 1), album_page[0].value.metrics.available_count);
     try std.testing.expectEqual(track.Source.verified_repo, album_page[0].value.sources.record);
@@ -1186,6 +1193,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     try std.testing.expectEqual(@import("../domain/verified_list.zig").Kind.album, album_detail.object);
     try std.testing.expect(std.mem.startsWith(u8, album_detail.id, "alb_"));
     try std.testing.expectEqualStrings(cover_cid_text, album_detail.metadata.cover_blob_cid.?);
+    try std.testing.expectEqualStrings(legacy_cover_url, album_detail.media.artwork.?.url);
     try std.testing.expectEqual(@as(?[]const u8, null), playlist_detail.metadata.cover_blob_cid);
     try std.testing.expectEqualStrings("Verified Title", album_detail.members[0].track.?.metadata.title);
 
