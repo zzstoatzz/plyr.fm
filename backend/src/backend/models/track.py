@@ -199,6 +199,21 @@ class Track(Base):
         return (cls.visibility == "public") & ~cls.is_owner_only
 
     @hybrid_property
+    def in_search(self) -> bool:
+        return self.publicly_visible and (
+            self.visibility != "unlisted"
+            or not self.extra.get("authored_unlisted", False)
+        )
+
+    @in_search.inplace.expression
+    @classmethod
+    def _in_search_expr(cls) -> ColumnElement[bool]:
+        return cls.publicly_visible & (
+            (cls.visibility != "unlisted")
+            | cls.extra["authored_unlisted"].as_boolean().is_not(True)
+        )
+
+    @hybrid_property
     def is_optimizing(self) -> bool:
         """published with an interim lossless rendition, deferred mp3 optimize
         still pending. the optimize task writes the canonical PDS blob itself

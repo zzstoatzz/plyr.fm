@@ -301,6 +301,10 @@ async def ingest_track_create(
                     and existing_track.visibility == "public"
                 ):
                     existing_track.visibility = "unlisted"
+                    existing_track.extra = {
+                        **existing_track.extra,
+                        "authored_unlisted": True,
+                    }
                 await project_record_tags(
                     db, existing_track, record, authoritative=True
                 )
@@ -418,6 +422,8 @@ async def ingest_track_create(
             audio_storage = "pds"
 
         extra: dict = {}
+        if record.get("visibility") == "unlisted":
+            extra["authored_unlisted"] = True
         if duration := record.get("duration"):
             extra["duration"] = duration
         if album := record.get("album"):
