@@ -52,12 +52,12 @@ async function holdDraftCompletion(page) {
 
 async function openSettings(page) {
   const nav = page.getByRole('navigation', { name: 'Main navigation' });
-  const account = nav.getByRole('button', { name: 'account', exact: true });
+  const account = nav.getByRole('button', { name: 'you', exact: true });
   if (await account.isVisible()) {
     await account.click();
-    await page.getByRole('dialog', { name: 'account', exact: true }).getByRole('link', { name: 'settings', exact: true }).click();
+    await page.getByRole('dialog', { name: 'account', exact: true }).getByRole('link', { name: /^settings/ }).click();
   } else {
-    await nav.getByRole('link', { name: 'settings', exact: true }).click();
+    await nav.getByRole('link', { name: /^settings/ }).click();
   }
 }
 

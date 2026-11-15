@@ -3,6 +3,7 @@
 	import { trackArtwork } from '@plyr/next-core/artwork';
 	import { canToggleTrack } from '@plyr/next-core/track-revision';
 	import { resolve } from '$app/paths';
+	import { prefs } from './prefs.svelte';
 	import { player } from './player.svelte';
 	import { artistName, clock, trackHref } from './tracks';
 	import Artwork from './ui/Artwork.svelte';
@@ -16,7 +17,8 @@
 	const title = $derived(track.metadata.title || 'untitled');
 	function toggle() {
 		if (currentTrack) player.toggle();
-		else player.play(track, collection, label);
+		else if (prefs.playThrough) player.play(track, collection, label);
+		else player.play(track);
 	}
 </script>
 
