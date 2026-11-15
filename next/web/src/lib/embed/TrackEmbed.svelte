@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import type { Track } from '@plyr/next-core/api';
+  import { canToggleTrack } from '@plyr/next-core/track-revision';
   import { player } from '$lib/player.svelte';
   import Scrub from '$lib/Scrub.svelte';
   import { artistName, trackHref } from '$lib/tracks';
@@ -9,7 +10,7 @@
   import { canEmbed, embedArtwork } from './catalog';
 
   let { track, autoplay }: { track: Track; autoplay: boolean } = $props();
-  let active = $derived(player.current?.id === track.id);
+  let active = $derived(canToggleTrack(player.current, track));
   let allowed = $derived(canEmbed(track));
   let playing = $derived(active && player.playing);
   let problem = $derived(active && player.error);

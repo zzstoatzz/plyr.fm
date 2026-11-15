@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Track } from '@plyr/next-core/api';
 	import { trackArtwork } from '@plyr/next-core/artwork';
+	import { canToggleTrack } from '@plyr/next-core/track-revision';
 	import { resolve } from '$app/paths';
 	import { player } from './player.svelte';
 	import { artistName, clock, trackHref } from './tracks';
@@ -10,7 +11,7 @@
 	let { track, collection, label, testid }: {
 		track: Track; collection?: Track[]; label?: string; testid?: string;
 	} = $props();
-	const currentTrack = $derived(!player.liveStation && player.current?.id === track.id);
+	const currentTrack = $derived(!player.liveStation && canToggleTrack(player.current, track, !!player.jam));
 	const playing = $derived(currentTrack && player.playing);
 	const title = $derived(track.metadata.title || 'untitled');
 	function toggle() {

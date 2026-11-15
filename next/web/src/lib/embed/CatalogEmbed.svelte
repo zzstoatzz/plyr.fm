@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { canToggleTrack } from '@plyr/next-core/track-revision';
   import { player } from '$lib/player.svelte';
   import { artistName, trackHref } from '$lib/tracks';
   import Artwork from '$lib/ui/Artwork.svelte';
@@ -16,7 +17,7 @@
     <div><h1>{data.title}</h1>{#if data.subtitle}<p class="subtle">{data.subtitle}</p>{/if}</div>
   </header>
   {#each data.tracks as track}
-    {@const current = player.current?.id === track.id}
+    {@const current = canToggleTrack(player.current, track)}
     <div class="row">
       <button class="icon-button cover" type="button" aria-label={`${current && player.playing ? 'Pause' : 'Play'} ${track.metadata.title}`} disabled={!canEmbed(track)}
         onclick={() => current ? player.toggle() : player.play(track, playable, data.title)}>
