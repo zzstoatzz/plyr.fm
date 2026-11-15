@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Heart } from './icons';
-import { Animated, Easing, Platform, StyleSheet, View } from 'react-native';
+import { Animated, Easing, StyleSheet, View } from 'react-native';
 import { useAppearance } from './appearance';
 
 /** The like glyph. It dips, overshoots and throws a ring when a like lands, and stays still otherwise. */
@@ -13,7 +13,7 @@ export function LikeHeart({ liked, size = 21 }: { liked: boolean | undefined; si
     previous.current = liked;
     if (!landed || theme.reduceMotion) return;
     pulse.setValue(0);
-    Animated.timing(pulse, { toValue: 1, duration: 600, easing: Easing.bezier(0.4, 0, 0.2, 1), useNativeDriver: Platform.OS !== 'web' }).start();
+    Animated.timing(pulse, { toValue: 1, duration: 600, easing: Easing.bezier(0.4, 0, 0.2, 1), useNativeDriver: true }).start();
   }, [liked, pulse, theme.reduceMotion]);
   return <View style={{ width: size, height: size }}>
     <Animated.View testID="like-ring" pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: size / 2, borderWidth: 2, borderColor: theme.accent,

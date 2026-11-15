@@ -4,7 +4,7 @@ const { createHash } = require('node:crypto');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { chromium } = require('playwright');
-const { fixtureAccounts, fixturePage, authorizeFixture } = require('../../app/scripts/pds-browser-fixture.cjs');
+const { fixtureAccounts, fixturePage, authorizeFixture } = require('./pds-browser-fixture.cjs');
 
 const origin = 'https://next.plyr.fm';
 const appView = 'https://api.next.plyr.fm';

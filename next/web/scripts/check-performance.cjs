@@ -1,7 +1,7 @@
 const path = require('node:path');
 const { chromium } = require('playwright');
 
-const fixtureFile = require.resolve('../../app/scripts/fixture-catalog.cjs');
+const fixtureFile = require.resolve('./fixture-catalog.cjs');
 const build = path.resolve(process.argv[2] || path.join(__dirname, '../build'));
 const repeats = Number(process.env.PERF_RUNS || 3);
 if (!Number.isInteger(repeats) || repeats < 1) throw new Error('PERF_RUNS must be a positive integer');

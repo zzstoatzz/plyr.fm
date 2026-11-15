@@ -68,7 +68,7 @@ function AccountPortal({ did, handle }: { did: string; handle: string | null }) 
     restore.current = positions.current[next];
     setTab(next);
   };
-  const catalogTabs = useTabs({ label: 'Your catalog', values: portalTabs, value: tab, onChange: selectTab });
+  const catalogTabs = useTabs({ label: 'Your catalog', value: tab, onChange: selectTab });
   const theme = useAppearance();
   const load = useCallback(async () => {
     try { return await api.artist(did); }

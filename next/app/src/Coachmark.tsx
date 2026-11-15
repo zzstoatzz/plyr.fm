@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp } from './icons';
-import { Animated, Easing, Platform, StyleSheet, View, type StyleProp, type ViewProps, type ViewStyle } from 'react-native';
+import { Animated, Easing, StyleSheet, View, type StyleProp, type ViewProps, type ViewStyle } from 'react-native';
 import { useAppearance } from './appearance';
 import { Action } from './controls';
 import { hints, useHint, type HintId } from './hints';
@@ -22,7 +22,7 @@ export function Coachmark({ hint, ready = true, arrow = 'down', style, touch }: 
     if (!shown) { setVisible(false); appear.setValue(0); return; }
     const timer = setTimeout(() => {
       setVisible(true);
-      Animated.timing(appear, { toValue: 1, duration: theme.reduceMotion ? 0 : 220, easing: Easing.out(Easing.cubic), useNativeDriver: Platform.OS !== 'web' }).start();
+      Animated.timing(appear, { toValue: 1, duration: theme.reduceMotion ? 0 : 220, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
     }, 700);
     return () => clearTimeout(timer);
   }, [shown, appear, theme.reduceMotion]);

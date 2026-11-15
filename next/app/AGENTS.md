@@ -15,26 +15,19 @@
 - Reuse shared controls, text, artwork and appearance helpers. When a feature
   needs several collaborating modules, keep them together under its name;
   do not grow a general-purpose helper or split files solely to meet a limit.
-- Put browser/native differences behind matching platform modules, as in
-  `auth.web.ts` / `auth.ts` and `queue-storage.web.ts` / `queue-storage.ts`.
-  Shared feature code must not import DOM or native storage implementations.
-  Keep both implementations' behavior and exported contracts aligned.
+- Keep native persistence, auth, audio and system integrations in this workspace.
+  Import shared models and contracts from `@plyr/next-core`.
 
 ## how to work here
 
-Read [contributing/](contributing/README.md) first: the pitfalls, what is
-settled, and the lint rules. Write with the `next-write-ui` skill, finish with
-`next-unslop`, and run `next-review` before asking a person to look.
+Use `next-write-ui` for native UI and `next-unslop` for the author pass.
+Get an independent `next-review` before merging.
 
 ## checks
 
-From `next/app`, run `npm run lint`, `npm run check`, `npm test` and
-`npm run build:web`. Exercise model behavior in `tests/` and rendered
-interactions through the browser checks the change reaches
-(`npm run checks:affected`), following the parent instructions. Every
-check kind and its command is in [contributing/checks.md](contributing/checks.md).
-Platform changes also need the affected native build and device behavior;
-an Expo bundle export does not verify native lifecycle or audio.
+From `next/app`, run `bun run lint`, `bun run check` and `bun run test`.
+Platform changes also need the affected simulator or device check. See
+[contributing/checks.md](contributing/checks.md).
 
 See the [client readme](README.md) for local/native commands and player
 navigation. Keep detailed feature contracts there or in the owning design

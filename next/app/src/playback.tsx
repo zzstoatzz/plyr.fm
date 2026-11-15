@@ -95,9 +95,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
   }
 
   useEffect(() => {
-    if (Platform.OS !== 'web') {
-      void setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: true, interruptionMode: 'doNotMix' }).catch(() => {});
-    }
+    void setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: true, interruptionMode: 'doNotMix' }).catch(() => {});
     return () => {
       sequence.current++;
       sourceEvents.current?.remove();
@@ -174,7 +172,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
       }
       const previousSource = objectUrl.current;
       try {
-        player.replace(Platform.OS === 'web' || availability === 'gated' ? url : { uri: url, headers: { Referer: 'https://next.plyr.fm/' } });
+        player.replace(availability === 'gated' ? url : { uri: url, headers: { Referer: 'https://next.plyr.fm/' } });
         player.loop = !jam.active() && settings.current.repeat === 'one';
         player.volume = settings.current.volume;
       } catch (cause) {
@@ -446,4 +444,4 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
   return <PlaybackContext.Provider value={value}>{children}</PlaybackContext.Provider>;
 }
 
-export { PlaybackFreeze, PlaybackOverride, usePlayback, type Playback } from './playback-context';
+export { PlaybackOverride, usePlayback, type Playback } from './playback-context';

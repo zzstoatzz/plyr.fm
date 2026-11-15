@@ -9,7 +9,6 @@ on:
       - "next/bun.lock"
       - "next/vendor/**"
       - "next/scripts/check-boundaries.mjs"
-      - "next/app/scripts/fixture-catalog.cjs"
       - ".github/workflows/check-svelte-next.yml"
 
 permissions:
@@ -36,6 +35,7 @@ jobs:
         working-directory: next/core
       - run: bun run check
       - run: bun run build
+      - run: bun run test
       - run: bun run playwright install --with-deps --only-shell chromium
       - run: bun run check:browser
         env:

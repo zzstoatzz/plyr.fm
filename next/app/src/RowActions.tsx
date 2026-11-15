@@ -1,6 +1,6 @@
 import { usePathname } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Platform, Pressable, StyleSheet, View, type ViewInstance } from 'react-native';
+import { Animated, Pressable, StyleSheet, View, type ViewInstance } from 'react-native';
 import { api } from './api-client';
 import { type Track } from '@plyr/next-core/api';
 import { useAppearance } from './appearance';
@@ -40,7 +40,7 @@ export function SignedOutHeart({ track }: { track: Track }) {
   function nudge() {
     if (!theme.reduceMotion) {
       shake.setValue(0);
-      Animated.sequence([-4, 4, -3, 3, 0].map(toValue => Animated.timing(shake, { toValue, duration: 100, useNativeDriver: Platform.OS !== 'web' }))).start();
+      Animated.sequence([-4, 4, -3, 3, 0].map(toValue => Animated.timing(shake, { toValue, duration: 100, useNativeDriver: true }))).start();
     }
     writeLocal(pendingKey, JSON.stringify({ id: track.id, at: Date.now() }));
     toast.add('sign in to like tracks', 'info', 5000, { label: 'sign in', href: { pathname: '/login', params: { return_to: path } } }, 'sign-in-to-like');

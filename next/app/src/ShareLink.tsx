@@ -1,4 +1,4 @@
-import { Platform, Share, View } from 'react-native';
+import { Share, View } from 'react-native';
 import { ShareNetwork as ShareIcon } from './icons';
 import { SITE_URL } from './config';
 import { Button } from './CatalogPieces';
@@ -10,14 +10,8 @@ export function ShareLink({ path, compact = false, menu = false }: { path: strin
   async function share() {
     try {
       const url = SITE_URL + path;
-      if (Platform.OS === 'web' && typeof navigator.share !== 'function') {
-        await navigator.clipboard.writeText(url);
-        toast.success('link copied');
-      } else if (Platform.OS === 'web') {
-        await navigator.share({ url });
-      } else {
-        await Share.share({ message: url });
-      }
+
+      await Share.share({ message: url });
     } catch (error) {
       if (!(error instanceof Error && error.name === 'AbortError')) toast.error('failed to share link');
     }

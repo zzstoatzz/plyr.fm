@@ -105,19 +105,11 @@ export function usePreferences(auth: Auth) {
 
 		const resume = () => { void sync(); };
 		const subscription = AppState.addEventListener('change', (state) => { if (state === 'active') resume(); });
-		if (typeof window !== 'undefined') {
-			window.addEventListener?.('online', resume);
-			window.addEventListener?.('focus', resume);
-		}
 		return () => {
 			clearTimeout(account.timer);
 			account.controller.abort();
 			if (active.current === account) active.current = null;
 			subscription.remove();
-			if (typeof window !== 'undefined') {
-				window.removeEventListener?.('online', resume);
-				window.removeEventListener?.('focus', resume);
-			}
 		};
 	}, [agent, apply, did, accountSync, sync]);
 

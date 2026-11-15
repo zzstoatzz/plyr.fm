@@ -3,7 +3,7 @@ import { MusicNote as Music2, UserCircle as UserRound } from './icons';
 import { Text } from './Text';
 import { Link, type Href } from 'expo-router';
 import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Animated, PixelRatio, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Animated, PixelRatio, Pressable, StyleSheet, View } from 'react-native';
 import { PlayGlyph as PlayIcon } from './PlayerGlyph';
 import { PlayerLoader } from './PlayerLoader';
 import type { ListSummary, Page, Track } from '@plyr/next-core/api';
@@ -160,7 +160,7 @@ export function Cover({ uri, size = 48, round = false, radius = 8, instant = fal
   const style = { width: size, height: size, borderRadius, backgroundColor: colors.raised, ...(size >= 100 && !round ? artworkShadow(colors) : {}) };
   const reveal = () => {
     if (source) revealed.add(source);
-    Animated.timing(opacity, { toValue: 1, duration: colors.reduceMotion ? 0 : 180, useNativeDriver: Platform.OS !== 'web' }).start(() => onSettle?.());
+    Animated.timing(opacity, { toValue: 1, duration: colors.reduceMotion ? 0 : 180, useNativeDriver: true }).start(() => onSettle?.());
   };
   const fail = () => {
     const count = (failed.uri === uri ? failed.count : 0) + 1;

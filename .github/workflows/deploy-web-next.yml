@@ -1,6 +1,6 @@
-name: deploy next web
+name: check next native
 
-# Keep the current Expo deployment serving next.plyr.fm until the Svelte cutover.
+# Keep this filename registered for manual Expo hotfix dispatches on next-expo.
 on:
   pull_request:
     paths:
@@ -11,65 +11,32 @@ on:
       - "next/bun.lock"
       - "next/vendor/**"
       - "next/patches/**"
-      - "next/web/src/lib/media/private-audio.ts"
-      - "next/web/static/private-audio-worker.js"
-      - "next/web/src/lib/storage/**"
       - ".github/workflows/deploy-web-next.yml"
 
+permissions:
+  contents: read
+
 jobs:
-  deploy:
-    name: deploy next web
+  check:
+    name: check next native
     runs-on: ubuntu-latest
-    concurrency: deploy-web-next-${{ github.ref }}
-    permissions:
-      contents: read
-    env:
-      EXPO_PUBLIC_API_URL: https://api.next.plyr.fm
-      EXPO_PUBLIC_SITE_URL: https://next.plyr.fm
-      EXPO_PUBLIC_NSID_PREFIX: fm.plyr
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
         working-directory: next
-
       - run: bun run check:boundaries
         working-directory: next
-
-      - name: check and build
+      - name: check native app
         working-directory: next/app
         run: |
           bun run lint
           bun run check
           bun run test
-          bun run build:web
-          test -s dist/index.html
-          test -s dist/oauth-client-metadata.json
-          test -s dist/oauth-native-client-metadata.json
-          test ! -e dist/404.html
-
-      # home, a track, now playing and the queue at phone and desktop widths, light and dark, against fixtures.
-      # a layout regression here stops the deploy (on main) and fails the PR.
-      - name: check key screens
-        working-directory: next/app
-        run: |
-          (cd ../web && bun run playwright install --with-deps --only-shell chromium)
-          export PLAYWRIGHT_MODULE="$(cd ../web && node -p "require.resolve('playwright')")"
-          SCREENS_OUTPUT="$RUNNER_TEMP/screens" node scripts/check-key-screens.cjs
-
-      - name: upload key screens
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: next-key-screens
-          path: ${{ runner.temp }}/screens
-          if-no-files-found: ignore
-
       - name: bundle iOS and Android
         working-directory: next/app
         run: bun run expo export --platform ios --platform android --output-dir "$RUNNER_TEMP/next-native"

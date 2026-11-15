@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Image, Platform, View } from 'react-native';
+import { Image, View } from 'react-native';
 import { createAccount, login, useAuth } from '../src/auth';
 import { Action, Copy, InlineLink, Page, row } from '../src/controls';
 import { returnPath } from '../src/return-path';
@@ -76,18 +76,6 @@ export default function Login() {
     const timer = setTimeout(() => setSlow(true), 4000);
     return () => clearTimeout(timer);
   }, [busy]);
-
-  useEffect(() => {
-    if (Platform.OS !== 'web') return;
-    function reset(event: PageTransitionEvent) {
-      if (!event.persisted) return;
-      pending.current = false;
-      setBusy(false);
-      setSlow(false);
-    }
-    window.addEventListener('pageshow', reset);
-    return () => window.removeEventListener('pageshow', reset);
-  }, []);
 
   function updateHandle(value: string) {
     setHandle(value);

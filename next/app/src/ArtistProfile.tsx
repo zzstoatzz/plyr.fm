@@ -45,7 +45,7 @@ function ArtistCatalog({ artist, onPlay }: { artist: Artist; onPlay: Play }) {
     if (visited.current) void revalidateAlbums();
     visited.current = true;
   }, [revalidateAlbums]));
-  const catalogTabs = useTabs({ label: 'Artist catalog', values: sections, value: section, onChange: setSection });
+  const catalogTabs = useTabs({ label: 'Artist catalog', value: section, onChange: setSection });
   const theme = useAppearance();
   const auth = useAuth();
   const name = artist.display_name || artist.handle;
