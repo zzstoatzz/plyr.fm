@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { albumPublishing } from '../src/collections/album-pds.ts';
 import type { CollectionItem } from '../src/collections/collection-order.ts';
 import { collectionOrdering } from '../src/collections/collection-order-pds.ts';
+import { readAlbumUploadPlan } from '../src/publishing/album-upload-plan.ts';
 import type { RepoRpc } from '../src/publishing/repo-rpc.ts';
 
 const did = 'did:plc:fixture';
@@ -64,4 +65,18 @@ test('an album draft distinguishes a missing upload and rejects foreign, protect
   await assert.rejects(f.albums.createFromUploads('recordings', [{ uri: prefix + '3222222222222', cid: 'old' }], undefined, f.draft), /a song changed/);
   assert.deepEqual(f.published, []);
   assert.equal(f.handoffs(), 0);
+});
+
+test('an album plan preserves the selected order and stays with its original account', () => {
+  const slots = ['3222222222223', '3222222222222'].map((reservedRkey, index) => ({
+    reservedRkey, owner: did, id: `slot-${index}`, album: 'recordings', artist: 'fixture', title: `song ${index}`,
+    audio: { name: `song-${index}.mp3`, type: 'audio/mpeg', size: 1024 },
+  }));
+  const plan = { id: 'album-draft', owner: did, name: 'recordings', coverName: 'scan.jpg', slots };
+  const restored = readAlbumUploadPlan(plan, did);
+  assert.deepEqual(restored.slots.map(slot => slot.reservedRkey), slots.map(slot => slot.reservedRkey));
+  assert.equal(restored.coverName, plan.coverName);
+  assert.throws(() => readAlbumUploadPlan(plan, 'did:plc:another'), /could not read/);
+  assert.throws(() => readAlbumUploadPlan({ ...plan, slots: [slots[0], slots[0]] }, did), /could not read/);
+  assert.throws(() => readAlbumUploadPlan({ ...plan, slots: [{ ...slots[0], reservedRkey: undefined }] }, did), /could not read/);
 });
