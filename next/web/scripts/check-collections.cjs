@@ -296,7 +296,9 @@ async function check(browser, accounts, width, scheme) {
     for (const track of tracks) assert.equal((await read(track.record.uri)).cid, track.record.cid, 'album edits leave track metadata alone');
     await capture('album');
     await context.route('https://pds.fixture.test/xrpc/com.atproto.sync.getBlob?*', route => route.fulfill({ status: 404 }));
+    const unavailableCover = page.waitForResponse(response => response.url().includes('com.atproto.sync.getBlob') && response.status() === 404);
     await page.reload();
+    await unavailableCover;
     await page.waitForFunction(avatar => {
       const image = document.querySelector('main header .cover img');
       return image?.currentSrc === avatar && image.complete && image.naturalWidth === 1;
