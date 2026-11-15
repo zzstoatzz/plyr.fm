@@ -35,6 +35,23 @@ export function jamTrack(track: Track, mediaDuration?: number): JamTrack | null 
     durationMs: Math.max(0, Math.round(duration * 1000)) } : null;
 }
 
+export function initialJam(track: Track, capture?: {
+  tracks: readonly Track[];
+  index: number;
+  duration: number;
+  position: number;
+  playing: boolean;
+}) {
+  const ref = jamTrack(track, capture?.duration);
+  if (!ref) return null;
+
+  const before = capture?.tracks.slice(0, capture.index).flatMap(item => jamTrack(item) ?? []) ?? [];
+  const after = capture?.tracks.slice(capture.index + 1).flatMap(item => jamTrack(item) ?? []) ?? [];
+  const seconds = capture?.position ?? 0;
+  const positionMs = Number.isFinite(seconds) ? Math.min(ref.durationMs, Math.max(0, Math.round(seconds * 1000))) : 0;
+  return { queue: [...before, ref, ...after], index: before.length, playing: capture?.playing ?? false, positionMs };
+}
+
 interface JamPlaybackOptions {
   target(): JamPlaybackTarget;
   did: string | null;

@@ -106,17 +106,17 @@
 			if (player.privateMode) throw new Error('play a public track before joining a jam.');
 			const current = player.current;
 			const capture = current && (!trackId || fromQueue || current.id === trackId) && !player.liveStation
-				? { current, tracks: player.queue, index: player.index, duration: player.length || player.duration, position: player.position, playing: player.playing }
+				? { tracks: player.queue, index: player.index, duration: player.length || player.duration, position: player.position, playing: player.playing }
 				: undefined;
 			const activeRoom = room;
 			if (!activeRoom) return;
 			const client = await roomClient(check);
 			if (!host) { await client.enter(); return; }
-			const { jamTrack } = await import('@plyr/next-core/jam-playback');
+			const { initialJam, jamTrack } = await import('@plyr/next-core/jam-playback');
 			async function recover(value?: unknown) {
 				const snapshot = parseJamTrackSnapshot(value ?? await client.space.read());
 				const track = await api.track(snapshot.trackId);
-				let ref = jamTrack(track, capture?.current.id === track.id ? capture.duration : undefined);
+				let ref = jamTrack(track, capture && current?.id === track.id ? capture.duration : undefined);
 				if (!ref && track.record.cid === snapshot.cid && !track.access.space_uri && !track.access.gate && track.access.visibility !== 'private') {
 					const source = await playbackSource(track, AbortSignal.timeout(8000));
 					try { ref = jamTrack(track, await audioDuration(source.url)); }
@@ -126,27 +126,23 @@
 				return { queue: [ref], index: 0, playing: snapshot.playing, positionMs: Math.min(ref.durationMs, snapshot.positionMs) };
 			}
 			if (create) {
-				const track = capture?.current ?? (trackId ? await api.track(trackId) : undefined);
-				const ref = track && jamTrack(track, capture?.duration);
-				if (!ref) throw new Error('track cannot be shared');
-				const before = capture?.tracks.slice(0, capture.index).flatMap(item => jamTrack(item) ?? []) ?? [];
-				const after = capture?.tracks.slice(capture.index + 1).flatMap(item => jamTrack(item) ?? []) ?? [];
-				const queue = [...before, ref, ...after];
-				const positionMs = Math.min(ref.durationMs, Math.max(0, Math.round((capture?.position ?? 0) * 1000)));
-				const playing = capture?.playing ?? false;
+				const track = capture ? current : trackId ? await api.track(trackId) : undefined;
+				const seed = track && initialJam(track, capture);
+				if (!seed) throw new Error('track cannot be shared');
+				const ref = seed.queue[seed.index];
 				check();
 				const created = await client.space.create();
 				check();
 				const previous = created ? undefined : await client.space.read(true);
 				check();
 				if (previous === undefined) {
-					await client.space.publish({ revision: 0, trackId: ref.id, cid: ref.cid, playing, positionMs, updatedAtMs: Date.now() });
+					await client.space.publish({ revision: 0, trackId: ref.id, cid: ref.cid, playing: seed.playing, positionMs: seed.positionMs, updatedAtMs: Date.now() });
 					check();
-					await client.enter({ queue, index: before.length, playing, positionMs });
+					await client.enter(seed);
 				} else await client.enter(undefined, () => recover(previous));
 				check();
 				await goto(jamRoomPath(activeRoom.host, activeRoom.key), { replaceState: true, keepFocus: true, noScroll: true });
-				if (capture && queue.length < capture.tracks.length) notice = 'some tracks couldn’t be shared.';
+				if (capture && seed.queue.length < capture.tracks.length) notice = 'some tracks couldn’t be shared.';
 			} else await client.enter(undefined, recover);
 		}, create ? 'couldn’t start the jam. try again.' : 'couldn’t join the jam. try again.');
 	}
