@@ -1,6 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { onMount, tick, untrack } from 'svelte';
+  import { isOpen } from '@plyr/next-core/access/policy';
   import type { AwaitStatus, Track } from '@plyr/next-core/api';
   import { TrackRevisionConflict } from '@plyr/next-core/pds';
   import { canReplaceTrackAudio, TrackWriteUnconfirmed, validateReplacementAudio } from '@plyr/next-core/publishing/track-audio';
@@ -47,7 +48,7 @@
   let saved = $state<{ status: AwaitStatus; deleting: boolean }>();
   const trackPath = $derived(`/track/${encodeURIComponent(id)}`);
   const close = $derived(returnTo ?? trackPath);
-  const canReplace = $derived(track?.access.visibility === 'public' && !!revision && canReplaceTrackAudio(revision.value));
+  const canReplace = $derived(!!track && isOpen(track) && !!revision && canReplaceTrackAudio(revision.value));
 
   onMount(() => {
     live = true;

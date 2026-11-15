@@ -9,6 +9,7 @@ import { Sheet } from '../Sheet';
 import { Action, Copy, Field, row } from '../controls';
 import { measureAudioDuration, pickMedia } from '../media-picker';
 import { createPds, TrackRevisionConflict, type MediaFile } from '../pds';
+import { isOpen } from '@plyr/next-core/access/policy';
 import { recordTags } from '@plyr/next-core/publishing/track-tags';
 import { TagsField } from './TagsField';
 import { pickArtwork } from './artwork';
@@ -115,7 +116,7 @@ function TrackForm({ auth, data, reload, feedback }: { auth: Auth; data: Data; r
 
   return <>
     {saved ? <Action label={deleted ? 'Back to your music' : 'View track'} onPress={() => router.replace(deleted ? '/portal' : `/track/${track.id}`)} /> : <>
-      {track.access.visibility === 'public' && canReplaceTrackAudio(revision.value) && <View style={{ gap: 8 }}>
+      {isOpen(track) && canReplaceTrackAudio(revision.value) && <View style={{ gap: 8 }}>
         <Action label={audio?.name ?? 'Replace audio'} disabled={busy || conflict} onPress={() => void pickMedia('audio/*').then(file => {
           if (!file || !current()) return;
           validateReplacementAudio(revision.value, file);

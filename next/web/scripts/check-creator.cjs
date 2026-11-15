@@ -31,18 +31,24 @@ async function run(browser, accounts, width, theme, mp3) {
   const pdsRecord = (recordCollection, key) => call('com.atproto.repo.getRecord', accessJwt, { repo: did, collection: recordCollection, rkey: key });
   const pdsWrite = (recordCollection, rkey, record, swapRecord) => call('com.atproto.repo.putRecord', accessJwt, undefined, { repo: did, collection: recordCollection, rkey, record, swapRecord });
   const rkey = `creator-${width}-${theme}-${Date.now().toString(36)}`;
-  const seed = { $type: collection, title: 'late recording', artist: author, fileType: 'mp3', audioUrl: 'https://fixture.invalid/audio.mp3', createdAt: fixtureTime, tags: ['ambient'], unseen: { preserved: true } };
+  const visibility = theme === 'dark' ? 'unlisted' : 'public';
+  const seed = { $type: collection, title: 'late recording', artist: author, fileType: 'mp3', audioUrl: 'https://fixture.invalid/audio.mp3', createdAt: fixtureTime, tags: ['ambient'], unseen: { preserved: true },
+    ...(visibility === 'unlisted' && width === 390 ? { visibility } : {}) };
   const { uri } = await pdsWrite(collection, rkey, seed);
   const id = 'trk_' + Buffer.from(uri).toString('base64url');
   const seededProfile = await pdsWrite(profileCollection, 'self', {
     $type: profileCollection, bio: 'fixture profile bio', avatar: 'https://fixture.invalid/old.png', createdAt: fixtureTime, favoriteTrack: uri
   });
   let projected = { ...seed, cid: (await pdsRecord(collection, rkey)).cid };
+  let gateAfterAudioUpload = width === 390 && visibility === 'unlisted';
+  let gated = false;
   const row = index => ({
     object: 'track', id: index === 25 ? id : `trk_fixture_${index}`,
     record: { uri: index === 25 ? uri : `at://${did}/${collection}/t${index}`, cid: index === 25 ? projected.cid : 'fixture' + index, collection, revision: null },
     metadata: { title: index === 25 ? projected.title : `recording ${index}`, artist_name: author, album: null, duration_seconds: 180, description: null, created_at: fixtureTime },
-    artist: { did, profile: { handle, display_name: author } }, media: { artwork: null }, access: { visibility: 'public' }, metrics: { play_count: index, like_count: 0 }
+    artist: { did, profile: { handle, display_name: author } }, media: { artwork: null },
+    access: { visibility: index === 25 ? visibility : 'public', gate: index === 25 && gated ? { type: 'supporter' } : null },
+    metrics: { play_count: index, like_count: 0 }
   });
   const album = { object: 'album', id: 'alb_sample', record: { uri: `at://${did}/fm.plyr.list/album` }, metadata: { name: 'demo album' }, owner: { did, profile: { handle, display_name: author } }, metrics: { member_count: 1, available_count: 1 }, media: { artwork: null } };
   const emptyAlbum = { ...album, id: 'alb_empty', record: { uri: `at://${did}/fm.plyr.list/empty` }, metadata: { name: 'draft album' }, metrics: { member_count: 0, available_count: 0 } };
@@ -111,6 +117,13 @@ async function run(browser, accounts, width, theme, mp3) {
     }
     return route.fallback();
   });
+  await context.route('https://pds.fixture.test/xrpc/com.atproto.repo.uploadBlob', route => {
+    if (gateAfterAudioUpload && route.request().headers()['content-type'] === 'audio/mpeg') {
+      gateAfterAudioUpload = false;
+      gated = true;
+    }
+    return route.fallback();
+  });
   await context.route('https://pds.fixture.test/xrpc/com.atproto.repo.getRecord?**', route => {
     const url = new URL(route.request().url());
     if (profileReadError && url.searchParams.get('collection') === profileCollection) {
@@ -176,7 +189,17 @@ async function run(browser, accounts, width, theme, mp3) {
     const cover = await fs.readFile(path.join(__dirname, 'fixtures/cover.heic'));
     await main.getByLabel('change cover', { exact: true }).setInputFiles({ name: 'edited.heif', mimeType: '', buffer: cover });
     await main.getByRole('img', { name: 'selected cover preview', exact: true }).waitFor();
-    await main.getByLabel('replace audio', { exact: true }).setInputFiles({ name: 'replacement.mp3', mimeType: 'audio/mpeg', buffer: mp3 });
+    const replacement = main.getByLabel('replace audio', { exact: true });
+    await replacement.waitFor({ timeout: 5000 });
+    await replacement.setInputFiles({ name: 'replacement.mp3', mimeType: 'audio/mpeg', buffer: mp3 });
+    await capture('track-replacement');
+    if (gateAfterAudioUpload) {
+      const before = await pdsRecord(collection, rkey);
+      await main.getByRole('button', { name: 'save', exact: true }).click();
+      await main.getByText('replace protected or restricted audio in the current app.', { exact: true }).waitFor();
+      assert.equal((await pdsRecord(collection, rkey)).cid, before.cid);
+      gated = false;
+    }
     await main.getByRole('button', { name: 'save', exact: true }).click();
     await page.waitForURL(origin + '/track/' + id);
     await main.getByRole('heading', { name: 'recording after edit' }).waitFor();
@@ -184,6 +207,7 @@ async function run(browser, accounts, width, theme, mp3) {
     assert.equal(saved.uri, uri);
     assert.equal(saved.value.title, 'recording after edit');
     assert.equal(saved.value.audioBlob.size, mp3.length);
+    assert.equal(saved.value.visibility, seed.visibility);
     assert.equal(saved.value.imageBlob.mimeType, 'image/jpeg');
     assert.deepEqual(saved.value.unseen, seed.unseen);
 

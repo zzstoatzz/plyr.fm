@@ -1,6 +1,7 @@
 import { RepoResponseError, repoOk as ok, getRecord, putRecord, uploadRepoBlob, type RepoRpc } from './repo-rpc';
 import type { Did } from '../auth-state';
 import { trackIdFromUri, type AwaitStatus, type createApi } from '../api';
+import { isOpen } from '../access/policy';
 import type { MediaFile } from './private-music';
 import { normalizeTrackTags } from './track-tags';
 import { sameRecord } from './create-operation';
@@ -29,11 +30,11 @@ export function trackEditor({ session, assertSession, ownedRkey, uploadArtwork, 
   uploadArtwork: (file: MediaFile) => Promise<{ imageBlob: unknown; imageUrl: string }>;
   settle: (uri: string, cid?: string) => Promise<AwaitStatus>;
 }) {
-  async function requirePublicAudio(uri: string) {
+  async function requireOpenAudio(uri: string) {
     assertSession();
     const track = await readPublicTrack(trackIdFromUri(uri), { fresh: true });
     assertSession();
-    if (track.record.uri !== uri || track.artist.did !== session().did || track.access.visibility !== 'public') {
+    if (track.record.uri !== uri || track.artist.did !== session().did || !isOpen(track)) {
       throw new Error('replace protected or restricted audio in the current app.');
     }
   }
@@ -62,14 +63,14 @@ export function trackEditor({ session, assertSession, ownedRkey, uploadArtwork, 
 			Object.assign(record, await uploadArtwork(edits.artwork));
 		}
 		if (edits.audio) {
-			await requirePublicAudio(uri);
+			await requireOpenAudio(uri);
 			const bytes = await edits.audio.file.arrayBuffer();
 			assertSession();
 			if (bytes.byteLength !== edits.audio.file.size) throw new Error('the selected audio changed. choose it again.');
 			const uploaded = await ok(uploadRepoBlob(rpc, { input: bytes, headers: { 'content-type': edits.audio.file.type } }));
 			assertSession();
 			record = replacedTrackAudio(record, edits.audio.file, uploaded.blob, edits.audio.duration);
-			await requirePublicAudio(uri);
+			await requireOpenAudio(uri);
 		}
 		assertSession();
 		const res = await ok(

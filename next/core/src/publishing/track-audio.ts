@@ -5,7 +5,7 @@ export const MAX_AUDIO_BYTES = 104_857_600;
 export function canReplaceTrackAudio(record: Record<string, unknown>): boolean {
   return !['audioSpace', 'audioFileId', 'originalAudioBlob', 'originalFileId', 'originalFileType', 'supportGate'].some(key => Object.hasOwn(record, key))
     && (record.downloadPolicy === undefined || record.downloadPolicy === 'open')
-    && (record.visibility === undefined || record.visibility === 'public');
+    && (record.visibility === undefined || record.visibility === 'public' || record.visibility === 'unlisted');
 }
 
 export function validateReplacementAudio(record: Record<string, unknown>, file: MediaFile): void {
