@@ -4,6 +4,7 @@ import test from 'node:test';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { UPLOAD_PART_BYTES } from '@plyr/next-core/publishing/upload-model';
 import { main, fixtureIdentity } from './verify-upload.mjs';
 
 test('resume binds both existing fixture identifiers and requires full-size mode', () => {
@@ -139,4 +140,55 @@ test('full-size fixture refuses local execution before network or allocation', a
   t.mock.method(globalThis, 'fetch', async () => { called = true; throw new Error('unexpected request'); });
   await assert.rejects(main(), /cloud-only/);
   assert.equal(called, false);
+});
+
+for (const lostReceipt of [false, true]) test(`prepublication cancels the transfer with ${lostReceipt ? 'a lost' : 'an acknowledged'} part receipt`, async t => {
+  const env = { ZAT_TEST_PDS: 'https://fixture.invalid', ZAT_TEST_HANDLE: 'fixture.invalid', ZAT_TEST_PASSWORD: 'secret',
+    GITHUB_REF: 'refs/heads/main', GITHUB_EVENT_NAME: 'workflow_dispatch', VERIFY_UPLOAD_PREPUBLICATION: 'true' };
+  const previous = Object.fromEntries(Object.keys(env).map(key => [key, process.env[key]]));
+  Object.assign(process.env, env);
+  t.after(() => { for (const [key, value] of Object.entries(previous)) if (value === undefined) delete process.env[key]; else process.env[key] = value; });
+  const owner = 'did:plc:aaaaaaaaaaaaaaaaaaaaaaaa';
+  let recordReads = 0, mediaReads = 0, admission, uploadUrl, cancelled = false, receipt;
+  const status = () => Response.json({ state: cancelled ? 'cancelled' : 'transferring', partSizeBytes: UPLOAD_PART_BYTES, partCount: Math.ceil(admission.sizeBytes / UPLOAD_PART_BYTES),
+    reservedBytes: cancelled ? 0 : admission.sizeBytes, recoveryRequired: false, receivedParts: receipt ? [receipt] : [], reservedDigests: receipt ? [receipt] : [] });
+  t.mock.method(globalThis, 'fetch', async (url, init) => {
+    const address = new URL(url);
+    if (address.pathname.endsWith('createSession')) return Response.json({ did: owner, accessJwt: 'session' });
+    if (address.pathname.endsWith('getServiceAuth')) return Response.json({ token: 'scoped-token' });
+    if (address.pathname.endsWith('getRecord')) {
+      assert.equal(init.method, 'GET');
+      assert.equal(address.searchParams.get('repo'), owner);
+      if (++recordReads > 1) assert.equal(`at://${owner}/${address.searchParams.get('collection')}/${address.searchParams.get('rkey')}`, admission.recordUri);
+      return Response.json({ error: 'RecordNotFound' }, { status: 400 });
+    }
+    if (address.pathname.endsWith('/authorize')) {
+      admission = JSON.parse(init.body);
+      uploadUrl = `https://plyr-next-audio.n8-3e9.workers.dev/v1/uploads/${createHash('sha256').update(owner).digest('hex')}/${admission.uploadId}`;
+      return Response.json({ capability: 'capability', expiresAt: Date.now() + 299000, uploadUrl });
+    }
+    if (url === uploadUrl + '/parts/1') {
+      assert.equal(init.method, 'PUT');
+      assert.equal(init.body.length, UPLOAD_PART_BYTES);
+      assert.ok(init.body.length < admission.sizeBytes, 'the final part must remain unsent');
+      receipt = { number: 1, sha256: createHash('sha256').update(init.body).digest('hex') };
+      if (lostReceipt) throw new TypeError('lost part response');
+      return Response.json(receipt);
+    }
+    if (url === uploadUrl) {
+      if (init.method === 'DELETE') cancelled = true;
+      else assert.ok(['POST', 'GET'].includes(init.method));
+      return status();
+    }
+    assert.equal(url, uploadUrl.replace('/v1/uploads/', '/media/'));
+    assert.ok(['GET', 'HEAD'].includes(init.method));
+    mediaReads++;
+    return new Response(null, { status: 404 });
+  });
+  const run = main({ deleteObject: () => assert.fail('multipart cancellation owns cleanup') });
+  if (lostReceipt) await assert.rejects(run, /lost part response/);
+  else await run;
+  assert.equal(cancelled, true);
+  assert.equal(recordReads, 2);
+  assert.equal(mediaReads, lostReceipt ? 2 : 4);
 });
