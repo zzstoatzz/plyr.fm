@@ -10,6 +10,8 @@ export interface InitialJam {
   positionMs?: number;
 }
 
+export class JamNotStarted extends Error {}
+
 type JamConfig = Pick<AuthConfig, 'JAM_SPACE' | 'JAM_COORDINATOR_URL' | 'JAM_SERVICE_AUDIENCE' | 'JAM_JOIN_METHOD'>;
 
 export function parseJamTrackSnapshot(value: unknown) {
@@ -118,6 +120,7 @@ export function createJamSpace<Key extends { did(): string }, Value extends Reco
         body: JSON.stringify({ host, key, serviceToken: serviceBody.token, delegationToken: delegationBody.token, initial })
       });
       const body = await response.json() as { ticket?: unknown; error?: { message?: string } };
+      if (response.status === 409) throw new JamNotStarted('the host hasn’t started this jam yet.');
       if (!response.ok || typeof body.ticket !== 'string') throw new Error(body.error?.message || 'could not connect to this jam');
       const socket = new URL('/v1/jams/socket', JAM_COORDINATOR_URL);
       socket.protocol = socket.protocol === 'https:' ? 'wss:' : 'ws:';

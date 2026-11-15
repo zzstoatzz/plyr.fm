@@ -22,7 +22,7 @@
 	function openJam() {
 		const { did } = auth.getAuth();
 		const path = player.jam ? jamRoomPath(player.jam.host, player.jam.key)
-			: did && player.current ? jamRoomPath(did, crypto.randomUUID(), player.current.id) : '/login?return_to=%2Fqueue';
+			: did && player.current ? jamRoomPath(did, crypto.randomUUID(), player.current.id) + '&start=1' : '/login?return_to=%2Fqueue';
 		close?.();
 		void goto(path);
 	}
