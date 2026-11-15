@@ -54,6 +54,44 @@ async function screen(browser, phone, scheme) {
   } finally { await context.close(); }
 }
 
+async function queueGroups(browser, phone, scheme) {
+  const width = phone ? 390 : 1280;
+  const { context, page, errors } = await setup(browser, width, phone ? 844 : 960, { phone, scheme });
+  try {
+    await page.goto(origin);
+    const navigation = page.getByRole('navigation', { name: 'Main navigation' });
+    const dock = page.getByTestId('player-dock');
+    await page.getByTestId('home-chart').getByRole('button', { name: `Play ${tracks[0].metadata.title}`, exact: true }).click();
+    await dock.getByRole('button', { name: 'Pause', exact: true }).waitFor();
+    const picks = page.getByTestId('home-track-row');
+    for (const index of [0, 1, 2, 3]) {
+      await picks.nth(index).getByRole('button', { name: `Add ${tracks[index].metadata.title} to queue` }).click();
+    }
+    if (phone) await navigation.getByRole('link', { name: 'queue', exact: true }).click();
+    else await dock.getByRole('button', { name: 'Queue', exact: true }).click();
+    const queue = page.getByRole('region', { name: 'Queue', exact: true });
+    const upNext = queue.getByRole('region', { name: 'up next', exact: true });
+    const continuation = queue.getByRole('region', { name: /next from/ });
+    await upNext.getByRole('button', { name: `Remove ${tracks[3].metadata.title}` }).waitFor({ timeout: 3000 });
+    await continuation.getByRole('button', { name: `Remove ${tracks[8].metadata.title}` }).waitFor();
+    assert.equal(await upNext.getByRole('listitem').count(), 4);
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    await page.screenshot({ path: path.join(output, `${width}-${scheme}-queue-grouped.png`) });
+
+    await upNext.getByRole('button', { name: `Move ${tracks[3].metadata.title} up` }).click();
+    await upNext.getByRole('listitem').nth(2).getByRole('link', { name: tracks[3].metadata.title, exact: true }).waitFor();
+    await queue.getByRole('button', { name: 'clear your queued tracks' }).click();
+    await upNext.getByText('no tracks queued by you.').waitFor();
+    assert.ok(await continuation.getByRole('link', { name: tracks[8].metadata.title, exact: true }).isVisible());
+    const promote = continuation.getByRole('button', { name: `Move ${tracks[2].metadata.title} into up next` });
+    await promote.focus();
+    await promote.press('Enter');
+    const promoted = upNext.getByRole('button', { name: `Play ${tracks[2].metadata.title}`, exact: true });
+    await page.waitForFunction(node => document.activeElement === node, await promoted.elementHandle());
+    assert.deepEqual(errors, []);
+  } finally { await context.close(); }
+}
+
 async function loginScreen(browser) {
   const { context, page, errors } = await setup(browser, 390, 844, { phone: true });
   try {
@@ -225,6 +263,7 @@ async function keyboard(browser, phone, scheme) {
     for (const phone of [true, false]) {
       for (const scheme of ['light', 'dark']) {
         await screen(browser, phone, scheme);
+        await queueGroups(browser, phone, scheme);
         await keyboard(browser, phone, scheme);
       }
     }
