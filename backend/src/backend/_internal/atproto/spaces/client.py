@@ -161,11 +161,22 @@ async def _request_space_credential(
     service_url: str, payload: dict[str, str]
 ) -> httpx.Response:
     """Ask the space host for a credential; the request itself is unsigned."""
-    url = f"{service_url}/xrpc/com.atproto.space.getSpaceCredential"
+    url = f"{service_url}/xrpc/com.atproto.space.authorizeSpaceSync"
     if not is_safe_url(url):
         raise ValueError(f"unsafe service URL: {url}")
     async with httpx.AsyncClient(timeout=30) as http:
-        return await http.post(url, json=payload)
+        response = await http.post(url, json=payload)
+        if response.status_code != 404:
+            return response
+        try:
+            problem = response.json()
+        except ValueError:
+            return response
+        if not isinstance(problem, dict) or problem.get("error") != "UnknownMethod":
+            return response
+        return await http.post(
+            f"{service_url}/xrpc/com.atproto.space.getSpaceCredential", json=payload
+        )
 
 
 # --- space lifecycle + record writes (owner/author, DPoP OAuth) ---------------
