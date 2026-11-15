@@ -1,7 +1,7 @@
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { pickMedia } from '../media-picker';
 import type { MediaFile } from '../pds';
-import { artworkName, artworkPlan, MAX_ARTWORK_BYTES, UNREADABLE_ARTWORK } from '../../../core/src/publishing/artwork-model';
+import { artworkName, artworkPlan, MAX_ARTWORK_BYTES, UNREADABLE_ARTWORK } from '@plyr/next-core/publishing/artwork-model';
 
 async function encode(url: string, name: string, width?: number): Promise<MediaFile> {
   const context = ImageManipulator.manipulate(url);

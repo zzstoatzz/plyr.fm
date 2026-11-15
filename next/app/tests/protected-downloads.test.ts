@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { protectedDownloadPolicy, requireProtectedReference } from '../src/downloads/protected-policy.ts';
-import type { Track } from '../../core/src/api.ts';
+import type { Track } from '@plyr/next-core/api';
 
 const track: Track = { object: 'track', id: 'track', record: { uri: 'at://did:plc:artist/fm.plyr.track/song', cid: 'revision', revision: null, collection: 'fm.plyr.track', rkey: 'song' }, metadata: { title: 'public title', artist_name: 'artist', description: null, album: null, duration_seconds: 1, created_at: '2026-11-12T00:00:00Z' }, artist: { did: 'did:plc:artist', profile: { handle: 'artist.test', display_name: 'artist', avatar_url: null } }, media: {}, access: { visibility: 'public', download_policy: 'open' }, metrics: { play_count: 0, like_count: 0 } };
 

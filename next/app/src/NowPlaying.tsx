@@ -1,4 +1,4 @@
-import { trackArtwork } from '../../core/src/artwork';
+import { trackArtwork } from '@plyr/next-core/artwork';
 import { ChatCircle, CaretDown as ChevronDown, Playlist as ListMusic, Radio as RadioTower, X } from './icons';
 import { Text } from './Text';
 import Slider from './Slider';
@@ -7,7 +7,7 @@ import { NextGlyph as SkipForward, PauseGlyph as Pause, PlayGlyph as Play, Previ
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Modal, Platform, Pressable, StyleSheet, View, useWindowDimensions, type ScrollViewInstance, type ViewInstance } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { Track } from '../../core/src/api';
+import type { Track } from '@plyr/next-core/api';
 import { useAppearance } from './appearance';
 import { Cover, artistName } from './CatalogPieces';
 import { ShareLink } from './ShareLink';

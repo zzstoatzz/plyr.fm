@@ -1,7 +1,7 @@
 <script lang="ts">
 	import TrackCollections from '$lib/collections/TrackCollections.svelte';
-	import { isPrivateTrack } from '$core/track-access';
-	import { trackArtwork } from '$core/artwork';
+	import { isPrivateTrack } from '@plyr/next-core/track-access';
+	import { trackArtwork } from '@plyr/next-core/artwork';
 	import { player } from '$lib/player.svelte';
 	import { artistName } from '$lib/tracks';
 	import Artwork from '$lib/ui/Artwork.svelte';

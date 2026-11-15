@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { MAX_SERVICE_AUDIO_BYTES, UPLOAD_PART_BYTES } from '../../../app/src/publishing/upload-model.ts';
+import { MAX_SERVICE_AUDIO_BYTES, UPLOAD_PART_BYTES } from '@plyr/next-core/publishing/upload-model';
 import { createUploadTransport } from '../../../app/src/publishing/upload-transport.ts';
 import { waveSource, verifyStream, transferFixture } from './upload-fixture-source.mjs';
 import { awaitRendition, verifyProcessedMedia } from './processing-fixture.mjs';

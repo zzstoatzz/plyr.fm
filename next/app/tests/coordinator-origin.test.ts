@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { joinJam } from '../src/jam-space.ts';
-import { JamConnection, type JamSocket } from '../../core/src/jam-connection.ts';
+import { JamConnection, type JamSocket } from '@plyr/next-core/jam-connection';
 import type { Agent, Auth } from '../src/auth-state.ts';
 
 test('a jam admission sends the caller’s Origin, so a native socket can present the same one', async t => {

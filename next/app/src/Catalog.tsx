@@ -1,12 +1,12 @@
 import { useAppearance } from './appearance';
 import { ListPlus, DotsThree as Ellipsis } from './icons';
-import { collectionArtwork } from '../../core/src/artwork';
+import { collectionArtwork } from '@plyr/next-core/artwork';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useRef, useState, type ReactNode } from 'react';
 import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { PauseGlyph as PauseIcon, PlayGlyph as PlayIcon } from './PlayerGlyph';
 import { api } from './api-client';
-import { type Track } from '../../core/src/api';
+import { type Track } from '@plyr/next-core/api';
 import {
   Button, Heading, ListRows, Status, trackCount,
   usePages, useResource, type Play, type TrackActions,

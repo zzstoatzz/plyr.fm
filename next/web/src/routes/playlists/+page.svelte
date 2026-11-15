@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { ListSummary } from '$core/api';
+  import type { ListSummary } from '@plyr/next-core/api';
   import { api } from '$lib/api';
   import PagedListing from '$lib/catalog/PagedListing.svelte';
   import ListCards from '$lib/collections/ListCards.svelte';

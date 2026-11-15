@@ -1,4 +1,4 @@
-import { createAuthConfig } from '$core/auth-config';
+import { createAuthConfig } from '@plyr/next-core/auth-config';
 
 export const authConfig = createAuthConfig({
   siteUrl: import.meta.env.PUBLIC_SITE_URL,

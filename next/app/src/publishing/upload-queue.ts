@@ -1,9 +1,9 @@
 import { useSyncExternalStore } from 'react';
 import { CryptoDigestAlgorithm, digest, randomUUID } from 'expo-crypto';
-import { trackIdFromUri } from '../../../core/src/api';
-import { applyGenreTags } from '../../../core/src/publishing/genre-tags';
-import { createUploadQueue } from '../../../core/src/publishing/upload-queue';
-import { jobLine } from '../../../core/src/publishing/upload-queue-model';
+import { trackIdFromUri } from '@plyr/next-core/api';
+import { applyGenreTags } from '@plyr/next-core/publishing/genre-tags';
+import { createUploadQueue } from '@plyr/next-core/publishing/upload-queue';
+import { jobLine } from '@plyr/next-core/publishing/upload-queue-model';
 import { getAuth } from '../auth-state';
 import { measureAudioDuration } from '../media-picker';
 import { createPds } from '../pds';

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Trash } from '../icons';
 import { View } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
-import type { Track } from '../../../core/src/api';
+import type { Track } from '@plyr/next-core/api';
 import { useAuth } from '../auth';
 import { Action, Copy, Field } from '../controls';
 import { ActionRow } from '../ActionRow';

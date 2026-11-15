@@ -3,7 +3,7 @@ const { spawn, execFileSync } = require('node:child_process');
 const { once } = require('node:events');
 const path = require('node:path');
 const root = path.resolve(__dirname, '../../..');
-const WebSocket = require(path.join(root, 'next/app/node_modules/ws'));
+const WebSocket = require('ws');
 const pds = process.env.JAM_TEST_PDS_ORIGIN || 'http://127.0.0.1:5197';
 const ports = [5311, 5312];
 const bases = ports.map(port => 'http://127.0.0.1:' + port);

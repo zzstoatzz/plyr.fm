@@ -1,5 +1,5 @@
 import { json } from '@sveltejs/kit';
-import { oauthMetadata } from '$core/oauth-metadata';
+import { oauthMetadata } from '@plyr/next-core/oauth-metadata';
 import { authConfig } from '$lib/auth-config';
 
 export const prerender = true;

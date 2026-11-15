@@ -1,10 +1,10 @@
 import { Copy } from './controls';
-import { trackArtwork } from '../../core/src/artwork';
+import { trackArtwork } from '@plyr/next-core/artwork';
 import { Text } from './Text';
 import { Link } from 'expo-router';
 import { type ReactNode, useState } from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
-import type { Track } from '../../core/src/api';
+import type { Track } from '@plyr/next-core/api';
 import { useAppearance } from './appearance';
 import { Cover, artistName } from './CatalogPieces';
 

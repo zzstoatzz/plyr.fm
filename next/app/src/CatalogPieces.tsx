@@ -1,4 +1,4 @@
-import { trackArtwork, collectionArtwork, displayUrl } from '../../core/src/artwork';
+import { trackArtwork, collectionArtwork, displayUrl } from '@plyr/next-core/artwork';
 import { MusicNote as Music2, UserCircle as UserRound } from './icons';
 import { Text } from './Text';
 import { Link, type Href } from 'expo-router';
@@ -6,7 +6,7 @@ import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } 
 import { Animated, PixelRatio, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { PlayGlyph as PlayIcon } from './PlayerGlyph';
 import { PlayerLoader } from './PlayerLoader';
-import type { ListSummary, Page, Track } from '../../core/src/api';
+import type { ListSummary, Page, Track } from '@plyr/next-core/api';
 import { Action, Copy } from './controls';
 import { WaveLoading } from './WaveLoading';
 import { compactCount } from './home-state';

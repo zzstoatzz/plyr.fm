@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { auth, login } from '$lib/auth';
-	import { returnPath } from '$core/return-path';
+	import { returnPath } from '@plyr/next-core/return-path';
 	import AccountInput from '$lib/AccountInput.svelte';
 
 	let account = $state.raw(auth.getAuth());

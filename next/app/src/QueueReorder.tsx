@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { DotsSix as GripHorizontal } from './icons';
 import { PanResponder, Platform, StyleSheet, useWindowDimensions, View, type ScrollViewInstance, type ViewInstance } from 'react-native';
-import type { Track } from '../../core/src/api';
+import type { Track } from '@plyr/next-core/api';
 import { useAppearance } from './appearance';
 import { autoscrollVelocity, dragTarget, landingTop, rowShift, type Row } from './behaviors/reorder';
 import { useCancelOnLeave } from './behaviors/use-cancel-on-leave';

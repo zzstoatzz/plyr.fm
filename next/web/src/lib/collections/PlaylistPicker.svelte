@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
-  import type { ListSummary, Track } from '$core/api';
+  import type { ListSummary, Track } from '@plyr/next-core/api';
   import { api } from '$lib/api';
   import { auth } from '$lib/auth';
   import PagedListing from '$lib/catalog/PagedListing.svelte';

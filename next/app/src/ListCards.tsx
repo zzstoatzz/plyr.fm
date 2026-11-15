@@ -1,8 +1,8 @@
 import { Link } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
-import type { ListSummary } from '../../core/src/api';
+import type { ListSummary } from '@plyr/next-core/api';
 import { useAppearance } from './appearance';
-import { collectionArtwork } from '../../core/src/artwork';
+import { collectionArtwork } from '@plyr/next-core/artwork';
 import { Cover, trackCount } from './CatalogPieces';
 import { Text } from './Text';
 

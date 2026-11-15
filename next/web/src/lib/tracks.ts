@@ -1,4 +1,4 @@
-import type { Track } from '$core/api';
+import type { Track } from '@plyr/next-core/api';
 
 export function artistName(track: Track) {
 	return track.metadata.artist_name || track.artist.profile.display_name || track.artist.profile.handle;

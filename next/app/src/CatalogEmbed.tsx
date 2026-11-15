@@ -1,9 +1,9 @@
-import { trackArtwork, collectionArtwork } from '../../core/src/artwork';
+import { trackArtwork, collectionArtwork } from '@plyr/next-core/artwork';
 import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef } from 'react';
 import { View } from 'react-native';
 import { api } from './api-client';
-import { trackIdFromUri, type Track } from '../../core/src/api';
+import { trackIdFromUri, type Track } from '@plyr/next-core/api';
 import { artistName, Cover, Heading, Status, TrackRows, useResource } from './CatalogPieces';
 import { Action, Copy } from './controls';
 import { WaveLoading } from './WaveLoading';

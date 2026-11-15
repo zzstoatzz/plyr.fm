@@ -1,4 +1,4 @@
-import { createAuthConfig } from '../../core/src/auth-config.ts';
+import { createAuthConfig } from '@plyr/next-core/auth-config';
 
 export const {
   SITE_URL,

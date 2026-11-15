@@ -3,7 +3,7 @@ import { isCid, isLexMap, type LexMap } from '@atproto/lex-data';
 import { lexParse } from '@atproto/lex-json';
 import { createSpaceSigHeaders, encapsulate, formatMacRequest, parseSpaceToken, RECORD_MAC_PROFILE, verifyRecord } from '@atproto/space';
 import { isSpaceAtUriString } from '@atproto/syntax';
-import { createGatedAudio, type GatedAudioSource } from '$core/gated-audio';
+import { createGatedAudio, type GatedAudioSource } from '@plyr/next-core/gated-audio';
 import { auth } from '$lib/auth';
 import { privateAudioUrl, releasePrivateAudio } from './private-audio';
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { CreateOperation } from '$core/publishing/create-operation';
+  import type { CreateOperation } from '@plyr/next-core/publishing/create-operation';
   import type { createPds } from '$lib/pds';
   import CreateRecovery from '$lib/publishing/CreateRecovery.svelte';
   import Loading from '$lib/ui/Loading.svelte';

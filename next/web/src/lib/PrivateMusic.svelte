@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import type { Track } from '$core/api';
-	import type { PrivateCreate, PrivateResult } from '$core/publishing/private-music';
+	import type { Track } from '@plyr/next-core/api';
+	import type { PrivateCreate, PrivateResult } from '@plyr/next-core/publishing/private-music';
 	import { auth } from './auth';
 	import { privateMusic } from './private-library';
 	import { fileDuration } from './media/file-duration';

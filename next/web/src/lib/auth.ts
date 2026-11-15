@@ -1,7 +1,7 @@
 import { Client } from '@atcute/client';
 import type { BrowserOAuthClient, OAuthSession } from '@atproto/oauth-client-browser';
-import { createAuthState } from '$core/auth-state';
-import { returnPath } from '$core/return-path';
+import { createAuthState } from '@plyr/next-core/auth-state';
+import { returnPath } from '@plyr/next-core/return-path';
 import { authConfig } from './auth-config';
 import { completeQueueLogin, prepareQueueLogin } from './storage/queue-login';
 

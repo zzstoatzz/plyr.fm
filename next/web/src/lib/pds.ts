@@ -1,6 +1,6 @@
 import { TID } from '@atproto/common-web';
-import { catalogChanged } from '$core/catalog/changes';
-import { createPublicPds } from '$core/pds';
+import { catalogChanged } from '@plyr/next-core/catalog/changes';
+import { createPublicPds } from '@plyr/next-core/pds';
 import { api } from './api';
 import { auth } from './auth';
 import { authConfig } from './auth-config';

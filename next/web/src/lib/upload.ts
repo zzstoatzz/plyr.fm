@@ -1,7 +1,7 @@
-import { createUploadQueue } from '$core/publishing/upload-queue';
-import { uploadTransport } from '$core/publishing/upload-transport';
-import { transferParts, type UploadOperation } from '$core/publishing/upload-model';
-import { applyGenreTags } from '$core/publishing/genre-tags';
+import { createUploadQueue } from '@plyr/next-core/publishing/upload-queue';
+import { uploadTransport } from '@plyr/next-core/publishing/upload-transport';
+import { transferParts, type UploadOperation } from '@plyr/next-core/publishing/upload-model';
+import { applyGenreTags } from '@plyr/next-core/publishing/genre-tags';
 import { auth } from './auth';
 import { uploadActivity } from './upload-activity.svelte';
 import { authConfig } from './auth-config';

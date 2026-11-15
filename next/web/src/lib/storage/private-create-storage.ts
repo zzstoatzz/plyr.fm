@@ -1,4 +1,4 @@
-import type { createPrivateLibrary, PrivateCreate, PrivateCreateStorage } from '../../../../core/src/publishing/private-music';
+import type { createPrivateLibrary, PrivateCreate, PrivateCreateStorage } from '@plyr/next-core/publishing/private-music';
 
 export function createPrivateCreateStorage({ privateCreate, samePrivateCreate }: Pick<ReturnType<typeof createPrivateLibrary>, 'privateCreate' | 'samePrivateCreate'>): PrivateCreateStorage {
   let database: Promise<IDBDatabase> | undefined;

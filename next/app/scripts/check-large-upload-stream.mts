@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert';
 import { createHash, randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
-import { MAX_SERVICE_AUDIO_BYTES, UPLOAD_PART_BYTES, transferParts, uploadStatus, type UploadOperation, type UploadReceipt } from '../../core/src/publishing/upload-model.ts';
+import { MAX_SERVICE_AUDIO_BYTES, UPLOAD_PART_BYTES, transferParts, uploadStatus, type UploadOperation, type UploadReceipt } from '@plyr/next-core/publishing/upload-model';
 
 const full = process.env.LARGE_FULLSIZE === '1';
 if (full && process.env.GITHUB_ACTIONS !== 'true') throw new Error('full-size acceptance runs only in cloud CI.');

@@ -5,6 +5,10 @@ on:
     paths:
       - "next/web/**"
       - "next/core/**"
+      - "next/package.json"
+      - "next/bun.lock"
+      - "next/vendor/**"
+      - "next/scripts/check-boundaries.mjs"
       - "next/app/scripts/fixture-catalog.cjs"
       - ".github/workflows/check-svelte-next.yml"
 
@@ -20,8 +24,16 @@ jobs:
         working-directory: next/web
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
+        working-directory: next
+      - run: bun run check:boundaries
+        working-directory: next
+      - run: bun run check && bun run test
+        working-directory: next/core
       - run: bun run check
       - run: bun run build
       - run: bun run playwright install --with-deps --only-shell chromium

@@ -9,7 +9,7 @@ on:
     branches: [main]
     paths:
       - "next/services/audio/**"
-      - ".github/workflows/deploy-next-audio.yml"
+      - "!next/services/audio/scripts/**"
   workflow_dispatch:
     inputs:
       verify_upload:
@@ -58,8 +58,10 @@ jobs:
           cache-dependency-path: next/services/audio/package-lock.json
       - run: npm ci
       - run: npm run check && npm test
+      - uses: oven-sh/setup-bun@v2
       - name: install fixture SDK
-        run: npm ci --prefix ../../app
+        working-directory: next
+        run: bun install --frozen-lockfile
       - name: install media verification tools
         run: |
           sudo apt-get update

@@ -1,5 +1,5 @@
 import { useCallback, useSyncExternalStore } from 'react';
-import { playMetrics } from '../../core/src/play-metrics';
+import { playMetrics } from '@plyr/next-core/play-metrics';
 
 export function usePlayCount(trackId: string, serverCount: number) {
   const subscribe = useCallback((listener: () => void) => playMetrics.subscribe(trackId, listener), [trackId]);

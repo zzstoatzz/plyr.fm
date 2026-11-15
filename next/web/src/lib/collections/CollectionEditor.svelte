@@ -1,9 +1,9 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { onMount, tick, untrack } from 'svelte';
-  import { trackIdFromUri, type AwaitStatus, type ListDetail, type Track } from '$core/api';
-  import type { AlbumEntry } from '$core/collections/album-membership';
-  import { CollectionOrderConflict, CollectionOrderUnconfirmed, type CollectionRevision } from '$core/collections/collection-order';
+  import { trackIdFromUri, type AwaitStatus, type ListDetail, type Track } from '@plyr/next-core/api';
+  import type { AlbumEntry } from '@plyr/next-core/collections/album-membership';
+  import { CollectionOrderConflict, CollectionOrderUnconfirmed, type CollectionRevision } from '@plyr/next-core/collections/collection-order';
   import { api } from '$lib/api';
   import { auth } from '$lib/auth';
   import { createPds } from '$lib/pds';

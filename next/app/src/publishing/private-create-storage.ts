@@ -1,5 +1,5 @@
 import { createMMKV } from 'react-native-mmkv';
-import type { PrivateCreate, PrivateCreateStorage } from '../../../core/src/publishing/private-music';
+import type { PrivateCreate, PrivateCreateStorage } from '@plyr/next-core/publishing/private-music';
 import { privateLibrary } from './private-config';
 
 const { privateCreate, samePrivateCreate } = privateLibrary;

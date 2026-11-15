@@ -1,4 +1,4 @@
-import { trackArtwork } from '../../core/src/artwork';
+import { trackArtwork } from '@plyr/next-core/artwork';
 import { X, ListPlus, MusicNote as Music2, ArrowsClockwise as RefreshCw } from './icons';
 import { PlayerControl } from './PlayerControl';
 import { AccountSection } from './AccountPieces';
@@ -11,7 +11,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import { api } from './api-client';
-import { playlistIdFromUri, type AwaitStatus, type ListDetail, type Track } from '../../core/src/api';
+import { playlistIdFromUri, type AwaitStatus, type ListDetail, type Track } from '@plyr/next-core/api';
 import { useAuth } from './auth';
 import { getAuth } from './auth-state';
 import {
@@ -24,7 +24,7 @@ import { CreateRecovery, EarlierCreates, useCreateRecovery } from './publishing/
 import { AlbumEditor } from './collections/AlbumEditor';
 import { CollectionOrderEditor } from './collections/CollectionOrderEditor';
 import { AccessSheet } from './access/AccessSheet';
-import type { CollectionRevision } from '../../core/src/collections/collection-order';
+import type { CollectionRevision } from '@plyr/next-core/collections/collection-order';
 
 function usePds() {
   const { did, rpc } = useAuth();

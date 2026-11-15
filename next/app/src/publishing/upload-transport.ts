@@ -1,9 +1,9 @@
 import type { Auth } from '../auth-state';
 import * as config from '../auth-config.ts';
-import type { UploadOperation } from '../../../core/src/publishing/upload-model';
-import { uploadTransport } from '../../../core/src/publishing/upload-transport.ts';
+import type { UploadOperation } from '@plyr/next-core/publishing/upload-model';
+import { uploadTransport } from '@plyr/next-core/publishing/upload-transport';
 
-export { UploadRequestError } from '../../../core/src/publishing/upload-transport.ts';
+export { UploadRequestError } from '@plyr/next-core/publishing/upload-transport';
 
 export function createUploadTransport(auth: Pick<Auth, 'did' | 'agent' | 'uploadStorage'>, operation: UploadOperation,
   assertCurrent: () => void, signal: AbortSignal, fetcher?: typeof fetch) {

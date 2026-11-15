@@ -1,10 +1,10 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { onMount, tick, untrack } from 'svelte';
-  import type { AwaitStatus, Track } from '$core/api';
-  import { TrackRevisionConflict } from '$core/pds';
-  import { canReplaceTrackAudio, TrackWriteUnconfirmed, validateReplacementAudio } from '$core/publishing/track-audio';
-  import { recordTags } from '$core/publishing/track-tags';
+  import type { AwaitStatus, Track } from '@plyr/next-core/api';
+  import { TrackRevisionConflict } from '@plyr/next-core/pds';
+  import { canReplaceTrackAudio, TrackWriteUnconfirmed, validateReplacementAudio } from '@plyr/next-core/publishing/track-audio';
+  import { recordTags } from '@plyr/next-core/publishing/track-tags';
   import { api } from '$lib/api';
   import { auth } from '$lib/auth';
   import { coverImage } from '$lib/media/cover-image';

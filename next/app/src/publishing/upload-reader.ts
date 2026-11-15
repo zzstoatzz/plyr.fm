@@ -1,6 +1,6 @@
 import { File, FileMode } from 'expo-file-system';
 import type { MediaFile } from '../pds';
-import { UPLOAD_PART_BYTES, type ChunkReader } from '../../../core/src/publishing/upload-model';
+import { UPLOAD_PART_BYTES, type ChunkReader } from '@plyr/next-core/publishing/upload-model';
 export function openUploadReader(file: MediaFile): ChunkReader {
   if (!file.uri) throw new Error('select the audio file again.');
   const handle = new File(file.uri).open(FileMode.ReadOnly);

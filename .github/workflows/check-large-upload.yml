@@ -4,6 +4,10 @@ on:
     paths:
       - "next/app/src/publishing/upload-*.ts"
       - "next/app/scripts/check-large-upload-stream.mts"
+      - "next/package.json"
+      - "next/bun.lock"
+      - "next/vendor/**"
+      - "next/core/src/publishing/upload-model.ts"
       - ".github/workflows/check-large-upload.yml"
   workflow_dispatch:
 permissions:
@@ -17,6 +21,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+        working-directory: next
       - name: transfer synthetic 1.5 GiB with lost acknowledgement
         working-directory: next/app
         env:

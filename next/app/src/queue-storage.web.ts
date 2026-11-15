@@ -1,5 +1,5 @@
-import { mergeQueueMutations, queueMutations } from '../../core/src/queue-mutation';
-import { applyQueueProgress, newerProgress, queueCheckpoint, type QueueStorage } from '../../core/src/queue-checkpoint';
+import { mergeQueueMutations, queueMutations } from '@plyr/next-core/queue-mutation';
+import { applyQueueProgress, newerProgress, queueCheckpoint, type QueueStorage } from '@plyr/next-core/queue-checkpoint';
 
 // IndexedDB writes started in pagehide often never commit on Safari, so the
 // newest position is also kept synchronously in localStorage.

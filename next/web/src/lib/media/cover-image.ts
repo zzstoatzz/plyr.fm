@@ -1,4 +1,4 @@
-import { artworkName, artworkPlan, artworkType, MAX_ARTWORK_BYTES, UNREADABLE_ARTWORK } from '$core/publishing/artwork-model';
+import { artworkName, artworkPlan, artworkType, MAX_ARTWORK_BYTES, UNREADABLE_ARTWORK } from '@plyr/next-core/publishing/artwork-model';
 
 export async function coverImage(file: File): Promise<File> {
   const type = artworkType(file.type);

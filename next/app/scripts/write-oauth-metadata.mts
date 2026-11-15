@@ -3,7 +3,7 @@
 import { copyFile, readFile, writeFile } from 'node:fs/promises';
 import { URL } from 'node:url';
 import * as config from '../src/auth-config.ts';
-import { oauthMetadata } from '../../core/src/oauth-metadata.ts';
+import { oauthMetadata } from '@plyr/next-core/oauth-metadata';
 import { HOME_PAGE_SIZE } from '../src/home-state.ts';
 
 for (const applicationType of ['web', 'native'] as const) {

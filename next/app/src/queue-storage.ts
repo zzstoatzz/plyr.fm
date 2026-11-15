@@ -1,6 +1,6 @@
-import { mergeQueueMutations, queueMutations } from '../../core/src/queue-mutation';
+import { mergeQueueMutations, queueMutations } from '@plyr/next-core/queue-mutation';
 import { createMMKV } from 'react-native-mmkv';
-import { applyQueueProgress, queueCheckpoint, type QueueStorage } from '../../core/src/queue-checkpoint';
+import { applyQueueProgress, queueCheckpoint, type QueueStorage } from '@plyr/next-core/queue-checkpoint';
 
 const storage = createMMKV({ id: 'plyr-next-queue' });
 function read(key: string): unknown {

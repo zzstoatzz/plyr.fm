@@ -1,5 +1,5 @@
-import type { MediaFile } from '../../../../core/src/publishing/private-music';
-import { UPLOAD_PART_BYTES, type ChunkReader } from '../../../../core/src/publishing/upload-model';
+import type { MediaFile } from '@plyr/next-core/publishing/private-music';
+import { UPLOAD_PART_BYTES, type ChunkReader } from '@plyr/next-core/publishing/upload-model';
 export function openUploadReader(file: MediaFile): ChunkReader {
   if (!(file instanceof Blob)) throw new Error('select the audio file again.');
   return { size: file.size, async read(offset, length) {

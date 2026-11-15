@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import { trackIdFromUri } from '$core/api';
-  import type { UploadOperation } from '$core/publishing/upload-model';
-  import { recoverUpload, type UploadRecoveryAction, type UploadRecoveryView } from '$core/publishing/upload-recovery';
-  import { canonicalAudioType } from '$core/publishing/upload-queue-model';
+  import { trackIdFromUri } from '@plyr/next-core/api';
+  import type { UploadOperation } from '@plyr/next-core/publishing/upload-model';
+  import { recoverUpload, type UploadRecoveryAction, type UploadRecoveryView } from '@plyr/next-core/publishing/upload-recovery';
+  import { canonicalAudioType } from '@plyr/next-core/publishing/upload-queue-model';
   import { auth } from '$lib/auth';
   import type { createPds } from '$lib/pds';
   import { createUploadTransport, uploadQueue } from '$lib/upload';

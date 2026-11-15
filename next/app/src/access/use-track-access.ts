@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { Track } from '../../../core/src/api';
-import { isPrivateTrack } from '../../../core/src/track-access';
+import type { Track } from '@plyr/next-core/api';
+import { isPrivateTrack } from '@plyr/next-core/track-access';
 import { listPolicies } from './policy-pds';
 import { implicitRule, isOpen, trackSpace, type Policy, type Rule } from './policy';
 

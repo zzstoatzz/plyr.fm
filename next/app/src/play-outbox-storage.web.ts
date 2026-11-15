@@ -1,4 +1,4 @@
-import { pendingPlay, PLAY_OUTBOX_LIMIT, type PendingPlay, type PlayOutboxStorage } from '../../core/src/play-outbox';
+import { pendingPlay, PLAY_OUTBOX_LIMIT, type PendingPlay, type PlayOutboxStorage } from '@plyr/next-core/play-outbox';
 
 let database: Promise<IDBDatabase> | undefined;
 function open(): Promise<IDBDatabase> {

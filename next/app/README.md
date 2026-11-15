@@ -5,15 +5,16 @@ The web export runs on `next.plyr.fm`. All targets use the Zig AppView for
 catalog reads and the account's PDS for authenticated writes.
 
 ```sh
-npm ci
-npm run check
-npm run web -- --localhost --port 5174
-npm run ios
-npm run android
-npm run build:web
+bun install --frozen-lockfile # from next/
+cd app
+bun run check
+bun run web --localhost --port 5174
+bun run ios
+bun run android
+bun run build:web
 ```
 
-Run these commands from `next/app` with Node 22 or newer. The native commands
+Use Bun and Node 22 or newer. The native commands
 require a native development build and the corresponding simulator or emulator. Open the local web app at `http://127.0.0.1:5174` to use the Next API’s development CORS origin. The web build writes a
 static export and OAuth metadata to `dist/`. Cloudflare Pages serves the
 export with a fallback to `index.html` for routes such as `/oauth/callback`.
@@ -49,7 +50,7 @@ The iOS player requires the [pinned native audio patch](patches/README.md);
 changing it requires rebuilding the native app.
 
 Browser regressions for the player are the `check-player-*` scripts, run after
-`npm run build:web`. They use real fixture audio and block real API and PDS
+`bun run build:web`. They use real fixture audio and block real API and PDS
 mutations.
 
 ## Creator portal catalog state

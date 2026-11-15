@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { displayUrl } from '$core/artwork';
+	import { displayUrl } from '@plyr/next-core/artwork';
 	import Icon from './Icon.svelte';
 
 	let { src, size = 56, eager = false }: { src?: string; size?: number; eager?: boolean } = $props();

@@ -4,7 +4,7 @@ import { useFocusEffect } from 'expo-router';
 import { View } from 'react-native';
 import { useAuth } from '../auth';
 import { getAuth, type Auth } from '../auth-state';
-import type { Track } from '../../../core/src/api';
+import type { Track } from '@plyr/next-core/api';
 import type { MediaFile } from '../pds';
 import { Action, Copy, Field, Page } from '../controls';
 import { Heading } from '../CatalogPieces';
@@ -12,7 +12,7 @@ import { measureAudioDuration, pickMedia } from '../media-picker';
 import { usePlayback } from '../playback';
 import { TagsField } from './TagsField';
 import { privatePds, type PrivateResult } from './private-pds';
-import type { PrivateCreate } from '../../../core/src/publishing/private-music';
+import type { PrivateCreate } from '@plyr/next-core/publishing/private-music';
 import { useArtistName } from './artist-name';
 
 export default function PrivateMusic() {

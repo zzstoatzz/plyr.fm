@@ -1,6 +1,6 @@
 import { api } from './api-client';
-import { type Playback, type Track } from '../../core/src/api';
-import { isPrivateTrack } from '../../core/src/track-access';
+import { type Playback, type Track } from '@plyr/next-core/api';
+import { isPrivateTrack } from '@plyr/next-core/track-access';
 
 const fresh = 60_000;
 const warmed = new Map<string, { at: number; lookup: Promise<Playback> }>();

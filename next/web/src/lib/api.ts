@@ -1,4 +1,4 @@
-import { createApi } from '$core/api';
+import { createApi } from '@plyr/next-core/api';
 
 export const apiOrigin = (import.meta.env.PUBLIC_API_URL || 'https://api.next.plyr.fm').replace(/\/$/, '');
 const listenerKey = 'plyr-next:anonymous-play-listener';

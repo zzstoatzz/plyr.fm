@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { player } from './player.svelte';
-	import { trackArtwork } from '$core/artwork';
+	import { trackArtwork } from '@plyr/next-core/artwork';
 	import { artistName } from './tracks';
 	import Artwork from './ui/Artwork.svelte';
 	import Icon from './ui/Icon.svelte';

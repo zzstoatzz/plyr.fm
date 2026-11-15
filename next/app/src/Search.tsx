@@ -3,7 +3,7 @@ import { MagnifyingGlass as SearchIcon, X, CaretRight as ChevronRight } from './
 import { useCallback, useEffect, useRef, useState, type ComponentRef } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { api } from './api-client';
-import { type SearchHit } from '../../core/src/api';
+import { type SearchHit } from '@plyr/next-core/api';
 import { Cover, Heading, Status, errorMessage, useResource, type Play } from './CatalogPieces';
 import { Text } from './Text';
 import { useAppearance } from './appearance';

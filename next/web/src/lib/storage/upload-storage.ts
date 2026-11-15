@@ -1,5 +1,5 @@
-import { sameRecord } from '../../../../core/src/publishing/create-operation';
-import { uploadOperation, type UploadStorage } from '../../../../core/src/publishing/upload-model';
+import { sameRecord } from '@plyr/next-core/publishing/create-operation';
+import { uploadOperation, type UploadStorage } from '@plyr/next-core/publishing/upload-model';
 let database: Promise<IDBDatabase> | undefined;
 function open() {
   return database ??= new Promise<IDBDatabase>((resolve, reject) => {

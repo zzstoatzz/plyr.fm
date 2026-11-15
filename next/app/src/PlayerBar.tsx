@@ -1,4 +1,4 @@
-import { displayUrl, trackArtwork } from '../../core/src/artwork';
+import { displayUrl, trackArtwork } from '@plyr/next-core/artwork';
 import { Playlist as ListMusic, X } from './icons';
 import { Text } from './Text';
 import { router, usePathname, type Href } from 'expo-router';
