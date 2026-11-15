@@ -88,15 +88,24 @@ export function wavBuffer({ durationSeconds = 0.2, sampleRate = 8000 } = {}) {
 	return b;
 }
 
-/** the zds consent page: expand the password form and authorize. */
 export async function authorizeOnPds(page, who = HANDLE, secret = PASSWORD) {
-	await page.waitForTimeout(800);
-	const usePassword = page.getByText('use password instead');
-	if (await usePassword.count()) await usePassword.click().catch(() => undefined);
-	await page.locator('input[name="username"]').fill(who);
-	await page.locator('input[name="password"]').fill(secret);
-	await page.getByRole('button', { name: 'authorize' }).click({ timeout: 60000 });
-	await page.waitForURL((u) => u.href.startsWith(APP), { timeout: 30000 });
+	const password = page.locator('input[name="password"]:visible');
+	const usePassword = page.getByText(/^(use password(?: instead)?)$/i).filter({ visible: true });
+	const authorize = page.getByRole('button', { name: /^authorize$/i });
+	await password.or(usePassword).or(authorize).first().waitFor();
+	if (await usePassword.isVisible()) {
+		await usePassword.click();
+		await password.waitFor();
+	}
+	if (await password.isVisible()) {
+		const username = page.locator('input[name="username"]:visible');
+		if (await username.count()) await username.fill(who);
+		await password.fill(secret);
+		const signIn = page.getByRole('button', { name: /^sign in$/i });
+		if (await signIn.isVisible()) await signIn.click();
+	}
+	await authorize.click({ timeout: 60000 });
+	await page.waitForURL((url) => url.origin === new URL(APP).origin, { timeout: 30000 });
 }
 
 export async function signIn(page, who = HANDLE, secret = PASSWORD) {
