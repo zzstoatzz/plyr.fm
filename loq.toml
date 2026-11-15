@@ -570,3 +570,7 @@ max_lines = 623
 [[rules]]
 path = "next/backend/src/internal/projection/postgres_list_store.zig"
 max_lines = 511
+
+[[rules]]
+path = "next/core/src/pds.ts"
+max_lines = 516

@@ -67,11 +67,15 @@ async function check(browser, accounts, width, scheme) {
       metrics: { member_count: members.length, available_count: members.filter(member => member.track).length, total_plays: 0 }
     };
   }
-  let loseCreate = true, creates = 0, playlistUri, albumUri;
+  let loseCreate = true, loseDelete = false, creates = 0, playlistUri, albumUri;
   let createBody;
   const { page, context } = await fixturePage(browser, accounts, {
     dist: path.resolve(__dirname, '../build'), context: { viewport: { width, height: 900 }, colorScheme: scheme },
     discardPdsResponse(endpoint) {
+      if (loseDelete && endpoint === '/xrpc/com.atproto.repo.deleteRecord') {
+        loseDelete = false;
+        return true;
+      }
       if (!loseCreate || endpoint !== '/xrpc/com.atproto.repo.createRecord' || createBody?.record?.listType !== 'playlist') return false;
       loseCreate = false;
       return true;
@@ -320,8 +324,16 @@ async function check(browser, accounts, width, scheme) {
     assert.equal((await read(albumUri)).cid, changedAlbum.cid);
     await button('reload latest album').click();
     await button('delete album').click();
+    if (width === 390) {
+      loseDelete = true;
+    } else {
+      await xrpc('com.atproto.repo.deleteRecord', { token, input: {
+        repo: did, collection: listCollection, rkey: albumUri.split('/').at(-1), swapRecord: changedAlbum.cid
+      } });
+    }
     await button('confirm delete').click();
     await page.waitForURL(origin + '/library');
+    assert.equal(loseDelete, false);
     assert.equal((await read(albumUri)).error, 'RecordNotFound');
     assert.equal(projection.has(albumUri), false);
     for (const track of tracks) assert.equal((await read(track.record.uri)).cid, track.record.cid, 'album deletion leaves tracks published');

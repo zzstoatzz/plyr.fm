@@ -1,5 +1,5 @@
 import { publicTrackReference, assertPublicCollection } from './publishing/track-reference';
-import { repoOk as ok, getRecord, listRecords, createRecord, putRecord, uploadRepoBlob, type RepoRpc } from './publishing/repo-rpc';
+import { RepoResponseError, repoOk as ok, getRecord, listRecords, createRecord, putRecord, uploadRepoBlob, type RepoRpc } from './publishing/repo-rpc';
 import type { createApi, AwaitStatus, Track } from './api';
 import type { Auth } from './auth-state';
 import type { AuthConfig } from './auth-config';
@@ -335,14 +335,31 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 
 	async function deleteCollection(uri: string, kind: 'album' | 'playlist', confirmedCid?: string): Promise<AwaitStatus> {
 		const { rpc, did } = session();
-		const rkey = ownedRkey(uri, did, LIST());
-		const { cid } = await readList(uri, kind);
+		const address = { repo: did, collection: LIST(), rkey: ownedRkey(uri, did, LIST()) };
+		async function currentCid() {
+			try { return (await readList(uri, kind)).cid; }
+			catch (error) {
+				if (confirmedCid && error instanceof RepoResponseError && error.error === 'RecordNotFound' &&
+					(error.status === 400 || error.status === 404)) return undefined;
+				throw error;
+			}
+		}
 		const changed = () => new CollectionOrderConflict(`this ${kind} changed elsewhere. reload it before deleting.`);
+		const cid = await currentCid();
+		if (cid === undefined) return await settle(uri);
 		if (confirmedCid && confirmedCid !== cid) throw changed();
 		assertSession();
-		const result = await rpc.post('com.atproto.repo.deleteRecord', { input: { repo: did, collection: LIST(), rkey, swapRecord: cid } });
-		if (!result.ok && result.data.error === 'InvalidSwap' && confirmedCid) throw changed();
-		ok(result);
+		try {
+			await ok(rpc.post('com.atproto.repo.deleteRecord', { input: { ...address, swapRecord: cid } }));
+		} catch (error) {
+			if (!confirmedCid) throw error;
+			assertSession();
+			const observed = await currentCid();
+			if (observed !== undefined) {
+				if (observed !== cid || (error instanceof RepoResponseError && error.error === 'InvalidSwap')) throw changed();
+				throw error;
+			}
+		}
 		return await settle(uri);
 	}
 

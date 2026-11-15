@@ -137,7 +137,7 @@
     } catch (failure) {
       if (!current()) return;
       conflict = failure instanceof CollectionOrderConflict;
-      error = failure instanceof CollectionOrderConflict ? failure.message : `could not delete this ${list.object}. try again.`;
+      error = failure instanceof CollectionOrderConflict ? failure.message : 'could not confirm deletion. try again.';
       if (conflict) { confirming = false; await tick(); if (current()) notice?.focus(); }
     } finally { if (current()) busy = false; }
   }
