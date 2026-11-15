@@ -51,7 +51,7 @@ export function sameRecord(left: unknown, right: unknown): boolean {
 }
 
 export class CollectionOrderConflict extends Error {
-  constructor() { super('this collection changed elsewhere. reload the latest order before saving.'); }
+  constructor(message = 'this collection changed elsewhere. reload the latest order before saving.') { super(message); }
 }
 
 export class CollectionOrderUnconfirmed extends Error {

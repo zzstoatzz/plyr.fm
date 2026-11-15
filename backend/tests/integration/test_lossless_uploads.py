@@ -167,7 +167,7 @@ async def test_upload_support_gated_aiff_optimizes_to_private_mp3(
     user1_client: AsyncPlyrClient,
     integration_settings: IntegrationSettings,
     drone_aiff: Path,
-):
+) -> None:
     """supporter-gated AIFF should publish, optimize, and stay private.
 
     This covers the #1408 path end-to-end: support_gate routes the source to
@@ -210,7 +210,15 @@ async def test_upload_support_gated_aiff_optimizes_to_private_mp3(
             assert track.file_type == "mp3"
             assert track.visibility == "public"
             assert track.support_gate == {"type": "any"}
-            assert track.audio_url is None  # gated: no public r2 url
+            proxy_url = f"{api_url}/audio/{track.file_id}"
+            assert track.audio_url == proxy_url
+
+            anonymous = await http.get(proxy_url, follow_redirects=False)
+            assert anonymous.status_code == 401
+            owner = await http.head(
+                proxy_url, headers=_auth_headers(token), follow_redirects=False
+            )
+            assert owner.status_code == 200
             assert track.audio_storage == "r2_private"
             assert track.pds_blob_cid is None
             assert track.original_file_id is not None
