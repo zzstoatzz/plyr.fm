@@ -97,7 +97,10 @@ jobs:
           project=plyr-fm-next
           details=$(curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$project")
-          branch=$(jq -er '.result | select(.name == "plyr-fm-next" and (.domains | index("next.plyr.fm"))) | .production_branch | select(length > 0)' <<< "$details")
+          branch=$(jq -er '.result
+            | select(.name == "plyr-fm-next" and (.domains | index("next.plyr.fm")))
+            | select(.domains | all(. != "plyr.fm" and . != "www.plyr.fm" and . != "api.plyr.fm"))
+            | .production_branch | select(test("^[A-Za-z0-9._/-]+$"))' <<< "$details")
           rollback=$(jq -er '.result.canonical_deployment | select(.environment == "production") | .id | select(length > 0)' <<< "$details")
           printf 'project=%s\nbranch=%s\n' "$project" "$branch" >> "$GITHUB_OUTPUT"
           printf 'Previous Next Pages deployment: `%s`\n' "$rollback" >> "$GITHUB_STEP_SUMMARY"
