@@ -10,6 +10,7 @@ import { recordCreator, CreateUnconfirmed } from './publishing/create-record';
 import { isCreateRkey, sameRecord, type CreateHandoff, type CreateOperation, type CreateReservation, type CreateStorage } from './publishing/create-operation';
 import { albumPublishing } from './collections/album-pds';
 import { collectionOrdering } from './collections/collection-order-pds';
+import { CollectionOrderConflict } from './collections/collection-order';
 import { MAX_AUDIO_BYTES } from './publishing/track-audio';
 import { trackEditor } from './publishing/track-pds';
 import { assertPublicUploadRecord } from './publishing/upload-model';
@@ -332,14 +333,20 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 		return writeList(playlistUri, value, cid);
 	}
 
-	async function deletePlaylist(playlistUri: string): Promise<AwaitStatus> {
+	async function deleteCollection(uri: string, kind: 'album' | 'playlist', confirmedCid?: string): Promise<AwaitStatus> {
 		const { rpc, did } = session();
-		const rkey = ownedRkey(playlistUri, did, LIST());
-		const { cid } = await readList(playlistUri);
+		const rkey = ownedRkey(uri, did, LIST());
+		const { cid } = await readList(uri, kind);
+		const changed = () => new CollectionOrderConflict(`this ${kind} changed elsewhere. reload it before deleting.`);
+		if (confirmedCid && confirmedCid !== cid) throw changed();
 		assertSession();
-		await ok(rpc.post('com.atproto.repo.deleteRecord', { input: { repo: did, collection: LIST(), rkey, swapRecord: cid } }));
-		return await settle(playlistUri);
+		const result = await rpc.post('com.atproto.repo.deleteRecord', { input: { repo: did, collection: LIST(), rkey, swapRecord: cid } });
+		if (!result.ok && result.data.error === 'InvalidSwap' && confirmedCid) throw changed();
+		ok(result);
+		return await settle(uri);
 	}
+
+	const deletePlaylist = (uri: string) => deleteCollection(uri, 'playlist');
 
 	// uploads: the audio goes to the user's PDS as a blob and the track record
 	// points at it. the appview never touches the bytes; players fetch them from
@@ -488,5 +495,5 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 			}, draft),
 		});
 	}
-	return { albumOrganization, collectionOrder, myLikes, like, unlike, newCommentAttempt, comment, deleteComment, createPlaylist, addToPlaylist, removeFromPlaylist, renameCollection, deletePlaylist, uploadTrack, myProfile, saveProfile, myTrack, editTrack, deleteTrack, reserveCreate, pendingCreates, recoverCreate, dismissCreate, archiveCreate, prepareTrackRecord, uploadedTrack, archiveUploadedTrack };
+	return { albumOrganization, collectionOrder, myLikes, like, unlike, newCommentAttempt, comment, deleteComment, createPlaylist, addToPlaylist, removeFromPlaylist, renameCollection, deleteCollection, deletePlaylist, uploadTrack, myProfile, saveProfile, myTrack, editTrack, deleteTrack, reserveCreate, pendingCreates, recoverCreate, dismissCreate, archiveCreate, prepareTrackRecord, uploadedTrack, archiveUploadedTrack };
 }
