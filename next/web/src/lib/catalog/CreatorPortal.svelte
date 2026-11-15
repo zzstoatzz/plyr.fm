@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { trackHref } from '$lib/tracks';
   import CollectionArtwork from '$lib/collections/CollectionArtwork.svelte';
   import { beforeNavigate } from '$app/navigation';
   import { onMount, tick, untrack } from 'svelte';
@@ -161,7 +162,7 @@
             {#if isPrivateTrack(track)}
               <button class="private-play" onclick={() => player.play(track, privateTracks)} aria-label={`Play ${track.metadata.title}`}>{track.metadata.title}</button>
             {:else}
-              <a href={`/track/${track.id}`}>{track.metadata.title}</a>
+              <a href={trackHref(track)}>{track.metadata.title}</a>
             {/if}
             <p class="subtle">{subtitle(track)}</p>
           </div>

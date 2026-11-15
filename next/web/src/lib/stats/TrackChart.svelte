@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { trackHref } from '$lib/tracks';
 	import type { ChartEntry } from '@plyr/next-core/api';
 	import { trackArtwork } from '@plyr/next-core/artwork';
 	import { api } from '$lib/api';
@@ -64,7 +65,7 @@
 						<Artwork src={trackArtwork(entry.track)} size={42} />
 					</span>
 					<div class="track">
-						<a class="track-title" href={'/track/' + encodeURIComponent(entry.track.id)}>{entry.track.metadata.title}</a>
+						<a class="track-title" href={trackHref(entry.track)}>{entry.track.metadata.title}</a>
 						<a class="artist" href={'/u/' + encodeURIComponent(entry.track.artist.did)}>{entry.track.artist.profile.display_name || entry.track.artist.profile.handle}</a>
 						<div class="bar" aria-hidden="true"><span style:width={(entry.period_like_count / maxLikes * 100) + '%'}></span></div>
 					</div>

@@ -87,6 +87,7 @@ export interface SearchHit {
 	object: 'search_result';
 	type: 'track' | 'artist' | 'album' | 'playlist';
 	id: string;
+	legacy_id?: number | null;
 	record: { uri: string; cid: string };
 	title: string;
 	owner: { did: string; handle: string; display_name: string };

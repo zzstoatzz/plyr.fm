@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, type Snippet } from 'svelte';
   import { resolve } from '$app/paths';
+  import { trackHref } from '$lib/tracks';
   import type { Track } from '@plyr/next-core/api';
   import { auth } from '$lib/auth';
   import Icon from '$lib/ui/Icon.svelte';
@@ -16,7 +17,7 @@
   let error = $state('');
   let confirmed = $state(false);
   let live = false;
-  const returnTo = $derived(resolve('/(app)/track/[id]', { id: track.id }));
+  const returnTo = $derived(trackHref(track));
   const count = $derived(track.metrics.like_count + Number(liked) - Number(initialLike));
 
   onMount(() => {
