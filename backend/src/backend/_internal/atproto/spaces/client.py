@@ -25,6 +25,9 @@ from backend._internal import Session as AuthSession
 from backend._internal.atproto.client import make_pds_request
 from backend._internal.atproto.spaces.mac import (
     ACCEPT_SIGNATURE_HEADER,
+    COMMIT_MAC_TYPE,
+    CURRENT_COMMIT_MAC_TYPE,
+    Encapsulation,
     SpaceMacError,
     encapsulate,
     format_mac_request,
@@ -161,11 +164,26 @@ async def _request_space_credential(
     service_url: str, payload: dict[str, str]
 ) -> httpx.Response:
     """Ask the space host for a credential; the request itself is unsigned."""
-    url = f"{service_url}/xrpc/com.atproto.space.getSpaceCredential"
+    url = f"{service_url}/xrpc/com.atproto.space.authorizeSpaceSync"
     if not is_safe_url(url):
         raise ValueError(f"unsafe service URL: {url}")
     async with httpx.AsyncClient(timeout=30) as http:
-        return await http.post(url, json=payload)
+        response = await http.post(url, json=payload)
+        if not _xrpc_error_is(response, 404, "UnknownMethod"):
+            return response
+        return await http.post(
+            f"{service_url}/xrpc/com.atproto.space.getSpaceCredential", json=payload
+        )
+
+
+def _xrpc_error_is(response: httpx.Response, status: int, name: str) -> bool:
+    if response.status_code != status:
+        return False
+    try:
+        problem = response.json()
+    except ValueError:
+        return False
+    return isinstance(problem, dict) and problem.get("error") == name
 
 
 # --- space lifecycle + record writes (owner/author, DPoP OAuth) ---------------
@@ -525,12 +543,11 @@ async def _credential_read(
     kem_key = await _kem_key(commit_mac_repo) if commit_mac_repo else None
     if commit_mac_repo and not kem_key:
         raise SpaceAccessError("space repo has no verification key")
-    for attempt in range(2):
-        credential = await get_space_credential(
-            auth_session, space, force_refresh=attempt > 0
-        )
-        encapsulation = encapsulate(kem_key) if kem_key else None
-        response = await _space_token_request(
+
+    async def request(
+        credential: SpaceCredential, encapsulation: Encapsulation | None, mac_type: str
+    ) -> httpx.Response:
+        return await _space_token_request(
             host_url,
             "GET",
             endpoint,
@@ -539,11 +556,32 @@ async def _credential_read(
             audience=audience,
             params=params,
             extra_headers=(
-                {ACCEPT_SIGNATURE_HEADER: format_mac_request(encapsulation.key_share)}
+                {
+                    ACCEPT_SIGNATURE_HEADER: format_mac_request(
+                        encapsulation.key_share, mac_type=mac_type
+                    )
+                }
                 if encapsulation
                 else None
             ),
         )
+
+    mac_type = CURRENT_COMMIT_MAC_TYPE
+    for attempt in range(2):
+        credential = await get_space_credential(
+            auth_session, space, force_refresh=attempt > 0
+        )
+        encapsulation = encapsulate(kem_key) if kem_key else None
+
+        response = await request(credential, encapsulation, mac_type)
+        if (
+            kem_key
+            and mac_type == CURRENT_COMMIT_MAC_TYPE
+            and _xrpc_error_is(response, 400, "InvalidSpaceMac")
+        ):
+            mac_type = COMMIT_MAC_TYPE
+            encapsulation = encapsulate(kem_key)
+            response = await request(credential, encapsulation, mac_type)
         if response.status_code == 401 and attempt == 0:
             continue
         if response.status_code != 200:
@@ -559,6 +597,7 @@ async def _credential_read(
                     response.headers,
                     space=space,
                     repo=commit_mac_repo,
+                    mac_type=mac_type,
                 )
             except SpaceMacError as exc:
                 raise SpaceAccessError(f"{endpoint}: {exc}") from exc
