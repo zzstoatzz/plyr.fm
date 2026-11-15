@@ -565,7 +565,7 @@ max_lines = 1140
 
 [[rules]]
 path = "next/web/scripts/check-shell.cjs"
-max_lines = 529
+max_lines = 586
 
 [[rules]]
 path = "next/backend/src/internal/projection/postgres_list_store.zig"

@@ -1,7 +1,10 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onDestroy, untrack } from 'svelte';
+	import { page } from '$app/state';
 	import { api } from '$lib/api';
-	import Icon from '$lib/ui/Icon.svelte';
+	import ArtistStats from '$lib/stats/ArtistStats.svelte';
+	import TrackChart from '$lib/stats/TrackChart.svelte';
+	import { catalogDuration } from '$lib/stats/duration';
 	import Loading from '$lib/ui/Loading.svelte';
 
 	let stats = $state<Awaited<ReturnType<typeof api.stats>>>();
@@ -10,17 +13,18 @@
 	let error = $state(false);
 	let request: AbortController | undefined;
 
+	const artistView = $derived(Boolean(page.url.searchParams.get('artist')));
 	const cards = $derived(stats && [
-		{ label: 'plays on Next', value: stats.plays.toLocaleString(), icon: 'play' },
-		{ label: 'tracks', value: stats.tracks.toLocaleString(), icon: 'music' },
-		{ label: 'artists', value: stats.artists.toLocaleString(), icon: 'user' },
-		{ label: 'of audio', value: duration(stats.duration_seconds), icon: 'clock' }
+		{ label: 'plays', value: stats.plays.toLocaleString() },
+		{ label: 'tracks', value: stats.tracks.toLocaleString() },
+		{ label: 'artists', value: stats.artists.toLocaleString() },
+		{ label: 'catalog runtime', value: catalogDuration(stats.duration_seconds) }
 	] as const);
 
-	onMount(() => {
-		void refresh();
-		return () => request?.abort();
+	$effect(() => {
+		if (!artistView) untrack(() => { if (!attempted) void refresh(); });
 	});
+	onDestroy(() => request?.abort());
 
 	async function refresh() {
 		if (request) return;
@@ -32,55 +36,78 @@
 		catch { if (!controller.signal.aborted) error = true; }
 		finally { request = undefined; loading = false; attempted = true; }
 	}
-
-	function duration(seconds: number) {
-		const minutes = Math.floor(seconds / 60);
-		const hours = Math.floor(minutes / 60);
-		if (hours >= 24) return `${Math.floor(hours / 24)}d ${hours % 24}h`;
-		if (hours) return `${hours}h ${minutes % 60}m`;
-		return `${minutes}m`;
-	}
 </script>
 
 <svelte:head><title>stats · plyr.fm</title></svelte:head>
 
 <section class="page-content stats">
-	<h1>stats</h1>
-	{#if loading && !cards}<Loading label="loading stats" />{/if}
-	{#if cards}
-		<dl class="totals" aria-label="Catalog totals" aria-busy={loading}>
-			{#each cards as card (card.label)}
-				<div class="card">
-					<Icon name={card.icon} size={22} />
-					<dt>{card.label}</dt>
-					<dd>{card.value}</dd>
-				</div>
-			{/each}
-		</dl>
-		<section class="scope" aria-labelledby="stats-scope">
-			<h2 id="stats-scope">what counts</h2>
-			<p>tracks, artists and audio cover the discoverable catalog on Next, including tracks for supporters.</p>
-			<p>plays are qualifying listens counted by Next. audio is the total running time of the catalog.</p>
-			{#if stats}
-				<p>updated <time datetime={new Date(stats.updated_at_ms).toISOString()}>{new Date(stats.updated_at_ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</time>. Next caches totals for up to a minute.</p>
+	<header class="intro">
+		<h1>stats</h1>
+		{#if !artistView}
+			<nav aria-label="on this page">
+				<a href="#most-liked">most liked tracks</a>
+				<a href="#artist-stats">artist stats</a>
+			</nav>
+		{/if}
+	</header>
+
+	{#if artistView}
+		<div class="artist-detail"><ArtistStats /></div>
+	{:else}
+		<section class="overview" aria-labelledby="overview-title" aria-busy={loading}>
+			<header class="overview-heading">
+				<h2 id="overview-title">catalog overview</h2>
+				{#if stats}
+					<p class="subtle">updated <time datetime={new Date(stats.updated_at_ms).toISOString()}>{new Date(stats.updated_at_ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</time></p>
+				{/if}
+			</header>
+			{#if loading && !cards}<Loading inline label="loading stats" />{/if}
+			{#if cards}
+				<dl class="totals" aria-label="Catalog totals">
+					{#each cards as card (card.label)}
+						<div><dt>{card.label}</dt><dd>{card.value}</dd></div>
+					{/each}
+				</dl>
 			{/if}
+			<div class="overview-actions">
+				{#if cards}
+					<details>
+						<summary>what counts</summary>
+						<p>the overview covers music you can discover on Next and plays counted here. artist totals can include tracks shared by direct link.</p>
+					</details>
+				{/if}
+				{#if attempted}<button class="text-button refresh" type="button" aria-disabled={loading} onclick={() => void refresh()}>{loading ? 'refreshing…' : error ? 'try again' : 'refresh stats'}</button>{/if}
+			</div>
+			{#if error}<p role="alert" class="state">{stats ? 'could not refresh stats.' : 'could not load stats.'}</p>{/if}
 		</section>
+
+		<div class="explore">
+			<TrackChart />
+			<ArtistStats />
+		</div>
 	{/if}
-	{#if error}<p role="alert" class="state">{stats ? 'could not refresh stats.' : 'could not load stats.'}</p>{/if}
-	{#if attempted}<button class="text-button refresh" type="button" aria-disabled={loading} onclick={() => void refresh()}>{loading ? 'refreshing…' : error ? 'try again' : 'refresh stats'}</button>{/if}
 </section>
 
 <style>
 	.stats { max-width: 68rem; }
-	h1 { font-size: clamp(1.65rem, 4vw, 2.6rem); letter-spacing: -0.035em; }
-	.totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(9rem, 100%), 1fr)); gap: 0.75rem; margin: 1.25rem 0; }
-	.card { min-width: 0; display: grid; gap: 0.55rem; border-radius: 0.95rem; padding: clamp(0.9rem, 3vw, 1.3rem); background: var(--surface); border: 1px solid var(--line); color: var(--accent); }
-	dt { grid-row: 3; color: var(--muted); }
-	dd { margin: 0; color: var(--text); font-weight: 700; font-size: clamp(1.3rem, 5vw, 1.75rem); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-	.scope { max-width: 40rem; display: grid; gap: 0.5rem; }
-	h2 { font-size: 1.1rem; }
-	.scope p { color: var(--muted); }
-	.refresh { margin-top: 1rem; border: 1px solid var(--line); border-radius: 2rem; padding-inline: 1rem; }
+	.intro { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem 1.25rem; }
+	h1 { font-size: clamp(1.9rem, 4vw, 2.6rem); letter-spacing: -0.035em; }
+	h2 { font-size: 1.2rem; }
+	nav { display: flex; gap: 1rem; flex-wrap: wrap; color: var(--muted); }
+	nav a { display: inline-flex; align-items: center; min-height: 2.75rem; text-decoration: underline; text-underline-offset: 0.2em; }
+	.overview { margin: 1.1rem 0 1.5rem; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 0.75rem 0 0.45rem; }
+	.overview-heading, .overview-actions { display: flex; justify-content: space-between; align-items: start; gap: 0.5rem 1rem; flex-wrap: wrap; }
+	.overview-actions { align-items: baseline; }
+	.totals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem 0.75rem; margin: 1rem 0 0.65rem; }
+	.totals div { display: grid; align-content: start; }
+	dt { grid-row: 2; color: var(--muted); font-size: 0.875rem; }
+	dd { margin: 0; font-weight: 690; font-size: clamp(1.5rem, 4vw, 2.1rem); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+	details p { color: var(--muted); max-width: 30rem; padding: 0 0 0.6rem; }
+	summary { line-height: 2.75rem; cursor: pointer; }
+	.refresh { text-decoration: underline; text-underline-offset: 0.2em; }
 	.refresh[aria-disabled="true"] { opacity: 0.6; cursor: wait; }
-	@media (max-width: 720px) { .totals { grid-template-columns: repeat(auto-fit, minmax(min(8.5rem, 100%), 1fr)); } }
+	.artist-detail { max-width: 37rem; margin-top: 1rem; }
+	.explore { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: clamp(1.5rem, 5vw, 3rem); }
+	@media (max-width: 980px) { .explore { grid-template-columns: minmax(0, 1fr); } }
+	@media (max-width: 720px) { .totals { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 </style>

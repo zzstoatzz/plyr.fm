@@ -200,6 +200,30 @@ async function statsScreen(browser, phone, scheme) {
       if (visits === 2 || visits === 4) return route.fulfill({ status: 503, json: {} });
       return route.fulfill({ json: { object: 'platform_stats', plays: 393 + visits, tracks: 1422, artists: 122, duration_seconds: 532800, updated_at_ms: 1794651020000 } });
     });
+    const chartTrack = tracks[0];
+    const did = chartTrack.artist.did;
+    const artist = { did, handle: 'alice.test', display_name: 'Alice Example' };
+    let weekReads = 0;
+    let artistLookups = 0;
+    await page.route('https://api.next.plyr.fm/v1/charts/tracks?**', route => {
+      const params = new URL(route.request().url()).searchParams;
+      if (params.get('limit') !== '5') return route.fallback();
+      const period = params.get('period');
+      if (period === 'week' && ++weekReads === 1) return route.fulfill({ status: 503, json: {} });
+      return route.fulfill({ json: { data: period === 'all_time' ? [] : [{ rank: 1, period_like_count: 12, track: chartTrack }] } });
+    });
+    await page.route('https://api.next.plyr.fm/v1/search?**', route => {
+      const params = new URL(route.request().url()).searchParams;
+      assert.equal(params.get('types'), 'artist');
+      const match = { id: did, title: artist.display_name, owner: artist };
+      return route.fulfill({ json: { data: params.get('q') === 'alice' ? [match] : [] } });
+    });
+    await page.route('https://api.next.plyr.fm/v1/artists/**', route => {
+      if (!new URL(route.request().url()).pathname.endsWith('/metrics')) return route.fulfill({ json: artist });
+      artistLookups += 1;
+      return route.fulfill({ json: { totals: { tracks: 3, plays: 57, duration_seconds: 1200 },
+        top_track: { id: chartTrack.id, title: chartTrack.metadata.title, play_count: 42 } } });
+    });
     await page.goto(origin);
     await page.getByTestId('home-track-row').first().waitFor();
     assert.equal(reads, 0, 'stats do not load in the home shell');
@@ -218,7 +242,33 @@ async function statsScreen(browser, phone, scheme) {
     assert.equal(await page.getByLabel('Catalog totals').evaluate(node =>
       getComputedStyle(node).gridTemplateColumns.split(' ').filter(size => Number.parseFloat(size) > 0).length
     ), phone ? 2 : 4);
+    const chart = page.getByRole('region', { name: 'most liked tracks', exact: true });
+    await chart.getByText('12 likes').waitFor();
     await page.screenshot({ path: path.join(output, `${width}-${scheme}-stats.png`) });
+    await chart.getByRole('button', { name: '7 days', exact: true }).click();
+    await chart.getByRole('alert').waitFor();
+    await chart.getByRole('button', { name: 'retry track chart' }).click();
+    await chart.getByText('12 likes').waitFor();
+    assert.ok(await chart.getByRole('button', { name: '7 days', exact: true }).evaluate(button => document.activeElement === button));
+    await chart.getByRole('button', { name: 'all time', exact: true }).click();
+    await chart.getByText('no likes in this time range.').waitFor();
+    assert.equal(artistLookups, 0, 'artist metrics are fetched only after selection');
+    const input = page.getByRole('searchbox', { name: 'find an artist', exact: true });
+    await input.fill('unknown');
+    await page.getByText('no artists found for “unknown”.').waitFor();
+    await input.fill('@alice');
+    const link = page.getByRole('link', { name: 'Alice Example @alice.test' });
+    await link.waitFor();
+    await input.press('Tab');
+    assert.ok(await link.evaluate(item => item === document.activeElement));
+    await page.keyboard.press('Enter');
+    await page.waitForURL('**/stats?artist=*#artist-stats');
+    await page.getByLabel('artist totals').getByText('57', { exact: true }).waitFor();
+    assert.equal(await page.getByRole('region', { name: 'artist stats', exact: true }).getByRole('link', { name: chartTrack.metadata.title, exact: true }).count(), 0,
+      'artist metrics can include an unlisted most-played track');
+    await page.getByRole('navigation', { name: 'stats breadcrumb' }).getByRole('link', { name: 'stats', exact: true }).click();
+    await page.waitForURL('**/stats#artist-stats');
+    assert.equal(await page.getByLabel('artist totals').count(), 0);
     await page.getByRole('button', { name: 'refresh stats' }).click();
     await page.getByRole('alert').getByText('could not refresh stats.').waitFor();
     assert.ok(await page.getByText('394', { exact: true }).isVisible(), 'failed refresh keeps the last totals');
@@ -232,6 +282,13 @@ async function statsScreen(browser, phone, scheme) {
     assert.ok(await page.getByRole('button', { name: 'refresh stats' }).evaluate(button => document.activeElement === button),
       'retry keeps keyboard focus on the same action');
     assert.equal(reads, 5 + Number(phone));
+    await page.goto(origin + '/stats?artist=' + encodeURIComponent(did) + '#artist-stats');
+    const artistTotals = page.getByLabel('artist totals');
+    await artistTotals.getByText('57', { exact: true }).waitFor();
+    assert.ok(await artistTotals.evaluate(element => element.getBoundingClientRect().top < innerHeight));
+    assert.equal(await page.getByRole('region', { name: 'most liked tracks', exact: true }).count(), 0);
+    assert.equal(reads, 5 + Number(phone), 'a direct artist view does not fetch catalog totals');
+    await page.screenshot({ path: path.join(output, `${width}-${scheme}-artist-stats.png`) });
     assert.deepEqual(errors, []);
   } finally { await context.close(); }
 }
