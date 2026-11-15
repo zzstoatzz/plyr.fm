@@ -6,9 +6,9 @@ const path = require('node:path');
 const { identity, serviceToken } = require('../../app/scripts/queue-fixture.cjs');
 
 async function main() {
-  const owner = identity(), paused = identity();
-  paused.did = 'did:plc:so3ysj7gypel6w7mixdfjhkh';
-  const documents = new Map([owner, paused].map(account => [account.did, {
+  const owner = identity(), resumed = identity();
+  resumed.did = 'did:plc:so3ysj7gypel6w7mixdfjhkh';
+  const documents = new Map([owner, resumed].map(account => [account.did, {
     id: account.did, verificationMethod: [{ id: `${account.did}#atproto`, type: 'Multikey', controller: account.did, publicKeyMultibase: account.multibase }], service: [],
   }]));
   let hold = false;
@@ -54,14 +54,14 @@ async function main() {
     assert.equal((await post({ ...reservation, serviceToken: serviceToken(owner) })).status, 403, 'Jam scope cannot authorize uploads');
     assert.equal((await post({ ...authorized, sizeBytes: 1610612737 })).status, 400);
     assert.equal((await post({ ...authorized, downloadPolicy: 'off' })).status, 400);
-    assert.equal((await post({ ...authorized, recordUri: `at://${paused.did}/fm.plyr.dev.track/3mtest` })).status, 400);
-    assert.equal((await post({ ...reservation, recordUri: `at://${paused.did}/fm.plyr.dev.track/3mtest`, serviceToken: serviceToken(paused, { lxm: 'fm.plyr.dev.upload.authorize' }) })).status, 403, 'operator pause preserved');
+    assert.equal((await post({ ...authorized, recordUri: `at://${resumed.did}/fm.plyr.dev.track/3mtest` })).status, 400);
+    assert.equal((await post({ ...reservation, recordUri: `at://${resumed.did}/fm.plyr.dev.track/3mtest`, serviceToken: serviceToken(resumed, { lxm: 'fm.plyr.dev.upload.authorize' }) })).status, 200, 'AddLine can authorize uploads after the pause is lifted');
     assert.equal((await fetch(`${base}/internal/uploads/inspect`, { method: 'POST', body: '{}' })).status, 403);
     hold = true;
     const pending = [post(authorized), post(authorized)];
     try {
       await Promise.race([heldReady, new Promise((_, reject) => setTimeout(() => reject(new Error('two uploads did not reach authority')), 3000))]);
-      const playback = await fetch(`${base}/v1/playback/join`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ serviceToken: serviceToken(paused), clientId: 'upload-isolation-test' }) });
+      const playback = await fetch(`${base}/v1/playback/join`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ serviceToken: serviceToken(resumed), clientId: 'upload-isolation-test' }) });
       assert.equal(playback.status, 200, 'held upload authorities must not exhaust personal playback admission');
       await playback.arrayBuffer();
     } finally {
@@ -69,7 +69,7 @@ async function main() {
       for (const respond of held) respond();
       await Promise.all(pending.map(async result => (await result).arrayBuffer()));
     }
-    console.log('upload admission HTTP: valid capability, distinct scope, owner/bounds/policy/pause, internal auth passed');
+    console.log('upload admission HTTP: valid capability, distinct scope, owner/bounds/policy/resumed account, internal auth passed');
   } finally {
     child.kill('SIGTERM');
     await new Promise(resolve => child.once('exit', resolve));

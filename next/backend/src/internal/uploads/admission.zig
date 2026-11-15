@@ -161,13 +161,20 @@ test "processing admits legacy inputs only with bounded source and output reserv
 
 pub fn requireAllowed(a: std.mem.Allocator, owner: []const u8) !void {
     const policy = try std.json.parseFromSliceLeaky(struct { paused_upload_dids: []const []const u8 }, a, @embedFile("upload_contract"), .{ .ignore_unknown_fields = true });
-    for (policy.paused_upload_dids) |did| if (std.mem.eql(u8, owner, did)) return error.UploadPaused;
+    try requireAllowedByPolicy(owner, policy.paused_upload_dids);
+}
+
+fn requireAllowedByPolicy(owner: []const u8, paused_dids: []const []const u8) !void {
+    for (paused_dids) |did| if (std.mem.eql(u8, owner, did)) return error.UploadPaused;
 }
 
 test "operator upload pause remains enforced independently of record replay" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    try std.testing.expectError(error.UploadPaused, requireAllowed(arena.allocator(), "did:plc:so3ysj7gypel6w7mixdfjhkh"));
+    const paused = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
+    try std.testing.expectError(error.UploadPaused, requireAllowedByPolicy(paused, &.{paused}));
+    try requireAllowedByPolicy("did:plc:bbbbbbbbbbbbbbbbbbbbbbbb", &.{paused});
+    try requireAllowed(arena.allocator(), "did:plc:so3ysj7gypel6w7mixdfjhkh");
     try requireAllowed(arena.allocator(), "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa");
 }
 

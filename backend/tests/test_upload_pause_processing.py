@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import backend.storage
-from backend._internal import Session
+from backend._internal import Session, upload_policy
 from backend._internal.clients import moderation
 from backend._internal.jobs import job_service
 from backend._internal.moderation import scan_track_for_copyright
@@ -23,6 +23,11 @@ from backend.models.job import JobStatus, JobType
 
 DID = "did:plc:so3ysj7gypel6w7mixdfjhkh"
 URI = f"at://{DID}/fm.plyr.track/existing"
+
+
+@pytest.fixture(autouse=True)
+def paused_policy(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(upload_policy, "PAUSED_UPLOAD_DIDS", frozenset({DID}))
 
 
 @pytest.fixture

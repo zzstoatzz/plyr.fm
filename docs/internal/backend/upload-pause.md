@@ -1,7 +1,8 @@
 # Temporary account upload pauses
 
-`backend/_internal/upload_policy.py` owns `PAUSED_UPLOAD_DIDS`, a hardcoded set
-of stable account DIDs. It initially contains AddLine. Adding or removing a DID
+`backend/src/backend/upload_contract.json` owns `paused_upload_dids`, shared by
+the Python and Next backends. The list is empty after lifting AddLine’s pause
+on November 15, 2026. Adding or removing a DID
 requires a reviewed backend release; handles and linked accounts do not inherit
 another account's pause.
 
