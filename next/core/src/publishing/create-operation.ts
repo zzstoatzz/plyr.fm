@@ -1,7 +1,7 @@
 import type { Did } from '../auth-state.ts';
 
 export type CreateReservation = { owner: Did; collection: string; rkey: string; uri: string };
-export type CreateOperation = CreateReservation & { record: Record<string, unknown>; cid?: string; archived?: boolean; draftId?: string };
+export type CreateOperation = CreateReservation & { record: Record<string, unknown>; cid?: string; archived?: boolean; draftId?: string; autoTag?: boolean };
 export interface CreateStorage {
   load(owner: string, collection: string): Promise<CreateOperation[]>;
   put(operation: CreateOperation): Promise<void>;
@@ -30,10 +30,12 @@ export function createOperation(value: unknown): CreateOperation {
     || (item.record as Record<string, unknown>).$type !== item.collection
     || (item.cid !== undefined && typeof item.cid !== 'string')
     || (item.draftId !== undefined && typeof item.draftId !== 'string')
+    || (item.autoTag !== undefined && typeof item.autoTag !== 'boolean')
     || (item.archived !== undefined && typeof item.archived !== 'boolean')) throw new Error('could not read pending creation.');
   return { owner: item.owner as Did, collection: item.collection, rkey: item.rkey, uri: item.uri,
     record: item.record as Record<string, unknown>, ...(item.cid === undefined ? {} : { cid: item.cid }),
-    ...(item.archived === undefined ? {} : { archived: item.archived }), ...(item.draftId === undefined ? {} : { draftId: item.draftId }) };
+    ...(item.archived === undefined ? {} : { archived: item.archived }), ...(item.draftId === undefined ? {} : { draftId: item.draftId }),
+    ...(item.autoTag === undefined ? {} : { autoTag: item.autoTag }) };
 }
 
 export function sameRecord(left: unknown, right: unknown): boolean {

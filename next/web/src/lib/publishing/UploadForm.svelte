@@ -41,6 +41,7 @@
   let details = $state(false);
   let consent = $state(false);
   let autoTag = $state(false);
+  let editorDraft = $derived(JSON.stringify({ title, album, description, tags, autoTag, named: !!title && title === autoTitle }));
   let reattach = $state(false);
   let imageBusy = $state(false);
   let imageVersion = 0;
@@ -94,7 +95,9 @@
       details = !!(album || description || tags);
       reattach = !!(title || details);
       consent = localStorage.getItem(consentKey) === 'yes';
-      autoTag = localStorage.getItem(autoTagKey) === 'yes';
+      autoTag = draft && typeof draft === 'object' && 'autoTag' in draft && typeof draft.autoTag === 'boolean'
+        ? draft.autoTag
+        : localStorage.getItem(autoTagKey) === 'yes';
     } catch { draftProblem = 'could not restore your draft on this device.'; }
     hydrated = true;
     if (owner) void api.artist(owner).then(profile => { if (current()) profileName = creditName(profile.display_name); }, () => {});
@@ -113,7 +116,7 @@
     if (!hydrated) return;
     try {
       if (title || album || description || tags) {
-        localStorage.setItem(draftKey, JSON.stringify({ title, album, description, tags, named: !!title && title === autoTitle }));
+        localStorage.setItem(draftKey, editorDraft);
       } else localStorage.removeItem(draftKey);
       draftProblem = '';
     } catch { draftProblem = 'changes to this draft could not be saved on this device.'; }
@@ -196,7 +199,17 @@
 
   async function editAgain(id: string) {
     if (!current() || imageBusy) return;
-    const input = await uploadQueue.takeBack(id).catch(failure => {
+    const input = await uploadQueue.takeBack(id, input => {
+      if (!current()) throw new Error('reopen the upload page to edit this draft.');
+      const previous = localStorage.getItem(draftKey);
+      const saved = JSON.stringify({ title: input.title, album: input.album, description: input.description, tags: input.tags?.join('\n'), autoTag: !!input.autoTag });
+      localStorage.setItem(draftKey, saved);
+      return () => {
+        if (localStorage.getItem(draftKey) !== saved) return;
+        if (previous === null) localStorage.removeItem(draftKey);
+        else localStorage.setItem(draftKey, previous);
+      };
+    }).catch(failure => {
       if (current()) formProblem = message(failure, 'could not reopen the upload. try again.');
     });
     if (!current() || !input || !(input.file instanceof File)) return;
@@ -219,8 +232,14 @@
     event.preventDefault();
     if (submitting || !current() || !audio || !title.trim() || !artist || tagProblem || imageBusy || loading || recoveryProblem || creationBlocksUpload || (service && (!consent || !account.uploadStorage))) return;
     submitting = true;
+    const submittedDraft = editorDraft;
     try {
       await uploadQueue.add({ file: audio, artwork: cover, title, artist, album, description, tags: tags.trim() ? tags.split('\n') : undefined, autoTag });
+      try {
+        if (localStorage.getItem(draftKey) === submittedDraft) localStorage.removeItem(draftKey);
+      } catch {
+        if (current()) draftProblem = 'the upload was queued, but this device could not clear the editor draft.';
+      }
       if (!current()) return;
       audio = undefined;
       cover = undefined;

@@ -30,6 +30,26 @@ async function interruptDraftCleanup(page) {
   });
 }
 
+async function holdDraftCompletion(page) {
+  await page.evaluate(() => {
+    const proto = IDBTransaction.prototype;
+    const completion = Object.getOwnPropertyDescriptor(proto, 'oncomplete');
+    Object.defineProperty(proto, 'oncomplete', {
+      ...completion,
+      set(callback) {
+        if (this.mode !== 'readwrite' || this.db.name !== 'plyr-next-upload-drafts') {
+          completion.set.call(this, callback);
+          return;
+        }
+        completion.set.call(this, event => {
+          Object.defineProperty(proto, 'oncomplete', completion);
+          window.releaseDraftTransaction = () => callback.call(this, event);
+        });
+      },
+    });
+  });
+}
+
 async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'regular') {
   const did = accounts[handle].did;
   let loseReply = true, blobWrites = 0;
@@ -69,6 +89,7 @@ async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'reg
   const blobStarted = Promise.withResolvers();
   const releaseBlob = Promise.withResolvers();
   await context.route(blobRoute, async route => {
+    if (scenario === 'edit-navigation') return route.fulfill({ status: 400, json: { error: 'InvalidRequest', message: 'fixture rejected the audio' } });
     if (++blobWrites === 1 && scenario === 'before-create') {
       blobStarted.resolve();
       await releaseBlob.promise;
@@ -157,7 +178,38 @@ async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'reg
     await page.locator('input[type=file][accept^="image"]').setInputFiles({ name: 'cover.png', mimeType: 'image/png', buffer: cover });
     if (scenario === 'regular') await page.screenshot({ path: path.join(output, width + '-' + theme + '.png'), fullPage: true });
     if (scenario === 'after-create') await interruptDraftCleanup(page);
+    if (scenario === 'after-create') await page.getByRole('checkbox', { name: 'auto-tag with recommended genres' }).check();
+    if (scenario === 'submit-navigation') await holdDraftCompletion(page);
     await submit.click();
+    if (scenario === 'submit-navigation' || scenario === 'edit-navigation') {
+      if (scenario === 'edit-navigation') {
+        const edit = page.getByRole('button', { name: 'edit and try again' });
+        await edit.waitFor({ timeout: 5000 });
+        await holdDraftCompletion(page);
+        await edit.click();
+      }
+      await page.waitForFunction(() => typeof window.releaseDraftTransaction === 'function');
+      await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'settings', exact: true }).click();
+      await page.getByRole('heading', { name: 'settings', exact: true }).waitFor();
+      await page.evaluate(() => window.releaseDraftTransaction());
+      if (scenario === 'submit-navigation') {
+        await page.waitForFunction(key => localStorage.getItem(key) === null, `plyr-upload-draft:${did}`);
+      }
+      await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'upload', exact: true }).click();
+      if (scenario === 'edit-navigation') {
+        await page.getByText('your draft is still here. choose the audio file again.').waitFor();
+        assert.equal(await title.inputValue(), 'direct from Svelte');
+        assert.equal(await page.getByRole('textbox', { name: 'tags', exact: true }).inputValue(), 'ambient\nfield recording');
+        assert.equal(writes.length, 0);
+      } else {
+        await page.getByText('"direct from Svelte" uploaded').waitFor({ timeout: 5000 });
+        assert.equal(await title.inputValue(), '');
+        assert.equal(writes.length, 1);
+      }
+      assert.deepEqual(errors, []);
+      console.log(`editor survived ${scenario} at ${width}px (${theme})`);
+      return;
+    }
     if (scenario === 'before-create' || scenario === 'after-create') {
       const draft = page.locator('.recovery-card').filter({ has: page.getByRole('heading', { name: 'direct from Svelte', exact: true }) });
       if (scenario === 'before-create') {
@@ -186,7 +238,9 @@ async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'reg
         await draft.getByRole('button', { name: 'resume creation' }).waitFor();
         assert.equal(await draft.getByRole('button', { name: 'resume queued upload' }).count(), 0);
         await draft.getByRole('button', { name: 'resume creation' }).click();
+        const genreRequest = page.waitForRequest(genreEndpoint, { timeout: 5000 });
         await draft.getByRole('button', { name: 'done with creation' }).click();
+        assert.equal((await genreRequest).postDataJSON().uri, `at://${did}/${collection}/${writes[0].rkey}`);
         await draft.waitFor({ state: 'detached', timeout: 5000 });
       }
       assert.equal(writes.length, 1, 'recovery writes one record');
@@ -349,5 +403,7 @@ async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'reg
     await verify(browser, accounts, 390, 'light', mp3, wav, 'before-create');
     await verify(browser, accounts, 1280, 'dark', mp3, wav, 'after-create');
     await verify(browser, accounts, 390, 'dark', mp3, wav, 'after-transfer');
+    await verify(browser, accounts, 390, 'light', mp3, wav, 'submit-navigation');
+    await verify(browser, accounts, 1280, 'dark', mp3, wav, 'edit-navigation');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

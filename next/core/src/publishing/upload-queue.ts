@@ -8,7 +8,7 @@ import type { UploadTransport } from './upload-transport';
 import type { UploadRecoveryDisposition } from './upload-recovery';
 import { draftInRecovery, queuedUploadDraft, reattachQueuedUpload, type QueuedUploadDraft, type QueuedUploadDrafts } from './queued-upload-draft.ts';
 
-type Job = UploadJobView & { owner: Did; draft?: QueuedUploadDraft; input?: NewTrack; file?: MediaFile; operation?: UploadOperation; rkey?: string; uploadId?: string };
+type Job = UploadJobView & { owner: Did; draft?: QueuedUploadDraft; input?: NewTrack; file?: MediaFile; operation?: UploadOperation; rkey?: string; uploadId?: string; handedOff?: boolean };
 type Session = Pick<Auth<unknown>, 'did' | 'agent' | 'uploadStorage'>;
 type Pds = ReturnType<typeof createPublicPds>;
 const POLL_MS = 4_000, NUDGE_MS = 20_000, ATTEMPTS = 5, KEEP_FINISHED = 4;
@@ -85,7 +85,10 @@ export function createUploadQueue<Rpc extends RepoRpc>({
   }
 
   async function runPds(job: Job, input: NewTrack, reservation: CreateReservation, draft: QueuedUploadDraft) {
-    const handedOff = async () => { await queuedDrafts.take(draft); };
+    const handedOff = async () => {
+      job.handedOff = true;
+      await queuedDrafts.take(draft);
+    };
     try {
       await withRetries(job, () => createPds(session(job)).uploadTrack(input, reservation, { id: draft.id, handedOff }));
     } catch (failure) {
@@ -176,6 +179,7 @@ export function createUploadQueue<Rpc extends RepoRpc>({
     const operation: UploadOperation = { ...reservation, draftId: draft.id, record: { ...record, fileType: format.fileType }, uploadId: randomUUID(),
       name: input.file.name, sizeBytes: input.file.size, ...format, ...(route.processing ? { processing: route.processing } : {}), ...(input.autoTag ? { autoTag: true } : {}) };
     await uploadStorage.put(operation);
+    job.handedOff = true;
     await queuedDrafts.take(draft);
     patch(job, { operation, uploadId: operation.uploadId });
     return runService(job, operation);
@@ -212,7 +216,7 @@ export function createUploadQueue<Rpc extends RepoRpc>({
           await run(job);
           job.input = undefined; job.file = undefined;
         } catch (failure) {
-          // The failed job keeps what was entered, files included, so the form can take it back.
+          if (job.handedOff) { job.input = undefined; job.file = undefined; }
           patch(job, { phase: 'failed', error: failure instanceof Error ? failure.message.replace(/\.$/, '') : undefined });
         }
       }
@@ -265,14 +269,26 @@ export function createUploadQueue<Rpc extends RepoRpc>({
       void drain();
     },
     /** A failed upload's form entries, taken out of the queue so they can be edited and sent again. */
-    async takeBack(id: string): Promise<NewTrack | undefined> {
+    async takeBack(id: string, saveEditor: (input: NewTrack) => () => void): Promise<NewTrack | undefined> {
       const job = jobs.find(item => item.id === id && item.owner === getAuth().did && item.phase === 'failed' && item.input);
       if (!job) return;
-      const { draft } = job;
-      const available = !draft || await queuedDrafts.withLock(draft, async () => await draftAvailable(draft) && queuedDrafts.take(draft));
-      remove(job);
-      if (!available) throw new Error('this queued upload was already opened elsewhere');
-      return job.input;
+      const { draft, input } = job;
+      if (!draft || !input) return;
+      return queuedDrafts.withLock(draft, async () => {
+        if (!await draftAvailable(draft)) {
+          remove(job);
+          throw new Error('this queued upload was already opened elsewhere');
+        }
+        const undo = saveEditor(input);
+        try {
+          if (!await queuedDrafts.take(draft)) throw new Error('could not reopen the queued upload.');
+        } catch (failure) {
+          undo();
+          throw failure;
+        }
+        remove(job);
+        return input;
+      });
     },
     dismissRecovery(operation: UploadOperation, disposition: UploadRecoveryDisposition) {
       if (operation.owner !== getAuth().did) return;

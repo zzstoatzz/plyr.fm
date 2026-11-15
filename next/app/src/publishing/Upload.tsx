@@ -40,7 +40,7 @@ function SignedOut() {
   </>;
 }
 
-type Draft = { title: string; album: string; description: string; tags: string; named?: boolean };
+type Draft = { title: string; album: string; description: string; tags: string; named?: boolean; autoTag?: boolean };
 type Problems = { audio?: string; artwork?: string; tags?: string; form?: string };
 
 function readDraft(key: string): Draft | undefined {
@@ -49,7 +49,11 @@ function readDraft(key: string): Draft | undefined {
     if (!value || typeof value !== 'object') return;
     const text = (field: string) => field in value && typeof (value as Record<string, unknown>)[field] === 'string' ? (value as Record<string, string>)[field] : '';
     const draft = { title: text('title'), album: text('album'), description: text('description'), tags: text('tags') };
-    return Object.values(draft).some(Boolean) ? { ...draft, named: 'named' in value && value.named === true } : undefined;
+    return Object.values(draft).some(Boolean) ? {
+      ...draft,
+      named: 'named' in value && value.named === true,
+      autoTag: 'autoTag' in value && typeof value.autoTag === 'boolean' ? value.autoTag : undefined,
+    } : undefined;
   } catch { return; }
 }
 
@@ -74,7 +78,7 @@ function AccountUpload({ auth }: { auth: Auth }) {
   const consentKey = `plyr-storage-consent:${auth.did}`;
   const [serviceConsent, setServiceConsent] = useState(() => readLocal(consentKey) === 'yes');
   const autoTagKey = `plyr-auto-tag:${auth.did}`;
-  const [autoTag, setAutoTag] = useState(() => readLocal(autoTagKey) === 'yes');
+  const [autoTag, setAutoTag] = useState(() => restored?.autoTag ?? readLocal(autoTagKey) === 'yes');
   const [problems, setProblems] = useState<Problems>({});
   const [draftProblem, setDraftProblem] = useState('');
   const [queuedProblem, setQueuedProblem] = useState('');
@@ -104,16 +108,16 @@ function AccountUpload({ auth }: { auth: Auth }) {
   const linkedDrafts = [...recovery.operations, ...recovery.archived, ...uploads.operations].map(operation => operation.draftId).join();
   useEffect(() => { void refreshDrafts(); }, [refreshDrafts, settled, linkedDrafts]);
   // Everything typed survives a reload, a crash or the sign-in-again round trip; files are chosen again.
+  const editorDraft = JSON.stringify({ title, album, description, tags, autoTag, named: !!title && title === autoTitle.current });
   useEffect(() => {
     try {
       if (title || album || description || tags) {
-        const value = JSON.stringify({ title, album, description, tags, named: !!title && title === autoTitle.current });
-        writeLocal(draftKey, value);
-        if (readLocal(draftKey) !== value) throw new Error('draft was not saved');
+        writeLocal(draftKey, editorDraft);
+        if (readLocal(draftKey) !== editorDraft) throw new Error('draft was not saved');
       } else removeLocal(draftKey);
       setDraftProblem('');
     } catch { setDraftProblem('changes to this draft could not be saved on this device.'); }
-  }, [draftKey, title, album, description, tags]);
+  }, [draftKey, editorDraft, title, album, description, tags]);
   const artist = useArtistName(auth);
   const current = () => live.current && getAuth().did === auth.did && getAuth().rpc === auth.rpc;
   const tagError = tagProblem(tags);
@@ -156,7 +160,18 @@ function AccountUpload({ auth }: { auth: Auth }) {
   }
 
   async function editAgain(id: string) {
-    const input = await uploadQueue.takeBack(id).catch(failure => {
+    const input = await uploadQueue.takeBack(id, input => {
+      if (!current()) throw new Error('reopen the upload page to edit this draft.');
+      const previous = readLocal(draftKey);
+      const saved = JSON.stringify({ title: input.title, album: input.album, description: input.description, tags: input.tags?.join('\n'), autoTag: !!input.autoTag });
+      writeLocal(draftKey, saved);
+      if (readLocal(draftKey) !== saved) throw new Error('could not save the editor draft.');
+      return () => {
+        if (readLocal(draftKey) !== saved) return;
+        if (previous === null) removeLocal(draftKey);
+        else writeLocal(draftKey, previous);
+      };
+    }).catch(failure => {
       if (current()) setProblems(previous => ({ ...previous, form: failure instanceof Error ? failure.message : 'could not reopen the upload. try again.' }));
     });
     if (!input || !current()) return;
@@ -173,6 +188,11 @@ function AccountUpload({ auth }: { auth: Auth }) {
     try {
       const list = tags.trim() ? tags.split('\n') : undefined;
       await uploadQueue.add({ file, artwork, title, artist, album, description, tags: list, autoTag });
+      try {
+        if (readLocal(draftKey) === editorDraft) removeLocal(draftKey);
+      } catch {
+        if (current()) setDraftProblem('the upload was queued, but this device could not clear the editor draft.');
+      }
       if (!current()) return;
       autoTitle.current = undefined;
       setFile(null); setArtwork(null); setTitle(''); setAlbum(''); setDetails(false); setDescription(''); setTags(''); setProblems({});

@@ -20,11 +20,12 @@ const operation: UploadOperation = {
   ...record, uploadId: 'fixture', name: 'fixture.mp3', sizeBytes: 1, contentType: 'audio/mpeg', fileType: 'mp3',
 };
 
-function fixture({ statusGate, reserve = async () => record, beforeSaveTransfer, beforeLoadTransfers }: {
+function fixture({ statusGate, reserve = async () => record, beforeSaveTransfer, beforeLoadTransfers, start }: {
   statusGate?: Promise<void>;
   reserve?: () => Promise<typeof record>;
   beforeSaveTransfer?: () => Promise<void>;
   beforeLoadTransfers?: () => void;
+  start?: () => Promise<UploadStatus>;
 } = {}) {
   let counter = 0;
   let confirmations = 0;
@@ -67,7 +68,7 @@ function fixture({ statusGate, reserve = async () => record, beforeSaveTransfer,
       withLock: async (_draft, task) => task(),
     },
     createUploadTransport: () => ({
-      start: async () => status(),
+      start: start ?? (async () => status()),
       status: async () => { await statusGate; return status(); },
       activate: async () => { confirmations++; return status(); },
     }) as UploadTransport,
@@ -91,7 +92,7 @@ test('failed jobs retain each editable input when more than four attempts fail',
   assert.deepEqual(model.snapshot().map(job => job.phase), Array(6).fill('failed'));
   const oldest = model.snapshot()[0];
   assert.equal(model.editable(oldest.id), true);
-  assert.deepEqual(await model.takeBack(oldest.id), { file, artist: 'fixture', title: 'Take 0' });
+  assert.deepEqual(await model.takeBack(oldest.id, () => () => {}), { file, artist: 'fixture', title: 'Take 0' });
 });
 
 test('a failed queue cannot reopen a draft already consumed elsewhere', async () => {
@@ -102,7 +103,7 @@ test('a failed queue cannot reopen a draft already consumed elsewhere', async ()
   const job = model.snapshot()[0];
   assert.equal(job.phase, 'failed');
   assert.equal(drafts.delete(job.id), true);
-  await assert.rejects(model.takeBack(job.id), /this queued upload was already opened elsewhere/);
+  await assert.rejects(model.takeBack(job.id, () => () => {}), /this queued upload was already opened elsewhere/);
   assert.deepEqual(model.snapshot(), []);
 });
 
@@ -120,6 +121,17 @@ test('processed upload keeps its draft until the transfer is durable', async () 
   await setImmediate();
   assert.equal(f.drafts.size, 0);
   assert.equal(f.model.snapshot()[0].phase, 'done');
+});
+
+test('a worker rejection after handoff leaves transfer recovery without a second edit path', async () => {
+  const f = fixture({ start: async () => { throw new Error('upload reservation refused'); } });
+  const file = { name: 'fixture.wav', type: 'audio/wav', size: 1, arrayBuffer: async () => new ArrayBuffer(1) };
+  await f.model.add({ file, artist: 'fixture', title: 'Take' });
+  await setImmediate();
+  const job = f.model.snapshot()[0];
+  assert.equal(job.phase, 'failed');
+  assert.equal(f.recordForRecovery()[0].draftId, job.id);
+  assert.equal(f.model.editable(job.id), false);
 });
 
 test('a completed recovery cannot race a stale draft into a new reservation', async () => {
