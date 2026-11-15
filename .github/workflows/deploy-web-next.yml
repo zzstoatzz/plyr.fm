@@ -1,27 +1,23 @@
-name: deploy next web
+name: deploy frozen Expo to Next
 
-# Exports the Expo client in next/app/ for web and deploys it to the
-# production branch of the direct-upload pages project plyr-fm-next, which
-# next.plyr.fm already CNAMEs to. Never touches production-fe or the plyr-fm
-# pages project.
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "next/app/**"
-      - ".github/workflows/deploy-web-next.yml"
-  pull_request:
-    paths:
-      - "next/app/**"
-      - ".github/workflows/deploy-web-next.yml"
   workflow_dispatch:
+    inputs:
+      target:
+        description: Next deployment target
+        required: true
+        type: choice
+        options:
+          - preview
+          - live
+        default: preview
 
 jobs:
   deploy:
-    name: deploy next web
+    if: github.ref == 'refs/heads/next-expo'
+    name: deploy frozen Expo to Next
     runs-on: ubuntu-latest
-    concurrency: deploy-web-next-${{ github.event_name == 'pull_request' && github.ref || 'main' }}
+    concurrency: next-expo-pages
     permissions:
       contents: read
       deployments: write
@@ -52,7 +48,7 @@ jobs:
           test ! -e dist/404.html
 
       # home, a track, now playing and the queue at phone and desktop widths, light and dark, against fixtures.
-      # a layout regression here stops the deploy (on main) and fails the PR.
+      # a layout regression here stops the deploy.
       - name: check key screens
         working-directory: next/app
         run: |
@@ -68,33 +64,34 @@ jobs:
           path: ${{ runner.temp }}/screens
           if-no-files-found: ignore
 
-      - name: bundle iOS and Android
-        if: github.event_name == 'pull_request'
-        working-directory: next/app
-        run: npx --no-install expo export --platform ios --platform android --output-dir "$RUNNER_TEMP/next-native"
-
-      # the project predates this workflow, so deploy to whatever branch it
-      # serves as production rather than guessing (a non-production branch
-      # only lands on a <branch>.plyr-fm-next.pages.dev preview).
-      - name: resolve production branch
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-        id: project
+      - name: select Pages branch
+        id: pages
         env:
+          RELEASE_TARGET: ${{ inputs.target }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          branch=$(curl -fsS \
+          live_branch=$(curl -fsS \
             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/plyr-fm-next" \
-            | jq -er '.result.production_branch')
-          echo "production branch: $branch"
-          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+            | jq -er '.result.production_branch | select(type == "string" and length > 0)')
+          case "$RELEASE_TARGET" in
+            preview)
+              branch=next-expo-preview
+              if [ "$branch" = "$live_branch" ]; then
+                echo "::error::The preview branch is configured as the live branch in Cloudflare."
+                exit 1
+              fi
+              ;;
+            live) branch="$live_branch" ;;
+            *) exit 1 ;;
+          esac
+          printf 'branch=%s\n' "$branch" >> "$GITHUB_OUTPUT"
 
       - name: deploy to cloudflare pages
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         uses: cloudflare/wrangler-action@v3
         with:
           wranglerVersion: "4.158.0"
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy next/app/dist --project-name plyr-fm-next --branch ${{ steps.project.outputs.branch }}
+          command: pages deploy next/app/dist --project-name plyr-fm-next --branch ${{ steps.pages.outputs.branch }}
