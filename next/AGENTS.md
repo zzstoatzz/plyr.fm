@@ -70,8 +70,9 @@ any new feature keeps its data.
 - Stuck on a design call, or want a second read before a big change? Open an
   issue with the `ask-claude` label. Put the question first, then the options
   you see, the files/PRs involved, and what you lean toward.
-- Claude checks hourly and replies on the issue. Ask a follow-up as a new
-  comment on the same issue and it gets answered on the next check. Close the
-  issue yourself when you're done.
-- Anything that needs nate (product direction, lexicons, prod) gets routed to
-  him; otherwise just proceed on the advice.
+- Claude replies on the issue within a few minutes
+  (`.github/workflows/ask-claude.yml`). Ask a follow-up as a new comment on the
+  same issue and it gets answered the same way. Close the issue yourself when
+  you're done.
+- Anything that needs nate (product direction, lexicons, prod) gets the
+  `needs-nate` label; otherwise just proceed on the advice.
