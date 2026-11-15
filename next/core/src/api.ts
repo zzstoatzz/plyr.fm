@@ -196,8 +196,8 @@ export function createApi(origin: string, playListenerId: () => string) {
 		playback: (id: string, options?: { fresh?: boolean }) => options?.fresh
 			? request<Playback>(`${origin}/v1/tracks/${encodeURIComponent(id)}/playback`, 15_000, undefined, { cache: 'no-store' })
 			: get<Playback>(`/v1/tracks/${encodeURIComponent(id)}/playback`),
-		artist: (didOrHandle: string) => get<Artist>(`/v1/artists/${encodeURIComponent(didOrHandle)}`),
-		artistMetrics: (did: string) => get<ArtistMetrics>(`/v1/artists/${encodeURIComponent(did)}/metrics`),
+		artist: (didOrHandle: string, signal?: AbortSignal) => get<Artist>(`/v1/artists/${encodeURIComponent(didOrHandle)}`, undefined, signal),
+		artistMetrics: (did: string, signal?: AbortSignal) => get<ArtistMetrics>(`/v1/artists/${encodeURIComponent(did)}/metrics`, undefined, signal),
 		albums: (artist_did: string, p: { limit?: number; cursor?: string } = {}) => get<Page<ListSummary>>('/v1/albums', { artist_did, ...p }),
 		album: (id: string) => get<ListDetail>(`/v1/albums/${encodeURIComponent(id)}`),
 		playlists: (p: { limit?: number; cursor?: string; owner_did?: string } = {}) =>
@@ -209,8 +209,8 @@ export function createApi(origin: string, playListenerId: () => string) {
 		search: (q: string, options: { limit?: number; types?: SearchHit['type']; signal?: AbortSignal } = {}) =>
 			get<Page<SearchHit>>('/v1/search', { q, limit: options.limit, types: options.types }, options.signal),
 		/** up to 50 tracks; the server has no cursor past that */
-		chart: (period: 'day' | 'week' | 'month' | 'all_time' = 'week', limit?: number) =>
-			get<{ period: string; data: ChartEntry[] }>('/v1/charts/tracks', { period, limit }),
+		chart: (period: 'day' | 'week' | 'month' | 'all_time' = 'week', limit?: number, signal?: AbortSignal) =>
+			get<{ period: string; data: ChartEntry[] }>('/v1/charts/tracks', { period, limit }, signal),
 		/** block (≤ timeout) until the appview has projected a write the client made on its PDS. */
 		awaitRecord: (uri: string, cid?: string, timeout_ms = 8000) =>
 			get<{ uri: string; status: AwaitStatus; cid?: string; reason?: string }>('/v1/records/await', {
