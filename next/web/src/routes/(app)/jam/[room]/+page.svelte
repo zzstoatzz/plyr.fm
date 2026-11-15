@@ -7,7 +7,9 @@
 	import { JamNotStarted, parseJamTrackSnapshot, type InitialJam } from '@plyr/next-core/jam-space';
 	import { api } from '$lib/api';
 	import { auth, login } from '$lib/auth';
-	import { isJamDid, jamRoomPath, parseJamRoom } from '$lib/jam-room';
+	import { isJamDid, jamRoomPath, parseJamRoom, takeJamStart } from '$lib/jam-room';
+	import { audioDuration } from '$lib/media/file-duration';
+	import { playbackSource } from '$lib/media/playback-source';
 	import { player } from '$lib/player.svelte';
 	import Loading from '$lib/ui/Loading.svelte';
 
@@ -16,11 +18,9 @@
 	let busy = $state(false);
 	let failure = $state('');
 	let notice = $state('');
-	let attemptedStart = $state('');
 	let supportAttempt = $state(0);
 	const room = $derived(parseJamRoom(page.params.room ?? ''));
 	const trackId = $derived(page.url.searchParams.get('track') ?? undefined);
-	const startOnArrival = $derived(page.url.searchParams.has('start'));
 	const link = $derived(room ? jamRoomPath(room.host, room.key, trackId) : '/');
 	const host = $derived(!!room && room.host === account.did);
 	const currentJam = $derived(player.jam && player.jam.host === room?.host && player.jam.key === room.key ? player.jam : undefined);
@@ -30,9 +30,8 @@
 	});
 	onMount(() => auth.subscribe(() => { account = auth.getAuth(); }));
 	$effect(() => {
-		if (!startOnArrival || !trackId || !host || !account.jamSpace || attemptedStart === page.params.room) return;
-		attemptedStart = page.params.room ?? '';
-		untrack(() => { void enter(true); });
+		if (!room || !trackId || !host || !account.jamSpace || !takeJamStart(room)) return;
+		untrack(() => { void enter(true, true); });
 	});
 
 	async function run(action: (check: () => void) => Promise<void>, errorCopy: string) {
@@ -62,24 +61,27 @@
 			fetch: (url, init) => fetch(url, init),
 			keypair: () => P256Keypair.create()
 		});
+		const checkAccount = () => {
+			if (auth.getAuth().agent !== agent) throw new Error('account changed.');
+		};
 		return {
 			space,
 			enter: (initial?: InitialJam, recover?: () => Promise<InitialJam>) => player.joinJam(activeRoom, async () => {
-				check();
+				checkAccount();
 				try { return await joinJam({ agent }, activeRoom.host, activeRoom.key, initial); }
 				catch (error) { if (!recover || !(error instanceof JamNotStarted)) throw error; }
 				const fallback = await recover();
-				check();
+				checkAccount();
 				return joinJam({ agent }, activeRoom.host, activeRoom.key, fallback);
 			}, check)
 		};
 	}
 
-	function enter(create: boolean) {
+	function enter(create: boolean, fromQueue = false) {
 		return run(async check => {
 			if (player.privateMode) throw new Error('play a public track before joining a jam.');
 			const current = player.current;
-			const capture = current && (!trackId || startOnArrival || current.id === trackId) && !player.liveStation
+			const capture = current && (!trackId || fromQueue || current.id === trackId) && !player.liveStation
 				? { current, tracks: player.queue, index: player.index, duration: player.length || player.duration, position: player.position, playing: player.playing }
 				: undefined;
 			const activeRoom = room;
@@ -87,6 +89,18 @@
 			const client = await roomClient(check);
 			if (!host) { await client.enter(); return; }
 			const { jamTrack } = await import('@plyr/next-core/jam-playback');
+			async function recover(value?: unknown) {
+				const snapshot = parseJamTrackSnapshot(value ?? await client.space.read());
+				const track = await api.track(snapshot.trackId);
+				let ref = jamTrack(track, capture?.current.id === track.id ? capture.duration : undefined);
+				if (!ref && track.record.cid === snapshot.cid && !track.access.space_uri && !track.access.gate && track.access.visibility !== 'private') {
+					const source = await playbackSource(track, AbortSignal.timeout(8000));
+					try { ref = jamTrack(track, await audioDuration(source.url)); }
+					finally { source.release?.(); }
+				}
+				if (!ref || ref.cid !== snapshot.cid) throw new Error('couldn’t restore the jam’s track.');
+				return { queue: [ref], index: 0, playing: snapshot.playing, positionMs: Math.min(ref.durationMs, snapshot.positionMs) };
+			}
 			if (create) {
 				const track = capture?.current ?? (trackId ? await api.track(trackId) : undefined);
 				const ref = track && jamTrack(track, capture?.duration);
@@ -97,21 +111,19 @@
 				const positionMs = Math.min(ref.durationMs, Math.max(0, Math.round((capture?.position ?? 0) * 1000)));
 				const playing = capture?.playing ?? false;
 				check();
-				await client.space.create();
+				const created = await client.space.create();
 				check();
-				await client.space.publish({ revision: 0, trackId: ref.id, cid: ref.cid, playing, positionMs, updatedAtMs: Date.now() });
+				const previous = created ? undefined : await client.space.read(true);
 				check();
-				await client.enter({ queue, index: before.length, playing, positionMs });
+				if (previous === undefined) {
+					await client.space.publish({ revision: 0, trackId: ref.id, cid: ref.cid, playing, positionMs, updatedAtMs: Date.now() });
+					check();
+					await client.enter({ queue, index: before.length, playing, positionMs });
+				} else await client.enter(undefined, () => recover(previous));
 				check();
 				await goto(jamRoomPath(activeRoom.host, activeRoom.key), { replaceState: true, keepFocus: true, noScroll: true });
 				if (capture && queue.length < capture.tracks.length) notice = 'some tracks couldn’t be shared.';
-			} else await client.enter(undefined, async () => {
-				const snapshot = parseJamTrackSnapshot(await client.space.read());
-				const track = await api.track(snapshot.trackId);
-				const ref = jamTrack(track, capture?.current.id === track.id ? capture.duration : undefined);
-				if (!ref || ref.cid !== snapshot.cid) throw new Error('the jam track has changed.');
-				return { queue: [ref], index: 0, playing: snapshot.playing, positionMs: Math.min(ref.durationMs, snapshot.positionMs) };
-			});
+			} else await client.enter(undefined, recover);
 		}, create ? 'couldn’t start the jam. try again.' : 'couldn’t join the jam. try again.');
 	}
 

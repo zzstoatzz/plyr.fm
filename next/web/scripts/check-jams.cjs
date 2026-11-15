@@ -25,6 +25,7 @@ async function run(browser, accounts, { delayedSolo = false, startFromQueue = fa
   const errors = [];
   let state;
   let joins = 0;
+  let rejectFirstPublish = startFromQueue;
   const firstAdd = Promise.withResolvers();
 
   async function setup(width, scheme) {
@@ -33,7 +34,13 @@ async function run(browser, accounts, { delayedSolo = false, startFromQueue = fa
       context: { viewport: { width, height: 844 }, colorScheme: scheme, isMobile: width === 390, hasTouch: width === 390 },
     });
     const { page, context } = result;
+    let roomSocket;
     page.on('pageerror', error => errors.push(error.message));
+    await context.route('https://pds.fixture.test/xrpc/com.atproto.space.putRecord', route => {
+      if (!rejectFirstPublish) return route.fallback();
+      rejectFirstPublish = false;
+      return route.fulfill({ status: 503, json: {} });
+    });
     await context.route('https://typeahead.waow.tech/**', route => route.fulfill({ json: { actors: [] } }));
     await context.route('https://panel-fixture.invalid/**', route => route.request().url().endsWith('/audio.wav')
       ? serveAudio(route) : route.fulfill({ status: 404 }));
@@ -83,11 +90,12 @@ async function run(browser, accounts, { delayedSolo = false, startFromQueue = fa
         assert.equal(admission.initial.queue[0].id, catalog[0].id);
         state ??= { ...admission.initial, epoch: 'room-epoch', revision: 1, occurrence: 1, updatedAtMs: Date.now() };
       }
-      assert.ok(state);
+      if (!state) return route.fulfill({ status: 409, json: { error: { message: 'The host needs to start this Jam' } } });
       joins++;
       return route.fulfill({ json: { ticket: 'room-ticket' } });
     });
     await context.routeWebSocket('wss://jams.next.plyr.fm/v1/jams/socket?ticket=room-ticket', socket => {
+      roomSocket = socket;
       sockets.add(socket);
       socket.onClose(() => sockets.delete(socket));
       const send = data => socket.send(JSON.stringify(data));
@@ -111,7 +119,7 @@ async function run(browser, accounts, { delayedSolo = false, startFromQueue = fa
         for (const peer of sockets) if (peer !== socket) peer.send(JSON.stringify({ type: 'state', state }));
       });
     });
-    return result;
+    return { ...result, disconnect: () => roomSocket.close({ code: 1012, reason: 'service restart' }) };
   }
 
   const hostTab = await setup(1280, 'light');
@@ -124,6 +132,8 @@ async function run(browser, accounts, { delayedSolo = false, startFromQueue = fa
     await hostPage.getByRole('link', { name: 'sign in to join' }).click();
     await authorizeFixture(hostPage, accounts, host);
     await hostPage.waitForURL(hostLink);
+    if (!delayedSolo) await hostPage.goto(hostLink + '&start=1');
+    await hostPage.getByRole('button', { name: 'start jam', exact: true }).waitFor();
     if (startFromQueue) {
       const nav = hostPage.getByRole('navigation', { name: 'Main navigation' });
       await nav.getByRole('link', { name: 'home', exact: true }).click();
@@ -135,12 +145,19 @@ async function run(browser, accounts, { delayedSolo = false, startFromQueue = fa
       await dock.getByRole('slider', { name: 'Playback position' }).fill('12');
       await nav.getByRole('link', { name: 'queue', exact: true }).click();
       await hostPage.getByRole('button', { name: 'Start a Jam', exact: true }).click();
+      await hostPage.getByRole('alert').getByText('couldn’t start the jam. try again.').waitFor();
+      await hostPage.getByRole('button', { name: 'start jam', exact: true }).click();
       await hostPage.getByText('jam is live', { exact: true }).waitFor();
       assert.deepEqual(state.queue.map(track => track.id), catalog.slice(0, 2).map(track => track.id));
       assert.equal(state.queue[0].durationMs, 240_000);
       assert.equal(state.playing, true);
       assert.ok(state.positionMs >= 12_000, 'the Jam starts at the previously audible position');
       assert.equal(new URL(hostPage.url()).search, '', 'the room URL no longer carries the start action');
+      state = undefined;
+      await hostPage.reload();
+      await hostPage.getByRole('button', { name: 'join jam', exact: true }).click();
+      await hostPage.getByText('jam is live', { exact: true }).waitFor();
+      assert.equal(state.queue[0].durationMs, 240_000, 'cold recovery probes the original audio duration');
       return;
     }
     if (delayedSolo) {
@@ -175,6 +192,9 @@ async function run(browser, accounts, { delayedSolo = false, startFromQueue = fa
 
     const navigation = guestPage.getByRole('navigation', { name: 'Main navigation' });
     await navigation.getByRole('link', { name: 'home', exact: true }).click();
+    const rejoin = guestPage.waitForResponse(response => response.url() === coordinator + '/v1/jams/join' && response.ok());
+    await guestTab.disconnect();
+    await rejoin;
     const add = index => guestPage.getByTestId('home-track-row').nth(index).getByRole('button', { name: /add .* to queue/i }).click();
     await add(1);
     await add(2);
@@ -202,7 +222,7 @@ async function run(browser, accounts, { delayedSolo = false, startFromQueue = fa
     await hostPage.getByRole('button', { name: 'leave jam' }).click();
     await hostPage.getByRole('button', { name: 'join jam', exact: true }).click();
     await hostPage.getByText('jam is live', { exact: true }).waitFor();
-    assert.equal(joins, 3);
+    assert.equal(joins, 4);
     assert.deepEqual(commands.map(command => command.action), ['play', 'pause', 'seek', 'replaceQueue', 'replaceQueue', 'selectTrack']);
     assert.deepEqual(soloCommands, [], 'room actions do not touch the personal queue');
     assert.deepEqual(errors, []);
