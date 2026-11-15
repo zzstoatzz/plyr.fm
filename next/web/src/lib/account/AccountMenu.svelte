@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { afterNavigate, goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { logout } from '$lib/auth';
 	import Icon from '$lib/ui/Icon.svelte';
@@ -15,6 +15,10 @@
 		{ label: 'private music', detail: 'listen to your private tracks', icon: 'music', href: resolve('/(app)/private') },
 		{ label: 'settings', detail: 'queue sync', icon: 'settings', href: resolve('/(app)/settings') }
 	] as const);
+
+	afterNavigate(({ from }) => {
+		if (from && dialog?.open) dialog.close();
+	});
 
 	export function open() { dialog.showModal(); }
 
