@@ -1,8 +1,8 @@
 # Temporary account upload pauses
 
-`backend/src/backend/upload_contract.json` owns `paused_upload_dids`, shared by
-the Python and Next backends. The list is empty after lifting AddLine’s pause
-on November 15, 2026. Adding or removing a DID
+`backend/src/backend/upload_limits.py` owns the Python backend’s
+`PAUSED_UPLOAD_DIDS`. It is empty after lifting AddLine’s pause on November 15,
+2026. The Next backend’s policy in `upload_contract.json` is separate. Adding or removing a DID
 requires a reviewed backend release; handles and linked accounts do not inherit
 another account's pause.
 
