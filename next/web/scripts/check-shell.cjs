@@ -222,8 +222,10 @@ async function statsScreen(browser, phone, scheme) {
     assert.equal(reads, 3 + Number(phone));
     await page.reload();
     await page.getByRole('alert').getByText('could not load stats.').waitFor();
-    await page.getByRole('button', { name: 'try again' }).click();
+    await page.getByRole('button', { name: 'try again' }).press('Enter');
     await page.getByText('398', { exact: true }).waitFor();
+    assert.ok(await page.getByRole('button', { name: 'refresh stats' }).evaluate(button => document.activeElement === button),
+      'retry keeps keyboard focus on the same action');
     assert.equal(reads, 5 + Number(phone));
     assert.deepEqual(errors, []);
   } finally { await context.close(); }

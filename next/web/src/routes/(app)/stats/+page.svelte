@@ -6,6 +6,7 @@
 
 	let stats = $state<Awaited<ReturnType<typeof api.stats>>>();
 	let loading = $state(true);
+	let attempted = $state(false);
 	let error = $state(false);
 	let request: AbortController | undefined;
 
@@ -29,7 +30,7 @@
 		error = false;
 		try { stats = await api.stats(controller.signal); }
 		catch { if (!controller.signal.aborted) error = true; }
-		finally { request = undefined; loading = false; }
+		finally { request = undefined; loading = false; attempted = true; }
 	}
 
 	function duration(seconds: number) {
@@ -66,7 +67,7 @@
 		</section>
 	{/if}
 	{#if error}<p role="alert" class="state">{stats ? 'could not refresh stats.' : 'could not load stats.'}</p>{/if}
-	{#if cards || error}<button class="text-button refresh" type="button" disabled={loading} onclick={() => void refresh()}>{loading ? 'refreshing…' : error ? 'try again' : 'refresh stats'}</button>{/if}
+	{#if attempted}<button class="text-button refresh" type="button" aria-disabled={loading} onclick={() => void refresh()}>{loading ? 'refreshing…' : error ? 'try again' : 'refresh stats'}</button>{/if}
 </section>
 
 <style>
@@ -80,5 +81,6 @@
 	h2 { font-size: 1.1rem; }
 	.scope p { color: var(--muted); }
 	.refresh { margin-top: 1rem; border: 1px solid var(--line); border-radius: 2rem; padding-inline: 1rem; }
+	.refresh[aria-disabled="true"] { opacity: 0.6; cursor: wait; }
 	@media (max-width: 720px) { .totals { grid-template-columns: repeat(auto-fit, minmax(min(8.5rem, 100%), 1fr)); } }
 </style>
