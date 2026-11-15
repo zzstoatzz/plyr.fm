@@ -100,7 +100,7 @@ pub const PostgresVerifiedListStore = struct {
             };
             items.append(allocator, .{
                 .value = decoded,
-                .created_at_us = row.get(i64, 20) catch return error.CorruptProjection,
+                .created_at_us = row.get(i64, 21) catch return error.CorruptProjection,
             }) catch return error.OutOfMemory;
         }
         return items.toOwnedSlice(allocator) catch return error.OutOfMemory;
@@ -152,11 +152,11 @@ pub const PostgresVerifiedListStore = struct {
                 row.get([]const u8, 0) catch return error.CorruptProjection,
             )) return error.CorruptProjection;
 
-            const position = row.get(?i16, 17) catch return error.CorruptProjection;
+            const position = row.get(?i16, 18) catch return error.CorruptProjection;
             if (position == null) {
                 if (members.items.len != 0 or
-                    (row.get(?[]const u8, 18) catch return error.CorruptProjection) != null or
-                    (row.get(?[]const u8, 19) catch return error.CorruptProjection) != null)
+                    (row.get(?[]const u8, 19) catch return error.CorruptProjection) != null or
+                    (row.get(?[]const u8, 20) catch return error.CorruptProjection) != null)
                     return error.CorruptProjection;
                 continue;
             }
@@ -164,22 +164,22 @@ pub const PostgresVerifiedListStore = struct {
                 return error.CorruptProjection;
             const subject_uri = try duplicate(
                 allocator,
-                row.get([]const u8, 18) catch return error.CorruptProjection,
+                row.get([]const u8, 19) catch return error.CorruptProjection,
             );
             validateRecordUri(subject_uri, request.track_collection) catch
                 return error.CorruptProjection;
             const subject_cid = try duplicate(
                 allocator,
-                row.get([]const u8, 19) catch return error.CorruptProjection,
+                row.get([]const u8, 20) catch return error.CorruptProjection,
             );
             validateCid(allocator, subject_cid, zat.cbor.Codec.dag_cbor) catch |err| switch (err) {
                 error.OutOfMemory => return error.OutOfMemory,
                 else => return error.CorruptProjection,
             };
 
-            const is_available = row.get(bool, 20) catch return error.CorruptProjection;
+            const is_available = row.get(bool, 21) catch return error.CorruptProjection;
             const resolved = if (is_available)
-                composed_track.decodeRow(allocator, shiftedRow(row, 21)) catch |err| switch (err) {
+                composed_track.decodeRow(allocator, shiftedRow(row, 22)) catch |err| switch (err) {
                     error.OutOfMemory => return error.OutOfMemory,
                     else => return error.CorruptProjection,
                 }
@@ -215,6 +215,7 @@ pub const PostgresVerifiedListStore = struct {
                 .available_count = available_count,
                 .total_plays = total_plays,
             },
+            .media = .{ .artwork = value.legacy_artwork },
             .sources = value.sources,
             .projection = value.projection,
         };
@@ -249,6 +250,7 @@ const Header = struct {
     record: verified_list.Record,
     metadata: verified_list.Metadata,
     owner: verified_list.Owner,
+    legacy_artwork: ?@import("../domain/track.zig").Artwork,
     sources: verified_list.Sources,
     projection: verified_list.Projection,
 };
@@ -259,12 +261,12 @@ fn decodeSummary(
     kind: verified_list.Kind,
 ) !verified_list.Summary {
     const header = try decodeHeader(allocator, row, kind, null);
-    const member_count = try nonnegativeUsize(try row.get(i64, 17));
-    const available_count = try nonnegativeUsize(try row.get(i64, 18));
+    const member_count = try nonnegativeUsize(try row.get(i64, 18));
+    const available_count = try nonnegativeUsize(try row.get(i64, 19));
     if (available_count > member_count) return error.CorruptMetrics;
-    const total_plays = try row.get(i64, 19);
+    const total_plays = try row.get(i64, 20);
     if (total_plays < 0) return error.CorruptMetrics;
-    const cover = try public_media.canonicalOwned(allocator, try duplicateOptional(allocator, try row.get(?[]const u8, 21)));
+    const cover = try public_media.canonicalOwned(allocator, try duplicateOptional(allocator, try row.get(?[]const u8, 22)));
     if (cover) |url| if (!lexicon_value.validUri(url)) return error.CorruptArtwork;
     return .{
         .object = kind,
@@ -277,7 +279,7 @@ fn decodeSummary(
             .available_count = available_count,
             .total_plays = total_plays,
         },
-        .media = .{ .artwork = if (cover) |url| .{ .url = url, .source = .verified_repo } else null },
+        .media = .{ .artwork = header.legacy_artwork orelse if (cover) |url| .{ .url = url, .source = .verified_repo } else null },
         .sources = header.sources,
         .projection = header.projection,
     };
@@ -322,6 +324,7 @@ fn decodeHeader(
     const account_source = try parseAccountSource(try row.get([]const u8, 15));
     const cover_blob_cid = try duplicateOptional(allocator, try row.get(?[]const u8, 16));
     if (cover_blob_cid) |cid| try validateCid(allocator, cid, zat.cbor.Codec.raw);
+    const legacy_cover = try duplicateOptional(allocator, try row.get(?[]const u8, 17));
     const id = try allocator.alloc(u8, switch (kind) {
         .album => album_id.encodedLength(uri),
         .playlist => playlist_id.encodedLength(uri),
@@ -348,6 +351,7 @@ fn decodeHeader(
                 .avatar_url = avatar,
             } else null,
         },
+        .legacy_artwork = if (legacy_cover) |url| .{ .url = url, .source = .legacy_projection } else null,
         .sources = .{
             .owner_profile = if (handle == null) .derived else if (authored_avatar) .mixed else .legacy_projection,
             .metrics = .derived,
@@ -410,11 +414,14 @@ const header_columns =
     \\  CASE WHEN owner_a.avatar_url IS NOT NULL AND owner_p.avatar LIKE 'https://cdn.bsky.app/img/avatar/plain/%' THEN owner_a.avatar_url ELSE COALESCE(NULLIF(owner_p.avatar, ''), owner_a.avatar_url) END,
     \\  owner_p.avatar IS NOT NULL AND owner_p.avatar <> '' AND (owner_a.avatar_url IS NULL OR owner_p.avatar NOT LIKE 'https://cdn.bsky.app/img/avatar/plain/%'),
     \\  owner_aa.evidence_source,
-    \\  records.cover_blob_cid
+    \\  records.cover_blob_cid,
+    \\  legacy_cover.cover_url
 ;
 
 const collection_joins =
     \\FROM plyr_index.list_records AS records
+    \\LEFT JOIN plyr_index.legacy_album_covers AS legacy_cover
+    \\  ON records.list_type = 'album' AND legacy_cover.record_uri = records.record_uri
     \\JOIN plyr_index.account_availability AS owner_aa
     \\  ON owner_aa.repo_did = records.owner_did AND owner_aa.available
     \\LEFT JOIN plyr_index.actor_identities AS owner_a
@@ -461,7 +468,7 @@ const collection_where =
 ;
 
 const collection_group =
-    \\GROUP BY records.record_uri, owner_aa.evidence_source, owner_a.did, owner_p.record_uri
+    \\GROUP BY records.record_uri, owner_aa.evidence_source, owner_a.did, owner_p.record_uri, legacy_cover.record_uri
 ;
 
 const collection_query = collection_select ++ "\n" ++ collection_joins ++ "\n" ++
@@ -490,6 +497,8 @@ const detail_query = "SELECT\n" ++ header_columns ++ "\n" ++
     \\  ,
 ++ composed_track.projected_columns ++ "\n" ++
     \\FROM plyr_index.list_records AS records
+    \\LEFT JOIN plyr_index.legacy_album_covers AS legacy_cover
+    \\  ON records.list_type = 'album' AND legacy_cover.record_uri = records.record_uri
     \\JOIN plyr_index.account_availability AS owner_aa
     \\  ON owner_aa.repo_did = records.owner_did AND owner_aa.available
     \\LEFT JOIN plyr_index.actor_identities AS owner_a
