@@ -197,7 +197,7 @@ pub const PostgresComposedTrackStore = struct {
         } orelse return null;
         var active = true;
         defer if (active) forceReleaseQueryRow(&query_row);
-        const value = decodeRow(allocator, &query_row.row) catch |err| switch (err) {
+        const value = decodeDetail(allocator, &query_row.row) catch |err| switch (err) {
             error.OutOfMemory => return error.OutOfMemory,
             else => {
                 std.log.err("composed track decode failed: {}", .{err});
@@ -306,6 +306,12 @@ pub const PostgresComposedTrackStore = struct {
         return items.toOwnedSlice(allocator) catch return error.OutOfMemory;
     }
 };
+
+fn decodeDetail(allocator: std.mem.Allocator, row: *pg.Row) !track.Track {
+    var value = try decodeRow(allocator, row);
+    value.metadata.tags = try parseLabels(allocator, try row.get([]const u8, projected_column_count));
+    return value;
+}
 
 fn logQueryError(conn: *pg.Conn, message: []const u8, err: anyerror) void {
     if (conn.err) |pg_err|
@@ -619,7 +625,7 @@ const common_policy =
     \\  )
 ;
 
-const detail_query = joined_projection ++ "\n" ++
+const detail_query = "SELECT\n" ++ projected_columns ++ ",\n" ++ track_tag_sql.detail_tags ++ "\n" ++ projected_from ++ "\n" ++
     \\WHERE v.record_uri = $1
     \\  AND COALESCE(pol.visibility, 'public') <> 'private'
 ++ common_policy ++ "\n" ++
@@ -1403,6 +1409,13 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     try std.testing.expectEqual(@as(i64, 2), inherited[0].track_count);
     try std.testing.expectEqual(@as(i64, 1), inherited[0].sources.verified_repo);
     try std.testing.expectEqual(@as(i64, 1), inherited[0].sources.legacy_plyr);
+    const authored_detail = (try implementation.store().getByUri(a, record_uri)).?.metadata.tags.?;
+    try std.testing.expectEqual(@as(usize, 1), authored_detail.len);
+    try std.testing.expectEqualStrings("drone", authored_detail[0]);
+    const inherited_detail = (try implementation.store().getByUri(a, pds_only_uri)).?.metadata.tags.?;
+    try std.testing.expectEqual(@as(usize, 2), inherited_detail.len);
+    try std.testing.expectEqualStrings("drone", inherited_detail[0]);
+    try std.testing.expectEqualStrings("legacy-only", inherited_detail[1]);
     const legacy_page = try implementation.store().listPublic(a, .{
         .collection = "fm.plyr.dev.track",
         .scope = .discovery,
@@ -1421,6 +1434,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     });
     try std.testing.expectEqual(@as(usize, 2), overlap.len);
     _ = try pool.exec("UPDATE plyr_index.track_tag_records SET tags_present=true,tags='{}' WHERE record_uri=$1", .{pds_only_uri});
+    try std.testing.expectEqual(@as(usize, 0), (try implementation.store().getByUri(a, pds_only_uri)).?.metadata.tags.?.len);
     try std.testing.expectEqual(@as(usize, 0), (try implementation.store().listPublic(a, .{
         .collection = "fm.plyr.dev.track",
         .scope = .discovery,
@@ -1430,6 +1444,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     })).len);
     _ = try pool.exec("UPDATE plyr_index.track_tag_records SET tags_present=false WHERE record_uri=$1", .{pds_only_uri});
     _ = try pool.exec("UPDATE plyr_index.legacy_track_tags SET observed_record_cid=$2 WHERE record_uri=$1", .{ pds_only_uri, stale_subject_cid });
+    try std.testing.expectEqual(@as(usize, 0), (try implementation.store().getByUri(a, pds_only_uri)).?.metadata.tags.?.len);
     try std.testing.expectEqual(@as(usize, 0), (try implementation.store().listPublic(a, .{
         .collection = "fm.plyr.dev.track",
         .scope = .discovery,
