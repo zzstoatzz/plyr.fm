@@ -19,11 +19,12 @@ const operation: UploadOperation = {
   ...record, uploadId: 'fixture', name: 'fixture.mp3', sizeBytes: 1, contentType: 'audio/mpeg', fileType: 'mp3',
 };
 
-function fixture() {
+function fixture(statusGate?: Promise<void>) {
   let counter = 0;
   let confirmations = 0;
   let dismissed = 0;
   let publicationAttempts = 0;
+  let tags = 0;
   let published = false;
   let saved: UploadOperation[] = [];
   const status = (): UploadStatus => ({
@@ -52,17 +53,17 @@ function fixture() {
     },
     createUploadTransport: () => ({
       start: async () => status(),
-      status: async () => status(),
+      status: async () => { await statusGate; return status(); },
       activate: async () => { confirmations++; return status(); },
     }) as UploadTransport,
-    applyGenreTags: async () => {},
+    applyGenreTags: async () => { tags++; },
     randomUUID: () => String(++counter),
     sha256: async () => new ArrayBuffer(32),
   });
   return {
     model, recordForRecovery: () => saved,
     confirmations: () => confirmations, dismissals: () => dismissed, publications: () => publicationAttempts,
-    seed: () => { saved = [operation]; }, confirm: () => { published = true; },
+    seed: (entry = operation) => { saved = [entry]; }, confirm: () => { published = true; }, tags: () => tags,
   };
 }
 
@@ -109,4 +110,39 @@ test('publication stays recoverable until the worker confirms it, then cleans up
   assert.equal(f.dismissals(), 1);
   assert.deepEqual(f.recordForRecovery(), []);
   assert.deepEqual(recoveryVisibleAtSuccess, []);
+});
+
+test('a delayed resume does not re-enqueue an upload that has finished meanwhile', async () => {
+  const gate = Promise.withResolvers<void>();
+  const f = fixture(gate.promise);
+  f.confirm();
+  f.seed();
+  const resumed = f.model.resume(owner);
+  await setImmediate();
+  f.model.continue(operation);
+  await setImmediate();
+  assert.deepEqual(f.model.snapshot().map(job => job.phase), ['done']);
+  gate.resolve();
+  await resumed;
+  await setImmediate();
+  assert.deepEqual(f.model.snapshot().map(job => job.phase), ['done']);
+});
+
+test('manual publication honors auto-tag after the waiting row has been set aside', async context => {
+  context.mock.timers.enable({ apis: ['setTimeout'] });
+  const f = fixture();
+  const tagged = { ...operation, autoTag: true };
+  f.seed(tagged);
+  await f.model.resume(owner);
+  await setImmediate();
+  for (let attempt = 1; attempt < 3; attempt++) {
+    context.mock.timers.tick(4_000);
+    await setImmediate();
+  }
+  assert.equal(f.model.snapshot()[0].phase, 'awaiting-publication');
+  f.model.dismissRecovery(tagged, 'archived');
+  assert.deepEqual(f.model.snapshot(), []);
+  assert.equal(f.tags(), 0);
+  f.model.dismissRecovery(tagged, 'published');
+  assert.equal(f.tags(), 1);
 });

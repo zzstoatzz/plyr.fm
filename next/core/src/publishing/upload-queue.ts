@@ -50,7 +50,7 @@ export function createUploadQueue<Rpc extends RepoRpc>({
     publish();
   }
 
-  function session(job: Job): Auth<Rpc> {
+  function session(job: Pick<Job, 'owner'>): Auth<Rpc> {
     const auth = getAuth();
     if (auth.did !== job.owner || !auth.rpc) throw new Error('sign in to the account that started it');
     return auth;
@@ -157,8 +157,13 @@ export function createUploadQueue<Rpc extends RepoRpc>({
     return () => runService(job, operation);
   }
 
+  function alreadyQueued(operation: UploadOperation) {
+    return jobs.some(job => job.owner === operation.owner && job.uploadId === operation.uploadId &&
+      (uploadInProgress(job.phase) || job.phase === 'done'));
+  }
+
   function enqueueSaved(operation: UploadOperation, file?: MediaFile) {
-    if (jobs.some(job => job.owner === operation.owner && job.uploadId === operation.uploadId && uploadInProgress(job.phase))) return;
+    if (alreadyQueued(operation)) return;
     const title = typeof operation.record.title === 'string' ? operation.record.title : operation.name;
     const job: Job = { id: randomUUID(), owner: operation.owner, title, phase: 'waiting', operation, file, uploadId: operation.uploadId, rkey: operation.rkey };
     const previous = jobs.find(item => item.owner === operation.owner && item.uploadId === operation.uploadId && item.phase === 'awaiting-publication');
@@ -212,7 +217,7 @@ export function createUploadQueue<Rpc extends RepoRpc>({
     },
     /** Carry on with a saved upload; a transfer that stopped part way needs its original file. */
     continue(operation: UploadOperation, file?: MediaFile) {
-      if (jobs.some(job => job.uploadId === operation.uploadId && uploadInProgress(job.phase))) return;
+      if (alreadyQueued(operation)) return;
       if (file) {
         const format = audioFormat(file.name, file.type, !!operation.processing);
         if (format.fileType !== operation.fileType || format.contentType !== operation.contentType) throw new Error('select the original audio file.');
@@ -230,15 +235,16 @@ export function createUploadQueue<Rpc extends RepoRpc>({
       return job.input;
     },
     dismissRecovery(operation: UploadOperation, disposition: UploadRecoveryDisposition) {
-      const job = jobs.find(item => item.phase === 'awaiting-publication' &&
-        item.owner === getAuth().did && item.owner === operation.owner &&
+      if (operation.owner !== getAuth().did) return;
+      const job = jobs.find(item => item.phase === 'awaiting-publication' && item.owner === operation.owner &&
         item.uploadId === operation.uploadId && item.operation?.uri === operation.uri);
-      if (!job) return;
-      jobs = jobs.filter(item => item !== job);
-      onDismiss?.(job);
-      publish();
-      if (disposition === 'published' && operation.autoTag) {
-        void applyGenreTags(() => session(job), operation.uri).catch(() => undefined);
+      if (job) {
+        jobs = jobs.filter(item => item !== job);
+        onDismiss?.(job);
+        publish();
+      }
+      if (disposition === 'published' && operation.autoTag && !alreadyQueued(operation)) {
+        void applyGenreTags(() => session(operation), operation.uri).catch(() => undefined);
       }
     },
     /** Creations and transfers the queue is driving, so recovery screens leave them alone. */
