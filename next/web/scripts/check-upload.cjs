@@ -353,13 +353,15 @@ async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'reg
       console.log(`a waiting upload survives reload and publishes once at ${width}px (${theme})`);
       return;
     }
-    await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'settings' }).click();
+    await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: /^(account|settings)$/ }).click();
     await page.getByRole('heading', { name: 'settings', exact: true }).waitFor();
-    const progress = page.getByRole('link', { name: 'uploading 1', exact: true });
+    const main = page.getByRole('main');
+    const progress = main.getByRole('link', { name: '1 upload in progress', exact: true });
     await progress.waitFor();
+    await page.screenshot({ path: path.join(output, `upload-progress-${width}-${theme}.png`) });
     releasePart.resolve();
     await progress.waitFor({ state: 'detached' });
-    await page.getByRole('link', { name: 'upload', exact: true }).click();
+    await main.getByRole('link', { name: 'upload', exact: true }).click();
     const jobLinks = page.getByRole('list', { name: 'Upload queue' }).getByRole('link', { name: 'view track' });
     if (waitForConfirmation) {
       const awaiting = page.getByText('"for conversion" is waiting for playback confirmation');
