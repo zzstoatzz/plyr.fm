@@ -64,6 +64,10 @@ async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'reg
     }
   });
   const errors = [];
+  const workerRequests = [];
+  page.on('request', request => {
+    if (new URL(request.url()).pathname.includes('/cover-heic.worker-')) workerRequests.push(request.url());
+  });
   page.on('pageerror', error => errors.push(error.message));
   const session = await fetch(pds + 'com.atproto.server.createSession', {
     method: 'POST', headers: { 'content-type': 'application/json' },
@@ -175,6 +179,7 @@ async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'reg
     assert.equal(await title.inputValue(), 'direct from Svelte');
     await audioInput.setInputFiles({ name: 'direct.mp3', mimeType: 'audio/mpeg', buffer: mp3 });
     const cover = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aMTsAAAAASUVORK5CYII=', 'base64');
+    const heic = await fs.readFile(path.join(__dirname, 'fixtures/cover.heic'));
     const coverInput = page.locator('input[type=file][accept^="image"]');
     if (scenario === 'regular') {
       const tags = page.getByRole('textbox', { name: 'tags', exact: true });
@@ -185,8 +190,6 @@ async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'reg
       await page.getByRole('alert').filter({ hasText: /choose an MP3.*WebM/ }).waitFor({ timeout: 5000 });
       await page.getByText('selected: direct.mp3').waitFor();
       assert.ok(await submit.isEnabled(), 'an invalid replacement leaves the valid audio attached');
-      await coverInput.setInputFiles({ name: 'IMG_0001.HEIC', mimeType: 'image/heic', buffer: Buffer.from('not an image') });
-      await page.getByRole('alert').filter({ hasText: "couldn't read that image" }).waitFor();
       assert.equal(await title.inputValue(), 'direct from Svelte');
       assert.equal(await tags.inputValue(), 'ambient\nfield recording');
 
@@ -209,8 +212,20 @@ async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'reg
       await page.screenshot({ path: path.join(output, `converted-cover-${width}-${theme}.png`), fullPage: true });
       await page.getByRole('button', { name: 'remove cover', exact: true }).click();
       await preview.waitFor({ state: 'detached' });
-    }
-    await coverInput.setInputFiles({ name: 'cover.png', mimeType: 'image/png', buffer: cover });
+      assert.deepEqual(workerRequests, [], 'ordinary covers never load the HEIC decoder');
+
+      await coverInput.setInputFiles({ name: 'bad.heic', mimeType: 'image/heic', buffer: Buffer.from('not an image') });
+      await page.getByRole('alert').filter({ hasText: "couldn't read that image" }).waitFor();
+      assert.equal(await title.inputValue(), 'direct from Svelte');
+      assert.equal(await tags.inputValue(), 'ambient\nfield recording');
+      await coverInput.setInputFiles({ name: 'cover.HEIC', mimeType: 'application/octet-stream', buffer: heic });
+      await preview.waitFor();
+      assert.deepEqual(await preview.evaluate(async image => {
+        await image.decode();
+        return [image.naturalWidth, image.naturalHeight];
+      }), [96, 64]);
+      await page.screenshot({ path: path.join(output, `heic-cover-${width}-${theme}.png`), fullPage: true });
+    } else await coverInput.setInputFiles({ name: 'cover.png', mimeType: 'image/png', buffer: cover });
     if (scenario === 'regular') await page.screenshot({ path: path.join(output, width + '-' + theme + '.png'), fullPage: true });
     if (scenario === 'after-create') await interruptDraftCleanup(page);
     if (scenario === 'after-create') await page.getByRole('checkbox', { name: 'auto-tag with recommended genres' }).check();
@@ -307,8 +322,8 @@ async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'reg
     assert.equal(value.fileType, 'mp3');
     assert.equal(value.audioBlob.mimeType, 'audio/mpeg');
     assert.equal(value.audioBlob.size, mp3.length);
-    assert.equal(value.imageBlob.mimeType, 'image/png');
-    assert.equal(value.imageBlob.size, cover.length);
+    assert.equal(value.imageBlob.mimeType, scenario === 'regular' ? 'image/jpeg' : 'image/png');
+    if (scenario !== 'regular') assert.equal(value.imageBlob.size, cover.length);
     assert.equal(new URL(value.imageUrl).hostname, 'pds.fixture.test');
     assert.equal(blobWrites, 2);
 

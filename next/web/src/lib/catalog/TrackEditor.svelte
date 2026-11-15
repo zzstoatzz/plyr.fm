@@ -25,6 +25,12 @@
   let tags = $state('');
   let tagsEdited = $state(false);
   let artwork = $state<File | null>();
+  let artworkPreview = $state<string>();
+  $effect(() => {
+    const url = artwork && URL.createObjectURL(artwork);
+    artworkPreview = url || undefined;
+    if (url) return () => URL.revokeObjectURL(url);
+  });
   let audio = $state<File>();
   let audioInput = $state<HTMLInputElement>();
   let artworkInput = $state<HTMLInputElement>();
@@ -163,6 +169,7 @@
           {artwork === null ? 'keep current cover' : 'remove cover'}
         </button>
       </div>
+      {#if artworkPreview}<img class="cover-preview" src={artworkPreview} alt="selected cover preview" width="64" height="64" />{/if}
       {#if imageBusy}<p role="status">preparing your cover…</p>{/if}
       {#if failure && !conflict}<p role="alert" class="editor-error">{failure}</p>{/if}
       {#if confirm}
@@ -180,3 +187,7 @@
     </form>
   {/if}
 </EditorPanel>
+
+<style>
+  .cover-preview { border-radius: 0.45rem; object-fit: cover; }
+</style>
