@@ -12,6 +12,7 @@
   } = $props();
 
   let result = $state<CreateResult>();
+  const known = $derived(result ?? (operation.cid ? { state: 'accepted' as const, uri: operation.uri, cid: operation.cid } : undefined));
   let busy = $state(false);
   let problem = $state('');
   let label = $derived(kind === 'track' ? operation.record.title : operation.record.name);
@@ -30,7 +31,7 @@
         await pds.archiveCreate(operation, true);
         await refresh();
       } else if (action === 'dismiss') {
-        await pds.dismissCreate(operation, result?.state === 'different');
+        await pds.dismissCreate(operation, known?.state === 'different');
         await refresh();
       } else {
         result = await pds.recoverCreate(operation, action === 'retry');
@@ -44,17 +45,17 @@
 <div class="recovery-card">
   <h3>{typeof label === 'string' ? label : kind}</h3>
   <p class="subtle" role="status">
-    {#if result?.state === 'accepted'}saved to your account.
-    {:else if result?.state === 'different'}a different record is already at this address.
-    {:else if result?.state === 'missing'}your account has no record at this address yet.
+    {#if known?.state === 'accepted'}saved to your account.
+    {:else if known?.state === 'different'}a different record is already at this address.
+    {:else if known?.state === 'missing'}your account has no record at this address yet.
     {:else if operation.archived}earlier attempt. the {kind} might still appear.
     {:else}this {kind} still needs confirmation.{/if}
   </p>
   {#if problem}<p role="alert">{problem}</p>{/if}
   <button class="text-button" disabled={busy} onclick={() => run('check')}>check creation</button>
-  {#if result?.state === 'accepted' || result?.state === 'different'}
-    {#if result.state === 'accepted'}<a class="text-button" href={view()}>view {kind}</a>{/if}
-    <button class="text-button" disabled={busy} onclick={() => run('dismiss')}>{result.state === 'accepted' ? 'done with creation' : 'keep existing record'}</button>
+  {#if known?.state === 'accepted' || known?.state === 'different'}
+    {#if known.state === 'accepted'}<a class="text-button" href={view()}>view {kind}</a>{/if}
+    <button class="text-button" disabled={busy} onclick={() => run('dismiss')}>{known.state === 'accepted' ? 'done with creation' : 'keep existing record'}</button>
   {:else}
     <button class="text-button" disabled={busy} onclick={() => run('retry')}>resume creation</button>
     {#if !operation.archived}<button class="text-button" disabled={busy} onclick={() => run('archive')}>set aside creation</button>{/if}

@@ -68,7 +68,7 @@ async function run(browser, width, theme, scale) {
       members: initial.items.map((item, position) => ({ ...item, position, track: tracks.find(track => track.record.uri === item.subject.uri) ?? null })),
     } }));
     await page.goto(new URL('/create-album', page.url()).href);
-    await page.getByRole('link', { name: 'Sign in', exact: true }).waitFor();
+    await page.getByRole('link', { name: 'Sign in', exact: true }).and(page.locator('a[href*="return_to"]')).waitFor();
     assert.equal(await button('Create album').count(), 0);
     await page.goto(new URL('/u/fixture.test', page.url()).href);
     await page.getByRole('heading', { name: 'jack', exact: true }).waitFor();
