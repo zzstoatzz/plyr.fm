@@ -1,123 +1,168 @@
-export function playerSheet(panel: HTMLElement, close: () => void) {
+import type { DockPull, DockPullUpdate } from './dock-pull';
+
+export function playerSheet(panel: HTMLElement, close: () => void, dockPull?: DockPull) {
 	const sheet = panel.closest('dialog');
 	if (!sheet) return;
 	const dialog = sheet;
 	const phone = matchMedia('(max-width: 720px)');
-	const reduce = matchMedia('(prefers-reduced-motion: reduce)');
-	const cover = panel.querySelector<HTMLElement>('[data-testid="now-playing-artwork"]');
-	const thumbnail = document.querySelector<HTMLElement>('[data-testid="player-dock"] .cover');
-	let gesture: { x: number; y: number; lastY: number; time: number; speed: number } | undefined;
-	let distance = 0;
+	const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+	const dock = document.querySelector<HTMLElement>('[data-testid="player-dock"]');
+	const pairs = [
+		{ expanded: panel.querySelector<HTMLElement>('[data-testid="now-playing-artwork"]'), docked: dock?.querySelector<HTMLElement>('.cover'), art: true },
+		{ expanded: panel.querySelector<HTMLElement>('[data-testid="now-playing-title"]'), docked: dock?.querySelector<HTMLElement>('.description strong'), art: false }
+	];
+	let flights: { expanded: HTMLElement; docked: HTMLElement; x: number; y: number; scale: number }[] = [];
+	let rest = innerHeight;
+	let position = 0;
+	let target = 0;
+	let frame = 0;
+	let finishTimeout: ReturnType<typeof setTimeout> | undefined;
 	let closing = false;
-	let settle: Animation | undefined;
-	let coverFlight: Animation | undefined;
-	let dockGeometry: { x: number; y: number; scale: number } | undefined;
+	let ready = false;
+	let pendingPull: DockPullUpdate | undefined;
+	let touch: { x: number; y: number; lastY: number; time: number; speed: number } | undefined;
 
-	function dockTransform(amount: number) {
-		if (!dockGeometry) return 'none';
-		const { x, y, scale } = dockGeometry;
-		return `translate(${x * amount}px, ${y * amount}px) scale(${1 - (1 - scale) * amount})`;
-	}
-
-	function flight(opening: boolean, offset: number, duration: number) {
-		if (!cover || !thumbnail || !thumbnail.isConnected || dialog.scrollTop > 1 || reduce.matches) return;
-		const from = cover.getBoundingClientRect();
-		const to = thumbnail.getBoundingClientRect();
-		if (!from.width || !to.width) return;
-		const dock = `translate(${to.left - from.left}px, ${to.top - from.top - offset}px) scale(${to.width / from.width})`;
-		const rest = 'translate(0, 0) scale(1)';
-		thumbnail.style.visibility = 'hidden';
-		coverFlight?.cancel();
-		coverFlight = cover.animate(opening ? [{ transform: dock }, { transform: rest }] : [{ transform: rest }, { transform: dock }], {
-			duration, easing: 'cubic-bezier(.2,.8,.25,1)', fill: 'both'
+	function measure() {
+		rest = dock?.getBoundingClientRect().top ?? innerHeight;
+		flights = dialog.scrollTop > 1 || reduced.matches ? [] : pairs.flatMap(({ expanded, docked, art }) => {
+			if (!expanded || !docked?.isConnected) return [];
+			const from = expanded.getBoundingClientRect();
+			const to = docked.getBoundingClientRect();
+			if (!from.width || !to.width) return [];
+			const scale = art ? to.width / from.width : parseFloat(getComputedStyle(docked).fontSize) / parseFloat(getComputedStyle(expanded).fontSize);
+			return [{ expanded, docked, x: to.left - from.left, y: to.top - from.top - rest, scale }];
 		});
-		void coverFlight.finished.then(() => { thumbnail.style.visibility = ''; }, () => {});
 	}
 
-	function begin(event: TouchEvent) {
-		if (event.touches.length !== 1) { reset(); return; }
-		if (closing || !phone.matches || dialog.scrollTop > 1 || (event.target instanceof Element && event.target.closest('button, a, input, textarea, select'))) return;
-		settle?.cancel();
-		coverFlight?.cancel();
-		if (thumbnail) thumbnail.style.visibility = '';
-		dockGeometry = undefined;
-		const { clientX: x, clientY: y } = event.touches[0];
-		gesture = { x, y, lastY: y, time: event.timeStamp, speed: 0 };
-	}
-
-	function move(event: TouchEvent) {
-		if (!gesture) return;
-		if (event.touches.length !== 1) { reset(); return; }
-		const { clientX: x, clientY: y } = event.touches[0];
-		const dx = Math.abs(x - gesture.x), dy = y - gesture.y;
-		if (!distance && (dy < -8 || dx > 8 && dx >= dy)) { gesture = undefined; return; }
-		if (!distance && dy <= Math.max(8, dx * 1.5)) return;
-		if (!event.cancelable) { reset(); return; }
-		event.preventDefault();
-		if (!distance && cover && thumbnail?.isConnected && !reduce.matches) {
-			const from = cover.getBoundingClientRect();
-			const to = thumbnail.getBoundingClientRect();
-			if (from.width && to.width) dockGeometry = { x: to.left - from.left, y: to.top - from.top - innerHeight, scale: to.width / from.width };
+	function render(next: number) {
+		position = next;
+		panel.style.transform = next ? `translateY(${next}px)` : '';
+		const progress = Math.min(1, next / Math.max(1, rest));
+		const phase = Math.max(0, (progress - 0.6) / 0.4);
+		const horizontal = phase * phase * (3 - 2 * phase);
+		dialog.style.setProperty('--player-backdrop', String(0.18 * Math.min(1, (1 - progress) / 0.15)));
+		for (const { expanded, docked, x, y, scale } of flights) {
+			docked.style.visibility = next ? 'hidden' : '';
+			expanded.style.transform = next ? `translate(${x * horizontal}px, ${y * progress}px) scale(${1 - (1 - scale) * progress})` : '';
 		}
-		gesture.speed = (y - gesture.lastY) / Math.max(1, event.timeStamp - gesture.time);
-		gesture.time = event.timeStamp;
-		gesture.lastY = y;
-		distance = Math.min(innerHeight, Math.max(0, dy));
-		panel.style.transform = `translateY(${distance}px)`;
-		if (cover && dockGeometry) cover.style.transform = dockTransform(distance / innerHeight);
+	}
+
+	function stopFrame() {
+		cancelAnimationFrame(frame);
+		frame = 0;
+		clearTimeout(finishTimeout);
+	}
+
+	function settle(to: number, finish?: () => void) {
+		stopFrame();
+		if (reduced.matches) { render(to); finish?.(); return; }
+		const from = position;
+		const start = performance.now();
+		const duration = 330;
+		const done = () => { stopFrame(); render(to); finish?.(); };
+		const animate = (now: number) => {
+			const fraction = Math.min(1, Math.max(0, (now - start) / duration));
+			if (fraction >= 1) { done(); return; }
+			const ease = 1 - (1 - fraction) ** 3;
+			render(from + (to - from) * ease);
+			frame = requestAnimationFrame(animate);
+		};
+		frame = requestAnimationFrame(animate);
+		finishTimeout = setTimeout(done, 900);
+	}
+
+	function dismiss() {
+		if (closing) return;
+		touch = undefined;
+		closing = true;
+		if (!phone.matches || reduced.matches || !ready) { close(); return; }
+		if (!position) measure();
+		settle(rest, close);
+	}
+
+	function fromDock(pull: DockPullUpdate) {
+		if (closing) return;
+		if (!ready) { pendingPull = pull; return; }
+		queueRender(rest - pull.distance);
+		if (pull.released) {
+			render(target);
+			if (pull.open) settle(0);
+			else dismiss();
+		}
+	}
+
+	function queueRender(next: number) {
+		target = Math.min(rest, Math.max(0, next));
+		if (!frame) frame = requestAnimationFrame(() => { frame = 0; render(target); });
 	}
 
 	function reset() {
-		gesture = undefined;
-		if (!distance) return;
-		const from = distance;
-		distance = 0;
-		panel.style.transform = '';
-		if (cover && dockGeometry) {
-			const transform = cover.style.transform;
-			cover.style.transform = '';
-			coverFlight = cover.animate([{ transform }, { transform: 'none' }], { duration: 190, easing: 'cubic-bezier(.2,.85,.25,1)' });
-		}
-		dockGeometry = undefined;
-		if (!reduce.matches) settle = panel.animate([{ transform: `translateY(${from}px)` }, { transform: 'none' }], { duration: 190, easing: 'cubic-bezier(.2,.85,.25,1)' });
+		touch = undefined;
+		if (!closing && (position || frame)) settle(0);
+	}
+
+	function begin(event: TouchEvent) {
+		if (event.touches.length !== 1) { if (touch) reset(); return; }
+		if (!ready || closing || frame || !phone.matches || dialog.scrollTop > 1 || (event.target instanceof Element && event.target.closest('button, a, input, textarea, select'))) return;
+		const { clientX: x, clientY: y } = event.touches[0];
+		touch = { x, y, lastY: y, time: event.timeStamp, speed: 0 };
+		target = 0;
+	}
+
+	function move(event: TouchEvent) {
+		if (!touch) return;
+		if (event.touches.length !== 1) { reset(); return; }
+		const { clientX: x, clientY: y } = event.touches[0];
+		const dx = Math.abs(x - touch.x), dy = y - touch.y;
+		if (!target && (dy < -10 || dx > 10 && dx >= dy)) { touch = undefined; return; }
+		if (!target && dy <= Math.max(10, dx * 1.5)) return;
+		if (!event.cancelable) { reset(); return; }
+		event.preventDefault();
+		if (!target && !position) measure();
+		touch.speed = (y - touch.lastY) / Math.max(1, event.timeStamp - touch.time);
+		touch.time = event.timeStamp;
+		touch.lastY = y;
+		queueRender(dy);
 	}
 
 	function end(event: TouchEvent) {
-		const speed = gesture && event.timeStamp - gesture.time < 90 ? gesture.speed : 0;
-		if (!gesture || distance < Math.min(120, innerHeight * 0.16) && (distance < 48 || speed < 0.8)) { reset(); return; }
-		gesture = undefined;
-		closing = true;
-		if (reduce.matches) { close(); return; }
-		const exit = innerHeight;
-		if (cover && thumbnail && dockGeometry) {
-			thumbnail.style.visibility = 'hidden';
-			coverFlight = cover.animate([{ transform: cover.style.transform }, { transform: dockTransform(1) }], {
-				duration: 245, easing: 'cubic-bezier(.2,.8,.25,1)', fill: 'both'
-			});
-		} else flight(false, exit - distance, 245);
-		settle = panel.animate([{ transform: `translateY(${distance}px)` }, { transform: `translateY(${exit}px)` }], { duration: 245, easing: 'cubic-bezier(.2,.8,.25,1)', fill: 'forwards' });
-		void settle.finished.then(close, () => {});
+		const speed = touch && event.timeStamp - touch.time < 90 ? touch.speed : 0;
+		if (!touch || target < Math.min(120, innerHeight * 0.16) && (target < 48 || speed < 0.8)) { if (touch) reset(); return; }
+		render(target);
+		dismiss();
 	}
 
-	const opening = requestAnimationFrame(() => {
-		if (!dialog.open || gesture || closing || !phone.matches || reduce.matches) return;
-		const offset = thumbnail ? thumbnail.getBoundingClientRect().top - 24 : innerHeight;
-		flight(true, -offset, 290);
-		settle = panel.animate([{ transform: `translateY(${offset}px)` }, { transform: 'none' }], { duration: 290, easing: 'cubic-bezier(.2,.8,.25,1)' });
-	});
+	const disconnect = dockPull?.connect(fromDock);
+	const dialogOpen = new MutationObserver(onOpen);
+	function onOpen() {
+		if (!dialog.open || ready || closing) return;
+		dialogOpen.disconnect();
+		ready = true;
+		if (!phone.matches || reduced.matches) return;
+		measure();
+		if (pendingPull) {
+			render(rest - pendingPull.distance);
+			fromDock(pendingPull);
+			pendingPull = undefined;
+		} else { render(rest); settle(0); }
+	}
+	if (dialog.open) onOpen();
+	else dialogOpen.observe(dialog, { attributes: true, attributeFilter: ['open'] });
+
 	panel.addEventListener('touchstart', begin, { passive: true });
 	panel.addEventListener('touchmove', move, { passive: false });
 	panel.addEventListener('touchend', end);
 	panel.addEventListener('touchcancel', reset);
-	return () => {
-		cancelAnimationFrame(opening);
+	function destroy() {
+		stopFrame();
+		dialogOpen.disconnect();
+		disconnect?.();
 		panel.removeEventListener('touchstart', begin);
 		panel.removeEventListener('touchmove', move);
 		panel.removeEventListener('touchend', end);
 		panel.removeEventListener('touchcancel', reset);
-		settle?.cancel();
-		coverFlight?.cancel();
-		if (cover) cover.style.transform = '';
-		if (thumbnail) thumbnail.style.visibility = '';
-	};
+		render(0);
+		dialog.style.removeProperty('--player-backdrop');
+	}
+	return { dismiss, destroy };
 }

@@ -6,7 +6,7 @@
   import Icon from '$lib/ui/Icon.svelte';
   import Loading from '$lib/ui/Loading.svelte';
 
-  let { track, transport, compact = false, onNavigate }: { track: Track; transport: Snippet; compact?: boolean; onNavigate?: () => void } = $props();
+  let { track, transport, compact = false }: { track: Track; transport: Snippet; compact?: boolean } = $props();
   let account = $state.raw(auth.getAuth());
   let picking = $state(false);
   let liked = $state(false);
@@ -17,7 +17,6 @@
   let confirmed = $state(false);
   let live = false;
   const returnTo = $derived(resolve('/(app)/track/[id]', { id: track.id }));
-  const signIn = $derived(resolve('/(app)/login') + '?' + new URLSearchParams({ return_to: returnTo }));
   const count = $derived(track.metrics.like_count + Number(liked) - Number(initialLike));
 
   onMount(() => {
@@ -77,7 +76,7 @@
   {#if account.ready && account.rpc}
     <button class="icon-button" type="button" aria-label={liked ? 'Unlike track' : 'Like track'} aria-pressed={liked} disabled={loading || busy} onclick={toggle}><Icon name={liked ? 'heart_f' : 'heart'} />{Math.max(0, count)}</button>
   {:else}
-    <a class="icon-button" href={signIn} aria-label="Sign in to like" onclick={onNavigate}><Icon name="heart" />{track.metrics.like_count}</a>
+    <a class="icon-button" href={resolve('/(app)/login') + '?' + new URLSearchParams({ return_to: returnTo })} aria-label="Sign in to like"><Icon name="heart" />{track.metrics.like_count}</a>
   {/if}
   {@render transport()}
 </div>

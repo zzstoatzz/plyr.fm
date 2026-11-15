@@ -81,8 +81,7 @@ async function screen(browser, phone, scheme) {
     await dock.getByRole('button', { name: 'Open now playing' }).click();
     const dialog = page.getByRole('dialog', { name: 'Now playing' });
     await dialog.getByRole('heading', { name: tracks[0].metadata.title }).waitFor();
-    await page.waitForFunction(node => node.getAnimations().length === 0 ||
-      node.getAnimations().every(item => item.playState === 'finished'), await dialog.getByTestId('now-playing-artwork').elementHandle());
+    await page.waitForFunction(node => getComputedStyle(node).transform === 'none', await dialog.getByTestId('now-playing-dismiss-region').elementHandle());
     const cover = await dialog.getByTestId('now-playing-artwork').boundingBox();
     if (phone) assert.ok(cover.width >= width - 35, 'now playing cover fills the phone');
     await capture('now-playing');

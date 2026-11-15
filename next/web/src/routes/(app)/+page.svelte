@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tick } from 'svelte';
+	import type { Snapshot } from '@sveltejs/kit';
 	import type { Track } from '@plyr/next-core/api';
 	import { api } from '$lib/api';
 	import { trackArtwork } from '@plyr/next-core/artwork';
@@ -12,11 +14,26 @@
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
+	let home: HTMLDivElement;
 	let extra: Track[] = $state.raw([]);
 	let nextCursor: string | undefined = $state();
 	let loading = $state(false);
 	let error = $state('');
 	$effect(() => { data.latest; extra = []; nextCursor = undefined; error = ''; });
+
+	export const snapshot: Snapshot<number> = {
+		capture: () => window.scrollY,
+		restore: y => {
+			const position = window.scrollY;
+			if (position === y) return;
+			const request = data.latest;
+			// The browser can clamp the saved scroll before the streamed rows render.
+			void Promise.allSettled([request, data.chart, data.featured]).then(async () => {
+				await tick();
+				if (home?.isConnected && data.latest === request && window.scrollY === position) window.scrollTo(0, y);
+			});
+		}
+	};
 
 	async function more(cursor: string) {
 		const request = data.latest;
@@ -35,7 +52,7 @@
 
 <svelte:head><title>plyr.fm</title></svelte:head>
 
-<div class="page-content home">
+<div class="page-content home" bind:this={home}>
 	<header class="mobile-brand"><LinksMenu /><h1>plyr.fm</h1></header>
 	{#await data.featured}
 		<div class="featured" aria-hidden="true"></div>

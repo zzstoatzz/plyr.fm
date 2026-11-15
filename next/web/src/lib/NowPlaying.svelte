@@ -11,10 +11,27 @@
 	import Transport from './Transport.svelte';
 	import LiveProgress from './radio/LiveProgress.svelte';
 	import { playerSheet } from './player-sheet';
+	import type { DockPull } from './dock-pull';
 
-	let { close }: { close?: () => void } = $props();
+	let { close, pull }: { close?: () => void; pull?: DockPull } = $props();
+	let motion: ReturnType<typeof playerSheet>;
 	const chapters = $derived(parseChapters(player.current?.metadata.description, player.current?.metadata.duration_seconds ?? undefined));
 	const chapter = $derived(currentChapter(chapters.chapters, player.position));
+
+	export function dismiss() {
+		if (motion) motion.dismiss();
+		else close?.();
+	}
+
+	function attachMotion(node: HTMLElement) {
+		if (!close) return;
+		const controller = playerSheet(node, close, pull);
+		motion = controller;
+		return () => {
+			controller?.destroy();
+			motion = undefined;
+		};
+	}
 
 	async function shareTrack() {
 		if (!player.current) return;
@@ -28,20 +45,20 @@
 
 {#snippet trackActions()}
 	<button class="icon-button" type="button" aria-label="Share track" onclick={shareTrack}><Icon name="share" /></button>
-	<a href={resolve('/(app)/queue')} class="icon-button" aria-label="Open queue" onclick={close}><Icon name="queue" /></a>
+	<a href={resolve('/(app)/queue')} class="icon-button" aria-label="Open queue"><Icon name="queue" /></a>
 {/snippet}
 
 {#if player.current}
-	<div class="now" class:sheet={!!close} {@attach node => close && playerSheet(node, close)}>
+	<div class="now" class:sheet={!!close} data-testid="now-playing-dismiss-region" {@attach attachMotion}>
 		<header>
-			{#if close}<button class="icon-button" type="button" aria-label="Close" onclick={close}><Icon name="down" /></button>{/if}
+			{#if close}<button class="icon-button dismiss" type="button" aria-label="Close" onclick={dismiss}><span class="phone-close"><Icon name="down" /></span><span class="desktop-close"><Icon name="x" /></span></button>{/if}
 			<span>{player.liveStation ? `live · ${player.liveStation.label} radio` : 'now playing'}</span>
-			{#if !player.liveStation}<a href="/queue" class="icon-button" aria-label="Queue" onclick={close}><Icon name="queue" /></a>{:else}<span></span>{/if}
+			{#if !player.liveStation}<a href={resolve('/(app)/queue')} class="icon-button" aria-label="Queue"><Icon name="queue" /></a>{:else}<span></span>{/if}
 		</header>
 		<div class="cover" data-testid="now-playing-artwork"><Artwork src={trackArtwork(player.current)} size={460} eager /></div>
 		<div class="copy">
 			<h1 data-testid="now-playing-title">{player.current.metadata.title}</h1>
-			<a class="subtle" href={`/u/${player.current.artist.did}`} onclick={close}>{artistName(player.current)}</a>
+			<a class="subtle" href={resolve('/(app)/u/[actor]', { actor: player.current.artist.profile.handle || player.current.artist.did })}>{artistName(player.current)}</a>
 			{#if player.current.metadata.album}<p class="subtle">{player.current.metadata.album}</p>{/if}
 			<div class="position">{#if player.liveStation}<LiveProgress />{:else}<Scrub stacked />{/if}</div>
 			<div class="commands" class:live={!!player.liveStation}>
@@ -49,7 +66,7 @@
 			</div>
 			{#if !player.liveStation}
 				{#if !player.privateMode}
-					{#key player.current.id}<TrackCollections track={player.current} transport={trackActions} onNavigate={close} compact />{/key}
+					{#key player.current.id}<TrackCollections track={player.current} transport={trackActions} compact />{/key}
 				{/if}
 				<div class="options">
 					<button class="icon-button" type="button" aria-label="Shuffle queue" onclick={() => player.shuffle()}><Icon name="shuffle" size={20} /></button>
@@ -58,13 +75,13 @@
 			{/if}
 			{#if player.error}<p class="state" role="status">{player.error}</p>{/if}
 			{#if player.liveStation}<button class="text-button stop" onclick={() => { player.stopRadio(); close?.(); }}>leave radio</button>{/if}
-			{#if player.privateMode}<a class="track-link" href="/private" onclick={close}>private music <span aria-hidden="true">→</span></a>
+			{#if player.privateMode}<a class="track-link" href={resolve('/(app)/private')}>private music <span aria-hidden="true">→</span></a>
 			{:else if !player.liveStation || player.current.id.startsWith('trk_')}
-				{#if !player.liveStation}<a class="artist-card" href={resolve('/(app)/u/[actor]', { actor: player.current.artist.did })} onclick={close}>
+				{#if !player.liveStation}<a class="artist-card" href={resolve('/(app)/u/[actor]', { actor: player.current.artist.profile.handle || player.current.artist.did })}>
 					<div class="avatar"><Artwork src={player.current.artist.profile.avatar_url ?? undefined} size={56} /></div>
 					<span><strong>{player.current.artist.profile.display_name || artistName(player.current)}</strong><small>@{player.current.artist.profile.handle}</small></span><Icon name="chevron" size={19} />
 				</a>{/if}
-				<a class="track-link" href={resolve('/(app)/track/[id]', { id: player.current.id })} onclick={close}>about this track <span aria-hidden="true">→</span></a>
+				<a class="track-link" href={resolve('/(app)/track/[id]', { id: player.current.id })}>about this track <span aria-hidden="true">→</span></a>
 			{/if}
 			{#if chapters.prose}<p class="description">{chapters.prose}</p>{/if}
 			{#if !player.liveStation && chapters.chapters.length}
@@ -80,7 +97,7 @@
 		</div>
 	</div>
 {:else}
-	<div class="page-content"><h1>now playing</h1><p class="state">play a track to see it here.</p><a href="/">browse tracks</a></div>
+	<div class="page-content"><h1>now playing</h1><p class="state">play a track to see it here.</p><a href={resolve('/(app)')}>browse tracks</a></div>
 {/if}
 
 <style>
@@ -88,7 +105,9 @@
 	header { display: flex; align-items: center; justify-content: space-between; height: 3.5rem; color: var(--muted); font-size: 0.875rem; }
 	.cover { border-radius: 0.95rem; width: 100%; transform-origin: top left; }
 	.copy { padding-top: 1.25rem; }
-	h1 { font-size: clamp(1.35rem, 4vw, 2rem); line-height: 1.18; overflow-wrap: anywhere; margin-bottom: 0.35rem; }
+	h1 { font-size: clamp(1.35rem, 4vw, 2rem); line-height: 1.18; overflow-wrap: anywhere; margin-bottom: 0.35rem; transform-origin: top left; }
+	.phone-close { display: none; }
+	.desktop-close { display: flex; }
 	.position { margin-top: 1.65rem; }
 	.commands, .options { display: flex; justify-content: space-between; gap: 0.4rem; align-items: center; margin-block: 0.85rem; }
 	.commands :global(.transport) { width: 100%; justify-content: space-evenly; }
@@ -105,5 +124,9 @@
 	h2 { font-size: 1rem; }
 	.chapters button { display: flex; justify-content: start; text-align: start; width: 100%; gap: 0.8rem; }
 	.chapters button span, .chapters [aria-current] { color: var(--accent); }
-	@media (max-width: 720px) { .sheet { min-height: 100dvh; } }
+	@media (max-width: 720px) {
+		.sheet { min-height: 100dvh; }
+		.phone-close { display: flex; }
+		.desktop-close { display: none; }
+	}
 </style>

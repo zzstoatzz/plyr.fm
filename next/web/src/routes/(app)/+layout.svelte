@@ -8,6 +8,7 @@
 	import { player } from '$lib/player.svelte';
 	import Icon from '$lib/ui/Icon.svelte';
 	import { uploadActivity } from '$lib/upload-activity.svelte';
+	import { createDockPull } from '$lib/dock-pull';
 	import '../../app.css';
 
 	let { children } = $props();
@@ -18,6 +19,18 @@
 	const queuePage = $derived(page.url.pathname === resolve('/queue'));
 	const queuePanelOpen = $derived(player.queueOpen && !queuePage);
 	let NowPlaying = $state<typeof import('$lib/NowPlaying.svelte').default>();
+	let nowPlayingView = $state.raw<{ dismiss: () => void }>();
+	const hideNowPlaying = () => { player.nowPlaying = false; };
+	const showNowPlaying = () => { player.nowPlaying = true; };
+	let loadingNowPlaying: Promise<void> | undefined;
+	function preloadNowPlaying() {
+		if (NowPlaying || loadingNowPlaying) return;
+		loadingNowPlaying = import('$lib/NowPlaying.svelte')
+			.then(module => { NowPlaying = module.default; })
+			.catch(hideNowPlaying)
+			.finally(() => { loadingNowPlaying = undefined; });
+	}
+	const pull = createDockPull(showNowPlaying, preloadNowPlaying);
 	let account = $state.raw(auth.getAuth());
 	let uploading = $derived(uploadActivity.jobs.filter(job => job.owner === account.did && uploadInProgress(job.phase)).length);
 	const links = [
@@ -38,7 +51,8 @@
 	];
 
 	beforeNavigate(() => cancelFocusRestore?.());
-	afterNavigate(({ to }) => {
+	afterNavigate(({ from, to }) => {
+		if (from && dialog?.open) nowPlayingView?.dismiss();
 		if (to?.url.pathname !== resolve('/search')) {
 			if (searchReturn && searchReturn.url.href === to?.url.href) searchReturn.restoreFocus();
 			searchReturn = undefined;
@@ -72,7 +86,7 @@
 	});
 	$effect(() => {
 		if (player.nowPlaying && !NowPlaying) {
-			void import('$lib/NowPlaying.svelte').then(module => { NowPlaying = module.default; });
+			preloadNowPlaying();
 		} else if (player.nowPlaying && !dialog.open) dialog.showModal();
 		else if (!player.nowPlaying && dialog.open) dialog.close();
 	});
@@ -212,10 +226,10 @@
 </div>
 
 {#if player.current}
-	{#await import('$lib/PlayerDock.svelte') then { default: Dock }}<Dock onQueue={toggleQueue} {queuePage} />{/await}
+	{#await import('$lib/PlayerDock.svelte') then { default: Dock }}<Dock onQueue={toggleQueue} {queuePage} {pull} />{/await}
 {/if}
-<dialog bind:this={dialog} class="now-sheet" aria-label="Now playing" onclose={() => { player.nowPlaying = false; }}>
-	{#if player.nowPlaying && NowPlaying}<NowPlaying close={() => { player.nowPlaying = false; }} />{/if}
+<dialog bind:this={dialog} class="now-sheet" aria-label="Now playing" onclose={hideNowPlaying} oncancel={event => { event.preventDefault(); nowPlayingView?.dismiss(); }}>
+	{#if player.nowPlaying && NowPlaying}<NowPlaying bind:this={nowPlayingView} close={hideNowPlaying} {pull} />{/if}
 </dialog>
 <dialog bind:this={shortcutsDialog} class="shortcuts" aria-labelledby="keyboard-guide-title">
 	<header>
@@ -267,6 +281,6 @@
 		nav a { gap: 0.2rem; flex-direction: column; justify-content: center; flex: 1; min-height: var(--tabs); padding: 0.15rem; border-radius: 0; font-size: 0.75rem; }
 		dialog:not(.shortcuts) { width: 100%; max-width: 100%; height: 100dvh; max-height: 100dvh; margin: 0; border: 0; border-radius: 0; }
 		dialog.now-sheet { background: transparent; overscroll-behavior: contain; }
-		.now-sheet::backdrop { background: rgb(0 0 0 / 0.18); }
+		.now-sheet::backdrop { background: rgb(0 0 0 / var(--player-backdrop, 0.18)); }
 	}
 </style>
