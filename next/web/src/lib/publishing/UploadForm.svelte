@@ -16,7 +16,7 @@
   import { onMount, untrack } from 'svelte';
   import { trackIdFromUri } from '@plyr/next-core/api';
   import type { CreateOperation } from '@plyr/next-core/publishing/create-operation';
-  import type { UploadOperation } from '@plyr/next-core/publishing/upload-model';
+  import { PUBLIC_AUDIO_FORMATS, type UploadOperation } from '@plyr/next-core/publishing/upload-model';
   import { draftInRecovery, type QueuedUploadDraft } from '@plyr/next-core/publishing/queued-upload-draft';
   import { canonicalAudioType, jobLine, needsPlyrStorage, uploadInProgress } from '@plyr/next-core/publishing/upload-queue-model';
   import { normalizeTrackTags } from '@plyr/next-core/publishing/track-tags';
@@ -45,6 +45,7 @@
   let artist = $derived(profileName || account.handle || account.did || '');
   let audio = $state<File>();
   let cover = $state<File>();
+  let coverPreview = $state<string>();
   let audioInput = $state<HTMLInputElement>();
   let coverInput = $state<HTMLInputElement>();
   let title = $state('');
@@ -180,6 +181,12 @@
     }
   }
 
+  $effect(() => {
+    const url = cover && URL.createObjectURL(cover);
+    coverPreview = url;
+    if (url) return () => URL.revokeObjectURL(url);
+  });
+
   function pickAudio(file?: File) {
     audioProblem = '';
     formProblem = '';
@@ -193,7 +200,6 @@
         title = autoTitle;
       }
     } catch (failure) {
-      audio = undefined;
       if (audioInput) audioInput.value = '';
       audioProblem = message(failure, 'could not open the audio file.');
     }
@@ -316,12 +322,15 @@
 {/if}
 
 <form onsubmit={upload} inert={!hydrated || submitting}>
-  <label class="file-field">
+  <div class="file-field">
     <strong>audio</strong>
-    <span class="subtle">mp3, wav, flac, aiff, ogg, opus, m4a or aac · up to 1.5 GiB</span>
-    <input type="file" accept="audio/*,.aif,.aiff,.m4a,.mp3,.aac,.ogg,.opus,.wav,.flac,.webm" bind:this={audioInput} onchange={event => pickAudio(event.currentTarget.files?.[0])} />
-    {#if audio && !audioInput?.files?.length}<span>{audio.name}</span>{/if}
-  </label>
+    <span class="subtle">{PUBLIC_AUDIO_FORMATS.toLowerCase()} · up to 1.5 GiB</span>
+    <div class="audio-selection">
+      <button type="button" class="text-button" onclick={() => audioInput?.click()}>{audio ? 'change audio' : 'choose audio'}</button>
+      {#if audio}<span>selected: {audio.name}</span>{/if}
+    </div>
+    <input type="file" aria-label="audio file" hidden accept="audio/*,.aif,.aiff,.m4a,.mp3,.aac,.ogg,.opus,.wav,.flac,.webm" bind:this={audioInput} onchange={event => pickAudio(event.currentTarget.files?.[0])} />
+  </div>
   {#if audioProblem}<p role="alert">{audioProblem}</p>
   {:else if reattach && !audio}<p class="subtle">your draft is still here. choose the audio file again.</p>{/if}
   {#if service}
@@ -342,7 +351,12 @@
   </label>
   {#if imageBusy}<p role="status">preparing your cover…</p>{/if}
   {#if coverProblem}<p role="alert">{coverProblem}</p>{/if}
-  {#if cover}<button type="button" class="text-button" disabled={imageBusy} onclick={() => { cover = undefined; if (coverInput) coverInput.value = ''; }}>remove cover</button>{/if}
+  {#if coverPreview}
+    <div class="cover-preview">
+      <img src={coverPreview} alt="selected cover preview" width="64" height="64" />
+      <button type="button" class="text-button" disabled={imageBusy} onclick={() => { cover = undefined; if (coverInput) { coverInput.value = ''; coverInput.focus(); } }}>remove cover</button>
+    </div>
+  {/if}
 
   {#if details}
     <label>album <input bind:value={album} maxlength="256" placeholder="optional" /></label>
@@ -364,7 +378,10 @@
   label { display: grid; gap: 0.45rem; }
   .check { display: flex; align-items: center; gap: 0.65rem; min-height: 2.75rem; }
   .check input { width: 1.15rem; height: 1.15rem; accent-color: var(--accent); }
-  .file-field { padding: 0.9rem; border: 1px dashed var(--line); border-radius: 0.55rem; overflow-wrap: anywhere; }
+  .cover-preview { display: flex; align-items: center; gap: 0.65rem; }
+  .cover-preview img { border-radius: 0.45rem; object-fit: cover; }
+  .audio-selection { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+  .file-field { display: grid; gap: 0.45rem; padding: 0.9rem; border: 1px dashed var(--line); border-radius: 0.55rem; overflow-wrap: anywhere; }
   input:not([type='checkbox']), textarea { width: 100%; min-width: 0; border: 1px solid var(--line); padding: 0.6rem; border-radius: 0.5rem; background: var(--bg); color: inherit; font: inherit; font-size: 1rem; }
   .text-button { justify-self: start; }
   .submit { background: var(--accent); color: var(--on-accent); padding-inline: 1rem; }

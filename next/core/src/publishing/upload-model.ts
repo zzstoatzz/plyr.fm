@@ -3,6 +3,7 @@ import { createOperation, type CreateOperation } from './create-operation.ts';
 export const UPLOAD_PART_BYTES = 10_485_760;
 export const MAX_SERVICE_AUDIO_BYTES = 1_610_612_736;
 const formats: Record<string, string> = { mp3: 'audio/mpeg', wav: 'audio/wav', flac: 'audio/flac', ogg: 'audio/ogg', m4a: 'audio/mp4', aac: 'audio/aac' };
+export const PUBLIC_AUDIO_FORMATS = 'MP3, WAV, FLAC, AIFF, OGG, Opus, M4A, AAC or WebM';
 const processingFormats: Record<string, string> = { ...formats, aif: 'audio/aiff', aiff: 'audio/aiff', webm: 'audio/webm', opus: 'audio/opus' };
 export type UploadProcessing = { recipe: 'mp3-320k-44100-v1'; outputBudget: number };
 export type UploadRendition = { duration: number; sizeBytes: number; contentType: 'audio/mpeg'; fileType: 'mp3' };
@@ -26,7 +27,7 @@ export function assertPublicUploadRecord(record: Record<string, unknown>): void 
 }
 
 export function audioFormat(name: string, type: string, processing = false) {
-  const fileType = name.split('.').at(-1)?.toLowerCase() ?? '';
+  const fileType = name.includes('.') ? name.slice(name.lastIndexOf('.') + 1).toLowerCase() : '';
   const contentType = (processing ? processingFormats : formats)[fileType];
   // Pickers name the same format differently: iOS reports WAV as audio/vnd.wave and WebM as video/webm.
   const normalized = ({ 'audio/x-wav': 'audio/wav', 'audio/wave': 'audio/wav', 'audio/vnd.wave': 'audio/wav', 'audio/x-pn-wav': 'audio/wav',
@@ -36,7 +37,7 @@ export function audioFormat(name: string, type: string, processing = false) {
     'application/octet-stream': '', 'binary/octet-stream': '', 'application/x-unknown': '' } as Record<string, string>)[type.toLowerCase()] ?? type.toLowerCase();
   // Opus usually travels in an Ogg container and is reported as such.
   if (fileType === 'opus' && (normalized === 'audio/ogg' || normalized === 'audio/x-opus+ogg')) return { fileType, contentType };
-  if (!contentType || (normalized && normalized !== contentType)) throw new Error(processing ? 'choose an MP3, WAV, FLAC, OGG, Opus, M4A, AAC, AIFF or WebM file.' : 'choose an MP3, WAV, FLAC, OGG, M4A or AAC file.');
+  if (!contentType || (normalized && normalized !== contentType)) throw new Error(processing ? `choose an ${PUBLIC_AUDIO_FORMATS} file.` : 'choose an MP3, WAV, FLAC, OGG, M4A or AAC file.');
   return { fileType, contentType };
 }
 function processingRecipe(value: unknown, sourceBytes: number): UploadProcessing {

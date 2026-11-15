@@ -207,6 +207,7 @@ async function run(browser, accounts, width, theme, mp3) {
 
     await main.getByRole('link', { name: 'back to your music' }).click();
     await main.getByRole('link', { name: /view your public profile/ }).click();
+    await page.waitForURL(origin + '/u/' + handle);
     await main.getByRole('link', { name: 'edit profile', exact: true }).waitFor();
     await main.getByRole('tab', { name: 'albums' }).click();
     await main.getByRole('link', { name: 'new album', exact: true }).waitFor();
