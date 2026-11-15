@@ -17,6 +17,7 @@
 	const links = [
 		{ path: '/', label: 'home', icon: 'home' },
 		{ path: '/search', label: 'search', icon: 'search' },
+		{ path: '/library', label: 'library', icon: 'library' },
 		{ path: '/queue', label: 'queue', icon: 'queue' }
 	] as const;
 

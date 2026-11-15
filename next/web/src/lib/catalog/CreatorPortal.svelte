@@ -136,6 +136,7 @@
   <div class="actions">
     <a class="text-button upload" href="/upload"><Icon name="upload" size={18} /> upload</a>
     <a class="text-button" href="/edit-profile">edit profile</a>
+    <a class="text-button" href="/create-album">new album</a>
     <button class="icon-button" type="button" aria-label="Share profile" onclick={share}><Icon name="share" size={19} /></button>
     <a class="icon-button settings" href="/settings" aria-label="Settings"><Icon name="settings" size={20} /></a>
     {#if copied}<span class="subtle" role="status">link copied</span>{/if}

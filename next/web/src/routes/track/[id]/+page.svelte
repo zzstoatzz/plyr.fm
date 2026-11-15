@@ -1,4 +1,6 @@
 <script lang="ts">
+	import TrackCollections from '$lib/collections/TrackCollections.svelte';
+	import { isPrivateTrack } from '$core/track-access';
 	import { trackArtwork } from '$core/artwork';
 	import { player } from '$lib/player.svelte';
 	import { artistName } from '$lib/tracks';
@@ -37,6 +39,7 @@
 		<button class="primary-button" type="button" aria-label={active && player.playing ? 'Pause' : 'Play'} onclick={play}><Icon name={active && player.playing ? 'pause' : 'play'} size={27} /></button>
 		<button class="icon-button" type="button" aria-label="Add to queue" disabled={player.privateMode} title={player.privateMode ? "play a public track to change queues" : undefined} onclick={() => player.enqueue(track)}><Icon name="queue" /></button>
 	</div>
+	{#if !isPrivateTrack(track)}{#key track.id}<TrackCollections {track} />{/key}{/if}
 	<p class="subtle">{track.metrics.play_count} {track.metrics.play_count === 1 ? 'listen' : 'listens'}</p>
 	{#if shared}<p role="status">link copied</p>{/if}
 	{#if active && player.error}<p class="state" role="status">{player.error}</p>{/if}

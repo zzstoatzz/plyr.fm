@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ListDetail, Track } from '../../../core/src/api';
 import { useAuth } from '../auth';
 import { createPds } from '../pds';
+import { applyCollectionRevision } from '../../../core/src/collections/projected-collection';
 import type { CollectionRevision } from '../../../core/src/collections/collection-order';
 
 export function useCollectionOrder(indexed: ListDetail | undefined) {
@@ -24,9 +25,6 @@ export function useCollectionOrder(indexed: ListDetail | undefined) {
   const saved = useCallback((revision: CollectionRevision, tracks: Track[] = []) => {
     setPending({ revision, baseline: indexed?.record.cid, tracks, rpc });
   }, [indexed?.record.cid, rpc]);
-  const list = indexed && revision ? { ...indexed, members: revision.value.items.map((item, position): ListDetail['members'][number] => {
-    const track = indexed.members.find(member => member.subject.uri === item.subject.uri)?.track ?? pending?.tracks.find(track => track.record.uri === item.subject.uri) ?? null;
-    return { position, subject: item.subject, track, availability: track ? 'available' : 'unavailable' };
-  }), metrics: { ...indexed.metrics, member_count: revision.value.items.length } } : indexed;
+  const list = indexed && revision ? applyCollectionRevision(indexed, revision, pending?.tracks) : indexed;
   return { list, saved };
 }

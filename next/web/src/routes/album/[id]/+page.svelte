@@ -4,4 +4,4 @@
 	let { data }: PageProps = $props();
 </script>
 
-<ListDetail list={data.list} />
+{#key data.list.record.uri}<ListDetail list={data.list} />{/key}

@@ -35,10 +35,10 @@ export function albumPublishing({ rpc, did, trackCollection, assertSession, orde
     assertSession();
     return publish(title, [...items.values()]);
   }
-  async function save(revision: CollectionRevision, entries: AlbumEntry[]) {
+  async function save(revision: CollectionRevision, entries: AlbumEntry[], name?: string) {
     if (revision.value.listType !== 'album') throw new Error('not an album.');
     const additions = await verify(entries.filter((entry): entry is Track => typeof entry !== 'number'));
-    return ordering.write(revision, albumMembership(revision, entries, additions));
+    return ordering.write(revision, albumMembership(revision, entries, additions), name);
   }
   return { ...ordering, create, save };
 }
