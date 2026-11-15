@@ -296,6 +296,8 @@ async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'reg
       console.error(await page.locator('main').innerText());
       throw failure;
     });
+    await page.getByRole('button', { name: 'choose audio', exact: true }).waitFor();
+    assert.equal(await page.getByRole('alert').filter({ hasText: /choose an MP3.*WebM/ }).count(), 0);
     assert.equal(loseReply, false);
     assert.equal(writes.length, 1, 'a lost create response reconciles at the same address');
     const { value } = await getRecord(`at://${did}/${collection}/${writes[0].rkey}`);

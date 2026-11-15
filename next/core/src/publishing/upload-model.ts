@@ -27,7 +27,7 @@ export function assertPublicUploadRecord(record: Record<string, unknown>): void 
 }
 
 export function audioFormat(name: string, type: string, processing = false) {
-  const fileType = name.includes('.') ? name.slice(name.lastIndexOf('.') + 1).toLowerCase() : '';
+  const fileType = name.split('.').at(-1)?.toLowerCase() ?? '';
   const contentType = (processing ? processingFormats : formats)[fileType];
   // Pickers name the same format differently: iOS reports WAV as audio/vnd.wave and WebM as video/webm.
   const normalized = ({ 'audio/x-wav': 'audio/wav', 'audio/wave': 'audio/wav', 'audio/vnd.wave': 'audio/wav', 'audio/x-pn-wav': 'audio/wav',

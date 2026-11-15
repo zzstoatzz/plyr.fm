@@ -274,7 +274,7 @@
       cover = undefined;
       if (audioInput) audioInput.value = '';
       if (coverInput) coverInput.value = '';
-      title = autoTitle = album = description = tags = formProblem = coverProblem = '';
+      title = autoTitle = album = description = tags = formProblem = audioProblem = coverProblem = '';
       details = false;
     } catch (failure) {
       formProblem = message(failure, 'could not start the upload.');

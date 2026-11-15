@@ -31,7 +31,8 @@ export function outputBudget(sizeBytes: number, type: string, duration?: number)
 export function uploadRoute(file: { name: string; type: string; size: number }, duration?: number): UploadRoute {
   if (!Number.isSafeInteger(file.size) || file.size <= 0) throw new Error('choose a nonempty audio file.');
   if (file.size > MAX_SERVICE_AUDIO_BYTES) throw new Error('audio files are limited to 1.5 GiB.');
-  const { fileType: type } = audioFormat(file.name, file.type, true);
+  const type = fileType(file.name);
+  audioFormat(file.name, file.type, type !== '');
   if (PROCESSED.has(type)) {
     return { kind: 'service', processing: { recipe: 'mp3-320k-44100-v1', outputBudget: outputBudget(file.size, type, duration) } };
   }
