@@ -189,9 +189,9 @@ async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'reg
         await edit.click();
       }
       await page.waitForFunction(() => typeof window.releaseDraftTransaction === 'function');
-      await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'settings', exact: true }).click();
+      await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: /^(account|settings)$/ }).click();
       await page.getByRole('heading', { name: 'settings', exact: true }).waitFor();
-      const uploadLink = page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'upload', exact: true });
+      const uploadLink = page.getByRole('main').getByRole('link', { name: 'upload', exact: true });
       if (scenario === 'submit-navigation') {
         await uploadLink.click();
         await page.locator('form[inert]').waitFor();
