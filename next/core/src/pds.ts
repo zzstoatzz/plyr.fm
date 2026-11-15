@@ -407,6 +407,7 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 		edits: { bio: string; avatar: string },
 		current: { value: ProfileRecord | null; cid: string | null }
 	): Promise<AwaitStatus> {
+		assertSession();
 		const { rpc, did } = session();
 		const now = new Date().toISOString();
 		const record: ProfileRecord = { ...(current.value ?? {}), $type: NSID.profile, createdAt: current.value?.createdAt ?? now };
