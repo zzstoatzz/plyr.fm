@@ -33,6 +33,11 @@ from backend.models import Artist, Track, UploadFeedback
 DID = "did:plc:so3ysj7gypel6w7mixdfjhkh"
 
 
+@pytest.fixture(autouse=True)
+def paused_policy(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(upload_policy, "PAUSED_UPLOAD_DIDS", frozenset({DID}))
+
+
 @pytest.fixture
 async def docket(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Docket]:
     async with Docket(name=f"pause-dms-{uuid4()}", url=settings.docket.url) as queue:
