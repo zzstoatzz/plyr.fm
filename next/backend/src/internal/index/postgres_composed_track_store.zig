@@ -331,7 +331,6 @@ fn decodeLookup(allocator: std.mem.Allocator, row: *pg.Row, include_tags: bool) 
     var value = try decodeRow(allocator, row);
     if (include_tags) {
         value.metadata.tags = try parseLabels(allocator, try row.get([]const u8, projected_column_count));
-        value.legacy_id = try row.get(?i32, projected_column_count + 1);
     }
     return value;
 }
@@ -469,6 +468,7 @@ pub fn decodeRow(allocator: std.mem.Allocator, row: anytype) !track.Track {
     if (artwork_url) |url| if (!lexicon_value.validUri(url)) return error.CorruptArtwork;
     return .{
         .id = id,
+        .legacy_id = try row.get(?i32, 48),
         .record = .{
             .uri = uri,
             .cid = record_cid,
@@ -556,7 +556,7 @@ pub fn decodeRow(allocator: std.mem.Allocator, row: anytype) !track.Track {
     };
 }
 
-pub const projected_column_count = 48;
+pub const projected_column_count = 49;
 
 pub const projected_columns =
     \\  v.record_uri,
@@ -610,7 +610,8 @@ pub const projected_columns =
     \\  v.image_url,
     \\  COALESCE((SELECT operator_labels FROM plyr_index.account_label_policies WHERE owner_did = v.owner_did
     \\    AND (expires_at_us IS NULL OR expires_at_us > (extract(epoch FROM statement_timestamp()) * 1000000)::bigint)), '[]'::jsonb)::text,
-    \\  v.download_policy
+    \\  v.download_policy,
+    \\  (SELECT links.legacy_id FROM plyr_index.legacy_track_links AS links WHERE links.record_uri = v.record_uri)
 ;
 
 pub const projected_from = "FROM plyr_index.track_records AS v\n" ++ projected_joins;
@@ -655,8 +656,7 @@ const lookup_policy =
 ;
 const lookup_where = "WHERE v.record_uri = $1\n" ++ lookup_policy;
 const lookup_query = joined_projection ++ "\n" ++ lookup_where;
-const detail_projection = "SELECT\n" ++ projected_columns ++ ",\n" ++ track_tag_sql.detail_tags ++
-    ",\n(SELECT links.legacy_id FROM plyr_index.legacy_track_links AS links WHERE links.record_uri = v.record_uri)\n" ++ projected_from;
+const detail_projection = "SELECT\n" ++ projected_columns ++ ",\n" ++ track_tag_sql.detail_tags ++ "\n" ++ projected_from;
 const detail_query = detail_projection ++ "\n" ++ lookup_where;
 const legacy_detail_query = detail_projection ++
     "\nWHERE v.record_uri = (SELECT links.record_uri FROM plyr_index.legacy_track_links AS links WHERE links.legacy_id = $1)" ++
@@ -760,6 +760,7 @@ const readiness_sql =
     \\  AND to_regclass('plyr_index.track_policies') IS NOT NULL
     \\  AND to_regclass('plyr_index.account_label_policies') IS NOT NULL
     \\  AND to_regclass('plyr_index.track_metrics') IS NOT NULL
+    \\  AND to_regclass('plyr_index.legacy_track_links') IS NOT NULL
     \\  AND to_regclass('plyr_index.like_records') IS NOT NULL
     \\  AND to_regclass('plyr_index.actor_identities') IS NOT NULL
 ;
@@ -1104,6 +1105,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     try std.testing.expectEqual(@import("../domain/search.zig").MatchField.handle, exact_handle_hits[0].match.field);
     try std.testing.expectEqualStrings(did, exact_handle_hits[0].id);
     try std.testing.expectEqualStrings("verified_repo", exact_handle_hits[0].projection.verification);
+    try std.testing.expectEqual(@as(?i32, null), exact_handle_hits[0].legacy_id);
 
     var verified_query = search_request;
     verified_query.query = "Verified";
@@ -1116,6 +1118,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     try std.testing.expect(std.mem.startsWith(u8, verified_hits[1].id, "trk_"));
     try std.testing.expectEqual(@as(?usize, 1), verified_hits[0].metrics.member_count);
     try std.testing.expectEqual(@as(?i64, 7), verified_hits[1].metrics.play_count);
+    try std.testing.expectEqual(@as(?i32, 1667), verified_hits[1].legacy_id);
     try std.testing.expectEqualStrings("https://images.example/cover.jpg", verified_hits[1].image_url.?);
     try std.testing.expectEqual(track.Source.verified_repo, verified_hits[1].sources.image);
     try std.testing.expectEqualStrings("https://pds.example/avatar.jpg", verified_hits[0].image_url.?);
@@ -1228,6 +1231,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     try std.testing.expectEqualStrings(legacy_cover_url, album_detail.media.artwork.?.url);
     try std.testing.expectEqual(@as(?[]const u8, null), playlist_detail.metadata.cover_blob_cid);
     try std.testing.expectEqualStrings("Verified Title", album_detail.members[0].track.?.metadata.title);
+    try std.testing.expectEqual(@as(?i32, 1667), album_detail.members[0].track.?.legacy_id);
 
     _ = try pool.exec(
         \\INSERT INTO plyr_index.track_delivery_origins VALUES (
