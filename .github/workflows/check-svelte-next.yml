@@ -43,9 +43,6 @@ jobs:
       - run: bun run check:radio
         env:
           SCREENS_OUTPUT: ${{ runner.temp }}/next-svelte-screens/radio
-      - run: bun run check:radio
-        env:
-          SCREENS_OUTPUT: ${{ runner.temp }}/next-svelte-screens/radio
       - uses: actions/upload-artifact@v4
         if: always()
         with:
