@@ -3,7 +3,6 @@
 	import type { Snapshot } from '@sveltejs/kit';
 	import type { Track } from '@plyr/next-core/api';
 	import { api } from '$lib/api';
-	import { trackArtwork } from '@plyr/next-core/artwork';
 	import { player } from '$lib/player.svelte';
 	import { artistName } from '$lib/tracks';
 	import Artwork from '$lib/ui/Artwork.svelte';
@@ -64,10 +63,12 @@
 		{#if featured.length}
 			{@const top = featured[Math.floor(Date.now() / 604800000) % featured.length]}
 			{@const byArtist = featured.filter(track => track.artist.did === top.artist.did)}
+			{@const covers = [...new Set(byArtist.flatMap(track => track.media.artwork?.url ? [track.media.artwork.url] : []))].slice(0, 6)}
+			{@const artwork = covers.length ? covers : top.artist.profile.avatar_url ? [top.artist.profile.avatar_url] : []}
 			<section class="featured" data-testid="home-featured" aria-label="artist of the week">
-				<div class="wall" aria-hidden="true">
-					{#each featured.slice(0, 6) as track (track.id)}
-						<Artwork src={trackArtwork(track)} size={200} />
+				<div class="wall" class:single={artwork.length === 1} class:pair={artwork.length === 2} aria-hidden="true">
+					{#each artwork as src (src)}
+						<Artwork {src} size={artwork.length === 1 ? 640 : 220} />
 					{/each}
 				</div>
 				<div class="feature-content">
@@ -119,6 +120,9 @@
 	@media (min-width: 721px) { .mobile-brand h1 { display: none; } }
 	.featured { grid-area: featured; position: relative; isolation: isolate; display: grid; align-items: center; min-height: 17rem; overflow: hidden; border: 1px solid var(--line); border-radius: 1.15rem; background: var(--surface); }
 	.wall { position: absolute; inset: -15% -5% -15% 32%; z-index: -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.4rem; align-content: center; transform: rotate(-4deg); mask-image: linear-gradient(90deg, transparent 0%, #000 55%); }
+	.wall.pair { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.wall.single { inset: 0 0 0 30%; display: block; transform: none; }
+	.wall.single :global(.artwork) { height: 100%; aspect-ratio: auto; }
 	.feature-content { max-width: 65%; padding: clamp(1.2rem, 3vw, 2.5rem); }
 	.feature-content span { font-weight: 650; color: var(--accent); font-size: 0.8rem; }
 	h1 { line-height: 1.1; letter-spacing: -0.035em; }
