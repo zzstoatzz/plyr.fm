@@ -35,12 +35,13 @@
       if (abort.signal.aborted || auth.getAuth().rpc !== account.rpc) throw new Error('account changed. resume from the original account.');
     };
     try {
-      await recoverUpload({
+      const disposition = await recoverUpload({
         operation, action, pds, storage: uploadStorage, assertCurrent,
         transport: createUploadTransport(account, operation, assertCurrent, abort.signal),
         update: patch => { view = { ...view, ...patch }; }
       });
       assertCurrent();
+      if (disposition) uploadQueue.dismissRecovery(operation, disposition);
       await refresh();
     } catch (failure) {
       if (!abort.signal.aborted) problem = failure instanceof Error ? failure.message : 'upload stopped. check its status.';

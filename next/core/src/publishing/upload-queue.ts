@@ -2,9 +2,10 @@ import type { Auth, Did } from '../auth-state';
 import type { createPublicPds, MediaFile, NewTrack } from '../pds';
 import type { RepoRpc } from './repo-rpc';
 import type { CreateReservation } from './create-operation';
-import { audioFormat, uploadPublication, type ChunkReader, type UploadOperation, type UploadStatus, type UploadStorage, type transferParts } from './upload-model';
-import { processingStep, retryDelay, transient, uploadRoute, type UploadJobView } from './upload-queue-model';
+import { audioFormat, uploadPublication, type ChunkReader, type UploadOperation, type UploadStatus, type UploadStorage, type transferParts } from './upload-model.ts';
+import { processingStep, retryDelay, transient, uploadInProgress, uploadRoute, type UploadJobView } from './upload-queue-model.ts';
 import type { UploadTransport } from './upload-transport';
+import type { UploadRecoveryDisposition } from './upload-recovery';
 
 type Job = UploadJobView & { owner: Did; input?: NewTrack; file?: MediaFile; operation?: UploadOperation; rkey?: string; uploadId?: string };
 type Session = Pick<Auth<unknown>, 'did' | 'agent' | 'uploadStorage'>;
@@ -36,7 +37,7 @@ export function createUploadQueue<Rpc extends RepoRpc>({
   const listeners = new Set<() => void>();
 
   function publish() {
-    const finished = jobs.filter(job => job.phase === 'done' || job.phase === 'failed');
+    const finished = jobs.filter(job => job.phase === 'done' || (job.phase === 'failed' && !job.input));
     const stale = new Set(finished.slice(0, Math.max(0, finished.length - KEEP_FINISHED)));
     if (stale.size) jobs = jobs.filter(job => !stale.has(job));
     snapshot = jobs.map(({ id, owner, title, phase, progress, uri, error }) => ({ id, owner, title, phase, progress, uri, error }));
@@ -49,7 +50,7 @@ export function createUploadQueue<Rpc extends RepoRpc>({
     publish();
   }
 
-  function session(job: Job): Auth<Rpc> {
+  function session(job: Pick<Job, 'owner'>): Auth<Rpc> {
     const auth = getAuth();
     if (auth.did !== job.owner || !auth.rpc) throw new Error('sign in to the account that started it');
     return auth;
@@ -66,10 +67,11 @@ export function createUploadQueue<Rpc extends RepoRpc>({
     }
   }
 
-  async function finishCreate(job: Job, uri: string, autoTag?: boolean) {
+  async function finishCreate(job: Job, uri: string, autoTag?: boolean, operation?: UploadOperation) {
     const pds = createPds(session(job));
     const pending = (await pds.pendingCreates('track')).find(item => item.uri === uri);
     if (pending) await pds.dismissCreate(pending).catch(() => undefined);
+    if (operation) await uploadStorage.delete(operation).catch(() => undefined);
     patch(job, { phase: 'done', uri });
     if (autoTag) void applyGenreTags(() => session(job), uri).catch(() => undefined);
   }
@@ -130,8 +132,11 @@ export function createUploadQueue<Rpc extends RepoRpc>({
         status = await withRetries(job, () => transport.activate());
       }
     }
-    await finishCreate(job, operation.uri, operation.autoTag);
-    if (status.state === 'published') await uploadStorage.delete(operation);
+    if (status.state !== 'published') {
+      patch(job, { phase: 'awaiting-publication' });
+      return;
+    }
+    await finishCreate(job, operation.uri, operation.autoTag, operation);
   }
 
   async function prepare(job: Job, input: NewTrack) {
@@ -152,10 +157,18 @@ export function createUploadQueue<Rpc extends RepoRpc>({
     return () => runService(job, operation);
   }
 
+  function alreadyQueued(operation: UploadOperation) {
+    return jobs.some(job => job.owner === operation.owner && job.uploadId === operation.uploadId &&
+      (uploadInProgress(job.phase) || job.phase === 'done'));
+  }
+
   function enqueueSaved(operation: UploadOperation, file?: MediaFile) {
+    if (alreadyQueued(operation)) return;
     const title = typeof operation.record.title === 'string' ? operation.record.title : operation.name;
     const job: Job = { id: randomUUID(), owner: operation.owner, title, phase: 'waiting', operation, file, uploadId: operation.uploadId, rkey: operation.rkey };
-    jobs = [...jobs, job];
+    const previous = jobs.find(item => item.owner === operation.owner && item.uploadId === operation.uploadId && item.phase === 'awaiting-publication');
+    if (previous) onDismiss?.(previous);
+    jobs = [...jobs.filter(item => item !== previous), job];
     patch(job, {});
   }
 
@@ -195,16 +208,16 @@ export function createUploadQueue<Rpc extends RepoRpc>({
       const assertCurrent = () => { if (getAuth().rpc !== account.rpc) throw new Error('account changed.'); };
       const pds = createPds(account), pending = await pds.pendingCreates('track');
       for (const operation of await uploadStorage.load(owner)) {
-        if (jobs.some(job => job.uploadId === operation.uploadId) || pending.some(item => item.rkey === operation.rkey && item.archived)) continue;
+        if (jobs.some(job => job.uploadId === operation.uploadId && job.phase !== 'awaiting-publication') || pending.some(item => item.rkey === operation.rkey && item.archived)) continue;
         const status = await createUploadTransport(account, operation, assertCurrent, new AbortController().signal).status().catch(() => undefined);
-        if (!status || !['completing', 'processing', 'complete'].includes(status.state)) continue;
+        if (!status || !['completing', 'processing', 'complete', 'published'].includes(status.state)) continue;
         enqueueSaved(operation);
       }
       void drain();
     },
     /** Carry on with a saved upload; a transfer that stopped part way needs its original file. */
     continue(operation: UploadOperation, file?: MediaFile) {
-      if (jobs.some(job => job.uploadId === operation.uploadId && job.phase !== 'done' && job.phase !== 'failed')) return;
+      if (alreadyQueued(operation)) return;
       if (file) {
         const format = audioFormat(file.name, file.type, !!operation.processing);
         if (format.fileType !== operation.fileType || format.contentType !== operation.contentType) throw new Error('select the original audio file.');
@@ -221,12 +234,25 @@ export function createUploadQueue<Rpc extends RepoRpc>({
       publish();
       return job.input;
     },
+    dismissRecovery(operation: UploadOperation, disposition: UploadRecoveryDisposition) {
+      if (operation.owner !== getAuth().did) return;
+      const job = jobs.find(item => item.phase === 'awaiting-publication' && item.owner === operation.owner &&
+        item.uploadId === operation.uploadId && item.operation?.uri === operation.uri);
+      if (job) {
+        jobs = jobs.filter(item => item !== job);
+        onDismiss?.(job);
+        publish();
+      }
+      if (disposition === 'published' && operation.autoTag && !alreadyQueued(operation)) {
+        void applyGenreTags(() => session(operation), operation.uri).catch(() => undefined);
+      }
+    },
     /** Creations and transfers the queue is driving, so recovery screens leave them alone. */
     busy() {
-      const active = jobs.filter(job => job.phase !== 'done' && job.phase !== 'failed');
+      const active = jobs.filter(job => uploadInProgress(job.phase));
       return { rkeys: new Set(active.flatMap(job => job.rkey ? [job.rkey] : [])), uploadIds: new Set(active.flatMap(job => job.uploadId ? [job.uploadId] : [])) };
     },
-    active: () => jobs.some(job => job.phase !== 'done' && job.phase !== 'failed'),
+    active: () => jobs.some(job => uploadInProgress(job.phase)),
     subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
     snapshot: () => snapshot,
     editable: (id: string) => jobs.some(job => job.id === id && job.owner === getAuth().did && job.phase === 'failed' && !!job.input),

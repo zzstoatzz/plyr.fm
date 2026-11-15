@@ -9,6 +9,7 @@ const { fixtureAccounts, fixturePage, authorizeFixture } = require('./pds-browse
 const origin = 'https://next.plyr.fm';
 const appView = 'https://api.next.plyr.fm';
 const coordinator = 'https://jams.next.plyr.fm';
+const genreEndpoint = 'https://plyr-next-audio.n8-3e9.workers.dev/v1/genres';
 const pds = 'http://localhost:5197/xrpc/';
 const collection = 'fm.plyr.track';
 const handle = 'mvpjamhost.test';
@@ -64,7 +65,11 @@ async function verify(browser, accounts, width, theme, mp3, wav) {
   const partStarted = Promise.withResolvers();
   const releasePart = Promise.withResolvers();
   let state = 'transferring';
+  const waitForConfirmation = theme === 'light';
+  const manualConfirmation = waitForConfirmation && width === 1280;
+  let activationChecks = 0;
   const worker = 'https://audio.fixture';
+  await context.route(genreEndpoint, route => route.fulfill({ status: 503 }));
   await context.route(coordinator + '/v1/uploads/authorize', route => {
     const request = route.request().postDataJSON();
     assert.equal(request.serviceToken.split('.').length, 3);
@@ -99,7 +104,8 @@ async function verify(browser, accounts, width, theme, mp3, wav) {
       assert.equal(value.audioBlob, undefined);
       assert.equal(value.downloadPolicy, 'open');
       assert.equal(value.fileType, 'mp3');
-      state = 'published';
+      activationChecks++;
+      if (!waitForConfirmation) state = 'published';
     }
     return route.fulfill({ json: {
       state, processing: upload.processing, recoveryRequired: false, partSizeBytes: partSize, partCount: 1,
@@ -155,6 +161,7 @@ async function verify(browser, accounts, width, theme, mp3, wav) {
     await consent.waitFor();
     assert.ok(await submit.isDisabled());
     await consent.check();
+    if (manualConfirmation) await page.getByRole('checkbox', { name: 'auto-tag with recommended genres' }).check();
     const partRequest = page.waitForRequest(request => request.url().startsWith(worker) && request.method() === 'PUT');
     await submit.click();
     await partRequest;
@@ -166,7 +173,27 @@ async function verify(browser, accounts, width, theme, mp3, wav) {
     releasePart.resolve();
     await progress.waitFor({ state: 'detached' });
     await page.getByRole('link', { name: 'upload', exact: true }).click();
-    await page.getByRole('list', { name: 'Upload queue' }).getByRole('link', { name: 'view track' }).nth(1).waitFor();
+    const jobLinks = page.getByRole('list', { name: 'Upload queue' }).getByRole('link', { name: 'view track' });
+    if (waitForConfirmation) {
+      const awaiting = page.getByText('"for conversion" is waiting for playback confirmation');
+      await awaiting.waitFor();
+      assert.equal(activationChecks, 3);
+      assert.equal(state, 'complete');
+      assert.equal(await jobLinks.count(), 1);
+      state = 'published';
+      if (manualConfirmation) {
+        await page.getByRole('button', { name: 'check upload status' }).click();
+        const genreRequest = page.waitForRequest(genreEndpoint, { timeout: 5000 });
+        await page.getByRole('button', { name: 'done with upload' }).click();
+        await awaiting.waitFor({ state: 'detached', timeout: 5000 });
+        assert.equal((await genreRequest).postDataJSON().uri, `at://${did}/${collection}/${writes[1].rkey}`);
+      } else {
+        await page.reload();
+        await jobLinks.first().waitFor();
+      }
+    } else {
+      await jobLinks.nth(1).waitFor();
+    }
     assert.equal(state, 'published');
     assert.equal(writes.length, 2);
     assert.equal(blobWrites, 2, 'converted source bytes never go to the PDS');

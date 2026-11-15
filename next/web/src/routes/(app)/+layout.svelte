@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, untrack } from 'svelte';
+	import { uploadInProgress } from '@plyr/next-core/publishing/upload-queue-model';
 	import { page } from '$app/state';
 	import { auth, restoreAuth } from '$lib/auth';
 	import { player } from '$lib/player.svelte';
@@ -11,7 +12,7 @@
 	let dialog: HTMLDialogElement;
 	let NowPlaying = $state<typeof import('$lib/NowPlaying.svelte').default>();
 	let account = $state.raw(auth.getAuth());
-	let uploading = $derived(uploadActivity.jobs.filter(job => job.owner === account.did && job.phase !== 'done' && job.phase !== 'failed').length);
+	let uploading = $derived(uploadActivity.jobs.filter(job => job.owner === account.did && uploadInProgress(job.phase)).length);
 	const links = [
 		{ path: '/', label: 'home', icon: 'home' },
 		{ path: '/search', label: 'search', icon: 'search' },
