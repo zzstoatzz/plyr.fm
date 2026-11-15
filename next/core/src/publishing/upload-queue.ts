@@ -67,13 +67,19 @@ export function createUploadQueue<Rpc extends RepoRpc>({
   }
 
   async function withRetries<T>(job: Job, step: () => Promise<T>): Promise<T> {
-    for (let attempt = 0; ; attempt++) {
-      try { return await step(); }
-      catch (failure) {
-        if (attempt + 1 >= ATTEMPTS || !transient(failure)) throw failure;
-        await sleep(retryDelay(attempt));
-        session(job);
+    const phase = job.phase;
+    try {
+      for (let attempt = 0; ; attempt++) {
+        try { return await step(); }
+        catch (failure) {
+          if (attempt + 1 >= ATTEMPTS || !transient(failure)) throw failure;
+          if (job.phase !== 'retrying') patch(job, { phase: 'retrying' });
+          await sleep(retryDelay(attempt));
+          session(job);
+        }
       }
+    } finally {
+      if (job.phase === 'retrying') patch(job, { phase });
     }
   }
 
