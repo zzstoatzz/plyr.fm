@@ -24,7 +24,7 @@ const verified = @import("verified_snapshot.zig");
 /// that used to reject valid records). A complete snapshot at the same
 /// revision as a head with an older version is then rebuilt instead of being
 /// treated as idempotent, so reconciliation repairs stale projections.
-pub const projection_version: i32 = 5;
+pub const projection_version: i32 = 6;
 
 const HeadDecision = union(enum) {
     done: verified.ApplyResult,
@@ -636,6 +636,9 @@ test "PostgreSQL complete snapshot bootstraps and reconciles atomically" {
         .track_cid = record_cid,
     }};
     two_1.upsert.members = &two_members;
+    const cover_blob = try zat.Cid.create(a, 1, zat.cbor.Codec.raw, zat.cbor.HashFn.sha2_256, "cover");
+    const cover_cid = try cover_blob.toString(a);
+    two_1.upsert.cover_blob_cid = cover_cid;
     var initial = makeSnapshot(&rev_1.str(), commit_1, data_1, 1_000, &.{ one_1, two_1 });
     const track_one_1 = trackUpsert("track-one", &rev_1.str(), commit_1, 1_000);
     const track_two_1 = trackUpsert("track-two", &rev_1.str(), commit_1, 1_000);
@@ -653,7 +656,8 @@ test "PostgreSQL complete snapshot bootstraps and reconciles atomically" {
     try std.testing.expectEqual(verified.ApplyResult.applied, try store.apply(a, initial));
     try std.testing.expectEqual(verified.ApplyResult.idempotent, try store.apply(a, initial));
 
-    _ = try pool.exec("UPDATE plyr_index.repo_heads SET projection_version = 2", .{});
+    _ = try pool.exec("UPDATE plyr_index.repo_heads SET projection_version = 5", .{});
+    _ = try pool.exec("UPDATE plyr_index.list_records SET cover_blob_cid = NULL", .{});
     _ = try pool.exec("DELETE FROM plyr_index.like_records", .{});
     _ = try pool.exec("DELETE FROM plyr_index.track_tag_records", .{});
     try std.testing.expectEqual(verified.ApplyResult.applied, try store.apply(a, initial));
@@ -665,6 +669,11 @@ test "PostgreSQL complete snapshot bootstraps and reconciles atomically" {
     }
     try expectState(pool, &rev_1.str(), "one", false);
     try expectState(pool, &rev_1.str(), "two", false);
+    {
+        var cover_row = (try pool.row("SELECT cover_blob_cid FROM plyr_index.list_records WHERE rkey = 'two'", .{})).?;
+        defer cover_row.deinit() catch {};
+        try std.testing.expectEqualStrings(cover_cid, (try cover_row.get(?[]const u8, 0)).?);
+    }
     try expectTrackState(pool, "track-one", &rev_1.str(), false);
     try expectTrackState(pool, "track-two", &rev_1.str(), false);
     {
