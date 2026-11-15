@@ -118,8 +118,9 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 		if (operation.owner !== session().did || (operation.collection !== NSID.track && operation.collection !== NSID.list)) throw new Error('not your pending creation');
 		await createStorage.archive(operation, archived);
 	}
-	async function publishCreate(reservation: CreateReservation, record: Record<string, unknown>) {
-		const result = await recordCreator(session().rpc, createStorage, assertSession, NSID.list).create({ ...reservation, record });
+	async function publishCreate(reservation: CreateReservation, record: Record<string, unknown>, draft?: { id: string; autoTag?: boolean; handedOff: () => Promise<void> }) {
+		const operation = { ...reservation, record, ...(draft ? { draftId: draft.id, autoTag: draft.autoTag } : {}) };
+		const result = await recordCreator(session().rpc, createStorage, assertSession, NSID.list).create(operation, draft?.handedOff);
 		if (result.state !== 'accepted') throw new CreateUnconfirmed();
 		return { uri: result.uri, status: await settle(result.uri, result.cid) };
 	}
@@ -322,7 +323,7 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 	// points at it. the appview never touches the bytes; players fetch them from
 	// the PDS (see identity.blobUrl).
 
-	async function uploadTrack(input: NewTrack, reserved?: CreateReservation): Promise<{ uri: string; status: AwaitStatus }> {
+	async function uploadTrack(input: NewTrack, reserved?: CreateReservation, draft?: { id: string; handedOff: () => Promise<void> }): Promise<{ uri: string; status: AwaitStatus }> {
 		const { rpc, did } = session();
 		const reservation = reserved ?? await reserveCreate('track');
 		if (reservation.owner !== did || reservation.collection !== NSID.track || reservation.uri !== `at://${did}/${NSID.track}/${reservation.rkey}`) throw new Error('not your upload reservation');
@@ -333,7 +334,7 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 		assertSession();
 		const record = await prepareTrackRecord(input);
 		assertSession();
-		return publishCreate(reservation, { ...record, audioBlob: uploaded.blob });
+		return publishCreate(reservation, { ...record, audioBlob: uploaded.blob }, draft && { ...draft, autoTag: input.autoTag });
 	}
 
 	async function prepareTrackRecord(input: NewTrack) {

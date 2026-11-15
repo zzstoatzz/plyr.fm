@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth';
 import { getAuth, type Auth } from '../auth-state';
 import { View } from 'react-native';
@@ -17,6 +17,9 @@ import { CreateRecovery, EarlierCreates, useCreateRecovery } from './CreateRecov
 import { AudienceToggle, CheckRow, FieldError, FormCard, PickTile } from './UploadPieces';
 import { pickArtwork } from './artwork';
 import { useArtistName } from './artist-name';
+import { QueuedUpload } from './QueuedUpload';
+import { queuedDrafts } from './upload-storage';
+import { draftInRecovery, type QueuedUploadDraft } from '@plyr/next-core/publishing/queued-upload-draft';
 
 export default function Upload() {
   const auth = useAuth();
@@ -37,7 +40,7 @@ function SignedOut() {
   </>;
 }
 
-type Draft = { title: string; album: string; description: string; tags: string; named?: boolean };
+type Draft = { title: string; album: string; description: string; tags: string; named?: boolean; autoTag?: boolean };
 type Problems = { audio?: string; artwork?: string; tags?: string; form?: string };
 
 function readDraft(key: string): Draft | undefined {
@@ -46,7 +49,11 @@ function readDraft(key: string): Draft | undefined {
     if (!value || typeof value !== 'object') return;
     const text = (field: string) => field in value && typeof (value as Record<string, unknown>)[field] === 'string' ? (value as Record<string, string>)[field] : '';
     const draft = { title: text('title'), album: text('album'), description: text('description'), tags: text('tags') };
-    return Object.values(draft).some(Boolean) ? { ...draft, named: 'named' in value && value.named === true } : undefined;
+    return Object.values(draft).some(Boolean) ? {
+      ...draft,
+      named: 'named' in value && value.named === true,
+      autoTag: 'autoTag' in value && typeof value.autoTag === 'boolean' ? value.autoTag : undefined,
+    } : undefined;
   } catch { return; }
 }
 
@@ -71,8 +78,13 @@ function AccountUpload({ auth }: { auth: Auth }) {
   const consentKey = `plyr-storage-consent:${auth.did}`;
   const [serviceConsent, setServiceConsent] = useState(() => readLocal(consentKey) === 'yes');
   const autoTagKey = `plyr-auto-tag:${auth.did}`;
-  const [autoTag, setAutoTag] = useState(() => readLocal(autoTagKey) === 'yes');
+  const [autoTag, setAutoTag] = useState(() => restored?.autoTag ?? readLocal(autoTagKey) === 'yes');
   const [problems, setProblems] = useState<Problems>({});
+  const [draftProblem, setDraftProblem] = useState('');
+  const [queuedProblem, setQueuedProblem] = useState('');
+  const [savedDrafts, setSavedDrafts] = useState<QueuedUploadDraft[]>([]);
+  const submitting = useRef(false);
+  const [saving, setSaving] = useState(false);
   const [reattach, setReattach] = useState(!!restored);
   const queue = useUploadQueue();
   const busy = uploadQueue.busy();
@@ -84,11 +96,28 @@ function AccountUpload({ auth }: { auth: Auth }) {
   useEffect(() => { live.current = true; return () => { live.current = false; }; }, []);
   const settled = queue.filter(job => !uploadInProgress(job.phase)).map(job => job.id).join();
   useEffect(() => { void recovery.refresh(); void uploads.refresh(); }, [settled]);
+  const refreshDrafts = useCallback(async () => {
+    const current = () => live.current && getAuth().did === auth.did && getAuth().rpc === auth.rpc;
+    try {
+      const next = auth.did ? await queuedDrafts.load(auth.did) : [];
+      if (current()) { setSavedDrafts(next); setQueuedProblem(''); }
+    } catch {
+      if (current()) setQueuedProblem('could not load queued uploads. try again.');
+    }
+  }, [auth.did, auth.rpc]);
+  const linkedDrafts = [...recovery.operations, ...recovery.archived, ...uploads.operations].map(operation => operation.draftId).join();
+  useEffect(() => { void refreshDrafts(); }, [refreshDrafts, settled, linkedDrafts]);
   // Everything typed survives a reload, a crash or the sign-in-again round trip; files are chosen again.
+  const editorDraft = JSON.stringify({ title, album, description, tags, autoTag, named: !!title && title === autoTitle.current });
   useEffect(() => {
-    if (title || album || description || tags) writeLocal(draftKey, JSON.stringify({ title, album, description, tags, named: !!title && title === autoTitle.current }));
-    else removeLocal(draftKey);
-  }, [draftKey, title, album, description, tags]);
+    try {
+      if (title || album || description || tags) {
+        writeLocal(draftKey, editorDraft);
+        if (readLocal(draftKey) !== editorDraft) throw new Error('draft was not saved');
+      } else removeLocal(draftKey);
+      setDraftProblem('');
+    } catch { setDraftProblem('changes to this draft could not be saved on this device.'); }
+  }, [draftKey, editorDraft, title, album, description, tags]);
   const artist = useArtistName(auth);
   const current = () => live.current && getAuth().did === auth.did && getAuth().rpc === auth.rpc;
   const tagError = tagProblem(tags);
@@ -130,8 +159,21 @@ function AccountUpload({ auth }: { auth: Auth }) {
     if (next) writeLocal(consentKey, 'yes'); else removeLocal(consentKey);
   }
 
-  function editAgain(id: string) {
-    const input = uploadQueue.takeBack(id);
+  async function editAgain(id: string) {
+    const input = await uploadQueue.takeBack(id, input => {
+      if (!current()) throw new Error('reopen the upload page to edit this draft.');
+      const previous = readLocal(draftKey);
+      const saved = JSON.stringify({ title: input.title, album: input.album, description: input.description, tags: input.tags?.join('\n'), autoTag: !!input.autoTag });
+      writeLocal(draftKey, saved);
+      if (readLocal(draftKey) !== saved) throw new Error('could not save the editor draft.');
+      return () => {
+        if (readLocal(draftKey) !== saved) return;
+        if (previous === null) removeLocal(draftKey);
+        else writeLocal(draftKey, previous);
+      };
+    }).catch(failure => {
+      if (current()) setProblems(previous => ({ ...previous, form: failure instanceof Error ? failure.message : 'could not reopen the upload. try again.' }));
+    });
     if (!input || !current()) return;
     setFile(input.file); setArtwork(input.artwork ?? null); setTitle(input.title); setAlbum(input.album ?? '');
     setDescription(input.description ?? ''); setTags(input.tags?.join('\n') ?? '');
@@ -139,23 +181,35 @@ function AccountUpload({ auth }: { auth: Auth }) {
     setProblems({});
   }
 
-  function upload() {
-    if (!current() || !file || !title.trim() || !artist || tagError || (service && (!serviceConsent || !auth.uploadStorage))) return;
+  async function upload() {
+    if (submitting.current || !current() || !file || !title.trim() || !artist || tagError || (service && (!serviceConsent || !auth.uploadStorage))) return;
+    submitting.current = true;
+    setSaving(true);
     try {
       const list = tags.trim() ? tags.split('\n') : undefined;
-      uploadQueue.add({ file, artwork, title, artist, album, description, tags: list, autoTag });
+      await uploadQueue.add({ file, artwork, title, artist, album, description, tags: list, autoTag });
+      try {
+        if (readLocal(draftKey) === editorDraft) removeLocal(draftKey);
+      } catch {
+        if (current()) setDraftProblem('the upload was queued, but this device could not clear the editor draft.');
+      }
+      if (!current()) return;
+      autoTitle.current = undefined;
+      setFile(null); setArtwork(null); setTitle(''); setAlbum(''); setDetails(false); setDescription(''); setTags(''); setProblems({});
     } catch (failure) {
-      setProblems(previous => ({ ...previous, form: failure instanceof Error ? failure.message : 'could not start the upload.' }));
-      return;
+      if (current()) setProblems(previous => ({ ...previous, form: failure instanceof Error ? failure.message : 'could not start the upload.' }));
+    } finally {
+      submitting.current = false;
+      if (current()) setSaving(false);
     }
-    // Queued: the form is free for the next track. A failure can be put back from the list above.
-    removeLocal(draftKey);
-    autoTitle.current = undefined;
-    setFile(null); setArtwork(null); setTitle(''); setAlbum(''); setDetails(false); setDescription(''); setTags(''); setProblems({});
   }
 
   return <>
-    <UploadQueueList onEdit={editAgain} />
+    <UploadQueueList onEdit={saving ? undefined : id => void editAgain(id)} />
+    {!!queuedProblem && <><Copy live>{queuedProblem}</Copy><Action label="Retry queued uploads" onPress={() => void refreshDrafts()} /></>}
+    {savedDrafts.filter(draft => !draftInRecovery(draft, recovery.operations, recovery.archived, uploads.operations) &&
+      !queue.some(job => job.id === draft.id)).map(draft =>
+      <QueuedUpload key={draft.id} draft={draft} refresh={refreshDrafts} />)}
     <LargeUploads uploads={uploads} skip={busy.uploadIds} />
     <EarlierCreates auth={auth} recovery={creationRecovery} kind="track" />
     {creationRecovery.loading || creationRecovery.error || creationRecovery.operations.length ? <CreateRecovery auth={auth} recovery={creationRecovery} kind="track" onDismiss={() => {}} /> : <>
@@ -186,8 +240,9 @@ function AccountUpload({ auth }: { auth: Auth }) {
         </> : <Action label="add album, description or tags" onPress={() => setDetails(true)} />}
         <CheckRow label="auto-tag with recommended genres" checked={autoTag} onChange={value => { setAutoTag(value); if (value) writeLocal(autoTagKey, 'yes'); else removeLocal(autoTagKey); }} />
         <View style={{ gap: 8 }}>
+          {draftProblem && <FieldError>{draftProblem}</FieldError>}
           {problems.form && <FieldError>{problems.form}</FieldError>}
-          <Action primary label="Upload" onPress={upload} disabled={!file || !title.trim() || !artist || !!tagError || (service && (!serviceConsent || !auth.uploadStorage))} />
+          <Action primary label="Upload" onPress={() => void upload()} disabled={saving || !file || !title.trim() || !artist || !!tagError || (service && (!serviceConsent || !auth.uploadStorage))} />
           {!!artist && <Copy>posts to your profile as {artist}. you can keep browsing while it uploads.</Copy>}
         </View>
       </FormCard>

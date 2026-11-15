@@ -47,8 +47,9 @@ export function recordCreator(rpc: RepoRpc, storage: CreateStorage, assertSessio
 
   return {
     check,
-    async create(operation: CreateOperation) {
+    async create(operation: CreateOperation, handedOff?: () => Promise<void>) {
       await storage.put(operation);
+      await handedOff?.();
       return send(operation);
     },
     async retry(operation: CreateOperation) {

@@ -2,6 +2,7 @@
   import { albumIdFromUri, playlistIdFromUri, trackIdFromUri } from '@plyr/next-core/api';
   import type { CreateOperation } from '@plyr/next-core/publishing/create-operation';
   import type { CreateResult } from '@plyr/next-core/publishing/create-record';
+  import { applyGenreTags } from '@plyr/next-core/publishing/genre-tags';
   import type { createPds } from '$lib/pds';
 
   let { operation, pds, kind, refresh }: {
@@ -32,6 +33,9 @@
         await refresh();
       } else if (action === 'dismiss') {
         await pds.dismissCreate(operation, known?.state === 'different');
+        if (kind === 'track' && known?.state === 'accepted' && operation.autoTag) {
+          void applyGenreTags(() => pds, operation.uri).catch(() => undefined);
+        }
         await refresh();
       } else {
         result = await pds.recoverCreate(operation, action === 'retry');

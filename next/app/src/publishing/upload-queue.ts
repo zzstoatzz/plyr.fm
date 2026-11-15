@@ -10,11 +10,11 @@ import { createPds } from '../pds';
 import { toast } from '../toast';
 import { openUploadReader } from './upload-reader';
 import { sendParts } from './part-sender';
-import { uploadStorage } from './upload-storage';
+import { queuedDrafts, uploadStorage } from './upload-storage';
 import { createUploadTransport } from './upload-transport';
 
 export const uploadQueue = createUploadQueue({
-  getAuth, createPds, measureAudioDuration, openUploadReader, sendParts, uploadStorage, createUploadTransport, randomUUID,
+  getAuth, createPds, measureAudioDuration, openUploadReader, sendParts, uploadStorage, queuedDrafts, createUploadTransport, randomUUID,
   sha256: bytes => digest(CryptoDigestAlgorithm.SHA256, bytes),
   applyGenreTags: (session, uri) => applyGenreTags(() => createPds(session()), uri),
   onJob(job) {

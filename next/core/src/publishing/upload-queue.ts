@@ -6,8 +6,9 @@ import { audioFormat, uploadPublication, type ChunkReader, type UploadOperation,
 import { processingStep, retryDelay, transient, uploadInProgress, uploadRoute, type UploadJobView } from './upload-queue-model.ts';
 import type { UploadTransport } from './upload-transport';
 import type { UploadRecoveryDisposition } from './upload-recovery';
+import { draftInRecovery, queuedUploadDraft, reattachQueuedUpload, type QueuedUploadDraft, type QueuedUploadDrafts } from './queued-upload-draft.ts';
 
-type Job = UploadJobView & { owner: Did; input?: NewTrack; file?: MediaFile; operation?: UploadOperation; rkey?: string; uploadId?: string };
+type Job = UploadJobView & { owner: Did; draft?: QueuedUploadDraft; input?: NewTrack; file?: MediaFile; operation?: UploadOperation; rkey?: string; uploadId?: string; handedOff?: boolean };
 type Session = Pick<Auth<unknown>, 'did' | 'agent' | 'uploadStorage'>;
 type Pds = ReturnType<typeof createPublicPds>;
 const POLL_MS = 4_000, NUDGE_MS = 20_000, ATTEMPTS = 5, KEEP_FINISHED = 4;
@@ -15,7 +16,7 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const hex = (bytes: ArrayBuffer) => Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, '0')).join('');
 
 export function createUploadQueue<Rpc extends RepoRpc>({
-  getAuth, createPds, measureAudioDuration, openUploadReader, sendParts, uploadStorage, createUploadTransport,
+  getAuth, createPds, measureAudioDuration, openUploadReader, sendParts, uploadStorage, queuedDrafts, createUploadTransport,
   applyGenreTags, randomUUID, sha256, onJob, onDismiss
 }: {
   getAuth: () => Auth<Rpc>;
@@ -24,6 +25,7 @@ export function createUploadQueue<Rpc extends RepoRpc>({
   openUploadReader: (file: MediaFile) => ChunkReader;
   sendParts: (operation: UploadOperation, reader: ChunkReader, transport: UploadTransport, hash: Parameters<typeof transferParts>[3], signal: AbortSignal, onProgress: Parameters<typeof transferParts>[5]) => Promise<UploadStatus>;
   uploadStorage: UploadStorage;
+  queuedDrafts: QueuedUploadDrafts;
   createUploadTransport: (auth: Session, operation: UploadOperation, assertCurrent: () => void, signal: AbortSignal) => UploadTransport;
   applyGenreTags: (session: () => Auth<Rpc>, uri: string) => Promise<void>;
   randomUUID: () => string;
@@ -47,6 +49,12 @@ export function createUploadQueue<Rpc extends RepoRpc>({
   function patch(job: Job, change: Partial<Job>) {
     Object.assign(job, change);
     onJob?.(job);
+    publish();
+  }
+
+  function remove(job: Job) {
+    jobs = jobs.filter(item => item !== job);
+    onDismiss?.(job);
     publish();
   }
 
@@ -76,14 +84,19 @@ export function createUploadQueue<Rpc extends RepoRpc>({
     if (autoTag) void applyGenreTags(() => session(job), uri).catch(() => undefined);
   }
 
-  async function runPds(job: Job, input: NewTrack, reservation: CreateReservation) {
-    patch(job, { phase: 'uploading', progress: undefined });
+  async function runPds(job: Job, input: NewTrack, reservation: CreateReservation, draft: QueuedUploadDraft) {
+    const handedOff = async () => {
+      job.handedOff = true;
+      await queuedDrafts.take(draft);
+    };
     try {
-      await withRetries(job, () => createPds(session(job)).uploadTrack(input, reservation));
+      await withRetries(job, () => createPds(session(job)).uploadTrack(input, reservation, { id: draft.id, handedOff }));
     } catch (failure) {
       // A reauthentication or lost reply can interrupt a create that still reached the PDS: settle it at the same address.
-      const pds = createPds(session(job)), pending = (await pds.pendingCreates('track')).find(item => item.rkey === reservation.rkey);
+      const pds = createPds(session(job));
+      const pending = (await pds.pendingCreates('track')).find(item => item.rkey === reservation.rkey && item.draftId === draft.id);
       if (!pending) throw failure;
+      await handedOff();
       if ((await withRetries(job, () => pds.recoverCreate(pending, true))).state !== 'accepted') throw failure;
     }
     patch(job, { phase: 'publishing' });
@@ -139,22 +152,44 @@ export function createUploadQueue<Rpc extends RepoRpc>({
     await finishCreate(job, operation.uri, operation.autoTag, operation);
   }
 
-  async function prepare(job: Job, input: NewTrack) {
+  async function draftAvailable(draft: QueuedUploadDraft) {
+    const pds = createPds(session(draft));
+    const [creates, uploads] = await Promise.all([pds.pendingCreates('track'), uploadStorage.load(draft.owner)]);
+    // Recovery deletes a linked draft before removing its operation.
+    return !draftInRecovery(draft, creates, uploads) && queuedDrafts.has(draft);
+  }
+
+  async function runDraft(job: Job, input: NewTrack, draft: QueuedUploadDraft) {
+    if (!await draftAvailable(draft)) {
+      job.input = undefined;
+      job.file = undefined;
+      throw new Error('this queued upload has already moved to upload recovery');
+    }
     const auth = session(job), pds = createPds(auth);
     const duration = input.duration ?? await measureAudioDuration(input.file).catch(() => undefined);
     const ready = { ...input, duration };
     const route = uploadRoute(input.file, duration);
+    if (route.kind === 'service' && !auth.uploadStorage) throw new Error('sign in again to allow plyr storage');
     const reservation = await pds.reserveCreate('track').catch(() => { throw new Error('finish the earlier upload first'); });
-    patch(job, { rkey: reservation.rkey });
-    if (route.kind === 'pds') return () => runPds(job, ready, reservation);
-    if (!auth.uploadStorage) throw new Error('sign in again to allow plyr storage');
+    session(job);
+    patch(job, { phase: 'uploading', rkey: reservation.rkey });
+    if (route.kind === 'pds') return runPds(job, ready, reservation, draft);
     const format = audioFormat(input.file.name, input.file.type, !!route.processing);
     const record = await pds.prepareTrackRecord(ready);
-    const operation: UploadOperation = { ...reservation, record: { ...record, fileType: format.fileType }, uploadId: randomUUID(),
+    const operation: UploadOperation = { ...reservation, draftId: draft.id, record: { ...record, fileType: format.fileType }, uploadId: randomUUID(),
       name: input.file.name, sizeBytes: input.file.size, ...format, ...(route.processing ? { processing: route.processing } : {}), ...(input.autoTag ? { autoTag: true } : {}) };
     await uploadStorage.put(operation);
+    job.handedOff = true;
+    await queuedDrafts.take(draft);
     patch(job, { operation, uploadId: operation.uploadId });
-    return () => runService(job, operation);
+    return runService(job, operation);
+  }
+
+  async function run(job: Job) {
+    if (job.operation) return runService(job, job.operation);
+    const { draft, input } = job;
+    if (!draft || !input) throw new Error('the queued upload is missing its draft');
+    return queuedDrafts.withLock(draft, () => runDraft(job, input, draft));
   }
 
   function alreadyQueued(operation: UploadOperation) {
@@ -178,28 +213,36 @@ export function createUploadQueue<Rpc extends RepoRpc>({
     try {
       for (let job = jobs.find(item => item.phase === 'waiting'); job; job = jobs.find(item => item.phase === 'waiting')) {
         try {
-          patch(job, { phase: 'uploading' });
-          const run = job.operation ? () => runService(job!, job!.operation!) : await prepare(job, job.input!);
-          await run();
+          await run(job);
           job.input = undefined; job.file = undefined;
         } catch (failure) {
-          // The failed job keeps what was entered, files included, so the form can take it back.
+          if (job.handedOff) { job.input = undefined; job.file = undefined; }
           patch(job, { phase: 'failed', error: failure instanceof Error ? failure.message.replace(/\.$/, '') : undefined });
         }
       }
     } finally { running = false; }
   }
 
+  function enqueueDraft(draft: QueuedUploadDraft, input: NewTrack) {
+    const job: Job = { id: draft.id, owner: draft.owner, title: draft.title.trim(), phase: 'waiting', draft, input, file: input.file };
+    jobs = [...jobs, job];
+    patch(job, {});
+    void drain();
+  }
+
   return {
-    /** Queue a track; the form can reset immediately. */
-    add(input: NewTrack) {
+    async add(input: NewTrack) {
       const owner = getAuth().did;
       if (!owner) throw new Error('sign in first.');
       uploadRoute(input.file);
-      const job: Job = { id: randomUUID(), owner, title: input.title.trim(), phase: 'waiting', input, file: input.file };
-      jobs = [...jobs, job];
-      patch(job, {});
-      void drain();
+      const draft = queuedUploadDraft(input, owner, randomUUID());
+      await queuedDrafts.put(draft);
+      if (getAuth().did === owner) enqueueDraft(draft, input);
+    },
+    reattach(draft: QueuedUploadDraft, file: MediaFile, artwork?: MediaFile) {
+      if (draft.owner !== getAuth().did) throw new Error('sign in to the account that queued it.');
+      if (jobs.some(job => job.id === draft.id)) return;
+      enqueueDraft(draft, reattachQueuedUpload(draft, file, artwork));
     },
     /** Pick up saved plyr-storage uploads whose bytes already arrived, e.g. after a reload. */
     async resume(owner: Did) {
@@ -226,23 +269,32 @@ export function createUploadQueue<Rpc extends RepoRpc>({
       void drain();
     },
     /** A failed upload's form entries, taken out of the queue so they can be edited and sent again. */
-    takeBack(id: string): NewTrack | undefined {
+    async takeBack(id: string, saveEditor: (input: NewTrack) => () => void): Promise<NewTrack | undefined> {
       const job = jobs.find(item => item.id === id && item.owner === getAuth().did && item.phase === 'failed' && item.input);
       if (!job) return;
-      jobs = jobs.filter(item => item !== job);
-      onDismiss?.(job);
-      publish();
-      return job.input;
+      const { draft, input } = job;
+      if (!draft || !input) return;
+      return queuedDrafts.withLock(draft, async () => {
+        if (!await draftAvailable(draft)) {
+          remove(job);
+          throw new Error('this queued upload was already opened elsewhere');
+        }
+        const undo = saveEditor(input);
+        try {
+          if (!await queuedDrafts.take(draft)) throw new Error('could not reopen the queued upload.');
+        } catch (failure) {
+          undo();
+          throw failure;
+        }
+        remove(job);
+        return input;
+      });
     },
     dismissRecovery(operation: UploadOperation, disposition: UploadRecoveryDisposition) {
       if (operation.owner !== getAuth().did) return;
       const job = jobs.find(item => item.phase === 'awaiting-publication' && item.owner === operation.owner &&
         item.uploadId === operation.uploadId && item.operation?.uri === operation.uri);
-      if (job) {
-        jobs = jobs.filter(item => item !== job);
-        onDismiss?.(job);
-        publish();
-      }
+      if (job) remove(job);
       if (disposition === 'published' && operation.autoTag && !alreadyQueued(operation)) {
         void applyGenreTags(() => session(operation), operation.uri).catch(() => undefined);
       }

@@ -1,5 +1,6 @@
 import { createMMKV } from 'react-native-mmkv';
 import { createKey, scopedCreate, sameRecord, type CreateStorage } from '@plyr/next-core/publishing/create-operation';
+import { queuedDrafts } from './upload-storage';
 
 const storage = createMMKV({ id: 'plyr-next-pending-creates' });
 export const createStorage: CreateStorage = {
@@ -22,7 +23,10 @@ export const createStorage: CreateStorage = {
     storage.set(key, value);
     if (storage.getString(key) !== value) throw new Error('could not save recovery information.');
   },
-  async delete(operation) { storage.remove(createKey(operation)); },
+  async delete(operation) {
+    if (operation.draftId) await queuedDrafts.take({ owner: operation.owner, id: operation.draftId });
+    storage.remove(createKey(operation));
+  },
   async archive(operation, archived) {
     const key = createKey(operation), value = storage.getString(key);
     if (!value) throw new Error('could not find this creation attempt.');
