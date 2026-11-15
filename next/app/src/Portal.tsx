@@ -4,7 +4,7 @@ import { Link, useFocusEffect, type Href } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react';
 import { Pressable, ScrollView, StyleSheet, View, type ScrollViewProps, type ScrollViewInstance } from 'react-native';
 import { api } from './api-client';
-import { ApiError, type Artist, type ListSummary, type Track } from '@plyr/next-core/api';
+import { ApiError, type Artist, type Page, type ListSummary, type Track } from '@plyr/next-core/api';
 import { useAuth } from './auth';
 import { useAppearance } from './appearance';
 import { Action, Copy, pageFrame, row } from './controls';
@@ -154,9 +154,9 @@ function useOwnerOnlyTracks(did: string, active: boolean) {
   const auth = useAuth();
   const pds = useMemo(() => auth.did === did && auth.privatePublishing ? privatePds(auth) : undefined,
     [auth.did, auth.rpc, auth.privatePublishing, did]);
-  const load = useCallback(async (cursor?: string) => {
+  const load = useCallback(async (cursor?: string): Promise<Page<Track>> => {
     const page = await pds?.list(cursor);
-    return { data: page?.tracks ?? [], has_more: !!page?.cursor, next_cursor: page?.cursor };
+    return { object: 'list', data: page?.tracks ?? [], has_more: !!page?.cursor, next_cursor: page?.cursor };
   }, [pds]);
   const pages = usePages(load);
   useFocusEffect(useCallback(() => { if (active) void pages.revalidate(); }, [active, pages.revalidate]));
