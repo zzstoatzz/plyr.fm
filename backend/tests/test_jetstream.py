@@ -544,6 +544,13 @@ class TestIngestTrackCreate:
         assert track.visibility == "unlisted"
         assert track.publicly_visible
         assert not track.in_discovery
+        assert not track.in_search
+        assert (
+            await db_session.scalar(
+                select(Track.id).where(Track.id == track.id, Track.in_search)
+            )
+            is None
+        )
 
     async def test_dedup_by_uri(
         self, db_session: AsyncSession, artist: Artist, track: Track

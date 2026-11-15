@@ -211,11 +211,11 @@ max_lines = 818
 
 [[rules]]
 path = "backend/src/backend/_internal/tasks/ingest.py"
-max_lines = 1325
+max_lines = 1328
 
 [[rules]]
 path = "backend/tests/test_jetstream.py"
-max_lines = 3220
+max_lines = 3227
 
 [[rules]]
 path = "frontend/src/lib/components/embed/CollectionEmbed.svelte"
@@ -387,7 +387,7 @@ max_lines = 599
 
 [[rules]]
 path = "backend/src/backend/_internal/atproto/spaces/client.py"
-max_lines = 653
+max_lines = 687
 
 [[rules]]
 path = "frontend/tools/oxlint/anti-slop/shared/dictionary-types.ts"
@@ -565,7 +565,7 @@ max_lines = 1140
 
 [[rules]]
 path = "next/web/scripts/check-shell.cjs"
-max_lines = 605
+max_lines = 623
 
 [[rules]]
 path = "next/backend/src/internal/projection/postgres_list_store.zig"

@@ -394,7 +394,7 @@
   .cover-preview img { border-radius: 0.45rem; object-fit: cover; }
   .audio-selection { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
   .file-field { display: grid; gap: 0.45rem; padding: 0.9rem; border: 1px dashed var(--line); border-radius: 0.55rem; overflow-wrap: anywhere; }
-  input:not([type='checkbox']), textarea { width: 100%; min-width: 0; border: 1px solid var(--line); padding: 0.6rem; border-radius: 0.5rem; background: var(--bg); color: inherit; font: inherit; font-size: 1rem; }
+  input:not([type='checkbox']), textarea { width: 100%; min-width: 0; border: 1px solid var(--line); padding: 0.6rem; border-radius: 0.5rem; background: var(--bg); color: inherit; }
   .text-button { justify-self: start; }
   .submit { background: var(--accent); color: var(--on-accent); padding-inline: 1rem; }
   .submit:hover { background: var(--accent); filter: brightness(1.12); }
