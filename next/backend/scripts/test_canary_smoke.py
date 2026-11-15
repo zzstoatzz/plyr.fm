@@ -136,7 +136,9 @@ def test_real_product_reads_traverse_projected_track_and_artist() -> None:
     }
     responses = {
         "/v1/tracks?limit=20": _response({"object": "list", "data": [track]}),
-        "/v1/tracks/trk_verified": _response(track),
+        "/v1/tracks/trk_verified": _response(
+            {**track, "metadata": {**track["metadata"], "tags": ["ambient"]}}
+        ),
         "/v1/tracks/trk_verified/playback": _response(
             {
                 "object": "playback",
@@ -214,7 +216,9 @@ def test_real_product_reads_traverse_album_when_present() -> None:
     }
     responses = {
         "/v1/tracks?limit=20": _response({"object": "list", "data": [track]}),
-        "/v1/tracks/trk_verified": _response(track),
+        "/v1/tracks/trk_verified": _response(
+            {**track, "metadata": {**track["metadata"], "tags": ["ambient"]}}
+        ),
         "/v1/tracks/trk_verified/playback": _response(
             {
                 "object": "playback",
