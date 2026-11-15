@@ -1,0 +1,57 @@
+import assert from 'node:assert/strict';
+import { setImmediate } from 'node:timers/promises';
+import test from 'node:test';
+import type { Artist, Track, TrackComment } from '../src/api.ts';
+import { createTrackComments } from '../src/track-comments.ts';
+
+const uri = 'at://did:plc:artist/fm.plyr.track/track';
+const commentUri = 'at://did:plc:listener/fm.plyr.comment/comment';
+const subject = { uri, cid: 'bafytrack' };
+const track: Track = {
+  object: 'track', id: 'track',
+  record: { ...subject, revision: null, collection: 'fm.plyr.track', rkey: 'track' },
+  metadata: { title: 'Sketch', description: null, album: null, duration_seconds: 30, created_at: '' },
+  artist: { did: 'did:plc:artist', profile: { handle: 'artist.test', display_name: 'Artist', avatar_url: null } },
+  media: {}, access: { visibility: 'public' }, metrics: { play_count: 0, like_count: 0 }
+};
+const listener: Artist = {
+  object: 'artist', did: 'did:plc:listener', handle: 'listener.test', display_name: 'Listener',
+  bio: null, avatar_url: null, support_url: null
+};
+
+test('a pending comment survives indexing lag and failed deletion', async () => {
+  let projected: TrackComment[] = [];
+  let rejectDelete = true;
+  const store = createTrackComments({
+    api: {
+      async artist() { return listener; },
+      async trackComments() { return { object: 'list', data: projected, has_more: false }; }
+    },
+    getAuth: () => ({ did: listener.did, handle: listener.handle, rpc: {} }),
+    createPds: () => ({
+      async comment() { return { uri: commentUri, cid: 'bafycomment', rkey: 'comment', subject }; },
+      async deleteComment() { if (rejectDelete) throw new Error('temporarily unavailable'); }
+    })
+  });
+  function comments() { return store.snapshot(track.id).comments; }
+  async function refresh() {
+    store.loadComments(track.id);
+    await setImmediate();
+  }
+
+  await refresh();
+  await store.addComment(track, 'great moment', 14_000);
+  await refresh();
+  const [optimistic] = comments();
+  assert.equal(optimistic.timestamp_ms, 14_000);
+  assert.equal(optimistic.author.display_name, 'Listener');
+  projected = [{ ...optimistic, created_at: '2026-11-14T18:01:03Z' }];
+  await refresh();
+  assert.deepEqual(comments(), projected);
+  await assert.rejects(store.removeComment(track.id, projected[0]), /temporarily unavailable/);
+  assert.deepEqual(comments(), projected);
+  rejectDelete = false;
+  await store.removeComment(track.id, projected[0]);
+  await refresh();
+  assert.deepEqual(comments(), []);
+});
