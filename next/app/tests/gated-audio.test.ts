@@ -8,7 +8,7 @@ import { createRecordMacHeaders, createSpaceCredential, decapsulate, parseMacReq
 import { openGatedAudio, resolveGatedAudio } from '../src/gated-audio-shared.ts';
 import type { Auth, Did } from '../src/auth-state.ts';
 
-async function fixture(context: test.TestContext, failure?: 'mac' | 'value' | 'missing' | 'key') {
+async function fixture(context: test.TestContext, failure?: 'mac' | 'value' | 'missing' | 'key', authority: 'current' | 'legacy' | 'denied' = 'current') {
   const did: Did = `did:plc:${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`;
   const space = `at://${did}/space/fm.plyr.privateMedia/self`;
   const uri = `${space}/${did}/fm.plyr.track/song`;
@@ -18,13 +18,18 @@ async function fixture(context: test.TestContext, failure?: 'mac' | 'value' | 'm
   const value = { $type: 'fm.plyr.track', audioBlob: { $type: 'blob', ref: blob, mimeType: 'audio/wav', size: 4 } };
   const cid = await cidForCbor(encode(value));
   let mints = 0, blobReads = 0;
+  const mintRequests: string[] = [];
   const auth: Auth = { did, ready: true, handle: null, rpc: null, jamSpace: true, accountSync: true, privatePublishing: false, privateDeleting: false, error: null, scopeRejected: false,
     agent: { async handle() { return Response.json({ token: 'fixture-delegation' }); } } };
   context.mock.method(globalThis, 'fetch', async () => Response.json({ verificationMethod: [{ id: `${did}#atproto_kem`, publicKeyMultibase: kem.did().slice('did:key:'.length) }], service: [{ id: `${did}#atproto_pds`, serviceEndpoint: 'https://audio-pds.fixture.test' }] }));
   const transport = {
     keypair: () => P256Keypair.create(),
     async fetch(url: string, init: RequestInit) {
-      if (url.includes('getSpaceCredential')) {
+      const method = new URL(url).pathname.split('.').at(-1);
+      if (method === 'authorizeSpaceSync' || method === 'getSpaceCredential') {
+        mintRequests.push(method);
+        if (method === 'authorizeSpaceSync' && authority === 'legacy') return Response.json({ error: 'UnknownMethod' }, { status: 404 });
+        if (method === 'authorizeSpaceSync' && authority === 'denied') return Response.json({ error: 'SpaceNotFound' }, { status: 404 });
         mints++;
         const input: { credentialKey: string } = JSON.parse(String(init.body));
         return Response.json({ credential: await createSpaceCredential({ iss: did, sub: space, keyId: input.credentialKey, expiresInSec: 60, keypair: signer }) });
@@ -47,7 +52,7 @@ async function fixture(context: test.TestContext, failure?: 'mac' | 'value' | 'm
       throw new Error('Unexpected transport request');
     }
   };
-  return { auth, uri, transport, mints: () => mints, blobReads: () => blobReads };
+  return { auth, uri, transport, mintRequests, mints: () => mints, blobReads: () => blobReads };
 }
 
 test('resolving protected audio verifies the record and does not download the body', async context => {
@@ -62,11 +67,24 @@ test('resolving protected audio verifies the record and does not download the bo
   const token = first.authorization.replace('Atproto-Space-Credential ', '');
   await verifyCredentialSig(first, parseSpaceToken('credential', token).payload.cnf.kid);
   assert.equal(f.mints(), 1);
+  assert.deepEqual(f.mintRequests, ['authorizeSpaceSync']);
   const now = Date.now();
   context.mock.method(Date, 'now', () => now + 35_000);
   const renewed = await source.headers();
   assert.equal(f.mints(), 2);
   assert.notEqual(renewed.authorization ?? renewed.Authorization, first.authorization ?? first.Authorization);
+});
+
+test('protected audio uses the legacy credential method only when the current method is absent', async context => {
+  const f = await fixture(context, undefined, 'legacy');
+  await resolveGatedAudio(f.uri, f.auth, f.transport);
+  assert.deepEqual(f.mintRequests, ['authorizeSpaceSync', 'getSpaceCredential']);
+});
+
+test('protected audio does not retry at a legacy endpoint when the authority denies access', async context => {
+  const f = await fixture(context, undefined, 'denied');
+  await assert.rejects(resolveGatedAudio(f.uri, f.auth, f.transport), /cannot access/);
+  assert.deepEqual(f.mintRequests, ['authorizeSpaceSync']);
 });
 
 for (const failure of ['mac', 'value', 'missing', 'key'] as const) test(`protected playback rejects a mismatched ${failure} before reading audio`, async context => {

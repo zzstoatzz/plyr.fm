@@ -1,6 +1,14 @@
 import type { Agent, Auth, Did } from './auth-state.ts';
 import { didDocument, pdsEndpoint } from './identity.ts';
 
+const spaceCredentialPath = '/xrpc/com.atproto.space.';
+const credentialMethods = ['authorizeSpaceSync', 'getSpaceCredential'] as const;
+
+export function isSpaceCredentialRequest(url: string): boolean {
+	const { pathname } = new URL(url);
+	return credentialMethods.some(method => pathname === spaceCredentialPath + method);
+}
+
 type SpaceKey = { did(): string };
 
 export interface SpaceAudioTransport<Key extends SpaceKey> {
@@ -52,12 +60,18 @@ export function createGatedAudio<Key extends SpaceKey, RecordValue extends Recor
 		if (typeof delegationToken !== 'string') throw new Error('invalid space delegation');
 
 		const key = await transport.keypair();
-		const response = await transport.fetch(`${authorityPds}/xrpc/com.atproto.space.getSpaceCredential`, {
+		const request: RequestInit = {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ space, credentialKey: key.did(), delegationToken }),
 			redirect: 'error'
-		});
+		};
+		const address = authorityPds + spaceCredentialPath;
+		let response = await transport.fetch(address + credentialMethods[0], request);
+		if (response.status === 404) {
+			const failure: { error?: string } | undefined = await response.json().catch(() => undefined);
+			if (failure?.error === 'UnknownMethod') response = await transport.fetch(address + credentialMethods[1], request);
+		}
 		if (!response.ok) throw new Error('your account cannot access this track');
 		const { credential: token } = await response.json();
 		if (typeof token !== 'string') throw new Error('invalid space credential');

@@ -1,4 +1,5 @@
 import type { Track } from '@plyr/next-core/api';
+import { isSpaceCredentialRequest } from '@plyr/next-core/gated-audio';
 import type { Auth } from '../auth-state';
 import { resolveGatedAudio } from '../gated-audio-shared';
 import { protectedTransport } from './protected-transport';
@@ -13,7 +14,7 @@ export async function prepareProtectedDownload(track: Track, uri: string, auth: 
   let policy: 'open' | 'ask' | 'supporters' | undefined;
   const transport = { ...protectedTransport, guard, async fetch(url: string, init: RequestInit) {
     // Credential minting is shared with playback; only this download's reads are cancellable.
-    if (new URL(url).pathname === '/xrpc/com.atproto.space.getSpaceCredential') return protectedTransport.fetch(url, init);
+    if (isSpaceCredentialRequest(url)) return protectedTransport.fetch(url, init);
     guard();
     const response = await protectedTransport.fetch(url, { ...init, signal, cache: 'no-store' });
     try { guard(); } catch (error) { await response.body?.cancel().catch(() => {}); throw error; }
