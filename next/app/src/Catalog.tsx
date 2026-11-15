@@ -1,6 +1,7 @@
 import { useAppearance } from './appearance';
 import { ListPlus, DotsThree as Ellipsis } from './icons';
 import { collectionArtwork } from '@plyr/next-core/artwork';
+import { canToggleTrack } from '@plyr/next-core/track-revision';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useRef, useState, type ReactNode } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
@@ -43,14 +44,16 @@ function TrackDetail({ id, onPlay, onEnqueue, trackActions }: {
   const player = usePlayback();
   const [actionsOpen, setActionsOpen] = useState(false);
   if (!track) return <Status loading={!result.error} error={result.error} retry={result.retry} />;
+  const active = canToggleTrack(player.current, track, !!player.jam);
+  const playing = active && player.status.playing;
   return <>
     <TrackPresentation track={track}
       controls={<>
         <View style={{ flex: 1, alignItems: 'center' }}><TrackLikes compact track={track} /></View>
-        <View style={{ flex: 1, alignItems: 'center' }}><PlayerControl primary large glow={player.current?.id === track.id && player.status.playing} icon={player.current?.id === track.id && player.status.playing ? PauseIcon : PlayIcon}
-          label={player.current?.id === track.id && player.status.playing ? 'Pause' : 'Play'}
-          busy={player.current?.id === track.id && player.loading}
-          onPress={() => player.current?.id === track.id ? player.setPlaying(!player.status.playing) : onPlay(track)} /></View>
+        <View style={{ flex: 1, alignItems: 'center' }}><PlayerControl primary large glow={playing} icon={playing ? PauseIcon : PlayIcon}
+          label={playing ? 'Pause' : 'Play'}
+          busy={active && player.loading}
+          onPress={() => active ? player.setPlaying(!player.status.playing) : onPlay(track)} /></View>
         <View style={{ flex: 1, alignItems: 'center' }}><PlayerControl icon={ListPlus} label="Add to queue" onPress={() => onEnqueue(track)} /></View>
       </>}
       stats={<TrackPlayCount track={track} />}

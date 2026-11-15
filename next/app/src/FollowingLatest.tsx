@@ -5,6 +5,7 @@ import { api } from './api-client';
 import { type Track } from '@plyr/next-core/api';
 import { useAppearance } from './appearance';
 import { trackArtwork } from '@plyr/next-core/artwork';
+import { canToggleTrack } from '@plyr/next-core/track-revision';
 import { Cover, type Play } from './CatalogPieces';
 import type { NetworkArtist } from './home-api';
 import { formatDuration, timeAgo } from './home-state';
@@ -61,7 +62,7 @@ export function PlayOneFromEach({ tracks, onPlay }: { tracks: Track[]; onPlay: P
 export function FollowingTrack({ track, tracks, onPlay, now, width }: { track: Track; tracks: Track[]; onPlay: Play; now: number; width?: number }) {
   const theme = useAppearance();
   const player = usePlayback();
-  const current = player.current?.id === track.id;
+  const current = canToggleTrack(player.current, track, !!player.jam);
   const playing = current && player.status.playing;
   const who = name(track);
   const profile = { pathname: '/u/[handle]' as const, params: { handle: track.artist.profile.handle || track.artist.did } };

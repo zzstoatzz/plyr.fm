@@ -4,6 +4,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { chromium } = require('playwright');
 const { authorizeFixture, fixtureAccounts, fixturePage } = require('./pds-browser-fixture.cjs');
+const { serveAudio } = require('./fixture-catalog.cjs');
 
 const origin = 'https://next.plyr.fm';
 const pds = 'http://127.0.0.1:5197/xrpc/';
@@ -67,12 +68,15 @@ async function run(browser, accounts, width, theme, mp3) {
   const albumRequests = [];
   await context.route('https://typeahead.waow.tech/**', route => route.fulfill({ json: { actors: [] } }));
   await context.route('https://jams.next.plyr.fm/**', route => route.fulfill({ status: 403, json: {} }));
-  await context.route('https://fixture.invalid/**', route => route.fulfill({ status: 404, body: '' }));
+  await context.route('https://fixture.invalid/**', route => route.request().url() === seed.audioUrl
+    ? serveAudio(route) : route.fulfill({ status: 404, body: '' }));
   await context.route('https://api.next.plyr.fm/**', async route => {
-    assert.equal(route.request().method(), 'GET', 'creator activity never writes to the AppView');
     const url = new URL(route.request().url());
+    if (url.pathname === `/v1/tracks/${id}/plays`) return route.fulfill({ status: 204 });
+    assert.equal(route.request().method(), 'GET', 'creator activity never writes to the AppView');
     if ([`/v1/artists/${did}`, `/v1/artists/${handle}`].includes(decodeURIComponent(url.pathname))) return route.fulfill({ json: { display_name: author, handle, did } });
     if (url.pathname === '/v1/tracks') {
+      if (!url.searchParams.has('artist_did')) return route.fulfill({ json: list([]) });
       assert.equal(url.searchParams.get('artist_did'), did);
       if (initialError) { initialError = false; return route.fulfill({ status: 503, json: { error: { message: 'fixture catalog unavailable' } } }); }
       if (url.searchParams.get('cursor') === 'next') {
@@ -87,6 +91,11 @@ async function run(browser, accounts, width, theme, mp3) {
       return route.fulfill({ json: list([album, emptyAlbum]) });
     }
     if (url.pathname === `/v1/tracks/${id}`) return route.fulfill({ json: row(25) });
+    if (url.pathname === `/v1/tracks/${id}/playback`) return route.fulfill({ json: {
+      availability: { status: 'available', ...(projected.audioBlob
+        ? { artifact: { cid: projected.audioBlob.ref.$link } }
+        : { delivery: { url: seed.audioUrl } }) }
+    } });
     if (decodeURIComponent(url.pathname) === `/v1/actors/${did}/likes`) return route.fulfill({ json: list(projectedLike ? [row(25)] : []) });
     if (url.pathname === '/v1/records/await') {
       const address = url.searchParams.get('uri');
@@ -174,6 +183,12 @@ async function run(browser, accounts, width, theme, mp3) {
     await main.getByRole('link', { name: 'Close', exact: true }).click();
     await main.getByRole('link', { name: 'edit late recording' }).waitFor();
     await page.waitForFunction(previous => Math.abs(scrollY - previous) < 30, previousScroll);
+
+    await main.getByRole('link', { name: 'late recording', exact: true }).click();
+    await main.getByRole('button', { name: 'Play', exact: true }).click();
+    await page.waitForFunction(url => window.jamAudio.some(audio => audio.currentSrc === url && audio.currentTime > 0.2), seed.audioUrl);
+    await main.getByRole('button', { name: 'Pause', exact: true }).click();
+    await page.goBack();
     await editTrack.click();
     await title.waitFor();
     await pdsWrite(collection, rkey, { ...seed, description: 'edited elsewhere' }, projected.cid);
@@ -211,6 +226,14 @@ async function run(browser, accounts, width, theme, mp3) {
     assert.equal(saved.value.imageBlob.mimeType, 'image/jpeg');
     assert.deepEqual(saved.value.unseen, seed.unseen);
 
+    const audioCid = saved.value.audioBlob.ref.$link;
+    const delivery = page.waitForResponse(response => {
+      const url = new URL(response.url());
+      return url.pathname.endsWith('/com.atproto.sync.getBlob') && url.searchParams.get('cid') === audioCid && response.ok();
+    }, { timeout: 7000 }).catch(() => undefined);
+    await main.getByRole('button', { name: 'Play', exact: true }).click();
+    assert.ok(await delivery, 'playing from the edited page fetches the replacement audio without a reload');
+    await page.waitForFunction(cid => window.jamAudio.some(audio => audio.currentSrc.includes(cid) && audio.currentTime > 0.15), audioCid);
     await page.goBack();
     await main.getByRole('link', { name: 'edit recording after edit' }).waitFor();
     await main.getByRole('link', { name: 'edit profile' }).click();

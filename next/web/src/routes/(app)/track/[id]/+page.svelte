@@ -2,6 +2,7 @@
 	import { resolve } from '$app/paths';
 	import TrackCollections from '$lib/collections/TrackCollections.svelte';
 	import { isPrivateTrack } from '@plyr/next-core/track-access';
+	import { canToggleTrack } from '@plyr/next-core/track-revision';
 	import { trackArtwork } from '@plyr/next-core/artwork';
 	import { player } from '$lib/player.svelte';
 	import { artistName } from '$lib/tracks';
@@ -12,7 +13,7 @@
 
 	let { data }: PageProps = $props();
 	const track = $derived(data.track);
-	const active = $derived(!player.liveStation && player.current?.id === track.id);
+	const active = $derived(!player.liveStation && canToggleTrack(player.current, track, !!player.jam));
 	const canDiscuss = $derived(!isPrivateTrack(track));
 	let sharedTrack = $state<string>();
 	let comments = $state<HTMLDialogElement>();

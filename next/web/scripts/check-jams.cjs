@@ -26,6 +26,7 @@ async function run(browser, accounts, { delayedSolo = false, startFromQueue = fa
   let state;
   let joins = 0;
   let rejectFirstPublish = startFromQueue;
+  let revisedTrack = false;
   const guestFailures = [503, 403];
   const firstAdd = Promise.withResolvers();
   const guestAdmission = Promise.withResolvers();
@@ -54,6 +55,10 @@ async function run(browser, accounts, { delayedSolo = false, startFromQueue = fa
         : published;
       if (track && pathname.endsWith('/playback')) return route.fulfill({ json: {
         availability: { status: 'available', delivery: { url: 'https://panel-fixture.invalid/audio.wav' } }
+      } });
+      if (revisedTrack && published === catalog[0]) return route.fulfill({ json: {
+        ...track, record: { ...track.record, cid: 'revised-cid' },
+        metadata: { ...track.metadata, title: 'revised recording', duration_seconds: 60 }
       } });
       if (track) return route.fulfill({ json: track });
       if (pathname === '/v1/tracks/resolve') {
@@ -159,6 +164,24 @@ async function run(browser, accounts, { delayedSolo = false, startFromQueue = fa
       assert.equal(state.playing, true);
       assert.ok(state.positionMs >= 12_000, 'the Jam starts at the previously audible position');
       assert.equal(new URL(hostPage.url()).search, '', 'the room URL no longer carries the start action');
+      const activeRoom = hostPage.url();
+      const pinnedQueue = state.queue;
+      revisedTrack = true;
+      await nav.getByRole('link', { name: 'home', exact: true }).click();
+      await row.first().getByRole('link', { name: catalog[0].metadata.title, exact: true }).click();
+      await hostPage.getByRole('heading', { name: 'revised recording', exact: true }).waitFor();
+      await dock.getByRole('button', { name: 'Pause', exact: true }).waitFor();
+      const main = hostPage.locator('main');
+      const pause = main.getByRole('button', { name: 'Pause', exact: true });
+      assert.equal(await pause.count(), 1, 'the host controls the revision pinned in the Jam');
+      await pause.click();
+      await main.getByRole('button', { name: 'Play', exact: true }).waitFor({ timeout: 7000 });
+      assert.equal(commands.at(-1)?.action, 'pause');
+      assert.deepEqual(state.queue, pinnedQueue);
+      revisedTrack = false;
+      await hostPage.goBack();
+      await hostPage.goBack();
+      await hostPage.waitForURL(activeRoom);
       state = undefined;
       await hostPage.reload();
       await hostPage.getByRole('button', { name: 'join jam', exact: true }).click();
