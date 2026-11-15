@@ -1,6 +1,7 @@
 name: check next svelte web
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - "next/web/**"
@@ -17,7 +18,8 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+    concurrency: next-svelte-web-${{ github.event_name == 'workflow_dispatch' && 'pages-preview' || github.ref }}
     defaults:
       run:
         working-directory: next/web
@@ -35,6 +37,8 @@ jobs:
         working-directory: next/core
       - run: bun run check
       - run: bun run build
+        env:
+          PUBLIC_SITE_URL: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && 'https://plyr-fm-next-svelte.pages.dev' || 'https://next.plyr.fm' }}
       - run: bun run test
       - run: bun run playwright install --with-deps --only-shell chromium
       - run: bun run check:browser
@@ -49,3 +53,31 @@ jobs:
           name: next-svelte-screens
           path: ${{ runner.temp }}/next-svelte-screens
           if-no-files-found: ignore
+      - name: check browser access to Next
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+        run: |
+          origin=https://plyr-fm-next-svelte.pages.dev
+          check_origin() {
+            curl -fsS -D - -o /dev/null -H "Origin: $origin" "$@" |
+              tr -d '\r' | grep -ix "access-control-allow-origin: $origin"
+          }
+          check_origin https://api.next.plyr.fm/health
+          check_origin -X OPTIONS -H 'Access-Control-Request-Method: POST' https://jams.next.plyr.fm/v1/playback/join
+          check_origin -X OPTIONS -H 'Access-Control-Request-Method: POST' https://plyr-next-audio.n8-3e9.workers.dev/v1/genres
+      - name: deploy the isolated Svelte preview
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          wranglerVersion: "4.158.0"
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy next/web/build --project-name plyr-fm-next-svelte --branch main
+      - name: verify preview client and callback
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+        env:
+          SITE_URL: https://plyr-fm-next-svelte.pages.dev
+        run: |
+          curl -fsS --retry 4 --retry-all-errors "$SITE_URL/oauth-client-metadata.json?commit=$GITHUB_SHA" |
+            jq -e --arg site "$SITE_URL" '.client_id == ($site + "/oauth-client-metadata.json") and .redirect_uris == [($site + "/oauth/callback")]'
+          curl -fsS "$SITE_URL/oauth/callback?commit=$GITHUB_SHA" -o "$RUNNER_TEMP/next-preview-callback.html"
+          cmp build/index.html "$RUNNER_TEMP/next-preview-callback.html"
