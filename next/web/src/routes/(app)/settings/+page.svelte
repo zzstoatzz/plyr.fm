@@ -26,7 +26,6 @@
 				<div class="row"><Icon name="user" size={21} /><span>{account.handle ? '@' + account.handle : account.did}</span></div>
 				<a class="row" href="/portal"><Icon name="portal" size={21} />your music</a>
 				<a class="row" href="/upload"><Icon name="upload" size={21} />{uploading === 0 ? 'upload' : uploading === 1 ? '1 upload in progress' : `${uploading} uploads in progress`}</a>
-				<a class="row" href="/private"><Icon name="music" size={21} />private music</a>
 				<button class="row" type="button" onclick={signOut}><Icon name="logout" size={21} />sign out</button>
 			</div>
 		</section>

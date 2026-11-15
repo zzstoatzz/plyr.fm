@@ -24,7 +24,7 @@ export interface PrivateCreateStorage {
 export type PrivateDeletionResult = 'deleted' | 'present';
 class PrivateRequestError extends Error {
   readonly code: string;
-  constructor(code: string) { super('could not access your private music. try again.'); this.code = code; }
+  constructor(code: string) { super('could not load all your tracks. try again.'); this.code = code; }
 }
 export type PrivateResult = { state: 'accepted' | 'different' | 'missing'; uri: string; cid?: string };
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
@@ -51,7 +51,7 @@ export function createPrivateLibrary({ NSID, PRIVATE_SPACE_TYPE }: Pick<AuthConf
     if (!/^did:(plc|web):[^/?#]+$/.test(owner) || !/^[a-zA-Z0-9._~:-]{1,512}$/.test(rkey) || rkey === '.' || rkey === '..' || !cid || !value || typeof value !== 'object'
       || !('$type' in value) || value.$type !== NSID.track || !('title' in value) || typeof value.title !== 'string'
       || !('artist' in value) || typeof value.artist !== 'string' || !('createdAt' in value) || typeof value.createdAt !== 'string') {
-      throw new Error('could not read your private track.');
+      throw new Error('could not read this track.');
     }
     const uri = `${privateSpace(owner)}/${owner}/${NSID.track}/${rkey}`;
     return {
@@ -74,7 +74,7 @@ export function createPrivateLibrary({ NSID, PRIVATE_SPACE_TYPE }: Pick<AuthConf
       || !('$type' in value.record) || value.record.$type !== NSID.track
       || 'audioUrl' in value.record || 'audioSpace' in value.record || 'supportGate' in value.record
       || !('audioBlob' in value.record) || !value.record.audioBlob || typeof value.record.audioBlob !== 'object'
-      || ('archived' in value && typeof value.archived !== 'boolean')) throw new Error('could not read private creation recovery.');
+      || ('archived' in value && typeof value.archived !== 'boolean')) throw new Error('could not read an earlier upload.');
     return { owner, rkey: value.rkey, uri: value.uri, record: value.record as Record<string, unknown>, ...('archived' in value ? { archived: value.archived as boolean } : {}) };
   }
   function samePrivateCreate(left: PrivateCreate, right: PrivateCreate) {
@@ -83,12 +83,12 @@ export function createPrivateLibrary({ NSID, PRIVATE_SPACE_TYPE }: Pick<AuthConf
   function requirePrivatePolicy(value: unknown, owner: string): void {
     if (!value || typeof value !== 'object' || !('space' in value) || value.space !== privateSpace(owner)
       || !('policy' in value) || !value.policy || typeof value.policy !== 'object' || !('$type' in value.policy)
-      || value.policy.$type !== 'com.atproto.memberspace.policy') throw new Error('this private space uses an unsupported access policy.');
+      || value.policy.$type !== 'com.atproto.memberspace.policy') throw new Error('this account can’t use the selected visibility setting.');
     const policy = value.policy;
     for (const key of ['publicRead', 'publicWrite', 'publishPolicy', 'publishMembers']) {
-      if (key in policy && Reflect.get(policy, key) !== false) throw new Error('this space is not private. its access policy was left unchanged.');
+      if (key in policy && Reflect.get(policy, key) !== false) throw new Error('this account can’t save tracks with this visibility setting.');
     }
-    if ('allowedApps' in policy) throw new Error('this private space restricts which apps can access it.');
+    if ('allowedApps' in policy) throw new Error('this account doesn’t allow plyr.fm to use this visibility setting.');
   }
 
   function privateDeletion({ owner, current, policy, allowed, pending, read, send }: {
@@ -97,7 +97,7 @@ export function createPrivateLibrary({ NSID, PRIVATE_SPACE_TYPE }: Pick<AuthConf
   }) {
     function owned(track: Track) {
       const did = current();
-      if (did !== owner || !ownsPrivateTrack(track, did)) throw new Error('this private track belongs to another account.');
+      if (did !== owner || !ownsPrivateTrack(track, did)) throw new Error('this track belongs to another account.');
       return track.record.rkey;
     }
     async function check(track: Track): Promise<PrivateDeletionResult> {
@@ -114,8 +114,8 @@ export function createPrivateLibrary({ NSID, PRIVATE_SPACE_TYPE }: Pick<AuthConf
       check,
       async remove(track: Track): Promise<PrivateDeletionResult> {
         const rkey = owned(track);
-        if (!allowed) throw new Error('sign in again to allow private deletion.');
-        if ((await pending()).some(operation => operation.uri === track.record.uri)) throw new Error('finish this track’s creation recovery before deleting it.');
+        if (!allowed) throw new Error('sign in again to delete this track.');
+        if ((await pending()).some(operation => operation.uri === track.record.uri)) throw new Error('finish this upload before deleting the track.');
         current();
         await policy();
         current();
@@ -135,7 +135,7 @@ export function createPrivateLibrary({ NSID, PRIVATE_SPACE_TYPE }: Pick<AuthConf
     async function request(method: string, params?: Record<string, string>, body?: object | ArrayBuffer, mimeType?: string) {
       current();
       const { agent } = auth;
-      if (!agent) throw new Error('sign in to access your private music.');
+      if (!agent) throw new Error('sign in to access this track.');
       const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 20_000);
       try {
         const response = await agent.handle(`/xrpc/${method}${params ? '?' + new URLSearchParams(params) : ''}`, {
@@ -162,7 +162,7 @@ export function createPrivateLibrary({ NSID, PRIVATE_SPACE_TYPE }: Pick<AuthConf
       const intent = owned(operation);
       try {
         const value = await request('com.atproto.space.getRecord', { space: privateSpace(intent.owner), repo: intent.owner, collection: NSID.track, rkey: intent.rkey });
-        if (!object(value) || value.uri !== intent.uri || typeof value.cid !== 'string') throw new Error('could not confirm the private track.');
+        if (!object(value) || value.uri !== intent.uri || typeof value.cid !== 'string') throw new Error('could not check whether the track was saved.');
         return { state: sameRecord(value.value, intent.record) ? 'accepted' : 'different', uri: intent.uri, cid: value.cid };
       } catch (error) {
         if (error instanceof PrivateRequestError && error.code === 'RecordNotFound') return { state: 'missing', uri: intent.uri };
@@ -174,26 +174,26 @@ export function createPrivateLibrary({ NSID, PRIVATE_SPACE_TYPE }: Pick<AuthConf
       await policy();
       const found = await check(intent);
       if (found.state !== 'missing' || !retry) return found;
-      if (!auth.privatePublishing) throw new Error('sign in again to allow private uploads.');
+      if (!auth.privatePublishing) throw new Error('sign in again to upload with this setting.');
       const stored = (await privateCreateStorage.load(intent.owner)).find(item => item.rkey === intent.rkey);
       current();
-      if (!stored || !sameRecord(stored.record, intent.record)) throw new Error('this private attempt was dismissed or changed.');
+      if (!stored || !sameRecord(stored.record, intent.record)) throw new Error('this upload has changed. reopen Upload and try again.');
       try {
         const result = await request('com.atproto.space.createRecord', undefined, {
           space: privateSpace(intent.owner), repo: intent.owner, collection: NSID.track, rkey: intent.rkey, record: intent.record,
         });
-        if (!object(result) || result.uri !== intent.uri || typeof result.cid !== 'string') throw new Error('invalid private creation response.');
+        if (!object(result) || result.uri !== intent.uri || typeof result.cid !== 'string') throw new Error('could not check whether the track was saved.');
         return { state: 'accepted', uri: intent.uri, cid: result.cid };
       } catch {
         current();
         const result = await check(intent).catch(() => undefined);
         if (result && result.state !== 'missing') return result;
-        throw new Error('could not confirm creation. check this private attempt before trying again.');
+        throw new Error('could not check whether the track was saved. check its status before trying again.');
       }
     }
     async function upload(input: { file: MediaFile; title: string; artist: string; description: string; tags: string[]; duration?: number }, prepared: (operation: PrivateCreate) => void) {
       const did = current();
-      if (!auth.privatePublishing) throw new Error('sign in again to allow private uploads.');
+      if (!auth.privatePublishing) throw new Error('sign in again to upload with this setting.');
       if (!input.title.trim() || !input.artist.trim()) throw new Error('a track needs a title and artist.');
       for (const [value, limit] of [[input.title.trim(), 256], [input.artist.trim(), 256], [input.description.trim(), 5000]] as const) {
         if (new TextEncoder().encode(value).length > limit) throw new Error('that text is too long. try a shorter version.');
@@ -202,7 +202,7 @@ export function createPrivateLibrary({ NSID, PRIVATE_SPACE_TYPE }: Pick<AuthConf
       const fileType = (input.file.name.includes('.') ? input.file.name.split('.').at(-1) : input.file.type.slice(6))?.toLowerCase();
       if (!fileType || new TextEncoder().encode(fileType).length > 16) throw new Error('choose a file with a supported audio extension.');
       const tags = normalizeTrackTags(input.tags);
-      if ((await privateCreateStorage.load(did)).some(item => !item.archived)) throw new Error('finish or set aside your earlier private creation first.');
+      if ((await privateCreateStorage.load(did)).some(item => !item.archived)) throw new Error('finish or set aside your earlier upload first.');
       await policy(true);
       const bytes = await input.file.arrayBuffer();
       current();
@@ -224,7 +224,7 @@ export function createPrivateLibrary({ NSID, PRIVATE_SPACE_TYPE }: Pick<AuthConf
       try {
         await policy();
         const result = await request('com.atproto.space.listRecords', { space: privateSpace(did), repo: did, collection: NSID.track, limit: '20', ...(cursor ? { cursor } : {}) });
-        if (!object(result) || !Array.isArray(result.records) || (result.cursor !== undefined && typeof result.cursor !== 'string')) throw new Error('could not read your private music.');
+        if (!object(result) || !Array.isArray(result.records) || (result.cursor !== undefined && typeof result.cursor !== 'string')) throw new Error('could not load all your tracks.');
         const tracks = result.records.map((item: unknown) => {
           if (!object(item) || item.collection !== NSID.track || typeof item.rkey !== 'string' || typeof item.cid !== 'string') throw new Error('invalid private record.');
           return privateTrack(did, item.rkey, item.cid, item.value);
@@ -235,15 +235,35 @@ export function createPrivateLibrary({ NSID, PRIVATE_SPACE_TYPE }: Pick<AuthConf
         throw error;
       }
     }
+    async function read(rkey: string) {
+      const did = current();
+      try {
+        return await request('com.atproto.space.getRecord', { space: privateSpace(did), repo: did, collection: NSID.track, rkey });
+      } catch (error) {
+        if (error instanceof PrivateRequestError && ['RecordNotFound', 'SpaceNotFound', 'RepoNotFound'].includes(error.code)) return undefined;
+        throw error;
+      }
+    }
+    async function track(rkey: string): Promise<Track | undefined> {
+      const did = current();
+      const uri = `${privateSpace(did)}/${did}/${NSID.track}/${rkey}`;
+      try {
+        await policy();
+        const record = await read(rkey);
+        if (record === undefined) return;
+        if (!object(record) || record.uri !== uri || typeof record.cid !== 'string') throw new Error('could not load this track.');
+        return privateTrack(did, rkey, record.cid, record.value);
+      } catch (error) {
+        if (error instanceof PrivateRequestError && ['SpaceNotFound', 'RepoNotFound'].includes(error.code)) return;
+        throw error;
+      }
+    }
     const deletion = privateDeletion({ owner, current, policy, allowed: auth.privateDeleting,
       pending: () => privateCreateStorage.load(current()),
-      read: async rkey => {
-        try { return await request('com.atproto.space.getRecord', { space: privateSpace(current()), repo: current(), collection: NSID.track, rkey }); }
-        catch (error) { if (error instanceof PrivateRequestError && error.code === 'RecordNotFound') return undefined; throw error; }
-      },
+      read,
       send: rkey => request('com.atproto.space.deleteRecord', undefined, { space: privateSpace(current()), repo: current(), collection: NSID.track, rkey }),
     });
-    return { upload, recover, list, deletion,
+    return { upload, recover, list, track, deletion,
       pending: async () => privateCreateStorage.load(current()),
       archive: async (operation: PrivateCreate, archived: boolean) => { owned(operation); await privateCreateStorage.archive(operation, archived); },
       dismiss: async (operation: PrivateCreate, keepExisting = false) => {

@@ -8,10 +8,9 @@ import { ApiError, type Artist, type ListSummary, type Track } from '@plyr/next-
 import { useAuth } from './auth';
 import { useAppearance } from './appearance';
 import { Action, Copy, pageFrame, row } from './controls';
-import { Cover, Row, useResource } from './CatalogPieces';
+import { Cover, Row, usePages, useResource } from './CatalogPieces';
 import { accessLabel } from '@plyr/next-core/access/label';
 import { AUDIO_SPACE_TYPE } from './auth-config';
-import { usePlayback } from './playback';
 import { privatePds } from './publishing/private-pds';
 import { isPrivateTrack } from '@plyr/next-core/track-access';
 import { Choice } from './AccountPieces';
@@ -119,26 +118,26 @@ function CatalogToolbar({ children }: { children: ReactNode }) {
 }
 
 function OwnedTracks({ did, active, tabs }: { did: string; active: boolean; tabs: ReactNode }) {
-  const player = usePlayback();
   const load = useCallback((cursor?: string) => api.tracks({ artist_did: did, limit: 25, cursor }), [did]);
   const tracks = usePortalPages(did, 'tracks', load, active);
   const own = useOwnerOnlyTracks(did, active);
-  // One list: what everyone can hear and what only you can, each row saying which.
-  const all = [...tracks.data, ...own].sort((a, b) => b.metadata.created_at.localeCompare(a.metadata.created_at));
+  const all = [...tracks.data, ...own.data].sort((a, b) => b.metadata.created_at.localeCompare(a.metadata.created_at));
   const plays = (track: Track) => `${track.metrics.play_count} ${track.metrics.play_count === 1 ? 'play' : 'plays'}`;
   return <View style={{ gap: 8 }}>
     {tabs && <CatalogToolbar>{tabs}</CatalogToolbar>}
     {all.map(track => {
       const subtitle = [accessLabel(track, AUDIO_SPACE_TYPE), !isPrivateTrack(track) && plays(track), track.metadata.album].filter(Boolean).join(' · ');
-      return isPrivateTrack(track)
-        ? <Row key={track.record.uri} title={track.metadata.title} image={trackArtwork(track)} subtitle={subtitle}
-          onPress={() => player.play(track, own)} action={<Edit label={`manage ${track.metadata.title}`} href="/private" />} />
-        : <Row key={track.record.uri} title={track.metadata.title} image={trackArtwork(track)} subtitle={subtitle}
-          href={{ pathname: '/track/[id]', params: { id: track.id } }}
-          action={<Edit label={`edit ${track.metadata.title}`} href={{ pathname: '/edit-track/[id]', params: { id: track.id } }} />} />;
+      return <Row key={track.record.uri} title={track.metadata.title} image={trackArtwork(track)} subtitle={subtitle}
+        href={{ pathname: '/track/[id]', params: { id: track.id } }}
+        action={isPrivateTrack(track) ? undefined : <Edit label={`edit ${track.metadata.title}`} href={{ pathname: '/edit-track/[id]', params: { id: track.id } }} />} />;
     })}
-    <CatalogState loading={tracks.loading} error={tracks.error} empty={!all.length} retry={tracks.retry} />
-    {tracks.cursor && !tracks.loading && !tracks.error && <View style={row}><Action label="more tracks" onPress={tracks.more} /></View>}
+    <CatalogState loading={tracks.loading || own.loading} error={tracks.error || own.error} empty={!all.length}
+      retry={tracks.error ? tracks.retry : own.more} />
+    {(tracks.cursor || own.cursor) && !tracks.loading && !own.loading && !tracks.error && !own.error &&
+      <View style={row}><Action label="more tracks" onPress={() => {
+        if (tracks.cursor) tracks.more();
+        if (own.cursor) own.more();
+      }} /></View>}
   </View>;
 }
 
@@ -151,18 +150,17 @@ function Edit({ label, href }: { label: string; href: Href }) {
   </Link>;
 }
 
-/** Tracks only their owner can hear, read from the owner's PDS; a PDS without them just adds nothing. */
 function useOwnerOnlyTracks(did: string, active: boolean) {
   const auth = useAuth();
-  const [tracks, setTracks] = useState<Track[]>([]);
-  const pds = useMemo(() => auth.did === did && auth.rpc ? privatePds(auth) : undefined, [auth.did, auth.rpc, did]);
-  useFocusEffect(useCallback(() => {
-    if (!pds || !active) return;
-    let live = true;
-    pds.list().then(result => { if (live) setTracks(result.tracks); }).catch(() => {});
-    return () => { live = false; };
-  }, [pds, active]));
-  return tracks;
+  const pds = useMemo(() => auth.did === did && auth.privatePublishing ? privatePds(auth) : undefined,
+    [auth.did, auth.rpc, auth.privatePublishing, did]);
+  const load = useCallback(async (cursor?: string) => {
+    const page = await pds?.list(cursor);
+    return { data: page?.tracks ?? [], has_more: !!page?.cursor, next_cursor: page?.cursor };
+  }, [pds]);
+  const pages = usePages(load);
+  useFocusEffect(useCallback(() => { if (active) void pages.revalidate(); }, [active, pages.revalidate]));
+  return pages;
 }
 
 function OwnedAlbums({ did, active, tabs }: { did: string; active: boolean; tabs: ReactNode }) {
@@ -181,6 +179,6 @@ function OwnedAlbums({ did, active, tabs }: { did: string; active: boolean; tabs
 function CatalogState({ loading, error, empty, retry }: { loading: boolean; error?: string; empty: boolean; retry: () => void }) {
   if (loading) return <WaveLoading label="Loading your music" />;
   if (error) return <View style={{ gap: 10 }}><Copy>{error}</Copy><View style={row}><Action label="retry" onPress={retry} /></View></View>;
-  if (empty) return <View style={{ gap: 12, paddingVertical: 20 }}><Copy>nothing here yet. upload something and it shows up here, open to everyone or just for you.</Copy></View>;
+  if (empty) return <View style={{ gap: 12, paddingVertical: 20 }}><Copy>nothing here yet.</Copy></View>;
   return null;
 }

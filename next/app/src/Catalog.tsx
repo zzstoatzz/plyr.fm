@@ -1,9 +1,13 @@
 import { useAppearance } from './appearance';
 import { ListPlus, DotsThree as Ellipsis } from './icons';
 import { collectionArtwork } from '@plyr/next-core/artwork';
+import { ownerTrackKey } from '@plyr/next-core/track-access';
+import { useAuth } from './auth';
+import { privatePds } from './publishing/private-pds';
+import { PrivateTrackDelete } from './publishing/PrivateTrackDelete';
 import { canToggleTrack } from '@plyr/next-core/track-revision';
-import { useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useCallback, useRef, useState, type ReactNode } from 'react';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { PauseGlyph as PauseIcon, PlayGlyph as PlayIcon } from './PlayerGlyph';
 import { api } from './api-client';
@@ -38,14 +42,33 @@ function TrackPlayCount({ track }: { track: Track }) {
 function TrackDetail({ id, onPlay, onEnqueue, trackActions }: {
   id: string; onPlay: Play; onEnqueue: (track: Track) => void; trackActions?: TrackActions;
 }) {
-  const load = useCallback(() => api.track(id), [id]);
+  const account = useAuth();
+  const rkey = ownerTrackKey(id);
+  const owner = rkey ? account.did : null;
+  const rpc = rkey ? account.rpc : null;
+  const pds = useMemo(() => owner && rpc ? privatePds(account) : undefined, [owner, rpc]);
+  const load = useCallback(async () => {
+    if (!rkey) return await api.track(id);
+    return pds ? (await pds.track(rkey)) ?? null : null;
+  }, [id, rkey, pds]);
   const result = useResource(load);
   const track = result.data;
   const player = usePlayback();
   const [actionsOpen, setActionsOpen] = useState(false);
+  if (rkey && (!account.ready || !owner || !rpc || track === null || track && track.artist.did !== owner)) {
+    return account.ready ? <Status error="track not found" /> : <Status loading />;
+  }
   if (!track) return <Status loading={!result.error} error={result.error} retry={result.retry} />;
   const active = canToggleTrack(player.current, track, !!player.jam);
   const playing = active && player.status.playing;
+  if (pds) return <TrackPresentation track={track}
+    controls={<PlayerControl primary large glow={playing} icon={playing ? PauseIcon : PlayIcon} label={playing ? 'Pause' : 'Play'}
+      busy={active && player.loading} onPress={() => active ? player.setPlaying(!player.status.playing) : onPlay(track)} />}
+    stats={<Copy>only you</Copy>}
+    utilities={<PrivateTrackDelete key={track.record.uri} track={track} auth={account} deletion={pds.deletion} pending={false} deleted={() => {
+      player.forgetPrivateTrack(track.record.uri);
+      router.replace('/portal');
+    }} />} />;
   return <>
     <TrackPresentation track={track}
       controls={<>

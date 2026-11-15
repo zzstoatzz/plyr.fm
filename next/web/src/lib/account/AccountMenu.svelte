@@ -12,7 +12,6 @@
 	const entries = $derived([
 		{ label: 'portal', detail: identity, icon: 'portal', href: resolve('/(app)/portal') },
 		{ label: 'upload', detail: uploadDetail, icon: 'upload', href: resolve('/(app)/upload') },
-		{ label: 'private music', detail: 'listen to your private tracks', icon: 'music', href: resolve('/(app)/private') },
 		{ label: 'settings', detail: null, icon: 'settings', href: resolve('/(app)/settings') }
 	] as const);
 

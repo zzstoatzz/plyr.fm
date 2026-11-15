@@ -19,7 +19,7 @@ export function PrivateTrackDelete({ track, auth, deletion, pending, deleted }: 
     try {
       const result = await (remove ? deletion.remove(track) : deletion.check(track));
       if (!sameSession()) return;
-      if (result === 'deleted') { deleted(); return; }
+      if (result === 'deleted') { if (live.current) deleted(); return; }
       if (live.current) { setState('present'); setMessage('this track is still here. review it before deleting again.'); }
     } catch (error) {
       if (live.current && sameSession()) { setState('unknown'); setMessage(error instanceof Error ? error.message : 'could not confirm deletion. check again.'); }
@@ -27,14 +27,13 @@ export function PrivateTrackDelete({ track, auth, deletion, pending, deleted }: 
   }
   if (state === 'closed') return <View style={{ alignSelf: 'flex-start', gap: 6 }}>
     <Action label={`Delete ${track.metadata.title}`} destructive disabled={pending} onPress={() => setState('confirm')} />
-    {pending && <Copy>finish this track’s creation recovery before deleting it.</Copy>}
+    {pending && <Copy>finish this track’s upload before deleting it.</Copy>}
   </View>;
   return <View style={{ gap: 10 }}>
-    <Copy>delete “{track.metadata.title}” from your private music? this deletes the current version, including changes made elsewhere. it cannot be undone here.</Copy>
-    <Copy>people who already downloaded the audio may still have a copy.</Copy>
+    <Copy>delete “{track.metadata.title}”? this deletes the current version, including changes made elsewhere. it cannot be undone here.</Copy>
     {message && <Copy live>{message}</Copy>}
     <View style={row}>
-      {!auth.privateDeleting ? <Action label="Sign in to delete private music" href={{ pathname: '/login', params: { return_to: '/private' } }} />
+      {!auth.privateDeleting ? <Action label="Sign in again to delete" href={{ pathname: '/login', params: { return_to: '/track/' + track.id } }} />
         : state === 'unknown' ? <Action label={busy ? 'Checking deletion…' : 'Check deletion'} disabled={busy} onPress={() => void run(false)} />
           : <Action label={busy ? 'Deleting…' : 'Delete current track'} primary destructive disabled={busy} onPress={() => void run(true)} />}
       <Action label="Cancel deletion" disabled={busy} onPress={() => { setState('closed'); setMessage(undefined); }} />

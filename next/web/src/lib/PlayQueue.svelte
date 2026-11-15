@@ -126,7 +126,7 @@
 			<span class="play"><Icon name={current && player.playing ? 'pause' : 'play'} size={18} /></span>
 		</button>
 		<div class="labels">
-			{#if player.privateMode}<span class="truncate">{track.metadata.title}</span>{:else}<a class="truncate" href={trackHref(track)}>{track.metadata.title}</a>{/if}
+			<a class="truncate" href={trackHref(track)}>{track.metadata.title}</a>
 			<span class="subtle truncate">{artistName(track)}</span>
 		</div>
 		<span class="subtle time">{clock(track.metadata.duration_seconds)}</span>

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useLocalSearchParams } from 'expo-router';
+import { OwnerTrackUpload } from './OwnerTrackUpload';
 import { useAuth } from '../auth';
 import { getAuth, type Auth } from '../auth-state';
 import { View } from 'react-native';
@@ -23,12 +25,18 @@ import { draftInRecovery, type QueuedUploadDraft } from '@plyr/next-core/publish
 
 export default function Upload() {
   const auth = useAuth();
+  const { visibility } = useLocalSearchParams<{ visibility?: string }>();
+  const [onlyYou, setOnlyYou] = useState(visibility === 'only-you');
   const [session, setSession] = useState({ rpc: auth.rpc, version: 0 });
   if (session.rpc !== auth.rpc) setSession({ rpc: auth.rpc, version: session.version + 1 });
   return <Page title="upload">
-    <AudienceToggle />
     {!auth.ready ? <Copy>loading your account…</Copy> : !auth.did ? <SignedOut />
-      : <AccountUpload key={`${auth.did}:${session.version}`} auth={auth} />}
+      : <>
+        <Copy>who can listen?</Copy>
+        <AudienceToggle onlyYou={onlyYou} select={setOnlyYou} />
+        {onlyYou ? <OwnerTrackUpload key={`${auth.did}:${session.version}`} auth={auth} />
+          : <AccountUpload key={`${auth.did}:${session.version}`} auth={auth} />}
+      </>}
   </Page>;
 }
 

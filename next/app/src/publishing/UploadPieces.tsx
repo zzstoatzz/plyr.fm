@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
 import { FileAudio, ImageSquare as ImagePlus, Check } from '../icons';
 import { Image, Pressable, View } from 'react-native';
-import { router } from 'expo-router';
 import { useAppearance } from '../appearance';
 import { Text } from '../Text';
 import type { MediaFile } from '../pds';
@@ -33,14 +32,18 @@ export function PickTile({ kind, file, hint, disabled, onPress }: { kind: 'audio
   </Pressable>;
 }
 
-/** Who can listen: everyone uploads here, just you goes to private music. */
-export function AudienceToggle() {
+export function AudienceToggle({ onlyYou, select }: { onlyYou: boolean; select: (value: boolean) => void }) {
   const theme = useAppearance();
   const segment = (label: string, selected: boolean) => <Text style={{ color: selected ? theme.onAccent : theme.muted, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale, fontWeight: '600', textTransform: 'lowercase' }}>{label}</Text>;
   const box = { minHeight: 40, paddingHorizontal: 18, borderRadius: 20, justifyContent: 'center' } as const;
   return <View accessibilityLabel="who can listen" style={{ flexDirection: 'row', alignSelf: 'flex-start', padding: 4, gap: 4, borderRadius: 24, borderWidth: 1, borderColor: theme.hairline, backgroundColor: theme.raised }}>
-    <Pressable accessibilityRole="button" accessibilityState={{ selected: true }} aria-pressed style={{ ...box, backgroundColor: theme.accent }}>{segment('everyone', true)}</Pressable>
-    <Pressable accessibilityRole="link" onPress={() => router.push('/private')} style={({ pressed }) => ({ ...box, backgroundColor: pressed ? theme.hover : 'transparent' })}>{segment('just you', false)}</Pressable>
+    {[false, true].map(value => {
+      const selected = value === onlyYou;
+      return <Pressable key={String(value)} accessibilityRole="button" accessibilityState={{ selected }} onPress={() => select(value)}
+        style={({ pressed }) => ({ ...box, backgroundColor: selected ? theme.accent : pressed ? theme.hover : 'transparent' })}>
+        {segment(value ? 'only you' : 'everyone', selected)}
+      </Pressable>;
+    })}
   </View>;
 }
 
