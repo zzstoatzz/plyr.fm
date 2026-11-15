@@ -26,10 +26,11 @@
 		restore: ({ y, tracks, cursor }) => {
 			const position = window.scrollY;
 			const request = data.latest;
-			void Promise.allSettled([request, data.chart, data.featured]).then(async () => {
+			void Promise.allSettled([request, data.chart, data.featured]).then(async ([first]) => {
 				await tick();
 				if (!home?.isConnected || data.latest !== request) return;
-				extra = tracks;
+				const firstIds = new Set(first.status === 'fulfilled' ? first.value.data.map(track => track.id) : []);
+				extra = tracks.filter(track => !firstIds.has(track.id));
 				nextCursor = cursor;
 				// The browser can clamp the saved scroll before the streamed rows render.
 				await tick();
