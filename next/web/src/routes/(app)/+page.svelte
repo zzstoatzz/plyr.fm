@@ -6,6 +6,7 @@
 	import { artistName } from '$lib/tracks';
 	import Artwork from '$lib/ui/Artwork.svelte';
 	import Icon from '$lib/ui/Icon.svelte';
+	import LinksMenu from '$lib/LinksMenu.svelte';
 	import Loading from '$lib/ui/Loading.svelte';
 	import TrackRow from '$lib/TrackRow.svelte';
 	import type { PageProps } from './$types';
@@ -35,13 +36,7 @@
 <svelte:head><title>plyr.fm</title></svelte:head>
 
 <div class="page-content home">
-	<header class="mobile-brand">
-		<details class="home-menu">
-			<summary class="icon-button" aria-label="Menu">✻</summary>
-			<nav aria-label="Explore"><a href="/radio" onclick={event => { event.currentTarget.closest('details')!.open = false; }}><Icon name="radio" size={18} />radio</a></nav>
-		</details>
-		<h1>plyr.fm</h1>
-	</header>
+	<header class="mobile-brand"><LinksMenu /><h1>plyr.fm</h1></header>
 	{#await data.featured}
 		<div class="featured" aria-hidden="true"></div>
 	{:then featured}
@@ -98,8 +93,9 @@
 </div>
 
 <style>
-	.home { display: grid; grid-template-columns: minmax(0, 2.6fr) minmax(12rem, 1fr); grid-template-areas: "featured featured" "latest chart"; gap: 2.2rem; }
-	.mobile-brand { grid-area: brand; display: none; }
+	.home { display: grid; grid-template-columns: minmax(0, 2.6fr) minmax(12rem, 1fr); grid-template-areas: "brand brand" "featured featured" "latest chart"; gap: 2.2rem; }
+	.mobile-brand { grid-area: brand; display: flex; align-items: center; gap: 0.5rem; margin-bottom: -1rem; }
+	@media (min-width: 721px) { .mobile-brand h1 { display: none; } }
 	.featured { grid-area: featured; position: relative; isolation: isolate; display: grid; align-items: center; min-height: 17rem; overflow: hidden; border: 1px solid var(--line); border-radius: 1.15rem; background: var(--surface); }
 	.wall { position: absolute; inset: -15% -5% -15% 32%; z-index: -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.4rem; align-content: center; transform: rotate(-4deg); mask-image: linear-gradient(90deg, transparent 0%, #000 55%); }
 	.feature-content { max-width: 65%; padding: clamp(1.2rem, 3vw, 2.5rem); }
@@ -118,7 +114,7 @@
 	.chart :global(.track) { grid-template-columns: 2.5rem minmax(0, 1fr); min-height: 3.6rem; }
 	.chart :global(.duration), .chart :global(.add), .chart :global(.metrics) { display: none; }
 	@media (max-width: 900px) {
-		.home { grid-template-columns: minmax(0, 1fr); grid-template-areas: "featured" "chart" "latest"; gap: 1.5rem; }
+		.home { grid-template-columns: minmax(0, 1fr); grid-template-areas: "brand" "featured" "chart" "latest"; gap: 1.5rem; }
 		.chart ol { display: grid; grid-auto-flow: column; grid-auto-columns: min(14rem, 78vw); gap: 0.65rem; min-height: 4.75rem; padding: 0; overflow-x: auto; scrollbar-width: none; }
 		.chart li { display: grid; align-items: center; min-width: 0; padding-inline: 0.7rem; border: 1px solid var(--line); border-radius: 0.6rem; background: var(--surface); }
 		.chart li::marker { content: ''; }
@@ -126,11 +122,6 @@
 	@media (max-width: 720px) {
 		.home { grid-template-areas: "brand" "featured" "chart" "latest"; }
 		.mobile-brand { display: flex; align-items: center; gap: 0.5rem; }
-		.home-menu { position: relative; }
-		.home-menu summary { display: grid; place-items: center; list-style: none; color: var(--accent); cursor: pointer; }
-		.home-menu summary::-webkit-details-marker { display: none; }
-		.home-menu nav { position: absolute; z-index: 2; left: 0; top: calc(100% + 0.2rem); min-width: 9rem; background: var(--surface); border: 1px solid var(--line); border-radius: 0.65rem; box-shadow: 0 0.4rem 1rem rgb(0 0 0 / 0.16); }
-		.home-menu nav a { display: flex; align-items: center; gap: 0.45rem; padding: 0.7rem 1rem; }
 		.featured { min-height: 11.5rem; }
 	}
 </style>

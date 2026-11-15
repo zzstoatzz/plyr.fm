@@ -186,17 +186,17 @@
 	<nav aria-label="Main navigation">
 		<a class="brand" aria-label="plyr.fm home" href="/"><span aria-hidden="true">✻</span> plyr.fm</a>
 		{#each links as link (link.path)}
-			<a href={link.path} class:active={page.url.pathname === link.path} aria-current={page.url.pathname === link.path ? 'page' : undefined}>
+			<a href={link.path} class:desktop-only={link.path === '/queue'} class:active={page.url.pathname === link.path} aria-current={page.url.pathname === link.path ? 'page' : undefined}>
 				<Icon name={link.icon} size={21} /> <span>{link.label}</span>
 			</a>
 		{/each}
-		<a href="/upload" class:active={page.url.pathname === '/upload'} aria-current={page.url.pathname === '/upload' ? 'page' : undefined}>
+		<a href="/upload" class="desktop-only" class:active={page.url.pathname === '/upload'} aria-current={page.url.pathname === '/upload' ? 'page' : undefined}>
 			<Icon name="upload" size={21} /><span>{uploading ? `uploading ${uploading}` : 'upload'}</span>
 		</a>
 		{#if account.did}
-			<a href="/settings" class:active={page.url.pathname === '/settings'}><Icon name="settings" size={21} /><span>settings</span></a>
+			<a href="/settings" class:active={page.url.pathname === '/settings'}><Icon name="user" size={21} /><span class="account-label">account</span><span class="desktop-only">settings</span></a>
 		{:else}
-			<a href={'/login?' + new URLSearchParams({ return_to: page.url.pathname + page.url.search })} class:active={page.url.pathname === '/login'}><Icon name="logout" size={21} /><span>sign in</span></a>
+			<a href={'/login?' + new URLSearchParams({ return_to: page.url.pathname + page.url.search })} class:active={page.url.pathname === '/login'}><Icon name="user" size={21} /><span class="account-label">account</span><span class="desktop-only">sign in</span></a>
 		{/if}
 		<a class="desktop-radio" href="/radio" class:active={page.url.pathname === '/radio'}><Icon name="radio" size={21} /><span>radio</span></a>
 		<button class="desktop-help" type="button" onclick={() => shortcutsDialog.showModal()}><span aria-hidden="true">?</span> keyboard shortcuts</button>
@@ -214,7 +214,7 @@
 {#if player.current}
 	{#await import('$lib/PlayerDock.svelte') then { default: Dock }}<Dock onQueue={toggleQueue} {queuePage} />{/await}
 {/if}
-<dialog bind:this={dialog} aria-label="Now playing" onclose={() => { player.nowPlaying = false; }}>
+<dialog bind:this={dialog} class="now-sheet" aria-label="Now playing" onclose={() => { player.nowPlaying = false; }}>
 	{#if player.nowPlaying && NowPlaying}<NowPlaying close={() => { player.nowPlaying = false; }} />{/if}
 </dialog>
 <dialog bind:this={shortcutsDialog} class="shortcuts" aria-labelledby="keyboard-guide-title">
@@ -239,6 +239,7 @@
 	nav a.active { background: var(--hover); color: var(--text); font-weight: 650; }
 	nav .brand { font-weight: 750; font-size: 1.4rem; letter-spacing: -0.04em; color: var(--text); margin-bottom: 0.7rem; }
 	.brand span { color: var(--accent); }
+	.account-label { display: none; }
 	.desktop-help { display: flex; align-items: center; gap: 0.7rem; min-height: 2.75rem; border: 0; background: none; border-radius: 0.7rem; padding: 0.65rem 0.8rem; color: var(--muted); text-align: start; font-size: 0.875rem; }
 	.desktop-help:hover { background: var(--raised); }
 	.desktop-help span { width: 21px; text-align: center; font-size: 1.15rem; }
@@ -260,9 +261,12 @@
 	@media (max-width: 720px) {
 		.frame, .frame.docked { display: block; padding-bottom: calc(var(--tabs) + env(safe-area-inset-bottom)); }
 		.frame.hasPlayer { padding-bottom: calc(var(--tabs) + var(--dock) + env(safe-area-inset-bottom)); }
-		aside, nav .brand, nav .desktop-radio, nav .desktop-help { display: none; }
+		aside, nav .brand, nav .desktop-only, nav .desktop-radio, nav .desktop-help { display: none; }
+		.account-label { display: inline; }
 		nav { z-index: 9; position: fixed; inset: auto 0 0; min-height: var(--tabs); flex-direction: row; padding: 0 0 env(safe-area-inset-bottom); border: 0; border-top: 1px solid var(--line); }
 		nav a { gap: 0.2rem; flex-direction: column; justify-content: center; flex: 1; min-height: var(--tabs); padding: 0.15rem; border-radius: 0; font-size: 0.75rem; }
 		dialog:not(.shortcuts) { width: 100%; max-width: 100%; height: 100dvh; max-height: 100dvh; margin: 0; border: 0; border-radius: 0; }
+		dialog.now-sheet { background: transparent; overscroll-behavior: contain; }
+		.now-sheet::backdrop { background: rgb(0 0 0 / 0.18); }
 	}
 </style>

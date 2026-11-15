@@ -24,6 +24,17 @@ async function screen(browser, phone, scheme) {
     await page.getByTestId('home-track-row').first().waitFor();
     await page.getByTestId('home-chart').waitFor();
     await capture('home');
+    if (phone) {
+      const links = page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link');
+      assert.deepEqual((await links.allTextContents()).map(label => label.trim().replace(/sign in$/, '')), ['home', 'search', 'library', 'account']);
+    }
+    await page.getByRole('button', { name: 'Open links menu' }).click();
+    const linksMenu = page.getByRole('dialog', { name: 'links' });
+    await linksMenu.getByRole('link', { name: 'documentation docs.plyr.fm' }).waitFor();
+    await linksMenu.getByRole('link', { name: 'status page' }).waitFor();
+    await capture('links-menu');
+    await page.keyboard.press('Escape');
+    await linksMenu.waitFor({ state: 'hidden' });
 
     await page.getByRole('link', { name: tracks[0].metadata.title, exact: true }).first().click();
     await page.getByRole('heading', { name: tracks[0].metadata.title, exact: true }).waitFor();
@@ -70,13 +81,34 @@ async function screen(browser, phone, scheme) {
     await dock.getByRole('button', { name: 'Open now playing' }).click();
     const dialog = page.getByRole('dialog', { name: 'Now playing' });
     await dialog.getByRole('heading', { name: tracks[0].metadata.title }).waitFor();
+    await page.waitForFunction(node => node.getAnimations().length === 0 ||
+      node.getAnimations().every(item => item.playState === 'finished'), await dialog.getByTestId('now-playing-artwork').elementHandle());
     const cover = await dialog.getByTestId('now-playing-artwork').boundingBox();
     if (phone) assert.ok(cover.width >= width - 35, 'now playing cover fills the phone');
     await capture('now-playing');
     await dialog.getByRole('slider', { name: 'Playback position' }).fill('12');
-    await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+    if (phone) {
+      const client = await context.newCDPSession(page);
+      const touch = (type, y) => client.send('Input.dispatchTouchEvent', { type, touchPoints: y === undefined ? [] : [{ x: 190, y }] });
+      const panel = dialog.locator('.now');
+      await touch('touchStart', 120);
+      await touch('touchMove', 146);
+      await touch('touchEnd');
+      await dialog.waitFor();
+      await page.waitForFunction(node => getComputedStyle(node).transform === 'none', await panel.elementHandle());
+      await touch('touchStart', 120);
+      await touch('touchMove', 162);
+      await touch('touchMove', 297);
+      await page.waitForFunction(node => new DOMMatrix(getComputedStyle(node).transform).m42 > 100, await panel.elementHandle());
+      await touch('touchEnd');
+      await dialog.waitFor({ state: 'hidden' });
+      assert.ok(Number(await dock.getByRole('slider', { name: 'Playback position' }).inputValue()) >= 11);
+    } else await dialog.getByRole('button', { name: 'Close', exact: true }).click();
 
-    if (phone) await page.getByRole('navigation').getByRole('link', { name: 'queue', exact: true }).click();
+    if (phone) {
+      await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'library', exact: true }).click();
+      await page.getByRole('link', { name: 'open queue', exact: true }).click();
+    }
     else await dock.getByRole('button', { name: 'Queue', exact: true }).click();
     const queue = page.getByRole('region', { name: 'Queue', exact: true });
     const remove = queue.getByRole('button', { name: `Remove ${tracks[0].metadata.title}` });
@@ -112,7 +144,10 @@ async function queueGroups(browser, phone, scheme) {
     for (const index of [0, 1, 2, 3]) {
       await picks.nth(index).getByRole('button', { name: `Add ${tracks[index].metadata.title} to queue` }).click();
     }
-    if (phone) await navigation.getByRole('link', { name: 'queue', exact: true }).click();
+    if (phone) {
+      await navigation.getByRole('link', { name: 'library', exact: true }).click();
+      await page.getByRole('link', { name: 'open queue', exact: true }).click();
+    }
     else await dock.getByRole('button', { name: 'Queue', exact: true }).click();
     const queue = page.getByRole('region', { name: 'Queue', exact: true });
     const upNext = queue.getByRole('region', { name: 'up next', exact: true });
@@ -155,6 +190,37 @@ async function loginScreen(browser) {
     assert.equal(await input.getAttribute('aria-expanded'), 'false');
     assert.ok(await input.evaluate(element => parseFloat(getComputedStyle(element).fontSize) >= 16));
     await page.screenshot({ path: path.join(output, '390-login.png') });
+    assert.deepEqual(errors, []);
+  } finally { await context.close(); }
+}
+
+async function artistScreen(browser, phone, scheme) {
+  const width = phone ? 390 : 1280;
+  const { context, page, errors } = await setup(browser, width, phone ? 844 : 960, { phone, scheme });
+  try {
+    let reads = 0;
+    await page.route('https://api.next.plyr.fm/v1/albums?**', route => {
+      reads++;
+      return route.fulfill({ json: { data: [{
+        object: 'album', id: 'alb_fixture', metadata: { name: 'Porch recordings' }, owner: { did: tracks[0].artist.did, profile: tracks[0].artist.profile }, metrics: { member_count: 2 }
+      }] } });
+    });
+    await page.goto(origin + '/u/' + tracks[0].artist.did);
+    await page.getByRole('heading', { name: 'replyomatic', exact: true }).waitFor();
+    await page.getByText('9 tracks · 9 plays', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Play tracks by replyomatic' }).waitFor();
+    const tabs = page.getByRole('navigation', { name: 'Artist catalog' });
+    assert.equal(reads, 0);
+    await tabs.getByRole('button', { name: 'albums' }).click();
+    await page.getByRole('link', { name: 'Porch recordings 2 tracks' }).waitFor();
+    await tabs.getByRole('button', { name: 'tracks' }).click();
+    await page.getByRole('region', { name: 'tracks', exact: true }).getByRole('link', { name: tracks[0].metadata.title, exact: true }).waitFor();
+    await tabs.getByRole('button', { name: 'albums' }).click();
+    await page.getByRole('link', { name: 'Porch recordings 2 tracks' }).waitFor();
+    assert.equal(reads, 1);
+    await tabs.getByRole('button', { name: 'tracks' }).click();
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    await page.screenshot({ path: path.join(output, `${width}-${scheme}-artist.png`) });
     assert.deepEqual(errors, []);
   } finally { await context.close(); }
 }
@@ -310,6 +376,7 @@ async function keyboard(browser, phone, scheme) {
         await screen(browser, phone, scheme);
         await queueGroups(browser, phone, scheme);
         await keyboard(browser, phone, scheme);
+        await artistScreen(browser, phone, scheme);
       }
     }
     await loginScreen(browser);
