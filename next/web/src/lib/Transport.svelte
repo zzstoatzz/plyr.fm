@@ -1,15 +1,16 @@
 <script lang="ts">
 	import { player } from './player.svelte';
 	import Icon from './ui/Icon.svelte';
+	const playing = $derived(player.liveStation ? player.liveListening : player.playing && !player.outputElsewhere);
 	let { compact = false }: { compact?: boolean } = $props();
 </script>
 
 <div class="transport" class:compact>
-	<button type="button" class="icon-button previous" aria-label="Previous track" onclick={() => player.previous()}><Icon name="prev_f" size={21} /></button>
-	<button type="button" class="primary-button toggle" aria-label={player.playing && !player.outputElsewhere ? 'Pause' : 'Play'} onclick={() => player.toggle()}>
-		<Icon name={player.playing && !player.outputElsewhere ? 'pause' : 'play'} size={23} />
+	{#if !player.liveStation}<button type="button" class="icon-button previous" aria-label="Previous track" onclick={() => player.previous()}><Icon name="prev_f" size={21} /></button>{/if}
+	<button type="button" class="primary-button toggle" aria-label={playing ? 'Pause' : player.liveStation ? 'Listen live' : 'Play'} onclick={() => player.toggle()}>
+		<Icon name={playing ? 'pause' : 'play'} size={23} />
 	</button>
-	<button type="button" class="icon-button" aria-label="Next track" onclick={() => player.next()}><Icon name="next_f" size={21} /></button>
+	{#if !player.liveStation}<button type="button" class="icon-button" aria-label="Next track" onclick={() => player.next()}><Icon name="next_f" size={21} /></button>{/if}
 </div>
 
 <style>

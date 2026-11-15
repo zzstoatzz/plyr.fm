@@ -83,7 +83,7 @@
 			</div>
 			<div class="actions">
 				<button type="button" class="primary-button play" aria-label={`Play ${title}`} disabled={!tracks.length} onclick={playAll}><Icon name="play" />{#if list.object === 'playlist'}<span>play</span>{/if}</button>
-				<button type="button" class="text-button enqueue" disabled={!tracks.length || player.privateMode} title={player.privateMode ? "play a public track to change queues" : undefined} onclick={enqueue}><Icon name="queue" /> add to queue</button>
+				<button type="button" class="text-button enqueue" disabled={!tracks.length || player.localMode} title={player.localMode ? "play a public track to change queues" : undefined} onclick={enqueue}><Icon name="queue" /> add to queue</button>
 				<button type="button" class="icon-button share" aria-label={`Share ${list.object}`} onclick={share}><Icon name="share" /></button>
 				{#if owned && !editing}<button type="button" class="text-button" onclick={() => { editing = true; }}>edit {list.object}</button>{/if}
 			</div>

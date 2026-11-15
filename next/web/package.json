@@ -11,6 +11,7 @@
     "check:collections": "node scripts/check-collections.cjs",
     "check:browser": "node scripts/check-shell.cjs",
     "check:performance": "node scripts/check-performance.cjs",
+    "check:radio": "node scripts/check-radio.cjs",
     "check:upload": "node scripts/check-upload.cjs",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "test": "node --experimental-strip-types --test tests/*.test.ts",

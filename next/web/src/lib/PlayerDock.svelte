@@ -16,24 +16,28 @@
 
 {#if player.current}
 	<div class="dock" data-testid="player-dock">
-		<div class="mobile-progress"><Scrub clockLabels={false} /></div>
+		{#if !player.liveStation}<div class="mobile-progress"><Scrub clockLabels={false} /></div>{/if}
 		<button type="button" class="song" aria-label="Open now playing" onclick={() => { player.nowPlaying = true; }}>
 			<span class="cover"><Artwork src={trackArtwork(player.current)} size={48} /></span>
 			<span class="description">
 				<strong class="truncate">{player.current.metadata.title}</strong>
-				<span class="truncate">{player.outputElsewhere ? 'playing on another device' : artistName(player.current)}</span>
+				<span class="truncate">{player.liveStation ? `live · ${player.liveStation.label} radio` : player.outputElsewhere ? 'playing on another device' : artistName(player.current)}</span>
 			</span>
 		</button>
 		<div class="controls">
 			<Transport compact />
-			<div class="desktop-progress"><Scrub /></div>
+			{#if !player.liveStation}<div class="desktop-progress"><Scrub /></div>{/if}
 		</div>
 		<div class="extras">
 			<label class="volume">
 				<Icon name={player.volume === 0 ? 'mute' : 'volume'} size={19} />
 				<input type="range" aria-label="Volume" min="0" max="1" step="0.01" value={player.volume} oninput={event => player.setVolume(event.currentTarget.valueAsNumber)} />
 			</label>
-			<button type="button" class="icon-button" aria-label="Queue" aria-pressed={player.queueOpen} onclick={queue}><Icon name="queue" /></button>
+			{#if player.liveStation}
+				<button type="button" class="icon-button" aria-label="Stop radio" onclick={() => player.stopRadio()}><Icon name="x" /></button>
+			{:else}
+				<button type="button" class="icon-button" aria-label="Queue" aria-pressed={player.queueOpen} onclick={queue}><Icon name="queue" /></button>
+			{/if}
 		</div>
 	</div>
 {/if}

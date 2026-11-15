@@ -35,7 +35,13 @@
 <svelte:head><title>plyr.fm</title></svelte:head>
 
 <div class="page-content home">
-	<header class="mobile-brand"><h1><span aria-hidden="true">✻</span> plyr.fm</h1></header>
+	<header class="mobile-brand">
+		<details class="home-menu">
+			<summary class="icon-button" aria-label="Menu">✻</summary>
+			<nav aria-label="Explore"><a href="/radio" onclick={event => { event.currentTarget.closest('details')!.open = false; }}><Icon name="radio" size={18} />radio</a></nav>
+		</details>
+		<h1>plyr.fm</h1>
+	</header>
 	{#await data.featured}
 		<div class="featured" aria-hidden="true"></div>
 	{:then featured}
@@ -119,8 +125,12 @@
 	}
 	@media (max-width: 720px) {
 		.home { grid-template-areas: "brand" "featured" "chart" "latest"; }
-		.mobile-brand { display: block; }
-		.mobile-brand span { color: var(--accent); }
+		.mobile-brand { display: flex; align-items: center; gap: 0.5rem; }
+		.home-menu { position: relative; }
+		.home-menu summary { display: grid; place-items: center; list-style: none; color: var(--accent); cursor: pointer; }
+		.home-menu summary::-webkit-details-marker { display: none; }
+		.home-menu nav { position: absolute; z-index: 2; left: 0; top: calc(100% + 0.2rem); min-width: 9rem; background: var(--surface); border: 1px solid var(--line); border-radius: 0.65rem; box-shadow: 0 0.4rem 1rem rgb(0 0 0 / 0.16); }
+		.home-menu nav a { display: flex; align-items: center; gap: 0.45rem; padding: 0.7rem 1rem; }
 		.featured { min-height: 11.5rem; }
 	}
 </style>
