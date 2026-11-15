@@ -42,16 +42,16 @@ export function albumPublishing({ rpc, did, trackCollection, assertSession, orde
   async function create(name: string, tracks: Track[], artwork?: MediaFile) {
     const title = albumName(name);
     if (!tracks.length || tracks.length > 500 || new Set(tracks.map(track => track.record.uri)).size !== tracks.length) throw new Error('choose between 1 and 500 of your tracks.');
-    const items = await verify(tracks);
     const cover = await prepareCover(artwork);
+    const items = await verify(tracks);
     assertSession();
     return publish(title, [...items.values()], cover);
   }
   async function save(revision: CollectionRevision, entries: AlbumEntry[], name?: string, artwork?: MediaFile) {
     if (revision.value.listType !== 'album') throw new Error('not an album.');
+    const cover = await prepareCover(artwork);
     const additions = await verify(entries.filter((entry): entry is Track => typeof entry !== 'number'));
     const items = albumMembership(revision, entries, additions);
-    const cover = await prepareCover(artwork);
     return ordering.write(revision, items, name, cover);
   }
   return { ...ordering, create, save };

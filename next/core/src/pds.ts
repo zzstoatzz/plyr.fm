@@ -62,9 +62,11 @@ export interface ProfileRecord {
 	[key: string]: unknown;
 }
 
-async function uploadBlob(rpc: RepoRpc, file: MediaFile) {
+async function uploadBlob(rpc: RepoRpc, file: MediaFile, assertSession: () => void) {
+	const bytes = await file.arrayBuffer();
+	assertSession();
 	return ok(uploadRepoBlob(rpc, {
-		input: await file.arrayBuffer(),
+		input: bytes,
 		headers: { 'content-type': file.type }
 	}));
 }
@@ -349,7 +351,7 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 		assertSession();
 		if (!input.file.type.startsWith('audio/')) throw new Error('pick an audio file');
 		if (input.file.size > MAX_AUDIO_BYTES) throw new Error('audio files are limited to 100 MB');
-		const uploaded = await uploadBlob(rpc, input.file);
+		const uploaded = await uploadBlob(rpc, input.file, assertSession);
 		assertSession();
 		const record = await prepareTrackRecord(input);
 		assertSession();
@@ -462,7 +464,7 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 		assertSession();
 		if (!(ARTWORK_TYPES as readonly string[]).includes(file.type)) throw new Error('choose a PNG, JPEG, WebP, or GIF cover');
 		if (file.size > MAX_ARTWORK_BYTES) throw new Error('cover art is limited to 10 MB');
-		const uploaded = await uploadBlob(rpc, file);
+		const uploaded = await uploadBlob(rpc, file, assertSession);
 		assertSession();
 		return { imageBlob: uploaded.blob };
 	}

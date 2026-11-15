@@ -33,7 +33,8 @@ async function check(browser, accounts, width, scheme) {
   const read = uri => xrpc('com.atproto.repo.getRecord', { token, params: { repo: did, collection: uri.split('/').at(-2), rkey: uri.split('/').at(-1) } });
   const list = collection => xrpc('com.atproto.repo.listRecords', { token, params: { repo: did, collection } });
   const put = (collection, key, record) => xrpc('com.atproto.repo.putRecord', { token, input: { repo: did, collection, rkey: key, record } });
-  const identity = { handle, display_name: 'Fixture Artist', avatar_url: null };
+  const avatar = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aMTsAAAAASUVORK5CYII=';
+  const identity = { handle, display_name: 'Fixture Artist', avatar_url: avatar };
   const tracks = [];
   for (const [index, title] of ['Alpha', 'Beta', 'Gamma'].entries()) {
     const rkey = 'demo-' + (index + 1);
@@ -137,7 +138,9 @@ async function check(browser, accounts, width, scheme) {
   });
 
   let failCover = false;
-  await context.route('https://pds.fixture.test/xrpc/com.atproto.repo.uploadBlob', route => {
+  let holdCover;
+  await context.route('https://pds.fixture.test/xrpc/com.atproto.repo.uploadBlob', async route => {
+    if (holdCover) await holdCover();
     if (!failCover) return route.fallback();
     return route.fulfill({ status: 503, json: { error: 'Unavailable', message: 'cover upload unavailable' } });
   });
@@ -241,19 +244,34 @@ async function check(browser, accounts, width, scheme) {
     await albumCover.setInputFiles(await image('first.png', '#f6635f'));
     await main.getByRole('img', { name: 'selected cover preview' }).waitFor();
     const beforeAlbum = creates;
-    staleTrack = true;
+    const coverEntered = Promise.withResolvers();
+    const coverReleased = Promise.withResolvers();
+    holdCover = () => {
+      coverEntered.resolve();
+      return coverReleased.promise;
+    };
     await button('create album').click();
+    await coverEntered.promise;
+    staleTrack = true;
+    coverReleased.resolve();
     await main.getByText('a selected track changed.', { exact: false }).waitFor();
     assert.equal(creates, beforeAlbum, 'a changed track cannot publish an album');
     assert.equal(await main.getByRole('textbox', { name: 'album name' }).inputValue(), 'Chosen tracks');
     await main.getByRole('img', { name: 'selected cover preview' }).waitFor();
     staleTrack = false;
+    holdCover = undefined;
     await button('create album').click();
     await main.getByRole('heading', { name: 'Chosen tracks' }).waitFor();
     assert.deepEqual((await read(albumUri)).value.items.map(item => item.subject), expected);
     const originalCover = await readCover();
     await button('edit album').click();
-    await main.getByLabel('change album cover').setInputFiles(await image('replacement.png', '#5277f5'));
+    const replacementFile = await image('replacement.png', '#5277f5');
+    await main.getByLabel('change album cover').setInputFiles(replacementFile);
+    await button('keep current cover').click();
+    assert.equal(await main.getByRole('img', { name: 'selected cover preview' }).count(), 0);
+    assert.ok(await button('save changes').isDisabled());
+    await main.getByLabel('change album cover').setInputFiles(replacementFile);
+    await main.getByRole('img', { name: 'selected cover preview' }).waitFor();
     await capture('album-cover-editor');
     failCover = true;
     await button('save changes').click();
@@ -277,6 +295,12 @@ async function check(browser, accounts, width, scheme) {
     assert.equal(await readCover(), replacement, 'membership-only edits preserve the cover');
     for (const track of tracks) assert.equal((await read(track.record.uri)).cid, track.record.cid, 'album edits leave track metadata alone');
     await capture('album');
+    await context.route('https://pds.fixture.test/xrpc/com.atproto.sync.getBlob?*', route => route.fulfill({ status: 404 }));
+    await page.reload();
+    await page.waitForFunction(avatar => {
+      const image = document.querySelector('main header .cover img');
+      return image?.currentSrc === avatar && image.complete && image.naturalWidth === 1;
+    }, avatar);
     assert.deepEqual(errors, []);
     console.log(`library, likes, playlist and album writes passed at ${width}px (${scheme})`);
   } finally { await context.close(); }
