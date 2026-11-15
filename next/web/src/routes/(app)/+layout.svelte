@@ -14,7 +14,7 @@
 	let { children } = $props();
 	let dialog: HTMLDialogElement;
 	let shortcutsDialog: HTMLDialogElement;
-	let accountMenu = $state<{ open: () => void }>();
+	let accountMenu = $state<{ open: (trigger: HTMLButtonElement) => void }>();
 	let searchReturn: { url: URL; restoreFocus: () => void } | undefined;
 	let cancelFocusRestore: (() => void) | undefined;
 	const queuePage = $derived(page.url.pathname === resolve('/queue'));
@@ -211,7 +211,7 @@
 			<Icon name="upload" size={21} /><span>{uploading ? `uploading ${uploading}` : 'upload'}</span>
 		</a>
 		{#if account.did}
-			<button type="button" class="mobile-account" aria-haspopup="dialog" class:active={page.url.pathname === '/settings'} onclick={() => accountMenu?.open()}>
+			<button type="button" class="mobile-account" aria-haspopup="dialog" class:active={page.url.pathname === '/settings'} onclick={event => accountMenu?.open(event.currentTarget)}>
 				<Icon name="user" size={21} /><span>account</span>
 			</button>
 			<a href="/settings" class="desktop-only" class:active={page.url.pathname === '/settings'} aria-current={page.url.pathname === '/settings' ? 'page' : undefined}><Icon name="settings" size={21} /><span>settings</span></a>

@@ -20,7 +20,10 @@
 		if (from && dialog?.open) dialog.close();
 	});
 
-	export function open() { dialog.showModal(); }
+	export function open(trigger: HTMLButtonElement) {
+		trigger.focus({ preventScroll: true });
+		dialog.showModal();
+	}
 
 	async function signOut() {
 		dialog.close();
