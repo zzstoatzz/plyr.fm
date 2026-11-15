@@ -1,4 +1,4 @@
-export type CatalogScope = 'tracks' | 'albums' | 'profile';
+export type CatalogScope = 'tracks' | 'collections' | 'likes' | 'profile';
 
 const revisions = new Map<string, Partial<Record<CatalogScope, number>>>();
 let sequence = 0;

@@ -28,7 +28,7 @@ const fail = (route, message) => route.fulfill({ status: 503, json: { error: { m
 
 async function verify(browser, origin, width, scheme) {
   const phone = width === 390;
-  const { context, page, errors } = await setup(browser, width, phone ? 844 : 960, { phone, scheme, scale: phone ? 1.2 : 1 });
+  const { context, page, errors } = await setup(browser, width, phone ? 844 : 960, { phone, scheme, scale: phone && scheme === 'dark' ? 2 : 1 });
   const reads = { tracks: 0, albums: 0, metrics: 0, playback: 0 };
   let whitespace = false;
   try {
@@ -126,7 +126,7 @@ async function verify(browser, origin, width, scheme) {
     await page.waitForURL(origin + artistPath + '?tab=albums');
     await panel('albums').getByRole('link', { name: /A second album/ }).waitFor();
     assert.deepEqual({ tracks: reads.tracks, albums: reads.albums }, { tracks: 2, albums: 3 }, 'Back restores the section and its loaded pages');
-    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'the catalog fits the viewport');
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'the catalog fits the viewport');
     await continuity();
 
     whitespace = true;

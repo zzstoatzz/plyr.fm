@@ -5,9 +5,9 @@ import { api } from '$lib/api';
 function createArtistCatalog(did: string) {
 	return {
 		tracks: createCatalogPages(cursor => api.tracks({ artist_did: did, limit: 50, cursor }), () => catalogRevision(did, 'tracks')),
-		albums: createCatalogPages(cursor => api.albums(did, { limit: 30, cursor }), () => catalogRevision(did, 'albums')),
-		playlists: createCatalogPages(cursor => api.playlists({ owner_did: did, limit: 30, cursor }), () => 0),
-		likes: createCatalogPages(cursor => api.actorLikes(did, { limit: 50, cursor }), () => 0)
+		albums: createCatalogPages(cursor => api.albums(did, { limit: 30, cursor }), () => catalogRevision(did, 'collections')),
+		playlists: createCatalogPages(cursor => api.playlists({ owner_did: did, limit: 30, cursor }), () => catalogRevision(did, 'collections')),
+		likes: createCatalogPages(cursor => api.actorLikes(did, { limit: 50, cursor }), () => catalogRevision(did, 'likes'))
 	};
 }
 

@@ -164,22 +164,25 @@
 </article>
 
 <style>
-	.artist { max-width: 69rem; display: grid; gap: 1.25rem; }
+	.artist { max-width: 69rem; display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.25rem; }
 	header { display: grid; grid-template-columns: clamp(5rem, 22vw, 9rem) minmax(0, 1fr); gap: clamp(1rem, 4vw, 2rem); align-items: center; }
 	.avatar { border-radius: 50%; overflow: hidden; }
 	.identity { display: grid; gap: 0.38rem; overflow-wrap: anywhere; }
 	h1 { font-size: clamp(1.58rem, 5vw, 3rem); line-height: 1.13; letter-spacing: -0.035em; }
 	.identity p, .bio, small { color: var(--muted); }
 	.bio { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 48rem; }
-	.actions { display: flex; align-items: center; gap: 0.75rem; }
+	.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; }
 	.actions .primary-button { width: 4.25rem; height: 4.25rem; box-shadow: 0 0.45rem 1.4rem color-mix(in srgb, var(--accent) 22%, transparent); }
-	.tabs { display: flex; gap: clamp(0.3rem, 2.5vw, 1.25rem); border-bottom: 1px solid var(--line); }
+	.tabs { display: flex; flex-wrap: wrap; gap: clamp(0.3rem, 2.5vw, 1.25rem); border-bottom: 1px solid var(--line); }
 	.tabs button { min-height: 2.75rem; border: 0; border-bottom: 2px solid transparent; padding-inline: 0.55rem; background: none; color: var(--muted); }
 	.tabs [aria-selected="true"] { color: var(--text); font-weight: 700; border-bottom-color: var(--accent); }
 	.panel { display: grid; gap: 0.55rem; min-width: 0; }
 	.panel :global(.track), .collection { background: var(--surface); border: 1px solid var(--line); border-radius: 0.75rem; padding: 0.55rem; }
 	.panel[hidden] { display: none; }
-	.collection { display: grid; grid-template-columns: 3.25rem minmax(0, 1fr) auto; align-items: center; gap: 0.75rem; overflow-wrap: anywhere; }
+	.collection { display: grid; grid-template-columns: min(3.25rem, 16vw) minmax(0, 1fr) auto; align-items: center; gap: 0.75rem; overflow-wrap: anywhere; }
+	@media (max-width: 520px) {
+		.panel :global(.track) { grid-template-columns: min(3.25rem, 16vw) minmax(0, 1fr) auto; }
+	}
 	.art { border-radius: 0.44rem; }
 	small { display: block; }
 </style>

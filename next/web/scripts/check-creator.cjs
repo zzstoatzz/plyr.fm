@@ -55,6 +55,7 @@ async function run(browser, accounts, width, theme, mp3) {
   page.on('pageerror', error => errors.push(error.message));
   let initialError = true, moreError = true, profileReadError = false, profileWrites = 0;
   let trackMissing = false;
+  let projectedLike = false;
   const albumRequests = [];
   await context.route('https://typeahead.waow.tech/**', route => route.fulfill({ json: { actors: [] } }));
   await context.route('https://jams.next.plyr.fm/**', route => route.fulfill({ status: 403, json: {} }));
@@ -78,8 +79,15 @@ async function run(browser, accounts, width, theme, mp3) {
       return route.fulfill({ json: list([album, emptyAlbum]) });
     }
     if (url.pathname === `/v1/tracks/${id}`) return route.fulfill({ json: row(25) });
+    if (decodeURIComponent(url.pathname) === `/v1/actors/${did}/likes`) return route.fulfill({ json: list(projectedLike ? [row(25)] : []) });
     if (url.pathname === '/v1/records/await') {
       const address = url.searchParams.get('uri');
+      if (address?.startsWith(`at://${did}/fm.plyr.like/`)) {
+        const like = await pdsRecord('fm.plyr.like', address.split('/').at(-1));
+        assert.equal(like.value.subject.uri, uri);
+        assert.equal(url.searchParams.get('cid'), like.cid);
+        projectedLike = true;
+      }
       if (address === uri) {
         const record = await pdsRecord(collection, rkey);
         if (record.error === 'RecordNotFound') { trackMissing = true; return route.fulfill({ json: { status: 'deleted' } }); }
@@ -195,6 +203,29 @@ async function run(browser, accounts, width, theme, mp3) {
     await capture('profile-saved');
 
     await main.getByRole('link', { name: 'back to your music' }).click();
+    await main.getByRole('link', { name: /view your public profile/ }).click();
+    await main.getByRole('link', { name: 'edit profile', exact: true }).waitFor();
+    await main.getByRole('tab', { name: 'albums' }).click();
+    await main.getByRole('link', { name: 'new album', exact: true }).waitFor();
+    await main.getByRole('link', { name: 'draft album 0 tracks', exact: true }).waitFor();
+    await capture('artist-owner');
+    await main.getByRole('tab', { name: 'likes' }).click();
+    await main.getByText('no likes yet.', { exact: true }).waitFor();
+    await main.getByRole('tab', { name: 'tracks' }).click();
+    await main.getByRole('button', { name: 'more tracks' }).click();
+    await main.getByRole('link', { name: 'recording after edit', exact: true }).click();
+    const indexedLike = page.waitForResponse(response => {
+      const url = new URL(response.url());
+      return url.pathname === '/v1/records/await' && url.searchParams.get('uri')?.startsWith(`at://${did}/fm.plyr.like/`) && response.ok();
+    });
+    await main.getByRole('button', { name: 'Like track', exact: true }).click();
+    await indexedLike;
+    await main.getByRole('button', { name: 'Unlike track', exact: true }).waitFor();
+    await page.goBack();
+    await main.getByRole('tab', { name: 'likes' }).click();
+    await main.getByRole('tabpanel', { name: 'likes' }).getByRole('link', { name: 'recording after edit', exact: true }).waitFor();
+    await page.goBack();
+    await page.waitForURL(origin + '/portal');
     await main.getByRole('link', { name: 'edit recording after edit' }).click();
     await main.getByRole('button', { name: 'delete track', exact: true }).click();
     await main.getByRole('button', { name: 'cancel delete' }).click();
@@ -204,12 +235,6 @@ async function run(browser, accounts, width, theme, mp3) {
     await page.waitForURL(origin + '/portal');
     await main.getByRole('link', { name: 'edit recording after edit' }).waitFor({ state: 'detached' });
     assert.equal((await pdsRecord(collection, rkey)).error, 'RecordNotFound');
-    await main.getByRole('link', { name: /view your public profile/ }).click();
-    await main.getByRole('link', { name: 'edit profile', exact: true }).waitFor();
-    await main.getByRole('tab', { name: 'albums' }).click();
-    await main.getByRole('link', { name: 'new album', exact: true }).waitFor();
-    await main.getByRole('link', { name: 'draft album 0 tracks', exact: true }).waitFor();
-    await capture('artist-owner');
     assert.deepEqual(errors, []);
     console.log(`creator portal, paging, track/profile edits and deletion passed at ${width}px (${theme})`);
   } finally { await context.close(); }

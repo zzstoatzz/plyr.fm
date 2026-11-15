@@ -14,6 +14,7 @@ import { MAX_AUDIO_BYTES } from './publishing/track-audio';
 import { trackEditor } from './publishing/track-pds';
 import { assertPublicUploadRecord } from './publishing/upload-model';
 import type { MediaFile } from './publishing/private-music';
+import type { CatalogScope } from './catalog/changes';
 
 export type { MediaFile } from './publishing/private-music';
 
@@ -80,8 +81,12 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
   createStorage: CreateStorage;
   getAuth: () => PdsSession;
   newRkey: () => string;
-  catalogChanged: (did: string, scope: 'tracks' | 'albums' | 'profile') => void;
+  catalogChanged: (did: string, scope: CatalogScope) => void;
 }) {
+	const catalogScopes: Record<string, CatalogScope> = {
+		[NSID.track]: 'tracks', [NSID.list]: 'collections', [NSID.like]: 'likes', [NSID.profile]: 'profile'
+	};
+
 	function session() {
 		if (!auth.rpc || !auth.did) throw new Error('sign in first');
 		return { rpc: auth.rpc, did: auth.did as `did:${string}:${string}` };
@@ -137,7 +142,7 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 			const status = (await api.awaitRecord(uri, cid)).status;
 			if (status === 'indexed' || status === 'deleted' || status === 'absent') {
 				const [, owner, collection] = /^at:\/\/([^/]+)\/([^/]+)\//.exec(uri) ?? [];
-				const scope = collection === NSID.track ? 'tracks' : collection === NSID.list ? 'albums' : collection === NSID.profile ? 'profile' : null;
+				const scope = Object.hasOwn(catalogScopes, collection) ? catalogScopes[collection] : undefined;
 				if (owner && scope) catalogChanged(owner, scope);
 			}
 			return status;
@@ -199,7 +204,8 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 			})
 		).catch((error: unknown) => { viewerLikes.delete(rpc); throw error; });
 		likes.set(subject.uri, { uri: res.uri, cid: res.cid, rkey: ownedRkey(res.uri, did, NSID.like), subject });
-		return waitForIndex ? settle(res.uri, res.cid) : 'pending';
+		const indexed = settle(res.uri, res.cid);
+		return waitForIndex ? indexed : 'pending';
 	}
 
 	async function unlike(track: Track, { waitForIndex = true }: { waitForIndex?: boolean } = {}): Promise<AwaitStatus> {
@@ -213,7 +219,8 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 			})
 		).catch((error: unknown) => { viewerLikes.delete(rpc); throw error; });
 		likes.delete(track.record.uri);
-		return waitForIndex ? settle(existing.uri) : 'pending';
+		const indexed = settle(existing.uri);
+		return waitForIndex ? indexed : 'pending';
 	}
 
 	function newCommentAttempt(): CommentAttempt {

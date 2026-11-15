@@ -167,7 +167,7 @@ function useOwnerOnlyTracks(did: string, active: boolean) {
 
 function OwnedAlbums({ did, active, tabs }: { did: string; active: boolean; tabs: ReactNode }) {
   const load = useCallback((cursor?: string) => api.albums(did, { cursor, limit: 25 }), [did]);
-  const albums = usePortalPages<ListSummary>(did, 'albums', load, active);
+  const albums = usePortalPages<ListSummary>(did, 'collections', load, active);
   return <View style={{ gap: 8 }}>
     {tabs && <CatalogToolbar>{tabs}</CatalogToolbar>}
     {albums.data.map(album => <Row key={album.record.uri} title={album.metadata.name || 'untitled album'} image={collectionArtwork(album)}
