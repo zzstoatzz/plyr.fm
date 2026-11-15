@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { tabForKey } from '../src/behaviors/tabs.ts';
+import { tabForKey } from '../src/catalog/tabs.ts';
 
 const sections = ['tracks', 'albums', 'playlists', 'likes'] as const;
 
