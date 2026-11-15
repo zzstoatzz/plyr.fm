@@ -1,19 +1,11 @@
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { chromium } = require('playwright');
-const { tracks, setup, serve, close } = require('./fixture-catalog.cjs');
+const { atlas, tracks, setup, serve, close } = require('./fixture-catalog.cjs');
 
 const output = process.env.SCREENS_OUTPUT || '/tmp/plyr-svelte-atlas';
 const [track] = tracks;
-const point = {
-  id: 19, x: 0, y: 0, title: track.metadata.title, artist: 'replyomatic', handle: 'sketches.test',
-  thumb: '', plays: 9, likes: 3, clusterCoarse: 0, clusterFine: 0, core: true
-};
-const cluster = { id: 0, label: 'field recordings', cx: 0, cy: 0, count: 1 };
-const atlas = {
-  points: [point], artists: [], clusters: { coarse: [cluster], fine: [{ ...cluster, parent: 0 }] },
-  meta: { generatedAt: '2026-11-14T00:00:00Z', nTracks: 1 }
-};
+const [point] = atlas.points;
 
 async function verify(browser, origin, width) {
   const phone = width === 390;
