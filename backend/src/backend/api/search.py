@@ -337,7 +337,7 @@ async def _search_tags(
     track_count_subq = (
         select(TrackTag.tag_id, func.count(TrackTag.track_id).label("track_count"))
         .join(Track, Track.id == TrackTag.track_id)
-        .where(Track.publicly_visible)
+        .where(Track.in_search)
         .group_by(TrackTag.tag_id)
         .subquery()
     )

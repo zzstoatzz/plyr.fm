@@ -87,7 +87,7 @@ async def get_tracks_by_tag(
         .join(TrackTag, Track.id == TrackTag.track_id)
         .where(TrackTag.tag_id == tag.id)
         # private media isn't tag-discoverable by anyone but its owner
-        .where(await visible_filter(session))
+        .where(await visible_filter(session), ~Track.is_authored_unlisted)
         .options(selectinload(Track.artist), selectinload(Track.album_rel))
         .order_by(Track.created_at.desc())
     )
@@ -155,7 +155,7 @@ async def list_tags(
         )
         .outerjoin(TrackTag, Tag.id == TrackTag.tag_id)
         .outerjoin(Track, TrackTag.track_id == Track.id)
-        .where(Track.publicly_visible)
+        .where(Track.in_search)
         .group_by(Tag.id, Tag.name)
         .order_by(func.coalesce(func.sum(Track.play_count), 0).desc(), Tag.name)
         .limit(limit)
