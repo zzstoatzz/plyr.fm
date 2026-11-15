@@ -16,6 +16,14 @@ async function screen(browser, phone, scheme) {
     await page.screenshot({ path: path.join(output, `${width}-${scheme}-${name}.png`) });
   };
   try {
+    const featuredTracks = [tracks[0], tracks[1], {
+      ...tracks[2],
+      artist: { ...tracks[2].artist, did: 'did:plc:otherartist', profile: { ...tracks[2].artist.profile, display_name: 'another artist' } }
+    }];
+    await page.route('https://api.next.plyr.fm/v1/charts/tracks?**', route => {
+      if (new URL(route.request().url()).searchParams.get('period') !== 'all_time') return route.fallback();
+      return route.fulfill({ json: { data: featuredTracks.map(track => ({ track })) } });
+    });
     const commentsRequests = [];
     page.on('request', request => {
       if (new URL(request.url()).pathname.endsWith('/comments')) commentsRequests.push(request);
@@ -23,6 +31,12 @@ async function screen(browser, phone, scheme) {
     await page.goto(origin);
     await page.getByTestId('home-track-row').first().waitFor();
     await page.getByTestId('home-chart').waitFor();
+    const featured = page.getByTestId('home-featured');
+    const artistPath = await featured.getByRole('link').getAttribute('href');
+    const expectedCovers = featuredTracks.filter(track => artistPath === '/u/' + track.artist.did).map(track => track.media.artwork.url);
+    assert.ok(expectedCovers.length > 0, 'the spotlight selected a fixture artist');
+    assert.deepEqual(await featured.locator('img').evaluateAll(images => images.map(image => image.src)), expectedCovers,
+      'the artist spotlight only uses covers from the selected artist');
     await capture('home');
     if (phone) {
       const links = page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link');
