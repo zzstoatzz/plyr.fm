@@ -6,7 +6,7 @@ export const load: PageLoad = ({ url }) => {
 	return {
 		tags,
 		latest: api.tracks({ limit: 24, tag: tags }),
-		chart: api.chart('month', 10).then(value => value.data, () => []),
+		chart: api.chart('month', 10).then(value => value.data, () => null),
 		featured: api.chart('all_time', 24).then(value => value.data.map(item => item.track), () => [])
 	};
 };

@@ -15,6 +15,25 @@
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
+	const chartPeriods = ['month', 'week', 'day', 'all_time'] as const;
+	type ChartPeriod = typeof chartPeriods[number];
+	const chartLabels: Record<ChartPeriod, string> = {
+		month: 'past month', week: 'past week', day: 'past day', all_time: 'all time'
+	};
+	let period = $state<ChartPeriod>('month');
+	const nextPeriod = $derived(chartPeriods[(chartPeriods.indexOf(period) + 1) % chartPeriods.length]);
+	let selectedChart = $state.raw<typeof data.chart>();
+	const chart = $derived(selectedChart ?? data.chart);
+	let chartRequest: AbortController | undefined;
+	let periodButton: HTMLButtonElement;
+
+	function showChart(value: ChartPeriod) {
+		chartRequest?.abort();
+		chartRequest = new AbortController();
+		period = value;
+		selectedChart = api.chart(value, 10, chartRequest.signal).then(result => result.data, () => null);
+	}
+
 	let home: HTMLDivElement;
 	let extra: Track[] = $state.raw([]);
 	let nextCursor: string | undefined = $state();
@@ -33,18 +52,19 @@
 		loading = false;
 		error = '';
 	});
-	onDestroy(() => pending?.abort());
+	onDestroy(() => { pending?.abort(); chartRequest?.abort(); });
 
-	export const snapshot: Snapshot<{ y: number; tracks: Track[]; cursor?: string }> = {
-		capture: () => ({ y: window.scrollY, tracks: extra, cursor: nextCursor }),
-		restore: ({ y, tracks, cursor }) => {
+	export const snapshot: Snapshot<{ y: number; tracks: Track[]; cursor?: string; period?: ChartPeriod }> = {
+		capture: () => ({ y: window.scrollY, tracks: extra, cursor: nextCursor, period }),
+		restore: ({ y, tracks, cursor, period: savedPeriod }) => {
+			if (savedPeriod && savedPeriod !== period) showChart(savedPeriod);
 			const position = window.scrollY;
 			const request = data.latest;
 			restoring = request;
 			pending?.abort();
 			pending = undefined;
 			loading = false;
-			void Promise.allSettled([request, data.chart, data.featured]).then(async ([first]) => {
+			void Promise.allSettled([request, chart, data.featured]).then(async ([first]) => {
 				await tick();
 				if (!home?.isConnected || data.latest !== request) return;
 				const firstIds = new Set(first.status === 'fulfilled' ? first.value.data.map(track => track.id) : []);
@@ -132,18 +152,33 @@
 	{/await}
 	<AtlasTile />
 	<section class="chart" data-testid="home-chart" aria-labelledby="home-top-tracks">
-		<header><h2 id="home-top-tracks">top tracks</h2><span>past month</span></header>
-		{#await data.chart}
+		<header>
+			<h2 id="home-top-tracks">top tracks</h2>
+			<button bind:this={periodButton} type="button" class="chart-period" aria-label={`top tracks period: ${chartLabels[period]}. show ${chartLabels[nextPeriod]}`} onclick={() => showChart(nextPeriod)}>
+				{chartLabels[period]} <Icon name="chevron" size={15} />
+			</button>
+		</header>
+		{#await chart}
 			<div class="chart-loading"><Loading label="loading top tracks" inline /></div>
-		{:then chart}
-			{@const tracks = chart.map(item => item.track)}
-			<ol>
-				{#each chart as item (item.track.id)}
-					<li><TrackRow track={item.track} collection={tracks} label="top tracks" /></li>
-				{:else}
-					<li class="chart-empty">no top tracks yet.</li>
-				{/each}
-			</ol>
+		{:then entries}
+			{#if entries?.length}
+				{@const tracks = entries.map(item => item.track)}
+				<ol>
+					{#each entries as item (item.track.id)}
+						<li><TrackRow track={item.track} collection={tracks} label="top tracks" /></li>
+					{/each}
+				</ol>
+			{:else if entries}
+				<p class="chart-empty" role="status">no top tracks for this period</p>
+			{:else}
+				<div class="chart-empty">
+					<p role="status">could not load top tracks</p>
+					<button type="button" class="text-button" onclick={event => {
+						if (document.activeElement === event.currentTarget) periodButton.focus({ preventScroll: true });
+						showChart(period);
+					}}>try again</button>
+				</div>
+			{/if}
 		{/await}
 	</section>
 	<section class="latest" aria-labelledby="home-latest">
@@ -195,7 +230,9 @@
 	.latest { grid-area: latest; min-width: 0; }
 	.chart { grid-area: chart; min-width: 0; }
 	.chart-loading, .chart-empty { display: grid; align-items: center; min-height: 4.75rem; color: var(--muted); }
-	.chart-empty { list-style: none; }
+	.chart-empty button { justify-self: start; }
+	.chart-period { display: inline-flex; align-items: center; justify-content: flex-end; gap: 0.2rem; min-height: 2.75rem; padding: 0; border: 0; background: none; color: var(--accent); white-space: nowrap; }
+	.chart-period:hover { text-decoration: underline; text-underline-offset: 0.2em; }
 	.latest header, .chart header { display: flex; justify-content: space-between; align-items: baseline; gap: 0.65rem; padding-bottom: 0.65rem; }
 	h2 { font-size: 1.07rem; }
 	header span, header a { color: var(--muted); font-size: 0.8rem; }
