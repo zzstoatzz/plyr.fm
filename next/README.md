@@ -64,10 +64,12 @@ bun run check:boundaries                         # check workspace imports
 (cd backend && just check)                       # appview and coordinator checks
 ```
 
-The frozen Expo build serves Next during the Svelte port (#2650). Ship urgent
-Expo web fixes from `next-expo`. Run a preview with
-`gh workflow run deploy-web-next.yml --ref next-expo -f target=preview`.
-After verifying the preview, dispatch with `target=live` to release the hotfix.
+Run the Svelte screen checks and deploy to the isolated Pages preview with
+`gh workflow run check-svelte-next.yml --ref main -f target=preview`.
+After verifying the preview, dispatch with `target=live` to update
+`next.plyr.fm`. The live run records the previous deployment ID for rollback
+in the `plyr-fm-next` Pages project. The frozen Expo release remains available
+via `gh workflow run deploy-web-next.yml --ref next-expo -f target=live`.
 Ship a Next backend change before the client change that depends on it.
 
 ## docs
