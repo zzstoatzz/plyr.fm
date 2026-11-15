@@ -20,7 +20,7 @@ function audio(format) {
   return execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1', '-f', format, 'pipe:1']);
 }
 
-async function verify(browser, accounts, width, theme, mp3, wav) {
+async function verify(browser, accounts, width, theme, mp3, wav, waitingDraftReload = false) {
   const did = accounts[handle].did;
   let loseReply = true, blobWrites = 0;
   const writes = [];
@@ -136,7 +136,7 @@ async function verify(browser, accounts, width, theme, mp3, wav) {
     await audioInput.setInputFiles({ name: 'direct.mp3', mimeType: 'audio/mpeg', buffer: mp3 });
     const cover = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aMTsAAAAASUVORK5CYII=', 'base64');
     await page.locator('input[type=file][accept^="image"]').setInputFiles({ name: 'cover.png', mimeType: 'image/png', buffer: cover });
-    await page.screenshot({ path: path.join(output, width + '-' + theme + '.png'), fullPage: true });
+    if (!waitingDraftReload) await page.screenshot({ path: path.join(output, width + '-' + theme + '.png'), fullPage: true });
     await submit.click();
     await page.getByText('"direct from Svelte" uploaded', { exact: false }).waitFor({ timeout: 5000 }).catch(async failure => {
       console.error(await page.locator('main').innerText());
@@ -166,6 +166,54 @@ async function verify(browser, accounts, width, theme, mp3, wav) {
     await submit.click();
     await partRequest;
     await partStarted.promise;
+    if (waitingDraftReload) {
+      const waitingTitle = 'queued through reload';
+      const uploadForm = page.locator('form').filter({ has: title });
+      await uploadForm.locator('input[type=file][accept^="audio"]').setInputFiles({ name: 'waiting.mp3', mimeType: 'audio/mpeg', buffer: mp3 });
+      await title.fill(waitingTitle);
+      await uploadForm.getByRole('button', { name: 'add album, description or tags' }).click();
+      await uploadForm.getByRole('textbox', { name: 'description', exact: true }).fill('liner notes that survive a reload');
+      await page.evaluate(() => {
+        const add = IDBObjectStore.prototype.add;
+        window.restoreDraftInsert = () => { IDBObjectStore.prototype.add = add; };
+        IDBObjectStore.prototype.add = function (...args) {
+          if (this.name === 'drafts') throw new DOMException('queued draft storage is full', 'QuotaExceededError');
+          return add.apply(this, args);
+        };
+      });
+      await uploadForm.getByRole('button', { name: 'upload', exact: true }).click();
+      await uploadForm.getByRole('alert').getByText('queued draft storage is full').waitFor();
+      assert.equal(await title.inputValue(), waitingTitle);
+      assert.equal(await uploadForm.getByRole('textbox', { name: 'description', exact: true }).inputValue(), 'liner notes that survive a reload');
+      await page.evaluate(() => window.restoreDraftInsert());
+      await uploadForm.getByRole('button', { name: 'upload', exact: true }).click();
+      await page.getByText(`"${waitingTitle}" is next…`).waitFor({ timeout: 5000 });
+      assert.equal(writes.length, 1, 'the waiting upload has no PDS record yet');
+
+      await page.reload();
+      const draft = page.locator('.recovery-card').filter({ has: page.getByRole('heading', { name: waitingTitle, exact: true }) });
+      await draft.getByText('choose waiting.mp3 to resume this upload.').waitFor({ timeout: 5000 });
+      assert.equal(writes.length, 1, 'reload does not publish the waiting upload');
+      const resume = draft.getByRole('button', { name: 'resume queued upload' });
+      assert.ok(await resume.isDisabled());
+      await draft.getByLabel('audio').setInputFiles({ name: 'wrong.mp3', mimeType: 'audio/mpeg', buffer: Buffer.alloc(17) });
+      await resume.click();
+      await draft.getByRole('alert').getByText('choose the original audio file.').waitFor();
+      assert.equal(writes.length, 1, 'mismatched input does not publish');
+      await draft.getByLabel('audio').setInputFiles({ name: 'waiting.mp3', mimeType: 'audio/mpeg', buffer: mp3 });
+      await page.screenshot({ path: path.join(output, `queued-draft-recovery-${width}-${theme}.png`) });
+      await resume.click();
+      await page.getByText(`"${waitingTitle}" uploaded`).waitFor({ timeout: 5000 });
+      assert.equal(writes.length, 2, 'restored draft publishes only once');
+      const { value: restored } = await getRecord(`at://${did}/${collection}/${writes[1].rkey}`);
+      assert.equal(restored.title, waitingTitle);
+      assert.equal(restored.description, 'liner notes that survive a reload');
+      await page.reload();
+      await page.getByRole('textbox', { name: 'title', exact: true }).waitFor();
+      assert.equal(await draft.count(), 0, 'published draft is gone on reload');
+      console.log(`a waiting upload survives reload and publishes once at ${width}px (${theme})`);
+      return;
+    }
     await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'settings' }).click();
     await page.getByRole('heading', { name: 'settings', exact: true }).waitFor();
     const progress = page.getByRole('link', { name: 'uploading 1', exact: true });
@@ -209,8 +257,12 @@ async function verify(browser, accounts, width, theme, mp3, wav) {
   const wav = audio('wav');
   const browser = await chromium.launch();
   try {
-    for (const width of [390, 1280]) for (const theme of ['light', 'dark']) {
-      await verify(browser, accounts, width, theme, mp3, wav);
+    if (process.env.WAITING_DRAFT_RELOAD !== '1') {
+      for (const width of [390, 1280]) for (const theme of ['light', 'dark']) {
+        await verify(browser, accounts, width, theme, mp3, wav);
+      }
     }
+    await verify(browser, accounts, 390, 'light', mp3, wav, true);
+    await verify(browser, accounts, 1280, 'dark', mp3, wav, true);
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

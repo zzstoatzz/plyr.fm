@@ -7,6 +7,7 @@ import type { RepoRpc } from '../src/publishing/repo-rpc.ts';
 import type { CreateOperation } from '../src/publishing/create-operation.ts';
 import { UPLOAD_PART_BYTES, type UploadOperation, type UploadStatus } from '../src/publishing/upload-model.ts';
 import { createUploadQueue } from '../src/publishing/upload-queue.ts';
+import type { QueuedUploadDraft } from '../src/publishing/queued-upload-draft.ts';
 import type { UploadTransport } from '../src/publishing/upload-transport.ts';
 
 const owner = 'did:plc:fixture';
@@ -27,6 +28,7 @@ function fixture(statusGate?: Promise<void>) {
   let tags = 0;
   let published = false;
   let saved: UploadOperation[] = [];
+  const drafts = new Map<string, QueuedUploadDraft>();
   const status = (): UploadStatus => ({
     state: published ? 'published' : 'complete', recoveryRequired: false, reservedBytes: 1,
     partSizeBytes: UPLOAD_PART_BYTES, partCount: 1, receivedParts: [], reservedDigests: [],
@@ -51,6 +53,11 @@ function fixture(statusGate?: Promise<void>) {
       put: async value => { saved = [value]; },
       delete: async () => { saved = []; },
     },
+    queuedDrafts: {
+      load: async account => [...drafts.values()].filter(draft => draft.owner === account),
+      put: async draft => { drafts.set(draft.id, draft); },
+      take: async draft => drafts.delete(draft.id),
+    },
     createUploadTransport: () => ({
       start: async () => status(),
       status: async () => { await statusGate; return status(); },
@@ -70,12 +77,12 @@ function fixture(statusGate?: Promise<void>) {
 test('failed jobs retain each editable input when more than four attempts fail', async () => {
   const { model } = fixture();
   const file = { name: 'fixture.mp3', type: 'audio/mpeg', size: 1, arrayBuffer: async () => new ArrayBuffer(1) };
-  for (let index = 0; index < 6; index++) model.add({ file, artist: 'fixture', title: `Take ${index}` });
+  for (let index = 0; index < 6; index++) await model.add({ file, artist: 'fixture', title: `Take ${index}` });
   await setImmediate();
   assert.deepEqual(model.snapshot().map(job => job.phase), Array(6).fill('failed'));
   const oldest = model.snapshot()[0];
   assert.equal(model.editable(oldest.id), true);
-  assert.deepEqual(model.takeBack(oldest.id), { file, artist: 'fixture', title: 'Take 0' });
+  assert.deepEqual(await model.takeBack(oldest.id), { file, artist: 'fixture', title: 'Take 0' });
 });
 
 test('publication stays recoverable until the worker confirms it, then cleans up the same upload', async context => {

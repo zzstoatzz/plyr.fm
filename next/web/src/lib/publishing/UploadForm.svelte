@@ -3,6 +3,7 @@
   import { trackIdFromUri } from '@plyr/next-core/api';
   import type { CreateOperation } from '@plyr/next-core/publishing/create-operation';
   import type { UploadOperation } from '@plyr/next-core/publishing/upload-model';
+  import type { QueuedUploadDraft } from '@plyr/next-core/publishing/queued-upload-draft';
   import { canonicalAudioType, jobLine, needsPlyrStorage, uploadInProgress } from '@plyr/next-core/publishing/upload-queue-model';
   import { normalizeTrackTags } from '@plyr/next-core/publishing/track-tags';
   import { creditName } from '@plyr/next-core/publishing/credit-name';
@@ -10,11 +11,12 @@
   import { auth } from '$lib/auth';
   import { coverImage } from '$lib/media/cover-image';
   import { createPds } from '$lib/pds';
-  import { uploadStorage } from '$lib/storage/upload-storage';
+  import { queuedDrafts, uploadStorage } from '$lib/storage/upload-storage';
   import { uploadQueue } from '$lib/upload';
   import Loading from '$lib/ui/Loading.svelte';
   import CreateRecovery from './CreateRecovery.svelte';
   import LargeUpload from './LargeUpload.svelte';
+  import QueuedUpload from './QueuedUpload.svelte';
 
   let { account }: { account: ReturnType<typeof auth.getAuth> } = $props();
 
@@ -46,13 +48,18 @@
   let audioProblem = $state('');
   let coverProblem = $state('');
   let formProblem = $state('');
+  let draftProblem = $state('');
+  let submitting = $state(false);
   let recoveryProblem = $state('');
+  let queuedProblem = $state('');
   let loading = $state(true);
   let pending = $state.raw<CreateOperation[]>([]);
   let transfers = $state.raw<UploadOperation[]>([]);
+  let drafts = $state.raw<QueuedUploadDraft[]>([]);
   let jobs = $state.raw(uploadQueue.snapshot());
   let active = $derived.by(() => { jobs; return uploadQueue.busy(); });
   let transfersToRecover = $derived(transfers.filter(operation => !active.uploadIds.has(operation.uploadId)));
+  let draftsToRecover = $derived(drafts.filter(draft => !jobs.some(job => job.id === draft.id)));
   let creationsToRecover = $derived(pending.filter(operation => !active.rkeys.has(operation.rkey) && !transfers.some(transfer => transfer.rkey === operation.rkey)));
   let creationBlocksUpload = $derived(creationsToRecover.some(operation => !operation.archived));
   let service = $derived(!!audio && needsPlyrStorage(audio));
@@ -88,7 +95,7 @@
       reattach = !!(title || details);
       consent = localStorage.getItem(consentKey) === 'yes';
       autoTag = localStorage.getItem(autoTagKey) === 'yes';
-    } catch {}
+    } catch { draftProblem = 'could not restore your draft on this device.'; }
     hydrated = true;
     if (owner) void api.artist(owner).then(profile => { if (current()) profileName = creditName(profile.display_name); }, () => {});
 
@@ -96,9 +103,10 @@
     const unsubscribe = uploadQueue.subscribe(() => {
       jobs = uploadQueue.snapshot();
       const signature = jobs.filter(job => !uploadInProgress(job.phase)).map(job => job.id).join();
-      if (signature !== finished) { finished = signature; void refresh(); }
+      if (signature !== finished) { finished = signature; void refresh(); void refreshDrafts(); }
     });
     void refresh();
+    void refreshDrafts();
     return () => { live = false; unsubscribe(); };
   });
 
@@ -108,6 +116,9 @@
       if (title || album || description || tags) {
         localStorage.setItem(draftKey, JSON.stringify({ title, album, description, tags, named: !!title && title === autoTitle }));
       } else localStorage.removeItem(draftKey);
+      draftProblem = '';
+    } catch { draftProblem = 'changes to this draft could not be saved on this device.'; }
+    try {
       if (consent) localStorage.setItem(consentKey, 'yes');
       else localStorage.removeItem(consentKey);
       if (autoTag) localStorage.setItem(autoTagKey, 'yes');
@@ -129,6 +140,21 @@
       if (current() && version === refreshVersion) recoveryProblem = 'could not load upload recovery. try again.';
     } finally {
       if (current() && version === refreshVersion) loading = false;
+    }
+  }
+
+  let draftVersion = 0;
+  async function refreshDrafts() {
+    if (!owner || !current()) return;
+    const version = ++draftVersion;
+    try {
+      const saved = await queuedDrafts.load(owner);
+      if (current() && version === draftVersion) {
+        drafts = saved;
+        queuedProblem = '';
+      }
+    } catch {
+      if (current() && version === draftVersion) queuedProblem = 'could not load queued uploads. try again.';
     }
   }
 
@@ -169,10 +195,10 @@
     }
   }
 
-  function editAgain(id: string) {
+  async function editAgain(id: string) {
     if (!current() || imageBusy) return;
-    const input = uploadQueue.takeBack(id);
-    if (!input || !(input.file instanceof File)) return;
+    const input = await uploadQueue.takeBack(id).catch(() => { formProblem = 'could not reopen the upload. try again.'; });
+    if (!current() || !input || !(input.file instanceof File)) return;
     audio = input.file;
     cover = input.artwork instanceof File ? input.artwork : undefined;
     title = input.title;
@@ -188,11 +214,13 @@
     coverProblem = '';
   }
 
-  function upload(event: SubmitEvent) {
+  async function upload(event: SubmitEvent) {
     event.preventDefault();
-    if (!current() || !audio || !title.trim() || !artist || tagProblem || imageBusy || loading || recoveryProblem || creationBlocksUpload || (service && (!consent || !account.uploadStorage))) return;
+    if (submitting || !current() || !audio || !title.trim() || !artist || tagProblem || imageBusy || loading || recoveryProblem || creationBlocksUpload || (service && (!consent || !account.uploadStorage))) return;
+    submitting = true;
     try {
-      uploadQueue.add({ file: audio, artwork: cover, title, artist, album, description, tags: tags.trim() ? tags.split('\n') : undefined, autoTag });
+      await uploadQueue.add({ file: audio, artwork: cover, title, artist, album, description, tags: tags.trim() ? tags.split('\n') : undefined, autoTag });
+      if (!current()) return;
       audio = undefined;
       cover = undefined;
       if (audioInput) audioInput.value = '';
@@ -201,7 +229,7 @@
       details = false;
     } catch (failure) {
       formProblem = message(failure, 'could not start the upload.');
-    }
+    } finally { submitting = false; }
   }
 </script>
 
@@ -211,11 +239,18 @@
       <li>
         {jobLine(job)}
         {#if job.phase === 'done' && job.uri}<a class="text-button" href={`/track/${trackIdFromUri(job.uri)}`}>view track</a>{/if}
-        {#if job.phase === 'failed' && uploadQueue.editable(job.id)}<button class="text-button" onclick={() => editAgain(job.id)} disabled={imageBusy}>edit and try again</button>{/if}
+        {#if job.phase === 'failed' && uploadQueue.editable(job.id)}<button class="text-button" onclick={() => editAgain(job.id)} disabled={imageBusy || submitting}>edit and try again</button>{/if}
       </li>
     {/each}
   </ul>
 {/if}
+{#if queuedProblem}
+  <p role="alert">{queuedProblem}</p>
+  <button class="text-button" onclick={refreshDrafts}>retry queued uploads</button>
+{/if}
+{#each draftsToRecover as draft (draft.id)}
+  <QueuedUpload {draft} refresh={refreshDrafts} />
+{/each}
 
 {#if loading}<Loading label="checking for earlier uploads" inline />{/if}
 {#if recoveryProblem}
@@ -237,7 +272,7 @@
   </details>
 {/if}
 
-<form onsubmit={upload}>
+<form onsubmit={upload} inert={submitting}>
   <label class="file-field">
     <strong>audio</strong>
     <span class="subtle">mp3, wav, flac, aiff, ogg, opus, m4a or aac · up to 1.5 GiB</span>
@@ -275,8 +310,9 @@
     <button type="button" class="text-button" onclick={() => { details = true; }}>add album, description or tags</button>
   {/if}
   <label class="check"><input type="checkbox" bind:checked={autoTag} /> auto-tag with recommended genres</label>
+  {#if draftProblem}<p role="alert">{draftProblem}</p>{/if}
   {#if formProblem}<p role="alert">{formProblem}</p>{/if}
-  <button class="text-button submit" type="submit" disabled={!audio || !title.trim() || !artist || !!tagProblem || imageBusy || loading || !!recoveryProblem || creationBlocksUpload || (service && (!consent || !account.uploadStorage))}>upload</button>
+  <button class="text-button submit" type="submit" disabled={submitting || !audio || !title.trim() || !artist || !!tagProblem || imageBusy || loading || !!recoveryProblem || creationBlocksUpload || (service && (!consent || !account.uploadStorage))}>upload</button>
   {#if artist}<p class="subtle">posts to your profile as {artist}. you can keep browsing while it uploads.</p>{/if}
 </form>
 

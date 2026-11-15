@@ -1,6 +1,7 @@
 import { createMMKV } from 'react-native-mmkv';
 import { sameRecord } from '@plyr/next-core/publishing/create-operation';
 import { uploadOperation, type UploadStorage } from '@plyr/next-core/publishing/upload-model';
+import { queuedUploadKey, readQueuedUploadDraft, type QueuedUploadDrafts } from '@plyr/next-core/publishing/queued-upload-draft';
 const storage = createMMKV({ id: 'plyr-next-uploads' });
 export const uploadStorage: UploadStorage = {
   async load(owner) {
@@ -20,4 +21,22 @@ export const uploadStorage: UploadStorage = {
     if (storage.getString(key) !== value) throw new Error('could not save upload recovery.');
   },
   async delete(operation) { storage.remove(`${operation.owner}/${operation.uploadId}`); },
+};
+
+const drafts = createMMKV({ id: 'plyr-next-upload-drafts' });
+export const queuedDrafts: QueuedUploadDrafts = {
+  async load(owner) {
+    return drafts.getAllKeys().filter(key => key.startsWith(`${owner}/`))
+      .map(key => readQueuedUploadDraft(JSON.parse(drafts.getString(key) ?? 'null'), owner, key));
+  },
+  async put(draft) {
+    const key = queuedUploadKey(draft);
+    if (drafts.contains(key)) throw new Error('another queued upload uses this address.');
+    const value = JSON.stringify(draft);
+    drafts.set(key, value);
+    if (drafts.getString(key) !== value) throw new Error('could not save the queued upload.');
+  },
+  async take(draft) {
+    return drafts.remove(queuedUploadKey(draft));
+  },
 };

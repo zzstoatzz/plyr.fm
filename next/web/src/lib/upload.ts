@@ -7,7 +7,7 @@ import { uploadActivity } from './upload-activity.svelte';
 import { authConfig } from './auth-config';
 import { createPds } from './pds';
 import { fileDuration } from './media/file-duration';
-import { uploadStorage } from './storage/upload-storage';
+import { queuedDrafts, uploadStorage } from './storage/upload-storage';
 import { openUploadReader } from './storage/upload-reader';
 
 export function createUploadTransport(account: Pick<ReturnType<typeof auth.getAuth>, 'did' | 'agent' | 'uploadStorage'>,
@@ -16,7 +16,7 @@ export function createUploadTransport(account: Pick<ReturnType<typeof auth.getAu
 }
 
 export const uploadQueue = createUploadQueue({
-  getAuth: auth.getAuth, createPds, uploadStorage, createUploadTransport, openUploadReader,
+  getAuth: auth.getAuth, createPds, uploadStorage, queuedDrafts, createUploadTransport, openUploadReader,
   sendParts: transferParts,
   measureAudioDuration: file => file instanceof Blob ? fileDuration(file) : Promise.resolve(undefined),
   randomUUID: () => crypto.randomUUID(),

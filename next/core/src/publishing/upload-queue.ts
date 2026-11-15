@@ -6,8 +6,9 @@ import { audioFormat, uploadPublication, type ChunkReader, type UploadOperation,
 import { processingStep, retryDelay, transient, uploadInProgress, uploadRoute, type UploadJobView } from './upload-queue-model.ts';
 import type { UploadTransport } from './upload-transport';
 import type { UploadRecoveryDisposition } from './upload-recovery';
+import { queuedUploadDraft, reattachQueuedUpload, type QueuedUploadDraft, type QueuedUploadDrafts } from './queued-upload-draft.ts';
 
-type Job = UploadJobView & { owner: Did; input?: NewTrack; file?: MediaFile; operation?: UploadOperation; rkey?: string; uploadId?: string };
+type Job = UploadJobView & { owner: Did; draft?: QueuedUploadDraft; input?: NewTrack; file?: MediaFile; operation?: UploadOperation; rkey?: string; uploadId?: string };
 type Session = Pick<Auth<unknown>, 'did' | 'agent' | 'uploadStorage'>;
 type Pds = ReturnType<typeof createPublicPds>;
 const POLL_MS = 4_000, NUDGE_MS = 20_000, ATTEMPTS = 5, KEEP_FINISHED = 4;
@@ -15,7 +16,7 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const hex = (bytes: ArrayBuffer) => Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, '0')).join('');
 
 export function createUploadQueue<Rpc extends RepoRpc>({
-  getAuth, createPds, measureAudioDuration, openUploadReader, sendParts, uploadStorage, createUploadTransport,
+  getAuth, createPds, measureAudioDuration, openUploadReader, sendParts, uploadStorage, queuedDrafts, createUploadTransport,
   applyGenreTags, randomUUID, sha256, onJob, onDismiss
 }: {
   getAuth: () => Auth<Rpc>;
@@ -24,6 +25,7 @@ export function createUploadQueue<Rpc extends RepoRpc>({
   openUploadReader: (file: MediaFile) => ChunkReader;
   sendParts: (operation: UploadOperation, reader: ChunkReader, transport: UploadTransport, hash: Parameters<typeof transferParts>[3], signal: AbortSignal, onProgress: Parameters<typeof transferParts>[5]) => Promise<UploadStatus>;
   uploadStorage: UploadStorage;
+  queuedDrafts: QueuedUploadDrafts;
   createUploadTransport: (auth: Session, operation: UploadOperation, assertCurrent: () => void, signal: AbortSignal) => UploadTransport;
   applyGenreTags: (session: () => Auth<Rpc>, uri: string) => Promise<void>;
   randomUUID: () => string;
@@ -144,10 +146,17 @@ export function createUploadQueue<Rpc extends RepoRpc>({
     const duration = input.duration ?? await measureAudioDuration(input.file).catch(() => undefined);
     const ready = { ...input, duration };
     const route = uploadRoute(input.file, duration);
+    if (route.kind === 'service' && !auth.uploadStorage) throw new Error('sign in again to allow plyr storage');
     const reservation = await pds.reserveCreate('track').catch(() => { throw new Error('finish the earlier upload first'); });
-    patch(job, { rkey: reservation.rkey });
+    session(job);
+    if (job.draft && !await queuedDrafts.take(job.draft)) {
+      job.input = undefined;
+      job.file = undefined;
+      throw new Error('this queued upload was already opened elsewhere');
+    }
+    job.draft = undefined;
+    patch(job, { phase: 'uploading', rkey: reservation.rkey });
     if (route.kind === 'pds') return () => runPds(job, ready, reservation);
-    if (!auth.uploadStorage) throw new Error('sign in again to allow plyr storage');
     const format = audioFormat(input.file.name, input.file.type, !!route.processing);
     const record = await pds.prepareTrackRecord(ready);
     const operation: UploadOperation = { ...reservation, record: { ...record, fileType: format.fileType }, uploadId: randomUUID(),
@@ -178,7 +187,6 @@ export function createUploadQueue<Rpc extends RepoRpc>({
     try {
       for (let job = jobs.find(item => item.phase === 'waiting'); job; job = jobs.find(item => item.phase === 'waiting')) {
         try {
-          patch(job, { phase: 'uploading' });
           const run = job.operation ? () => runService(job!, job!.operation!) : await prepare(job, job.input!);
           await run();
           job.input = undefined; job.file = undefined;
@@ -190,16 +198,26 @@ export function createUploadQueue<Rpc extends RepoRpc>({
     } finally { running = false; }
   }
 
+  function enqueueDraft(draft: QueuedUploadDraft, input: NewTrack) {
+    const job: Job = { id: draft.id, owner: draft.owner, title: draft.title.trim(), phase: 'waiting', draft, input, file: input.file };
+    jobs = [...jobs, job];
+    patch(job, {});
+    void drain();
+  }
+
   return {
-    /** Queue a track; the form can reset immediately. */
-    add(input: NewTrack) {
+    async add(input: NewTrack) {
       const owner = getAuth().did;
       if (!owner) throw new Error('sign in first.');
       uploadRoute(input.file);
-      const job: Job = { id: randomUUID(), owner, title: input.title.trim(), phase: 'waiting', input, file: input.file };
-      jobs = [...jobs, job];
-      patch(job, {});
-      void drain();
+      const draft = queuedUploadDraft(input, owner, randomUUID());
+      await queuedDrafts.put(draft);
+      if (getAuth().did === owner) enqueueDraft(draft, input);
+    },
+    reattach(draft: QueuedUploadDraft, file: MediaFile, artwork?: MediaFile) {
+      if (draft.owner !== getAuth().did) throw new Error('sign in to the account that queued it.');
+      if (jobs.some(job => job.id === draft.id)) return;
+      enqueueDraft(draft, reattachQueuedUpload(draft, file, artwork));
     },
     /** Pick up saved plyr-storage uploads whose bytes already arrived, e.g. after a reload. */
     async resume(owner: Did) {
@@ -226,9 +244,10 @@ export function createUploadQueue<Rpc extends RepoRpc>({
       void drain();
     },
     /** A failed upload's form entries, taken out of the queue so they can be edited and sent again. */
-    takeBack(id: string): NewTrack | undefined {
+    async takeBack(id: string): Promise<NewTrack | undefined> {
       const job = jobs.find(item => item.id === id && item.owner === getAuth().did && item.phase === 'failed' && item.input);
       if (!job) return;
+      if (job.draft) await queuedDrafts.take(job.draft);
       jobs = jobs.filter(item => item !== job);
       onDismiss?.(job);
       publish();

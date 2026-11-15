@@ -1,14 +1,17 @@
 import { sameRecord } from '@plyr/next-core/publishing/create-operation';
 import { uploadOperation, type UploadStorage } from '@plyr/next-core/publishing/upload-model';
-let database: Promise<IDBDatabase> | undefined;
-function open() {
-  return database ??= new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open('plyr-next-uploads', 1);
-    request.onupgradeneeded = () => request.result.createObjectStore('uploads');
+import { queuedUploadKey, readQueuedUploadDraft, type QueuedUploadDrafts } from '@plyr/next-core/publishing/queued-upload-draft';
+function databaseFor(name: string, store: string) {
+  let database: Promise<IDBDatabase> | undefined;
+  return () => database ??= new Promise((resolve, reject) => {
+    const request = indexedDB.open(name, 1);
+    request.onupgradeneeded = () => request.result.createObjectStore(store);
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => { database = undefined; reject(request.error); };
   });
 }
+const open = databaseFor('plyr-next-uploads', 'uploads');
+const openDrafts = databaseFor('plyr-next-upload-drafts', 'drafts');
 export const uploadStorage: UploadStorage = {
   async load(owner) {
     const database = await open();
@@ -45,6 +48,45 @@ export const uploadStorage: UploadStorage = {
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(transaction.error);
       transaction.onabort = () => reject(transaction.error ?? new Error('could not dismiss upload recovery.'));
+    });
+  },
+};
+
+export const queuedDrafts: QueuedUploadDrafts = {
+  async load(owner) {
+    const db = await openDrafts();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction('drafts');
+      const store = transaction.objectStore('drafts');
+      const range = IDBKeyRange.bound(`${owner}/`, `${owner}/\uffff`);
+      const values = store.getAll(range);
+      const keys = store.getAllKeys(range);
+      transaction.oncomplete = () => {
+        try { resolve(values.result.map((value, index) => readQueuedUploadDraft(value, owner, keys.result[index]))); }
+        catch (failure) { reject(failure); }
+      };
+      transaction.onabort = () => reject(transaction.error ?? new Error('could not load queued uploads.'));
+    });
+  },
+  async put(draft) {
+    const db = await openDrafts();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction('drafts', 'readwrite');
+      transaction.objectStore('drafts').add(draft, queuedUploadKey(draft));
+      transaction.oncomplete = () => resolve();
+      transaction.onabort = () => reject(transaction.error ?? new Error('could not save the queued upload.'));
+    });
+  },
+  async take(draft) {
+    const db = await openDrafts();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction('drafts', 'readwrite');
+      const store = transaction.objectStore('drafts');
+      const key = queuedUploadKey(draft);
+      const existing = store.getKey(key);
+      existing.onsuccess = () => { if (existing.result !== undefined) store.delete(key); };
+      transaction.oncomplete = () => resolve(existing.result !== undefined);
+      transaction.onabort = () => reject(transaction.error ?? new Error('could not open the queued upload.'));
     });
   },
 };
