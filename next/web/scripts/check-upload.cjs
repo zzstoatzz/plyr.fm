@@ -55,7 +55,7 @@ async function openSettings(page) {
   const account = nav.getByRole('button', { name: 'account', exact: true });
   if (await account.isVisible()) {
     await account.click();
-    await page.getByRole('dialog', { name: 'account', exact: true }).getByRole('link', { name: /settings queue sync/ }).click();
+    await page.getByRole('dialog', { name: 'account', exact: true }).getByRole('link', { name: 'settings', exact: true }).click();
   } else {
     await nav.getByRole('link', { name: 'settings', exact: true }).click();
   }
