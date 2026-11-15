@@ -117,11 +117,19 @@ async function keyboard(browser, phone, scheme) {
     await press('q');
     await queue.waitFor({ state: 'hidden' });
     assert.equal(new URL(page.url()).pathname, '/');
+    if (phone) {
+      await page.goForward();
+      await page.waitForURL('**/queue');
+      await queue.getByText('your queue is empty.').waitFor();
+      await press('q');
+      await page.waitForURL(origin + '/');
+    }
 
-    await opener.focus();
-    const beforeSearch = await page.evaluate(() => history.length);
+    const chartOpener = page.getByTestId('home-chart').getByRole('link', { name: tracks[0].metadata.title, exact: true });
+    await chartOpener.focus();
     await press(`${modifier}+k`);
     await page.waitForURL('**/search');
+    const searchHistoryLength = await page.evaluate(() => history.length);
     const search = page.getByRole('searchbox');
     await search.waitFor();
     assert.ok(await search.evaluate(node => document.activeElement === node));
@@ -132,10 +140,22 @@ async function keyboard(browser, phone, scheme) {
     await search.press('Enter');
     await page.waitForURL('**/search?q=q%3F');
     await page.getByText('no results for “q?”.').waitFor();
+    await page.route('https://api.next.plyr.fm/v1/charts/tracks?**', async route => {
+      if (new URL(route.request().url()).searchParams.get('period') === 'month') {
+        await new Promise(resolve => setTimeout(resolve, 1800));
+      }
+      await route.fallback();
+    }, { times: 2 });
     await press('Escape');
     await page.waitForURL(origin + '/');
-    await page.waitForFunction(node => document.activeElement === node, await opener.elementHandle());
-    assert.equal(await page.evaluate(() => history.length), beforeSearch + 1, 'search and its query share one browser entry');
+    await opener.waitFor();
+    await page.waitForFunction(node => document.activeElement === node, await chartOpener.elementHandle());
+    assert.equal(await page.evaluate(() => history.length), searchHistoryLength, 'search and its query share one browser entry');
+    await page.goForward();
+    await page.waitForURL('**/search?q=q%3F');
+    await page.getByText('no results for “q?”.').waitFor();
+    await press('Escape');
+    await page.waitForURL(origin + '/');
 
     await press(`${modifier}+Comma`);
     await page.waitForURL('**/settings');

@@ -62,8 +62,8 @@
 			</section>
 		{/if}
 	{/await}
-	<section class="chart" data-testid="home-chart">
-		<header><h2>top tracks</h2><span>past month</span></header>
+	<section class="chart" data-testid="home-chart" aria-labelledby="home-top-tracks">
+		<header><h2 id="home-top-tracks">top tracks</h2><span>past month</span></header>
 		{#await data.chart}
 			<div class="chart-loading"><Loading label="loading top tracks" inline /></div>
 		{:then chart}
@@ -77,8 +77,8 @@
 			</ol>
 		{/await}
 	</section>
-	<section class="latest">
-		<header><h2>latest</h2>{#if data.tags.length}<a href="/">clear filters</a>{:else}<span>newest first</span>{/if}</header>
+	<section class="latest" aria-labelledby="home-latest">
+		<header><h2 id="home-latest">latest</h2>{#if data.tags.length}<a href="/">clear filters</a>{:else}<span>newest first</span>{/if}</header>
 		{#await data.latest}
 			<Loading label="loading the latest tracks" />
 		{:then first}

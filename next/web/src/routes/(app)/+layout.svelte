@@ -15,7 +15,6 @@
 	let shortcutsDialog: HTMLDialogElement;
 	let searchReturn: { url: URL; restoreFocus: () => void } | undefined;
 	let cancelFocusRestore: (() => void) | undefined;
-	let queueReturn: URL | undefined;
 	const queuePage = $derived(page.url.pathname === resolve('/queue'));
 	const queuePanelOpen = $derived(player.queueOpen && !queuePage);
 	let NowPlaying = $state<typeof import('$lib/NowPlaying.svelte').default>();
@@ -44,7 +43,6 @@
 			if (searchReturn && searchReturn.url.href === to?.url.href) searchReturn.restoreFocus();
 			searchReturn = undefined;
 		}
-		if (to?.url.pathname !== resolve('/queue')) queueReturn = undefined;
 	});
 
 	onMount(() => {
@@ -63,7 +61,7 @@
 		});
 		const stop = player.mount();
 		void restoreAuth();
-		return () => { unsubscribe(); stop(); };
+		return () => { cancelFocusRestore?.(); unsubscribe(); stop(); };
 	});
 	$effect(() => {
 		// Queue snapshots, rather than the media clock, trigger checkpoint writes.
@@ -84,8 +82,11 @@
 		if (!(opener instanceof HTMLElement) || opener === document.body) return () => {};
 		const attribute = ['id', 'href', 'aria-label', 'name'].find(key => opener.getAttribute(key));
 		const value = attribute && opener.getAttribute(attribute);
-		const selector = value && `${opener.localName}[${attribute}=${CSS.escape(value)}]`;
-		const index = selector ? Array.from(document.querySelectorAll(selector)).indexOf(opener) : -1;
+		const region = opener.closest('section[aria-labelledby]')?.getAttribute('aria-labelledby');
+		const track = opener.closest('[data-track-id]')?.getAttribute('data-track-id');
+		const prefix = (region ? `section[aria-labelledby=${CSS.escape(region)}] ` : '')
+			+ (track ? `[data-track-id=${CSS.escape(track)}] ` : '');
+		const selector = value && `${prefix}${opener.localName}[${attribute}=${CSS.escape(value)}]`;
 		return () => {
 			if (opener.isConnected) {
 				opener.focus({ preventScroll: true });
@@ -93,7 +94,8 @@
 			}
 			if (!selector) return;
 			const restore = () => {
-				const target = document.querySelectorAll<HTMLElement>(selector)[index];
+				const matches = document.querySelectorAll<HTMLElement>(selector);
+				const target = matches.length === 1 ? matches[0] : undefined;
 				target?.focus({ preventScroll: true });
 				return document.activeElement === target;
 			};
@@ -102,26 +104,26 @@
 			if (!main) return;
 			// A streamed route can render the opener after navigation completes.
 			const observer = new MutationObserver(() => { if (restore()) cancel(); });
-			const timer = window.setTimeout(() => cancel(), 1500);
 			const cancel = () => {
 				observer.disconnect();
-				window.clearTimeout(timer);
 				document.removeEventListener('focusin', cancel);
+				document.removeEventListener('pointerdown', cancel);
 				cancelFocusRestore = undefined;
 			};
 			cancelFocusRestore = cancel;
 			document.addEventListener('focusin', cancel, { once: true });
+			document.addEventListener('pointerdown', cancel, { once: true });
 			observer.observe(main, { childList: true, subtree: true });
 		};
 	}
 
 	async function toggleSearch() {
-		if (page.url.pathname === resolve('/search') && searchReturn) {
-			if (page.state.shortcutSearch) history.back();
-			else await goto(searchReturn.url, { replaceState: true });
-			return;
-		}
-		if (page.url.pathname !== resolve('/search')) {
+		if (page.url.pathname === resolve('/search')) {
+			if (page.state.shortcutSearch) {
+				history.back();
+				return;
+			}
+		} else {
 			searchReturn = { url: new URL(page.url), restoreFocus: rememberFocus() };
 			await goto(resolve('/search'), { state: { shortcutSearch: true } });
 		}
@@ -132,10 +134,10 @@
 		if (queuePage) {
 			if (!fromShortcut) return;
 			player.queueOpen = false;
-			void goto(queueReturn ?? resolve('/'), { replaceState: true });
+			if (page.state.toggledQueue) history.back();
+			else void goto(resolve('/'), { replaceState: true });
 		} else if (matchMedia('(max-width: 720px)').matches) {
-			queueReturn = new URL(page.url);
-			void goto(resolve('/queue'));
+			void goto(resolve('/queue'), { state: { toggledQueue: true } });
 		} else {
 			player.queueOpen = !player.queueOpen;
 		}
@@ -150,7 +152,7 @@
 			else if (key === ',') { event.preventDefault(); void goto(resolve('/settings')); }
 			return;
 		}
-		if (key === 'escape' && page.url.pathname === resolve('/search') && searchReturn) {
+		if (key === 'escape' && page.url.pathname === resolve('/search') && page.state.shortcutSearch) {
 			event.preventDefault();
 			void toggleSearch();
 			return;
