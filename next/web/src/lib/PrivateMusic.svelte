@@ -248,7 +248,7 @@
 	h2 { font-size: 1.15rem; }
 	.danger { color: var(--danger, #b12323); }
 	form { margin-top: 0.75rem; display: grid; gap: 0.5rem; max-width: 32rem; }
-	form input:not([type='checkbox']), textarea { width: 100%; padding: 0.6rem; border: 1px solid var(--line); border-radius: 0.5rem; color: inherit; background: var(--surface); font: inherit; font-size: 1rem; }
+	form input:not([type='checkbox']), textarea { width: 100%; padding: 0.6rem; border: 1px solid var(--line); border-radius: 0.5rem; color: inherit; background: var(--surface); }
 	form label { justify-self: start; margin-top: 0.4rem; }
 	.submit { justify-self: start; background: var(--accent); color: var(--on-accent); padding-inline: 1rem; }
 	.submit:hover { background: var(--accent); filter: brightness(1.12); }

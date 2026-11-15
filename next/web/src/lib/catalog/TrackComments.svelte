@@ -111,7 +111,7 @@
 
 <style>
 	form { display: grid; gap: 0.35rem; }
-	textarea { width: 100%; min-height: 4rem; resize: vertical; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 0.65rem; padding: 0.55rem; font: inherit; font-size: max(1rem, 16px); }
+	textarea { width: 100%; min-height: 4rem; resize: vertical; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 0.65rem; padding: 0.55rem; }
 	.form-actions, .row-head { display: flex; align-items: center; gap: 0.35rem; }
 	.form-actions { justify-content: space-between; }
 	.time, .state a { color: var(--accent); }

@@ -584,12 +584,30 @@ async function keyboard(browser, phone, scheme) {
   } finally { await context.close(); }
 }
 
+async function textFields(browser) {
+  const { context, page } = await setup(browser, 390, 664, { phone: true, scheme: 'light', scale: 0.9 });
+  try {
+    for (const [path, field] of [
+      ['/search', '#search-query'],
+      ['/stats', '#stat-artist'],
+      ['/login', '#account-handle']
+    ]) {
+      await page.goto(origin + path);
+      const input = page.locator(field);
+      await input.tap();
+      assert.ok(await input.evaluate(node => parseFloat(getComputedStyle(node).fontSize)) >= 16,
+        `${path}: a focused text field below 16px triggers iOS Safari zoom`);
+    }
+  } finally { await context.close(); }
+}
+
 (async () => {
   await mkdir(output, { recursive: true });
   const staticBuild = !origin;
   if (staticBuild) origin = await serve();
   const browser = await chromium.launch();
   try {
+    await textFields(browser);
     for (const phone of [true, false]) {
       for (const scheme of ['light', 'dark']) {
         await screen(browser, phone, scheme);
