@@ -45,6 +45,7 @@
     "@atproto/oauth-client-browser": "0.5.14",
     "@atproto/space": "file:../vendor/space-sdk/atproto-space-0.0.1.tgz",
     "@atproto/syntax": "file:../vendor/space-sdk/atproto-syntax-0.7.6.tgz",
-    "@plyr/next-core": "workspace:*"
+    "@plyr/next-core": "workspace:*",
+    "heic-to": "1.6.7"
   }
 }

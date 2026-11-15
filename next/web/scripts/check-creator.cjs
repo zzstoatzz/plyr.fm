@@ -173,6 +173,9 @@ async function run(browser, accounts, width, theme, mp3) {
     await main.getByRole('textbox', { name: 'description' }).waitFor();
     assert.equal(await main.getByRole('textbox', { name: 'description' }).inputValue(), 'edited elsewhere');
     await title.fill('recording after edit');
+    const cover = await fs.readFile(path.join(__dirname, 'fixtures/cover.heic'));
+    await main.getByLabel('change cover', { exact: true }).setInputFiles({ name: 'edited.heif', mimeType: '', buffer: cover });
+    await main.getByRole('img', { name: 'selected cover preview', exact: true }).waitFor();
     await main.getByLabel('replace audio', { exact: true }).setInputFiles({ name: 'replacement.mp3', mimeType: 'audio/mpeg', buffer: mp3 });
     await main.getByRole('button', { name: 'save', exact: true }).click();
     await page.waitForURL(origin + '/track/' + id);
@@ -181,6 +184,7 @@ async function run(browser, accounts, width, theme, mp3) {
     assert.equal(saved.uri, uri);
     assert.equal(saved.value.title, 'recording after edit');
     assert.equal(saved.value.audioBlob.size, mp3.length);
+    assert.equal(saved.value.imageBlob.mimeType, 'image/jpeg');
     assert.deepEqual(saved.value.unseen, seed.unseen);
 
     await page.goBack();
