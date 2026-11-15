@@ -43,7 +43,7 @@
 	}
 
 	function searchHref(query: string) {
-		return resolve('/search') + '?' + new URLSearchParams({ q: query });
+		return resolve('/search') + (query ? '?' + new URLSearchParams({ q: query }) : '');
 	}
 	type Preview = { query: string; results: SearchHit[] } | { query: string; error: true };
 	let preview = $state.raw<Preview>();
@@ -85,6 +85,27 @@
 		if (next < 0) input.focus();
 		else links[next]?.focus();
 	}
+
+	function submitSearch(value: string) {
+		if ([...value].length === 1) { input.focus(); return; }
+		rememberQuery(value);
+		const url = new URL(searchHref(value), page.url);
+		const shortcutSearch = page.state.shortcutSearch;
+		const retry = !!value && url.href === page.url.href;
+		void goto(url, {
+			replaceState: shortcutSearch || retry,
+			keepFocus: retry,
+			noScroll: retry,
+			invalidate: retry ? ['plyr:catalog-search'] : undefined,
+			state: { shortcutSearch }
+		});
+	}
+
+	function selectRecent(event: MouseEvent, value: string) {
+		if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+		event.preventDefault();
+		submitSearch(value);
+	}
 </script>
 
 {#snippet hits(results: SearchHit[], suggestions: boolean)}
@@ -112,22 +133,7 @@
 
 <section class="page-content search-page">
 	<h1>search</h1>
-	<form action="/search" onsubmit={event => {
-		event.preventDefault();
-		const shortcutSearch = page.state.shortcutSearch;
-		if (length === 1) { input.focus(); return; }
-		rememberQuery(term);
-		const url = new URL(resolve('/search'), page.url);
-		if (term) url.searchParams.set('q', term);
-		const retry = !!term && url.href === page.url.href;
-		void goto(url, {
-			replaceState: shortcutSearch || retry,
-			keepFocus: retry,
-			noScroll: retry,
-			invalidate: retry ? ['plyr:catalog-search'] : undefined,
-			state: { shortcutSearch }
-		});
-	}}>
+	<form action="/search" onsubmit={event => { event.preventDefault(); submitSearch(term); }}>
 		<input id="search-query" aria-label="Search tracks, artists, albums and playlists" type="search" name="q"
 			bind:this={input} bind:value={query} autocomplete="off" maxlength="100" placeholder="tracks, artists, albums and playlists"
 			onkeydown={event => moveFocus(event, -1)} />
@@ -136,7 +142,7 @@
 	<p class="announcer" role="status">{#if suggestionCount}{suggestionCount} {suggestionCount === 1 ? 'suggestion' : 'suggestions'}{/if}</p>
 	{#if length < 2}
 		{#if length === 1}<p class="subtle" role="status">type at least two characters to search.</p>{/if}
-		<SearchExplore {recent} {searchHref} clear={clearRecent} />
+		<SearchExplore {recent} {searchHref} {selectRecent} clear={clearRecent} />
 	{:else if term === data.query}
 		{#await data.results}
 			<Loading label="searching" />

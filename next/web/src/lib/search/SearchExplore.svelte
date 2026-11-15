@@ -8,9 +8,10 @@
 	import Icon from '$lib/ui/Icon.svelte';
 	import Loading from '$lib/ui/Loading.svelte';
 
-	let { recent, searchHref, clear }: {
+	let { recent, searchHref, selectRecent, clear }: {
 		recent: string[];
 		searchHref: (query: string) => string;
+		selectRecent: (event: MouseEvent, query: string) => void;
 		clear: () => void;
 	} = $props();
 	let charts = $state.raw<ChartEntry[]>();
@@ -53,7 +54,7 @@
 		<section aria-labelledby="recent-searches">
 			<header><h2 id="recent-searches">recent searches</h2><button class="text-button clear" type="button" onclick={clear}>clear</button></header>
 			<ul class="recent">
-				{#each recent as query (query)}<li><a href={searchHref(query)}><Icon name="clock" size={16} /><span>{query}</span></a></li>{/each}
+				{#each recent as query (query)}<li><a href={searchHref(query)} onclick={event => selectRecent(event, query)}><Icon name="clock" size={16} /><span>{query}</span></a></li>{/each}
 			</ul>
 		</section>
 	{/if}
