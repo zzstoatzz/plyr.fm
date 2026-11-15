@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { auth, logout } from '$lib/auth';
+	import Icon from '$lib/ui/Icon.svelte';
 	import { activeUploadCount } from '$lib/upload-activity.svelte';
 
 	let account = $state.raw(auth.getAuth());
@@ -17,18 +18,45 @@
 
 <svelte:head><title>settings · plyr.fm</title></svelte:head>
 
-<section class="page-content">
+<section class="page-content settings">
 	<h1>settings</h1>
 	{#if account.did}
-		<p class="state">{account.handle ? '@' + account.handle : account.did}</p>
-		<p class="state">{account.accountSync ? 'your queue syncs across devices.' : 'your queue stays on this device.'}</p>
-		{#if !account.accountSync}<a class="text-button" href="/login?return_to=%2Fsettings">set up queue sync</a>{/if}
-		<a class="text-button" href="/portal">your music</a>
-		<a class="text-button" href="/upload">{uploading === 0 ? 'upload' : uploading === 1 ? '1 upload in progress' : `${uploading} uploads in progress`}</a>
-		<a class="text-button" href="/private">private music</a>
-		<button type="button" class="text-button" onclick={signOut}>sign out</button>
+		<section aria-labelledby="playback-settings">
+			<h2 id="playback-settings">playback</h2>
+			<div class="card">
+				<div class="row">
+					<Icon name="queue" size={21} />
+					<div><strong>queue sync</strong><p class="subtle">{account.accountSync ? 'your queue syncs across devices.' : 'your queue stays on this device.'}</p></div>
+					{#if !account.accountSync}<a class="text-button" href="/login?return_to=%2Fsettings">set up queue sync</a>{/if}
+				</div>
+			</div>
+		</section>
+		<section aria-labelledby="account-settings">
+			<h2 id="account-settings">account</h2>
+			<div class="card">
+				<div class="row"><Icon name="user" size={21} /><span>{account.handle ? '@' + account.handle : account.did}</span></div>
+				<a class="row" href="/portal"><Icon name="portal" size={21} />your music</a>
+				<a class="row" href="/upload"><Icon name="upload" size={21} />{uploading === 0 ? 'upload' : uploading === 1 ? '1 upload in progress' : `${uploading} uploads in progress`}</a>
+				<a class="row" href="/private"><Icon name="music" size={21} />private music</a>
+				<button class="row" type="button" onclick={signOut}><Icon name="logout" size={21} />sign out</button>
+			</div>
+		</section>
 	{:else if account.ready}
 		<p class="state"><a href="/login?return_to=%2Fsettings">sign in</a> to see your account.</p>
 	{/if}
 	<a class="text-button" href={resolve('/(app)/stats')}>stats</a>
 </section>
+
+<style>
+	.settings { max-width: 44rem; }
+	.settings > section { margin-block: 1.35rem; }
+	h2 { font-size: 1rem; margin-bottom: 0.45rem; }
+	.card { background: var(--surface); border: 1px solid var(--line); border-radius: 0.85rem; padding: 0.25rem 0.8rem; }
+	.row { display: flex; align-items: center; flex-wrap: wrap; gap: 0.35rem 0.8rem; min-height: 3rem; padding: 0.6rem 0.2rem; overflow-wrap: anywhere; }
+	.row > :global(svg) { flex: none; color: var(--muted); }
+	.row:not(:first-child) { border-top: 1px solid var(--line); }
+	.row p { font-size: 0.875rem; }
+	.row .text-button { color: var(--accent); margin-left: auto; }
+	button.row { border: 0; border-radius: 0; background: none; width: 100%; text-align: start; }
+	button.row:hover { text-decoration: underline; text-underline-offset: 0.2em; }
+</style>
