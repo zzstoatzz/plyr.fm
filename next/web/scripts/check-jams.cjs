@@ -13,7 +13,7 @@ const catalog = tracks.slice(0, 3).map(track => ({
   ...track, record: { ...track.record, cid: 'bafyreib2rxk3rybk3aobmv5cjuql3bm2twh4jo5uxgf5kpqcsgz7soitae' }
 }));
 
-async function run(browser, accounts, { delayedSolo = false } = {}) {
+async function run(browser, accounts, { delayedSolo = false, startFromQueue = false } = {}) {
   const host = 'sveltejamhost.test';
   const guest = 'sveltejamguest.test';
   const key = 'room-' + randomUUID();
@@ -25,6 +25,7 @@ async function run(browser, accounts, { delayedSolo = false } = {}) {
   const errors = [];
   let state;
   let joins = 0;
+  let rejectFirstPublish = startFromQueue;
   const firstAdd = Promise.withResolvers();
 
   async function setup(width, scheme) {
@@ -33,13 +34,22 @@ async function run(browser, accounts, { delayedSolo = false } = {}) {
       context: { viewport: { width, height: 844 }, colorScheme: scheme, isMobile: width === 390, hasTouch: width === 390 },
     });
     const { page, context } = result;
+    let roomSocket;
     page.on('pageerror', error => errors.push(error.message));
+    await context.route('https://pds.fixture.test/xrpc/com.atproto.space.putRecord', route => {
+      if (!rejectFirstPublish) return route.fallback();
+      rejectFirstPublish = false;
+      return route.fulfill({ status: 503, json: {} });
+    });
     await context.route('https://typeahead.waow.tech/**', route => route.fulfill({ json: { actors: [] } }));
     await context.route('https://panel-fixture.invalid/**', route => route.request().url().endsWith('/audio.wav')
       ? serveAudio(route) : route.fulfill({ status: 404 }));
     await context.route('https://api.next.plyr.fm/**', route => {
       const pathname = new URL(route.request().url()).pathname;
-      const track = catalog.find(item => pathname === '/v1/tracks/' + item.id || pathname === '/v1/tracks/' + item.id + '/playback');
+      const published = catalog.find(item => pathname === '/v1/tracks/' + item.id || pathname === '/v1/tracks/' + item.id + '/playback');
+      const track = startFromQueue && published === catalog[0]
+        ? { ...published, metadata: { ...published.metadata, duration_seconds: null } }
+        : published;
       if (track && pathname.endsWith('/playback')) return route.fulfill({ json: {
         availability: { status: 'available', delivery: { url: 'https://panel-fixture.invalid/audio.wav' } }
       } });
@@ -49,10 +59,13 @@ async function run(browser, accounts, { delayedSolo = false } = {}) {
         const data = catalog.filter(item => ids.includes(item.id));
         return route.fulfill({ json: { data, missing: ids.filter(id => !data.some(item => item.id === id)) } });
       }
-      if (pathname === '/v1/tracks') return route.fulfill({ json: { data: catalog, has_more: false } });
+      if (pathname === '/v1/tracks') return route.fulfill({ json: {
+        data: startFromQueue ? [{ ...catalog[0], metadata: { ...catalog[0].metadata, duration_seconds: null } }, ...catalog.slice(1)] : catalog,
+        has_more: false
+      } });
       return route.fulfill({ json: { data: [], has_more: false } });
     });
-    await context.route(coordinator + '/v1/playback/join', route => delayedSolo ? route.fulfill({ status: 503, json: {} })
+    await context.route(coordinator + '/v1/playback/join', route => delayedSolo || startFromQueue ? route.fulfill({ status: 503, json: {} })
       : route.fulfill({ json: { ticket: 'solo-ticket', connectionId: 'solo-connection' } }));
     await context.routeWebSocket('wss://jams.next.plyr.fm/v1/jams/socket?ticket=solo-ticket', socket => {
       const solo = catalog[1];
@@ -69,18 +82,20 @@ async function run(browser, accounts, { delayedSolo = false } = {}) {
     await context.route(coordinator + '/v1/jams/join', route => {
       const admission = route.request().postDataJSON();
       assert.equal(admission.host, accounts[host].did);
-      assert.equal(admission.key, key);
+      if (startFromQueue) assert.match(admission.key, /^[a-f\d-]{36}$/);
+      else assert.equal(admission.key, key);
       assert.equal(typeof admission.serviceToken, 'string');
       assert.equal(typeof admission.delegationToken, 'string');
       if (admission.initial) {
         assert.equal(admission.initial.queue[0].id, catalog[0].id);
         state ??= { ...admission.initial, epoch: 'room-epoch', revision: 1, occurrence: 1, updatedAtMs: Date.now() };
       }
-      assert.ok(state);
+      if (!state) return route.fulfill({ status: 409, json: { error: { message: 'The host needs to start this Jam' } } });
       joins++;
       return route.fulfill({ json: { ticket: 'room-ticket' } });
     });
     await context.routeWebSocket('wss://jams.next.plyr.fm/v1/jams/socket?ticket=room-ticket', socket => {
+      roomSocket = socket;
       sockets.add(socket);
       socket.onClose(() => sockets.delete(socket));
       const send = data => socket.send(JSON.stringify(data));
@@ -104,7 +119,7 @@ async function run(browser, accounts, { delayedSolo = false } = {}) {
         for (const peer of sockets) if (peer !== socket) peer.send(JSON.stringify({ type: 'state', state }));
       });
     });
-    return result;
+    return { ...result, disconnect: () => roomSocket.close({ code: 1012, reason: 'service restart' }) };
   }
 
   const hostTab = await setup(1280, 'light');
@@ -117,13 +132,41 @@ async function run(browser, accounts, { delayedSolo = false } = {}) {
     await hostPage.getByRole('link', { name: 'sign in to join' }).click();
     await authorizeFixture(hostPage, accounts, host);
     await hostPage.waitForURL(hostLink);
+    if (!delayedSolo) await hostPage.goto(hostLink + '&start=1');
+    await hostPage.getByRole('button', { name: 'start jam', exact: true }).waitFor();
+    if (startFromQueue) {
+      const nav = hostPage.getByRole('navigation', { name: 'Main navigation' });
+      await nav.getByRole('link', { name: 'home', exact: true }).click();
+      const row = hostPage.getByTestId('home-track-row');
+      await row.first().getByRole('button', { name: /^play/i }).click();
+      await hostPage.waitForFunction(() => window.jamAudio.some(audio => !audio.paused && audio.duration > 0));
+      await row.nth(1).getByRole('button', { name: /^add .* to queue/i }).click();
+      const dock = hostPage.getByTestId('player-dock');
+      await dock.getByRole('slider', { name: 'Playback position' }).fill('12');
+      await nav.getByRole('link', { name: 'queue', exact: true }).click();
+      await hostPage.getByRole('button', { name: 'Start a Jam', exact: true }).click();
+      await hostPage.getByRole('alert').getByText('couldn’t start the jam. try again.').waitFor();
+      await hostPage.getByRole('button', { name: 'start jam', exact: true }).click();
+      await hostPage.getByText('jam is live', { exact: true }).waitFor();
+      assert.deepEqual(state.queue.map(track => track.id), catalog.slice(0, 2).map(track => track.id));
+      assert.equal(state.queue[0].durationMs, 240_000);
+      assert.equal(state.playing, true);
+      assert.ok(state.positionMs >= 12_000, 'the Jam starts at the previously audible position');
+      assert.equal(new URL(hostPage.url()).search, '', 'the room URL no longer carries the start action');
+      state = undefined;
+      await hostPage.reload();
+      await hostPage.getByRole('button', { name: 'join jam', exact: true }).click();
+      await hostPage.getByText('jam is live', { exact: true }).waitFor();
+      assert.equal(state.queue[0].durationMs, 240_000, 'cold recovery probes the original audio duration');
+      return;
+    }
     if (delayedSolo) {
       await verifySoloHandoff(hostTab, hostLink);
       return;
     }
-    await hostPage.getByRole('button', { name: 'create jam with current track' }).click();
-    await hostPage.getByText('connected', { exact: true }).waitFor();
-    await hostPage.getByLabel('guest DID').fill(accounts[guest].did);
+    await hostPage.getByRole('button', { name: 'start jam', exact: true }).click();
+    await hostPage.getByText('jam is live', { exact: true }).waitFor();
+    await hostPage.getByLabel('guest handle').fill('@' + guest);
     await hostPage.getByRole('button', { name: 'invite guest' }).click();
     await hostPage.getByText('guest invited. send them the jam link.', { exact: true }).waitFor();
 
@@ -136,7 +179,7 @@ async function run(browser, accounts, { delayedSolo = false } = {}) {
     const guestPosition = guestDock.getByRole('slider', { name: 'Playback position' });
     assert.equal(await guestPosition.inputValue(), '34');
     await guestPage.getByRole('button', { name: 'join jam', exact: true }).click();
-    await guestPage.getByText('connected', { exact: true }).waitFor();
+    await guestPage.getByText('jam is live', { exact: true }).waitFor();
     assert.equal(joins, 2);
     assert.equal(await guestPosition.isDisabled(), true);
     await hostPage.getByRole('button', { name: 'play jam' }).click();
@@ -149,6 +192,9 @@ async function run(browser, accounts, { delayedSolo = false } = {}) {
 
     const navigation = guestPage.getByRole('navigation', { name: 'Main navigation' });
     await navigation.getByRole('link', { name: 'home', exact: true }).click();
+    const rejoin = guestPage.waitForResponse(response => response.url() === coordinator + '/v1/jams/join' && response.ok());
+    await guestTab.disconnect();
+    await rejoin;
     const add = index => guestPage.getByTestId('home-track-row').nth(index).getByRole('button', { name: /add .* to queue/i }).click();
     await add(1);
     await add(2);
@@ -175,8 +221,8 @@ async function run(browser, accounts, { delayedSolo = false } = {}) {
     await guestDock.getByRole('button', { name: 'Play', exact: true }).waitFor();
     await hostPage.getByRole('button', { name: 'leave jam' }).click();
     await hostPage.getByRole('button', { name: 'join jam', exact: true }).click();
-    await hostPage.getByText('connected', { exact: true }).waitFor();
-    assert.equal(joins, 3);
+    await hostPage.getByText('jam is live', { exact: true }).waitFor();
+    assert.equal(joins, 4);
     assert.deepEqual(commands.map(command => command.action), ['play', 'pause', 'seek', 'replaceQueue', 'replaceQueue', 'selectTrack']);
     assert.deepEqual(soloCommands, [], 'room actions do not touch the personal queue');
     assert.deepEqual(errors, []);
@@ -203,7 +249,7 @@ async function verifySoloHandoff({ page, context }, room) {
     await page.goBack();
     await page.waitForURL(room);
     const admitting = page.waitForRequest(join);
-    await page.getByRole('button', { name: 'create jam with current track' }).click();
+    await page.getByRole('button', { name: 'start jam', exact: true }).click();
     await admitting;
     await page.getByText('connecting to the jam…', { exact: true }).waitFor();
     solo.resolve();
@@ -217,6 +263,10 @@ async function verifySoloHandoff({ page, context }, room) {
 (async () => {
   const accounts = await fixtureAccounts(['sveltejamhost', 'sveltejamguest']);
   const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
-  try { await run(browser, accounts); await run(browser, accounts, { delayedSolo: true }); }
+  try {
+    await run(browser, accounts);
+    await run(browser, accounts, { delayedSolo: true });
+    await run(browser, accounts, { startFromQueue: true });
+  }
   finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

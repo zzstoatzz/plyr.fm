@@ -1,11 +1,15 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { onMount, untrack } from 'svelte';
+	import { resolveHandle } from '@plyr/next-core/auth-state';
 	import { pdsEndpoint, pdsSupportsSpaces } from '@plyr/next-core/identity';
-	import { parseJamTrackSnapshot, type InitialJam } from '@plyr/next-core/jam-space';
+	import { JamNotStarted, parseJamTrackSnapshot, type InitialJam } from '@plyr/next-core/jam-space';
 	import { api } from '$lib/api';
 	import { auth, login } from '$lib/auth';
-	import { isJamDid, jamRoomPath, parseJamRoom } from '$lib/jam-room';
+	import { isJamDid, jamRoomPath, parseJamRoom, takeJamStart } from '$lib/jam-room';
+	import { audioDuration } from '$lib/media/file-duration';
+	import { playbackSource } from '$lib/media/playback-source';
 	import { player } from '$lib/player.svelte';
 	import Loading from '$lib/ui/Loading.svelte';
 
@@ -25,8 +29,12 @@
 		return room && account.did && !account.jamSpace ? pdsEndpoint(account.did).then(pdsSupportsSpaces) : undefined;
 	});
 	onMount(() => auth.subscribe(() => { account = auth.getAuth(); }));
+	$effect(() => {
+		if (!room || !trackId || !host || !account.jamSpace || !takeJamStart(room)) return;
+		untrack(() => { void enter(true, true); });
+	});
 
-	async function run(action: (check: () => void) => Promise<void>) {
+	async function run(action: (check: () => void) => Promise<void>, errorCopy: string) {
 		if (busy) return;
 		const initial = { slug: page.params.room, agent: account.agent };
 		const check = () => {
@@ -38,7 +46,7 @@
 		try { await action(check); }
 		catch (error) {
 			if (page.params.room === initial.slug && auth.getAuth().agent === initial.agent) {
-				failure = error instanceof Error ? error.message : 'jam request failed.';
+				failure = error instanceof JamNotStarted ? 'the host hasn’t started this jam yet.' : errorCopy;
 			}
 		} finally { busy = false; }
 	}
@@ -53,51 +61,87 @@
 			fetch: (url, init) => fetch(url, init),
 			keypair: () => P256Keypair.create()
 		});
+		const checkAccount = () => {
+			if (auth.getAuth().agent !== agent) throw new Error('account changed.');
+		};
 		return {
 			space,
-			enter: (initial?: InitialJam) => player.joinJam(activeRoom, () => {
-				if (auth.getAuth().agent !== agent) return Promise.reject(new Error('account changed. try again.'));
-				return joinJam({ agent }, activeRoom.host, activeRoom.key, initial);
+			enter: (initial?: InitialJam, recover?: () => Promise<InitialJam>) => player.joinJam(activeRoom, async () => {
+				checkAccount();
+				try { return await joinJam({ agent }, activeRoom.host, activeRoom.key, initial); }
+				catch (error) { if (!recover || !(error instanceof JamNotStarted)) throw error; }
+				const fallback = await recover();
+				checkAccount();
+				return joinJam({ agent }, activeRoom.host, activeRoom.key, fallback);
 			}, check)
 		};
 	}
 
-	function enter(create: boolean) {
+	function enter(create: boolean, fromQueue = false) {
 		return run(async check => {
 			if (player.privateMode) throw new Error('play a public track before joining a jam.');
+			const current = player.current;
+			const capture = current && (!trackId || fromQueue || current.id === trackId) && !player.liveStation
+				? { current, tracks: player.queue, index: player.index, duration: player.length || player.duration, position: player.position, playing: player.playing }
+				: undefined;
+			const activeRoom = room;
+			if (!activeRoom) return;
 			const client = await roomClient(check);
 			if (!host) { await client.enter(); return; }
 			const { jamTrack } = await import('@plyr/next-core/jam-playback');
-			if (create) {
-				const track = trackId ? await api.track(trackId) : player.current;
-				const ref = track && jamTrack(track);
-				if (!track || !ref) throw new Error('choose a track with audio before starting a jam.');
-				check();
-				await client.space.create();
-				check();
-				await client.space.publish({ revision: 0, trackId: track.id, cid: ref.cid, playing: false, positionMs: 0, updatedAtMs: Date.now() });
-				check();
-				await client.enter({ queue: [ref], index: 0, playing: false, positionMs: 0 });
-			} else {
-				const snapshot = parseJamTrackSnapshot(await client.space.read());
+			async function recover(value?: unknown) {
+				const snapshot = parseJamTrackSnapshot(value ?? await client.space.read());
 				const track = await api.track(snapshot.trackId);
-				const ref = jamTrack(track);
-				if (!ref || ref.cid !== snapshot.cid) throw new Error('the jam track has changed.');
-				check();
-				await client.enter({ queue: [ref], index: 0, playing: snapshot.playing, positionMs: Math.min(ref.durationMs, snapshot.positionMs) });
+				let ref = jamTrack(track, capture?.current.id === track.id ? capture.duration : undefined);
+				if (!ref && track.record.cid === snapshot.cid && !track.access.space_uri && !track.access.gate && track.access.visibility !== 'private') {
+					const source = await playbackSource(track, AbortSignal.timeout(8000));
+					try { ref = jamTrack(track, await audioDuration(source.url)); }
+					finally { source.release?.(); }
+				}
+				if (!ref || ref.cid !== snapshot.cid) throw new Error('couldn’t restore the jam’s track.');
+				return { queue: [ref], index: 0, playing: snapshot.playing, positionMs: Math.min(ref.durationMs, snapshot.positionMs) };
 			}
-		});
+			if (create) {
+				const track = capture?.current ?? (trackId ? await api.track(trackId) : undefined);
+				const ref = track && jamTrack(track, capture?.duration);
+				if (!ref) throw new Error('track cannot be shared');
+				const before = capture?.tracks.slice(0, capture.index).flatMap(item => jamTrack(item) ?? []) ?? [];
+				const after = capture?.tracks.slice(capture.index + 1).flatMap(item => jamTrack(item) ?? []) ?? [];
+				const queue = [...before, ref, ...after];
+				const positionMs = Math.min(ref.durationMs, Math.max(0, Math.round((capture?.position ?? 0) * 1000)));
+				const playing = capture?.playing ?? false;
+				check();
+				const created = await client.space.create();
+				check();
+				const previous = created ? undefined : await client.space.read(true);
+				check();
+				if (previous === undefined) {
+					await client.space.publish({ revision: 0, trackId: ref.id, cid: ref.cid, playing, positionMs, updatedAtMs: Date.now() });
+					check();
+					await client.enter({ queue, index: before.length, playing, positionMs });
+				} else await client.enter(undefined, () => recover(previous));
+				check();
+				await goto(jamRoomPath(activeRoom.host, activeRoom.key), { replaceState: true, keepFocus: true, noScroll: true });
+				if (capture && queue.length < capture.tracks.length) notice = 'some tracks couldn’t be shared.';
+			} else await client.enter(undefined, recover);
+		}, create ? 'couldn’t start the jam. try again.' : 'couldn’t join the jam. try again.');
 	}
 
 	function invite() {
-		const did = guest.trim();
-		if (!isJamDid(did)) return;
+		const handle = guest.trim().replace(/^@/, '');
+		if (!handle) return;
 		return run(async check => {
+			const did = isJamDid(handle) ? handle : await resolveHandle(handle);
+			if (typeof did !== 'string' || !isJamDid(did)) {
+				failure = 'couldn’t find that account. check the handle.';
+				return;
+			}
+			check();
 			const { space } = await roomClient(check);
 			await space.invite(did);
 			check();
 			notice = 'guest invited. send them the jam link.';
-		});
+		}, 'couldn’t invite this guest. try again.');
 	}
 
 	async function copyLink() {
@@ -127,7 +171,7 @@
 				<p>allow plyr.fm to create and join jams with this account.</p>
 				<button class="text-button" type="button" disabled={busy} onclick={() => run(async () => {
 					if (account.did) await login(account.did, false, link);
-				})}>enable jams</button>
+				}, 'couldn’t open sign-in. try again.')}>enable jams</button>
 			{:else}<p>your account’s server doesn’t support jams yet.</p>{/if}
 		{:catch}
 			<p role="alert">could not check jam support.</p>
@@ -135,15 +179,15 @@
 		{/await}
 	{:else if !currentJam}
 		<div class="actions">
-			{#if host && (trackId || player.current)}
-				<button class="text-button" type="button" disabled={busy} onclick={() => enter(true)}>create jam with current track</button>
+			{#if host && trackId}
+				<button class="text-button" type="button" disabled={busy} onclick={() => enter(true)}>{busy ? 'starting jam…' : 'start jam'}</button>
+			{:else}
+				<button class="text-button" type="button" disabled={busy} onclick={() => enter(false)}>join jam</button>
 			{/if}
-			<button class="text-button" type="button" disabled={busy} onclick={() => enter(false)}>join jam</button>
 		</div>
 	{:else}
-		<p role="status">{currentJam.phase === 'connected' ? 'connected' : 'connecting to the jam…'}</p>
+		<p role="status">{currentJam.phase === 'connected' ? 'jam is live' : currentJam.phase === 'reconnecting' ? 'reconnecting to the jam…' : 'connecting to the jam…'}</p>
 		{#if currentJam.state}
-			<p>{currentJam.state.playing ? 'playing' : 'paused'}</p>
 			<div class="actions">
 				<button class="text-button" type="button" disabled={currentJam.phase !== 'connected'} onclick={() => player.jamCommand({ action: currentJam?.state?.playing ? 'pause' : 'play' })}>{currentJam.state.playing ? 'pause jam' : 'play jam'}</button>
 				{#if host}
@@ -153,14 +197,13 @@
 					<button class="text-button" type="button" onclick={() => player.jamCommand({ action: 'play' })}>play audio on this device</button>
 				{/if}
 			</div>
-			{#if !host}<p class="subtle">the host controls seeking. everyone can play, pause and edit the queue.</p>{/if}
 		{/if}
-		{#if host}
+		{#if host && currentJam.phase === 'connected'}
 			<form onsubmit={(event) => { event.preventDefault(); void invite(); }}>
-				<label for="jam-guest">guest DID</label>
-				<input id="jam-guest" bind:value={guest} autocomplete="off" autocapitalize="none" spellcheck={false} />
+				<label for="jam-guest">guest handle</label>
+				<input id="jam-guest" bind:value={guest} placeholder="you.bsky.social" autocomplete="off" autocapitalize="none" spellcheck={false} />
 				<div class="actions">
-					<button class="text-button" type="submit" disabled={busy || !isJamDid(guest.trim())}>invite guest</button>
+					<button class="text-button" type="submit" disabled={busy || !guest.trim()}>invite guest</button>
 					<button class="text-button" type="button" onclick={copyLink}>copy jam link</button>
 				</div>
 			</form>

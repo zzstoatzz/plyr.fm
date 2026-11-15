@@ -1,5 +1,19 @@
 import type { Did } from '@plyr/next-core/auth-state';
 
+let pendingStart: { host: string; key: string } | undefined;
+
+export function newJamPath(host: string, track: string) {
+	const key = crypto.randomUUID();
+	pendingStart = { host, key };
+	return jamRoomPath(host, key, track);
+}
+
+export function takeJamStart(room: { host: string; key: string }) {
+	if (pendingStart?.host !== room.host || pendingStart.key !== room.key) return false;
+	pendingStart = undefined;
+	return true;
+}
+
 export function isJamDid(value: string): value is Did {
 	return /^did:(plc|web):[^/?#~\s]+$/.test(value);
 }

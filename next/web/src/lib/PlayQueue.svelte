@@ -2,7 +2,7 @@
 	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import { auth } from './auth';
-	import { jamRoomPath } from './jam-room';
+	import { jamRoomPath, newJamPath } from './jam-room';
 	import { player } from './player.svelte';
 	import { artistName, clock } from './tracks';
 	import { trackArtwork } from '@plyr/next-core/artwork';
@@ -22,7 +22,7 @@
 	function openJam() {
 		const { did } = auth.getAuth();
 		const path = player.jam ? jamRoomPath(player.jam.host, player.jam.key)
-			: did && player.current ? jamRoomPath(did, crypto.randomUUID(), player.current.id) : '/login?return_to=%2Fqueue';
+			: did && player.current ? newJamPath(did, player.current.id) : '/login?return_to=%2Fqueue';
 		close?.();
 		void goto(path);
 	}

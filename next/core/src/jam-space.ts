@@ -10,6 +10,8 @@ export interface InitialJam {
   positionMs?: number;
 }
 
+export class JamNotStarted extends Error {}
+
 type JamConfig = Pick<AuthConfig, 'JAM_SPACE' | 'JAM_COORDINATOR_URL' | 'JAM_SERVICE_AUDIENCE' | 'JAM_JOIN_METHOD'>;
 
 export function parseJamTrackSnapshot(value: unknown) {
@@ -45,7 +47,12 @@ export function createJamSpace<Key extends { did(): string }, Value extends Reco
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body)
       });
-      if (!response.ok) throw new Error(`jam request failed (${response.status})`);
+      if (response.ok) return true;
+      if (method === 'space.createSpace' && response.status === 400) {
+        const body: { error?: string } | undefined = await response.json().catch(() => undefined);
+        if (body?.error === 'SpaceAlreadyExists') return false;
+      }
+      throw new Error(`jam request failed (${response.status})`);
     }
 
     return {
@@ -63,7 +70,7 @@ export function createJamSpace<Key extends { did(): string }, Value extends Reco
       publish: (snapshot: object) => hostWrite('space.putRecord', {
         ...record, record: { ...snapshot, $type: collection }
       }),
-      async read(): Promise<unknown> {
+      async read(allowMissing = false): Promise<unknown> {
         const [endpoint, doc] = await Promise.all([pdsEndpoint(host), didDocument(host)]);
         const kem = doc.verificationMethod?.find(method => method.id === `${host}#atproto_kem`)?.publicKeyMultibase;
         if (!kem) throw new Error('jam host has no verification key');
@@ -76,7 +83,13 @@ export function createJamSpace<Key extends { did(): string }, Value extends Reco
           `${endpoint}/xrpc/com.atproto.space.getRecord?${new URLSearchParams(record)}`, host,
           { 'accept-signature': formatMacRequest(RECORD_MAC_PROFILE, keyShare) }
         );
-        if (!response.ok) throw new Error('could not read this jam');
+        if (!response.ok) {
+          if (allowMissing) {
+            const body: { error?: string } | undefined = await response.json().catch(() => undefined);
+            if (response.status === 404 || body?.error === 'RecordNotFound') return undefined;
+          }
+          throw new Error('could not read this jam');
+        }
         const decoded = lexParse(await response.text(), { strict: true });
         if (!isLexMap(decoded) || typeof decoded.uri !== 'string' || typeof decoded.cid !== 'string' || !isLexMap(decoded.value)) {
           throw new Error('invalid jam record');
@@ -118,6 +131,7 @@ export function createJamSpace<Key extends { did(): string }, Value extends Reco
         body: JSON.stringify({ host, key, serviceToken: serviceBody.token, delegationToken: delegationBody.token, initial })
       });
       const body = await response.json() as { ticket?: unknown; error?: { message?: string } };
+      if (response.status === 409) throw new JamNotStarted('the host hasn’t started this jam yet.');
       if (!response.ok || typeof body.ticket !== 'string') throw new Error(body.error?.message || 'could not connect to this jam');
       const socket = new URL('/v1/jams/socket', JAM_COORDINATOR_URL);
       socket.protocol = socket.protocol === 'https:' ? 'wss:' : 'ws:';

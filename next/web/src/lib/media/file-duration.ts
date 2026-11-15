@@ -1,6 +1,11 @@
 export async function fileDuration(file: Blob): Promise<number | undefined> {
-	const audio = document.createElement('audio');
 	const url = URL.createObjectURL(file);
+	try { return await audioDuration(url); }
+	finally { URL.revokeObjectURL(url); }
+}
+
+export async function audioDuration(url: string): Promise<number | undefined> {
+	const audio = document.createElement('audio');
 	audio.preload = 'metadata';
 	try {
 		return await new Promise(resolve => {
@@ -18,6 +23,5 @@ export async function fileDuration(file: Blob): Promise<number | undefined> {
 		audio.onerror = null;
 		audio.removeAttribute('src');
 		audio.load();
-		URL.revokeObjectURL(url);
 	}
 }
