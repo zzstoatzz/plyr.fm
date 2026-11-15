@@ -515,6 +515,35 @@ class TestIngestTrackCreate:
         assert track.extra.get("duration") == 180
         assert track.publish_state == "published"
         assert track.self_labels == ["sexual"]
+        assert track.visibility == "public"
+
+    async def test_creates_unlisted_track_as_unlisted(
+        self, db_session: AsyncSession, artist: Artist
+    ) -> None:
+        uri = f"at://{artist.did}/{settings.atproto.track_collection}/unlisted"
+        await ingest_track_create(
+            did=artist.did,
+            rkey="unlisted",
+            record={
+                "title": "Link only",
+                "artist": "Test Artist",
+                "fileType": "mp3",
+                "audioUrl": "https://r2.example.com/link-only.mp3",
+                "createdAt": _recent_ts(),
+                "visibility": "unlisted",
+            },
+            uri=uri,
+            cid="bafyunlisted",
+        )
+
+        track = await db_session.scalar(
+            select(Track).where(Track.atproto_record_uri == uri)
+        )
+        assert track is not None
+        assert track.publish_state == "published"
+        assert track.visibility == "unlisted"
+        assert track.publicly_visible
+        assert not track.in_discovery
 
     async def test_dedup_by_uri(
         self, db_session: AsyncSession, artist: Artist, track: Track

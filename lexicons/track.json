@@ -141,6 +141,11 @@
               "off"
             ],
             "description": "Download permission through the publishing application, independent of audio location."
+          },
+          "visibility": {
+            "type": "string",
+            "knownValues": ["unlisted"],
+            "description": "When unlisted, omit this track from discovery feeds. Direct links, record access, and audio access follow their usual policies."
           }
         }
       }
