@@ -9,10 +9,11 @@
 	let { track, collection, label, testid }: {
 		track: Track; collection?: Track[]; label?: string; testid?: string;
 	} = $props();
-	const playing = $derived(!player.liveStation && player.current?.id === track.id && player.playing);
+	const currentTrack = $derived(!player.liveStation && player.current?.id === track.id);
+	const playing = $derived(currentTrack && player.playing);
 	const title = $derived(track.metadata.title || 'untitled');
 	function toggle() {
-		if (player.current?.id === track.id) player.toggle();
+		if (currentTrack) player.toggle();
 		else player.play(track, collection, label);
 	}
 </script>

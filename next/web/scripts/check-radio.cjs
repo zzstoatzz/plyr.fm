@@ -7,7 +7,8 @@ const { tracks, setup, serve, close } = require('./fixture-catalog.cjs');
 
 const output = process.env.SCREENS_OUTPUT || '/tmp/plyr-svelte-radio';
 const slugs = ['loved', 'fresh', 'deep-cuts', 'slop', 'firehose'];
-const titles = ['Heavy rotation', 'First light', 'Side B, track nine', 'Long station title that does not fit in one line', 'Segment 0412'];
+const airing = tracks[1];
+const titles = ['Heavy rotation', airing.metadata.title, 'Side B, track nine', 'Long station title that does not fit in one line', 'Segment 0412'];
 const radioUri = slug => `at://did:plc:fixtureartist/fm.plyr.track/radio-${slug}`;
 const id = uri => 'trk_' + Buffer.from(uri).toString('base64url');
 const audio = Buffer.alloc(44 + 8000 * 2 * 10);
@@ -48,7 +49,8 @@ async function fixture(browser, width, scheme, fastChange = false) {
         id: slugs.indexOf(slug) + 1, title, artist: 'Fixture radio artist', artist_handle: 'sketches.test', artist_did: 'did:plc:fixtureartist',
         stream_url: `https://live-fixture.invalid/${slug}-${changed ? 'next' : 'first'}.wav`, duration: 10,
         artwork_url: `https://panel-fixture.invalid/art/${slugs.indexOf(slug)}.jpg`, thumbnail_url: null,
-        atproto_record_uri: radioUri(changed ? slug + '-next' : slug), atproto_record_cid: 'fixture-cid', created_at: '2026-11-14T00:00:00Z',
+        atproto_record_uri: slug === 'fresh' ? airing.record.uri : radioUri(changed ? slug + '-next' : slug),
+        atproto_record_cid: 'fixture-cid', created_at: '2026-11-14T00:00:00Z',
         like_count: 1, play_count: 0
       },
       current_ends_at: new Date(start + (fastChange && !changed ? 6500 : 50_000)).toISOString(),
@@ -108,7 +110,7 @@ async function stationFlow(browser, origin, width, scheme) {
 
     await grid.getByRole('button', { name: 'Listen to fresh radio', exact: true }).click();
     const now = page.getByRole('dialog', { name: 'Now playing' });
-    await now.getByRole('heading', { name: 'First light', exact: true }).waitFor();
+    await now.getByRole('heading', { name: airing.metadata.title, exact: true }).waitFor();
     await now.getByText('live · fresh radio', { exact: true }).waitFor();
     await page.waitForFunction(() => window.media.some(media => !media.paused && media.src.includes('fresh-first')));
     assert.equal(await now.getByRole('slider').count(), 0);
@@ -128,6 +130,16 @@ async function stationFlow(browser, origin, width, scheme) {
     await dock.getByRole('button', { name: 'Play', exact: true }).waitFor();
     const resumedAt = Number(await dock.getByRole('slider', { name: 'Playback position' }).inputValue());
     assert.ok(resumedAt >= 11.5 && resumedAt < 14, 'leaving radio restores the personal checkpoint');
+
+    await page.goto(origin + '/radio');
+    await grid.getByRole('button', { name: 'Listen to fresh radio', exact: true }).click();
+    await now.getByRole('link', { name: 'Fixture radio artist' }).click();
+    await page.getByRole('button', { name: 'Play ' + airing.metadata.title, exact: true }).click();
+    await dock.getByRole('slider', { name: 'Playback position' }).waitFor({ timeout: 5000 });
+    await page.waitForFunction(() => window.media.some(media => !media.paused && media.src.includes('/audio.wav')));
+    await page.getByRole('button', { name: 'Pause ' + airing.metadata.title, exact: true }).waitFor();
+    await page.screenshot({ path: path.join(output, `${width}-${scheme}-radio-to-track.png`) });
+
     assert.deepEqual(appViewWrites, []);
     assert.deepEqual(errors, []);
     console.log(`station grid, live controls and queue handoff passed at ${width}px (${scheme})`);
