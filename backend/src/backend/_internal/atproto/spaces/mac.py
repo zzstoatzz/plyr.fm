@@ -18,6 +18,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.kdf.hkdf import HKDFExpand
 
 COMMIT_MAC_TYPE = "atproto-space-repo"
+CURRENT_COMMIT_MAC_TYPE = "atproto-space-commit"
 RECORD_MAC_TYPE = "atproto-space-record"
 COMMIT_VERSION = 1
 ACCEPT_SIGNATURE_HEADER = "accept-signature"
@@ -113,7 +114,7 @@ def format_mac_request(key_share: str, *, mac_type: str = COMMIT_MAC_TYPE) -> st
 
 
 def _covered_header(mac_type: str) -> str:
-    if mac_type == COMMIT_MAC_TYPE:
+    if mac_type in (COMMIT_MAC_TYPE, CURRENT_COMMIT_MAC_TYPE):
         return "atproto-space-commit"
     if mac_type == RECORD_MAC_TYPE:
         return "atproto-space-record"
@@ -192,6 +193,7 @@ def verify_commit_mac(
     *,
     space: str,
     repo: str,
+    mac_type: str = COMMIT_MAC_TYPE,
 ) -> None:
     if (
         not isinstance(commit, dict)
@@ -203,7 +205,7 @@ def verify_commit_mac(
         or commit.get("repo") != repo
     ):
         raise SpaceMacError("missing or unexpected space commit")
-    fields = _verify_mac(exchange, headers, COMMIT_MAC_TYPE)
+    fields = _verify_mac(exchange, headers, mac_type)
     try:
         data = _b64(commit["data"]["$bytes"])
     except (KeyError, TypeError, ValueError) as exc:

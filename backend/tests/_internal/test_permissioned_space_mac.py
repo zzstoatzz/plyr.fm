@@ -226,8 +226,11 @@ def _host_reply(kem: ec.EllipticCurvePrivateKey, *, forge: bool = False):
         )
         secret = mac.decapsulate(kem, key_share)
         commit = _commit()
-        proof = commit_headers(
-            mac.Encapsulation(key_share, bytes(32) if forge else secret), commit
+        proof = response_headers(
+            headers[mac.ACCEPT_SIGNATURE_HEADER],
+            bytes(32) if forge else secret,
+            "atproto-space-commit",
+            {**commit, "data": base64.b64decode(commit["data"]["$bytes"] + "=")},
         )
         return httpx.Response(
             200,
@@ -238,16 +241,31 @@ def _host_reply(kem: ec.EllipticCurvePrivateKey, *, forge: bool = False):
     return reply
 
 
+@pytest.mark.parametrize("legacy", [False, True])
 async def test_repo_ops_request_and_verify_the_commit_mac(
-    monkeypatch: pytest.MonkeyPatch, credential: None
+    monkeypatch: pytest.MonkeyPatch,
+    credential: None,
+    legacy: bool,
 ) -> None:
     kem = ec.generate_private_key(ec.SECP256R1())
-    result = await _read_repo_ops(monkeypatch, kem=kem, respond=_host_reply(kem))
+
+    def respond(headers: dict[str, str]) -> httpx.Response:
+        if legacy and headers[mac.ACCEPT_SIGNATURE_HEADER].endswith(
+            'tag="atproto-space-commit"'
+        ):
+            return httpx.Response(400, json={"error": "InvalidSpaceMac"})
+        return _host_reply(kem)(headers)
+
+    result = await _read_repo_ops(monkeypatch, kem=kem, respond=respond)
     assert result["commit"]["rev"] == "3kbcq3p7ad400"
-    [headers] = result["_sent"]
-    assert headers[mac.ACCEPT_SIGNATURE_HEADER].startswith(
-        'mac=("atproto-space-commit";sf);keyid="did:key:z'
-    )
+    requests = [headers[mac.ACCEPT_SIGNATURE_HEADER] for headers in result["_sent"]]
+    assert requests[0].startswith('mac=("atproto-space-commit";sf);keyid="did:key:z')
+    assert requests[0].endswith('tag="atproto-space-commit"')
+    if legacy:
+        assert len(requests) == 2
+        assert requests[1].endswith('tag="atproto-space-repo"')
+    else:
+        assert len(requests) == 1
 
 
 async def test_repo_ops_reject_a_commit_whose_mac_does_not_verify(
