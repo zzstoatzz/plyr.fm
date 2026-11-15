@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       target:
-        description: Deploy Next web or verify live upload consent
+        description: Deploy Next web or verify the live browser
         type: choice
-        options: [preview, live, verify-live-upload-consent]
+        options: [preview, live, verify-live-upload-consent, verify-live-jam]
         default: preview
   pull_request:
     paths:
@@ -23,7 +23,7 @@ permissions:
 
 jobs:
   check:
-    if: github.event_name != 'workflow_dispatch' || inputs.target != 'verify-live-upload-consent'
+    if: github.event_name != 'workflow_dispatch' || inputs.target == 'preview' || inputs.target == 'live'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     concurrency: next-svelte-web-${{ github.event_name == 'workflow_dispatch' && format('pages-{0}', inputs.target) || github.ref }}
@@ -133,11 +133,11 @@ jobs:
           curl -fsS https://plyr.fm/ -o /dev/null
           curl -fsS https://api.plyr.fm/health | jq -e '.status == "ok"'
 
-  verify-live-upload-consent:
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.target == 'verify-live-upload-consent'
+  verify-live-browser:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.target == 'verify-live-upload-consent' || inputs.target == 'verify-live-jam')
     runs-on: ubuntu-latest
     timeout-minutes: 8
-    concurrency: next-live-upload-consent
+    concurrency: next-live-browser
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -149,9 +149,20 @@ jobs:
       - run: bun run playwright install --with-deps --only-shell chromium
         working-directory: next/web
       - name: verify live OAuth and upload admission in the browser
+        if: inputs.target == 'verify-live-upload-consent'
         working-directory: next/web
         env:
           ZAT_TEST_HANDLE: ${{ secrets.ZAT_TEST_HANDLE }}
           ZAT_TEST_PASSWORD: ${{ secrets.ZAT_TEST_PASSWORD }}
           ZAT_TEST_PDS: ${{ secrets.ZAT_TEST_PDS }}
         run: node scripts/check-live-upload-consent.mjs
+      - name: verify live Jam host and signed-out guest
+        if: inputs.target == 'verify-live-jam'
+        working-directory: next/web
+        env:
+          ZAT_TEST_HANDLE: ${{ secrets.ZAT_TEST_HANDLE }}
+          ZAT_TEST_PASSWORD: ${{ secrets.ZAT_TEST_PASSWORD }}
+          ZAT_TEST_PDS: ${{ secrets.ZAT_TEST_PDS }}
+          ALPHA_TEST_HANDLE: ${{ secrets.ALPHA_TEST_HANDLE }}
+          ALPHA_TEST_PASSWORD: ${{ secrets.ALPHA_TEST_PASSWORD }}
+        run: node scripts/check-live-jam.mjs
