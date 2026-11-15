@@ -248,6 +248,7 @@ const search_query =
     \\  JOIN plyr_index.actor_identities AS a ON a.did = v.owner_did
     \\  LEFT JOIN plyr_index.track_policies AS pol ON pol.record_uri = v.record_uri
     \\  WHERE $5::boolean AND v.collection = $2 AND NOT v.deleted
+    \\    AND v.support_gate_type IS DISTINCT FROM 'owner'
     \\    AND COALESCE(pol.visibility, 'public') IN ('public', 'supporters')
     \\    AND pol.moderation_decision IS DISTINCT FROM 'exclude'
     \\    AND (

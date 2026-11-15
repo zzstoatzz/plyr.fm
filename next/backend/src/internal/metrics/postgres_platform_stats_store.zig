@@ -60,6 +60,7 @@ const query =
     \\LEFT JOIN plyr_index.track_policies AS pol ON pol.record_uri = v.record_uri
     \\LEFT JOIN plyr_index.track_metrics AS metrics ON metrics.record_uri = v.record_uri
     \\WHERE v.collection = $1 AND NOT v.deleted
+    \\  AND v.support_gate_type IS DISTINCT FROM 'owner'
     \\  AND COALESCE(pol.visibility, 'public') IN ('public', 'supporters')
     \\  AND pol.moderation_decision IS DISTINCT FROM 'exclude'
     \\  AND (pol.moderation_decision IS NOT DISTINCT FROM 'allow' OR NOT (
@@ -85,7 +86,7 @@ test "platform stats exclude unavailable and non-discoverable records and cache 
     _ = try pool.exec("DROP SCHEMA IF EXISTS plyr_index CASCADE", .{});
     _ = try pool.exec("CREATE SCHEMA plyr_index", .{});
     _ = try pool.exec("CREATE TABLE plyr_index.account_availability (repo_did text PRIMARY KEY, available boolean)", .{});
-    _ = try pool.exec("CREATE TABLE plyr_index.track_records (record_uri text PRIMARY KEY, owner_did text, collection text, duration_seconds bigint, deleted boolean DEFAULT false, self_labels text[] DEFAULT '{}')", .{});
+    _ = try pool.exec("CREATE TABLE plyr_index.track_records (record_uri text PRIMARY KEY, owner_did text, collection text, duration_seconds bigint, support_gate_type text, deleted boolean DEFAULT false, self_labels text[] DEFAULT '{}')", .{});
     _ = try pool.exec("CREATE TABLE plyr_index.track_policies (record_uri text PRIMARY KEY, visibility text, moderation_decision text, operator_labels jsonb DEFAULT '[]')", .{});
     _ = try pool.exec("CREATE TABLE plyr_index.track_metrics (record_uri text PRIMARY KEY, play_count bigint)", .{});
     _ = try pool.exec("INSERT INTO plyr_index.account_availability VALUES ('a',true),('b',true),('c',false)", .{});
@@ -99,6 +100,7 @@ test "platform stats exclude unavailable and non-discoverable records and cache 
         \\('excluded','a','fm.plyr.track',999,false,'{}'),('operator','a','fm.plyr.track',999,false,'{}'),
         \\('foreign','a','fm.other.track',999,false,'{}')
     , .{});
+    _ = try pool.exec("INSERT INTO plyr_index.track_records (record_uri,owner_did,collection,duration_seconds,support_gate_type) VALUES ('owner','a','fm.plyr.track',999,'owner')", .{});
     _ = try pool.exec("INSERT INTO plyr_index.track_policies VALUES ('private','private',null,'[]'),('unlisted','unlisted',null,'[]'),('gated','supporters',null,'[]'),('override','public','allow','[]'),('excluded','public','exclude','[]'),('operator','public',null,'[\"copyright-violation\"]')", .{});
     _ = try pool.exec("INSERT INTO plyr_index.track_metrics VALUES ('public',7),('gated',3),('override',2),('private',100),('offline',100)", .{});
     var implementation: PostgresPlatformStatsStore = .{ .pool = pool, .io = io, .collection = "fm.plyr.track" };
