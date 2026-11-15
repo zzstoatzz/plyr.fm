@@ -29,8 +29,10 @@ async function homePagination(browser, origin) {
       const retry = page.getByRole('button', { name: 'try again' });
       await retry.waitFor();
       assert.equal(secondReads, 1, 'stops requesting after a failure');
-      await retry.click();
-      await rows.getByText(tracks[2].metadata.title, { exact: true }).waitFor();
+      await retry.press('Enter');
+      const appended = rows.getByRole('link', { name: tracks[2].metadata.title, exact: true });
+      await appended.waitFor();
+      assert.equal(await appended.evaluate(node => document.activeElement === node), true);
       assert.equal(await rows.count(), 26, 'keeps existing tracks and removes duplicates');
       assert.deepEqual(requests, [null, 'next', 'last', 'last'], 'stops if a cursor repeats');
       assert.equal(new URL(page.url()).searchParams.get('tag'), 'ambient');
