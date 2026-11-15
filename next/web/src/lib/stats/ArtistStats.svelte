@@ -53,7 +53,7 @@
 <section id="artist-stats" tabindex="-1" aria-label={did ? 'artist stats' : undefined} aria-labelledby={did ? undefined : 'artist-stats-title'}>
 	{#if did}
 		<nav aria-label="stats breadcrumb">
-			<a href={resolve('/(app)/stats') + '#artist-stats'}>stats</a>
+			<a href={resolve('/stats#artist-stats')}>stats</a>
 			<Icon name="chevron" size={14} />
 			<span aria-current="page">{lookup ? lookup.artist.display_name || lookup.artist.handle : 'artist'}</span>
 		</nav>
@@ -89,8 +89,10 @@
 		<label for="stat-artist">{did ? 'find another artist' : 'find an artist'}</label>
 		<div class="search-field">
 			<span><Icon name="search" size={18} /></span>
-			<input id="stat-artist" type="search" bind:value={query} placeholder="artist name or @handle" autocomplete="off" maxlength="100" />
+			<input id="stat-artist" type="search" bind:value={query} placeholder="artist name or @handle" aria-describedby="stat-artist-help" autocomplete="off" maxlength="100" />
 		</div>
+		<p id="stat-artist-help">type at least two characters.</p>
+		<p class="announcer" role="status">{#if matches?.length}{matches.length} {matches.length === 1 ? 'artist found' : 'artists found'}{/if}</p>
 
 		{#if searchError}
 			<p role="alert" class="state">couldn’t find artists right now.</p>
@@ -98,7 +100,7 @@
 		{:else if matches?.length}
 			<ul aria-label="matching artists">
 				{#each matches as match (match.id)}
-					<li><a href={resolve('/(app)/stats') + '?' + new URLSearchParams({ artist: match.id }) + '#artist-stats'} onclick={() => { query = ''; }}>
+					<li><a href={resolve(`/stats?${new URLSearchParams({ artist: match.id })}#artist-stats`)} onclick={() => { query = ''; }}>
 						<span class="avatar"><Artwork src={match.image_url ?? undefined} size={36} fallbackIcon="user" /></span>
 						<span class="match-name"><strong>{match.title}</strong><span class="subtle">@{match.owner.handle}</span></span>
 						<Icon name="chevron" size={16} />
@@ -121,12 +123,14 @@
 	.find, .artist-result { background: var(--surface); border: 1px solid var(--line); border-radius: 1rem; }
 	.find { padding: 1rem; }
 	label { display: block; margin-bottom: 0.4rem; color: var(--muted); font-size: 0.875rem; }
+	#stat-artist-help { margin-top: 0.45rem; color: var(--muted); font-size: 0.8rem; }
 	.search-field { position: relative; }
 	.search-field > span { position: absolute; inset-inline-start: 0.75rem; inset-block: 0; display: grid; place-items: center; color: var(--muted); pointer-events: none; }
 	input { display: block; width: 100%; min-height: 2.75rem; padding: 0.55rem 0.75rem 0.55rem 2.4rem; background: var(--bg); border: 1px solid var(--line); border-radius: 0.6rem; }
 	nav { display: flex; align-items: center; gap: 0.45rem; color: var(--muted); margin-block: 0 0.55rem; overflow-wrap: anywhere; }
 	nav a { display: inline-flex; align-items: center; min-height: 2.75rem; }
 	nav a, .artist-link { text-decoration: underline; text-underline-offset: 0.18em; }
+	.announcer { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 	ul { list-style: none; padding: 0; margin: 0.55rem 0 0; }
 	li a { display: grid; grid-template-columns: 2.25rem minmax(0, 1fr) auto; align-items: center; gap: 0.65rem; padding: 0.45rem 0.15rem; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
 	.avatar, .portrait { border-radius: 50%; }

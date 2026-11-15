@@ -272,12 +272,12 @@ async function statsScreen(browser, phone, scheme) {
     await chart.getByRole('button', { name: 'all time', exact: true }).click();
     await chart.getByText('no likes in this time range.').waitFor();
     assert.equal(artistLookups, 0, 'artist metrics are fetched only after selection');
-    const input = page.getByRole('searchbox', { name: 'find an artist', exact: true });
+    const input = page.getByRole('searchbox', { name: 'find an artist', description: 'type at least two characters.', exact: true });
     await input.fill('unknown');
     await page.getByText('no artists found for “unknown”.').waitFor();
     await input.fill('@alice');
+    await page.getByRole('status').filter({ hasText: '1 artist found' }).waitFor();
     const link = page.getByRole('link', { name: 'Alice Example @alice.test' });
-    await link.waitFor();
     await input.press('Tab');
     assert.ok(await link.evaluate(item => item === document.activeElement));
     await page.keyboard.press('Enter');
