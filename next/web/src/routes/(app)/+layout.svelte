@@ -1,13 +1,12 @@
 <script lang="ts">
 	import { onMount, untrack } from 'svelte';
-	import { uploadInProgress } from '@plyr/next-core/publishing/upload-queue-model';
 	import { afterNavigate, beforeNavigate, goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { auth, restoreAuth } from '$lib/auth';
 	import { player } from '$lib/player.svelte';
 	import Icon from '$lib/ui/Icon.svelte';
-	import { uploadActivity } from '$lib/upload-activity.svelte';
+	import { activeUploadCount } from '$lib/upload-activity.svelte';
 	import { createDockPull } from '$lib/dock-pull';
 	import '../../app.css';
 
@@ -31,7 +30,7 @@
 	}
 	const pull = createDockPull(() => player.openNowPlaying(), preloadNowPlaying);
 	let account = $state.raw(auth.getAuth());
-	let uploading = $derived(uploadActivity.jobs.filter(job => job.owner === account.did && uploadInProgress(job.phase)).length);
+	let uploading = $derived(activeUploadCount(account.did));
 	const links = [
 		{ path: '/', label: 'home', icon: 'home' },
 		{ path: '/search', label: 'search', icon: 'search' },

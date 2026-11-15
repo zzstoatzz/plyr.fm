@@ -3,8 +3,10 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { auth, logout } from '$lib/auth';
+	import { activeUploadCount } from '$lib/upload-activity.svelte';
 
 	let account = $state.raw(auth.getAuth());
+	const uploading = $derived(activeUploadCount(account.did));
 	onMount(() => auth.subscribe(() => { account = auth.getAuth(); }));
 
 	async function signOut() {
@@ -22,7 +24,7 @@
 		<p class="state">{account.accountSync ? 'your queue syncs across devices.' : 'your queue stays on this device.'}</p>
 		{#if !account.accountSync}<a class="text-button" href="/login?return_to=%2Fsettings">set up queue sync</a>{/if}
 		<a class="text-button" href="/portal">your music</a>
-		<a class="text-button" href="/upload">upload</a>
+		<a class="text-button" href="/upload">{uploading === 0 ? 'upload' : uploading === 1 ? '1 upload in progress' : `${uploading} uploads in progress`}</a>
 		<a class="text-button" href="/private">private music</a>
 		<button type="button" class="text-button" onclick={signOut}>sign out</button>
 	{:else if account.ready}
