@@ -161,7 +161,9 @@ try {
   await playing(guestPage);
 
   step('verifying the guest queue matches the host queue');
-  const guestQueue = await openQueue(guestPage);
+  await guestPage.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'library', exact: true }).click();
+  await guestPage.getByRole('link', { name: 'open queue', exact: true }).click();
+  const guestQueue = guestPage.getByRole('region', { name: 'Queue', exact: true });
   const guestNext = guestQueue.getByRole('region', { name: 'up next' }).getByRole('link');
   await guestNext.first().waitFor();
   assert.deepEqual(await guestNext.allTextContents(), titles);
@@ -170,7 +172,8 @@ try {
   await hostPage.getByRole('button', { name: 'pause jam', exact: true }).click();
   await guestPage.getByTestId('player-dock').getByRole('button', { name: 'Play', exact: true }).waitFor();
   await guestPage.waitForFunction(() => window.testAudio.every(audio => audio.paused));
-  await guestPage.goBack();
+  await guestQueue.getByRole('button', { name: 'Open Jam', exact: true }).click();
+  await guestPage.waitForURL(room);
   await guestPage.getByRole('button', { name: 'leave jam', exact: true }).click();
   await guestPage.getByRole('button', { name: 'join jam', exact: true }).waitFor();
   await guestPage.getByRole('button', { name: 'join jam', exact: true }).click();
