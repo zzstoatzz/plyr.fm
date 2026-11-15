@@ -50,6 +50,17 @@ async function holdDraftCompletion(page) {
   });
 }
 
+async function openSettings(page) {
+  const nav = page.getByRole('navigation', { name: 'Main navigation' });
+  const account = nav.getByRole('button', { name: 'account', exact: true });
+  if (await account.isVisible()) {
+    await account.click();
+    await page.getByRole('dialog', { name: 'account', exact: true }).getByRole('link', { name: /settings queue sync/ }).click();
+  } else {
+    await nav.getByRole('link', { name: 'settings', exact: true }).click();
+  }
+}
+
 async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'regular') {
   const did = accounts[handle].did;
   let loseReply = true, blobWrites = 0;
@@ -239,7 +250,7 @@ async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'reg
         await edit.click();
       }
       await page.waitForFunction(() => typeof window.releaseDraftTransaction === 'function');
-      await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: /^(account|settings)$/ }).click();
+      await openSettings(page);
       await page.getByRole('heading', { name: 'settings', exact: true }).waitFor();
       const uploadLink = page.getByRole('main').getByRole('link', { name: 'upload', exact: true });
       if (scenario === 'submit-navigation') {
@@ -405,7 +416,7 @@ async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'reg
       console.log(`a waiting upload survives reload and publishes once at ${width}px (${theme})`);
       return;
     }
-    await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: /^(account|settings)$/ }).click();
+    await openSettings(page);
     await page.getByRole('heading', { name: 'settings', exact: true }).waitFor();
     const main = page.getByRole('main');
     const progress = main.getByRole('link', { name: '1 upload in progress', exact: true });
