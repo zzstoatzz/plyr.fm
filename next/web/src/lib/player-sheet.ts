@@ -1,4 +1,5 @@
 import type { DockPull, DockPullUpdate } from './dock-pull';
+import { dismissPlayerPull, pullDirection } from '@plyr/next-core/behaviors/player-pull';
 
 export function playerSheet(panel: HTMLElement, close: () => void, dockPull?: DockPull) {
 	const sheet = panel.closest('dialog');
@@ -20,7 +21,7 @@ export function playerSheet(panel: HTMLElement, close: () => void, dockPull?: Do
 	let closing = false;
 	let ready = false;
 	let pendingPull: DockPullUpdate | undefined;
-	let touch: { x: number; y: number; lastY: number; time: number; speed: number } | undefined;
+	let touch: { x: number; y: number; lastY: number; time: number; speed: number; scroll: number; header: boolean; captured: boolean } | undefined;
 
 	function measure() {
 		rest = dock?.getBoundingClientRect().top ?? innerHeight;
@@ -116,9 +117,11 @@ export function playerSheet(panel: HTMLElement, close: () => void, dockPull?: Do
 
 	function begin(event: TouchEvent) {
 		if (event.touches.length !== 1) { if (touch) reset(); return; }
-		if (!ready || closing || frame || !phone.matches || dialog.scrollTop > 1 || (event.target instanceof Element && event.target.closest('button, a, input, textarea, select'))) return;
+		if (!ready || closing || frame || !phone.matches || !(event.target instanceof Element) ||
+			event.target.closest('button, a, input, textarea, select, [data-player-no-pull]')) return;
 		const { clientX: x, clientY: y } = event.touches[0];
-		touch = { x, y, lastY: y, time: event.timeStamp, speed: 0 };
+		const header = !!event.target.closest('[data-player-header]');
+		touch = { x, y, lastY: y, time: event.timeStamp, speed: 0, scroll: Math.max(0, dialog.scrollTop), header, captured: false };
 		target = 0;
 	}
 
@@ -126,21 +129,31 @@ export function playerSheet(panel: HTMLElement, close: () => void, dockPull?: Do
 		if (!touch) return;
 		if (event.touches.length !== 1) { reset(); return; }
 		const { clientX: x, clientY: y } = event.touches[0];
-		const dx = Math.abs(x - touch.x), dy = y - touch.y;
-		if (!target && (dy < -10 || dx > 10 && dx >= dy)) { touch = undefined; return; }
-		if (!target && dy <= Math.max(10, dx * 1.5)) return;
+		const dy = y - touch.y;
+		if (!touch.captured) {
+			const direction = pullDirection(x - touch.x, dy);
+			if (direction === 'blocked') { touch = undefined; return; }
+			if (direction === 'waiting') return;
+			touch.captured = true;
+		}
 		if (!event.cancelable) { reset(); return; }
 		event.preventDefault();
-		if (!target && !position) measure();
+		const distance = dy - (touch.header ? 0 : touch.scroll);
+		if (!touch.header && touch.scroll > 0) dialog.scrollTop = Math.max(0, -distance);
+		if (!target && !position && distance > 0) {
+			measure();
+			if (touch.header) rest += dialog.scrollTop;
+		}
 		touch.speed = (y - touch.lastY) / Math.max(1, event.timeStamp - touch.time);
 		touch.time = event.timeStamp;
 		touch.lastY = y;
-		queueRender(dy);
+		queueRender(distance);
 	}
 
 	function end(event: TouchEvent) {
-		const speed = touch && event.timeStamp - touch.time < 90 ? touch.speed : 0;
-		if (!touch || target < Math.min(120, innerHeight * 0.16) && (target < 48 || speed < 0.8)) { if (touch) reset(); return; }
+		if (!touch) return;
+		const speed = event.timeStamp - touch.time < 90 ? touch.speed : 0;
+		if (!touch.captured || !dismissPlayerPull(target, speed, innerHeight, touch.header)) { reset(); return; }
 		render(target);
 		dismiss();
 	}
@@ -166,6 +179,7 @@ export function playerSheet(panel: HTMLElement, close: () => void, dockPull?: Do
 	panel.addEventListener('touchmove', move, { passive: false });
 	panel.addEventListener('touchend', end);
 	panel.addEventListener('touchcancel', reset);
+	window.addEventListener('resize', reset);
 	function destroy() {
 		stopFrame();
 		dialogOpen.disconnect();
@@ -174,6 +188,7 @@ export function playerSheet(panel: HTMLElement, close: () => void, dockPull?: Do
 		panel.removeEventListener('touchmove', move);
 		panel.removeEventListener('touchend', end);
 		panel.removeEventListener('touchcancel', reset);
+		window.removeEventListener('resize', reset);
 		render(0);
 		dialog.style.removeProperty('--player-backdrop');
 	}

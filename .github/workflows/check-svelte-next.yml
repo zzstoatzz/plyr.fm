@@ -48,6 +48,9 @@ jobs:
         env:
           SCREENS_OUTPUT: ${{ runner.temp }}/next-svelte-screens/radio
       - run: bun run check:player-transition
+      - run: bun run check:player-presentation
+        env:
+          SCREENS_OUTPUT: ${{ runner.temp }}/next-svelte-screens/player
       - run: bun run check:artist-catalog
         env:
           SCREENS_OUTPUT: ${{ runner.temp }}/next-svelte-screens/artist

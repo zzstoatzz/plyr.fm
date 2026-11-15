@@ -1,8 +1,11 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { player } from './player.svelte';
+	import { auth } from './auth';
 	import { artistName, clock } from './tracks';
 	import { trackArtwork } from '@plyr/next-core/artwork';
 	import { parseChapters, currentChapter } from '@plyr/next-core/chapters';
+	import { parseSeen, seenKey } from '@plyr/next-core/behaviors/hints';
 	import { resolve } from '$app/paths';
 	import Artwork from './ui/Artwork.svelte';
 	import TrackCollections from './collections/TrackCollections.svelte';
@@ -15,8 +18,38 @@
 
 	let { close, pull }: { close?: () => void; pull?: DockPull } = $props();
 	let motion: ReturnType<typeof playerSheet>;
+	let condensed = $state(false);
+	let hintSeen = $state(true);
+	const hint = 'now-playing.more-below';
+	let hintKey: string | undefined;
 	const chapters = $derived(parseChapters(player.current?.metadata.description, player.current?.metadata.duration_seconds ?? undefined));
 	const chapter = $derived(currentChapter(chapters.chapters, player.position));
+	const playing = $derived(player.liveStation ? player.liveListening : player.playing && !player.outputElsewhere);
+
+	onMount(() => {
+		if (!close) return;
+		function readHint() {
+			const account = auth.getAuth();
+			if (!account.ready) return;
+			const key = seenKey(account.did ?? null);
+			if (key === hintKey) return;
+			hintKey = key;
+			try { hintSeen = parseSeen(localStorage.getItem(key)).has(hint); }
+			catch { hintSeen = true; }
+		}
+		readHint();
+		return auth.subscribe(readHint);
+	});
+
+	function dismissHint() {
+		hintSeen = true;
+		if (!hintKey) return;
+		try {
+			const seen = parseSeen(localStorage.getItem(hintKey));
+			seen.add(hint);
+			localStorage.setItem(hintKey, JSON.stringify([...seen]));
+		} catch {}
+	}
 
 	export function dismiss() {
 		if (motion) motion.dismiss();
@@ -27,7 +60,18 @@
 		if (!close) return;
 		const controller = playerSheet(node, close, pull);
 		motion = controller;
+		const dialog = node.closest('dialog');
+		const title = node.querySelector('[data-testid="now-playing-title"]');
+		const header = node.querySelector('[data-player-header]');
+		function scroll() {
+			if (!dialog?.open || !title || !header) return;
+			condensed = title.getBoundingClientRect().bottom <= header.getBoundingClientRect().bottom;
+			if (dialog.scrollTop > 24 && !hintSeen) dismissHint();
+		}
+		dialog?.addEventListener('scroll', scroll, { passive: true });
+		scroll();
 		return () => {
+			dialog?.removeEventListener('scroll', scroll);
 			controller?.destroy();
 			motion = undefined;
 		};
@@ -50,34 +94,57 @@
 
 {#if player.current}
 	<div class="now" class:sheet={!!close} data-testid="now-playing-dismiss-region" {@attach attachMotion}>
-		<header>
+		<header data-player-header data-testid="now-playing-header">
 			{#if close}<button class="icon-button dismiss" type="button" aria-label="Close" onclick={dismiss}><span class="phone-close"><Icon name="down" /></span><span class="desktop-close"><Icon name="x" /></span></button>{/if}
-			<span>{player.liveStation ? `live · ${player.liveStation.label} radio` : 'now playing'}</span>
+			{#if close && condensed}
+				<div class="condensed" data-testid="now-playing-condensed">
+					<div class="mini"><Artwork src={trackArtwork(player.current)} size={52} /></div>
+					<div class="mini-copy"><strong class="truncate">{player.current.metadata.title}</strong><span class="truncate">{artistName(player.current)}</span></div>
+					<button type="button" class="icon-button" aria-label={playing ? 'Pause' : player.liveStation ? 'Listen live' : 'Play'} onclick={() => player.toggle()}><Icon name={playing ? 'pause' : 'play'} size={18} /></button>
+				</div>
+			{:else}<span>{player.liveStation ? `live · ${player.liveStation.label} radio` : 'now playing'}</span>{/if}
 			{#if !player.liveStation}<a href={resolve('/(app)/queue')} class="icon-button" aria-label="Queue"><Icon name="queue" /></a>{:else}<span></span>{/if}
 		</header>
-		<div class="cover" data-testid="now-playing-artwork"><Artwork src={trackArtwork(player.current)} size={460} eager /></div>
-		<div class="copy">
-			<h1 data-testid="now-playing-title">{player.current.metadata.title}</h1>
-			<a class="subtle" href={resolve('/(app)/u/[actor]', { actor: player.current.artist.profile.handle || player.current.artist.did })}>{artistName(player.current)}</a>
-			{#if player.current.metadata.album}<p class="subtle">{player.current.metadata.album}</p>{/if}
-			<div class="position">{#if player.liveStation}<LiveProgress />{:else}<Scrub stacked />{/if}</div>
-			<div class="commands" class:live={!!player.liveStation}>
-				<Transport />
-			</div>
-			{#if !player.liveStation}
-				{#if !player.privateMode}
+		<div class="hero" data-testid="now-playing-hero">
+			<div class="cover" data-testid="now-playing-artwork"><Artwork src={trackArtwork(player.current)} size={460} eager /></div>
+			<div class="copy">
+				<h1 data-testid="now-playing-title">{player.current.metadata.title}</h1>
+				<a class="subtle" href={resolve('/(app)/u/[actor]', { actor: player.current.artist.profile.handle || player.current.artist.did })}>{artistName(player.current)}</a>
+				{#if player.current.metadata.album}<p class="subtle">{player.current.metadata.album}</p>{/if}
+				<div class="position">{#if player.liveStation}<LiveProgress />{:else}<Scrub stacked chapter={chapters.chapters[chapter]?.title} />{/if}</div>
+				<div class="commands" class:live={!!player.liveStation}>
+					<Transport />
+				</div>
+				{#if !player.liveStation && !player.privateMode}
 					{#key player.current.id}<TrackCollections track={player.current} transport={trackActions} compact />{/key}
 				{/if}
+				{#if !player.liveStation}
+					<label class="volume">
+						<Icon name={player.volume ? 'volume' : 'mute'} size={18} />
+						<input type="range" aria-label="Volume" min="0" max="1" step="0.01" value={player.volume} oninput={event => player.setVolume(event.currentTarget.valueAsNumber)} />
+					</label>
+				{/if}
+				{#if player.error}<p class="state" role="status">{player.error}</p>{/if}
+				{#if player.liveStation}<button class="text-button stop" onclick={() => { player.stopRadio(); close?.(); }}>leave radio</button>{/if}
+			</div>
+			{#if close && !player.liveStation && !player.privateMode}
+				<div class="hint-slot">
+					{#if !hintSeen}
+						<div class="coachmark" data-testid="coachmark"><span>scroll down for the artist and track details</span><button type="button" class="text-button" onclick={dismissHint}>got it</button></div>
+					{/if}
+				</div>
+			{/if}
+		</div>
+		<div class="details" data-testid="now-playing-details">
+			{#if !player.liveStation}
 				<div class="options">
 					<button class="icon-button" type="button" aria-label="Shuffle queue" onclick={() => player.shuffle()}><Icon name="shuffle" size={20} /></button>
 					<button class="icon-button" type="button" aria-label={`Repeat ${player.repeat}`} aria-pressed={player.repeat !== 'off'} onclick={() => player.cycleRepeat()}><Icon name="repeat" size={20} /></button>
 				</div>
 			{/if}
-			{#if player.error}<p class="state" role="status">{player.error}</p>{/if}
-			{#if player.liveStation}<button class="text-button stop" onclick={() => { player.stopRadio(); close?.(); }}>leave radio</button>{/if}
 			{#if player.privateMode}<a class="track-link" href={resolve('/(app)/private')}>private music <span aria-hidden="true">→</span></a>
 			{:else if !player.liveStation || player.current.id.startsWith('trk_')}
-				{#if !player.liveStation}<a class="artist-card" href={resolve('/(app)/u/[actor]', { actor: player.current.artist.profile.handle || player.current.artist.did })}>
+				{#if !player.liveStation}<a class="artist-card" data-testid="now-playing-artist" href={resolve('/(app)/u/[actor]', { actor: player.current.artist.profile.handle || player.current.artist.did })}>
 					<div class="avatar"><Artwork src={player.current.artist.profile.avatar_url ?? undefined} size={56} /></div>
 					<span><strong>{player.current.artist.profile.display_name || artistName(player.current)}</strong><small>@{player.current.artist.profile.handle}</small></span><Icon name="chevron" size={19} />
 				</a>{/if}
@@ -102,12 +169,17 @@
 
 <style>
 	.now { max-width: 33rem; margin: auto; padding: 0 1rem 2rem; background: var(--bg); }
-	header { display: flex; align-items: center; justify-content: space-between; height: 3.5rem; color: var(--muted); font-size: 0.875rem; }
+	header { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; height: 3.5rem; color: var(--muted); font-size: 0.875rem; background: var(--bg); }
 	.cover { border-radius: 0.95rem; width: 100%; transform-origin: top left; }
 	.copy { padding-top: 1.25rem; }
 	h1 { font-size: clamp(1.35rem, 4vw, 2rem); line-height: 1.18; overflow-wrap: anywhere; margin-bottom: 0.35rem; transform-origin: top left; }
 	.phone-close { display: none; }
 	.desktop-close { display: flex; }
+	.condensed { display: grid; grid-template-columns: 2rem minmax(0, 1fr) auto; align-items: center; flex: 1; gap: 0.5rem; min-width: 0; }
+	.mini { border-radius: 0.35rem; overflow: hidden; }
+	.mini-copy { display: grid; min-width: 0; }
+	.mini-copy strong { color: var(--text); }
+	.hint-slot, .volume { display: none; }
 	.position { margin-top: 1.65rem; }
 	.commands, .options { display: flex; justify-content: space-between; gap: 0.4rem; align-items: center; margin-block: 0.85rem; }
 	.commands :global(.transport) { width: 100%; justify-content: space-evenly; }
@@ -115,6 +187,7 @@
 	.commands.live { justify-content: center; }
 	.stop { display: flex; margin-inline: auto; }
 	.options { justify-content: center; }
+	.details { padding-block: 0.5rem 1rem; }
 	.artist-card { display: grid; grid-template-columns: 3.5rem minmax(0, 1fr) auto; align-items: center; gap: 0.7rem; padding: 0.65rem; border: 1px solid var(--line); border-radius: 0.85rem; background: var(--surface); overflow-wrap: anywhere; }
 	.avatar { border-radius: 50%; overflow: hidden; }
 	small { display: block; color: var(--muted); }
@@ -124,8 +197,23 @@
 	h2 { font-size: 1rem; }
 	.chapters button { display: flex; justify-content: start; text-align: start; width: 100%; gap: 0.8rem; }
 	.chapters button span, .chapters [aria-current] { color: var(--accent); }
+	@media (min-width: 800px) {
+		.sheet { max-width: 64rem; padding-inline: 1.75rem; }
+		.sheet .hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(1rem, 4vw, 3rem); align-items: center; }
+		.sheet .copy { min-width: 0; padding-top: 0; }
+		.sheet .volume { display: flex; gap: 0.5rem; justify-content: center; align-items: center; color: var(--muted); margin-top: 1rem; }
+		.volume input { width: 8rem; }
+	}
 	@media (max-width: 720px) {
 		.sheet { min-height: 100dvh; }
+		.sheet .hero { min-height: calc(100dvh - 3.5rem); display: flex; flex-direction: column; }
+		.sheet .cover { width: min(100%, max(9rem, calc(100dvh - 26.5rem))); margin-inline: auto; }
+		.sheet .copy { padding-top: 1rem; }
+		.sheet .position { margin-top: 1rem; }
+		.sheet .commands { margin-block: 0.65rem; }
+		.hint-slot { display: grid; min-height: 3.5rem; margin-top: auto; padding-block: 0.25rem; }
+		.coachmark { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; padding-inline: 0.6rem; color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: 0.7rem; font-size: 0.85rem; }
+		.coachmark button { flex: none; color: var(--accent); }
 		.phone-close { display: flex; }
 		.desktop-close { display: none; }
 	}
