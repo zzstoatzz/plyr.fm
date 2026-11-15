@@ -3,6 +3,8 @@ import type { Track } from '@plyr/next-core/api';
 import { ListeningSession } from '@plyr/next-core/listening-session';
 import { createPersonalPlayback, type PersonalPlaybackTarget } from '@plyr/next-core/personal-playback';
 import { createQueueAdmission } from '@plyr/next-core/personal-queue-join';
+import type { createJamPlayback, ActiveJam } from '@plyr/next-core/jam-playback';
+import type { JamIntent } from '@plyr/next-core/jam-connection';
 import { PlayOutbox } from '@plyr/next-core/play-outbox';
 import { playMetrics } from '@plyr/next-core/play-metrics';
 import { trackArtwork } from '@plyr/next-core/artwork';
@@ -44,7 +46,11 @@ class Player {
 	privateMode = $state(false);
 	liveStation = $state.raw<RadioStation>();
 	liveListening = $state(false);
-	get localMode() { return this.privateMode || !!this.liveStation; }
+	jam = $state.raw<ActiveJam>();
+	get localMode() { return this.privateMode || !!this.liveStation || !!this.jam; }
+	get canEditPublicQueue() { return !this.privateMode && !this.liveStation; }
+	get canSeek() { return !this.jam || this.jam.canSeek && this.jam.phase === 'connected'; }
+	#jam: ReturnType<typeof createJamPlayback> | undefined;
 	#leaveRadio: (() => void) | undefined;
 	#liveClock: (() => number) | undefined;
 	#liveOccurrence: string | undefined;
@@ -116,6 +122,7 @@ class Player {
 			if (!account.ready || previous && account.did === previous.did && account.agent === previous.agent && account.accountSync === previous.accountSync) return;
 			this.#stop?.();
 			if (previous?.did && previous.agent !== account.agent) {
+				this.#closeJam();
 				this.#resetOutput();
 				this.#setMediaSession();
 			}
@@ -142,6 +149,7 @@ class Player {
 			this.#stop?.();
 			this.#stop = undefined;
 			this.#outbox?.dispose();
+			this.#closeJam();
 			this.#resetOutput();
 			clearMediaSession?.();
 			window.removeEventListener('pagehide', progress);
@@ -172,12 +180,29 @@ class Player {
 			this.#startLocal(at >= 0 ? tracks : [track], Math.max(0, at));
 			return;
 		}
+		if (this.jam) {
+			const tracks = collection?.filter(item => !isPrivateTrack(item)) ?? [track];
+			const at = tracks.findIndex(item => item.record.uri === track.record.uri);
+			this.#jam?.replaceQueue(at < 0 ? [track] : tracks, Math.max(0, at), true);
+			return;
+		}
 		if (this.localMode) this.#leaveLocalMode();
 		this.#model.play(track, collection?.filter(item => !isPrivateTrack(item)), label);
 	}
 
+	canPlayFrom(track: Track) {
+		return !this.jam || this.canSeek && this.current?.record.uri === track.record.uri && this.current.record.cid === track.record.cid;
+	}
+
 	playFrom(track: Track, seconds: number) {
 		if (!Number.isFinite(seconds) || seconds < 0 || isPrivateTrack(track)) return;
+		if (this.jam) {
+			if (this.canPlayFrom(track)) {
+				this.seek(seconds);
+				if (!this.playing) this.jamCommand({ action: 'play' });
+			}
+			return;
+		}
 		const { uri, cid } = track.record;
 		const current = !this.liveStation && this.current?.record.uri === uri && this.current.record.cid === cid;
 		const waiting = this.loading || this.snapshot.waiting;
@@ -233,7 +258,60 @@ class Player {
 			this.#publicRepeat = this.repeat;
 			this.#model.suspend();
 		}
+		if (this.jam) this.#jam?.leave(false);
 		this.#dropRadio();
+	}
+
+	async joinJam(room: Pick<ActiveJam, 'host' | 'key'>, admit: () => Promise<{ ticket: string; websocketUrl: string }>, guard: () => void) {
+		const account = auth.getAuth();
+		if (!account.did || !account.agent || !account.jamSpace) throw new Error('enable jams to join this room.');
+		if (this.privateMode) throw new Error('play a public track before joining a jam.');
+		const { createJamPlayback } = await import('@plyr/next-core/jam-playback');
+		guard();
+		if (auth.getAuth().agent !== account.agent) throw new Error('account changed. try again.');
+		if (this.privateMode) throw new Error('play a public track before joining a jam.');
+		if (!this.jam) this.#holdQueue();
+		this.#jam ??= createJamPlayback({
+			did: account.did, track: api.track, socket: url => new WebSocket(url),
+			changed: jam => { this.jam = jam; },
+			target: () => ({
+				queue: this.queue, index: this.index, current: this.current,
+				ready: !!this.#mediaTrack && (this.#audio?.readyState ?? 0) >= 1, buffering: this.loading,
+				position: () => this.#audio?.currentTime ?? 0, playing: () => !!this.#audio && !this.#audio.paused,
+				load: (tracks, index) => { this.queue = tracks; this.index = index; return this.#load(tracks, index); },
+				loaded: async () => {
+					const source = this.#audioSource;
+					try { await this.#ready(); }
+					finally { if (source === this.#audioSource) this.loading = false; }
+				},
+				seek: seconds => this.#seekMedia(seconds), play: () => this.#playMedia(), pause: () => this.#audio?.pause(),
+				setQueue: (tracks, index) => { this.queue = tracks; this.index = index; },
+				clear: () => this.#resetOutput()
+			})
+		});
+		this.repeat = 'off';
+		this.#startAt = undefined;
+		this.#detachMedia();
+		this.#mediaTrack = undefined;
+		this.#listening.stop();
+		this.#jam.join({ ...room, admit });
+	}
+
+	leaveJam() {
+		if (!this.jam) return;
+		this.#jam?.leave(false);
+		this.#leaveLocalMode();
+	}
+
+	#closeJam() {
+		this.#jam?.close();
+		this.#jam = undefined;
+		this.jam = undefined;
+	}
+
+	jamCommand(intent: JamIntent) {
+		if (intent.action === 'play' || intent.action === 'pause') this.#jam?.setPlaying(intent.action === 'play', this.jam?.state);
+		else this.#jam?.command(intent);
 	}
 
 	startRadio(station: RadioStation, leave: () => void) {
@@ -341,6 +419,7 @@ class Player {
 	}
 
 	toggle() {
+		if (this.#jam?.toggle()) return;
 		if (this.liveStation) { this.setRadioListening(!this.liveListening); return; }
 		if (!this.current) return;
 		const pause = this.playing && !this.outputElsewhere;
@@ -364,6 +443,7 @@ class Player {
 		const duration = this.duration;
 		const position = Math.min(Math.max(0, seconds), duration);
 		if (!Number.isFinite(position) || duration <= 0) return;
+		if (this.#jam?.command({ action: 'seek', positionMs: Math.round(position * 1000) })) return;
 		if (this.privateMode || this.#embedded) { this.#setPosition(position); return; }
 		if (this.snapshot.remote) {
 			if (this.#model.ownsOutput()) this.#setPosition(position);
@@ -372,6 +452,7 @@ class Player {
 	}
 
 	get position() {
+		if (this.jam?.pendingSeekMs !== undefined) return this.jam.pendingSeekMs / 1000;
 		return this.localMode ? this.time : this.snapshot.restoredPosition ?? this.time;
 	}
 	get duration() {
@@ -393,13 +474,20 @@ class Player {
 	next() {
 		this.#startAt = undefined;
 		if (this.liveStation) return;
+		if (this.jam) {
+			const room = this.jam.state;
+			if (room && room.index + 1 < room.queue.length) this.#jam?.command({ action: 'selectTrack', index: room.index + 1 });
+			else this.#jam?.command({ action: 'pause' });
+			return;
+		}
 		if (!this.privateMode && !this.#embedded) return this.#model.next();
 		if (this.index + 1 < this.queue.length) this.jump(this.index + 1);
 		else if (this.repeat === 'all' && this.queue.length) this.jump(0);
 	}
-	jump(index: number) {
+	jump(index: number, playing?: boolean) {
 		this.#startAt = undefined;
 		if (this.liveStation) return;
+		if (this.#jam?.command({ action: 'selectTrack', index, playing })) return;
 		if (!this.privateMode && !this.#embedded) this.#model.select(index);
 		else if (this.queue[index]) this.#startLocal(this.queue, index);
 	}
@@ -410,36 +498,51 @@ class Player {
 			if (this.privateMode) this.queue = [...this.queue, track];
 			else this.play(track);
 		} else if (!this.privateMode) {
+			if (this.#jam?.enqueue([track])) return;
 			if (this.current) this.#model.enqueue(track);
 			else this.play(track);
 		}
 	}
 	enqueueCollection(tracks: Track[]) {
-		if (this.localMode) return;
-		this.#model.enqueueCollection(tracks.filter(track => track.record.cid && !isPrivateTrack(track)));
+		if (!this.canEditPublicQueue) return;
+		const available = tracks.filter(track => track.record.cid && !isPrivateTrack(track));
+		if (!this.#jam?.enqueue(available)) this.#model.enqueueCollection(available);
 	}
 	remove(index: number) {
 		if (this.liveStation) return;
+		if (this.#jam?.editQueue((items, current) => ({ queue: items.filter((_, at) => at !== index || at <= current), index: current }))) return;
 		if (this.privateMode) this.queue = editPrivateQueue(this.queue, this.index, { action: 'remove', at: index });
 		else this.#model.remove(index);
 	}
 	move(from: number, to: number) {
 		if (this.liveStation) return;
+		if (this.#jam?.editQueue((items, index) => {
+			if (from > index && to > index && items[from] && items[to]) items.splice(to, 0, ...items.splice(from, 1));
+			return { queue: items, index };
+		})) return;
 		if (this.privateMode) this.queue = editPrivateQueue(this.queue, this.index, { action: 'move', from, to });
 		else this.#model.move(from, to);
 	}
 	clear() {
 		if (this.liveStation) return;
+		if (this.#jam?.editQueue((items, index) => ({ queue: items.slice(0, index + 1), index }))) return;
 		if (this.privateMode) this.queue = editPrivateQueue(this.queue, this.index, { action: 'clear' });
 		else this.#model.clear();
 	}
 	shuffle() {
 		if (this.liveStation) return;
+		if (this.#jam?.editQueue((items, index) => {
+			for (let i = items.length - 1; i > index + 1; i--) {
+				const j = index + 1 + Math.floor(Math.random() * (i - index));
+				[items[i], items[j]] = [items[j], items[i]];
+			}
+			return { queue: items, index };
+		})) return;
 		if (this.privateMode) this.queue = editPrivateQueue(this.queue, this.index, { action: 'shuffle' });
 		else this.#model.shuffle();
 	}
 	cycleRepeat() {
-		if (this.liveStation) return;
+		if (this.liveStation || this.jam) return;
 		const repeat = this.repeat === 'off' ? 'all' : this.repeat === 'all' ? 'one' : 'off';
 		if (this.privateMode) this.repeat = repeat;
 		else { this.#model.setRepeat(repeat); this.#model.save(); }
@@ -467,6 +570,7 @@ class Player {
 				playbackRate: audio.playbackRate
 			});
 			if (play) this.#outbox?.enqueue(play);
+			this.#jam?.observe();
 		};
 		for (const event of ['timeupdate', 'durationchange', 'play', 'pause', 'playing', 'waiting', 'ended']) {
 			audio.addEventListener(event, observe);
@@ -479,6 +583,7 @@ class Player {
 		audio.addEventListener('error', () => { if (audio.src) this.error = 'could not load this audio'; this.loading = false; });
 		audio.addEventListener('ended', () => {
 			if (this.liveStation) { this.loading = this.liveListening; return; }
+			if (this.jam) { if (this.jam.canSeek) void this.next(); return; }
 			if ((this.privateMode || !this.snapshot.remote) && this.repeat === 'one') { this.#repeatTrack(); return; }
 			if (this.privateMode || this.#embedded) void this.next();
 			else void this.#model.next(false);

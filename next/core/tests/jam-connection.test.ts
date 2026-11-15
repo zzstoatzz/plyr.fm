@@ -80,6 +80,44 @@ test('explicit pause remains pause and stale room frames cannot move playback ba
   } finally { connection.close(); }
 });
 
+test('two pending Jam queue additions build on their acknowledged predecessors', async () => {
+  const { connection, socket, errors } = setup();
+  try {
+    await connection.connect(); socket.open(); socket.receive({ type: 'state', state: base, serverTimeMs: 10_000 });
+    const second = { ...base.queue[0], id: 'second' };
+    const third = { ...base.queue[0], id: 'third' };
+    connection.appendQueue([second]);
+    connection.appendQueue([third]);
+    const commands = () => socket.sent.filter(frame => frame.action === 'replaceQueue');
+    assert.equal(commands().length, 1);
+    socket.receive({ type: 'result', id: commands()[0].id, outcome: 'applied',
+      state: { ...base, revision: 2, queue: [...base.queue, second] }, serverTimeMs: 10_000 });
+    assert.equal(commands().length, 2);
+    assert.equal(commands()[1].expectedRevision, 2);
+    assert.deepEqual(commands()[1].queue, [...base.queue, second, third]);
+    assert.deepEqual(errors, []);
+  } finally { connection.close(); }
+});
+
+test('an index edit cannot remove a different track after the queue changes', async () => {
+  const { connection, socket, errors } = setup();
+  try {
+    const initial = { ...base, queue: ['one', 'two', 'three', 'four'].map(id => ({ ...base.queue[0], id })) };
+    await connection.connect(); socket.open(); socket.receive({ type: 'state', state: initial, serverTimeMs: 10_000 });
+    const remove = (at: number) => connection.editQueue((queue, index) => ({ queue: queue.filter((_, offset) => offset !== at), index }));
+    remove(1);
+    remove(2);
+    const commands = () => socket.sent.filter(frame => frame.action === 'replaceQueue');
+    assert.equal(commands().length, 1);
+    const queue = initial.queue.filter(track => track.id !== 'two');
+    socket.receive({ type: 'result', id: commands()[0].id, outcome: 'applied',
+      state: { ...initial, revision: 2, queue }, serverTimeMs: 10_000 });
+    assert.deepEqual(connection.state?.queue, queue);
+    assert.equal(commands().length, 1);
+    assert.deepEqual(errors, ['the jam queue changed. try that action again.']);
+  } finally { connection.close(); }
+});
+
 test('reconnect refreshes admission, discards unsent commands and accepts the new authoritative epoch', async () => {
   const sockets: Socket[] = [];
   let admissions = 0;

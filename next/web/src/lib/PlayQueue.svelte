@@ -1,5 +1,8 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { goto } from '$app/navigation';
+	import { auth } from './auth';
+	import { jamRoomPath } from './jam-room';
 	import { player } from './player.svelte';
 	import { artistName, clock } from './tracks';
 	import { trackArtwork } from '@plyr/next-core/artwork';
@@ -15,6 +18,14 @@
 	const continuation = $derived(player.queue.slice(end));
 	let pickList: HTMLOListElement | undefined = $state();
 	let pendingPromotion: { key: string; opener: HTMLButtonElement } | undefined;
+
+	function openJam() {
+		const { did } = auth.getAuth();
+		const path = player.jam ? jamRoomPath(player.jam.host, player.jam.key)
+			: did && player.current ? jamRoomPath(did, crypto.randomUUID(), player.current.id) : '/login?return_to=%2Fqueue';
+		close?.();
+		void goto(path);
+	}
 
 	function key(index: number) {
 		return player.localMode ? index : queueState.entries[index]?.key ?? index;
@@ -48,6 +59,9 @@
 	<header>
 		<h1>queue</h1>
 		<div class="actions">
+			{#if player.jam || player.current && player.canEditPublicQueue}
+				<button class="icon-button" type="button" aria-label={player.jam ? 'Open Jam' : 'Start a Jam'} title={player.jam ? 'Open Jam' : 'Start a Jam'} onclick={openJam}><Icon name="users" size={18} /></button>
+			{/if}
 			{#if player.current && !player.liveStation}
 				<button class="icon-button" type="button" aria-label="shuffle up next" title="shuffle up next" disabled={picks.length < 2} onclick={() => player.shuffle()}><Icon name="shuffle" size={18} /></button>
 				{#if picks.length}
@@ -95,11 +109,12 @@
 		<a href={resolve('/')}>browse tracks</a>
 	{/if}
 	{#if !player.localMode && player.snapshot.queueError}<p class="state" role="status">{player.snapshot.queueError}</p>{/if}
+	{#if player.jam?.error}<p class="state" role="status">{player.jam.error}</p>{/if}
 </section>
 
 {#snippet row(track: NonNullable<typeof player.current>, index: number, current: boolean)}
 		{@const promote = promotes(index)}
-		<button class="cover" type="button" aria-label={`${current && player.playing ? 'Pause' : 'Play'} ${track.metadata.title}`} onclick={() => current ? player.toggle() : player.jump(index)}>
+		<button class="cover" type="button" aria-label={`${current && player.playing ? 'Pause' : 'Play'} ${track.metadata.title}`} onclick={() => current ? player.toggle() : player.jump(index, true)}>
 			<Artwork src={trackArtwork(track)} size={44} eager={index - player.index < 8} />
 			<span class="play"><Icon name={current && player.playing ? 'pause' : 'play'} size={18} /></span>
 		</button>

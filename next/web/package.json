@@ -7,6 +7,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "check:account": "node scripts/check-account.cjs",
+    "check:jams": "node scripts/check-jams.cjs",
     "check:creator": "node scripts/check-creator.cjs",
     "check:collections": "node scripts/check-collections.cjs",
     "check:browser": "node scripts/check-shell.cjs",

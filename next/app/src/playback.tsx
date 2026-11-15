@@ -12,7 +12,6 @@ import { editPrivateQueue, withoutPrivateTrack } from '@plyr/next-core/publishin
 import { privateLibrary } from './publishing/private-config';
 import { blobUrl } from '@plyr/next-core/identity';
 import { gatedAudioUrl, releaseGatedAudioUrl } from './gated-audio';
-import { jamTrack } from '@plyr/next-core/jam-playback';
 import { useJamPlayback } from './use-jam-playback';
 import { usePersonalQueue } from './use-personal-queue';
 import { usePlayerAccounting } from './use-player-accounting';
@@ -395,9 +394,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
       if (isPrivateTrack(track)) { if (privateMode.current && track.artist.did === auth.did) setQueue(items => [...items, track]); else play(track); return; }
       if (privateMode.current) { toast.info('play a public track to change queues'); return; }
       toast.success(`queued ${track.metadata.title}`, 1800);
-      const ref = jamTrack(track);
-      if (jam.active()) { if (ref) jam.editQueue((items, at) => ({ queue: [...items, ref], index: at })); else jam.replaceQueue([...queue, track], index); }
-      else personal.enqueue(track);
+      if (!jam.enqueue([track])) personal.enqueue(track);
     },
     remove: (at) => { if (privateMode.current) { setQueue(items => editPrivateQueue(items, index, { action: 'remove', at })); return; } if (jam.editQueue((items, current) => ({ queue: at > current ? items.filter((_, position) => position !== at) : items, index: current }))) return; if (at > index) personal.remove(at); },
     move: (from, to) => {

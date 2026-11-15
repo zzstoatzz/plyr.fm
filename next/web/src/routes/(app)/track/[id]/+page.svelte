@@ -54,7 +54,7 @@
 
 {#snippet transport()}
 	<button class="primary-button" type="button" aria-label={active && player.playing ? 'Pause' : 'Play'} onclick={play}><Icon name={active && player.playing ? 'pause' : 'play'} size={25} /></button>
-	<button class="icon-button" type="button" aria-label="Add to queue" disabled={player.localMode} title={player.localMode ? "play a public track to change queues" : undefined} onclick={() => player.enqueue(track)}><Icon name="queue" /></button>
+	<button class="icon-button" type="button" aria-label="Add to queue" disabled={!player.canEditPublicQueue} title={!player.canEditPublicQueue ? "play a public track to change queues" : undefined} onclick={() => player.enqueue(track)}><Icon name="queue" /></button>
 {/snippet}
 
 {#key track.id}
@@ -98,7 +98,7 @@
 				{#await import('$lib/catalog/TrackComments.svelte')}
 					<Loading label="loading comments" />
 				{:then component}
-					<component.default {track} {playFrom} />
+				<component.default {track} playFrom={player.canPlayFrom(track) ? playFrom : undefined} />
 				{:catch}
 					<p role="alert" class="state">could not open comments.</p>
 				{/await}
