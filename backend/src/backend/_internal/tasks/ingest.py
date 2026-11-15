@@ -296,6 +296,13 @@ async def ingest_track_create(
                 existing_track.atproto_record_cid = cid
                 existing_track.atproto_record_rev = rev
                 existing_track.publish_state = "published"
+                if record.get("visibility") == "unlisted":
+                    if existing_track.visibility == "public":
+                        existing_track.visibility = "unlisted"
+                    existing_track.extra = {
+                        **existing_track.extra,
+                        "authored_unlisted": True,
+                    }
                 await project_record_tags(
                     db, existing_track, record, authoritative=True
                 )
@@ -324,7 +331,8 @@ async def ingest_track_create(
                 await run_post_track_create_hooks(
                     existing_track.id,
                     audio_url=resolved_audio_url,
-                    skip_notification=is_staging,
+                    skip_notification=is_staging
+                    or record.get("visibility") == "unlisted",
                     skip_copyright=is_staging,
                 )
             else:
@@ -412,6 +420,8 @@ async def ingest_track_create(
             audio_storage = "pds"
 
         extra: dict = {}
+        if record.get("visibility") == "unlisted":
+            extra["authored_unlisted"] = True
         if duration := record.get("duration"):
             extra["duration"] = duration
         if album := record.get("album"):
@@ -434,6 +444,9 @@ async def ingest_track_create(
             audio_storage=audio_storage,
             pds_blob_cid=pds_blob_cid,
             publish_state="published",
+            visibility="unlisted"
+            if record.get("visibility") == "unlisted"
+            else "public",
             description=record.get("description"),
             image_url=image_url,
             support_gate=record.get("supportGate"),
@@ -480,7 +493,7 @@ async def ingest_track_create(
     await run_post_track_create_hooks(
         track.id,
         audio_url=resolved_audio_url,
-        skip_notification=is_staging,
+        skip_notification=is_staging or record.get("visibility") == "unlisted",
         skip_copyright=is_staging,
     )
 

@@ -229,8 +229,7 @@ async def _search_tracks(
         select(Track, Artist, relevance.label("relevance"))
         .join(Artist, Track.artist_did == Artist.did)
         .where(_matches(Track.title, query))
-        # private (permissioned-space) media is never publicly searchable
-        .where(Track.publicly_visible)
+        .where(Track.in_search)
         .order_by(relevance.desc())
         .limit(limit)
     )
@@ -338,7 +337,7 @@ async def _search_tags(
     track_count_subq = (
         select(TrackTag.tag_id, func.count(TrackTag.track_id).label("track_count"))
         .join(Track, Track.id == TrackTag.track_id)
-        .where(Track.publicly_visible)
+        .where(Track.in_search)
         .group_by(TrackTag.tag_id)
         .subquery()
     )
@@ -469,8 +468,7 @@ async def semantic_search(
         select(Track, Artist)
         .join(Artist, Track.artist_did == Artist.did)
         .where(Track.id.in_(track_ids))
-        # private media is never publicly searchable (also shouldn't be indexed)
-        .where(Track.publicly_visible)
+        .where(Track.in_search)
     )
     result = await db.execute(stmt)
     rows = result.all()
