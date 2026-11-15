@@ -23,6 +23,11 @@ async function homePagination(browser, origin) {
       await rows.nth(23).waitFor();
       assert.deepEqual(requests, [null], 'waits until the end of the list approaches');
       assert.equal(await page.getByRole('button', { name: 'load more' }).count(), 0);
+      assert.equal(await page.evaluate(() => getComputedStyle(document.scrollingElement).scrollbarWidth),
+        width === 390 ? 'none' : 'auto', 'the page scrollbar is only hidden on narrow touch screens');
+      await page.mouse.move(width / 2, 320);
+      await page.mouse.wheel(0, 450);
+      await page.waitForFunction(() => window.scrollY > 0);
       await rows.nth(23).scrollIntoViewIfNeeded();
       await rows.getByText(tracks[1].metadata.title, { exact: true }).waitFor();
       await rows.last().scrollIntoViewIfNeeded();
