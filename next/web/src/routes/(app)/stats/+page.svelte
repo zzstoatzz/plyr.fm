@@ -6,6 +6,7 @@
 	import TrackChart from '$lib/stats/TrackChart.svelte';
 	import { catalogDuration } from '$lib/stats/duration';
 	import Loading from '$lib/ui/Loading.svelte';
+	import Icon from '$lib/ui/Icon.svelte';
 
 	let stats = $state<Awaited<ReturnType<typeof api.stats>>>();
 	let loading = $state(true);
@@ -15,10 +16,10 @@
 
 	const artistView = $derived(Boolean(page.url.searchParams.get('artist')));
 	const cards = $derived(stats && [
-		{ label: 'plays', value: stats.plays.toLocaleString() },
-		{ label: 'tracks', value: stats.tracks.toLocaleString() },
-		{ label: 'artists', value: stats.artists.toLocaleString() },
-		{ label: 'catalog runtime', value: catalogDuration(stats.duration_seconds) }
+		{ label: 'plays', icon: 'play_circle', value: stats.plays.toLocaleString() },
+		{ label: 'tracks', icon: 'music', value: stats.tracks.toLocaleString() },
+		{ label: 'artists', icon: 'users', value: stats.artists.toLocaleString() },
+		{ label: 'runtime', icon: 'clock', value: catalogDuration(stats.duration_seconds) }
 	] as const);
 
 	$effect(() => {
@@ -41,43 +42,45 @@
 <svelte:head><title>stats · plyr.fm</title></svelte:head>
 
 <section class="page-content stats">
-	<header class="intro">
-		<h1>stats</h1>
-		{#if !artistView}
-			<nav aria-label="on this page">
-				<a href="#most-liked">most liked tracks</a>
-				<a href="#artist-stats">artist stats</a>
-			</nav>
-		{/if}
-	</header>
-
 	{#if artistView}
 		<div class="artist-detail"><ArtistStats /></div>
 	{:else}
+		<header class="intro">
+			<h1>stats</h1>
+			<nav aria-label="on this page">
+				<a href="#most-liked"><Icon name="heart" size={16} /> most liked tracks</a>
+				<a href="#artist-stats"><Icon name="user" size={16} /> artist stats</a>
+			</nav>
+		</header>
 		<section class="overview" aria-labelledby="overview-title" aria-busy={loading}>
 			<header class="overview-heading">
 				<h2 id="overview-title">catalog overview</h2>
-				{#if stats}
-					<p class="subtle">updated <time datetime={new Date(stats.updated_at_ms).toISOString()}>{new Date(stats.updated_at_ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</time></p>
+				{#if attempted}
+					<button class="icon-button refresh" type="button" aria-label={loading ? 'refreshing' : error ? 'try again' : 'refresh stats'}
+						title={error ? 'try again' : 'refresh stats'} aria-disabled={loading} onclick={() => void refresh()}>
+						<Icon name="repeat" size={17} />
+					</button>
 				{/if}
 			</header>
 			{#if loading && !cards}<Loading inline label="loading stats" />{/if}
 			{#if cards}
 				<dl class="totals" aria-label="Catalog totals">
 					{#each cards as card (card.label)}
-						<div><dt>{card.label}</dt><dd>{card.value}</dd></div>
+						<div class:lead={card.label === 'plays'}>
+							<dt><Icon name={card.icon} size={17} />{card.label}</dt><dd>{card.value}</dd>
+						</div>
 					{/each}
 				</dl>
 			{/if}
-			<div class="overview-actions">
-				{#if cards}
+			{#if stats}
+				<footer class="overview-actions">
 					<details>
-						<summary>what counts</summary>
-						<p>the overview covers music you can discover on Next and plays counted here. artist totals can include tracks shared by direct link.</p>
+						<summary>about these numbers</summary>
+						<p>plays are counted on Next. catalog totals cover discoverable tracks. artist totals can include tracks shared by direct link.</p>
 					</details>
-				{/if}
-				{#if attempted}<button class="text-button refresh" type="button" aria-disabled={loading} onclick={() => void refresh()}>{loading ? 'refreshing…' : error ? 'try again' : 'refresh stats'}</button>{/if}
-			</div>
+					<p>updated <time datetime={new Date(stats.updated_at_ms).toISOString()}>{new Date(stats.updated_at_ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</time></p>
+				</footer>
+			{/if}
 			{#if error}<p role="alert" class="state">{stats ? 'could not refresh stats.' : 'could not load stats.'}</p>{/if}
 		</section>
 
@@ -89,25 +92,41 @@
 </section>
 
 <style>
-	.stats { max-width: 68rem; }
-	.intro { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem 1.25rem; }
-	h1 { font-size: clamp(1.9rem, 4vw, 2.6rem); letter-spacing: -0.035em; }
-	h2 { font-size: 1.2rem; }
-	nav { display: flex; gap: 1rem; flex-wrap: wrap; color: var(--muted); }
-	nav a { display: inline-flex; align-items: center; min-height: 2.75rem; text-decoration: underline; text-underline-offset: 0.2em; }
-	.overview { margin: 1.1rem 0 1.5rem; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 0.75rem 0 0.45rem; }
-	.overview-heading, .overview-actions { display: flex; justify-content: space-between; align-items: start; gap: 0.5rem 1rem; flex-wrap: wrap; }
-	.overview-actions { align-items: baseline; }
-	.totals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem 0.75rem; margin: 1rem 0 0.65rem; }
-	.totals div { display: grid; align-content: start; }
-	dt { grid-row: 2; color: var(--muted); font-size: 0.875rem; }
-	dd { margin: 0; font-weight: 690; font-size: clamp(1.5rem, 4vw, 2.1rem); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-	details p { color: var(--muted); max-width: 30rem; padding: 0 0 0.6rem; }
-	summary { line-height: 2.75rem; cursor: pointer; }
-	.refresh { text-decoration: underline; text-underline-offset: 0.2em; }
-	.refresh[aria-disabled="true"] { opacity: 0.6; cursor: wait; }
-	.artist-detail { max-width: 37rem; margin-top: 1rem; }
-	.explore { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: clamp(1.5rem, 5vw, 3rem); }
-	@media (max-width: 980px) { .explore { grid-template-columns: minmax(0, 1fr); } }
-	@media (max-width: 720px) { .totals { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+	.stats { max-width: 72rem; }
+	.intro { display: flex; align-items: end; justify-content: space-between; flex-wrap: wrap; gap: 0.55rem 1rem; margin-bottom: 1.25rem; }
+	h1 { font-size: clamp(2.4rem, 5vw, 3.3rem); font-weight: 730; line-height: 1; letter-spacing: -0.065em; }
+	h2 { font-size: 1rem; }
+	nav { display: flex; gap: 0 0.95rem; flex-wrap: wrap; color: var(--muted); }
+	nav a { display: inline-flex; align-items: center; gap: 0.4rem; min-height: 2.75rem; font-size: 0.875rem; }
+	.overview { container-type: inline-size; margin-bottom: 1.35rem; background: var(--surface); border: 1px solid var(--line); border-radius: 1rem; overflow: hidden; }
+	.overview-heading, .overview-actions { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem 0.8rem; flex-wrap: wrap; padding-inline: 1rem; }
+	.overview-heading { min-height: 3.4rem; }
+	.totals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; margin: 0; background: var(--line); border-block: 1px solid var(--line); }
+	.totals div { display: grid; align-content: start; gap: 0.45rem; min-width: 0; background: var(--surface); padding: 0.9rem 1rem 1.05rem; }
+	.totals .lead { background: color-mix(in srgb, var(--accent) 9%, var(--surface)); }
+	dt { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; color: var(--muted); font-size: 0.85rem; }
+	dd { margin: 0; line-height: 1.05; font-weight: 700; letter-spacing: -0.045em; font-size: clamp(1.25rem, 3.2vw, 2.2rem); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+	.lead dd { color: var(--accent); }
+	.overview-actions { align-items: start; color: var(--muted); font-size: 0.8rem; }
+	.overview-actions > p { padding-block: 0.85rem; }
+	details p { max-width: 41ch; padding-bottom: 0.85rem; }
+	summary { display: list-item; min-height: 2.75rem; padding-block: 0.8rem; cursor: pointer; }
+	.refresh { color: var(--muted); }
+	.refresh[aria-disabled='true'] { opacity: 0.6; cursor: wait; }
+	.state { padding-inline: 1rem; }
+	.artist-detail { max-width: 42rem; margin-inline: auto; }
+	.explore { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(15rem, 1fr); gap: 1.2rem; align-items: start; }
+	@media (max-width: 850px) { .explore { grid-template-columns: minmax(0, 1fr); } }
+	@media (max-width: 720px) {
+		.intro { margin-bottom: 0.75rem; }
+		.totals { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+		.totals div { padding: 0.75rem; }
+		.totals .lead { grid-column: 1 / -1; padding-inline: 1rem; }
+		.lead dd { font-size: 2.65rem; }
+	}
+	@container (max-width: 17rem) {
+		.totals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+		.totals .lead { grid-column: auto; padding-inline: 0.75rem; }
+		.lead dd { font-size: 1.65rem; }
+	}
 </style>

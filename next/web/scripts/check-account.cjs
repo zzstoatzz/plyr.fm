@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const { mkdir } = require('node:fs/promises');
 const path = require('node:path');
 const { chromium } = require('playwright');
 const { fixtureAccounts, fixturePage, authorizeFixture } = require('./pds-browser-fixture.cjs');
@@ -141,8 +142,42 @@ const coordinator = 'https://jams.next.plyr.fm';
     assert.deepEqual((await fetch(records).then(response => response.json())).records, []);
     await panel.getByRole('button', { name: 'Close comments' }).click();
 
-    await page.getByRole('link', { name: 'settings' }).click();
+    await page.setViewportSize({ width: 390, height: 844 });
+    const nav = page.getByRole('navigation', { name: 'Main navigation' });
+    const account = nav.getByRole('button', { name: 'account', exact: true });
+    const menu = page.getByRole('dialog', { name: 'account', exact: true });
+    const activePath = new URL(page.url()).pathname;
+    await account.focus();
+    await account.press('Enter');
+    await menu.waitFor();
+    assert.equal(new URL(page.url()).pathname, activePath, 'opening the account menu keeps the current page');
+    await menu.getByRole('link', { name: 'portal @' + handle }).waitFor();
+    await menu.getByRole('link', { name: /private music/ }).waitFor();
+    assert.ok(await menu.evaluate(node => node.scrollWidth <= node.clientWidth));
+    if (process.env.SCREENS_OUTPUT) {
+      await mkdir(process.env.SCREENS_OUTPUT, { recursive: true });
+      await page.screenshot({ path: path.join(process.env.SCREENS_OUTPUT, 'next-account-mobile.png') });
+    }
+    await page.keyboard.press('Escape');
+    await menu.waitFor({ state: 'hidden' });
+    await page.waitForFunction(element => document.activeElement === element, await account.elementHandle());
+    await nav.getByRole('link', { name: 'library', exact: true }).click();
+    await page.waitForURL(origin + '/library');
+    await account.click();
+    await menu.waitFor();
+    await page.goBack();
+    await page.waitForURL(origin + activePath);
+    await menu.waitFor({ state: 'hidden' });
+    await account.click();
+    await menu.getByRole('link', { name: /settings queue sync/ }).click();
+    await page.waitForURL(origin + '/settings');
+    await menu.waitFor({ state: 'hidden' });
     await page.getByText('your queue syncs across devices.').waitFor();
+    if (process.env.SCREENS_OUTPUT) {
+      await page.screenshot({ path: path.join(process.env.SCREENS_OUTPUT, 'next-settings-mobile.png') });
+    }
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await nav.getByRole('link', { name: 'settings', exact: true }).waitFor();
     const revoked = page.waitForResponse(response => response.url() === 'https://pds.fixture.test/oauth/revoke' && response.ok());
     await page.getByRole('button', { name: 'sign out' }).click();
     await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'sign in' }).waitFor();

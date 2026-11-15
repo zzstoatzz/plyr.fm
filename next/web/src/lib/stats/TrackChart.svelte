@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import { trackHref } from '$lib/tracks';
 	import type { ChartEntry } from '@plyr/next-core/api';
 	import { trackArtwork } from '@plyr/next-core/artwork';
@@ -41,7 +42,7 @@
 	});
 </script>
 
-<section id="most-liked" aria-labelledby="most-liked-title">
+<section id="most-liked" tabindex="-1" aria-labelledby="most-liked-title">
 	<header>
 		<h2 id="most-liked-title">most liked tracks</h2>
 		<div class="ranges" bind:this={rangesGroup} role="group" aria-label="time range for track likes">
@@ -58,18 +59,19 @@
 		<button type="button" class="text-button" bind:this={retryButton} aria-disabled={retrying}
 			onclick={() => { if (!retrying) { retrying = true; retry += 1; } }}>{retrying ? 'retrying…' : 'retry track chart'}</button>
 	{:else if rows?.length}
-		<ol class="ranking">
+		<ol class="ranking" role="list">
 			{#each rows as entry (entry.track.id)}
-				<li>
+				<li value={entry.rank}>
+					<span class="rank" aria-hidden="true">{entry.rank}</span>
 					<span class="cover">
 						<Artwork src={trackArtwork(entry.track)} size={42} />
 					</span>
 					<div class="track">
 						<a class="track-title" href={trackHref(entry.track)}>{entry.track.metadata.title}</a>
-						<a class="artist" href={'/u/' + encodeURIComponent(entry.track.artist.did)}>{entry.track.artist.profile.display_name || entry.track.artist.profile.handle}</a>
+						<a class="artist" href={resolve('/(app)/u/[actor]', { actor: entry.track.artist.did })}>{entry.track.artist.profile.display_name || entry.track.artist.profile.handle}</a>
 						<div class="bar" aria-hidden="true"><span style:width={(entry.period_like_count / maxLikes * 100) + '%'}></span></div>
 					</div>
-					<span class="likes">{entry.period_like_count.toLocaleString()} <span class="subtle">{entry.period_like_count === 1 ? 'like' : 'likes'}</span></span>
+					<span class="likes"><strong>{entry.period_like_count.toLocaleString()}</strong> <span>{entry.period_like_count === 1 ? 'like' : 'likes'}</span></span>
 				</li>
 			{/each}
 		</ol>
@@ -79,18 +81,29 @@
 </section>
 
 <style>
-	header { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem 1rem; flex-wrap: wrap; }
+	section:focus { outline: none; }
+	section { min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 1rem; }
+	header { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem 1rem; flex-wrap: wrap; padding: 1rem; }
 	h2 { font-size: 1.2rem; }
-	.ranges { display: flex; flex-wrap: wrap; gap: 0.25rem; }
-	.ranges button { padding-inline: 0.7rem; }
-	button[aria-pressed='true'] { background: var(--raised); color: var(--accent); box-shadow: inset 0 0 0 1px var(--line); }
-	.ranking { list-style: none; padding: 0; margin: 0.35rem 0 0; }
-	.ranking li { display: grid; grid-template-columns: 2.625rem minmax(0, 1fr) auto; gap: 0.7rem; align-items: start; padding: 0.7rem 0; border-top: 1px solid var(--line); }
+	.ranges { display: flex; flex-wrap: wrap; gap: 0.2rem; }
+	.ranges button { padding-inline: 0.65rem; color: var(--muted); }
+	.ranges button[aria-pressed='true'] { background: color-mix(in srgb, var(--accent) 9%, var(--raised)); color: var(--accent); box-shadow: inset 0 0 0 1px var(--line); }
+	.ranking { list-style: none; padding: 0; margin: 0; }
+	.ranking li { display: grid; grid-template-columns: 1.25rem 2.625rem minmax(0, 1fr) auto; gap: 0.65rem; align-items: center; padding: 0.75rem 1rem; border-top: 1px solid var(--line); }
+	.rank { color: var(--muted); font-size: 0.85rem; text-align: center; font-variant-numeric: tabular-nums; }
 	.cover { border-radius: 0.4rem; overflow: hidden; }
-	.track { display: grid; overflow-wrap: anywhere; }
+	.track { display: grid; justify-items: start; min-width: 0; overflow-wrap: anywhere; }
 	.track-title { font-weight: 650; }
 	.artist { color: var(--muted); font-size: 0.875rem; }
-	.likes { white-space: nowrap; font-variant-numeric: tabular-nums; }
-	.bar { height: 3px; border-radius: 3px; background: var(--raised); margin-top: 0.5rem; }
+	.likes { display: grid; text-align: right; line-height: 1.25; font-variant-numeric: tabular-nums; }
+	.likes strong { font-size: 1.2rem; }
+	.likes span { color: var(--muted); font-size: 0.75rem; }
+	.bar { width: 100%; height: 3px; border-radius: 3px; background: var(--raised); margin-top: 0.45rem; }
 	.bar span { display: block; height: 100%; background: var(--accent); border-radius: inherit; }
+	.state { margin: 0; padding: 0.8rem 1rem; }
+	section > button { margin: 0 1rem 1rem; }
+	@media (max-width: 395px) {
+		.ranges button { font-size: 0.875rem; padding-inline: 0.55rem; }
+		.ranking li { gap: 0.45rem; padding-inline: 0.65rem; }
+	}
 </style>
