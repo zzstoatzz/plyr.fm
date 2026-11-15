@@ -1,12 +1,12 @@
 import { error, redirect } from '@sveltejs/kit';
 import { ApiError, type Track } from '@plyr/next-core/api';
-import { ownerTrackKey } from '@plyr/next-core/track-access';
+import { ownerTrackAddress } from '@plyr/next-core/track-access';
 import { api } from '$lib/api';
 import type { PageLoad } from './$types';
 
 export const load: PageLoad = async ({ params, url }) => {
-	const ownerKey = ownerTrackKey(params.id);
-	if (ownerKey) return { track: null, ownerKey };
+	const address = ownerTrackAddress(params.id);
+	if (address) return { track: null, address };
 	let track: Track;
 	try {
 		track = await api.track(params.id);
@@ -16,5 +16,5 @@ export const load: PageLoad = async ({ params, url }) => {
 	}
 	const legacyId = track.legacy_id;
 	if (legacyId && params.id !== String(legacyId)) redirect(308, `/track/${legacyId}` + url.search);
-	return { track, ownerKey: null };
+	return { track, address: null };
 };

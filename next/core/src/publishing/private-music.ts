@@ -55,7 +55,7 @@ export function createPrivateLibrary({ NSID, PRIVATE_SPACE_TYPE }: Pick<AuthConf
     }
     const uri = `${privateSpace(owner)}/${owner}/${NSID.track}/${rkey}`;
     return {
-      object: 'track', id: `private_${rkey}`,
+      object: 'track', id: `${owner}|${rkey}`,
       record: { uri, cid, revision: cid, collection: NSID.track, rkey },
       metadata: { title: value.title, artist_name: value.artist, created_at: value.createdAt,
         album: 'album' in value && typeof value.album === 'string' ? value.album : null,

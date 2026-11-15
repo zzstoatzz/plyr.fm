@@ -152,8 +152,8 @@ function Edit({ label, href }: { label: string; href: Href }) {
 
 function useOwnerOnlyTracks(did: string, active: boolean) {
   const auth = useAuth();
-  const pds = useMemo(() => auth.did === did && auth.privatePublishing ? privatePds(auth) : undefined,
-    [auth.did, auth.rpc, auth.privatePublishing, did]);
+  const pds = useMemo(() => auth.did === did && (auth.privatePublishing || auth.privateDeleting) ? privatePds(auth) : undefined,
+    [auth.did, auth.rpc, auth.privatePublishing, auth.privateDeleting, did]);
   const load = useCallback(async (cursor?: string): Promise<Page<Track>> => {
     const page = await pds?.list(cursor);
     return { object: 'list', data: page?.tracks ?? [], has_more: !!page?.cursor, next_cursor: page?.cursor };

@@ -15,9 +15,9 @@
 	<TrackDetail track={data.track} />
 {:else if !account.ready}
 	<Loading label="loading track" />
-{:else if account.did && account.rpc}
+{:else if account.did === data.address.owner && account.rpc}
 	{#key account.rpc}
-		{#key data.ownerKey}<OwnerTrack {account} rkey={data.ownerKey} />{/key}
+		{#key data.address.rkey}<OwnerTrack {account} rkey={data.address.rkey} />{/key}
 	{/key}
 {:else}
 	<div class="page-content"><h1>track not found</h1><a href="/">browse tracks</a></div>

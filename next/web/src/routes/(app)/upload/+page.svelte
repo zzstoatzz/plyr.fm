@@ -5,8 +5,7 @@
   import { onMount } from 'svelte';
   import { auth } from '$lib/auth';
   import Loading from '$lib/ui/Loading.svelte';
-  import OwnerTrackUpload from '$lib/publishing/OwnerTrackUpload.svelte';
-  import UploadForm from '$lib/publishing/UploadForm.svelte';
+  import TrackUpload from '$lib/publishing/TrackUpload.svelte';
 
   const onlyYou = $derived(page.url.searchParams.get('visibility') === 'only-you');
   const albumMode = $derived(page.url.searchParams.get('mode') === 'album');
@@ -29,19 +28,7 @@
     {:else if account.did}
       {#key account.rpc}
         {#if albumMode}<AlbumUpload {account} owner={account.did} />
-        {:else}
-          <div class="visibility">
-            <span>who can listen?</span>
-            <nav aria-label="Who can listen">
-              {#if onlyYou}
-                <a class="text-button" href={uploadPath}>everyone</a><span aria-current="page">only you</span>
-              {:else}
-                <span aria-current="page">everyone</span><a class="text-button" href={uploadPath + '?visibility=only-you'}>only you</a>
-              {/if}
-            </nav>
-          </div>
-          {#if onlyYou}<OwnerTrackUpload {account} />{:else}<UploadForm {account} />{/if}
-        {/if}
+        {:else}<TrackUpload {account} {onlyYou} />{/if}
       {/key}
     {:else}
       <a class="text-button" href={resolve('/(app)/login') + '?' + new URLSearchParams({ return_to: uploadPath + page.url.search })}>sign in</a>
@@ -51,7 +38,6 @@
 
 <style>
   .upload { max-width: 38rem; display: grid; gap: 0.8rem; }
-  .visibility { display: grid; gap: 0.35rem; }
   nav { display: flex; align-items: center; gap: 0.65rem; }
   nav span { background: var(--hover); border-radius: 0.55rem; padding: 0.65rem 0.8rem; }
 </style>

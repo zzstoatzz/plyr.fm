@@ -1,12 +1,13 @@
 import { useAppearance } from './appearance';
 import { ListPlus, DotsThree as Ellipsis } from './icons';
 import { collectionArtwork } from '@plyr/next-core/artwork';
-import { ownerTrackKey } from '@plyr/next-core/track-access';
+import { ownerTrackAddress } from '@plyr/next-core/track-access';
 import { useAuth } from './auth';
+import { getAuth } from './auth-state';
 import { privatePds } from './publishing/private-pds';
 import { PrivateTrackDelete } from './publishing/PrivateTrackDelete';
 import { canToggleTrack } from '@plyr/next-core/track-revision';
-import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { PauseGlyph as PauseIcon, PlayGlyph as PlayIcon } from './PlayerGlyph';
@@ -43,15 +44,21 @@ function TrackDetail({ id, onPlay, onEnqueue, trackActions }: {
   id: string; onPlay: Play; onEnqueue: (track: Track) => void; trackActions?: TrackActions;
 }) {
   const account = useAuth();
-  const rkey = ownerTrackKey(id);
-  const owner = rkey ? account.did : null;
-  const rpc = rkey ? account.rpc : null;
+  const address = ownerTrackAddress(id);
+  const rkey = address?.rkey;
+  const owner = address?.owner === account.did ? account.did : null;
+  const rpc = owner ? account.rpc : null;
   const pds = useMemo(() => owner && rpc ? privatePds(account) : undefined, [owner, rpc]);
   const load = useCallback(async () => {
     if (!rkey) return await api.track(id);
     return pds ? (await pds.track(rkey)) ?? null : null;
   }, [id, rkey, pds]);
   const result = useResource(load);
+  const loadPending = useCallback(async () => pds ? await pds.pending() : [], [pds]);
+  const pending = useResource(loadPending);
+  const loadCollection = useCallback(async () => pds ? (await pds.list()).tracks : [], [pds]);
+  const collection = useResource(loadCollection);
+  const navigation = useNavigation();
   const track = result.data;
   const player = usePlayback();
   const [actionsOpen, setActionsOpen] = useState(false);
@@ -61,14 +68,23 @@ function TrackDetail({ id, onPlay, onEnqueue, trackActions }: {
   if (!track) return <Status loading={!result.error} error={result.error} retry={result.retry} />;
   const active = canToggleTrack(player.current, track, !!player.jam);
   const playing = active && player.status.playing;
-  if (pds) return <TrackPresentation track={track}
-    controls={<PlayerControl primary large glow={playing} icon={playing ? PauseIcon : PlayIcon} label={playing ? 'Pause' : 'Play'}
-      busy={active && player.loading} onPress={() => active ? player.setPlaying(!player.status.playing) : onPlay(track)} />}
-    stats={<Copy>only you</Copy>}
-    utilities={<PrivateTrackDelete key={track.record.uri} track={track} auth={account} deletion={pds.deletion} pending={false} deleted={() => {
-      player.forgetPrivateTrack(track.record.uri);
-      router.replace('/portal');
-    }} />} />;
+  if (pds) {
+    const loaded = collection.data ?? [];
+    const queue = loaded.some(item => item.record.uri === track.record.uri) ? loaded : [track, ...loaded];
+    const waiting = !!pending.data?.some(upload => upload.uri === track.record.uri);
+    return <TrackPresentation track={track}
+      controls={<PlayerControl primary large glow={playing} icon={playing ? PauseIcon : PlayIcon} label={playing ? 'Pause' : 'Play'}
+        busy={active && player.loading} onPress={() => active ? player.setPlaying(!player.status.playing) : onPlay(track, queue)} />}
+      stats={<Copy>only you</Copy>}
+      utilities={waiting
+        ? <InlineLink href={{ pathname: '/upload', params: { visibility: 'only-you' } }}>finish upload</InlineLink>
+        : pending.error ? <Status error={pending.error} retry={pending.retry} />
+          : pending.data && <PrivateTrackDelete key={track.record.uri} track={track} auth={account} deletion={pds.deletion} deleted={() => {
+            if (getAuth().rpc !== rpc) return;
+            player.forgetPrivateTrack(track.record.uri);
+            if (navigation.isFocused()) router.replace('/portal');
+          }} />} />;
+  }
   return <>
     <TrackPresentation track={track}
       controls={<>

@@ -16,12 +16,15 @@
 	let problem = $state('');
 	let removal = $state<'confirm' | 'uncertain'>();
 	let busy = $state(false);
+	let uploadPending = $state(false);
+	let siblings: Promise<Track[]> | undefined;
 	let live = false;
 	const current = () => live && auth.getAuth().rpc === account.rpc;
 
 	onMount(() => {
 		live = true;
 		void load();
+		siblings = pds.list().then(result => result.tracks, () => []);
 		return () => { live = false; };
 	});
 
@@ -31,11 +34,22 @@
 		try {
 			const result = await pds.track(rkey);
 			if (current()) track = result;
+			if (result) {
+				const uploads = await pds.pending().catch(() => []);
+				if (current()) uploadPending = uploads.some(upload => upload.uri === result.record.uri);
+			}
 		} catch {
 			if (current()) problem = 'could not load this track.';
 		} finally {
 			if (current()) loading = false;
 		}
+	}
+
+	async function playTrack(item: Track) {
+		const tracks = await siblings ?? [];
+		if (!current()) return;
+		const queue = tracks.some(track => track.record.uri === item.record.uri) ? tracks : [item, ...tracks];
+		player.play(item, queue);
 	}
 
 	async function remove(item: Track, check: boolean) {
@@ -67,10 +81,12 @@
 	<Loading label="loading track" />
 {:else if track}
 	{@const item = track}
-	<TrackDetail track={item}>
+	<TrackDetail track={item} {playTrack}>
 		{#snippet ownerActions()}
 			<div class="track-actions">
-				{#if removal}
+				{#if uploadPending}
+					<a class="text-button" href={resolve('/upload?visibility=only-you')}>finish upload</a>
+				{:else if removal}
 					<p>delete “{item.metadata.title}”?</p>
 					{#if !account.privateDeleting}
 						<a class="text-button" href={resolve(`/login?${new URLSearchParams({ return_to: '/track/' + item.id })}`)}>sign in again to delete</a>

@@ -5,10 +5,13 @@
 	import type { PrivateCreate, PrivateResult } from '@plyr/next-core/publishing/private-music';
 	import { auth } from '$lib/auth';
 	import { privateMusic } from '$lib/private-library';
+	import { canonicalAudioFile } from '$lib/media/audio-file';
 	import { fileDuration } from '$lib/media/file-duration';
 	import Loading from '$lib/ui/Loading.svelte';
 
-	let { account }: { account: ReturnType<typeof auth.getAuth> } = $props();
+	let { account, selected, busy = $bindable(false), audio = $bindable(), title = $bindable(''), description = $bindable(''), tags = $bindable('') }: {
+		account: ReturnType<typeof auth.getAuth>; selected: boolean; busy: boolean; audio: File | undefined; title: string; description: string; tags: string;
+	} = $props();
 	const pds = $derived(privateMusic(account));
 	let live = false;
 	let generation = 0;
@@ -16,14 +19,9 @@
 	let pending = $state.raw<PrivateCreate[]>([]);
 	let results = $state<Record<string, PrivateResult>>({});
 	let loading = $state(true);
-	let busy = $state(false);
 	let recoveryError = $state('');
 	let feedback = $state('');
-	let file = $state<File>();
-	let title = $state('');
 	let artist = $state('');
-	let description = $state('');
-	let tags = $state('');
 	let attempt: string | undefined;
 	const active = $derived(pending.some(operation => !operation.archived));
 	let fileInput = $state<HTMLInputElement>();
@@ -64,7 +62,7 @@
 	function reset(operation: PrivateCreate) {
 		if (!current() || attempt !== operation.rkey) return;
 		attempt = undefined;
-		file = undefined;
+		audio = undefined;
 		title = '';
 		artist = '';
 		description = '';
@@ -73,19 +71,21 @@
 	}
 
 	function upload() {
-		const selected = file;
-		if (!selected || active) return;
+		const file = audio;
+		if (!selected || !file || active) return;
+		const input = { file, title, artist: artist.trim() || account.handle || '', description, tags: tags.split('\n') };
 		void run(async () => {
-			const duration = await fileDuration(selected);
+			const duration = await fileDuration(file);
 			if (!current()) return;
 			const result = await pds.upload({
-				file: selected, duration, title, artist: artist.trim() || account.handle || '', description, tags: tags.split(/[\n,]+/)
+				...input, duration
 			}, operation => { if (current()) attempt = operation.rkey; });
 			if (!current()) return;
 			results[result.operation.rkey] = result.result;
 			if (result.result.state === 'accepted') {
 				await pds.dismiss(result.operation);
-				if (current()) await goto(resolve('/(app)/portal'));
+				if (current() && selected) reset(result.operation);
+				if (current() && selected) await goto(resolve('/(app)/portal'));
 			}
 		});
 	}
@@ -113,7 +113,7 @@
 				<button class="text-button" disabled={busy} onclick={() => run(async () => {
 					await pds.dismiss(operation, results[operation.rkey]?.state === 'different');
 					reset(operation);
-					if (results[operation.rkey]?.state === 'accepted') await goto(resolve('/(app)/portal'));
+					if (selected && results[operation.rkey]?.state === 'accepted') await goto(resolve('/(app)/portal'));
 				})}>{results[operation.rkey]?.state === 'different' ? 'keep existing track' : 'done with upload'}</button>
 			{:else}
 				<button class="text-button" disabled={busy} onclick={() => run(async () => {
@@ -132,10 +132,11 @@
 		<form onsubmit={event => { event.preventDefault(); upload(); }}>
 			<label for="private-audio">audio</label>
 			<input id="private-audio" type="file" accept="audio/*" bind:this={fileInput} disabled={busy || active} onchange={event => {
-				file = event.currentTarget.files?.[0];
-				if (file && !title) title = file.name.replace(/\.[^.]+$/, '').slice(0, 256);
+				const file = event.currentTarget.files?.[0];
+				audio = file ? canonicalAudioFile(file) : undefined;
+				if (audio && !title) title = audio.name.replace(/\.[^.]+$/, '').slice(0, 256);
 			}} />
-			<p class="subtle">up to 100 MiB</p>
+			<p class="subtle">{audio ? audio.name + ' · ' : ''}up to 100 MiB</p>
 			<label for="private-title">title</label>
 			<input id="private-title" bind:value={title} maxlength="256" required disabled={busy || active} />
 			<label for="private-artist">artist</label>
@@ -143,8 +144,8 @@
 			<label for="private-description">description</label>
 			<textarea id="private-description" bind:value={description} maxlength="5000" rows="3" disabled={busy || active}></textarea>
 			<label for="private-tags">tags</label>
-			<input id="private-tags" bind:value={tags} placeholder="comma-separated" disabled={busy || active} />
-			<button class="text-button submit" type="submit" disabled={busy || active || loading || !!recoveryError || !file || !title.trim()}>
+			<textarea id="private-tags" bind:value={tags} placeholder="one tag per line" rows="2" disabled={busy || active}></textarea>
+			<button class="text-button submit" type="submit" disabled={busy || active || loading || !!recoveryError || !audio || !title.trim()}>
 				{busy ? 'saving…' : 'upload'}
 			</button>
 		</form>

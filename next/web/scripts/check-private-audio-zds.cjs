@@ -25,20 +25,29 @@ async function rpc(method, body, token) {
 }
 async function checkOwnerTrack(page, audio, previousSource, origin, appView, coordinator) {
   await page.getByRole('link', { name: 'upload', exact: true }).last().click();
-  await page.getByRole('navigation', { name: 'Who can listen' }).getByRole('link', { name: 'only you' }).click();
-  await page.waitForURL('**/upload?visibility=only-you');
   const shortAudio = Buffer.from(audio.subarray(0, 44 + 8000 * 2 * 4));
   shortAudio.writeUInt32LE(shortAudio.length - 8, 4);
   shortAudio.writeUInt32LE(shortAudio.length - 44, 40);
-  await page.getByLabel('audio', { exact: true }).setInputFiles({ name: 'fixture.wav', mimeType: 'audio/wav', buffer: shortAudio });
-  await page.getByLabel('title', { exact: true }).fill(ownerTitle);
-  await page.getByLabel('artist', { exact: true }).fill('fixture artist');
+  const policy = page.getByRole('navigation', { name: 'Who can listen' });
+  const editor = page.locator('form:visible');
+  await editor.getByRole('textbox', { name: 'title', exact: true }).fill(ownerTitle);
+  await editor.getByLabel('audio file', { exact: true }).setInputFiles({ name: 'fixture.wav', mimeType: 'audio/wav', buffer: shortAudio });
+  await policy.getByRole('link', { name: 'only you' }).click();
+  await page.waitForURL('**/upload?visibility=only-you');
+  assert.equal(await editor.getByRole('textbox', { name: 'title', exact: true }).inputValue(), ownerTitle);
+  await editor.getByText(/fixture\.wav/).waitFor();
+  await editor.getByRole('textbox', { name: 'tags', exact: true }).fill('field\nambient');
+  await policy.getByRole('link', { name: 'everyone' }).click();
+  assert.equal(await editor.getByRole('textbox', { name: 'tags', exact: true }).inputValue(), 'field\nambient');
+  await policy.getByRole('link', { name: 'only you' }).click();
+  await editor.getByRole('textbox', { name: 'artist', exact: true }).fill('fixture artist');
   await page.getByRole('button', { name: 'upload', exact: true }).click();
   await page.waitForURL('**/portal');
   const row = page.getByRole('list', { name: 'Your tracks' }).getByRole('listitem').filter({ hasText: ownerTitle });
   await row.getByText('only you', { exact: true }).waitFor();
   await row.getByRole('link', { name: ownerTitle }).click();
   await page.getByRole('heading', { name: ownerTitle, exact: true }).waitFor();
+  const ownerId = decodeURIComponent(new URL(page.url()).pathname.split('/').at(-1));
   const play = page.locator('article').getByRole('button', { name: 'Play', exact: true });
   await play.click();
   await page.getByTestId('player-dock').getByText(ownerTitle).waitFor();
@@ -58,7 +67,7 @@ async function checkOwnerTrack(page, audio, previousSource, origin, appView, coo
     };
   }));
   for (const messages of [appView, coordinator, [publicCheckpoints]]) {
-    assert.ok(!messages.some(message => /private_|privateMedia|Owner-only recording fixture/i.test(message)),
+    assert.ok(!messages.some(message => /privateMedia|Owner-only recording fixture/i.test(message) || message.includes(ownerId) || message.includes(encodeURIComponent(ownerId)) || message.includes(ownerId.replace('|', '%7C'))),
       'private track stayed out of public API requests, queue messages and checkpoints');
   }
   await page.screenshot({ path: output + '/track-visibility-only-you.png' });

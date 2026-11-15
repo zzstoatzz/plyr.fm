@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { OwnerTrackUpload } from './OwnerTrackUpload';
 import { useAuth } from '../auth';
 import { getAuth, type Auth } from '../auth-state';
@@ -16,7 +16,7 @@ import { usePendingSharedAudio, useSharedAudio } from './shared-audio';
 import { TagsField } from './TagsField';
 import { normalizeTrackTags } from '@plyr/next-core/publishing/track-tags';
 import { CreateRecovery, EarlierCreates, useCreateRecovery } from './CreateRecovery';
-import { AudienceToggle, CheckRow, FieldError, FormCard, PickTile } from './UploadPieces';
+import { AudienceToggle, CheckRow, FieldError, FormCard, PickTile, type TrackDraftFields } from './UploadPieces';
 import { pickArtwork } from './artwork';
 import { useArtistName } from './artist-name';
 import { QueuedUpload } from './QueuedUpload';
@@ -26,25 +26,20 @@ import { draftInRecovery, type QueuedUploadDraft } from '@plyr/next-core/publish
 export default function Upload() {
   const auth = useAuth();
   const { visibility } = useLocalSearchParams<{ visibility?: string }>();
-  const [onlyYou, setOnlyYou] = useState(visibility === 'only-you');
+  const onlyYou = visibility === 'only-you';
   const [session, setSession] = useState({ rpc: auth.rpc, version: 0 });
   if (session.rpc !== auth.rpc) setSession({ rpc: auth.rpc, version: session.version + 1 });
   return <Page title="upload">
-    {!auth.ready ? <Copy>loading your account…</Copy> : !auth.did ? <SignedOut />
-      : <>
-        <Copy>who can listen?</Copy>
-        <AudienceToggle onlyYou={onlyYou} select={setOnlyYou} />
-        {onlyYou ? <OwnerTrackUpload key={`${auth.did}:${session.version}`} auth={auth} />
-          : <AccountUpload key={`${auth.did}:${session.version}`} auth={auth} />}
-      </>}
+    {!auth.ready ? <Copy>loading your account…</Copy> : !auth.did ? <SignedOut onlyYou={onlyYou} />
+      : <TrackUpload key={`${auth.did}:${session.version}`} auth={auth} onlyYou={onlyYou} />}
   </Page>;
 }
 
-function SignedOut() {
+function SignedOut({ onlyYou }: { onlyYou: boolean }) {
   const shared = usePendingSharedAudio();
   return <>
     {shared && <Copy>sign in to upload {shared}.</Copy>}
-    <Action label="Sign in" href={{ pathname: '/login', params: { return_to: '/upload' } }} />
+    <Action label="Sign in" href={{ pathname: '/login', params: { return_to: onlyYou ? '/upload?visibility=only-you' : '/upload' } }} />
   </>;
 }
 
@@ -70,19 +65,37 @@ function tagProblem(tags: string) {
   catch (failure) { return failure instanceof Error ? failure.message : 'check the tags.'; }
 }
 
-function AccountUpload({ auth }: { auth: Auth }) {
+function TrackUpload({ auth, onlyYou }: { auth: Auth; onlyYou: boolean }) {
+  const [restored] = useState(() => readDraft(`plyr-upload-draft:${auth.did}`));
+  const [file, setFile] = useState<MediaFile | null>(null);
+  const [title, setTitle] = useState(restored?.title ?? '');
+  const [description, setDescription] = useState(restored?.description ?? '');
+  const [tags, setTags] = useState(restored?.tags ?? '');
+  const [ownerBusy, setOwnerBusy] = useState(false);
+  const [ownerVisited, setOwnerVisited] = useState(onlyYou);
+  useEffect(() => { if (onlyYou) setOwnerVisited(true); }, [onlyYou]);
+  const draft = { file, setFile, title, setTitle, description, setDescription, tags, setTags };
+  return <>
+    <Copy>who can listen?</Copy>
+    <AudienceToggle onlyYou={onlyYou} disabled={ownerBusy} select={value => router.setParams({ visibility: value ? 'only-you' : undefined })} />
+    <View style={onlyYou ? { display: 'none' } : { gap: 14 }}>
+      <AccountUpload {...draft} auth={auth} restored={restored} />
+    </View>
+    {(onlyYou || ownerVisited) && <View style={onlyYou ? { gap: 14 } : { display: 'none' }}>
+      <OwnerTrackUpload {...draft} auth={auth} selected={onlyYou} onBusy={setOwnerBusy} />
+    </View>}
+  </>;
+}
+
+function AccountUpload({ auth, restored, file, setFile, title, setTitle, description, setDescription, tags, setTags }: TrackDraftFields & { auth: Auth; restored?: Draft }) {
   const live = useRef(true);
   const draftKey = `plyr-upload-draft:${auth.did}`;
-  const [restored] = useState(() => readDraft(draftKey));
-  const [file, setFile] = useState<MediaFile | null>(null);
   const [artwork, setArtwork] = useState<MediaFile | null>(null);
-  const [title, setTitle] = useState(restored?.title ?? '');
   // The title the last audio file gave, so a later pick may replace it; a typed title is never replaced.
   const autoTitle = useRef<string | undefined>(restored?.named ? restored.title : undefined);
   const [album, setAlbum] = useState(restored?.album ?? '');
-  const [description, setDescription] = useState(restored?.description ?? '');
-  const [tags, setTags] = useState(restored?.tags ?? '');
   const [details, setDetails] = useState(!!(restored?.album || restored?.description || restored?.tags));
+  useEffect(() => { if (description || tags) setDetails(true); }, [description, tags]);
   const consentKey = `plyr-storage-consent:${auth.did}`;
   const [serviceConsent, setServiceConsent] = useState(() => readLocal(consentKey) === 'yes');
   const autoTagKey = `plyr-auto-tag:${auth.did}`;

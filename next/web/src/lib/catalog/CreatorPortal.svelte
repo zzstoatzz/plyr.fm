@@ -83,7 +83,7 @@
     ownerError = false;
     ownerLoading = true;
     try {
-      if (!account.privatePublishing) return;
+      if (!account.privatePublishing && !account.privateDeleting) return;
       const result = await privateMusic(account).list(cursor);
       if (current()) {
         const previous = cursor ? ownerTracks : [];

@@ -13,7 +13,7 @@
 	import Artwork from '$lib/ui/Artwork.svelte';
 	import Icon from '$lib/ui/Icon.svelte';
 	import Loading from '$lib/ui/Loading.svelte';
-	let { track, ownerActions }: { track: Track; ownerActions?: Snippet } = $props();
+	let { track, ownerActions, playTrack = player.play.bind(player) }: { track: Track; ownerActions?: Snippet; playTrack?: (track: Track) => void } = $props();
 	const active = $derived(!player.liveStation && canToggleTrack(player.current, track, !!player.jam));
 	const canDiscuss = $derived(!isPrivateTrack(track));
 	let sharedTrack = $state<string>();
@@ -22,7 +22,7 @@
 
 	function play() {
 		if (active) player.toggle();
-		else player.play(track);
+		else playTrack(track);
 	}
 
 	function playFrom(seconds: number) {
@@ -68,7 +68,7 @@
 		{#if track.metadata.tags?.length}
 			<nav class="tags" aria-label="Tags">
 				{#each track.metadata.tags as tag (tag)}
-					<a href={resolve('/') + '?' + new URLSearchParams({ tag })}>{tag}</a>
+					<a href={resolve(`/?${new URLSearchParams({ tag })}`)}>{tag}</a>
 				{/each}
 			</nav>
 		{/if}

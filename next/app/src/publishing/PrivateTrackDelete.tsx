@@ -5,8 +5,8 @@ import { getAuth, type Auth } from '../auth-state';
 import { Action, Copy, row } from '../controls';
 import type { privatePds } from './private-pds';
 
-export function PrivateTrackDelete({ track, auth, deletion, pending, deleted }: {
-  track: Track; auth: Auth; deletion: ReturnType<typeof privatePds>['deletion']; pending: boolean; deleted: () => void;
+export function PrivateTrackDelete({ track, auth, deletion, deleted }: {
+  track: Track; auth: Auth; deletion: ReturnType<typeof privatePds>['deletion']; deleted: () => void;
 }) {
   const [state, setState] = useState<'closed' | 'confirm' | 'unknown' | 'present'>('closed');
   const [busy, setBusy] = useState(false), [message, setMessage] = useState<string>();
@@ -26,8 +26,7 @@ export function PrivateTrackDelete({ track, auth, deletion, pending, deleted }: 
     } finally { locked.current = false; if (live.current && sameSession()) setBusy(false); }
   }
   if (state === 'closed') return <View style={{ alignSelf: 'flex-start', gap: 6 }}>
-    <Action label={`Delete ${track.metadata.title}`} destructive disabled={pending} onPress={() => setState('confirm')} />
-    {pending && <Copy>finish this track’s upload before deleting it.</Copy>}
+    <Action label={`Delete ${track.metadata.title}`} destructive onPress={() => setState('confirm')} />
   </View>;
   return <View style={{ gap: 10 }}>
     <Copy>delete “{track.metadata.title}”? this deletes the current version, including changes made elsewhere. it cannot be undone here.</Copy>
