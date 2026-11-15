@@ -18,7 +18,7 @@
 	}
 </script>
 
-<div class="track" data-testid={testid}>
+<div class="track" data-testid={testid} data-track-id={track.id}>
 	<button class="cover" type="button" data-testid="track-play-control" aria-label={`${playing ? 'Pause' : 'Play'} ${title}`} onclick={toggle}>
 		<Artwork src={trackArtwork(track)} />
 		<span class="play"><Icon name={playing ? 'pause' : 'play'} size={20} /></span>

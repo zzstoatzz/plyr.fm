@@ -29,6 +29,7 @@ class Player {
 	time = $state(0);
 	length = $state(0);
 	volume = $state(1);
+	#lastAudibleVolume = 1;
 	error = $state<string>();
 	repeat = $state<PersonalPlaybackTarget['repeat']>('off');
 	keepPlaying = $state(false);
@@ -350,7 +351,11 @@ class Player {
 	}
 	setVolume(value: number) {
 		this.volume = Math.min(1, Math.max(0, value));
+		if (this.volume > 0) this.#lastAudibleVolume = this.volume;
 		if (this.#audio) this.#audio.volume = this.volume;
+	}
+	toggleMute() {
+		this.setVolume(this.volume === 0 ? this.#lastAudibleVolume : 0);
 	}
 	previous() {
 		if (this.liveStation) return;

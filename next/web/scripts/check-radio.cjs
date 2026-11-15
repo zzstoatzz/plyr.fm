@@ -124,6 +124,12 @@ async function stationFlow(browser, origin, width, scheme) {
     await now.getByRole('link', { name: 'Fixture radio artist' }).click();
     await page.waitForURL('**/u/**');
     assert.ok(await page.evaluate(() => window.media.some(media => !media.paused && media.src.includes('fresh-first'))));
+    await now.waitFor({ state: 'hidden' });
+    await page.keyboard.press('Space');
+    await dock.getByRole('button', { name: 'Listen live', exact: true }).waitFor();
+    await page.waitForFunction(() => window.media.every(media => media.paused));
+    await page.keyboard.press('Space');
+    await page.waitForFunction(() => window.media.some(media => !media.paused && media.src.includes('fresh-first')));
     await dock.getByRole('button', { name: 'Open now playing' }).click();
     await now.getByRole('button', { name: 'leave radio' }).click();
     await dock.getByText(tracks[0].metadata.title).waitFor();

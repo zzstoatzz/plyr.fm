@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
+	import { resolve } from '$app/paths';
 	import Icon from '$lib/ui/Icon.svelte';
 	import Loading from '$lib/ui/Loading.svelte';
 	import type { PageProps } from './$types';
@@ -18,8 +20,15 @@
 
 <section class="page-content">
 	<h1>search</h1>
-	<form action="/search" onsubmit={event => { event.preventDefault(); void goto(`/search?${new URLSearchParams({ q: query.trim() })}`); }}>
-		<input aria-label="Search tracks, artists, albums and playlists" type="search" name="q" bind:value={query} placeholder="tracks, artists, albums and playlists" />
+	<form action="/search" onsubmit={event => {
+		event.preventDefault();
+		const shortcutSearch = page.state.shortcutSearch;
+		void goto(`${resolve('/search')}?${new URLSearchParams({ q: query.trim() })}`, {
+			replaceState: shortcutSearch,
+			state: { shortcutSearch }
+		});
+	}}>
+		<input id="search-query" aria-label="Search tracks, artists, albums and playlists" type="search" name="q" bind:value={query} placeholder="tracks, artists, albums and playlists" />
 		<button class="icon-button" type="submit" aria-label="Search"><Icon name="search" /></button>
 	</form>
 	{#await data.results}

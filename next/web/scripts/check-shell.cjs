@@ -76,6 +76,146 @@ async function loginScreen(browser) {
   } finally { await context.close(); }
 }
 
+async function keyboard(browser, phone, scheme) {
+  const width = phone ? 390 : 1280;
+  const { context, page, errors } = await setup(browser, width, phone ? 844 : 960, { phone, scheme });
+  const press = key => page.keyboard.press(key);
+  const blur = () => page.evaluate(() => document.activeElement.blur());
+  const modifier = phone ? 'Meta' : 'Control';
+  const dock = page.getByTestId('player-dock');
+  try {
+    await page.goto(origin);
+    const opener = page.getByTestId('home-track-row').first().getByRole('link', { name: tracks[0].metadata.title, exact: true });
+    await opener.focus();
+    await press('?');
+    const guide = page.getByRole('dialog', { name: 'keyboard shortcuts' });
+    await guide.waitFor({ timeout: 3000 });
+    assert.ok(await guide.getByText('seek back or forward 10 seconds').isVisible());
+    assert.ok((await guide.boundingBox()).height < (phone ? 844 : 960) * 0.8, 'shortcuts fit in a compact dialog');
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    await page.screenshot({ path: path.join(output, `${width}-${scheme}-shortcuts.png`) });
+    await press('q');
+    assert.equal(new URL(page.url()).pathname, '/');
+    assert.equal(await page.getByTestId('queue-panel').count(), 0);
+    await press('Escape');
+    await guide.waitFor({ state: 'hidden' });
+    assert.ok(await opener.evaluate(node => document.activeElement === node));
+
+    if (!phone) {
+      const help = page.getByRole('button', { name: 'keyboard shortcuts', exact: true });
+      await help.click();
+      await guide.waitFor();
+      await press('Escape');
+      assert.equal(await help.evaluate(node => document.activeElement === node), true);
+      await opener.focus();
+    }
+
+    await press('q');
+    const queue = page.getByRole('region', { name: 'Queue', exact: true });
+    await queue.getByText('your queue is empty.').waitFor({ timeout: 5000 });
+    if (phone) assert.equal(new URL(page.url()).pathname, '/queue');
+    await press('q');
+    await queue.waitFor({ state: 'hidden' });
+    assert.equal(new URL(page.url()).pathname, '/');
+    if (phone) {
+      await page.goForward();
+      await page.waitForURL('**/queue');
+      await queue.getByText('your queue is empty.').waitFor();
+      await press('q');
+      await page.waitForURL(origin + '/');
+    }
+
+    const chartOpener = page.getByTestId('home-chart').getByRole('link', { name: tracks[0].metadata.title, exact: true });
+    await chartOpener.focus();
+    await press(`${modifier}+k`);
+    await page.waitForURL('**/search');
+    const searchHistoryLength = await page.evaluate(() => history.length);
+    const search = page.getByRole('searchbox');
+    await search.waitFor();
+    assert.ok(await search.evaluate(node => document.activeElement === node));
+    await press('q');
+    await press('?');
+    assert.equal(await search.inputValue(), 'q?');
+    assert.equal(await guide.isVisible(), false);
+    await search.press('Enter');
+    await page.waitForURL('**/search?q=q%3F');
+    await page.getByText('no results for “q?”.').waitFor();
+    await page.route('https://api.next.plyr.fm/v1/charts/tracks?**', async route => {
+      if (new URL(route.request().url()).searchParams.get('period') === 'month') {
+        await new Promise(resolve => setTimeout(resolve, 1800));
+      }
+      await route.fallback();
+    }, { times: 2 });
+    await press('Escape');
+    await page.waitForURL(origin + '/');
+    await opener.waitFor();
+    await page.waitForFunction(node => document.activeElement === node, await chartOpener.elementHandle());
+    assert.ok(await chartOpener.evaluate(node => {
+      const { top, bottom } = node.getBoundingClientRect();
+      return top >= 0 && bottom <= innerHeight;
+    }), 'the restored link is in view');
+    assert.equal(await page.evaluate(() => history.length), searchHistoryLength, 'search and its query share one browser entry');
+    await page.goForward();
+    await page.waitForURL('**/search?q=q%3F');
+    await page.getByText('no results for “q?”.').waitFor();
+    await press('Escape');
+    await page.waitForURL(origin + '/');
+
+    await press(`${modifier}+Comma`);
+    await page.waitForURL('**/settings');
+    await page.getByRole('heading', { name: 'settings', exact: true }).waitFor();
+    await press(`${modifier}+k`);
+    await page.waitForURL('**/search');
+    await press(`${modifier}+k`);
+    await page.waitForURL('**/settings');
+
+    await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'home', exact: true }).click();
+    await page.getByTestId('home-track-row').first().getByRole('button', { name: `Play ${tracks[0].metadata.title}`, exact: true }).click();
+    await dock.getByRole('button', { name: 'Pause', exact: true }).waitFor();
+    await page.getByTestId('home-track-row').nth(1).getByRole('button', { name: `Add ${tracks[1].metadata.title} to queue` }).click();
+    await blur();
+    await press('Space');
+    await dock.getByRole('button', { name: 'Play', exact: true }).waitFor();
+    const position = dock.getByRole('slider', { name: 'Playback position' });
+    await position.fill('12');
+    await blur();
+    const actualPosition = () => position.inputValue().then(Number);
+    await press('ArrowRight');
+    assert.equal(await actualPosition(), 22);
+    await press('ArrowLeft');
+    assert.equal(await actualPosition(), 12);
+    await press('J');
+    assert.equal(await actualPosition(), 0);
+
+    const volume = dock.getByRole('slider', { name: 'Volume', includeHidden: true });
+    if (!phone) {
+      await volume.fill('0.35');
+      await volume.focus();
+      await press('m');
+      assert.equal(await volume.inputValue(), '0.35', 'volume slider keeps its focus');
+    }
+    const beforeMute = await volume.inputValue();
+    await dock.getByRole('button', { name: 'Play', exact: true }).focus();
+    await press('m');
+    assert.equal(await volume.inputValue(), '0');
+    await press('M');
+    assert.equal(await volume.inputValue(), beforeMute);
+    await press('l');
+    await dock.getByText(tracks[1].metadata.title, { exact: true }).waitFor();
+    await press('j');
+    await dock.getByText(tracks[0].metadata.title, { exact: true }).waitFor();
+    if (!phone) {
+      await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'queue', exact: true }).click();
+      await page.waitForURL('**/queue');
+      const dockQueue = dock.getByRole('button', { name: 'Queue', exact: true, pressed: true });
+      await dockQueue.waitFor({ timeout: 3000 });
+      assert.equal(await dockQueue.isDisabled(), true);
+      assert.equal(new URL(page.url()).pathname, '/queue');
+    }
+    assert.deepEqual(errors, []);
+  } finally { await context.close(); }
+}
+
 (async () => {
   await mkdir(output, { recursive: true });
   const staticBuild = !origin;
@@ -83,9 +223,12 @@ async function loginScreen(browser) {
   const browser = await chromium.launch();
   try {
     for (const phone of [true, false]) {
-      for (const scheme of ['light', 'dark']) await screen(browser, phone, scheme);
+      for (const scheme of ['light', 'dark']) {
+        await screen(browser, phone, scheme);
+        await keyboard(browser, phone, scheme);
+      }
     }
     await loginScreen(browser);
-    console.log(`Svelte shell, queue and sign-in passed at phone and desktop widths → ${output}`);
+    console.log(`Svelte shell, queue, shortcuts and sign-in passed at phone and desktop widths → ${output}`);
   } finally { await browser.close(); if (staticBuild) close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
