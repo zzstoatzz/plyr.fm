@@ -4,10 +4,11 @@
 	import type { AwaitStatus, ListDetail, Track } from '@plyr/next-core/api';
 	import type { CollectionRevision } from '@plyr/next-core/collections/collection-order';
 	import { applyCollectionRevision } from '@plyr/next-core/collections/projected-collection';
-	import { collectionArtwork, trackArtwork } from '@plyr/next-core/artwork';
+	import { trackArtwork } from '@plyr/next-core/artwork';
 	import { auth } from './auth';
 	import { player } from './player.svelte';
 	import Artwork from './ui/Artwork.svelte';
+	import CollectionArtwork from './collections/CollectionArtwork.svelte';
 	import Icon from './ui/Icon.svelte';
 	import Loading from './ui/Loading.svelte';
 	import TrackRow from './TrackRow.svelte';
@@ -74,11 +75,11 @@
 
 <article class="page-content" class:playlist={list.object === 'playlist'} class:album={list.object === 'album'}>
 	<header>
-		<div class="cover" class:collage={list.object === 'playlist' && covers.length === 4}>
-			{#if list.object === 'playlist' && covers.length === 4}
+		<div class="cover" class:collage={list.object === 'playlist' && !list.metadata.cover_blob_cid && covers.length === 4}>
+			{#if list.object === 'playlist' && !list.metadata.cover_blob_cid && covers.length === 4}
 				{#each covers as cover (cover)}<Artwork src={cover} size={112} eager />{/each}
 			{:else}
-				<Artwork src={collectionArtwork(list)} size={230} eager />
+				<CollectionArtwork {list} size={230} eager />
 			{/if}
 		</div>
 		<div class="copy">

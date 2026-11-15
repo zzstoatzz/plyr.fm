@@ -30,6 +30,10 @@ export function collectionRecord(value: unknown, kind: CollectionRecord['listTyp
   return { ...value, listType: kind, items };
 }
 
+export function coverBlobCid(value: unknown): string | undefined {
+  if (object(value) && value.$type === 'blob' && object(value.ref) && typeof value.ref.$link === 'string') return value.ref.$link;
+}
+
 export function orderedCollection(value: CollectionRecord, order: readonly number[]): CollectionRecord {
   if (order.length !== value.items.length || new Set(order).size !== order.length
     || order.some(index => !Number.isInteger(index) || index < 0 || index >= order.length)) {

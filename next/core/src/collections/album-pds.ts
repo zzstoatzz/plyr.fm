@@ -1,17 +1,19 @@
 import { publicTrackReference } from '../publishing/track-reference';
 import { repoOk as ok, getRecord, type RepoRpc } from '../publishing/repo-rpc';
+import type { MediaFile } from '../publishing/private-music';
 import type { Track, AwaitStatus } from '../api';
 import type { CollectionItem, CollectionRevision } from './collection-order';
 import type { collectionOrdering } from './collection-order-pds';
 import { albumName, albumMembership, type AlbumEntry } from './album-membership';
 
-export function albumPublishing({ rpc, did, trackCollection, assertSession, ordering, publish }: {
+export function albumPublishing({ rpc, did, trackCollection, assertSession, ordering, publish, uploadCover }: {
   rpc: RepoRpc;
   did: `did:${string}:${string}`;
   trackCollection: `${string}.${string}.${string}`;
   assertSession: () => void;
   ordering: ReturnType<typeof collectionOrdering>;
-  publish: (name: string, items: CollectionItem[]) => Promise<{ uri: string; status: AwaitStatus }>;
+  uploadCover: (file: MediaFile) => Promise<{ imageBlob: unknown }>;
+  publish: (name: string, items: CollectionItem[], cover?: { imageBlob: unknown }) => Promise<{ uri: string; status: AwaitStatus }>;
 }) {
   async function verify(tracks: Track[]) {
     const items = new Map<Track, CollectionItem>();
@@ -28,17 +30,29 @@ export function albumPublishing({ rpc, did, trackCollection, assertSession, orde
     }
     return items;
   }
-  async function create(name: string, tracks: Track[]) {
+  async function prepareCover(artwork?: MediaFile) {
+    if (!artwork) return;
+    try { return await uploadCover(artwork); }
+    catch {
+      assertSession();
+      throw new Error('could not upload the cover. try saving again.');
+    }
+  }
+
+  async function create(name: string, tracks: Track[], artwork?: MediaFile) {
     const title = albumName(name);
     if (!tracks.length || tracks.length > 500 || new Set(tracks.map(track => track.record.uri)).size !== tracks.length) throw new Error('choose between 1 and 500 of your tracks.');
     const items = await verify(tracks);
+    const cover = await prepareCover(artwork);
     assertSession();
-    return publish(title, [...items.values()]);
+    return publish(title, [...items.values()], cover);
   }
-  async function save(revision: CollectionRevision, entries: AlbumEntry[], name?: string) {
+  async function save(revision: CollectionRevision, entries: AlbumEntry[], name?: string, artwork?: MediaFile) {
     if (revision.value.listType !== 'album') throw new Error('not an album.');
     const additions = await verify(entries.filter((entry): entry is Track => typeof entry !== 'number'));
-    return ordering.write(revision, albumMembership(revision, entries, additions), name);
+    const items = albumMembership(revision, entries, additions);
+    const cover = await prepareCover(artwork);
+    return ordering.write(revision, items, name, cover);
   }
   return { ...ordering, create, save };
 }

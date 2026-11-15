@@ -1,5 +1,5 @@
 import type { ListDetail, Track } from '../api.ts';
-import type { CollectionRevision } from './collection-order.ts';
+import { coverBlobCid, type CollectionRevision } from './collection-order.ts';
 
 export function applyCollectionRevision(indexed: ListDetail, revision: CollectionRevision, additions: Track[] = []): ListDetail {
   if (revision.uri !== indexed.record.uri) return indexed;
@@ -18,7 +18,11 @@ export function applyCollectionRevision(indexed: ListDetail, revision: Collectio
   const available = members.flatMap(member => member.track ? [member.track] : []);
   return {
     ...indexed, members,
-    metadata: { ...indexed.metadata, name: typeof revision.value.name === 'string' ? revision.value.name : indexed.metadata.name },
+    metadata: {
+      ...indexed.metadata,
+      name: typeof revision.value.name === 'string' ? revision.value.name : indexed.metadata.name,
+      cover_blob_cid: coverBlobCid(revision.value.imageBlob),
+    },
     metrics: { member_count: members.length, available_count: available.length, total_plays: available.reduce((sum, track) => sum + track.metrics.play_count, 0) }
   };
 }

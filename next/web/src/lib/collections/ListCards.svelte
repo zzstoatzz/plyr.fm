@@ -1,7 +1,6 @@
 <script lang="ts">
   import type { ListSummary } from '@plyr/next-core/api';
-  import { collectionArtwork } from '@plyr/next-core/artwork';
-  import Artwork from '$lib/ui/Artwork.svelte';
+  import CollectionArtwork from './CollectionArtwork.svelte';
 
   let { lists }: { lists: ListSummary[] } = $props();
 </script>
@@ -10,7 +9,7 @@
   {#each lists as list (list.record.uri)}
     <li>
       <a href={`/${list.object}/${list.id}`}>
-        <span class="art"><Artwork src={collectionArtwork(list)} size={168} /></span>
+        <span class="art"><CollectionArtwork {list} size={168} /></span>
         <span class="text">
           <strong class="truncate">{list.metadata.name || `untitled ${list.object}`}</strong>
           <span class="subtle">{list.metrics.member_count} {list.metrics.member_count === 1 ? 'track' : 'tracks'}</span>

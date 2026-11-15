@@ -2,15 +2,14 @@ import { artworkName, artworkPlan, artworkType, MAX_ARTWORK_BYTES, UNREADABLE_AR
 
 export async function coverImage(file: File): Promise<File> {
   const type = artworkType(file.type);
-  if (artworkPlan(file).keep) return type === file.type ? file : new File([file], file.name, { type });
-
   const address = URL.createObjectURL(file);
   try {
     const image = new Image();
     image.src = address;
-    await image.decode();
+    await image.decode().catch(() => { throw new Error(UNREADABLE_ARTWORK); });
     const plan = artworkPlan(file, image.naturalWidth, image.naturalHeight);
-    const width = plan.keep ? image.naturalWidth : Math.min(image.naturalWidth, plan.width ?? image.naturalWidth);
+    if (plan.keep) return type === file.type ? file : new File([file], file.name, { type });
+    const width = Math.min(image.naturalWidth, plan.width ?? image.naturalWidth);
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = Math.round(image.naturalHeight * width / image.naturalWidth);

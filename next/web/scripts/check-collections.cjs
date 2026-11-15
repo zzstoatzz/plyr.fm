@@ -61,7 +61,7 @@ async function check(browser, accounts, width, scheme) {
     });
     return {
       object: value.listType, id, record: { uri, cid, collection: listCollection, rkey: uri.split('/').at(-1) },
-      metadata: { name: value.name, created_at: time }, owner: { did, profile: identity },
+      metadata: { name: value.name, created_at: time, cover_blob_cid: value.imageBlob?.ref?.$link }, owner: { did, profile: identity },
       media: { artwork: null }, members,
       metrics: { member_count: members.length, available_count: members.filter(member => member.track).length, total_plays: 0 }
     };
@@ -128,7 +128,41 @@ async function check(browser, accounts, width, scheme) {
     return route.fulfill({ json: listPage([]) });
   });
 
+  let staleTrack = false;
+  await context.route('https://pds.fixture.test/xrpc/com.atproto.repo.getRecord?*', route => {
+    const url = new URL(route.request().url());
+    if (!staleTrack || url.searchParams.get('collection') !== trackCollection) return route.fallback();
+    const uri = 'at://' + did + '/' + trackCollection + '/' + url.searchParams.get('rkey');
+    return route.fulfill({ json: { uri, cid: staleCid, value: { $type: trackCollection, title: 'Changed' } } });
+  });
+
+  let failCover = false;
+  await context.route('https://pds.fixture.test/xrpc/com.atproto.repo.uploadBlob', route => {
+    if (!failCover) return route.fallback();
+    return route.fulfill({ status: 503, json: { error: 'Unavailable', message: 'cover upload unavailable' } });
+  });
+
   const main = page.locator('main');
+  const cover = main.locator('header .cover img');
+  const image = async (name, color) => {
+    const data = await page.evaluate(color => {
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = 32;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = color;
+      ctx.fillRect(0, 0, 32, 32);
+      return canvas.toDataURL('image/png').split(',')[1];
+    }, color);
+    return { name, mimeType: 'image/png', buffer: Buffer.from(data, 'base64') };
+  };
+  async function readCover() {
+    const ref = (await read(albumUri)).value.imageBlob?.ref?.$link;
+    assert.ok(ref, 'the signed album has a cover blob');
+    await cover.waitFor();
+    await page.waitForFunction(cid => [...document.querySelectorAll('main header .cover img')].some(img =>
+      img.complete && img.naturalWidth === 32 && new URL(img.currentSrc).searchParams.get('cid') === cid), ref);
+    return ref;
+  }
   const button = name => main.getByRole('button', { name, exact: true });
   const capture = async label => {
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), label + ' fits');
@@ -200,9 +234,38 @@ async function check(browser, accounts, width, scheme) {
     await button('Add Alpha').click();
     await button('Add Beta').click();
     await button('Move Beta up').click();
+    const albumCover = main.getByLabel('cover art (optional)');
+    await albumCover.setInputFiles({ name: 'bad.png', mimeType: 'image/png', buffer: Buffer.from('not a PNG') });
+    await main.getByText('could not open this image.', { exact: false }).waitFor();
+    assert.equal(await main.getByRole('textbox', { name: 'album name' }).inputValue(), 'Chosen tracks');
+    await albumCover.setInputFiles(await image('first.png', '#f6635f'));
+    await main.getByRole('img', { name: 'selected cover preview' }).waitFor();
+    const beforeAlbum = creates;
+    staleTrack = true;
+    await button('create album').click();
+    await main.getByText('a selected track changed.', { exact: false }).waitFor();
+    assert.equal(creates, beforeAlbum, 'a changed track cannot publish an album');
+    assert.equal(await main.getByRole('textbox', { name: 'album name' }).inputValue(), 'Chosen tracks');
+    await main.getByRole('img', { name: 'selected cover preview' }).waitFor();
+    staleTrack = false;
     await button('create album').click();
     await main.getByRole('heading', { name: 'Chosen tracks' }).waitFor();
     assert.deepEqual((await read(albumUri)).value.items.map(item => item.subject), expected);
+    const originalCover = await readCover();
+    await button('edit album').click();
+    await main.getByLabel('change album cover').setInputFiles(await image('replacement.png', '#5277f5'));
+    await capture('album-cover-editor');
+    failCover = true;
+    await button('save changes').click();
+    await main.getByText('could not upload the cover. try saving again.', { exact: true }).waitFor();
+    assert.equal((await read(albumUri)).value.imageBlob.ref.$link, originalCover);
+    failCover = false;
+    await button('save changes').click();
+    await button('edit album').waitFor();
+    const replacement = await readCover();
+    assert.notEqual(replacement, originalCover);
+    await page.reload();
+    assert.equal(await readCover(), replacement);
     await button('edit album').click();
     await button('Remove Beta').click();
     await button('add tracks').click();
@@ -211,6 +274,8 @@ async function check(browser, accounts, width, scheme) {
     await button('edit album').waitFor();
     assert.deepEqual((await read(albumUri)).value.items.map(item => item.subject), [tracks[0], tracks[2]].map(subject));
     await main.getByRole('link', { name: 'Gamma', exact: true }).waitFor();
+    assert.equal(await readCover(), replacement, 'membership-only edits preserve the cover');
+    for (const track of tracks) assert.equal((await read(track.record.uri)).cid, track.record.cid, 'album edits leave track metadata alone');
     await capture('album');
     assert.deepEqual(errors, []);
     console.log(`library, likes, playlist and album writes passed at ${width}px (${scheme})`);

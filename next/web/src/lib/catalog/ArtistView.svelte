@@ -1,9 +1,9 @@
 <script lang="ts">
+  import CollectionArtwork from '$lib/collections/CollectionArtwork.svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { onMount, untrack } from 'svelte';
-	import { collectionArtwork } from '@plyr/next-core/artwork';
 	import { subscribeCatalogChanges } from '@plyr/next-core/catalog/changes';
 	import { tabForKey } from '@plyr/next-core/catalog/tabs';
 	import type { Artist, ArtistMetrics, ListSummary } from '@plyr/next-core/api';
@@ -103,7 +103,7 @@
 {#snippet lists(entries: ListSummary[])}
 	{#each entries as entry (entry.id)}
 		<a class="collection" href={entry.object === 'album' ? resolve('/(app)/album/[id]', { id: entry.id }) : resolve('/(app)/playlist/[id]', { id: entry.id })}>
-			<div class="art"><Artwork src={collectionArtwork(entry)} size={60} /></div>
+			<div class="art"><CollectionArtwork list={entry} size={60} /></div>
 			<span><strong>{entry.metadata.name || ('untitled ' + entry.object)}</strong><small>{entry.metrics.member_count} {entry.metrics.member_count === 1 ? 'track' : 'tracks'}</small></span>
 			<Icon name="chevron" size={18} />
 		</a>
