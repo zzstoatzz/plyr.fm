@@ -152,7 +152,7 @@ const coordinator = 'https://jams.next.plyr.fm';
     await menu.waitFor();
     assert.equal(new URL(page.url()).pathname, activePath, 'opening the account menu keeps the current page');
     await menu.getByRole('link', { name: 'portal @' + handle }).waitFor();
-    await menu.getByRole('link', { name: /private music/ }).waitFor();
+    assert.equal(await menu.getByRole('link', { name: /private music/ }).count(), 0);
     assert.ok(await menu.evaluate(node => node.scrollWidth <= node.clientWidth));
     if (process.env.SCREENS_OUTPUT) {
       await mkdir(process.env.SCREENS_OUTPUT, { recursive: true });

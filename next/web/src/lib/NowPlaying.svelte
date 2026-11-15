@@ -143,7 +143,7 @@
 					<button class="icon-button" type="button" aria-label={`Repeat ${player.repeat}`} aria-pressed={player.repeat !== 'off'} onclick={() => player.cycleRepeat()}><Icon name="repeat" size={20} /></button>
 				</div>
 			{/if}
-			{#if player.privateMode}<a class="track-link" href={resolve('/(app)/private')}>private music <span aria-hidden="true">→</span></a>
+			{#if player.privateMode}<a class="track-link" href={trackHref(player.current)}>about this track <span aria-hidden="true">→</span></a>
 			{:else if !player.liveStation || player.current.id.startsWith('trk_')}
 				{#if !player.liveStation}<a class="artist-card" data-testid="now-playing-artist" href={resolve('/(app)/u/[actor]', { actor: player.current.artist.profile.handle || player.current.artist.did })}>
 					<div class="avatar"><Artwork src={player.current.artist.profile.avatar_url ?? undefined} size={56} /></div>

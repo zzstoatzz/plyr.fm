@@ -33,7 +33,9 @@
   import LargeUpload from './LargeUpload.svelte';
   import QueuedUpload from './QueuedUpload.svelte';
 
-  let { account }: { account: ReturnType<typeof auth.getAuth> } = $props();
+  let { account, submitting = $bindable(false), audio = $bindable(), title = $bindable(''), description = $bindable(''), tags = $bindable('') }: {
+    account: ReturnType<typeof auth.getAuth>; submitting: boolean; audio: File | undefined; title: string; description: string; tags: string;
+  } = $props();
 
   const owner = untrack(() => account.did);
   const pds = untrack(() => createPds(account));
@@ -44,16 +46,12 @@
   let hydrated = $state(false);
   let profileName = $state<string>();
   let artist = $derived(profileName || account.handle || account.did || '');
-  let audio = $state<File>();
   let cover = $state<File>();
   let coverPreview = $state<string>();
   let audioInput = $state<HTMLInputElement>();
   let coverInput = $state<HTMLInputElement>();
-  let title = $state('');
   let autoTitle = $state('');
   let album = $state('');
-  let description = $state('');
-  let tags = $state('');
   let details = $state(false);
   let consent = $state(false);
   let autoTag = $state(false);
@@ -66,7 +64,6 @@
   let coverProblem = $state('');
   let formProblem = $state('');
   let draftProblem = $state('');
-  let submitting = $state(false);
   let recoveryProblem = $state('');
   let queuedProblem = $state('');
   let loading = $state(true);
@@ -79,6 +76,7 @@
   let draftsToRecover = $derived(drafts.filter(draft => !draftInRecovery(draft, pending, transfers) && !jobs.some(job => job.id === draft.id && !(draft.reservedRkey && job.phase === 'failed'))));
   let creationsToRecover = $derived(pending.filter(operation => !active.rkeys.has(operation.rkey) && !transfers.some(transfer => transfer.rkey === operation.rkey)));
   let creationBlocksUpload = $derived(creationsToRecover.some(operation => !operation.archived));
+  $effect(() => { if (description || tags) details = true; });
   let service = $derived(!!audio && needsPlyrStorage(audio));
   let tagProblem = $derived.by(() => {
     try { if (tags.trim()) normalizeTrackTags(tags.split('\n')); return ''; }
@@ -269,7 +267,7 @@
           if (current()) draftProblem = 'the upload was queued, but this device could not clear the editor draft.';
         }
       });
-      if (!current()) return;
+      if (!current() || audio !== input.file || cover !== input.artwork || editorDraft !== submittedDraft) return;
       audio = undefined;
       cover = undefined;
       if (audioInput) audioInput.value = '';

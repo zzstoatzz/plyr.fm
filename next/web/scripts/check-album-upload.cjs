@@ -177,7 +177,7 @@ async function fixture(browser, accounts, handle, width, scheme, scenario, audio
 
     if (scenario === 'pending') {
       await page.getByRole('button', { name: 'create album', exact: true }).click();
-      const check = page.getByRole('button', { name: 'check creation', exact: true });
+      const check = page.getByRole('button', { name: 'check status', exact: true });
       await check.waitFor();
       const view = page.getByRole('link', { name: 'view album', exact: true });
       assert.equal(await view.count(), 1, 'only one album action while the journal owns the result');
@@ -189,7 +189,7 @@ async function fixture(browser, accounts, handle, width, scheme, scenario, audio
       });
       await check.click();
       assert.equal((await (await indexed).json()).status, 'indexed');
-      await page.getByRole('button', { name: 'done with creation', exact: true }).click();
+      await page.getByRole('button', { name: 'done', exact: true }).click();
       await check.waitFor({ state: 'detached' });
       await view.click();
       await page.waitForURL('**/album/**');
@@ -199,8 +199,8 @@ async function fixture(browser, accounts, handle, width, scheme, scenario, audio
       await page.getByText('uploaded songs stay in your music. unfinished songs stay in upload recovery.').waitFor();
       await page.getByRole('button', { name: 'cancel', exact: true }).click();
       await page.getByRole('button', { name: 'create album with 2 songs' }).click();
-      await page.getByRole('button', { name: 'resume creation' }).waitFor();
-      await page.getByRole('button', { name: 'resume creation' }).click();
+      await page.getByRole('button', { name: 'try saving again' }).waitFor();
+      await page.getByRole('button', { name: 'try saving again' }).click();
       await page.getByRole('link', { name: 'view album' }).waitFor();
       await page.getByRole('link', { name: 'view album' }).click();
     } else if (scenario === 'stale') {
@@ -233,8 +233,8 @@ async function fixture(browser, accounts, handle, width, scheme, scenario, audio
       const elsewhere = scenario === 'journal-other';
       if (elsewhere) await page.goto(origin + '/create-album');
       else await page.reload();
-      await page.getByRole('button', { name: 'resume creation' }).click();
-      await page.getByRole('button', { name: 'done with creation' }).click();
+      await page.getByRole('button', { name: 'try saving again' }).click();
+      await page.getByRole('button', { name: 'done' }).click();
       if (elsewhere) {
         await page.goto(upload);
         await page.getByRole('link', { name: 'view album' }).waitFor();

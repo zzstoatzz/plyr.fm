@@ -12,7 +12,7 @@
 
 	async function signOut() {
 		void logout();
-		await goto('/');
+		await goto(resolve('/'));
 	}
 </script>
 
@@ -26,14 +26,12 @@
 				<div class="row"><Icon name="user" size={21} /><span>{account.handle ? '@' + account.handle : account.did}</span></div>
 				<a class="row" href="/portal"><Icon name="portal" size={21} />your music</a>
 				<a class="row" href="/upload"><Icon name="upload" size={21} />{uploading === 0 ? 'upload' : uploading === 1 ? '1 upload in progress' : `${uploading} uploads in progress`}</a>
-				<a class="row" href="/private"><Icon name="music" size={21} />private music</a>
 				<button class="row" type="button" onclick={signOut}><Icon name="logout" size={21} />sign out</button>
 			</div>
 		</section>
 	{:else if account.ready}
 		<p class="state"><a href="/login?return_to=%2Fsettings">sign in</a> to see your account.</p>
 	{/if}
-	<a class="text-button" href={resolve('/(app)/stats')}>stats</a>
 </section>
 
 <style>

@@ -49,20 +49,20 @@
 <div class="recovery-card">
   <h3>{typeof label === 'string' ? label : kind}</h3>
   <p class="subtle" role="status">
-    {#if known?.state === 'accepted'}saved to your account.
-    {:else if known?.state === 'different'}a different record is already at this address.
-    {:else if known?.state === 'missing'}your account has no record at this address yet.
-    {:else if operation.archived}earlier attempt. the {kind} might still appear.
-    {:else}this {kind} still needs confirmation.{/if}
+    {#if known?.state === 'accepted'}saved.
+    {:else if known?.state === 'different'}another {kind} was saved instead.
+    {:else if known?.state === 'missing'}this {kind} hasn’t been saved yet.
+    {:else if operation.archived}an earlier attempt might still finish.
+    {:else}this {kind} may already be saved. check its status before trying again.{/if}
   </p>
   {#if problem}<p role="alert">{problem}</p>{/if}
-  <button class="text-button" disabled={busy} onclick={() => run('check')}>check creation</button>
+  <button class="text-button" disabled={busy} onclick={() => run('check')}>check status</button>
   {#if known?.state === 'accepted' || known?.state === 'different'}
     {#if known.state === 'accepted'}<a class="text-button" href={view()}>view {kind}</a>{/if}
-    <button class="text-button" disabled={busy} onclick={() => run('dismiss')}>{known.state === 'accepted' ? 'done with creation' : 'keep existing record'}</button>
+    <button class="text-button" disabled={busy} onclick={() => run('dismiss')}>{known.state === 'accepted' ? 'done' : `keep existing ${kind}`}</button>
   {:else}
-    <button class="text-button" disabled={busy} onclick={() => run('retry')}>resume creation</button>
-    {#if !operation.archived}<button class="text-button" disabled={busy} onclick={() => run('archive')}>set aside creation</button>{/if}
+    <button class="text-button" disabled={busy} onclick={() => run('retry')}>try saving again</button>
+    {#if !operation.archived}<button class="text-button" disabled={busy} onclick={() => run('archive')}>set aside this attempt</button>{/if}
   {/if}
 </div>
 

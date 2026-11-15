@@ -75,9 +75,9 @@ function LargeUpload({ operation, uploads, disabled }: { operation: UploadOperat
   }
   return <>
     <Copy>{title}</Copy>
-    <Copy live>{status?.state === 'published' ? 'saved. public audio is available.' : complete ? 'audio uploaded. publication still needs confirmation.'
+    <Copy live>{status?.state === 'published' ? 'track ready to play.' : complete ? 'audio uploaded. check whether the track was saved.'
       : status?.state === 'processing' ? status.processingFailure === 'output_budget_exceeded' ? 'the mp3 needs more space than reserved. the original is kept.' : 'converting to mp3.'
-        : 'upload saved for recovery.'}</Copy>
+        : 'you can resume this upload.'}</Copy>
     {(view?.message || pickError) && <Copy live>{pickError ?? view?.message}</Copy>}
     {!busy && <Action label="Check upload status" disabled={locked} onPress={() => void uploads.run(operation, 'check')} />}
     {busy && <Copy live>checking…</Copy>}
@@ -87,13 +87,13 @@ function LargeUpload({ operation, uploads, disabled }: { operation: UploadOperat
       <Action label="Resume upload" disabled={locked || !file} onPress={() => carryOn(file)} />
     </>)}
     {complete && status.state !== 'published' && <>
-      {view?.publication?.state === 'different' ? <Copy>a different record exists at this address. it will not be overwritten.</Copy>
-        : <Action label={view?.publication?.state === 'accepted' ? 'Check playback availability' : 'Publish this track'} disabled={locked} onPress={() => void uploads.run(operation, view?.publication?.state === 'accepted' ? 'activate' : 'publish')} />}
-      {!view?.archived && <><Copy>this record may still appear. starting again could create a duplicate.</Copy>
-      <Action label="Set aside creation" disabled={locked} onPress={() => void uploads.run(operation, 'archive')} /></>}
+      {view?.publication?.state === 'different' ? <Copy>another track was saved instead.</Copy>
+        : <Action label={view?.publication?.state === 'accepted' ? 'Check if the track is ready' : 'Publish this track'} disabled={locked} onPress={() => void uploads.run(operation, view?.publication?.state === 'accepted' ? 'activate' : 'publish')} />}
+      {!view?.archived && <><Copy>this track may still appear. starting again could create a duplicate.</Copy>
+      <Action label="Set aside this attempt" disabled={locked} onPress={() => void uploads.run(operation, 'archive')} /></>}
     </>}
     {status?.state === 'published' && <><Action label="View track" href={`/track/${trackIdFromUri(operation.uri)}`} /><Action label="Done with upload" disabled={locked} onPress={() => void uploads.run(operation, 'done')} /></>}
-    {status?.state !== 'published' && (complete ? <Copy>completed audio is retained for publication recovery and cannot be cancelled here.</Copy>
+    {status?.state !== 'published' && (complete ? <Copy>the audio has already been uploaded.</Copy>
       : <Action label="Cancel transfer" disabled={locked} onPress={() => void uploads.run(operation, 'cancel')} />)}
   </>;
 }

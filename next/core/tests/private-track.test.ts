@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { isPrivateTrack } from '../src/track-access.ts';
+import { isPrivateTrack, ownerTrackAddress } from '../src/track-access.ts';
 import { queueReference } from '../src/personal-queue.ts';
 import { queueCheckpoint } from '../src/queue-checkpoint.ts';
 import { createAuthConfig } from '../src/auth-config.ts';
@@ -11,6 +11,17 @@ const { privateTrack } = createPrivateLibrary(createAuthConfig());
 const track = privateTrack('did:plc:fixture', '3jzfcijpj2z2a', 'fixturecid', {
   $type: 'fm.plyr.track', title: 'private song', artist: 'private artist', createdAt: '2026-11-12T00:00:00Z',
   imageUrl: 'https://untrusted.invalid/private-artwork', description: 'private liner notes', duration: 42,
+});
+
+test('a track address distinguishes owners with the same record key', () => {
+  assert.deepEqual(ownerTrackAddress(track.id), { owner: track.artist.did, rkey: track.record.rkey });
+  const other = privateTrack('did:plc:other', track.record.rkey, 'fixturecid', {
+    $type: 'fm.plyr.track', title: 'another track', artist: 'another artist', createdAt: '2026-11-12T00:00:00Z',
+  });
+  assert.notEqual(other.id, track.id);
+  for (const invalid of ['1234', 'trk_fixture', 'did:plc:fixture|..', 'did:plc:fixture/space|key']) {
+    assert.equal(ownerTrackAddress(invalid), undefined);
+  }
 });
 
 test('private track metadata stays local and cannot become a synchronized queue reference', () => {

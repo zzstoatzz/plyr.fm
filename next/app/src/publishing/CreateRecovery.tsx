@@ -87,19 +87,19 @@ function PendingCreate({ operation, auth, kind, recovery, onDismiss }: { operati
   const name = typeof operation.record.title === 'string' ? operation.record.title : typeof operation.record.name === 'string' ? operation.record.name : kind;
   return <>
     <Copy>{name}</Copy>
-    <Copy live>{accepted ? result.status === 'indexed' ? 'saved to your PDS.' : result.status === 'rejected' ? 'saved to your PDS. the catalog rejected the change.' : 'saved to your PDS. the catalog is catching up.'
-      : result?.state === 'different' ? 'a different record exists at this address. review it before continuing.'
-        : result?.state === 'missing' ? 'this creation is not visible yet. retrying uses the same record address.' : busy ? 'checking whether your creation was saved…' : 'creation status is unknown.'}</Copy>
+    <Copy live>{accepted ? result.status === 'indexed' ? 'saved.' : result.status === 'rejected' ? 'saved, but it couldn’t be added to the catalog.' : 'saved. it might take a moment to appear.'
+      : result?.state === 'different' ? 'another item was saved instead.'
+        : result?.state === 'missing' ? 'this hasn’t been saved yet.' : busy ? 'checking whether it was saved…' : 'this may already be saved. check its status before trying again.'}</Copy>
     {error && <Copy live>{error}</Copy>}
     {!accepted && <Action label={busy ? 'Checking…' : 'Check status'} disabled={busy} onPress={() => void check()} />}
-    {result?.state === 'missing' && !operation.archived && <Action label="Retry same creation" disabled={busy} onPress={() => void check(true)} />}
+    {result?.state === 'missing' && !operation.archived && <Action label="Try saving again" disabled={busy} onPress={() => void check(true)} />}
     {!accepted && operation.archived && <Action label="Resume recovery" disabled={busy} onPress={() => archive(false)} />}
     {!accepted && !operation.archived && result?.state !== 'different' && <>
       <Copy>this attempt may still appear. starting again could create a duplicate.</Copy>
       <Action label="Set aside attempt" disabled={busy} onPress={() => archive(true)} />
     </>}
     {(accepted || result?.state === 'different') && <Action label={kind === 'track' ? 'View track' : accepted ? `Open created ${album ? 'album' : 'playlist'}` : `View existing ${album ? 'album' : 'playlist'}`} href={kind === 'track' ? `/track/${trackIdFromUri(operation.uri)}` : album ? `/album/${albumIdFromUri(operation.uri)}` : `/playlist/${playlistIdFromUri(operation.uri)}`} />}
-    {result?.state === 'different' && <Action label="Keep existing record" disabled={busy} onPress={() => dismiss(true)} />}
+    {result?.state === 'different' && <Action label="Keep existing item" disabled={busy} onPress={() => dismiss(true)} />}
     {accepted && <Action label={kind === 'track' && !operation.archived ? 'Upload another' : 'Done'} disabled={busy} onPress={() => dismiss()} />}
   </>;
 }

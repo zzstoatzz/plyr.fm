@@ -73,10 +73,10 @@
   <h3>{typeof operation.record.title === 'string' ? operation.record.title : operation.name}</h3>
   <p role="status" class="subtle">
     {#if controller}checking upload…
-    {:else if status?.state === 'published'}saved. public audio is available.
-    {:else if complete}audio uploaded. publication still needs confirmation.
+    {:else if status?.state === 'published'}track ready to play.
+    {:else if complete}audio uploaded. check whether the track was saved.
     {:else if status?.state === 'processing'}{status.processingFailure === 'output_budget_exceeded' ? 'the mp3 needs more space than reserved. the original is kept.' : 'converting to mp3.'}
-    {:else}upload saved for recovery.{/if}
+    {:else}you can resume this upload.{/if}
   </p>
   {#if problem || view.message}<p role="alert">{problem || view.message}</p>{/if}
   <button class="text-button" disabled={!!controller} onclick={() => run('check')}>check upload status</button>
@@ -85,13 +85,13 @@
     <button class="text-button" disabled={!!controller} onclick={() => run('done')}>done with upload</button>
   {:else if complete}
     {#if view.publication?.state === 'different'}
-      <p>a different record exists at this address. it will not be overwritten.</p>
+      <p>another track was saved instead.</p>
     {:else}
       <button class="text-button" disabled={!!controller} onclick={() => run(view.publication?.state === 'accepted' ? 'activate' : 'publish')}>
-        {view.publication?.state === 'accepted' ? 'check playback availability' : 'publish this track'}
+        {view.publication?.state === 'accepted' ? 'check if the track is ready' : 'publish this track'}
       </button>
     {/if}
-    {#if !view.archived}<button class="text-button" disabled={!!controller} onclick={() => run('archive')}>set aside creation</button>{/if}
+    {#if !view.archived}<button class="text-button" disabled={!!controller} onclick={() => run('archive')}>set aside this attempt</button>{/if}
   {:else if status?.state === 'cancelled'}
     <button class="text-button" disabled={!!controller} onclick={() => run('done')}>done with upload</button>
   {:else}

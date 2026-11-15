@@ -5,8 +5,9 @@
   import { onMount } from 'svelte';
   import { auth } from '$lib/auth';
   import Loading from '$lib/ui/Loading.svelte';
-  import UploadForm from '$lib/publishing/UploadForm.svelte';
+  import TrackUpload from '$lib/publishing/TrackUpload.svelte';
 
+  const onlyYou = $derived(page.url.searchParams.get('visibility') === 'only-you');
   const albumMode = $derived(page.url.searchParams.get('mode') === 'album');
   const uploadPath = resolve('/(app)/upload');
   let account = $state.raw(auth.getAuth());
@@ -18,7 +19,6 @@
 <section class="page-content">
   <div class="upload">
     <h1>{albumMode ? 'upload album' : 'upload'}</h1>
-    <nav aria-label="Upload audience"><span aria-current="page">public</span><a class="text-button" href="/private">private</a></nav>
     <nav aria-label="Upload type">
       {#if albumMode}<a class="text-button" href={uploadPath}>track</a><span aria-current="page">album</span>
       {:else}<span aria-current="page">track</span><a class="text-button" href={uploadPath + '?mode=album'}>album</a>{/if}
@@ -28,10 +28,10 @@
     {:else if account.did}
       {#key account.rpc}
         {#if albumMode}<AlbumUpload {account} owner={account.did} />
-        {:else}<UploadForm {account} />{/if}
+        {:else}<TrackUpload {account} {onlyYou} />{/if}
       {/key}
     {:else}
-      <a class="text-button" href={resolve('/(app)/login') + '?' + new URLSearchParams({ return_to: uploadPath + (albumMode ? '?mode=album' : '') })}>sign in</a>
+      <a class="text-button" href={resolve('/(app)/login') + '?' + new URLSearchParams({ return_to: uploadPath + page.url.search })}>sign in</a>
     {/if}
   </div>
 </section>
