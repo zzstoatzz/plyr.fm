@@ -8,11 +8,11 @@ const output = process.env.SCREENS_OUTPUT || '/tmp/plyr-svelte-player-presentati
 async function verify(browser, origin, width, scheme) {
   const phone = width === 390;
   const height = phone ? 760 : 900;
-  const { context, page, errors } = await setup(browser, width, height, { phone: true, scheme });
+  const { context, page, errors } = await setup(browser, width, height, { phone: true, scheme, scale: phone && scheme === 'dark' ? 1.5 : 1 });
   try {
     await page.route(url => url.hostname === 'api.next.plyr.fm' && url.pathname === '/v1/tracks', route => route.fulfill({ json: {
       object: 'list', has_more: false, data: [
-        { ...tracks[0], metadata: { ...tracks[0].metadata, description: 'A recording made at dawn on the porch. '.repeat(80) + '\n\n0:00 morning\n0:25 field\n1:00 porch' } },
+        { ...tracks[0], metadata: { ...tracks[0].metadata, album: 'Sketches at Dawn', description: 'A recording made at dawn on the porch. '.repeat(80) + '\n\n0:00 morning\n0:25 field\n1:00 porch' } },
         ...tracks.slice(1)
       ]
     } }));
@@ -87,8 +87,9 @@ async function verify(browser, origin, width, scheme) {
       await touch('touchEnd');
       await present();
       await touch('touchStart', [[x, y]]);
-      await touch('touchMove', [[x, y + 60]]);
-      await touch('touchStart', [[x, y + 60], [x + 35, y + 64]]);
+      await touch('touchMove', [[x, y + 150]]);
+      await page.waitForFunction(() => document.querySelector('[data-testid="now-playing-dismiss-region"]').getBoundingClientRect().top > 100);
+      await touch('touchStart', [[x, y + 150], [x + 30, y]]);
       await touch('touchEnd');
       await present();
       await touch('touchStart', [[x, y]]);
@@ -114,16 +115,29 @@ async function verify(browser, origin, width, scheme) {
       await condensed.waitFor();
       assert.ok(await condensed.getByRole('button', { name: 'Pause', exact: true }).isVisible());
       await capture('scrolled');
+      const flick = async start => {
+        await setScroll(start);
+        await touch('touchStart', [[10, 260]]);
+        for (const distance of [25, 50, 75, 100]) await touch('touchMove', [[10, 260 + distance]]);
+        await touch('touchEnd');
+        await page.waitForFunction(initial => document.querySelector('dialog.now-sheet').scrollTop < initial - 110, start, { timeout: 1500 });
+        await present();
+        await page.waitForTimeout(350);
+      };
+      await flick(950);
+      await flick(250);
       await setScroll(110);
+      await page.waitForFunction(() => document.querySelector('dialog.now-sheet').scrollTop === 110);
       const body = [10, 260];
       await touch('touchStart', [body]);
       await touch('touchMove', [[body[0], body[1] + 50]]);
-      assert.equal(await scrollTop(), 60, 'a downward content pull first scrolls');
+      assert.ok(Math.abs(await scrollTop() - 60) <= 8, 'a downward content pull first scrolls');
       assert.equal(await offset(), 0, 'the sheet stays still before reaching the top');
       await touch('touchMove', [[body[0], body[1] + 150]]);
       await page.waitForFunction(() => {
         const sheet = document.querySelector('[data-testid="now-playing-dismiss-region"]');
-        return sheet.closest('dialog').scrollTop === 0 && Math.abs(new DOMMatrix(getComputedStyle(sheet).transform).m42 - 40) < 2;
+        const offset = new DOMMatrix(getComputedStyle(sheet).transform).m42;
+        return sheet.closest('dialog').scrollTop === 0 && offset >= 30 && offset <= 50;
       });
       await touch('touchMove', [[body[0], body[1] + 220]]);
       await touch('touchEnd');

@@ -63,10 +63,11 @@
 		const dialog = node.closest('dialog');
 		const title = node.querySelector('[data-testid="now-playing-title"]');
 		const header = node.querySelector('[data-player-header]');
+		const details = node.querySelector('[data-testid="now-playing-details"]');
 		function scroll() {
 			if (!dialog?.open || !title || !header) return;
 			condensed = title.getBoundingClientRect().bottom <= header.getBoundingClientRect().bottom;
-			if (dialog.scrollTop > 24 && !hintSeen) dismissHint();
+			if (!hintSeen && details && details.getBoundingClientRect().top < dialog.getBoundingClientRect().bottom - 24) dismissHint();
 		}
 		dialog?.addEventListener('scroll', scroll, { passive: true });
 		scroll();
@@ -106,7 +107,9 @@
 			{#if !player.liveStation}<a href={resolve('/(app)/queue')} class="icon-button" aria-label="Queue"><Icon name="queue" /></a>{:else}<span></span>{/if}
 		</header>
 		<div class="hero" data-testid="now-playing-hero">
-			<div class="cover" data-testid="now-playing-artwork"><Artwork src={trackArtwork(player.current)} size={460} eager /></div>
+			<div class="artwork-frame">
+				<div class="cover" data-testid="now-playing-artwork"><Artwork src={trackArtwork(player.current)} size={460} eager /></div>
+			</div>
 			<div class="copy">
 				<h1 data-testid="now-playing-title">{player.current.metadata.title}</h1>
 				<a class="subtle" href={resolve('/(app)/u/[actor]', { actor: player.current.artist.profile.handle || player.current.artist.did })}>{artistName(player.current)}</a>
@@ -128,10 +131,8 @@
 				{#if player.liveStation}<button class="text-button stop" onclick={() => { player.stopRadio(); close?.(); }}>leave radio</button>{/if}
 			</div>
 			{#if close && !player.liveStation && !player.privateMode}
-				<div class="hint-slot">
-					{#if !hintSeen}
-						<div class="coachmark" data-testid="coachmark"><span>scroll down for the artist and track details</span><button type="button" class="text-button" onclick={dismissHint}>got it</button></div>
-					{/if}
+				<div class="hint-slot" class:seen={hintSeen} inert={hintSeen}>
+					<div class="coachmark" data-testid={hintSeen ? undefined : 'coachmark'}><span>scroll down for the artist and track details</span><button type="button" class="text-button" onclick={dismissHint}>got it</button></div>
 				</div>
 			{/if}
 		</div>
@@ -206,15 +207,21 @@
 	}
 	@media (max-width: 720px) {
 		.sheet { min-height: 100dvh; }
-		.sheet .hero { min-height: calc(100dvh - 3.5rem); display: flex; flex-direction: column; }
-		.sheet .cover { width: min(100%, max(9rem, calc(100dvh - 26.5rem))); margin-inline: auto; }
+		.sheet header { touch-action: none; }
+		.sheet .hero { height: calc(100dvh - 3.5rem); min-height: min-content; display: grid; grid-template-rows: minmax(80px, 1fr) auto auto; }
+		.sheet .artwork-frame { container-type: size; display: grid; place-items: center; }
+		.sheet .cover { width: 100cqmin; }
 		.sheet .copy { padding-top: 1rem; }
 		.sheet .position { margin-top: 1rem; }
 		.sheet .commands { margin-block: 0.65rem; }
-		.hint-slot { display: grid; min-height: 3.5rem; margin-top: auto; padding-block: 0.25rem; }
+		.hint-slot { display: grid; min-height: 3.5rem; padding-block: 0.25rem; }
+		.hint-slot.seen { visibility: hidden; }
 		.coachmark { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; padding-inline: 0.6rem; color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: 0.7rem; font-size: 0.85rem; }
 		.coachmark button { flex: none; color: var(--accent); }
 		.phone-close { display: flex; }
 		.desktop-close { display: none; }
+	}
+	@media (max-width: 720px) and (max-height: 820px) {
+		.sheet h1 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
 	}
 </style>
