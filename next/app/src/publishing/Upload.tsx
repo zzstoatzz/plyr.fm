@@ -19,7 +19,7 @@ import { pickArtwork } from './artwork';
 import { useArtistName } from './artist-name';
 import { QueuedUpload } from './QueuedUpload';
 import { queuedDrafts } from './upload-storage';
-import type { QueuedUploadDraft } from '@plyr/next-core/publishing/queued-upload-draft';
+import { draftInRecovery, type QueuedUploadDraft } from '@plyr/next-core/publishing/queued-upload-draft';
 
 export default function Upload() {
   const auth = useAuth();
@@ -101,7 +101,8 @@ function AccountUpload({ auth }: { auth: Auth }) {
       if (current()) setQueuedProblem('could not load queued uploads. try again.');
     }
   }, [auth.did, auth.rpc]);
-  useEffect(() => { void refreshDrafts(); }, [refreshDrafts, settled]);
+  const linkedDrafts = [...recovery.operations, ...recovery.archived, ...uploads.operations].map(operation => operation.draftId).join();
+  useEffect(() => { void refreshDrafts(); }, [refreshDrafts, settled, linkedDrafts]);
   // Everything typed survives a reload, a crash or the sign-in-again round trip; files are chosen again.
   useEffect(() => {
     try {
@@ -186,7 +187,8 @@ function AccountUpload({ auth }: { auth: Auth }) {
   return <>
     <UploadQueueList onEdit={saving ? undefined : id => void editAgain(id)} />
     {!!queuedProblem && <><Copy live>{queuedProblem}</Copy><Action label="Retry queued uploads" onPress={() => void refreshDrafts()} /></>}
-    {savedDrafts.filter(draft => !queue.some(job => job.id === draft.id)).map(draft =>
+    {savedDrafts.filter(draft => !draftInRecovery(draft, recovery.operations, recovery.archived, uploads.operations) &&
+      !queue.some(job => job.id === draft.id)).map(draft =>
       <QueuedUpload key={draft.id} draft={draft} refresh={refreshDrafts} />)}
     <LargeUploads uploads={uploads} skip={busy.uploadIds} />
     <EarlierCreates auth={auth} recovery={creationRecovery} kind="track" />

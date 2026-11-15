@@ -20,7 +20,17 @@ function audio(format) {
   return execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1', '-f', format, 'pipe:1']);
 }
 
-async function verify(browser, accounts, width, theme, mp3, wav, waitingDraftReload = false) {
+async function interruptDraftCleanup(page) {
+  await page.evaluate(() => {
+    const getKey = IDBObjectStore.prototype.getKey;
+    IDBObjectStore.prototype.getKey = function (...args) {
+      if (this.name === 'drafts' && this.transaction.mode === 'readwrite') throw new Error('fixture interrupted draft cleanup');
+      return getKey.apply(this, args);
+    };
+  });
+}
+
+async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'regular') {
   const did = accounts[handle].did;
   let loseReply = true, blobWrites = 0;
   const writes = [];
@@ -56,7 +66,16 @@ async function verify(browser, accounts, width, theme, mp3, wav, waitingDraftRel
   await context.route('https://typeahead.waow.tech/**', route => route.fulfill({ json: { actors: [] } }));
   await context.route(coordinator + '/v1/playback/join', route => route.fulfill({ status: 403, json: {} }));
   const blobRoute = 'https://pds.fixture.test/xrpc/com.atproto.repo.uploadBlob';
-  await context.route(blobRoute, route => { blobWrites++; return route.fallback(); });
+  const blobStarted = Promise.withResolvers();
+  const releaseBlob = Promise.withResolvers();
+  await context.route(blobRoute, async route => {
+    if (++blobWrites === 1 && scenario === 'before-create') {
+      blobStarted.resolve();
+      await releaseBlob.promise;
+      return route.abort().catch(() => {});
+    }
+    return route.fallback();
+  });
   await context.route('https://pds.fixture.test/xrpc/com.atproto.repo.createRecord', route => {
     writes.push(route.request().postDataJSON());
     return route.fallback();
@@ -136,8 +155,51 @@ async function verify(browser, accounts, width, theme, mp3, wav, waitingDraftRel
     await audioInput.setInputFiles({ name: 'direct.mp3', mimeType: 'audio/mpeg', buffer: mp3 });
     const cover = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aMTsAAAAASUVORK5CYII=', 'base64');
     await page.locator('input[type=file][accept^="image"]').setInputFiles({ name: 'cover.png', mimeType: 'image/png', buffer: cover });
-    if (!waitingDraftReload) await page.screenshot({ path: path.join(output, width + '-' + theme + '.png'), fullPage: true });
+    if (scenario === 'regular') await page.screenshot({ path: path.join(output, width + '-' + theme + '.png'), fullPage: true });
+    if (scenario === 'after-create') await interruptDraftCleanup(page);
     await submit.click();
+    if (scenario === 'before-create' || scenario === 'after-create') {
+      const draft = page.locator('.recovery-card').filter({ has: page.getByRole('heading', { name: 'direct from Svelte', exact: true }) });
+      if (scenario === 'before-create') {
+        await blobStarted.promise;
+        const other = await context.newPage();
+        try {
+          await other.goto(origin + '/upload');
+          const card = other.locator('.recovery-card').filter({ has: other.getByRole('heading', { name: 'direct from Svelte' }) });
+          await card.getByLabel('audio').setInputFiles({ name: 'direct.mp3', mimeType: 'audio/mpeg', buffer: mp3 });
+          await card.getByLabel(/^cover/).setInputFiles({ name: 'cover.png', mimeType: 'image/png', buffer: cover });
+          await card.getByRole('button', { name: 'resume queued upload' }).click();
+          await other.getByText(/this queued upload is open in another tab/).waitFor({ timeout: 5000 });
+          assert.equal(blobWrites, 1, 'the other tab cannot upload a second blob');
+        } finally { await other.close(); }
+        await page.reload();
+        releaseBlob.resolve();
+        await draft.getByLabel('audio').setInputFiles({ name: 'direct.mp3', mimeType: 'audio/mpeg', buffer: mp3 });
+        await draft.getByLabel(/^cover/).setInputFiles({ name: 'cover.png', mimeType: 'image/png', buffer: cover });
+        assert.equal(writes.length, 0, 'an interrupted blob transfer must not create a record');
+        await draft.getByRole('button', { name: 'resume queued upload' }).click();
+        await page.getByText('"direct from Svelte" uploaded').waitFor({ timeout: 5000 });
+      } else {
+        await page.getByText(/fixture interrupted draft cleanup/).waitFor({ timeout: 5000 });
+        assert.equal(writes.length, 0, 'the draft handoff runs before the PDS record write');
+        await page.reload();
+        await draft.getByRole('button', { name: 'resume creation' }).waitFor();
+        assert.equal(await draft.getByRole('button', { name: 'resume queued upload' }).count(), 0);
+        await draft.getByRole('button', { name: 'resume creation' }).click();
+        await draft.getByRole('button', { name: 'done with creation' }).click();
+        await draft.waitFor({ state: 'detached', timeout: 5000 });
+      }
+      assert.equal(writes.length, 1, 'recovery writes one record');
+      const { value: restored } = await getRecord(`at://${did}/${collection}/${writes[0].rkey}`);
+      assert.deepEqual(restored.tags, ['ambient', 'field recording']);
+      assert.equal(restored.draftId, undefined);
+      await page.reload();
+      await page.getByText(/posts to your profile as Fixture Artist/).waitFor();
+      assert.equal(await draft.count(), 0, 'finished recovery leaves no draft');
+      assert.deepEqual(errors, []);
+      console.log(`draft recovered ${scenario} at ${width}px (${theme})`);
+      return;
+    }
     await page.getByText('"direct from Svelte" uploaded', { exact: false }).waitFor({ timeout: 5000 }).catch(async failure => {
       console.error(await page.locator('main').innerText());
       throw failure;
@@ -162,11 +224,31 @@ async function verify(browser, accounts, width, theme, mp3, wav, waitingDraftRel
     assert.ok(await submit.isDisabled());
     await consent.check();
     if (manualConfirmation) await page.getByRole('checkbox', { name: 'auto-tag with recommended genres' }).check();
+    if (scenario === 'after-transfer') {
+      await interruptDraftCleanup(page);
+      await submit.click();
+      await page.getByText(/fixture interrupted draft cleanup/).waitFor({ timeout: 5000 });
+      assert.equal(upload, undefined, 'worker reservation starts after the local transfer handoff');
+      await page.reload();
+      const card = page.locator('.recovery-card').filter({ has: page.getByRole('heading', { name: 'for conversion', exact: true }) });
+      await card.getByLabel('reselect original audio').setInputFiles({ name: 'for conversion.wav', mimeType: 'audio/wav', buffer: wav });
+      assert.equal(await card.getByRole('button', { name: 'resume queued upload' }).count(), 0);
+      releasePart.resolve();
+      await card.getByRole('button', { name: 'resume upload', exact: true }).click();
+      await page.getByText('"for conversion" uploaded').waitFor({ timeout: 5000 });
+      assert.equal(writes.length, 2, 'resumed transfer writes one record beyond the direct upload');
+      await page.reload();
+      await page.getByText(/posts to your profile as Fixture Artist/).waitFor();
+      assert.equal(await card.count(), 0, 'finished transfer leaves no draft');
+      assert.deepEqual(errors, []);
+      console.log(`draft recovered after-transfer at ${width}px (${theme})`);
+      return;
+    }
     const partRequest = page.waitForRequest(request => request.url().startsWith(worker) && request.method() === 'PUT');
     await submit.click();
     await partRequest;
     await partStarted.promise;
-    if (waitingDraftReload) {
+    if (scenario === 'waiting') {
       const waitingTitle = 'queued through reload';
       const uploadForm = page.locator('form').filter({ has: title });
       await uploadForm.locator('input[type=file][accept^="audio"]').setInputFiles({ name: 'waiting.mp3', mimeType: 'audio/mpeg', buffer: mp3 });
@@ -247,7 +329,7 @@ async function verify(browser, accounts, width, theme, mp3, wav, waitingDraftRel
     assert.equal(blobWrites, 2, 'converted source bytes never go to the PDS');
     assert.deepEqual(errors, []);
     console.log(`Svelte public PDS and processed upload passed at ${width}px (${theme})`);
-  } finally { releasePart.resolve(); await context.close(); }
+  } finally { releaseBlob.resolve(); releasePart.resolve(); await context.close(); }
 }
 
 (async () => {
@@ -262,7 +344,10 @@ async function verify(browser, accounts, width, theme, mp3, wav, waitingDraftRel
         await verify(browser, accounts, width, theme, mp3, wav);
       }
     }
-    await verify(browser, accounts, 390, 'light', mp3, wav, true);
-    await verify(browser, accounts, 1280, 'dark', mp3, wav, true);
+    await verify(browser, accounts, 390, 'light', mp3, wav, 'waiting');
+    await verify(browser, accounts, 1280, 'dark', mp3, wav, 'waiting');
+    await verify(browser, accounts, 390, 'light', mp3, wav, 'before-create');
+    await verify(browser, accounts, 1280, 'dark', mp3, wav, 'after-create');
+    await verify(browser, accounts, 390, 'dark', mp3, wav, 'after-transfer');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

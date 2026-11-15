@@ -41,8 +41,8 @@
   async function discard() {
     busy = true;
     problem = '';
-    try { await queuedDrafts.take(draft); await refresh(); }
-    catch { problem = 'could not discard the queued draft. try again.'; }
+    try { await queuedDrafts.withLock(draft, () => queuedDrafts.take(draft)); await refresh(); }
+    catch (failure) { problem = failure instanceof Error ? failure.message : 'could not discard the queued draft. try again.'; }
     finally { busy = false; }
   }
 </script>

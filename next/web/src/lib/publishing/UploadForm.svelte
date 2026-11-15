@@ -3,7 +3,7 @@
   import { trackIdFromUri } from '@plyr/next-core/api';
   import type { CreateOperation } from '@plyr/next-core/publishing/create-operation';
   import type { UploadOperation } from '@plyr/next-core/publishing/upload-model';
-  import type { QueuedUploadDraft } from '@plyr/next-core/publishing/queued-upload-draft';
+  import { draftInRecovery, type QueuedUploadDraft } from '@plyr/next-core/publishing/queued-upload-draft';
   import { canonicalAudioType, jobLine, needsPlyrStorage, uploadInProgress } from '@plyr/next-core/publishing/upload-queue-model';
   import { normalizeTrackTags } from '@plyr/next-core/publishing/track-tags';
   import { creditName } from '@plyr/next-core/publishing/credit-name';
@@ -59,7 +59,7 @@
   let jobs = $state.raw(uploadQueue.snapshot());
   let active = $derived.by(() => { jobs; return uploadQueue.busy(); });
   let transfersToRecover = $derived(transfers.filter(operation => !active.uploadIds.has(operation.uploadId)));
-  let draftsToRecover = $derived(drafts.filter(draft => !jobs.some(job => job.id === draft.id)));
+  let draftsToRecover = $derived(drafts.filter(draft => !draftInRecovery(draft, pending, transfers) && !jobs.some(job => job.id === draft.id)));
   let creationsToRecover = $derived(pending.filter(operation => !active.rkeys.has(operation.rkey) && !transfers.some(transfer => transfer.rkey === operation.rkey)));
   let creationBlocksUpload = $derived(creationsToRecover.some(operation => !operation.archived));
   let service = $derived(!!audio && needsPlyrStorage(audio));
@@ -103,10 +103,9 @@
     const unsubscribe = uploadQueue.subscribe(() => {
       jobs = uploadQueue.snapshot();
       const signature = jobs.filter(job => !uploadInProgress(job.phase)).map(job => job.id).join();
-      if (signature !== finished) { finished = signature; void refresh(); void refreshDrafts(); }
+      if (signature !== finished) { finished = signature; void refresh(); }
     });
     void refresh();
-    void refreshDrafts();
     return () => { live = false; unsubscribe(); };
   });
 
@@ -131,7 +130,7 @@
     if (!owner || !current()) return;
     const version = ++refreshVersion;
     try {
-      const [creates, uploads] = await Promise.all([pds.pendingCreates('track'), uploadStorage.load(owner)]);
+      const [creates, uploads] = await Promise.all([pds.pendingCreates('track'), uploadStorage.load(owner), refreshDrafts()]);
       if (!current() || version !== refreshVersion) return;
       pending = creates;
       transfers = uploads;

@@ -1,13 +1,13 @@
 import type { Did } from '../auth-state.ts';
 
 export type CreateReservation = { owner: Did; collection: string; rkey: string; uri: string };
-export type CreateOperation = CreateReservation & { record: Record<string, unknown>; cid?: string; archived?: boolean };
+export type CreateOperation = CreateReservation & { record: Record<string, unknown>; cid?: string; archived?: boolean; draftId?: string };
 export interface CreateStorage {
   load(owner: string, collection: string): Promise<CreateOperation[]>;
   put(operation: CreateOperation): Promise<void>;
   accept(operation: CreateReservation, cid: string): Promise<void>;
   archive(operation: CreateReservation, archived: boolean): Promise<void>;
-  delete(operation: CreateReservation): Promise<void>;
+  delete(operation: CreateOperation): Promise<void>;
 }
 
 export function scopedCreate(value: unknown, owner: string, collection: string, key: string) {
@@ -29,9 +29,11 @@ export function createOperation(value: unknown): CreateOperation {
     || !item.record || typeof item.record !== 'object' || Array.isArray(item.record)
     || (item.record as Record<string, unknown>).$type !== item.collection
     || (item.cid !== undefined && typeof item.cid !== 'string')
+    || (item.draftId !== undefined && typeof item.draftId !== 'string')
     || (item.archived !== undefined && typeof item.archived !== 'boolean')) throw new Error('could not read pending creation.');
   return { owner: item.owner as Did, collection: item.collection, rkey: item.rkey, uri: item.uri,
-    record: item.record as Record<string, unknown>, ...(item.cid === undefined ? {} : { cid: item.cid }), ...(item.archived === undefined ? {} : { archived: item.archived }) };
+    record: item.record as Record<string, unknown>, ...(item.cid === undefined ? {} : { cid: item.cid }),
+    ...(item.archived === undefined ? {} : { archived: item.archived }), ...(item.draftId === undefined ? {} : { draftId: item.draftId }) };
 }
 
 export function sameRecord(left: unknown, right: unknown): boolean {

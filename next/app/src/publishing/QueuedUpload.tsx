@@ -39,8 +39,8 @@ export function QueuedUpload({ draft, refresh }: { draft: QueuedUploadDraft; ref
   async function discard() {
     setBusy(true);
     setProblem('');
-    try { await queuedDrafts.take(draft); await refresh(); }
-    catch { setProblem('could not discard the queued draft. try again.'); }
+    try { await queuedDrafts.withLock(draft, () => queuedDrafts.take(draft)); await refresh(); }
+    catch (failure) { setProblem(failure instanceof Error ? failure.message : 'could not discard the queued draft. try again.'); }
     finally { setBusy(false); }
   }
 

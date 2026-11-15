@@ -41,6 +41,7 @@ export const uploadStorage: UploadStorage = {
     });
   },
   async delete(operation) {
+    if (operation.draftId) await queuedDrafts.take({ owner: operation.owner, id: operation.draftId });
     const database = await open();
     await new Promise<void>((resolve, reject) => {
       const transaction = database.transaction('uploads', 'readwrite');
@@ -77,6 +78,14 @@ export const queuedDrafts: QueuedUploadDrafts = {
       transaction.onabort = () => reject(transaction.error ?? new Error('could not save the queued upload.'));
     });
   },
+  async has(draft) {
+    const db = await openDrafts();
+    return new Promise((resolve, reject) => {
+      const request = db.transaction('drafts').objectStore('drafts').getKey(queuedUploadKey(draft));
+      request.onsuccess = () => resolve(request.result !== undefined);
+      request.onerror = () => reject(request.error);
+    });
+  },
   async take(draft) {
     const db = await openDrafts();
     return new Promise((resolve, reject) => {
@@ -87,6 +96,14 @@ export const queuedDrafts: QueuedUploadDrafts = {
       existing.onsuccess = () => { if (existing.result !== undefined) store.delete(key); };
       transaction.oncomplete = () => resolve(existing.result !== undefined);
       transaction.onabort = () => reject(transaction.error ?? new Error('could not open the queued upload.'));
+    });
+  },
+  withLock(draft, task) {
+    const { locks } = navigator;
+    if (!locks) throw new Error('queued uploads need a secure browser session.');
+    return locks.request(`plyr-next-queued-upload/${queuedUploadKey(draft)}`, { ifAvailable: true }, lock => {
+      if (!lock) throw new Error('this queued upload is open in another tab.');
+      return task();
     });
   },
 };

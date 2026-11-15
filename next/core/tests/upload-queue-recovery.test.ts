@@ -20,7 +20,12 @@ const operation: UploadOperation = {
   ...record, uploadId: 'fixture', name: 'fixture.mp3', sizeBytes: 1, contentType: 'audio/mpeg', fileType: 'mp3',
 };
 
-function fixture(statusGate?: Promise<void>, reserve = async () => record) {
+function fixture({ statusGate, reserve = async () => record, beforeSaveTransfer, beforeLoadTransfers }: {
+  statusGate?: Promise<void>;
+  reserve?: () => Promise<typeof record>;
+  beforeSaveTransfer?: () => Promise<void>;
+  beforeLoadTransfers?: () => void;
+} = {}) {
   let counter = 0;
   let confirmations = 0;
   let dismissed = 0;
@@ -37,7 +42,8 @@ function fixture(statusGate?: Promise<void>, reserve = async () => record) {
   const pds = {
     reserveCreate: reserve,
     uploadTrack: async () => { throw new Error('host rejected the upload'); },
-    pendingCreates: async () => [record],
+    prepareTrackRecord: async () => record.record,
+    pendingCreates: async () => saved.length ? [record] : [],
     recoverCreate: async () => ({ state: 'different' }),
     uploadedTrack: async () => { publicationAttempts++; return { state: 'accepted' }; },
     dismissCreate: async () => { dismissed++; },
@@ -49,14 +55,16 @@ function fixture(statusGate?: Promise<void>, reserve = async () => record) {
     openUploadReader: () => { throw new Error('not used'); },
     sendParts: async () => { throw new Error('not used'); },
     uploadStorage: {
-      load: async () => saved,
-      put: async value => { saved = [value]; },
+      load: async () => { beforeLoadTransfers?.(); return saved; },
+      put: async value => { await beforeSaveTransfer?.(); saved = [value]; },
       delete: async () => { saved = []; },
     },
     queuedDrafts: {
       load: async account => [...drafts.values()].filter(draft => draft.owner === account),
       put: async draft => { drafts.set(draft.id, draft); },
+      has: async draft => drafts.has(draft.id),
       take: async draft => drafts.delete(draft.id),
+      withLock: async (_draft, task) => task(),
     },
     createUploadTransport: () => ({
       start: async () => status(),
@@ -87,7 +95,7 @@ test('failed jobs retain each editable input when more than four attempts fail',
 });
 
 test('a failed queue cannot reopen a draft already consumed elsewhere', async () => {
-  const { model, drafts } = fixture(undefined, async () => { throw new Error('resolve an earlier create first'); });
+  const { model, drafts } = fixture({ reserve: async () => { throw new Error('resolve an earlier create first'); } });
   const file = { name: 'fixture.mp3', type: 'audio/mpeg', size: 1, arrayBuffer: async () => new ArrayBuffer(1) };
   await model.add({ file, artist: 'fixture', title: 'Take' });
   await setImmediate();
@@ -96,6 +104,35 @@ test('a failed queue cannot reopen a draft already consumed elsewhere', async ()
   assert.equal(drafts.delete(job.id), true);
   await assert.rejects(model.takeBack(job.id), /this queued upload was already opened elsewhere/);
   assert.deepEqual(model.snapshot(), []);
+});
+
+test('processed upload keeps its draft until the transfer is durable', async () => {
+  const saving = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  const f = fixture({ beforeSaveTransfer: () => { saving.resolve(); return release.promise; } });
+  f.confirm();
+  const file = { name: 'fixture.wav', type: 'audio/wav', size: 1, arrayBuffer: async () => new ArrayBuffer(1) };
+  await f.model.add({ file, artist: 'fixture', title: 'Take', description: 'Saved notes' });
+  await saving.promise;
+  assert.deepEqual(f.recordForRecovery(), []);
+  assert.equal([...f.drafts.values()][0].description, 'Saved notes');
+  release.resolve();
+  await setImmediate();
+  assert.equal(f.drafts.size, 0);
+  assert.equal(f.model.snapshot()[0].phase, 'done');
+});
+
+test('a completed recovery cannot race a stale draft into a new reservation', async () => {
+  let reservations = 0;
+  const f = fixture({
+    reserve: async () => { reservations++; return record; },
+    beforeLoadTransfers: () => { f.drafts.clear(); },
+  });
+  const file = { name: 'fixture.mp3', type: 'audio/mpeg', size: 1, arrayBuffer: async () => new ArrayBuffer(1) };
+  await f.model.add({ file, artist: 'fixture', title: 'Take' });
+  await setImmediate();
+  assert.equal(f.model.snapshot()[0].phase, 'failed');
+  assert.equal(reservations, 0);
 });
 
 test('publication stays recoverable until the worker confirms it, then cleans up the same upload', async context => {
@@ -134,7 +171,7 @@ test('publication stays recoverable until the worker confirms it, then cleans up
 
 test('a delayed resume does not re-enqueue an upload that has finished meanwhile', async () => {
   const gate = Promise.withResolvers<void>();
-  const f = fixture(gate.promise);
+  const f = fixture({ statusGate: gate.promise });
   f.confirm();
   f.seed();
   const resumed = f.model.resume(owner);

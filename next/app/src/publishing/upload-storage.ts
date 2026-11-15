@@ -20,10 +20,14 @@ export const uploadStorage: UploadStorage = {
     storage.set(key, value);
     if (storage.getString(key) !== value) throw new Error('could not save upload recovery.');
   },
-  async delete(operation) { storage.remove(`${operation.owner}/${operation.uploadId}`); },
+  async delete(operation) {
+    if (operation.draftId) await queuedDrafts.take({ owner: operation.owner, id: operation.draftId });
+    storage.remove(`${operation.owner}/${operation.uploadId}`);
+  },
 };
 
 const drafts = createMMKV({ id: 'plyr-next-upload-drafts' });
+const lockedDrafts = new Set<string>();
 export const queuedDrafts: QueuedUploadDrafts = {
   async load(owner) {
     return drafts.getAllKeys().filter(key => key.startsWith(`${owner}/`))
@@ -38,5 +42,13 @@ export const queuedDrafts: QueuedUploadDrafts = {
   },
   async take(draft) {
     return drafts.remove(queuedUploadKey(draft));
+  },
+  async has(draft) { return drafts.contains(queuedUploadKey(draft)); },
+  async withLock(draft, task) {
+    const key = queuedUploadKey(draft);
+    if (lockedDrafts.has(key)) throw new Error('this queued upload is already open.');
+    lockedDrafts.add(key);
+    try { return await task(); }
+    finally { lockedDrafts.delete(key); }
   },
 };

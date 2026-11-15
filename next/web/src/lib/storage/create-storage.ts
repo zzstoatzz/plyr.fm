@@ -1,4 +1,5 @@
 import { createKey, scopedCreate, sameRecord, type CreateStorage } from '@plyr/next-core/publishing/create-operation';
+import { queuedDrafts } from './upload-storage';
 
 let database: Promise<IDBDatabase> | undefined;
 function open(): Promise<IDBDatabase> {
@@ -56,6 +57,7 @@ export const createStorage: CreateStorage = {
     });
   },
   async delete(operation) {
+    if (operation.draftId) await queuedDrafts.take({ owner: operation.owner, id: operation.draftId });
     const database = await open();
     await new Promise<void>((resolve, reject) => {
       const transaction = database.transaction('operations', 'readwrite');

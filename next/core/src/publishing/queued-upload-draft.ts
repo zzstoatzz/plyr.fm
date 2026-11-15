@@ -1,5 +1,6 @@
 import type { Did } from '../auth-state.ts';
 import type { MediaFile, NewTrack } from '../pds.ts';
+import type { CreateOperation } from './create-operation.ts';
 import { canonicalAudioType } from './upload-queue-model.ts';
 
 export type QueuedUploadDraft = Omit<NewTrack, 'file' | 'artwork' | 'duration'> & {
@@ -12,11 +13,19 @@ export type QueuedUploadDraft = Omit<NewTrack, 'file' | 'artwork' | 'duration'> 
 export interface QueuedUploadDrafts {
   load(owner: Did): Promise<QueuedUploadDraft[]>;
   put(draft: QueuedUploadDraft): Promise<void>;
-  take(draft: QueuedUploadDraft): Promise<boolean>;
+  has(draft: QueuedUploadKey): Promise<boolean>;
+  take(draft: QueuedUploadKey): Promise<boolean>;
+  withLock<T>(draft: QueuedUploadKey, task: () => Promise<T>): Promise<T>;
 }
 
-export function queuedUploadKey(draft: Pick<QueuedUploadDraft, 'owner' | 'id'>) {
+export type QueuedUploadKey = Pick<QueuedUploadDraft, 'owner' | 'id'>;
+
+export function queuedUploadKey(draft: QueuedUploadKey) {
   return `${draft.owner}/${draft.id}`;
+}
+
+export function draftInRecovery(draft: QueuedUploadKey, ...records: readonly CreateOperation[][]) {
+  return records.some(group => group.some(record => record.owner === draft.owner && record.draftId === draft.id));
 }
 
 export function queuedUploadDraft(input: NewTrack, owner: Did, id: string): QueuedUploadDraft {

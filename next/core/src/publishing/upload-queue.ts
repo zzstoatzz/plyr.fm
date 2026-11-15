@@ -6,7 +6,7 @@ import { audioFormat, uploadPublication, type ChunkReader, type UploadOperation,
 import { processingStep, retryDelay, transient, uploadInProgress, uploadRoute, type UploadJobView } from './upload-queue-model.ts';
 import type { UploadTransport } from './upload-transport';
 import type { UploadRecoveryDisposition } from './upload-recovery';
-import { queuedUploadDraft, reattachQueuedUpload, type QueuedUploadDraft, type QueuedUploadDrafts } from './queued-upload-draft.ts';
+import { draftInRecovery, queuedUploadDraft, reattachQueuedUpload, type QueuedUploadDraft, type QueuedUploadDrafts } from './queued-upload-draft.ts';
 
 type Job = UploadJobView & { owner: Did; draft?: QueuedUploadDraft; input?: NewTrack; file?: MediaFile; operation?: UploadOperation; rkey?: string; uploadId?: string };
 type Session = Pick<Auth<unknown>, 'did' | 'agent' | 'uploadStorage'>;
@@ -84,14 +84,16 @@ export function createUploadQueue<Rpc extends RepoRpc>({
     if (autoTag) void applyGenreTags(() => session(job), uri).catch(() => undefined);
   }
 
-  async function runPds(job: Job, input: NewTrack, reservation: CreateReservation) {
-    patch(job, { phase: 'uploading', progress: undefined });
+  async function runPds(job: Job, input: NewTrack, reservation: CreateReservation, draft: QueuedUploadDraft) {
+    const handedOff = async () => { await queuedDrafts.take(draft); };
     try {
-      await withRetries(job, () => createPds(session(job)).uploadTrack(input, reservation));
+      await withRetries(job, () => createPds(session(job)).uploadTrack(input, reservation, { id: draft.id, handedOff }));
     } catch (failure) {
       // A reauthentication or lost reply can interrupt a create that still reached the PDS: settle it at the same address.
-      const pds = createPds(session(job)), pending = (await pds.pendingCreates('track')).find(item => item.rkey === reservation.rkey);
+      const pds = createPds(session(job));
+      const pending = (await pds.pendingCreates('track')).find(item => item.rkey === reservation.rkey && item.draftId === draft.id);
       if (!pending) throw failure;
+      await handedOff();
       if ((await withRetries(job, () => pds.recoverCreate(pending, true))).state !== 'accepted') throw failure;
     }
     patch(job, { phase: 'publishing' });
@@ -147,7 +149,19 @@ export function createUploadQueue<Rpc extends RepoRpc>({
     await finishCreate(job, operation.uri, operation.autoTag, operation);
   }
 
-  async function prepare(job: Job, input: NewTrack) {
+  async function draftAvailable(draft: QueuedUploadDraft) {
+    const pds = createPds(session(draft));
+    const [creates, uploads] = await Promise.all([pds.pendingCreates('track'), uploadStorage.load(draft.owner)]);
+    // Recovery deletes a linked draft before removing its operation.
+    return !draftInRecovery(draft, creates, uploads) && queuedDrafts.has(draft);
+  }
+
+  async function runDraft(job: Job, input: NewTrack, draft: QueuedUploadDraft) {
+    if (!await draftAvailable(draft)) {
+      job.input = undefined;
+      job.file = undefined;
+      throw new Error('this queued upload has already moved to upload recovery');
+    }
     const auth = session(job), pds = createPds(auth);
     const duration = input.duration ?? await measureAudioDuration(input.file).catch(() => undefined);
     const ready = { ...input, duration };
@@ -155,21 +169,23 @@ export function createUploadQueue<Rpc extends RepoRpc>({
     if (route.kind === 'service' && !auth.uploadStorage) throw new Error('sign in again to allow plyr storage');
     const reservation = await pds.reserveCreate('track').catch(() => { throw new Error('finish the earlier upload first'); });
     session(job);
-    if (job.draft && !await queuedDrafts.take(job.draft)) {
-      job.input = undefined;
-      job.file = undefined;
-      throw new Error('this queued upload was already opened elsewhere');
-    }
-    job.draft = undefined;
     patch(job, { phase: 'uploading', rkey: reservation.rkey });
-    if (route.kind === 'pds') return () => runPds(job, ready, reservation);
+    if (route.kind === 'pds') return runPds(job, ready, reservation, draft);
     const format = audioFormat(input.file.name, input.file.type, !!route.processing);
     const record = await pds.prepareTrackRecord(ready);
-    const operation: UploadOperation = { ...reservation, record: { ...record, fileType: format.fileType }, uploadId: randomUUID(),
+    const operation: UploadOperation = { ...reservation, draftId: draft.id, record: { ...record, fileType: format.fileType }, uploadId: randomUUID(),
       name: input.file.name, sizeBytes: input.file.size, ...format, ...(route.processing ? { processing: route.processing } : {}), ...(input.autoTag ? { autoTag: true } : {}) };
     await uploadStorage.put(operation);
+    await queuedDrafts.take(draft);
     patch(job, { operation, uploadId: operation.uploadId });
-    return () => runService(job, operation);
+    return runService(job, operation);
+  }
+
+  async function run(job: Job) {
+    if (job.operation) return runService(job, job.operation);
+    const { draft, input } = job;
+    if (!draft || !input) throw new Error('the queued upload is missing its draft');
+    return queuedDrafts.withLock(draft, () => runDraft(job, input, draft));
   }
 
   function alreadyQueued(operation: UploadOperation) {
@@ -193,8 +209,7 @@ export function createUploadQueue<Rpc extends RepoRpc>({
     try {
       for (let job = jobs.find(item => item.phase === 'waiting'); job; job = jobs.find(item => item.phase === 'waiting')) {
         try {
-          const run = job.operation ? () => runService(job!, job!.operation!) : await prepare(job, job.input!);
-          await run();
+          await run(job);
           job.input = undefined; job.file = undefined;
         } catch (failure) {
           // The failed job keeps what was entered, files included, so the form can take it back.
@@ -253,7 +268,8 @@ export function createUploadQueue<Rpc extends RepoRpc>({
     async takeBack(id: string): Promise<NewTrack | undefined> {
       const job = jobs.find(item => item.id === id && item.owner === getAuth().did && item.phase === 'failed' && item.input);
       if (!job) return;
-      const available = !job.draft || await queuedDrafts.take(job.draft);
+      const { draft } = job;
+      const available = !draft || await queuedDrafts.withLock(draft, async () => await draftAvailable(draft) && queuedDrafts.take(draft));
       remove(job);
       if (!available) throw new Error('this queued upload was already opened elsewhere');
       return job.input;
