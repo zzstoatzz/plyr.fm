@@ -5,7 +5,7 @@ import type { Track, TrackComment } from '@plyr/next-core/api';
 import { useAppearance } from './appearance';
 import { useAuth } from './auth';
 import { Cover } from './CatalogPieces';
-import { clock } from './chapters';
+import { clock } from '@plyr/next-core/chapters';
 import { CommentComposer } from './CommentComposer';
 import { timeAgo } from './home-state';
 import { Trash } from './icons';
