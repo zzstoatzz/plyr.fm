@@ -21,7 +21,6 @@
 	let NowPlaying = $state<typeof import('$lib/NowPlaying.svelte').default>();
 	let nowPlayingView = $state.raw<{ dismiss: () => void }>();
 	const hideNowPlaying = () => { player.nowPlaying = false; };
-	const showNowPlaying = () => { player.nowPlaying = true; };
 	let loadingNowPlaying: Promise<void> | undefined;
 	function preloadNowPlaying() {
 		if (NowPlaying || loadingNowPlaying) return;
@@ -30,7 +29,7 @@
 			.catch(hideNowPlaying)
 			.finally(() => { loadingNowPlaying = undefined; });
 	}
-	const pull = createDockPull(showNowPlaying, preloadNowPlaying);
+	const pull = createDockPull(() => player.openNowPlaying(), preloadNowPlaying);
 	let account = $state.raw(auth.getAuth());
 	let uploading = $derived(uploadActivity.jobs.filter(job => job.owner === account.did && uploadInProgress(job.phase)).length);
 	const links = [
@@ -87,7 +86,10 @@
 	$effect(() => {
 		if (player.nowPlaying && !NowPlaying) {
 			preloadNowPlaying();
-		} else if (player.nowPlaying && !dialog.open) dialog.showModal();
+		} else if (player.nowPlaying && !dialog.open) {
+			dialog.showModal();
+			if (player.focusNowPlayingSheet) dialog.focus({ preventScroll: true });
+		}
 		else if (!player.nowPlaying && dialog.open) dialog.close();
 	});
 

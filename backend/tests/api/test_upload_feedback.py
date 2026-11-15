@@ -9,12 +9,17 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend._internal import Session, background, require_auth
+from backend._internal import Session, background, require_auth, upload_policy
 from backend._internal.notifications import notification_service
 from backend.models import UploadFeedback
 from backend.utilities.rate_limit import limiter
 
 PAUSED_DID = "did:plc:so3ysj7gypel6w7mixdfjhkh"
+
+
+@pytest.fixture(autouse=True)
+def paused_policy(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(upload_policy, "PAUSED_UPLOAD_DIDS", frozenset({PAUSED_DID}))
 
 
 @pytest.fixture

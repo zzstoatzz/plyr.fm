@@ -50,7 +50,11 @@ async function screen(browser, phone, scheme) {
     await page.keyboard.press('Escape');
     await linksMenu.waitFor({ state: 'hidden' });
 
-    await page.getByRole('link', { name: tracks[0].metadata.title, exact: true }).first().click();
+    const firstRow = page.getByTestId('home-track-row').first();
+    await firstRow.getByRole('link', { name: 'replyomatic', exact: true }).click();
+    await page.waitForURL('**/u/' + tracks[0].artist.did);
+    await page.goBack();
+    await firstRow.getByRole('link', { name: tracks[0].metadata.title, exact: true }).click();
     await page.getByRole('heading', { name: tracks[0].metadata.title, exact: true }).waitFor();
     const tags = page.getByRole('navigation', { name: 'Tags', exact: true });
     const tag = tags.getByRole('link', { name: 'field & nature', exact: true });
@@ -381,12 +385,42 @@ async function keyboard(browser, phone, scheme) {
     const search = page.getByRole('searchbox');
     await search.waitFor();
     assert.ok(await search.evaluate(node => document.activeElement === node));
+    await page.getByText('try a track title, artist name or handle, album, or playlist.').waitFor();
+    await page.screenshot({ path: path.join(output, `${width}-${scheme}-search-empty.png`) });
+    const hit = {
+      object: 'search_result', type: 'track', id: tracks[0].id, title: tracks[0].metadata.title,
+      record: tracks[0].record, image_url: null,
+      owner: { did: tracks[0].artist.did, ...tracks[0].artist.profile }
+    };
+    let submitted = 0;
+    await page.route('https://api.next.plyr.fm/v1/search?**', route => {
+      const params = new URL(route.request().url()).searchParams;
+      const term = params.get('q');
+      if (term === 'q?' && params.get('limit') === '40' && ++submitted === 1) {
+        return route.fulfill({ status: 503, json: { error: 'temporarily unavailable' } });
+      }
+      return route.fulfill({ json: { object: 'list', data: term === 'sketch' ? [hit] : [], has_more: false } });
+    });
+    await search.fill('🎧');
+    await page.getByText('type at least two characters to search.').waitFor();
+    await search.fill('sketch');
+    const suggestion = page.getByRole('list', { name: 'search suggestions' }).getByRole('link');
+    await suggestion.waitFor();
+    assert.equal(new URL(page.url()).search, '', 'suggestions do not submit the query');
+    await search.press('ArrowDown');
+    assert.ok(await suggestion.evaluate(node => document.activeElement === node));
+    await suggestion.press('ArrowUp');
+    assert.ok(await search.evaluate(node => document.activeElement === node));
+    await page.screenshot({ path: path.join(output, `${width}-${scheme}-search-suggestions.png`) });
+    await search.fill('');
     await press('q');
     await press('?');
     assert.equal(await search.inputValue(), 'q?');
     assert.equal(await guide.isVisible(), false);
     await search.press('Enter');
     await page.waitForURL('**/search?q=q%3F');
+    await page.getByText('could not search. try again.').waitFor();
+    await search.press('Enter');
     await page.getByText('no results for “q?”.').waitFor();
     await page.route('https://api.next.plyr.fm/v1/charts/tracks?**', async route => {
       if (new URL(route.request().url()).searchParams.get('period') === 'month') {
@@ -418,7 +452,17 @@ async function keyboard(browser, phone, scheme) {
     await page.waitForURL('**/settings');
 
     await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'home', exact: true }).click();
-    await page.getByTestId('home-track-row').first().getByRole('button', { name: `Play ${tracks[0].metadata.title}`, exact: true }).click();
+    const row = page.getByTestId('home-track-row').first();
+    await row.scrollIntoViewIfNeeded();
+    const artistLink = row.getByRole('link', { name: 'replyomatic', exact: true });
+    const artistBounds = await artistLink.boundingBox();
+    const rowBounds = await row.boundingBox();
+    const x = rowBounds.x + rowBounds.width - (phone ? 66 : 120);
+    const y = artistBounds.y + artistBounds.height / 2;
+    assert.ok(x > artistBounds.x + artistBounds.width, 'artist link ends before the blank part of the row');
+    if (phone) await page.touchscreen.tap(x, y);
+    else await page.mouse.click(x, y);
+    assert.equal(new URL(page.url()).pathname, '/', 'the blank part of the row does not navigate');
     await dock.getByRole('button', { name: 'Pause', exact: true }).waitFor();
     await page.getByTestId('home-track-row').nth(1).getByRole('button', { name: `Add ${tracks[1].metadata.title} to queue` }).click();
     await blur();

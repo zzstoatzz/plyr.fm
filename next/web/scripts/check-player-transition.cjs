@@ -59,6 +59,11 @@ async function transition(browser, origin, width, reducedMotion) {
     assert.ok(homeScroll > 0, 'the fixture can exercise Home scroll restoration');
     await opener.click();
     await dialog.waitFor();
+    const closeButton = dialog.getByRole('button', { name: 'Close', exact: true });
+    assert.ok(await dialog.evaluate(node => document.activeElement === node), 'opening focuses the dialog itself');
+    assert.equal(await closeButton.evaluate(node => node.matches(':focus-visible')), false, 'opening does not highlight Close');
+    await page.keyboard.press('Tab');
+    assert.ok(await closeButton.evaluate(node => node.matches(':focus-visible')), 'keyboard navigation still highlights Close');
     await page.waitForFunction(sheet => !sheet.style.transform, await panel.elementHandle());
     const opened = await page.evaluate(() => window.playerFrames.filter(frame => frame.top !== null));
     if (phone && reducedMotion === 'no-preference') {
@@ -158,6 +163,11 @@ async function transition(browser, origin, width, reducedMotion) {
     await pagedTrack.waitFor();
     await page.waitForFunction(expected => Math.abs(window.scrollY - expected) < 2, homeScroll);
     await dock.getByRole('button', { name: 'Pause', exact: true }).waitFor();
+    await opener.press('Enter');
+    await dialog.waitFor();
+    assert.ok(await closeButton.evaluate(node => node === document.activeElement), 'keyboard open retains direct focus on Close');
+    await page.keyboard.press('Escape');
+    await dialog.waitFor({ state: 'hidden' });
     assert.equal(deliveries.length, 1, 'no playback delivery refetch');
     assert.equal(await page.evaluate(() => window.audioElements.filter(audio => audio.src).length), 1, 'the same audio element keeps playing');
     assert.deepEqual(errors, []);

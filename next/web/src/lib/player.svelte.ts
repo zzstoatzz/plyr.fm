@@ -36,6 +36,12 @@ class Player {
 	repeat = $state<PersonalPlaybackTarget['repeat']>('off');
 	keepPlaying = $state(false);
 	nowPlaying = $state(false);
+	#keyboardOpenedNowPlaying = false;
+	get focusNowPlayingSheet() { return !this.#keyboardOpenedNowPlaying; }
+	openNowPlaying(keyboard = false) {
+		this.#keyboardOpenedNowPlaying = keyboard;
+		this.nowPlaying = true;
+	}
 	queueOpen = $state(false);
 	privateMode = $state(false);
 	liveStation = $state.raw<RadioStation>();
