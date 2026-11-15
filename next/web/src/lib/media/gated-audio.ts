@@ -3,7 +3,7 @@ import { isCid, isLexMap, type LexMap } from '@atproto/lex-data';
 import { lexParse } from '@atproto/lex-json';
 import { createSpaceSigHeaders, encapsulate, formatMacRequest, parseSpaceToken, RECORD_MAC_PROFILE, verifyRecord } from '@atproto/space';
 import { isSpaceAtUriString } from '@atproto/syntax';
-import { createGatedAudio, type GatedAudioSource } from '@plyr/next-core/gated-audio';
+import { createGatedAudio, isSpaceCredentialRequest, type GatedAudioSource } from '@plyr/next-core/gated-audio';
 import { auth } from '$lib/auth';
 import { privateAudioUrl, releasePrivateAudio } from './private-audio';
 
@@ -27,7 +27,7 @@ export async function protectedAudio(uri: string, signal: AbortSignal): Promise<
 		guard,
 		fetch: (url, init) => {
 			// An in-flight credential can be shared by two tracks in the same Space.
-			return new URL(url).pathname === '/xrpc/com.atproto.space.getSpaceCredential'
+			return isSpaceCredentialRequest(url)
 				? fetch(url, init)
 				: fetch(url, { ...init, signal, cache: 'no-store' });
 		},
