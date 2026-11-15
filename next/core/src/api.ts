@@ -11,6 +11,7 @@ export interface Page<T> {
 export interface Track {
 	object: 'track';
 	id: string;
+	legacy_id?: number | null;
 	record: { uri: string; cid: string | null; revision: string | null; collection: string; rkey: string };
 	metadata: {
 		title: string;

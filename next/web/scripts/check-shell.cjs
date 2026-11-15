@@ -24,6 +24,14 @@ async function screen(browser, phone, scheme) {
       if (new URL(route.request().url()).searchParams.get('period') !== 'all_time') return route.fallback();
       return route.fulfill({ json: { data: featuredTracks.map(track => ({ track })) } });
     });
+    const linkedTrack = { ...tracks[0], legacy_id: 1667, metadata: { ...tracks[0].metadata, tags: ['ambient', 'home recordings', 'field & nature'] } };
+    await page.route('https://api.next.plyr.fm/v1/tracks/1667', route => route.fulfill({ json: linkedTrack }));
+    await page.route('https://api.next.plyr.fm/v1/tracks/' + tracks[0].id, route => route.fulfill({ json: linkedTrack }));
+    await page.goto(origin + '/track/' + tracks[0].id + '?ref=fixture');
+    await page.waitForURL('**/track/1667?ref=fixture');
+    await page.getByRole('heading', { name: linkedTrack.metadata.title, exact: true }).waitFor();
+    await page.reload();
+    await page.getByRole('heading', { name: linkedTrack.metadata.title, exact: true }).waitFor();
     const commentsRequests = [];
     page.on('request', request => {
       if (new URL(request.url()).pathname.endsWith('/comments')) commentsRequests.push(request);
@@ -55,6 +63,7 @@ async function screen(browser, phone, scheme) {
     await page.waitForURL('**/u/' + tracks[0].artist.did);
     await page.goBack();
     await firstRow.getByRole('link', { name: tracks[0].metadata.title, exact: true }).click();
+    await page.waitForURL('**/track/1667');
     await page.getByRole('heading', { name: tracks[0].metadata.title, exact: true }).waitFor();
     const tags = page.getByRole('navigation', { name: 'Tags', exact: true });
     const tag = tags.getByRole('link', { name: 'field & nature', exact: true });
