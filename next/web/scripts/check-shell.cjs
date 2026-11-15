@@ -83,6 +83,11 @@ async function queueGroups(browser, phone, scheme) {
     await queue.getByRole('button', { name: 'clear your queued tracks' }).click();
     await upNext.getByText('no tracks queued by you.').waitFor();
     assert.ok(await continuation.getByRole('link', { name: tracks[8].metadata.title, exact: true }).isVisible());
+    const promote = continuation.getByRole('button', { name: `Move ${tracks[2].metadata.title} into up next` });
+    await promote.focus();
+    await promote.press('Enter');
+    const promoted = upNext.getByRole('button', { name: `Play ${tracks[2].metadata.title}`, exact: true });
+    await page.waitForFunction(node => document.activeElement === node, await promoted.elementHandle());
     assert.deepEqual(errors, []);
   } finally { await context.close(); }
 }

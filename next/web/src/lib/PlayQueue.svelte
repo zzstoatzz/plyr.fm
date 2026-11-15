@@ -8,15 +8,40 @@
 	import Icon from './ui/Icon.svelte';
 	let { close }: { close?: () => void } = $props();
 	const start = $derived(player.index + 1);
-	const state = $derived(player.snapshot.state);
-	const tail = $derived(player.localMode ? undefined : state.tail);
-	const end = $derived(tail ? Math.max(start, explicitEnd(state)) : player.queue.length);
+	const queueState = $derived(player.snapshot.state);
+	const tail = $derived(player.localMode ? undefined : queueState.tail);
+	const end = $derived(tail ? Math.max(start, explicitEnd(queueState)) : player.queue.length);
 	const picks = $derived(player.queue.slice(start, end));
 	const continuation = $derived(player.queue.slice(end));
+	let pickList: HTMLOListElement | undefined = $state();
+	let pendingPromotion: { key: string; opener: HTMLButtonElement } | undefined;
 
 	function key(index: number) {
-		return player.localMode ? index : state.entries[index]?.key ?? index;
+		return player.localMode ? index : queueState.entries[index]?.key ?? index;
 	}
+
+	function promotes(index: number) {
+		return !!tail && index > start && (index === end || index === end + 1);
+	}
+
+	function moveUp(index: number, opener: HTMLButtonElement) {
+		const entryKey = key(index);
+		if (typeof entryKey === 'string' && promotes(index) && document.activeElement === opener) {
+			pendingPromotion = { key: entryKey, opener };
+		}
+		player.move(index, index - 1);
+	}
+
+	$effect(() => {
+		const { entries } = queueState;
+		const pending = pendingPromotion;
+		if (!pending) return;
+		const index = entries.findIndex(entry => entry.key === pending.key);
+		if (index < start || index >= end) return;
+		const target = pickList?.querySelector<HTMLButtonElement>(`[data-queue-key=${CSS.escape(pending.key)}] .cover`);
+		if (document.activeElement === document.body || document.activeElement === pending.opener) target?.focus();
+		pendingPromotion = undefined;
+	});
 </script>
 
 <section aria-label="Queue" class="queue" class:rail={!!close}>
@@ -46,9 +71,9 @@
 				<span class="count">{picks.length}</span>
 			</div>
 			{#if picks.length}
-				<ol role="list">
+				<ol role="list" bind:this={pickList}>
 					{#each picks as track, offset (key(start + offset))}
-						<li class="row">{@render row(track, start + offset, false)}</li>
+						<li class="row" data-queue-key={key(start + offset)}>{@render row(track, start + offset, false)}</li>
 					{/each}
 				</ol>
 			{:else}
@@ -73,6 +98,7 @@
 </section>
 
 {#snippet row(track: NonNullable<typeof player.current>, index: number, current: boolean)}
+		{@const promote = promotes(index)}
 		<button class="cover" type="button" aria-label={`${current && player.playing ? 'Pause' : 'Play'} ${track.metadata.title}`} onclick={() => current ? player.toggle() : player.jump(index)}>
 			<Artwork src={trackArtwork(track)} size={44} eager={index - player.index < 8} />
 			<span class="play"><Icon name={current && player.playing ? 'pause' : 'play'} size={18} /></span>
@@ -84,7 +110,7 @@
 		<span class="subtle time">{clock(track.metadata.duration_seconds)}</span>
 		{#if !current}
 			<div class="actions">
-				<button class="icon-button move" type="button" aria-label={`Move ${track.metadata.title} up`} disabled={index === start} onclick={() => player.move(index, index - 1)}><Icon name="down" size={16} /></button>
+				<button class="icon-button move" type="button" aria-label={promote ? `Move ${track.metadata.title} into up next` : `Move ${track.metadata.title} up`} title={promote ? 'move into up next' : 'move up'} disabled={index === start} onclick={event => moveUp(index, event.currentTarget)}><Icon name="down" size={16} /></button>
 				<button class="icon-button" type="button" aria-label={`Remove ${track.metadata.title}`} onclick={() => player.remove(index)}><Icon name="x" size={16} /></button>
 			</div>
 		{/if}
@@ -97,7 +123,7 @@
 	.actions { display: flex; align-items: center; }
 	h1 { font-size: 1.45rem; letter-spacing: -0.03em; }
 	h2, .count { color: var(--muted); font-size: 0.87rem; font-weight: 650; }
-	h2 { margin-block-end: 0.55rem; }
+	h2 { margin-block-end: 0.55rem; overflow-wrap: anywhere; }
 	.count { margin-block-end: 0.55rem; font-variant-numeric: tabular-nums; }
 	ol { display: grid; gap: 0.38rem; margin: 0; padding: 0; list-style: none; }
 	.row { display: flex; align-items: center; gap: 0.6rem; padding: 0.45rem; min-width: 0; border: 1px solid var(--line); border-radius: 0.7rem; background: var(--raised); }
