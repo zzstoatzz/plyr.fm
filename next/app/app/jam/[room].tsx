@@ -8,7 +8,7 @@ import { Action, Copy, Field, Page } from '../../src/controls';
 import { jamSpace, joinJam, type InitialJam } from '../../src/jam-space';
 import { coordinatorHeaders } from '../../src/coordinator-origin';
 import { usePlayback } from '../../src/playback';
-import { jamTrack } from '../../src/use-jam-playback';
+import { jamTrack } from '@plyr/next-core/jam-playback';
 import { useResource } from '../../src/CatalogPieces';
 import { pdsEndpoint, pdsSupportsSpaces } from '@plyr/next-core/identity';
 

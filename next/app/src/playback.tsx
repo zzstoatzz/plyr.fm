@@ -12,7 +12,8 @@ import { editPrivateQueue, withoutPrivateTrack } from '@plyr/next-core/publishin
 import { privateLibrary } from './publishing/private-config';
 import { blobUrl } from '@plyr/next-core/identity';
 import { gatedAudioUrl, releaseGatedAudioUrl } from './gated-audio';
-import { useJamPlayback, jamTrack } from './use-jam-playback';
+import { jamTrack } from '@plyr/next-core/jam-playback';
+import { useJamPlayback } from './use-jam-playback';
 import { usePersonalQueue } from './use-personal-queue';
 import { usePlayerAccounting } from './use-player-accounting';
 import { useMediaSession } from './media-session';
