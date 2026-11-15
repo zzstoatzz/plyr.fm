@@ -163,6 +163,11 @@ async function transition(browser, origin, width, reducedMotion) {
     await pagedTrack.waitFor();
     await page.waitForFunction(expected => Math.abs(window.scrollY - expected) < 2, homeScroll);
     await dock.getByRole('button', { name: 'Pause', exact: true }).waitFor();
+    await opener.press('Enter');
+    await dialog.waitFor();
+    assert.ok(await closeButton.evaluate(node => node === document.activeElement), 'keyboard open retains direct focus on Close');
+    await page.keyboard.press('Escape');
+    await dialog.waitFor({ state: 'hidden' });
     assert.equal(deliveries.length, 1, 'no playback delivery refetch');
     assert.equal(await page.evaluate(() => window.audioElements.filter(audio => audio.src).length), 1, 'the same audio element keeps playing');
     assert.deepEqual(errors, []);

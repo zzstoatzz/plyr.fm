@@ -20,8 +20,12 @@
 	const queuePanelOpen = $derived(player.queueOpen && !queuePage);
 	let NowPlaying = $state<typeof import('$lib/NowPlaying.svelte').default>();
 	let nowPlayingView = $state.raw<{ dismiss: () => void }>();
-	const hideNowPlaying = () => { player.nowPlaying = false; };
-	const showNowPlaying = () => { player.nowPlaying = true; };
+	let focusSheetOnOpen = false;
+	const hideNowPlaying = () => { focusSheetOnOpen = false; player.nowPlaying = false; };
+	const showNowPlaying = (keyboard = false) => {
+		focusSheetOnOpen = !keyboard;
+		player.nowPlaying = true;
+	};
 	let loadingNowPlaying: Promise<void> | undefined;
 	function preloadNowPlaying() {
 		if (NowPlaying || loadingNowPlaying) return;
@@ -89,7 +93,7 @@
 			preloadNowPlaying();
 		} else if (player.nowPlaying && !dialog.open) {
 			dialog.showModal();
-			dialog.focus({ preventScroll: true });
+			if (focusSheetOnOpen) dialog.focus({ preventScroll: true });
 		}
 		else if (!player.nowPlaying && dialog.open) dialog.close();
 	});
@@ -231,7 +235,7 @@
 </div>
 
 {#if player.current}
-	{#await import('$lib/PlayerDock.svelte') then { default: Dock }}<Dock onQueue={toggleQueue} {queuePage} {pull} />{/await}
+	{#await import('$lib/PlayerDock.svelte') then { default: Dock }}<Dock onOpen={showNowPlaying} onQueue={toggleQueue} {queuePage} {pull} />{/await}
 {/if}
 <dialog bind:this={dialog} class="now-sheet" aria-label="Now playing" onclose={hideNowPlaying} oncancel={event => { event.preventDefault(); nowPlayingView?.dismiss(); }}>
 	{#if player.nowPlaying && NowPlaying}<NowPlaying bind:this={nowPlayingView} close={hideNowPlaying} {pull} />{/if}

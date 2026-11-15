@@ -8,13 +8,13 @@
 	import Scrub from './Scrub.svelte';
 	import type { DockPull } from './dock-pull';
 
-	let { onQueue, queuePage, pull }: { onQueue: () => void; queuePage: boolean; pull: DockPull } = $props();
+	let { onOpen, onQueue, queuePage, pull }: { onOpen: (keyboard: boolean) => void; onQueue: () => void; queuePage: boolean; pull: DockPull } = $props();
 </script>
 
 {#if player.current}
 	<div class="dock" data-testid="player-dock">
 		{#if !player.liveStation}<div class="mobile-progress"><Scrub clockLabels={false} /></div>{/if}
-		<button type="button" class="song" aria-label="Open now playing" {@attach pull.attach} onclick={() => { player.nowPlaying = true; }}>
+		<button type="button" class="song" aria-label="Open now playing" {@attach pull.attach} onclick={event => onOpen(event.detail === 0)}>
 			<span class="cover"><Artwork src={trackArtwork(player.current)} size={48} /></span>
 			<span class="description">
 				<strong class="truncate">{player.current.metadata.title}</strong>
