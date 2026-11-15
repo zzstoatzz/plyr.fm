@@ -56,9 +56,10 @@
   let problem = $state('');
   let selectionProblem = $state('');
   let statusProblem = $state('');
-  let savedUrl = $state('');
+  let savedUri = $state('');
   let confirming = $state(false);
   let journalReady = $state(false);
+  const savedInJournal = $derived(journalReady && journal.view.operations.some(operation => !operation.archived && operation.uri === savedUri));
   let ready = $derived(songs.flatMap(song => song.state === 'ready' ? [song.reference] : []));
   let working = $derived(songs.some(song => song.state === 'working'));
   let blocked = $derived(journal.view.loading || !!journal.view.error || journal.view.operations.some(operation => !operation.archived));
@@ -115,7 +116,7 @@
           await albumUploads.finish(storedPlan);
           nextPlan = undefined;
         }
-        if (existing && current() && attempt === revision) savedUrl = albumHref(existing.uri);
+        if (existing && current() && attempt === revision) savedUri = existing.uri;
       }
       if (!current() || attempt !== revision) return;
       journalReady = true;
@@ -292,7 +293,7 @@
         if (!current()) return;
         if (existing) {
           await albumUploads.finish(saved);
-          savedUrl = albumHref(uri);
+          savedUri = uri;
           return;
         }
         await keepUnfinished(saved, tracks);
@@ -301,12 +302,12 @@
           id: selected.id, reservedRkey: selected.reservedRkey, handedOff: () => albumUploads.finish(selected)
         });
         if (!current()) return;
-        savedUrl = albumHref(result.uri);
+        savedUri = result.uri;
         await journal.refresh();
         if (result.status !== 'indexed' || !current()) return;
         const accepted = journal.view.operations.find(operation => operation.uri === result.uri && operation.cid);
         if (accepted) await pds.dismissCreate(accepted).catch(() => {});
-        if (current()) await goto(savedUrl);
+        if (current()) await goto(albumHref(result.uri));
       });
     } catch (failure) {
       if (current()) {
@@ -327,9 +328,11 @@
 {#if problem}<p role="alert">{problem}</p>{/if}
 {#if loading}
   <Loading label="checking saved album uploads" inline />
-{:else if savedUrl}
-  <p role="status">album saved. it may take a moment to appear.</p>
-  <a class="text-button" href={savedUrl}>view album</a>
+{:else if savedUri}
+  {#if !savedInJournal}
+    <p role="status">album saved. it may take a moment to appear.</p>
+    <a class="text-button" href={albumHref(savedUri)}>view album</a>
+  {/if}
 {:else if plan}
   <div class="panel">
     <h2>{plan.name}</h2>

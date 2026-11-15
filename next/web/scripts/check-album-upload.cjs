@@ -37,12 +37,14 @@ async function fixture(browser, accounts, handle, width, scheme, scenario, audio
   const lostAlbumReply = Promise.withResolvers();
   const errors = [];
   let blobCount = 0, albumAttempts = 0, albumLost = false, rejectAlbum = scenario === 'partial';
+  let albumPending = scenario === 'pending';
   let activeWrite;
   let albumUri;
   const { page, context } = await fixturePage(browser, accounts, {
     origin, dist: path.resolve(__dirname, '../build'),
     context: { viewport: { width, height: 900 }, colorScheme: scheme, hasTouch: width === 390, isMobile: width === 390 },
     discardPdsResponse(endpoint) {
+      if (scenario === 'pending') return false;
       if (endpoint !== '/xrpc/com.atproto.repo.createRecord' || activeWrite !== listCollection || albumLost) return false;
       albumLost = true;
       lostAlbumReply.resolve();
@@ -110,7 +112,10 @@ async function fixture(browser, accounts, handle, width, scheme, scenario, audio
       } });
     }
     if (url.pathname === '/v1/records/await') {
-      if (url.searchParams.get('uri') === albumUri) projected = true;
+      if (url.searchParams.get('uri') === albumUri) {
+        if (albumPending) return route.fulfill({ json: { status: 'pending' } });
+        projected = true;
+      }
       return route.fulfill({ json: { status: 'indexed' } });
     }
     if (url.pathname.startsWith('/v1/artists/')) return route.fulfill({ json: { did, handle, display_name: 'Fixture Artist' } });
@@ -170,7 +175,25 @@ async function fixture(browser, accounts, handle, width, scheme, scenario, audio
     assert.equal((await records(listCollection)).filter(record => !albumsAtStart.has(record.uri)).length, 0);
     await page.screenshot({ path: path.join(output, `${width}-${scheme}-${scenario}-progress.png`), fullPage: true });
 
-    if (scenario === 'partial') {
+    if (scenario === 'pending') {
+      await page.getByRole('button', { name: 'create album', exact: true }).click();
+      const check = page.getByRole('button', { name: 'check creation', exact: true });
+      await check.waitFor();
+      const view = page.getByRole('link', { name: 'view album', exact: true });
+      assert.equal(await view.count(), 1, 'only one album action while the journal owns the result');
+      await page.screenshot({ path: path.join(output, `${width}-${scheme}-pending-result.png`), fullPage: true });
+      albumPending = false;
+      const indexed = page.waitForResponse(response => {
+        const url = new URL(response.url());
+        return url.pathname === '/v1/records/await' && url.searchParams.get('uri') === albumUri && response.ok();
+      });
+      await check.click();
+      assert.equal((await (await indexed).json()).status, 'indexed');
+      await page.getByRole('button', { name: 'done with creation', exact: true }).click();
+      await check.waitFor({ state: 'detached' });
+      await view.click();
+      await page.waitForURL('**/album/**');
+    } else if (scenario === 'partial') {
       await page.getByText('upload didn’t finish. choose alpha.mp3 to try again.').waitFor();
       await page.getByRole('button', { name: 'set aside album', exact: true }).click();
       await page.getByText('uploaded songs stay in your music. unfinished songs stay in upload recovery.').waitFor();
@@ -260,7 +283,15 @@ async function fixture(browser, accounts, handle, width, scheme, scenario, audio
 
 (async () => {
   await mkdir(output, { recursive: true });
-  const frames = [[390, 'dark', 'reload'], [1280, 'light', 'partial'], [390, 'light', 'stale'], [1280, 'dark', 'journal'], [390, 'dark', 'journal-other']];
+  const frames = [
+    [390, 'dark', 'pending'],
+    [1280, 'light', 'pending'],
+    [390, 'dark', 'reload'],
+    [1280, 'light', 'partial'],
+    [390, 'light', 'stale'],
+    [1280, 'dark', 'journal'],
+    [390, 'dark', 'journal-other']
+  ];
   const handles = frames.map(([, , scenario]) => 'albqa-' + (scenario === 'journal-other' ? 'elsewhere' : scenario));
   const accounts = await fixtureAccounts([...handles, 'album-upload-other']);
   const audio = execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1', '-f', 'mp3', 'pipe:1']);
