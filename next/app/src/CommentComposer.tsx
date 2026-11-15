@@ -5,7 +5,7 @@ import type { Track } from '@plyr/next-core/api';
 import { MAX_COMMENT_BYTES } from '@plyr/next-core/track-comments';
 import { useAppearance } from './appearance';
 import { useAuth } from './auth';
-import { clock } from './chapters';
+import { clock } from '@plyr/next-core/chapters';
 import { inputFontSize } from './controls';
 import { ArrowUp } from './icons';
 import { Text } from './Text';

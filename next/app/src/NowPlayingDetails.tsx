@@ -8,7 +8,7 @@ import { useAppearance } from './appearance';
 import { Cover, artistName } from './CatalogPieces';
 import { Text } from './Text';
 import { AccessSummary } from './access/AccessSummary';
-import { clock, currentChapter, parseChapters, type Chapter } from './chapters';
+import { clock, currentChapter, parseChapters, type Chapter } from '@plyr/next-core/chapters';
 import { compactCount } from './home-state';
 import { firstLikers } from './Likers';
 import { Sheet, type Anchor } from './Sheet';

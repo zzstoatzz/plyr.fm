@@ -3,11 +3,11 @@
 	import { clock } from './tracks';
 
 	let scrub: number | undefined = $state();
-	let { clockLabels = true }: { clockLabels?: boolean } = $props();
+	let { clockLabels = true, stacked = false }: { clockLabels?: boolean; stacked?: boolean } = $props();
 	const position = $derived(scrub ?? player.position);
 </script>
 
-<div class="scrub" class:clockLabels>
+<div class="scrub" class:clockLabels class:stacked>
 	{#if clockLabels}<span>{clock(position)}</span>{/if}
 	<input aria-label="Playback position" type="range" min="0" max={player.duration || 1} step="0.01"
 		value={Math.min(position, player.duration)}
@@ -20,6 +20,9 @@
 
 <style>
 	.scrub { display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
+	.stacked { display: grid; grid-template-columns: 1fr 1fr; gap: 0.15rem; }
+	.stacked input { grid-area: 1 / 1 / 2 / 3; min-height: 2rem; }
+	.stacked span:last-child { justify-self: end; }
 	input { margin: 0; }
 	span { color: var(--muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
 </style>

@@ -6,7 +6,7 @@
   import Icon from '$lib/ui/Icon.svelte';
   import Loading from '$lib/ui/Loading.svelte';
 
-  let { track, transport }: { track: Track; transport: Snippet } = $props();
+  let { track, transport, compact = false }: { track: Track; transport: Snippet; compact?: boolean } = $props();
   let account = $state.raw(auth.getAuth());
   let picking = $state(false);
   let liked = $state(false);
@@ -17,7 +17,6 @@
   let confirmed = $state(false);
   let live = false;
   const returnTo = $derived(resolve('/(app)/track/[id]', { id: track.id }));
-  const signIn = $derived(resolve('/(app)/login') + '?' + new URLSearchParams({ return_to: returnTo }));
   const count = $derived(track.metrics.like_count + Number(liked) - Number(initialLike));
 
   onMount(() => {
@@ -73,15 +72,15 @@
   }
 </script>
 
-<div class="actions">
+<div class="actions" class:compact>
   {#if account.ready && account.rpc}
     <button class="icon-button" type="button" aria-label={liked ? 'Unlike track' : 'Like track'} aria-pressed={liked} disabled={loading || busy} onclick={toggle}><Icon name={liked ? 'heart_f' : 'heart'} />{Math.max(0, count)}</button>
   {:else}
-    <a class="icon-button" href={signIn} aria-label="Sign in to like"><Icon name="heart" />{track.metrics.like_count}</a>
+    <a class="icon-button" href={resolve('/(app)/login') + '?' + new URLSearchParams({ return_to: returnTo })} aria-label="Sign in to like"><Icon name="heart" />{track.metrics.like_count}</a>
   {/if}
   {@render transport()}
 </div>
-{#if account.ready && account.rpc}
+{#if !compact && account.ready && account.rpc}
   <div class="actions">
     <button class="text-button" type="button" aria-expanded={picking} onclick={() => { picking = !picking; }}>add to playlist</button>
     {#if account.did === track.artist.did}<a class="text-button" href={resolve('/(app)/edit-track/[id]', { id: track.id })}>edit track</a>{/if}
@@ -102,4 +101,5 @@
 
 <style>
   .actions { display: flex; align-items: center; justify-content: center; gap: 0.5rem; flex-wrap: wrap; }
+  .compact { justify-content: space-between; }
 </style>

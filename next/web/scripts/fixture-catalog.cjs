@@ -76,6 +76,7 @@ async function setup(browser, width, height = 900, options = {}) {
       await route.fulfill({ status: 400, json: { error: { code: 'invalid_request' } } });
       return;
     }
+    else if (url.pathname === '/v1/stats') body = { object: 'platform_stats', tracks: 9, artists: 1, duration_seconds: 2000, plays: 9, updated_at_ms: 1794651020000 };
     else if (url.pathname === '/v1/tracks') body = { object: 'list', data: tracks, has_more: false };
     else if (url.pathname === '/v1/charts/tracks') body = { period: url.searchParams.get('period') || 'week', data: tracks.map((track, index) => ({ rank: index + 1, track, plays: 1, likes: track.metrics.like_count })) };
     else if (url.pathname.startsWith('/v1/artists/') && url.pathname.endsWith('/metrics')) body = { totals: { plays: 9, tracks: 9, duration_seconds: 2000 }, top_track: null };

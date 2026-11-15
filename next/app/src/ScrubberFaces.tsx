@@ -3,7 +3,7 @@ import { Animated, Pressable, StyleSheet, View } from 'react-native';
 import type { TrackComment } from '@plyr/next-core/api';
 import { useAppearance } from './appearance';
 import { Cover } from './CatalogPieces';
-import { clock } from './chapters';
+import { clock } from '@plyr/next-core/chapters';
 import { COUNT_WIDTH, FACE, SHOWN, STEP, clampLeft, passingComment, pileFaces, type Pile } from './comment-faces';
 import { Text } from './Text';
 

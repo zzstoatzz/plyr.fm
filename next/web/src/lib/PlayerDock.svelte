@@ -6,14 +6,15 @@
 	import Icon from './ui/Icon.svelte';
 	import Transport from './Transport.svelte';
 	import Scrub from './Scrub.svelte';
+	import type { DockPull } from './dock-pull';
 
-	let { onQueue, queuePage }: { onQueue: () => void; queuePage: boolean } = $props();
+	let { onQueue, queuePage, pull }: { onQueue: () => void; queuePage: boolean; pull: DockPull } = $props();
 </script>
 
 {#if player.current}
 	<div class="dock" data-testid="player-dock">
 		{#if !player.liveStation}<div class="mobile-progress"><Scrub clockLabels={false} /></div>{/if}
-		<button type="button" class="song" aria-label="Open now playing" onclick={() => { player.nowPlaying = true; }}>
+		<button type="button" class="song" aria-label="Open now playing" {@attach pull.attach} onclick={() => { player.nowPlaying = true; }}>
 			<span class="cover"><Artwork src={trackArtwork(player.current)} size={48} /></span>
 			<span class="description">
 				<strong class="truncate">{player.current.metadata.title}</strong>
@@ -50,6 +51,7 @@
 	.volume { display: flex; align-items: center; gap: 0.5rem; width: 7.5rem; }
 	.mobile-progress { display: none; }
 	@media (max-width: 720px) {
+		.song { touch-action: pan-x; }
 		.dock { grid-template-columns: minmax(0, 1fr) auto; bottom: calc(var(--tabs) + env(safe-area-inset-bottom)); gap: 0.25rem; padding: 0.3rem 0.75rem; }
 		.extras, .desktop-progress { display: none; }
 		.mobile-progress { position: absolute; inset: -0.42rem 0 auto; display: block; }

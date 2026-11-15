@@ -19,7 +19,7 @@ import { usePlayerDismiss } from './use-player-dismiss';
 import { PullDetector, PullRoot, usePlayerPull } from './player-pull';
 import { PlayerFlight } from './PlayerFlight';
 import { AlbumLink, NowPlayingDetails } from './NowPlayingDetails';
-import { currentChapter, parseChapters } from './chapters';
+import { currentChapter, parseChapters } from '@plyr/next-core/chapters';
 import { Coachmark } from './Coachmark';
 import { markHintSeen, useHintPending } from './hints';
 import { measure, playerSheet, setFlying, type Rect } from './player-sheet';
