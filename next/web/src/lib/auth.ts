@@ -1,5 +1,5 @@
 import { Client } from '@atcute/client';
-import { BrowserOAuthClient, type OAuthSession } from '@atproto/oauth-client-browser';
+import type { BrowserOAuthClient, OAuthSession } from '@atproto/oauth-client-browser';
 import { createAuthState } from '$core/auth-state';
 import { returnPath } from '$core/return-path';
 import { authConfig } from './auth-config';
@@ -16,12 +16,12 @@ function oauthClient() {
 	const clientId = loopback
 		? `http://localhost?redirect_uri=${encodeURIComponent(redirect)}&scope=${encodeURIComponent(SCOPE_PARTS.join(' '))}`
 		: `${SITE_URL}/oauth-client-metadata.json`;
-	client = BrowserOAuthClient.load({
+	client = import('@atproto/oauth-client-browser').then(({ BrowserOAuthClient }) => BrowserOAuthClient.load({
 		clientId,
 		allowHttp: loopback,
 		handleResolver: 'https://public.api.bsky.app',
 		onSessionDeleted: did => { if (auth.getAuth().did === did) auth.clearAuth(); }
-	});
+	}));
 	void client.catch(() => { client = undefined; });
 	return client;
 }
@@ -43,6 +43,13 @@ export function restoreAuth(): Promise<void> {
 	return initialization ??= initialize();
 }
 
+async function mayHaveSession() {
+	try {
+		// Both Next web builds use this SDK database. A browser unable to list it still runs the SDK restore.
+		return (await indexedDB.databases()).some(database => database.name === '@atproto-oauth-client');
+	} catch { return true; }
+}
+
 async function initialize() {
 	if (location.pathname.replace(/\/$/, '') === '/oauth/callback') {
 		const params = new URLSearchParams(location.hash.slice(1) || location.search.slice(1));
@@ -61,6 +68,7 @@ async function initialize() {
 		}
 		return;
 	}
+	if (!await mayHaveSession()) { auth.clearAuth(); return; }
 	try {
 		const restored = await (await oauthClient()).initRestore();
 		if (restored) {

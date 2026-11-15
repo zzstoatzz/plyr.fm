@@ -7,14 +7,13 @@
 	import NowPlaying from '$lib/NowPlaying.svelte';
 	import PlayQueue from '$lib/PlayQueue.svelte';
 	import PlayerDock from '$lib/PlayerDock.svelte';
-	import { uploadQueue } from '$lib/upload';
+	import { uploadActivity } from '$lib/upload-activity.svelte';
 	import '../app.css';
 
 	let { children } = $props();
 	let dialog: HTMLDialogElement;
 	let account = $state.raw(auth.getAuth());
-	let uploadJobs = $state.raw(uploadQueue.snapshot());
-	let uploading = $derived(uploadJobs.filter(job => job.owner === account.did && job.phase !== 'done' && job.phase !== 'failed').length);
+	let uploading = $derived(uploadActivity.jobs.filter(job => job.owner === account.did && job.phase !== 'done' && job.phase !== 'failed').length);
 	const links = [
 		{ path: '/', label: 'home', icon: 'home' },
 		{ path: '/search', label: 'search', icon: 'search' },
@@ -27,12 +26,17 @@
 			account = auth.getAuth();
 			if (resumed === account.rpc) return;
 			resumed = account.rpc;
-			if (account.did && account.uploadStorage) void uploadQueue.resume(account.did).catch(() => {});
+			const owner = account.did;
+			const rpc = account.rpc;
+			if (owner && account.uploadStorage) {
+				void import('$lib/upload').then(({ uploadQueue }) => {
+					if (auth.getAuth().rpc === rpc) return uploadQueue.resume(owner);
+				}).catch(() => {});
+			}
 		});
-		const stopUploads = uploadQueue.subscribe(() => { uploadJobs = uploadQueue.snapshot(); });
 		const stop = player.mount();
 		void restoreAuth();
-		return () => { unsubscribe(); stopUploads(); stop(); };
+		return () => { unsubscribe(); stop(); };
 	});
 	$effect(() => {
 		// Queue snapshots, rather than the media clock, trigger checkpoint writes.
