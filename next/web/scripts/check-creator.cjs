@@ -61,7 +61,7 @@ async function run(browser, accounts, width, theme, mp3) {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   let initialError = true, moreError = true, profileReadError = false, profileWrites = 0;
-  let trackMissing = false;
+  let trackMissing = false, trackLoadFailed = false;
   let projectedLike = false;
   let announceLike;
   const waitForProjection = new Promise(resolve => { announceLike = resolve; });
@@ -90,7 +90,10 @@ async function run(browser, accounts, width, theme, mp3) {
       albumRequests.push(url.search);
       return route.fulfill({ json: list([album, emptyAlbum]) });
     }
-    if (url.pathname === `/v1/tracks/${id}`) return route.fulfill({ json: row(25) });
+    if (url.pathname === `/v1/tracks/${id}`) {
+      if (!trackLoadFailed) { trackLoadFailed = true; return route.abort('failed'); }
+      return route.fulfill({ json: row(25) });
+    }
     if (url.pathname === `/v1/tracks/${id}/playback`) return route.fulfill({ json: {
       availability: { status: 'available', ...(projected.audioBlob
         ? { artifact: { cid: projected.audioBlob.ref.$link } }
@@ -177,6 +180,10 @@ async function run(browser, accounts, width, theme, mp3) {
     await editTrack.scrollIntoViewIfNeeded();
     const previousScroll = await page.evaluate(() => scrollY);
     await editTrack.click();
+    const retryTrack = main.getByRole('button', { name: 'retry loading track', exact: true });
+    await retryTrack.waitFor();
+    assert.equal(await main.getByRole('alert').innerText(), 'could not load this track.');
+    await retryTrack.click();
     const title = main.getByRole('textbox', { name: 'title', exact: true });
     await title.waitFor();
     assert.equal(await title.inputValue(), 'late recording');
