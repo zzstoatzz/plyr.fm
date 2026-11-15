@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
   import { onMount } from 'svelte';
   import type { ListSummary, Track } from '@plyr/next-core/api';
   import { api } from '$lib/api';
@@ -29,11 +30,14 @@
 
 <svelte:head><title>{heading} · plyr.fm</title></svelte:head>
 <section class="page-content library">
-  <header><h1>{heading}</h1><a class="icon-button" href="/settings" aria-label="Settings"><Icon name="settings" /></a></header>
+  <header>
+    <h1>{heading}</h1>
+    {#if !likesOnly}<a class="icon-button queue-link" href={resolve('/(app)/queue')} aria-label="open queue"><Icon name="queue" /></a>{/if}
+  </header>
   {#if !account.ready}
     <Loading label="loading account" inline />
   {:else if !account.did || !account.rpc}
-    <p class="state">sign in to see your liked tracks and playlists.</p>
+    <p class="state">sign in to see your {likesOnly ? 'liked tracks' : 'liked tracks and playlists'}.</p>
     <a class="text-button primary" href={'/login?' + new URLSearchParams({ return_to: likesOnly ? '/liked' : '/library' })}>sign in</a>
   {:else}
     {@const did = account.did}
@@ -74,6 +78,7 @@
 <style>
   .library { max-width: 62rem; }
   header { display: flex; justify-content: space-between; align-items: start; }
+  @media (min-width: 721px) { .queue-link { display: none; } }
   .primary { background: var(--accent); color: var(--on-accent); padding-inline: 1rem; border-radius: 2rem; }
   .primary:hover { background: var(--accent); filter: brightness(1.1); }
   .actions { display: flex; gap: 0.45rem; flex-wrap: wrap; align-items: center; margin: 1rem 0; }

@@ -12,7 +12,7 @@
 
 	async function signOut() {
 		void logout();
-		await goto('/');
+		await goto(resolve('/'));
 	}
 </script>
 
@@ -32,7 +32,6 @@
 	{:else if account.ready}
 		<p class="state"><a href="/login?return_to=%2Fsettings">sign in</a> to see your account.</p>
 	{/if}
-	<a class="text-button" href={resolve('/(app)/stats')}>stats</a>
 </section>
 
 <style>
