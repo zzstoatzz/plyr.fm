@@ -122,16 +122,22 @@ async function verify(browser, origin, width, scheme) {
         await touch('touchEnd');
         await page.waitForFunction(initial => document.querySelector('dialog.now-sheet').scrollTop < initial - 110, start, { timeout: 1500 });
         await present();
-        await page.waitForTimeout(350);
       };
       await flick(950);
+      await page.keyboard.press('Escape');
+      await dialog.waitFor({ state: 'hidden' });
+      await open();
       await flick(250);
+      await page.keyboard.press('Escape');
+      await dialog.waitFor({ state: 'hidden' });
+      await open();
       await setScroll(110);
       await page.waitForFunction(() => document.querySelector('dialog.now-sheet').scrollTop === 110);
       const body = [10, 260];
       await touch('touchStart', [body]);
       await touch('touchMove', [[body[0], body[1] + 50]]);
-      assert.ok(Math.abs(await scrollTop() - 60) <= 8, 'a downward content pull first scrolls');
+      const remainingScroll = await scrollTop();
+      assert.ok(Math.abs(remainingScroll - 60) <= 8, `a downward content pull first scrolls (scrollTop ${remainingScroll})`);
       assert.equal(await offset(), 0, 'the sheet stays still before reaching the top');
       await touch('touchMove', [[body[0], body[1] + 150]]);
       await page.waitForFunction(() => {

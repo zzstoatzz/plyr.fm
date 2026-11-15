@@ -208,7 +208,7 @@
 	@media (max-width: 720px) {
 		.sheet { min-height: 100dvh; }
 		.sheet header { touch-action: none; }
-		.sheet .hero { height: calc(100dvh - 3.5rem); min-height: min-content; display: grid; grid-template-rows: minmax(80px, 1fr) auto auto; }
+		.sheet .hero { height: calc(100dvh - 3.5rem); min-height: min-content; display: grid; grid-template-rows: minmax(64px, 1fr) auto auto; }
 		.sheet .artwork-frame { container-type: size; display: grid; place-items: center; }
 		.sheet .cover { width: 100cqmin; }
 		.sheet .copy { padding-top: 1rem; }
@@ -222,6 +222,6 @@
 		.desktop-close { display: none; }
 	}
 	@media (max-width: 720px) and (max-height: 820px) {
-		.sheet h1 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+		.sheet h1 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
 	}
 </style>
