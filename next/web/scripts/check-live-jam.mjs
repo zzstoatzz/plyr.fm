@@ -47,6 +47,12 @@ async function openClient(browser, width, permitSpaceWrite) {
   await context.route(`${api}/v1/tracks/*/plays*`, route => route.abort());
   await context.route(`${coordinator}/v1/playback/join`, route => route.abort());
   const page = await context.newPage();
+  page.on('response', response => {
+    const url = new URL(response.url());
+    if (url.origin === coordinator && url.pathname === '/v1/jams/join') {
+      console.log(`browser ${width}px ${url.pathname}: HTTP ${response.status()}`);
+    }
+  });
   page.setDefaultTimeout(20_000);
   await context.route('**/xrpc/**', route => {
     const request = route.request(), url = new URL(request.url());
@@ -113,14 +119,17 @@ try {
   await hostPage.waitForURL(app + '/settings');
   await hostPage.getByRole('button', { name: 'sign out', exact: true }).waitFor();
 
-  step('playing an existing public catalog track and its queue');
+  step('opening an existing public recording in the artist catalog');
   await hostPage.goto(app + artistPath);
   await hostPage.locator('main').getByRole('button', { name: 'Play ' + track, exact: true }).click();
+  step('decoding audio in the host browser');
   await playing(hostPage);
+  step('reading the host queue and artist continuation');
   const hostQueue = await openQueue(hostPage);
-  const upcoming = hostQueue.getByRole('region', { name: 'up next' });
-  await upcoming.getByRole('link').first().waitFor();
-  const titles = await upcoming.getByRole('link').allTextContents();
+  const queuedTracks = hostQueue.getByRole('link');
+  await queuedTracks.nth(1).waitFor();
+  const [current, ...titles] = await queuedTracks.allTextContents();
+  assert.equal(current, track);
 
   step('starting a Jam and sharing its active queue');
   await hostQueue.getByRole('button', { name: 'Start a Jam', exact: true }).click();
@@ -170,6 +179,12 @@ try {
   await guestPage.getByRole('button', { name: 'leave jam', exact: true }).click();
   await hostPage.getByRole('button', { name: 'leave jam', exact: true }).click();
 } catch (error) {
+  if (stage === 'decoding audio in the host browser') {
+    const media = await hostClient.page.evaluate(() => window.testAudio.map(audio => ({
+      ready: audio.readyState, network: audio.networkState, error: audio.error?.code ?? null, paused: audio.paused, time: Math.floor(audio.currentTime)
+    }))).catch(() => []);
+    console.error('host media state', JSON.stringify(media));
+  }
   errors.push(new Error(`live Jam failed at ${stage} (${error.name})`));
 } finally {
   for (const [client, account, consented, role] of [[guestClient, guest, guestConsented, 'guest'], [hostClient, host, hostConsented, 'host']]) {
@@ -177,9 +192,10 @@ try {
       if (consented) await account.signOut(client.page, '/settings');
     } catch (error) {
       errors.push(new Error(`${role} browser sign-out failed (${error.name})`));
-    } finally { await client?.context.close(); }
+    }
+    try { await client?.context.close(); } catch (error) { errors.push(new Error(`${role} browser cleanup failed (${error.name})`)); }
   }
-  await browser.close();
+  try { await browser.close(); } catch (error) { errors.push(new Error(`browser cleanup failed (${error.name})`)); }
   try {
     if (space) {
       const removed = await hostRpc('space.deleteSpace', { space }, session.accessJwt);
