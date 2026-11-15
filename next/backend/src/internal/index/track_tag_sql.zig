@@ -13,8 +13,7 @@ pub const filter =
     \\  ))
 ;
 
-pub const effective_rows =
-    \\ JOIN plyr_index.track_tag_records tags ON tags.record_uri=v.record_uri AND tags.record_cid=v.record_cid
+const effective_values =
     \\ CROSS JOIN LATERAL (
     \\   SELECT name, 'verified_repo'::text AS source FROM unnest(tags.tags) name WHERE tags.tags_present
     \\   UNION ALL
@@ -22,6 +21,19 @@ pub const effective_rows =
     \\   WHERE NOT tags.tags_present AND annotation.record_uri=v.record_uri
     \\     AND annotation.observed_record_cid=v.record_cid
     \\ ) AS tag(name,source)
+;
+
+pub const effective_rows =
+    \\ JOIN plyr_index.track_tag_records tags ON tags.record_uri=v.record_uri AND tags.record_cid=v.record_cid
+++ "\n" ++ effective_values;
+
+pub const detail_tags =
+    \\ array_to_json(ARRAY(
+    \\   SELECT DISTINCT tag.name FROM plyr_index.track_tag_records tags
+++ "\n" ++ effective_values ++ "\n" ++
+    \\   WHERE tags.record_uri=v.record_uri AND tags.record_cid=v.record_cid
+    \\   ORDER BY tag.name
+    \\ ))::text
 ;
 
 // Exclusion keys are non-null; uncorrelated sets avoid per-row subplan costs.

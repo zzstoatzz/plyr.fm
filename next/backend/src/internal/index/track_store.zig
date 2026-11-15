@@ -34,6 +34,7 @@ pub const TrackStore = struct {
     get_by_uri_fn: *const fn (*anyopaque, std.mem.Allocator, []const u8) Error!?track.Track,
     list_public_fn: *const fn (*anyopaque, std.mem.Allocator, ListRequest) Error![]ListItem,
     ready_fn: *const fn (*anyopaque) bool,
+    get_detail_fn: ?*const fn (*anyopaque, std.mem.Allocator, []const u8) Error!?track.Track = null,
 
     resolve_fn: ?*const fn (*anyopaque, std.mem.Allocator, []const []const u8) Error![]const track.Track = null,
 
@@ -59,6 +60,10 @@ pub const TrackStore = struct {
         at_uri: []const u8,
     ) Error!?track.Track {
         return self.get_by_uri_fn(self.context, allocator, at_uri);
+    }
+
+    pub fn getDetail(self: TrackStore, allocator: std.mem.Allocator, at_uri: []const u8) Error!?track.Track {
+        return (self.get_detail_fn orelse self.get_by_uri_fn)(self.context, allocator, at_uri);
     }
 
     pub fn listPublic(

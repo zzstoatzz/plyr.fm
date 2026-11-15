@@ -33,6 +33,7 @@ pub const Metadata = struct {
     album: ?[]const u8,
     duration_seconds: ?i64,
     created_at: []const u8,
+    tags: ?[]const []const u8 = null,
 };
 
 pub const Artist = struct {
