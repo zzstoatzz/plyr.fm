@@ -20,7 +20,7 @@
   .editor :global(form) { display: grid; gap: 0.85rem; }
   .editor :global(form label) { min-width: 0; display: grid; gap: 0.4rem; }
   .editor :global(form input), .editor :global(form textarea) {
-    width: 100%; min-width: 0; font: inherit; font-size: 1rem; color: inherit;
+    width: 100%; min-width: 0; color: inherit;
     padding: 0.65rem; border-radius: 0.55rem; background: var(--bg); border: 1px solid var(--line);
   }
   .editor :global(.editor-actions) { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }

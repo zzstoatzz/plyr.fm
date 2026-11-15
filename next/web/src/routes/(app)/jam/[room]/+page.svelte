@@ -243,6 +243,6 @@
 	.jam { display: grid; justify-items: start; gap: 1rem; }
 	.actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 	form { display: grid; gap: 0.5rem; width: min(100%, 26rem); }
-	input { min-width: 0; min-height: 2.75rem; border: 1px solid var(--line); border-radius: 0.6rem; padding: 0 0.75rem; font-size: 1rem; background: var(--surface); color: inherit; }
+	input { min-width: 0; min-height: 2.75rem; border: 1px solid var(--line); border-radius: 0.6rem; padding: 0 0.75rem; background: var(--surface); color: inherit; }
 	.text-button { border: 1px solid var(--line); border-radius: 2rem; }
 </style>

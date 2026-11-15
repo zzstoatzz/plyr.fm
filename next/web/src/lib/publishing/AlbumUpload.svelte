@@ -421,7 +421,7 @@
 <style>
   .panel { display: grid; gap: 0.9rem; padding: 1rem; background: var(--surface); border: 1px solid var(--line); border-radius: 0.8rem; }
   label, .song-picker { display: grid; gap: 0.4rem; overflow-wrap: anywhere; }
-  input:not([type='checkbox']) { width: 100%; min-width: 0; font: inherit; color: inherit; }
+  input:not([type='checkbox']) { width: 100%; min-width: 0; color: inherit; }
   input:not([type='file'], [type='checkbox']) { padding: 0.55rem; border: 1px solid var(--line); border-radius: 0.5rem; background: var(--bg); }
   input[type='file']::file-selector-button { min-height: 44px; }
   h2, p, li { overflow-wrap: anywhere; }

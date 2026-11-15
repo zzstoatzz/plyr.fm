@@ -181,7 +181,7 @@
 <style>
   .editing { padding: 1rem; margin-bottom: 1rem; border: 1px solid var(--line); border-radius: 0.75rem; background: var(--surface); }
   form, label { display: grid; gap: 0.55rem; margin-top: 0.75rem; }
-  input { width: 100%; padding: 0.55rem; border: 1px solid var(--line); border-radius: 0.45rem; background: var(--bg); font-size: 1rem; }
+  input { width: 100%; padding: 0.55rem; border: 1px solid var(--line); border-radius: 0.45rem; background: var(--bg); }
   .actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
   .save { color: var(--on-accent); background: var(--accent); padding-inline: 0.85rem; }
   .save:hover { background: var(--accent); filter: brightness(1.1); }
