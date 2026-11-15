@@ -62,7 +62,10 @@
     try {
       const item = await api.track(id, { fresh: true });
       if (!current()) return;
-      if (item.artist.did !== account.did) throw new Error('only the artist can edit this track.');
+      if (item.artist.did !== account.did) {
+        failure = 'only the artist can edit this track.';
+        return;
+      }
       const record = await pds.myTrack(item.record.uri);
       if (!current()) return;
       const text = (key: string) => {
@@ -78,8 +81,8 @@
       track = item;
       revision = record;
       conflict = confirm = false;
-    } catch (error) {
-      if (current()) failure = error instanceof Error ? error.message : 'could not load this track.';
+    } catch {
+      if (current()) failure = 'could not load this track.';
     } finally { if (current()) loading = false; }
   }
 
