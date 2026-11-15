@@ -155,8 +155,8 @@ function AccountUpload({ auth }: { auth: Auth }) {
   }
 
   async function editAgain(id: string) {
-    const input = await uploadQueue.takeBack(id).catch(() => {
-      if (current()) setProblems(previous => ({ ...previous, form: 'could not reopen the upload. try again.' }));
+    const input = await uploadQueue.takeBack(id).catch(failure => {
+      if (current()) setProblems(previous => ({ ...previous, form: failure instanceof Error ? failure.message : 'could not reopen the upload. try again.' }));
     });
     if (!input || !current()) return;
     setFile(input.file); setArtwork(input.artwork ?? null); setTitle(input.title); setAlbum(input.album ?? '');

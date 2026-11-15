@@ -52,6 +52,12 @@ export function createUploadQueue<Rpc extends RepoRpc>({
     publish();
   }
 
+  function remove(job: Job) {
+    jobs = jobs.filter(item => item !== job);
+    onDismiss?.(job);
+    publish();
+  }
+
   function session(job: Pick<Job, 'owner'>): Auth<Rpc> {
     const auth = getAuth();
     if (auth.did !== job.owner || !auth.rpc) throw new Error('sign in to the account that started it');
@@ -247,21 +253,16 @@ export function createUploadQueue<Rpc extends RepoRpc>({
     async takeBack(id: string): Promise<NewTrack | undefined> {
       const job = jobs.find(item => item.id === id && item.owner === getAuth().did && item.phase === 'failed' && item.input);
       if (!job) return;
-      if (job.draft) await queuedDrafts.take(job.draft);
-      jobs = jobs.filter(item => item !== job);
-      onDismiss?.(job);
-      publish();
+      const available = !job.draft || await queuedDrafts.take(job.draft);
+      remove(job);
+      if (!available) throw new Error('this queued upload was already opened elsewhere');
       return job.input;
     },
     dismissRecovery(operation: UploadOperation, disposition: UploadRecoveryDisposition) {
       if (operation.owner !== getAuth().did) return;
       const job = jobs.find(item => item.phase === 'awaiting-publication' && item.owner === operation.owner &&
         item.uploadId === operation.uploadId && item.operation?.uri === operation.uri);
-      if (job) {
-        jobs = jobs.filter(item => item !== job);
-        onDismiss?.(job);
-        publish();
-      }
+      if (job) remove(job);
       if (disposition === 'published' && operation.autoTag && !alreadyQueued(operation)) {
         void applyGenreTags(() => session(operation), operation.uri).catch(() => undefined);
       }

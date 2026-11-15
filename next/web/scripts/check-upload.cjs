@@ -196,7 +196,7 @@ async function verify(browser, accounts, width, theme, mp3, wav, waitingDraftRel
       assert.equal(writes.length, 1, 'reload does not publish the waiting upload');
       const resume = draft.getByRole('button', { name: 'resume queued upload' });
       assert.ok(await resume.isDisabled());
-      await draft.getByLabel('audio').setInputFiles({ name: 'wrong.mp3', mimeType: 'audio/mpeg', buffer: Buffer.alloc(17) });
+      await draft.getByLabel('audio').setInputFiles({ name: 'wrong.mp3', mimeType: 'audio/mpeg', buffer: Buffer.alloc(mp3.length) });
       await resume.click();
       await draft.getByRole('alert').getByText('choose the original audio file.').waitFor();
       assert.equal(writes.length, 1, 'mismatched input does not publish');

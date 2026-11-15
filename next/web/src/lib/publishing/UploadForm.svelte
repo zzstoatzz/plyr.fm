@@ -197,7 +197,9 @@
 
   async function editAgain(id: string) {
     if (!current() || imageBusy) return;
-    const input = await uploadQueue.takeBack(id).catch(() => { formProblem = 'could not reopen the upload. try again.'; });
+    const input = await uploadQueue.takeBack(id).catch(failure => {
+      if (current()) formProblem = message(failure, 'could not reopen the upload. try again.');
+    });
     if (!current() || !input || !(input.file instanceof File)) return;
     audio = input.file;
     cover = input.artwork instanceof File ? input.artwork : undefined;

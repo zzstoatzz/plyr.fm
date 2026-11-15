@@ -43,7 +43,7 @@ export function readQueuedUploadDraft(value: unknown, owner: Did, key: unknown):
 }
 
 export function reattachQueuedUpload(draft: QueuedUploadDraft, file: MediaFile, artwork?: MediaFile): NewTrack {
-  if (file.size !== draft.audio.size || canonicalAudioType(file) !== canonicalAudioType(draft.audio)) {
+  if (file.name !== draft.audio.name || file.size !== draft.audio.size || canonicalAudioType(file) !== canonicalAudioType(draft.audio)) {
     throw new Error('choose the original audio file.');
   }
   if (draft.coverName && !artwork) throw new Error('choose the cover again.');

@@ -20,7 +20,7 @@ const operation: UploadOperation = {
   ...record, uploadId: 'fixture', name: 'fixture.mp3', sizeBytes: 1, contentType: 'audio/mpeg', fileType: 'mp3',
 };
 
-function fixture(statusGate?: Promise<void>) {
+function fixture(statusGate?: Promise<void>, reserve = async () => record) {
   let counter = 0;
   let confirmations = 0;
   let dismissed = 0;
@@ -35,7 +35,7 @@ function fixture(statusGate?: Promise<void>) {
     audioUrl: 'https://fixture.invalid/media/fixture',
   });
   const pds = {
-    reserveCreate: async () => record,
+    reserveCreate: reserve,
     uploadTrack: async () => { throw new Error('host rejected the upload'); },
     pendingCreates: async () => [record],
     recoverCreate: async () => ({ state: 'different' }),
@@ -71,6 +71,7 @@ function fixture(statusGate?: Promise<void>) {
     model, recordForRecovery: () => saved,
     confirmations: () => confirmations, dismissals: () => dismissed, publications: () => publicationAttempts,
     seed: (entry = operation) => { saved = [entry]; }, confirm: () => { published = true; }, tags: () => tags,
+    drafts,
   };
 }
 
@@ -83,6 +84,18 @@ test('failed jobs retain each editable input when more than four attempts fail',
   const oldest = model.snapshot()[0];
   assert.equal(model.editable(oldest.id), true);
   assert.deepEqual(await model.takeBack(oldest.id), { file, artist: 'fixture', title: 'Take 0' });
+});
+
+test('a failed queue cannot reopen a draft already consumed elsewhere', async () => {
+  const { model, drafts } = fixture(undefined, async () => { throw new Error('resolve an earlier create first'); });
+  const file = { name: 'fixture.mp3', type: 'audio/mpeg', size: 1, arrayBuffer: async () => new ArrayBuffer(1) };
+  await model.add({ file, artist: 'fixture', title: 'Take' });
+  await setImmediate();
+  const job = model.snapshot()[0];
+  assert.equal(job.phase, 'failed');
+  assert.equal(drafts.delete(job.id), true);
+  await assert.rejects(model.takeBack(job.id), /this queued upload was already opened elsewhere/);
+  assert.deepEqual(model.snapshot(), []);
 });
 
 test('publication stays recoverable until the worker confirms it, then cleans up the same upload', async context => {
