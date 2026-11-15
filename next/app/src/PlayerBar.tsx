@@ -22,6 +22,7 @@ export function PlayerBar() {
   const path = usePathname();
   const { width, height } = useWindowDimensions();
   const [expanded, setExpanded] = useState(false);
+  useEffect(() => { setExpanded(false); }, [path]);
   const flying = useFlying();
   const dock = useRef<ViewInstance>(null);
   const present = !!player.current;
