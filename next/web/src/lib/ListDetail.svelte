@@ -45,6 +45,10 @@
 	}
 	const title = $derived(list.metadata.name || (list.object === 'album' ? 'untitled album' : 'untitled playlist'));
 	const tracks = $derived(list.members.flatMap(member => member.track ? [member.track] : []));
+	const active = $derived(!player.localMode && tracks.some(track =>
+		track.record.uri === player.current?.record.uri && track.record.cid === player.current.record.cid
+	));
+	const playing = $derived(active && player.playing && !player.outputElsewhere);
 	const covers = $derived([...new Set(tracks.flatMap(track => {
 		const artwork = trackArtwork(track);
 		return artwork ? [artwork] : [];
@@ -56,10 +60,8 @@
 		} catch {}
 	}
 	function playAll() {
-		if (tracks[0]) player.play(tracks[0], tracks, title);
-	}
-	function enqueue() {
-		for (const track of tracks) player.enqueue(track);
+		if (active) player.toggle();
+		else if (tracks[0]) player.play(tracks[0], tracks, title);
 	}
 </script>
 
@@ -82,8 +84,8 @@
 				{#if list.metrics.member_count > tracks.length}<span aria-hidden="true">·</span><span>{tracks.length} playable</span>{/if}
 			</div>
 			<div class="actions">
-				<button type="button" class="primary-button play" aria-label={`Play ${title}`} disabled={!tracks.length} onclick={playAll}><Icon name="play" />{#if list.object === 'playlist'}<span>play</span>{/if}</button>
-				<button type="button" class="text-button enqueue" disabled={!tracks.length || player.localMode} title={player.localMode ? "play a public track to change queues" : undefined} onclick={enqueue}><Icon name="queue" /> add to queue</button>
+				<button type="button" class="primary-button play" aria-label={`${playing ? 'Pause' : 'Play'} ${title}`} disabled={!tracks.length || active && (player.loading || player.snapshot.waiting)} onclick={playAll}><Icon name={playing ? 'pause' : 'play'} /> {playing ? 'pause' : 'play'}</button>
+				<button type="button" class="text-button enqueue" disabled={!tracks.length || player.localMode} title={player.localMode ? "play a public track to change queues" : undefined} onclick={() => player.enqueueCollection(tracks)}><Icon name="queue" /> add to queue</button>
 				<button type="button" class="icon-button share" aria-label={`Share ${list.object}`} onclick={share}><Icon name="share" /></button>
 				{#if owned && !editing}<button type="button" class="text-button" onclick={() => { editing = true; }}>edit {list.object}</button>{/if}
 			</div>
@@ -125,8 +127,8 @@
 	.meta { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-top: 0.25rem; }
 	.members h2 { font-size: 1.15rem; margin-bottom: 0.6rem; }
 	.playlist .members :global(.track), .playlist .unavailable { background: var(--surface); border: 1px solid var(--line); padding: 0.55rem; border-radius: 0.65rem; margin: 0 0 0.5rem; }
-	.playlist .play { width: auto; padding: 0 1rem; gap: 0.45rem; }
-	.playlist .enqueue { border: 1px solid var(--line); border-radius: 2rem; padding-inline: 0.85rem; }
+	.play { width: auto; padding: 0 1rem; border-radius: 2rem; }
+	.enqueue { border: 1px solid var(--line); border-radius: 2rem; padding-inline: 0.85rem; }
 	.copy { min-width: 0; }
 	h1 { overflow-wrap: anywhere; line-height: 1.14; font-size: clamp(1.45rem, 4vw, 3rem); }
 	.actions { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-top: 0.85rem; }
