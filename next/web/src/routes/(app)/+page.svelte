@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { tick } from 'svelte';
+	import { onDestroy, tick } from 'svelte';
+	import { invalidateAll } from '$app/navigation';
 	import type { Snapshot } from '@sveltejs/kit';
 	import type { Track } from '@plyr/next-core/api';
 	import { api } from '$lib/api';
@@ -19,7 +20,19 @@
 	let nextCursor: string | undefined = $state();
 	let loading = $state(false);
 	let error = $state('');
-	$effect(() => { data.latest; extra = []; nextCursor = undefined; error = ''; });
+	let pending: AbortController | undefined;
+	const completed = new Set<string>();
+	$effect(() => {
+		data.latest;
+		pending?.abort();
+		pending = undefined;
+		completed.clear();
+		extra = [];
+		nextCursor = undefined;
+		loading = false;
+		error = '';
+	});
+	onDestroy(() => pending?.abort());
 
 	export const snapshot: Snapshot<{ y: number; tracks: Track[]; cursor?: string }> = {
 		capture: () => ({ y: window.scrollY, tracks: extra, cursor: nextCursor }),
@@ -39,18 +52,42 @@
 		}
 	};
 
-	async function more(cursor: string) {
+	function observeMore(node: HTMLElement, cursor: string) {
 		const request = data.latest;
+		if (typeof IntersectionObserver === 'undefined') return;
+		const observer = new IntersectionObserver(entries => {
+			if (entries.some(entry => entry.isIntersecting) && data.latest === request && !error) void more(cursor);
+		}, { rootMargin: '0px 0px 200px' });
+		observer.observe(node);
+		return () => observer.disconnect();
+	}
+
+	async function more(cursor: string) {
+		if (pending || completed.has(cursor)) return;
+		const controller = new AbortController();
+		const request = data.latest;
+		pending = controller;
 		loading = true;
 		error = '';
 		try {
-			const [page, first] = await Promise.all([api.tracks({ cursor, tag: data.tags, limit: 24 }), request]);
-			if (request !== data.latest) return;
+			const [page, first] = await Promise.all([api.tracks({ cursor, tag: data.tags, limit: 24 }, controller.signal), request]);
+			if (controller.signal.aborted || request !== data.latest) return;
 			const known = new Set([...first.data, ...extra].map(track => track.id));
-			extra = [...extra, ...page.data.filter(track => !known.has(track.id))];
-			nextCursor = page.next_cursor ?? '';
-		} catch { error = 'could not load more tracks.'; }
-		finally { loading = false; }
+			extra = [...extra, ...page.data.filter(track => {
+				if (known.has(track.id)) return false;
+				known.add(track.id);
+				return true;
+			})];
+			completed.add(cursor);
+			nextCursor = page.next_cursor && !completed.has(page.next_cursor) ? page.next_cursor : '';
+		} catch {
+			if (!controller.signal.aborted && request === data.latest) error = 'could not load more tracks.';
+		} finally {
+			if (pending === controller) {
+				pending = undefined;
+				loading = false;
+			}
+		}
 	}
 </script>
 
@@ -107,10 +144,22 @@
 				<p class="state">no tracks found.</p>
 			{/each}
 			{@const cursor = nextCursor ?? first.next_cursor}
-			{#if cursor}<button class="text-button" disabled={loading} onclick={() => more(cursor)}>{loading ? 'loading…' : 'load more'}</button>{/if}
-			{#if error}<p role="status" class="state">{error}</p>{/if}
+			{#if cursor}
+				{#key cursor}
+					<div class="more" {@attach node => observeMore(node, cursor)}>
+						{#if loading}<Loading label="loading more tracks" inline />
+						{:else if error}
+							<p role="status">{error}</p>
+							<button type="button" class="text-button" onclick={() => more(cursor)}>try again</button>
+						{:else if typeof IntersectionObserver === 'undefined'}
+							<button type="button" class="text-button" onclick={() => more(cursor)}>load more</button>
+						{/if}
+					</div>
+				{/key}
+			{/if}
 		{:catch}
-			<p role="status" class="state">could not load tracks. <a href="/">try again</a></p>
+			<p role="status" class="state">could not load tracks.</p>
+			<button type="button" class="text-button" onclick={() => invalidateAll()}>try again</button>
 		{/await}
 	</section>
 
@@ -129,6 +178,7 @@
 	.feature-content span { font-weight: 650; color: var(--accent); font-size: 0.8rem; }
 	h1 { line-height: 1.1; letter-spacing: -0.035em; }
 	.feature-content h1 { font-size: clamp(1.75rem, 4vw, 3.25rem); margin-block: 0.5rem 1.2rem; }
+	.more { min-height: 2.75rem; color: var(--muted); }
 	.latest { grid-area: latest; min-width: 0; }
 	.chart { grid-area: chart; min-width: 0; }
 	.chart-loading, .chart-empty { display: grid; align-items: center; min-height: 4.75rem; color: var(--muted); }
