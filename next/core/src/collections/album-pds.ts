@@ -1,10 +1,13 @@
-import { publicTrackReference } from '../publishing/track-reference';
-import { repoOk as ok, getRecord, type RepoRpc } from '../publishing/repo-rpc';
+import { publicTrackReference } from '../publishing/track-reference.ts';
+import { repoOk as ok, getRecord, type RepoRpc } from '../publishing/repo-rpc.ts';
+import type { CreateHandoff } from '../publishing/create-operation';
 import type { MediaFile } from '../publishing/private-music';
 import type { Track, AwaitStatus } from '../api';
-import type { CollectionItem, CollectionRevision } from './collection-order';
+import type { CollectionItem, CollectionRevision } from './collection-order.ts';
 import type { collectionOrdering } from './collection-order-pds';
-import { albumName, albumMembership, type AlbumEntry } from './album-membership';
+import { albumName, albumMembership, type AlbumEntry } from './album-membership.ts';
+
+type AlbumHandoff = CreateHandoff & { reservedRkey: string };
 
 export function albumPublishing({ rpc, did, trackCollection, assertSession, ordering, publish, uploadCover }: {
   rpc: RepoRpc;
@@ -13,19 +16,37 @@ export function albumPublishing({ rpc, did, trackCollection, assertSession, orde
   assertSession: () => void;
   ordering: ReturnType<typeof collectionOrdering>;
   uploadCover: (file: MediaFile) => Promise<{ imageBlob: unknown }>;
-  publish: (name: string, items: CollectionItem[], cover?: { imageBlob: unknown }) => Promise<{ uri: string; status: AwaitStatus }>;
+  publish: (name: string, items: CollectionItem[], cover?: { imageBlob: unknown }, draft?: AlbumHandoff) => Promise<{ uri: string; status: AwaitStatus }>;
 }) {
+  async function readTrack(uri: string) {
+    assertSession();
+    const prefix = `at://${did}/${trackCollection}/`;
+    const rkey = uri.startsWith(prefix) ? uri.slice(prefix.length) : '';
+    if (!/^(?!\.{1,2}$)[a-zA-Z0-9._~:-]{1,512}$/.test(rkey)) throw new Error('choose one of your published tracks.');
+    const response = await getRecord(rpc, { params: { repo: did, collection: trackCollection, rkey } });
+    assertSession();
+    if (!response.ok && response.data.error === 'RecordNotFound') return null;
+    const result = ok(response);
+    if (result.uri !== uri || !result.cid) throw new Error('could not read your track revision.');
+    return { uri: result.uri, cid: result.cid, value: result.value };
+  }
+  async function readUpload(uri: string) {
+    const result = await readTrack(uri);
+    if (!result) return null;
+    const { value, cid } = result;
+    if (value.$type !== trackCollection || (value.visibility !== undefined && value.visibility !== 'public')
+      || value.audioSpace || value.supportGate) {
+      throw new Error('choose one of your published tracks.');
+    }
+    return { uri, cid };
+  }
   async function verify(tracks: Track[]) {
     const items = new Map<Track, CollectionItem>();
     for (const track of tracks) {
       publicTrackReference(track);
-      assertSession();
-      const prefix = `at://${did}/${trackCollection}/`;
-      const rkey = track.record.uri.startsWith(prefix) ? track.record.uri.slice(prefix.length) : '';
-      if (track.artist.did !== did || !track.record.cid || !/^(?!\.{1,2}$)[a-zA-Z0-9._~:-]{1,512}$/.test(rkey)) throw new Error('choose one of your published tracks.');
-      const result = await ok(getRecord(rpc, { params: { repo: did, collection: trackCollection, rkey } }));
-      assertSession();
-      if (result.uri !== track.record.uri || result.cid !== track.record.cid) throw new Error('a selected track changed. remove it, reload your tracks, and add it again.');
+      if (track.artist.did !== did) throw new Error('choose one of your published tracks.');
+      const result = await readTrack(track.record.uri);
+      if (!result || result.cid !== track.record.cid) throw new Error('a selected track changed. remove it, reload your tracks, and add it again.');
       items.set(track, { subject: { uri: result.uri, cid: result.cid } });
     }
     return items;
@@ -39,13 +60,29 @@ export function albumPublishing({ rpc, did, trackCollection, assertSession, orde
     }
   }
 
+  function assertTrackCount(uris: readonly string[]) {
+    if (!uris.length || uris.length > 500 || new Set(uris).size !== uris.length) throw new Error('choose between 1 and 500 of your tracks.');
+  }
   async function create(name: string, tracks: Track[], artwork?: MediaFile) {
     const title = albumName(name);
-    if (!tracks.length || tracks.length > 500 || new Set(tracks.map(track => track.record.uri)).size !== tracks.length) throw new Error('choose between 1 and 500 of your tracks.');
+    assertTrackCount(tracks.map(track => track.record.uri));
     const cover = await prepareCover(artwork);
     const items = await verify(tracks);
     assertSession();
     return publish(title, [...items.values()], cover);
+  }
+  async function createFromUploads(name: string, tracks: readonly { uri: string; cid: string }[], artwork: MediaFile | undefined, draft: AlbumHandoff) {
+    const title = albumName(name);
+    assertTrackCount(tracks.map(track => track.uri));
+    const cover = await prepareCover(artwork);
+    const items: CollectionItem[] = [];
+    for (const track of tracks) {
+      const subject = await readUpload(track.uri);
+      if (!subject || subject.cid !== track.cid) throw new Error('a song changed. refresh the album before trying again.');
+      items.push({ subject });
+    }
+    assertSession();
+    return publish(title, items, cover, draft);
   }
   async function save(revision: CollectionRevision, entries: AlbumEntry[], name?: string, artwork?: MediaFile) {
     if (revision.value.listType !== 'album') throw new Error('not an album.');
@@ -54,5 +91,5 @@ export function albumPublishing({ rpc, did, trackCollection, assertSession, orde
     const items = albumMembership(revision, entries, additions);
     return ordering.write(revision, items, name, cover);
   }
-  return { ...ordering, create, save };
+  return { ...ordering, create, createFromUploads, readUpload, save };
 }

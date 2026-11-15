@@ -7,7 +7,7 @@ import { blobUrl } from './identity';
 import { normalizeTrackTags } from './publishing/track-tags';
 import { ARTWORK_TYPES, MAX_ARTWORK_BYTES } from './publishing/artwork-model';
 import { recordCreator, CreateUnconfirmed } from './publishing/create-record';
-import { sameRecord, type CreateOperation, type CreateReservation, type CreateStorage } from './publishing/create-operation';
+import { isCreateRkey, sameRecord, type CreateHandoff, type CreateOperation, type CreateReservation, type CreateStorage } from './publishing/create-operation';
 import { albumPublishing } from './collections/album-pds';
 import { collectionOrdering } from './collections/collection-order-pds';
 import { MAX_AUDIO_BYTES } from './publishing/track-audio';
@@ -101,11 +101,12 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 	function pendingCreates(kind: 'track' | 'playlist' | 'album') {
 		return createStorage.load(session().did, kind === 'track' ? NSID.track : NSID.list);
 	}
-	async function reserveCreate(kind: 'track' | 'playlist' | 'album'): Promise<CreateReservation> {
+	async function reserveCreate(kind: 'track' | 'playlist' | 'album', reservedRkey?: string): Promise<CreateReservation> {
 		assertSession();
 		if ((await pendingCreates(kind)).some(operation => !operation.archived)) throw new CreateUnconfirmed();
 		assertSession();
-		const owner = session().did, collection = kind === 'track' ? NSID.track : NSID.list, rkey = newRkey();
+		const owner = session().did, collection = kind === 'track' ? NSID.track : NSID.list, rkey = reservedRkey ?? newRkey();
+		if (!isCreateRkey(rkey)) throw new Error('invalid record address.');
 		return { owner, collection, rkey, uri: `at://${owner}/${collection}/${rkey}` };
 	}
 	async function recoverCreate(operation: CreateOperation, retry = false) {
@@ -126,7 +127,7 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 		if (operation.owner !== session().did || (operation.collection !== NSID.track && operation.collection !== NSID.list)) throw new Error('not your pending creation');
 		await createStorage.archive(operation, archived);
 	}
-	async function publishCreate(reservation: CreateReservation, record: Record<string, unknown>, draft?: { id: string; autoTag?: boolean; handedOff: () => Promise<void> }) {
+	async function publishCreate(reservation: CreateReservation, record: Record<string, unknown>, draft?: CreateHandoff & { autoTag?: boolean }) {
 		const operation = { ...reservation, record, ...(draft ? { draftId: draft.id, autoTag: draft.autoTag } : {}) };
 		const result = await recordCreator(session().rpc, createStorage, assertSession, NSID.list).create(operation, draft?.handedOff);
 		if (result.state !== 'accepted') throw new CreateUnconfirmed();
@@ -482,9 +483,9 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 	}
 	function albumOrganization() {
 		return albumPublishing({ ...session(), trackCollection: NSID.track as Nsid, assertSession, ordering: collectionOrder('album'), uploadCover,
-			publish: async (name, items, cover) => publishCreate(await reserveCreate('album'), {
+			publish: async (name, items, cover, draft) => publishCreate(await reserveCreate('album', draft?.reservedRkey), {
 				$type: NSID.list, name, listType: 'album', items, ...cover, createdAt: new Date().toISOString(),
-			}),
+			}, draft),
 		});
 	}
 	return { albumOrganization, collectionOrder, myLikes, like, unlike, newCommentAttempt, comment, deleteComment, createPlaylist, addToPlaylist, removeFromPlaylist, renameCollection, deletePlaylist, uploadTrack, myProfile, saveProfile, myTrack, editTrack, deleteTrack, reserveCreate, pendingCreates, recoverCreate, dismissCreate, archiveCreate, prepareTrackRecord, uploadedTrack, archiveUploadedTrack };

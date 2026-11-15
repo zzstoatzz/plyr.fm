@@ -1,6 +1,6 @@
 import type { Did } from '../auth-state.ts';
 import type { MediaFile, NewTrack } from '../pds.ts';
-import type { CreateOperation } from './create-operation.ts';
+import { isCreateRkey, type CreateOperation } from './create-operation.ts';
 import { canonicalAudioType } from './upload-queue-model.ts';
 
 export type QueuedUploadDraft = Omit<NewTrack, 'file' | 'artwork' | 'duration'> & {
@@ -8,6 +8,7 @@ export type QueuedUploadDraft = Omit<NewTrack, 'file' | 'artwork' | 'duration'> 
   owner: Did;
   audio: Pick<MediaFile, 'name' | 'type' | 'size'>;
   coverName?: string;
+  reservedRkey?: string;
 };
 
 export interface QueuedUploadDrafts {
@@ -28,27 +29,28 @@ export function draftInRecovery(draft: QueuedUploadKey, ...records: readonly Cre
   return records.some(group => group.some(record => record.owner === draft.owner && record.draftId === draft.id));
 }
 
-export function queuedUploadDraft(input: NewTrack, owner: Did, id: string): QueuedUploadDraft {
+export function queuedUploadDraft(input: NewTrack, owner: Did, id: string, reservedRkey?: string): QueuedUploadDraft {
   const { file, artwork, duration: _duration, ...fields } = input;
   return { ...fields, owner, id, audio: { name: file.name, type: file.type, size: file.size },
-    ...(artwork ? { coverName: artwork.name } : {}) };
+    ...(artwork ? { coverName: artwork.name } : {}), ...(reservedRkey ? { reservedRkey } : {}) };
 }
 
 export function readQueuedUploadDraft(value: unknown, owner: Did, key: unknown): QueuedUploadDraft {
   if (!value || typeof value !== 'object') throw new Error('could not read a queued upload.');
-  const { id, title, artist, album, description, tags, autoTag, audio, coverName } = value as Record<string, unknown>;
+  const { id, title, artist, album, description, tags, autoTag, audio, coverName, reservedRkey } = value as Record<string, unknown>;
   if (typeof id !== 'string' || key !== queuedUploadKey({ owner, id }) || !('owner' in value) || value.owner !== owner ||
     typeof title !== 'string' || typeof artist !== 'string' ||
     (album !== undefined && typeof album !== 'string') || (description !== undefined && typeof description !== 'string') ||
     (tags !== undefined && (!Array.isArray(tags) || !tags.every(tag => typeof tag === 'string'))) ||
     (autoTag !== undefined && typeof autoTag !== 'boolean') || (coverName !== undefined && typeof coverName !== 'string') ||
+    (reservedRkey !== undefined && !isCreateRkey(reservedRkey)) ||
     !audio || typeof audio !== 'object' || !('name' in audio) || typeof audio.name !== 'string' ||
     !('type' in audio) || typeof audio.type !== 'string' || !('size' in audio) || typeof audio.size !== 'number') {
     throw new Error('could not read a queued upload.');
   }
   const file = { name: audio.name, type: audio.type, size: audio.size };
   canonicalAudioType(file);
-  return { owner, id, title, artist, album, description, tags, autoTag, audio: file, coverName };
+  return { owner, id, title, artist, album, description, tags, autoTag, audio: file, coverName, ...(reservedRkey ? { reservedRkey } : {}) };
 }
 
 export function reattachQueuedUpload(draft: QueuedUploadDraft, file: MediaFile, artwork?: MediaFile): NewTrack {

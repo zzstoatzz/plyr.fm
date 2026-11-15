@@ -9,7 +9,7 @@ const MIB = 1_048_576;
 
 export type UploadRoute = { kind: 'pds' } | { kind: 'service'; processing?: UploadProcessing };
 export type UploadPhase = 'waiting' | 'uploading' | 'processing' | 'publishing' | 'awaiting-publication' | 'done' | 'failed';
-export type UploadJobView = { id: string; owner: string; title: string; phase: UploadPhase; progress?: number; uri?: string; error?: string };
+export type UploadJobView = { id: string; draftId?: string; owner: string; title: string; phase: UploadPhase; progress?: number; uri?: string; error?: string };
 
 export function uploadInProgress(phase: UploadPhase) {
   return phase === 'waiting' || phase === 'uploading' || phase === 'processing' || phase === 'publishing';

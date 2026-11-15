@@ -18,12 +18,13 @@
   import type { CreateOperation } from '@plyr/next-core/publishing/create-operation';
   import { PUBLIC_AUDIO_FORMATS, type UploadOperation } from '@plyr/next-core/publishing/upload-model';
   import { draftInRecovery, type QueuedUploadDraft } from '@plyr/next-core/publishing/queued-upload-draft';
-  import { canonicalAudioType, jobLine, needsPlyrStorage, uploadInProgress } from '@plyr/next-core/publishing/upload-queue-model';
+  import { jobLine, needsPlyrStorage, uploadInProgress } from '@plyr/next-core/publishing/upload-queue-model';
   import { normalizeTrackTags } from '@plyr/next-core/publishing/track-tags';
   import { creditName } from '@plyr/next-core/publishing/credit-name';
   import { api } from '$lib/api';
   import { auth } from '$lib/auth';
   import { coverImage } from '$lib/media/cover-image';
+  import { canonicalAudioFile } from '$lib/media/audio-file';
   import { createPds } from '$lib/pds';
   import { queuedDrafts, uploadStorage } from '$lib/storage/upload-storage';
   import { uploadQueue } from '$lib/upload';
@@ -75,7 +76,7 @@
   let jobs = $state.raw(uploadQueue.snapshot());
   let active = $derived.by(() => { jobs; return uploadQueue.busy(); });
   let transfersToRecover = $derived(transfers.filter(operation => !active.uploadIds.has(operation.uploadId)));
-  let draftsToRecover = $derived(drafts.filter(draft => !draftInRecovery(draft, pending, transfers) && !jobs.some(job => job.id === draft.id)));
+  let draftsToRecover = $derived(drafts.filter(draft => !draftInRecovery(draft, pending, transfers) && !jobs.some(job => job.id === draft.id && !(draft.reservedRkey && job.phase === 'failed'))));
   let creationsToRecover = $derived(pending.filter(operation => !active.rkeys.has(operation.rkey) && !transfers.some(transfer => transfer.rkey === operation.rkey)));
   let creationBlocksUpload = $derived(creationsToRecover.some(operation => !operation.archived));
   let service = $derived(!!audio && needsPlyrStorage(audio));
@@ -192,8 +193,7 @@
     formProblem = '';
     if (!file) return;
     try {
-      const type = canonicalAudioType(file);
-      audio = file.type === type ? file : new File([file], file.name, { type, lastModified: file.lastModified });
+      audio = canonicalAudioFile(file);
       reattach = false;
       if (!title.trim() || title === autoTitle) {
         autoTitle = file.name.replace(/\.[^.]+$/, '').slice(0, 256);
