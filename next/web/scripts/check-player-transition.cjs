@@ -59,6 +59,11 @@ async function transition(browser, origin, width, reducedMotion) {
     assert.ok(homeScroll > 0, 'the fixture can exercise Home scroll restoration');
     await opener.click();
     await dialog.waitFor();
+    const closeButton = dialog.getByRole('button', { name: 'Close', exact: true });
+    assert.ok(await dialog.evaluate(node => document.activeElement === node), 'opening focuses the dialog itself');
+    assert.equal(await closeButton.evaluate(node => node.matches(':focus-visible')), false, 'opening does not highlight Close');
+    await page.keyboard.press('Tab');
+    assert.ok(await closeButton.evaluate(node => node.matches(':focus-visible')), 'keyboard navigation still highlights Close');
     await page.waitForFunction(sheet => !sheet.style.transform, await panel.elementHandle());
     const opened = await page.evaluate(() => window.playerFrames.filter(frame => frame.top !== null));
     if (phone && reducedMotion === 'no-preference') {

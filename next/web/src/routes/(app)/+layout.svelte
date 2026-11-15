@@ -87,7 +87,10 @@
 	$effect(() => {
 		if (player.nowPlaying && !NowPlaying) {
 			preloadNowPlaying();
-		} else if (player.nowPlaying && !dialog.open) dialog.showModal();
+		} else if (player.nowPlaying && !dialog.open) {
+			dialog.showModal();
+			dialog.focus({ preventScroll: true });
+		}
 		else if (!player.nowPlaying && dialog.open) dialog.close();
 	});
 
