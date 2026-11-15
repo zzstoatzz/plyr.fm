@@ -22,21 +22,26 @@ function wave(name) {
   return { name, mimeType: 'audio/wav', buffer: bytes };
 }
 
-async function signIn(page) {
+async function signIn(page, step) {
+  step('opening sign-in');
   await page.locator('main').getByRole('link', { name: 'sign in', exact: true }).click();
   await page.getByLabel('atmosphere account').fill(handle);
   await page.locator('main form button[type=submit]').click();
+  step('redirecting to the dedicated PDS');
   await page.waitForURL(url => url.origin + url.pathname === authorize);
+  step('opening the PDS password prompt');
   const passwordInput = page.locator('input[name=password]:visible');
-  const passwordMode = page.getByText(/^(use password(?: instead)?)$/i);
+  const passwordMode = page.getByText(/^(use password(?: instead)?)$/i).filter({ visible: true });
   await passwordInput.or(passwordMode).first().waitFor();
   if (await passwordMode.first().isVisible()) await passwordMode.first().click();
   const identifier = page.locator('input[name=username]:visible');
   if (await identifier.count()) await identifier.fill(handle);
+  step('entering the PDS password');
   await passwordInput.fill(password);
   const providerSignIn = page.getByRole('button', { name: 'Sign in', exact: true });
   if (await providerSignIn.isVisible()) await providerSignIn.click();
-  await page.getByRole('button', { name: 'authorize', exact: true }).click();
+  step('approving the PDS consent');
+  await page.getByRole('button', { name: /^(authorize|allow)$/i }).click();
 }
 
 async function signOut(page, destination) {
@@ -74,6 +79,13 @@ async function verify(browser, width, album) {
   let consented = false;
   const destination = album ? '/upload?mode=album' : '/upload';
   const forbidden = [];
+  const pdsResponses = [];
+  const pdsStages = new Set(['/.well-known/oauth-authorization-server', '/oauth/par', '/oauth/authorize', '/oauth/token', '/oauth/revoke']);
+  page.on('response', response => {
+    const url = new URL(response.url());
+    if (url.origin === pds.origin && pdsStages.has(url.pathname)) pdsResponses.push(url.pathname + ' ' + response.status());
+    else if (url.origin === 'https://public.api.bsky.app' && url.pathname === '/xrpc/com.atproto.identity.resolveHandle') pdsResponses.push('handle lookup ' + response.status());
+  });
   try {
     await context.route('**/xrpc/**', route => {
       const { pathname } = new URL(route.request().url());
@@ -87,8 +99,7 @@ async function verify(browser, width, album) {
 
     stage = 'opening signed-out upload';
     await page.goto(app + destination, { waitUntil: 'domcontentloaded' });
-    stage = 'authorizing through the dedicated PDS';
-    await signIn(page);
+    await signIn(page, next => { stage = next; });
     consented = true;
     stage = 'returning to the original upload form';
     await page.waitForURL(app + destination);
@@ -113,6 +124,7 @@ async function verify(browser, width, album) {
     assert.deepEqual(forbidden, [], 'no repository or Space mutation was attempted');
   } catch (error) {
     const detail = stage === 'checking upload authority from the browser' && error.message.startsWith('upload admission returned HTTP') ? `: ${error.message}` : '';
+    if (pdsResponses.length) console.error(pdsResponses.join(', '));
     failure = new Error(`${width}px failed at ${stage} (${error.name})${detail}`);
   } finally {
     try {
