@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useAppearance } from './appearance';
 import { Status } from './CatalogPieces';
-import { tagColors } from './tag-colors';
+import { tagColors } from '@plyr/next-core/tag-colors';
 import { TagScroller } from './TagScroller';
 import { Text } from './Text';
 import type { LatestFeed } from './use-latest-feed';

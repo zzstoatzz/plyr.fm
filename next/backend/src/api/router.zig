@@ -20,6 +20,7 @@ const path_segment = @import("../internal/http/path_segment.zig");
 const ArtistStore = @import("../internal/index/artist_store.zig").ArtistStore;
 const ArtistMetricStore = @import("../internal/metrics/artist_metric_store.zig").ArtistMetricStore;
 const LikeQueryStore = @import("../internal/index/like_query_store.zig").LikeQueryStore;
+const CommentQueryStore = @import("../internal/index/comment_query_store.zig").CommentQueryStore;
 const ViewerLikeStore = @import("../internal/index/viewer_like_store.zig").Store;
 const LikedTrackStore = @import("../internal/index/liked_track_store.zig").Store;
 const PlaybackStore = @import("../internal/index/playback_store.zig").PlaybackStore;
@@ -41,6 +42,7 @@ pub const App = struct {
     track_store: ?TrackStore,
     track_chart_store: ?TrackChartStore = null,
     like_store: ?LikeQueryStore = null,
+    comment_store: ?CommentQueryStore = null,
     viewer_like_store: ?ViewerLikeStore = null,
     liked_track_store: ?LikedTrackStore = null,
     playback_store: ?PlaybackStore,
@@ -55,6 +57,7 @@ pub const App = struct {
     list_collection: []const u8,
     profile_collection: []const u8,
     like_collection: []const u8,
+    comment_collection: []const u8 = "",
     cors: response.CorsPolicy,
     managed_space: ?ManagedSpaceConfig = null,
     /// null when no service DID is configured: callers authenticate to it
@@ -294,6 +297,23 @@ pub fn handle(
             id,
             request_id,
         );
+    } else if (trackSuffixedId(path, "/comments")) |id| {
+        if (request.method != .GET) {
+            try response.apiError(request, .method_not_allowed, request_id, app.cors);
+            return;
+        }
+        try tracks.comments(
+            request,
+            allocator,
+            app.track_store,
+            app.comment_store,
+            app.track_collection,
+            app.comment_collection,
+            app.profile_collection,
+            app.cors,
+            id,
+            request_id,
+        );
     } else if (trackPlaybackId(path)) |id| {
         if (request.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
@@ -420,12 +440,15 @@ fn trackPlaybackId(path: []const u8) ?[]const u8 {
 }
 
 fn trackLikesId(path: []const u8) ?[]const u8 {
+    return trackSuffixedId(path, "/likes");
+}
+
+fn trackSuffixedId(path: []const u8, suffix: []const u8) ?[]const u8 {
     const tracks_prefix = prefix ++ "/tracks/";
-    const likes_suffix = "/likes";
     if (!mem.startsWith(u8, path, tracks_prefix) or
-        !mem.endsWith(u8, path, likes_suffix)) return null;
-    if (path.len <= tracks_prefix.len + likes_suffix.len) return null;
-    const id = path[tracks_prefix.len .. path.len - likes_suffix.len];
+        !mem.endsWith(u8, path, suffix)) return null;
+    if (path.len <= tracks_prefix.len + suffix.len) return null;
+    const id = path[tracks_prefix.len .. path.len - suffix.len];
     if (id.len == 0 or mem.indexOfScalar(u8, id, '/') != null) return null;
     return id;
 }
@@ -541,6 +564,8 @@ test "track like-read routes accept one opaque track segment" {
     try std.testing.expect(trackLikesId("/v1/tracks/likes") == null);
     try std.testing.expect(trackLikesId("/v1/tracks/trk_abc/likes/more") == null);
     try std.testing.expect(trackLikesId("/tracks/trk_abc/likes") == null);
+    try std.testing.expectEqualStrings("trk_abc", trackSuffixedId("/v1/tracks/trk_abc/comments", "/comments").?);
+    try std.testing.expect(trackSuffixedId("/v1/tracks/trk_abc/comments/x", "/comments") == null);
 }
 
 test "actor like routes take one DID segment" {

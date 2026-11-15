@@ -1,36 +1,33 @@
+import { useState } from 'react';
+import { StyleSheet, View } from 'react-native';
 import { useAppearance } from './appearance';
-import { Link } from 'expo-router';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Heading, type Play } from './CatalogPieces';
+import { FollowingTrack, PlayOneFromEach, useFollowingLatest } from './FollowingLatest';
 import type { NetworkArtist } from './home-api';
-import { Cover, Heading } from './CatalogPieces';
 import { HomeShelf } from './HomeShelf';
 import { cardSurface } from './materials';
-import { Text } from './Text';
 
-const placeholders = [0, 1, 2, 3];
+const placeholders = [0, 1, 2];
 
-export function HomeArtists({ artists, loading }: { artists: NetworkArtist[]; loading: boolean }) {
+export function HomeArtists({ artists, loading, onPlay }: { artists: NetworkArtist[]; loading: boolean; onPlay: Play }) {
   const colors = useAppearance();
-  const card = [cardSurface(colors), styles.card, { width: 176 * colors.scale }];
-  const name = Math.ceil(14 * colors.scale * 1.3);
-  const count = Math.ceil(12 * colors.scale * 1.3);
-  return <HomeShelf testID="home-artists" label="artists you know" busy={loading} heading={<Heading>artists you know</Heading>}>
-    {loading ? placeholders.map(index => <View key={index} style={card}>
-      <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.raised }} />
-      <View style={{ flex: 1, height: name + count + 1, justifyContent: 'center' }}><View style={{ width: '70%', height: 10 * colors.scale, borderRadius: 5, backgroundColor: colors.raised }} /></View>
-    </View>) : artists.map(artist => <Link key={artist.did} href={{ pathname: '/u/[handle]', params: { handle: artist.handle || artist.did } }} asChild>
-      <Pressable accessibilityRole="link" accessibilityLabel={artist.display_name || artist.handle} style={StyleSheet.flatten(card)}>
-        <Cover uri={artist.avatar_url} size={40} round />
-        <View style={styles.text}>
-          <Text numberOfLines={1} style={{ color: colors.text, fontSize: 14 * colors.scale, lineHeight: name, fontWeight: '600' }}>{artist.display_name || artist.handle}</Text>
-          <Text numberOfLines={1} style={{ color: colors.faint, fontSize: 12 * colors.scale, lineHeight: count }}>{artist.track_count} {artist.track_count === 1 ? 'track' : 'tracks'}</Text>
-        </View>
-      </Pressable>
-    </Link>)}
+  const latest = useFollowingLatest(artists);
+  const [now] = useState(() => Date.now());
+  const busy = loading || latest.loading;
+  if (!busy && !latest.tracks.length) return null;
+  const width = 300 * colors.scale;
+  return <HomeShelf testID="home-artists" label="new from people you follow" busy={busy}
+    heading={<><Heading>new from people you follow</Heading><PlayOneFromEach tracks={latest.tracks} onPlay={onPlay} /></>}>
+    {busy ? placeholders.map(index => <View key={index} style={[cardSurface(colors), styles.placeholder, { width }]}>
+      <View style={{ width: 56, height: 56, borderRadius: 8, backgroundColor: colors.raised }} />
+      <View style={{ flex: 1, gap: 6 }}>
+        <View style={{ width: '50%', height: 10, borderRadius: 5, backgroundColor: colors.raised }} />
+        <View style={{ width: '80%', height: 12, borderRadius: 6, backgroundColor: colors.raised }} />
+      </View>
+    </View>) : latest.tracks.map(track => <FollowingTrack key={track.id} track={track} tracks={latest.tracks} onPlay={onPlay} now={now} width={width} />)}
   </HomeShelf>;
 }
 
 const styles = StyleSheet.create({
-  card: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 8 },
-  text: { flex: 1, minWidth: 0, gap: 1 },
+  placeholder: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 10, borderRadius: 14, height: 82 },
 });

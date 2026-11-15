@@ -28,7 +28,7 @@ pub fn execute(
     if (!std.mem.eql(u8, collection, expected_collection)) return .not_found;
 
     const configured_store = store orelse return .unavailable;
-    const value = configured_store.getByUri(allocator, at_uri) catch |err| {
+    const value = configured_store.getDetail(allocator, at_uri) catch |err| {
         switch (err) {
             error.CorruptProjection => std.log.err("corrupt track projection for {s}", .{at_uri}),
             error.IndexUnavailable => std.log.err("track index unavailable for {s}", .{at_uri}),

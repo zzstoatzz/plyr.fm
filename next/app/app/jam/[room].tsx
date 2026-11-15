@@ -1,24 +1,17 @@
 import { useCallback, useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import { P256Keypair } from '@atproto/crypto';
-import { api } from '../../src/api';
+import { api } from '../../src/api-client';
 import { login, useAuth } from '../../src/auth';
 import { getAuth, type Did } from '../../src/auth-state';
 import { Action, Copy, Field, Page } from '../../src/controls';
 import { jamSpace, joinJam, type InitialJam } from '../../src/jam-space';
 import { coordinatorHeaders } from '../../src/coordinator-origin';
 import { usePlayback } from '../../src/playback';
-import { jamTrack } from '../../src/use-jam-playback';
+import { jamTrack } from '@plyr/next-core/jam-playback';
+import { parseJamTrackSnapshot } from '@plyr/next-core/jam-space';
 import { useResource } from '../../src/CatalogPieces';
-import { pdsEndpoint, pdsSupportsSpaces } from '../../src/identity';
-
-function legacyTrack(value: unknown): { trackId: string; cid: string; playing: boolean; positionMs: number } {
-  if (!value || typeof value !== 'object') throw new Error('could not read this jam');
-  const record = value as Record<string, unknown>;
-  if (typeof record.trackId !== 'string' || typeof record.cid !== 'string' || typeof record.playing !== 'boolean'
-      || typeof record.positionMs !== 'number' || !Number.isSafeInteger(record.positionMs) || record.positionMs < 0) throw new Error('could not read this jam');
-  return { trackId: record.trackId, cid: record.cid, playing: record.playing, positionMs: record.positionMs };
-}
+import { pdsEndpoint, pdsSupportsSpaces } from '@plyr/next-core/identity';
 
 export default function JamRoom() {
   const { room, track: trackId } = useLocalSearchParams<{ room: string; track?: string }>();
@@ -52,7 +45,7 @@ export default function JamRoom() {
 
   async function enter(initial?: InitialJam) {
     if (isHost && !initial) {
-      const snapshot = legacyTrack(await client().read());
+      const snapshot = parseJamTrackSnapshot(await client().read());
       const track = await api.track(snapshot.trackId);
       const ref = jamTrack(track, player.current?.id === track.id ? player.status.duration : undefined);
       if (!ref || ref.cid !== snapshot.cid) throw new Error('the jam track has changed');

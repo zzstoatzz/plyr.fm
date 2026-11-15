@@ -1,23 +1,25 @@
-import { trackArtwork, collectionArtwork } from './artwork';
+import { trackArtwork, collectionArtwork } from '@plyr/next-core/artwork';
 import { CaretRight as ChevronRight, PencilSimple as Pencil } from './icons';
 import { Link, useFocusEffect, type Href } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react';
 import { Pressable, ScrollView, StyleSheet, View, type ScrollViewProps, type ScrollViewInstance } from 'react-native';
-import { api, ApiError, type Artist, type ListSummary, type Track } from './api';
+import { api } from './api-client';
+import { ApiError, type Artist, type ListSummary, type Track } from '@plyr/next-core/api';
 import { useAuth } from './auth';
 import { useAppearance } from './appearance';
 import { Action, Copy, pageFrame, row } from './controls';
 import { Cover, Row, useResource } from './CatalogPieces';
-import { accessLabel } from './access/label';
+import { accessLabel } from '@plyr/next-core/access/label';
+import { AUDIO_SPACE_TYPE } from './auth-config';
 import { usePlayback } from './playback';
 import { privatePds } from './publishing/private-pds';
-import { isPrivateTrack } from './publishing/private-track';
+import { isPrivateTrack } from '@plyr/next-core/track-access';
 import { Choice } from './AccountPieces';
 import { Text } from './Text';
 import { WaveLoading } from './WaveLoading';
 import { usePortalPages } from './use-portal-pages';
 import { ShareLink } from './ShareLink';
-import { catalogRevision } from './catalog-changes';
+import { catalogRevision } from '@plyr/next-core/catalog/changes';
 import { useTabs } from './behaviors/use-tabs';
 
 const portalTabs = ['tracks', 'albums'] as const;
@@ -66,7 +68,7 @@ function AccountPortal({ did, handle }: { did: string; handle: string | null }) 
     restore.current = positions.current[next];
     setTab(next);
   };
-  const catalogTabs = useTabs({ label: 'Your catalog', values: portalTabs, value: tab, onChange: selectTab });
+  const catalogTabs = useTabs({ label: 'Your catalog', value: tab, onChange: selectTab });
   const theme = useAppearance();
   const load = useCallback(async () => {
     try { return await api.artist(did); }
@@ -127,7 +129,7 @@ function OwnedTracks({ did, active, tabs }: { did: string; active: boolean; tabs
   return <View style={{ gap: 8 }}>
     {tabs && <CatalogToolbar>{tabs}</CatalogToolbar>}
     {all.map(track => {
-      const subtitle = [accessLabel(track), !isPrivateTrack(track) && plays(track), track.metadata.album].filter(Boolean).join(' · ');
+      const subtitle = [accessLabel(track, AUDIO_SPACE_TYPE), !isPrivateTrack(track) && plays(track), track.metadata.album].filter(Boolean).join(' · ');
       return isPrivateTrack(track)
         ? <Row key={track.record.uri} title={track.metadata.title} image={trackArtwork(track)} subtitle={subtitle}
           onPress={() => player.play(track, own)} action={<Edit label={`manage ${track.metadata.title}`} href="/private" />} />
@@ -165,7 +167,7 @@ function useOwnerOnlyTracks(did: string, active: boolean) {
 
 function OwnedAlbums({ did, active, tabs }: { did: string; active: boolean; tabs: ReactNode }) {
   const load = useCallback((cursor?: string) => api.albums(did, { cursor, limit: 25 }), [did]);
-  const albums = usePortalPages<ListSummary>(did, 'albums', load, active);
+  const albums = usePortalPages<ListSummary>(did, 'collections', load, active);
   return <View style={{ gap: 8 }}>
     {tabs && <CatalogToolbar>{tabs}</CatalogToolbar>}
     {albums.data.map(album => <Row key={album.record.uri} title={album.metadata.name || 'untitled album'} image={collectionArtwork(album)}

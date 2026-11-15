@@ -22,6 +22,7 @@ pub fn main() !void {
         const list = try std.fmt.allocPrint(a, "{s}.list", .{prefix});
         const profile = try std.fmt.allocPrint(a, "{s}.actor.profile", .{prefix});
         const like = try std.fmt.allocPrint(a, "{s}.like", .{prefix});
+        const comment = try std.fmt.allocPrint(a, "{s}.comment", .{prefix});
         const started = std.Io.Timestamp.now(io, .awake);
         var keys: signing_key.ZatSigningKeyResolver = .{ .resolver = &resolver };
         const key = try keys.port().resolve(a, did, true);
@@ -29,12 +30,12 @@ pub fn main() !void {
             .io = io,
             .identity_resolver = &resolver,
             .transport = &transport,
-            .collections = &.{ track, list, profile, like },
+            .collections = &.{ track, list, profile, like, comment },
         };
         const fetched = try source.fetchCollections(a, did);
         defer fetched.release();
         const fetched_at = std.Io.Timestamp.now(io, .awake);
-        const snapshot = try verifier.verifyProofs(a, fetched.proofs.?, did, key.publicKey(), list, track, profile, like, 1);
+        const snapshot = try verifier.verifyProofs(a, fetched.proofs.?, did, key.publicKey(), list, track, profile, like, comment, 1);
         const verified_at = std.Io.Timestamp.now(io, .awake);
         std.log.info("sample {d}: fetch {d}ms, verify {d}us, car {d} bytes, tracks {d}, lists {d}, likes {d}", .{
             iteration + 1,

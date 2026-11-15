@@ -1,5 +1,5 @@
 import { Platform, Share } from 'react-native';
-import { formatPlaybackEvents, playbackEvents } from './playback-diagnostics';
+import { formatPlaybackEvents, playbackEvents } from '@plyr/next-core/playback-diagnostics';
 import { toast } from './toast';
 
 export async function sharePlaybackLog(signedIn: boolean, authReady: boolean) {

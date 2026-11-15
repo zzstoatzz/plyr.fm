@@ -1,0 +1,377 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createPersonalPlayback, type PersonalPlaybackTarget } from '../src/personal-playback.ts';
+import { PersonalQueue } from '../src/personal-queue.ts';
+import type { Track } from '../src/api.ts';
+import type { JamSocket, JamState } from '../src/jam-connection.ts';
+import { mergeQueueMutations, queueMutations, type QueueMutation } from '../src/queue-mutation.ts';
+import type { QueueStorage } from '../src/queue-checkpoint.ts';
+
+const uri = 'at://did:plc:aaaaaaaaaaaaaaaaaaaaaaaa/fm.plyr.track/a';
+const track: Track = { object: 'track', id: 'trk_' + Buffer.from(uri).toString('base64url'), record: { uri, cid: 'cid', revision: null, collection: 'fm.plyr.track', rkey: 'a' },
+  metadata: { title: 'A', description: null, album: null, duration_seconds: 60, created_at: '' },
+  artist: { did: 'did:plc:aaaaaaaaaaaaaaaaaaaaaaaa', profile: { handle: 'artist.test', display_name: 'Artist', avatar_url: null } },
+  media: {}, access: { visibility: 'public' }, metrics: { play_count: 0, like_count: 0 } };
+const ref = { id: track.id, uri, cid: 'cid', durationMs: 60_000, key: 'first' };
+const base: JamState = { epoch: 'personal', revision: 1, occurrence: 1, queue: [ref], index: 0, playing: false, positionMs: 1234, updatedAtMs: 10_000,
+  personal: { explicitEnd: 1, tailKind: null, label: null, repeat: 'off', keepPlaying: false, cursor: null, output: null, disconnected: false } };
+class Socket implements JamSocket {
+  readyState = 1;
+  onopen: JamSocket['onopen'] = null;
+  onmessage: JamSocket['onmessage'] = null;
+  onclose: JamSocket['onclose'] = null;
+  onerror: JamSocket['onerror'] = null;
+  sent: Record<string, unknown>[] = [];
+  send(value: string) { this.sent.push(JSON.parse(value)); }
+  close() { this.readyState = 3; }
+  receive(value: object) { this.onmessage?.call(this as unknown as WebSocket, new MessageEvent('message', { data: JSON.stringify(value) })); }
+}
+const tick = () => new Promise(resolve => setTimeout(resolve, 0));
+function setup(journal: QueueMutation[] = [], id = () => 'edit') {
+  const socket = new Socket();
+  let stored = structuredClone(journal);
+  const calls: string[][] = [];
+  const changes: unknown[] = [];
+  const errors: string[] = [];
+  const persisted: number[] = [];
+  const storage: QueueStorage = { load: async () => null, loadMutations: async () => structuredClone(stored),
+    saveMutations: async (_, entries, remove) => { persisted.push(entries.length); stored = structuredClone(mergeQueueMutations(stored, entries, remove)); return stored; },
+    save: async () => {}, progress: async () => {} };
+  const queue = new PersonalQueue({ owner: 'account', storage, id,
+    resolve: async ids => { calls.push(ids); return { data: ids.map(id => ({ ...track, id, record: { ...track.record, uri: Buffer.from(id.slice(4), 'base64url').toString() } })).reverse(), missing: [] }; },
+    changed: state => changes.push(state), remote: () => {}, error: message => errors.push(message),
+    connect: { admit: async () => ({ ticket: 'test', websocketUrl: 'wss://test' }), socket: () => socket } });
+  return { queue, socket, calls, changes, errors, persisted, stored: () => stored };
+}
+
+test('a signed-in queue keeps all seventy collection entries while acknowledgements are stalled', async () => {
+  let id = 0;
+  const first = setup([], () => 'edit-' + ++id);
+  const entries = Array.from({ length: 70 }, (_, at) => ({ ...ref, key: 'collection-' + at }));
+  let journal: QueueMutation[];
+  try {
+    await first.queue.start();
+    first.socket.receive({ type: 'state', state: base });
+    first.queue.remember([track]);
+    await first.queue.editMany(entries.map(entry => ({ action: 'enqueue', entry })));
+    assert.deepEqual(first.queue.state.entries.map(entry => entry.key), [ref, ...entries].map(entry => entry.key));
+    assert.deepEqual(first.persisted, [70, 1], 'the whole collection is journaled before the first command is prepared');
+    journal = queueMutations({ owner: 'account', entries: first.stored() }, 'account');
+    assert.equal(journal.length, entries.length);
+    assert.deepEqual(first.errors, []);
+  } finally { first.queue.close(); }
+  const refreshed = setup(journal);
+  try {
+    await refreshed.queue.start();
+    const started = performance.now();
+    refreshed.socket.receive({ type: 'state', state: base });
+    let state = base;
+    for (const [at, entry] of entries.entries()) {
+      const findCommand = () => refreshed.socket.sent.filter(value => value.action === 'enqueue')[at];
+      for (let attempt = 0; !findCommand() && attempt < 40; attempt++) await new Promise(resolve => setTimeout(resolve, 5));
+      const command = findCommand();
+      assert.deepEqual(command?.entry, entry);
+      state = { ...state, revision: state.revision + 1, queue: [...state.queue, entry],
+        personal: { ...state.personal!, explicitEnd: state.queue.length + 1 } };
+      refreshed.socket.receive({ type: 'result', id: command.id, outcome: 'applied', state });
+    }
+    await tick();
+    assert.ok(performance.now() - started >= (entries.length - 1) * 45, 'replay stays below the coordinator message limit');
+    assert.deepEqual(refreshed.stored(), []);
+    assert.equal(refreshed.queue.wire?.positionMs, base.positionMs);
+    assert.deepEqual(refreshed.queue.state.entries.map(entry => entry.key), [ref, ...entries].map(entry => entry.key));
+  } finally { refreshed.queue.close(); }
+});
+
+test('collections waiting on admission stay ordered within the requesting account', async () => {
+  let did = 'account-a';
+  let blockedLoad!: (checkpoint: unknown) => void;
+  let releaseJoin!: () => void;
+  let id = 0;
+  const otherUri = track.record.uri + '-other';
+  const other = { ...track, id: 'trk_' + Buffer.from(otherUri).toString('base64url'), record: { ...track.record, uri: otherUri } };
+  const journal: { owner: string; ids: string[] }[] = [];
+  const target: PersonalPlaybackTarget = {
+    ready: false, suspended: false, repeat: 'off', keepPlaying: false, position: () => 0, duration: () => 60,
+    playing: () => false, load: async () => false, loaded: async () => {}, seek: async () => {},
+    play: () => {}, pause: () => {}, setQueue: () => {}, setRepeat: () => {}, error: assert.fail,
+  };
+  const socket = new Socket();
+  const model = createPersonalPlayback({
+    target: () => target,
+    account: () => ({ ready: true, did, accountSync: true, join: async () => {
+      await new Promise<void>(resolve => { releaseJoin = resolve; });
+      return { ticket: 'test', websocketUrl: 'wss://test' };
+    } }),
+    id: () => 'key-' + ++id,
+    storage: { load: owner => owner === 'account-a' ? new Promise(resolve => { blockedLoad = resolve; }) : Promise.resolve(null),
+      loadMutations: async () => [], save: async () => {}, progress: async () => {},
+      saveMutations: async (owner, entries) => {
+        journal.push({ owner, ids: entries.flatMap(({ intent }) => intent.action === 'enqueue' ? [intent.entry.id] : []) });
+        return entries;
+      } },
+    consumeLogin: () => false, socket: () => socket, resolve: async () => ({ data: [], missing: [] }),
+    recent: async () => ({ object: 'list', data: [], has_more: false }),
+  });
+  model.start();
+  model.enqueueCollection([other]);
+  did = 'account-b';
+  const stop = model.start();
+  try {
+    model.enqueueCollection([track]);
+    await tick();
+    model.enqueueCollection([other]);
+    blockedLoad(null);
+    releaseJoin();
+    await tick();
+    assert.deepEqual(journal, [
+      { owner: 'account-b', ids: [track.id] },
+      { owner: 'account-b', ids: [other.id] },
+    ]);
+  } finally { stop?.(); }
+});
+
+test('a collection that cannot fit leaves the queue and its journal intact', async () => {
+  const { queue, socket, errors, persisted } = setup();
+  try {
+    await queue.start();
+    socket.receive({ type: 'state', state: base });
+    await tick();
+    const entries = Array.from({ length: 200 }, (_, at) => ({ ...ref, key: 'collection-' + at }));
+    await queue.editMany(entries.map(entry => ({ action: 'enqueue', entry })));
+    assert.deepEqual(queue.state.entries.map(entry => entry.key), [ref.key]);
+    assert.deepEqual(persisted, []);
+    assert.equal(errors.length, 1);
+  } finally { queue.close(); }
+});
+
+test('queue hydration batches distinct tracks and progress does not rehydrate or republish metadata', async () => {
+  const { queue, socket, calls, changes } = setup();
+  try {
+    await queue.start();
+    socket.receive({ type: 'state', state: { ...base, queue: [ref, { ...ref, key: 'second' }], personal: { ...base.personal, explicitEnd: 2 } } });
+    await tick();
+    assert.deepEqual(calls, [[track.id]]);
+    assert.equal(queue.state.entries.length, 2);
+    assert.equal(queue.state.entries[0].track, queue.state.entries[1].track);
+    const count = changes.length;
+    socket.receive({ type: 'state', state: { ...base, revision: 2, queue: [ref, { ...ref, key: 'second' }], personal: { ...base.personal, explicitEnd: 2 }, positionMs: 5000 } });
+    await tick();
+    assert.equal(calls.length, 1);
+    assert.equal(changes.length, count);
+  } finally { queue.close(); }
+});
+
+test('an edit is journaled before sending and a refresh replays the identical prepared command after a lost acknowledgement', async () => {
+  const first = setup();
+  let prepared: Record<string, unknown>;
+  let saved: QueueMutation[];
+  try {
+    await first.queue.start(); first.socket.receive({ type: 'state', state: base }); await tick();
+    first.queue.remember([track]);
+    await first.queue.edit({ action: 'enqueue', entry: { ...ref, key: 'second' } });
+    prepared = first.socket.sent.find(value => value.action === 'enqueue')!;
+    assert.ok(prepared);
+    saved = first.stored();
+    assert.equal(saved[0].id, prepared.id);
+    assert.equal(saved[0].base?.expectedRevision, prepared.expectedRevision);
+  } finally { first.queue.close(); }
+  const refreshed = setup(saved!);
+  try {
+    await refreshed.queue.start();
+    const accepted = { ...base, revision: 5, occurrence: 2, queue: [ref, { ...ref, key: 'second' }], personal: { ...base.personal, explicitEnd: 2 } };
+    refreshed.socket.receive({ type: 'state', state: accepted }); await tick(); await tick();
+    const replay = refreshed.socket.sent.find(value => value.action === 'enqueue');
+    assert.deepEqual(replay, prepared!);
+    assert.equal(refreshed.queue.state.entries.length, 2);
+    refreshed.socket.receive({ type: 'result', id: prepared!.id, outcome: 'duplicate', state: accepted });
+    await tick();
+    assert.deepEqual(refreshed.stored(), []);
+    assert.equal(refreshed.socket.sent.some(value => value.action === 'play' || value.action === 'seek'), false);
+  } finally { refreshed.queue.close(); }
+});
+
+test('closed account sessions cannot publish delayed hydration', async () => {
+  const { queue, socket, changes } = setup();
+  await queue.start(); socket.receive({ type: 'state', state: base });
+  queue.close(); const count = changes.length;
+  await tick(); assert.equal(changes.length, count);
+});
+
+test('two tabs cannot overwrite each other’s pending edits or prepare different retry fingerprints', () => {
+  const a: QueueMutation = { id: 'a', intent: { action: 'enqueue', entry: { ...ref, key: 'a' } } };
+  const b: QueueMutation = { id: 'b', intent: { action: 'clearPicks' } };
+  const initial = mergeQueueMutations([a], [b]);
+  assert.deepEqual(initial.map(entry => entry.id), ['a', 'b']);
+  const prepared = { epoch: 'epoch', expectedRevision: 5, occurrence: 1, expectedOutput: null };
+  const first = mergeQueueMutations(initial, [{ ...a, base: prepared }]);
+  const second = mergeQueueMutations(first, [{ ...a, base: { ...prepared, expectedRevision: 6 } }]);
+  assert.equal(second[0].base?.expectedRevision, 5);
+  assert.deepEqual(mergeQueueMutations(second, [], ['b']).map(entry => entry.id), ['a']);
+});
+
+test('restoring 200 distinct occurrences performs two bounded metadata reads and maps by record identity', async () => {
+  const { queue, socket, calls } = setup();
+  try {
+    const refs = Array.from({ length: 200 }, (_, at) => {
+      const uri = `at://did:plc:aaaaaaaaaaaaaaaaaaaaaaaa/fm.plyr.track/queue-${at}`;
+      return { ...ref, key: `entry-${at}`, uri, id: 'trk_' + Buffer.from(uri).toString('base64url') };
+    });
+    await queue.start();
+    socket.receive({ type: 'state', state: { ...base, queue: refs, personal: { ...base.personal, explicitEnd: 200 } } });
+    await tick();
+    assert.equal(calls.length, 2);
+    assert.ok(calls.every(ids => ids.length <= 100));
+    assert.deepEqual(queue.state.entries.map(entry => entry.track.id), refs.map(ref => ref.id));
+    assert.ok(queue.state.entries.every(entry => entry.track.metadata.title === 'A'));
+  } finally { queue.close(); }
+});
+
+test('late checkpoint reads cannot replace a fresh local selection or its metadata', async () => {
+  let release: (value: unknown) => void = () => {};
+  const storage: QueueStorage = { load: () => new Promise(resolve => { release = resolve; }), loadMutations: async () => [],
+    saveMutations: async (_, entries) => entries, save: async () => {}, progress: async () => {} };
+  const queue = new PersonalQueue({ owner: 'anonymous', storage, id: () => 'test', resolve: async () => ({ data: [], missing: [] }),
+    changed: () => {}, remote: () => {}, error: () => {} });
+  try {
+    const starting = queue.start();
+    const fresh = { ...track, metadata: { ...track.metadata, title: 'Fresh selection' } };
+    queue.local({ entries: [{ key: 'fresh', track: fresh }], index: 0 });
+    release({ version: 1, owner: 'anonymous', updatedAt: 100, position: 20, repeat: 'off', keepPlaying: false,
+      state: { entries: [{ key: 'old', track }], index: 0 } });
+    await starting;
+    assert.equal(queue.state.entries[0].key, 'fresh');
+    assert.equal(queue.cache.get(track.id)?.metadata.title, 'Fresh selection');
+  } finally { queue.close(); }
+});
+
+test('progress is recorded synchronously before queued storage writes', async () => {
+  const order: string[] = [];
+  let release!: () => void;
+  const storage: QueueStorage = { load: async () => null, loadMutations: async () => [], saveMutations: async (_, entries) => entries,
+    save: () => new Promise<void>(resolve => { release = resolve; }), progress: async () => { order.push('queued'); },
+    latest: (_, progress) => { order.push('latest:' + progress.position); } };
+  const queue = new PersonalQueue({ owner: 'anonymous', storage, id: () => 'test', resolve: async () => ({ data: [], missing: [] }),
+    error: () => {}, changed: () => {} });
+  await queue.start();
+  (queue as unknown as { state: { entries: { key: string }[]; index: number } }).state = { entries: [{ key: 'only' }], index: 0 };
+  void queue.save(5, 'off', false);
+  queue.progress(42);
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.deepEqual(order, ['latest:42'], 'the queued write is still waiting behind the save');
+  release();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.deepEqual(order, ['latest:42', 'queued']);
+});
+
+test('shared playback restores the server position and waits for output ownership before loading audio', async () => {
+  const socket = new Socket();
+  const storage: QueueStorage = {
+    load: async () => null,
+    loadMutations: async () => [],
+    saveMutations: async (_, entries) => entries,
+    save: async () => {},
+    progress: async () => {},
+  };
+  let active = false;
+  let position = 0;
+  let visible: Track | undefined;
+  const actions: string[] = [];
+  const target: PersonalPlaybackTarget = {
+    ready: false,
+    suspended: false,
+    repeat: 'off',
+    keepPlaying: false,
+    position: () => position,
+    duration: () => 60,
+    playing: () => active,
+    load: async (tracks, index) => {
+      assert.equal(tracks[index], track);
+      actions.push('load');
+      return true;
+    },
+    loaded: async () => { actions.push('loaded'); },
+    seek: async seconds => { position = seconds; actions.push('seek'); },
+    play: () => { active = true; actions.push('play'); },
+    pause: () => { active = false; },
+    setQueue: (tracks, index) => { visible = tracks[index]; },
+    setRepeat: repeat => { target.repeat = repeat; },
+    error: assert.fail,
+  };
+  const model = createPersonalPlayback({
+    target: () => target,
+    account: () => ({ did: track.artist.did, ready: true, accountSync: true,
+      join: async () => ({ ticket: 'test', websocketUrl: 'wss://test' }) }),
+    id: () => 'client',
+    storage,
+    consumeLogin: () => false,
+    socket: () => socket,
+    resolve: async () => ({ data: [track], missing: [] }),
+    recent: async () => ({ object: 'list', data: [], has_more: false }),
+  });
+  const stop = model.start();
+  try {
+    await tick();
+    socket.receive({ type: 'state', state: base });
+    await tick();
+    assert.equal(visible, track);
+    assert.equal(model.getSnapshot().restoredPosition, 1.234);
+    assert.equal(model.position(), 1.234);
+    assert.deepEqual(actions, []);
+    assert.equal(model.command({ action: 'play' }), true);
+    assert.ok(socket.sent.some(frame => frame.action === 'play'));
+    socket.receive({ type: 'state', state: {
+      ...base,
+      revision: 2,
+      playing: true,
+      updatedAtMs: Date.now(),
+      personal: { ...base.personal, output: { clientId: 'client', connectionId: 'socket' } },
+    } });
+    await tick();
+    assert.equal(model.ownsOutput(), true);
+    assert.equal(position, 1.234);
+    assert.deepEqual(actions, ['load', 'loaded', 'seek', 'play']);
+  } finally { stop?.(); }
+});
+
+test('a suspended device-only queue restores its own position and ignores the other audio clock', async () => {
+  let position = 9;
+  const saved: number[] = [];
+  const target: PersonalPlaybackTarget = {
+    ready: true, suspended: false, repeat: 'off', keepPlaying: false,
+    position: () => position, duration: () => 60, playing: () => false,
+    load: async () => true, loaded: async () => {}, seek: async seconds => { position = seconds; },
+    play: () => {}, pause: () => {}, setQueue: () => {}, setRepeat: () => {}, error: assert.fail,
+  };
+  const model = createPersonalPlayback({
+    target: () => target,
+    account: () => ({ ready: true, did: null, accountSync: false }),
+    id: () => 'saved',
+    storage: {
+      load: async () => null, loadMutations: async () => [], saveMutations: async (_, entries) => entries,
+      save: async () => {}, progress: async (_, item) => { saved.push(item.position); },
+    },
+    consumeLogin: () => false, socket: () => new Socket(),
+    resolve: async () => ({ data: [track], missing: [] }),
+    recent: async () => ({ object: 'list', data: [], has_more: false }),
+  });
+  const stop = model.start();
+  try {
+    await tick();
+    model.play(track);
+    model.suspend();
+    target.suspended = true;
+    position = 46;
+    model.checkpoint();
+    target.suspended = false;
+    model.restore();
+    assert.equal(model.getSnapshot().restoredPosition, 9);
+    assert.equal(model.resume(), true);
+    await tick();
+    assert.equal(position, 9);
+    model.suspend();
+    position = 52;
+  } finally { stop?.(); }
+  await tick();
+  assert.deepEqual(saved, [9, 9]);
+});

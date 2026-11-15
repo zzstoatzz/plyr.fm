@@ -22,16 +22,14 @@ Write with the `next-write-ui` skill, finish with `next-unslop`, review with
 harness can follow them.
 
 ```sh
-npm run lint                    # the conventions below
-npm run check                   # tsc
-npm test                        # model tests in tests/
-npm run build:web               # the web export the browser checks load
-npm run checks:affected         # the browser checks this branch reaches
+bun run lint
+bun run check
+bun run test
 ```
 
 ## lint
 
-`npm run lint` runs [scripts/check-code.mjs](../scripts/check-code.mjs). Every
+`bun run lint` runs [scripts/check-code.mjs](../scripts/check-code.mjs). Every
 new convention lands with its rule. A file that breaks a rule for a reason
 goes in [scripts/lint-exemptions.json](../scripts/lint-exemptions.json) with
 that reason; delete the entry once the file is fixed, and lint fails on an
@@ -40,9 +38,8 @@ entry whose file is gone.
 | rule | what it keeps true | fix |
 | --- | --- | --- |
 | `route-boundaries` | files in `app/` don't import `pds`, `jam-connection` or a storage module | move the call into a feature module or hook in `src/` |
-| `platform-seams` | shared code doesn't touch `document`, `window`, `navigator` or web storage, and never imports a `.web`/`.ios`/`.native` path | put it in `name.web.ts` beside `name.ts` and import `./name` |
-| `seam-exports` | `name.web.ts(x)` and its sibling export the same names | keep both contracts aligned |
+| `platform-seams` | native code avoids browser globals and imports platform modules by base name | put browser adapters in `next/web` |
 | `hand-rolled-roles` | tab, combobox, listbox, slider, dialog, menu and similar roles come from one shared control | reuse it, or add the behavior under `src/behaviors/` with its tests |
 | `comment-length` | comment blocks stay at three lines or fewer | the rationale goes in the PR or a doc |
 | `fs-sync` | expo-file-system `copy()`/`move()` (async) are awaited, never fire-and-forget | `await` it or call `copySync()`/`moveSync()` |
-| `browser-checks` | every `scripts/check-*.cjs` is listed in `scripts/checks.mjs` with what it covers | add its entry |
+| `input-zoom` | every `TextInput` sizes its text with `inputFontSize()`, and nothing passes a font size to `Field` | use `inputFontSize(theme.scale)` from `controls` |

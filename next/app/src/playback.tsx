@@ -1,16 +1,18 @@
-import { recordPlayback, urlHost } from './playback-diagnostics';
+import { recordPlayback, urlHost } from '@plyr/next-core/playback-diagnostics';
 import { LoadingWatchdog } from './loading-watchdog';
-import { trackArtwork } from './artwork';
+import { trackArtwork } from '@plyr/next-core/artwork';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Platform } from 'react-native';
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
-import type { Track } from './api';
+import type { Track } from '@plyr/next-core/api';
 import { useAuth } from './auth';
 import { getAuth } from './auth-state';
-import { editPrivateQueue, isPrivateTrack, privateSpace, withoutPrivateTrack } from './publishing/private-track';
-import { blobUrl } from './identity';
+import { isPrivateTrack } from '@plyr/next-core/track-access';
+import { editPrivateQueue, withoutPrivateTrack } from '@plyr/next-core/publishing/private-music';
+import { privateLibrary } from './publishing/private-config';
+import { blobUrl } from '@plyr/next-core/identity';
 import { gatedAudioUrl, releaseGatedAudioUrl } from './gated-audio';
-import { useJamPlayback, jamTrack } from './use-jam-playback';
+import { useJamPlayback } from './use-jam-playback';
 import { usePersonalQueue } from './use-personal-queue';
 import { usePlayerAccounting } from './use-player-accounting';
 import { useMediaSession } from './media-session';
@@ -93,9 +95,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
   }
 
   useEffect(() => {
-    if (Platform.OS !== 'web') {
-      void setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: true, interruptionMode: 'doNotMix' }).catch(() => {});
-    }
+    void setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: true, interruptionMode: 'doNotMix' }).catch(() => {});
     return () => {
       sequence.current++;
       sourceEvents.current?.remove();
@@ -135,7 +135,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     if (!track) return false;
     const privateTrack = isPrivateTrack(track);
     if (privateTrack !== privateMode.current || tracks.some(item => isPrivateTrack(item) !== privateTrack)) return false;
-    if (privateTrack && (!auth.did || track.artist.did !== auth.did || !track.record.uri.startsWith(privateSpace(auth.did) + '/' + auth.did + '/'))) return false;
+    if (privateTrack && !privateLibrary.ownsPrivateTrack(track, auth.did)) return false;
     const request = ++sequence.current;
     const startedAt = Date.now();
     if (!privateTrack) console.info("[playback] load", { request, track: track.id, start });
@@ -172,7 +172,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
       }
       const previousSource = objectUrl.current;
       try {
-        player.replace(Platform.OS === 'web' || availability === 'gated' ? url : { uri: url, headers: { Referer: 'https://next.plyr.fm/' } });
+        player.replace(availability === 'gated' ? url : { uri: url, headers: { Referer: 'https://next.plyr.fm/' } });
         player.loop = !jam.active() && settings.current.repeat === 'one';
         player.volume = settings.current.volume;
       } catch (cause) {
@@ -394,9 +394,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
       if (isPrivateTrack(track)) { if (privateMode.current && track.artist.did === auth.did) setQueue(items => [...items, track]); else play(track); return; }
       if (privateMode.current) { toast.info('play a public track to change queues'); return; }
       toast.success(`queued ${track.metadata.title}`, 1800);
-      const ref = jamTrack(track);
-      if (jam.active()) { if (ref) jam.editQueue((items, at) => ({ queue: [...items, ref], index: at })); else jam.replaceQueue([...queue, track], index); }
-      else personal.enqueue(track);
+      if (!jam.enqueue([track])) personal.enqueue(track);
     },
     remove: (at) => { if (privateMode.current) { setQueue(items => editPrivateQueue(items, index, { action: 'remove', at })); return; } if (jam.editQueue((items, current) => ({ queue: at > current ? items.filter((_, position) => position !== at) : items, index: current }))) return; if (at > index) personal.remove(at); },
     move: (from, to) => {
@@ -444,4 +442,4 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
   return <PlaybackContext.Provider value={value}>{children}</PlaybackContext.Provider>;
 }
 
-export { PlaybackFreeze, PlaybackOverride, usePlayback, type Playback } from './playback-context';
+export { PlaybackOverride, usePlayback, type Playback } from './playback-context';

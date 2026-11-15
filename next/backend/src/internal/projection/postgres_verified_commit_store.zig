@@ -12,6 +12,7 @@ const postgres_list = @import("postgres_list_store.zig");
 const postgres_track = @import("postgres_track_store.zig");
 const postgres_profile = @import("postgres_profile_store.zig");
 const postgres_like = @import("postgres_like_store.zig");
+const postgres_comment = @import("postgres_comment_store.zig");
 const postgres_rejections = @import("postgres_record_rejection_store.zig");
 const profile_change = @import("profile_change.zig");
 const profile_store = @import("profile_store.zig");
@@ -174,6 +175,16 @@ pub const PostgresVerifiedCommitStore = struct {
             };
             if (result != .applied) return error.CorruptProjection;
         }
+        var comments: postgres_comment.PostgresCommentStore = .{ .pool = self.pool };
+        for (commit.comment_changes) |change| {
+            const result = comments.applyInTransaction(conn, allocator, change) catch |err| switch (err) {
+                error.RevisionConflict => return error.RevisionConflict,
+                error.CorruptProjection => return error.CorruptProjection,
+                error.ProjectionUnavailable => return error.ProjectionUnavailable,
+                error.OutOfMemory => return error.OutOfMemory,
+            };
+            if (result != .applied) return error.CorruptProjection;
+        }
         const touched = collectTouchedUris(allocator, commit) catch return error.OutOfMemory;
         defer allocator.free(touched);
         var rejection_store: postgres_rejections.PostgresRecordRejectionStore = .{ .pool = self.pool };
@@ -241,7 +252,7 @@ fn collectTouchedUris(
     commit: verified.Commit,
 ) ![][]const u8 {
     const count = commit.list_changes.len + commit.track_changes.len +
-        commit.profile_changes.len + commit.like_changes.len;
+        commit.profile_changes.len + commit.like_changes.len + commit.comment_changes.len;
     const uris = try allocator.alloc([]const u8, count);
     var index: usize = 0;
     for (commit.list_changes) |change| {
@@ -266,6 +277,13 @@ fn collectTouchedUris(
         index += 1;
     }
     for (commit.like_changes) |change| {
+        uris[index] = switch (change) {
+            .upsert => |value| value.record_uri,
+            .delete => |value| value.record_uri,
+        };
+        index += 1;
+    }
+    for (commit.comment_changes) |change| {
         uris[index] = switch (change) {
             .upsert => |value| value.record_uri,
             .delete => |value| value.record_uri,

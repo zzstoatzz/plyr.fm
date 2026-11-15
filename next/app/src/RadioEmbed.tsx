@@ -5,7 +5,7 @@ import { useAppearance } from './appearance';
 import { Cover } from './CatalogPieces';
 import { PauseGlyph as Pause, PlayGlyph as Play } from './PlayerGlyph';
 import { PlayerControl } from './PlayerControl';
-import { radioStations } from './radio';
+import { radioStations } from '@plyr/next-core/radio';
 import { useRadio } from './radio-session';
 import { Text } from './Text';
 import { useRadioFeed } from './use-radio-feed';

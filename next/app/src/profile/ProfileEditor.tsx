@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { useAuth } from '../auth';
 import { getAuth, type Auth } from '../auth-state';
-import type { AwaitStatus } from '../api';
+import type { AwaitStatus } from '@plyr/next-core/api';
 import { useResource } from '../CatalogPieces';
 import { Action, Copy, Field, row } from '../controls';
 import { createPds } from '../pds';

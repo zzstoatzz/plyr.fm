@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { transferParts, UPLOAD_PART_BYTES } from '../../../app/src/publishing/upload-model.ts';
+import { transferParts, UPLOAD_PART_BYTES } from '@plyr/next-core/publishing/upload-model';
 
 export async function transferFixture(operation, source, transport, loseReply = false) {
   let lostAcknowledgement = false;

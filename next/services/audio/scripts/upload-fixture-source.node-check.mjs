@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createHash } from 'node:crypto';
-import { UPLOAD_PART_BYTES } from '../../../app/src/publishing/upload-model.ts';
+import { UPLOAD_PART_BYTES } from '@plyr/next-core/publishing/upload-model';
 import { waveSource, verifyStream, transferFixture } from './upload-fixture-source.mjs';
 
 test('lost acknowledged multipart response resumes with the same receipts', async () => {

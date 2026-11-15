@@ -44,7 +44,7 @@ export function Sheet({ title, close, children, notice, visible = true, onDismis
       style={{ flex: 1, justifyContent: wide ? 'center' : 'flex-end', alignItems: 'center' }}>
       <Pressable accessible={false} focusable={false} tabIndex={-1} aria-hidden onPress={close}
         style={[StyleSheet.absoluteFill, { backgroundColor: '#0008' }]} />
-      <View accessibilityViewIsModal={Platform.OS === 'web' ? undefined : true} style={{
+      <View accessibilityViewIsModal={true} style={{
         width: '100%', maxWidth: 520, maxHeight: '88%', borderTopLeftRadius: 22, borderTopRightRadius: 22,
         borderBottomLeftRadius: wide ? 22 : 0, borderBottomRightRadius: wide ? 22 : 0,
         backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.hairline, paddingBottom: wide ? 12 : insets.bottom

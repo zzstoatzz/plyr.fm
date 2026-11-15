@@ -1,13 +1,13 @@
 ---
 name: next-unslop
-description: Remove generated-looking code from a next/app diff without changing behavior — comments that restate code, defensive checks the types rule out, one-caller helpers, vague names, duplicated controls. Use as the last step before review of any next client change, or when asked to clean up a diff.
+description: Remove generated-looking code from a Next client or core diff without changing behavior — comments that restate code, defensive checks the types rule out, one-caller helpers, vague names, duplicated controls. Use as the last step before review of any next client change, or when asked to clean up a diff.
 metadata:
   author: zzstoatzz
 ---
 
 # next-unslop
 
-Scope is `git diff origin/main...HEAD -- next/app` unless you're given files. Behavior never changes: the same checks pass before and after.
+Scope is `git diff origin/main...HEAD -- next/app next/web next/core` unless you're given files. Behavior never changes: the same checks pass before and after.
 
 ## what goes
 
@@ -24,6 +24,6 @@ Scope is `git diff origin/main...HEAD -- next/app` unless you're given files. Be
 
 - Comments that cite an issue, a browser or platform bug, or a lexicon rule.
 - Explicit handling of partial failure in PDS writes and uploads, even when it looks verbose.
-- Platform seams, even when the two files look alike.
+- Native iOS and Android seams that own a real platform difference.
 
-Finish with `npm run lint && npm run check && npm test` from `next/app` and report the exit codes.
+Run svelte-autofixer on changed Svelte files. Show failures for user actions and preserve drafts. Run the workspace check, test and lint commands in next/AGENTS.md.

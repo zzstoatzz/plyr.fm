@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react';
-import { CaretDown as ChevronDown, Screencast as Cast } from './icons';
-import { Image, PixelRatio, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Image, PixelRatio, Pressable, StyleSheet, View, } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { useAppearance } from './appearance';
-import { displayUrl } from './artwork';
+import { displayUrl } from '@plyr/next-core/artwork';
 import { Cover } from './CatalogPieces';
 import { Copy, InlineLink, Page } from './controls';
 import { playerSheet } from './player-sheet';
-import { radioStations, type RadioStation } from './radio';
+import { radioStations, type RadioStation } from '@plyr/next-core/radio';
 import { useRadio } from './radio-session';
 import { Text } from './Text';
 import { useRadioFeed } from './use-radio-feed';
@@ -19,11 +18,9 @@ const tiled = radioStations.filter(station => station !== featured);
 export default function RadioStations() {
   const radio = useRadio();
   const theme = useAppearance();
-  const { width } = useWindowDimensions();
   const [frame, setFrame] = useState(0);
   const [opening, setOpening] = useState<RadioStation | null>(null);
-  const [embedding, setEmbedding] = useState(false);
-  const columns = width < 600 ? 2 : 4;
+  const columns = 2;
   const gap = 14;
   const size = frame ? Math.floor((frame - gap * (columns - 1)) / columns) : 0;
   useEffect(() => {
@@ -43,21 +40,7 @@ export default function RadioStations() {
     <Copy>always on. pick a station and listen along with everyone else.</Copy>
     <View testID="radio-stations" onLayout={event => setFrame(event.nativeEvent.layout.width)} style={{ flexDirection: 'row', flexWrap: 'wrap', gap }}>
       {size > 0 && tiled.map(station => tile(station, size, size))}
-      {size > 0 && tile(featured, frame, Math.round(Math.min(size, 180) * (columns === 2 ? 0.75 : 1)))}
-    </View>
-    <View style={{ marginTop: 8, borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: theme.line }}>
-      <Pressable accessibilityRole="button" aria-expanded={embedding} onPress={() => setEmbedding(open => !open)}
-        style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44, opacity: pressed ? 0.7 : 1 })}>
-        <Cast size={16} color={theme.muted} />
-        <Text style={[small, { flex: 1 }]}>embed radio in your stream</Text>
-        <ChevronDown size={16} color={theme.muted} style={{ transform: [{ rotate: embedding ? '180deg' : '0deg' }] }} />
-      </Pressable>
-      {embedding && <View style={{ gap: 6, paddingBottom: 14, paddingLeft: 26 }}>
-        <Text style={small}>add a station to OBS as a browser source:</Text>
-        {radioStations.map(station => <Text key={station.slug} style={small}>
-          <InlineLink href={`/embed/radio?station=${station.slug}&autoplay=1`}>{station.label}</InlineLink>
-        </Text>)}
-      </View>}
+      {size > 0 && tile(featured, frame, Math.round(Math.min(size, 180) * 0.75))}
     </View>
     <Text style={[small, { fontSize: 12 * theme.scale, marginBottom: 24 }]}>
       <InlineLink href="https://tangled.org/zzstoatzz.io/plyr-radio">source</InlineLink>

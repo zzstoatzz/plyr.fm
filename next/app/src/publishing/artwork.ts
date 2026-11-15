@@ -2,7 +2,7 @@ import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { launchImageLibraryAsync, UIImagePickerPreferredAssetRepresentationMode } from 'expo-image-picker';
 import { File as LocalFile } from 'expo-file-system';
 import type { MediaFile } from '../pds';
-import { artworkName, artworkPlan, artworkType, MAX_ARTWORK_BYTES, UNREADABLE_ARTWORK } from './artwork-model';
+import { artworkName, artworkPlan, artworkType, MAX_ARTWORK_BYTES, UNREADABLE_ARTWORK } from '@plyr/next-core/publishing/artwork-model';
 
 async function encode(uri: string, name: string, width?: number): Promise<MediaFile> {
   const context = ImageManipulator.manipulate(uri);

@@ -1,6 +1,6 @@
 import { Directory, File, Paths } from 'expo-file-system';
 import { UploadRequestError, type createUploadTransport } from './upload-transport';
-import { UPLOAD_PART_BYTES, type ChunkReader, type UploadOperation, type UploadStatus } from './upload-model';
+import { UPLOAD_PART_BYTES, type ChunkReader, type UploadOperation, type UploadStatus } from '@plyr/next-core/publishing/upload-model';
 
 type Transport = ReturnType<typeof createUploadTransport>;
 // The audio service handles one part at a time per owner and queues at most two more, so more in flight only earns 409s.

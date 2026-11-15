@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { DownloadSimple as Download } from '../icons';
 import { View } from 'react-native';
-import { api, ApiError, type Track } from '../api';
+import { api } from '../api-client';
+import { ApiError, type Track } from '@plyr/next-core/api';
 import { ActionRow } from '../ActionRow';
 import { Action, Copy, row } from '../controls';
 import { downloadAllowed, prepareDownload } from './model';

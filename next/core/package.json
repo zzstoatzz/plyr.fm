@@ -1,0 +1,12 @@
+{
+  "name": "@plyr/next-core",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "check": "tsc -p tsconfig.json",
+    "test": "node --experimental-strip-types --test tests/*.test.ts"
+  }
+}

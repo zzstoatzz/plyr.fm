@@ -3,8 +3,8 @@ import { PencilSimple as Pencil, ListPlus, SignIn as LogIn, ArrowLeft, Lock } fr
 import { useState } from 'react';
 import { Platform, View } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
-import type { Track } from './api';
-import { isPrivateTrack } from './publishing/private-track';
+import type { Track } from '@plyr/next-core/api';
+import { isPrivateTrack } from '@plyr/next-core/track-access';
 import { useAuth } from './auth';
 import { ActionRow } from './ActionRow';
 import { TrackPlaylistPicker } from './AccountCatalog';

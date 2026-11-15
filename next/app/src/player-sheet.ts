@@ -7,37 +7,18 @@ export type Measurable = { measureInWindow(callback: (x: number, y: number, widt
 const translation = new Animated.Value(0);
 const listeners = new Set<() => void>();
 let flying = false;
-let present = false;
 
 export const playerSheet = {
   translation,
   value: 0,
   dockTop: undefined as number | undefined,
-  dragging: false,
-  release: undefined as { open: boolean; velocity: number } | undefined,
-  settle: undefined as ((open: boolean, velocity: number) => void) | undefined,
   dock: { art: null, title: null } as Record<'art' | 'title', Measurable | null>,
-  instant: false,
   /** Native: now playing's Modal is mounted and its dismiss owns `translation`. */
   modal: false,
-  leaving: false,
-  opened: undefined as (() => void) | undefined,
   /** Opens now playing from outside the dock (the radio grid); the dock sets it while it is mounted. */
   expand: undefined as (() => void) | undefined,
-  get present() { return present; },
-  show(instant = false) { if (!present) playerSheet.instant = instant; setPresent(true); },
-  hide() { playerSheet.leaving = false; setPresent(false); },
 };
 
-function setPresent(next: boolean) {
-  if (present === next) return;
-  present = next;
-  for (const listener of listeners) listener();
-}
-
-export function useSheetPresent() {
-  return useSyncExternalStore(listener => { listeners.add(listener); return () => listeners.delete(listener); }, () => present, () => false);
-}
 translation.addListener(({ value }) => { playerSheet.value = value; });
 
 export function setFlying(next: boolean) {

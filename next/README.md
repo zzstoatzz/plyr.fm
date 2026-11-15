@@ -1,9 +1,9 @@
 # next
 
 The rewrite of [plyr.fm](https://plyr.fm) that runs beside the legacy app until
-it can replace it: one Expo / React Native client for web, iOS and Android, a
-Zig appview for the catalog, and a coordinator for live playback state. The
-client writes the user's `fm.plyr.*` records straight to their PDS and reads
+it can replace it. SvelteKit serves the new browser client and Expo provides
+the iOS and Android app. Both use the same TypeScript core, Zig appview and
+playback coordinator. Each client writes the user's `fm.plyr.*` records straight to their PDS and reads
 them back through the appview, which follows Tangled's
 [Bobbin](https://til.desertthunder.dev/notes/2026/08/01/bobbin/): read-only,
 with an index that can be rebuilt from the records. State that is not a record
@@ -56,13 +56,21 @@ every closed release. Keep next.plyr.fm resolvable as the lexicon authority.
 ## develop
 
 ```sh
-cd app && npm ci && npm run check && npm test   # client: types and unit tests
-cd app && npm run build:web                     # client: static web export
-cd backend && just check                        # appview and coordinator: format, build, tests
+bun install --frozen-lockfile                    # install from next/ with Bun and Node 22+
+bun run check:boundaries                         # check workspace imports
+(cd core && bun run check && bun run test)       # shared types and model tests
+(cd web && bun run dev)                          # Svelte at http://127.0.0.1:5174
+(cd app && bun run check && bun run test)        # Expo types and tests
+(cd backend && just check)                       # appview and coordinator checks
 ```
 
-Merging to `main` deploys whichever half changed. Ship a backend change before
-the client change that depends on it.
+Run the Svelte screen checks and deploy to the isolated Pages preview with
+`gh workflow run check-svelte-next.yml --ref main -f target=preview`.
+After verifying the preview, dispatch with `target=live` to update
+`next.plyr.fm`. The live run records the previous deployment ID for rollback
+in the `plyr-fm-next` Pages project. The frozen Expo release remains available
+via `gh workflow run deploy-web-next.yml --ref next-expo -f target=live`.
+Ship a Next backend change before the client change that depends on it.
 
 ## docs
 

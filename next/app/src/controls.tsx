@@ -5,7 +5,7 @@ import { Link, type Href } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, TextInput, type TextInputProps, type ScrollViewProps, type ScrollViewInstance, View } from 'react-native';
 import type { Glyph } from './PlayerGlyph';
 import { useAppearance } from './appearance';
-import { onAccent } from './colors';
+import { onAccent } from '@plyr/next-core/colors';
 
 export function Action({ label, onPress, href, disabled, selected, primary, destructive, icon: Icon, onArtwork, onAccentFill }: {
   label: string; onPress?: () => void; href?: Href; disabled?: boolean; selected?: boolean; primary?: boolean; destructive?: boolean; icon?: Glyph; onArtwork?: boolean;
@@ -40,6 +40,9 @@ export function Copy({ children, live = false }: { children: ReactNode; live?: b
   return <Text accessibilityLiveRegion={live ? 'polite' : undefined} style={{ color: theme.muted, fontFamily: theme.fontFamily, fontSize: 15 * theme.scale, lineHeight: 22 * theme.scale }}>{children}</Text>;
 }
 
+/** Typing text never drops below 16px: iOS Safari zooms the page into any smaller field on focus. */
+export const inputFontSize = (scale: number) => Math.max(16, 16 * scale);
+
 export function Field({ label, style, onFocus, onBlur, multiline, ...props }: TextInputProps & { label: string }) {
   const theme = useAppearance();
   const id = useId();
@@ -48,7 +51,7 @@ export function Field({ label, style, onFocus, onBlur, multiline, ...props }: Te
     <Text nativeID={id} style={{ color: theme.text, fontSize: 15 * theme.scale, lineHeight: 22 * theme.scale }}>{label}</Text>
     <TextInput {...props} accessibilityLabel={label} aria-labelledby={id} placeholderTextColor={theme.muted} multiline={multiline}
       onFocus={event => { setFocused(true); onFocus?.(event); }} onBlur={event => { setFocused(false); onBlur?.(event); }}
-      style={[styles.input, { color: theme.text, backgroundColor: theme.surface, fontFamily: theme.fontFamily, fontSize: 16 * theme.scale,
+      style={[styles.input, { color: theme.text, backgroundColor: theme.surface, fontFamily: theme.fontFamily, fontSize: inputFontSize(theme.scale),
         borderColor: focused ? theme.accent : theme.border, opacity: props.editable === false ? 0.6 : 1 },
         multiline && { minHeight: 112, textAlignVertical: 'top' }, style]} />
   </View>;
@@ -60,8 +63,6 @@ export function InlineLink({ href, children, standalone = false }: { href: Href;
 }
 
 export const pageFrame = { width: '100%', maxWidth: 824, alignSelf: 'center', paddingHorizontal: 20 } as const;
-/** The frame for pages laid out for a desktop window: home and library past `DESKTOP_HOME_WIDTH`. */
-export const wideFrame = { width: '100%', maxWidth: 1320, alignSelf: 'center', paddingHorizontal: 36 } as const;
 
 export const row = { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 } as const;
 const styles = StyleSheet.create({

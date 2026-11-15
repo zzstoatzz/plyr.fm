@@ -1,26 +1,18 @@
 # Next client
 
-The Expo / React Native app is the Next client for iOS, Android, and web.
-The web export runs on `next.plyr.fm`. All targets use the Zig AppView for
-catalog reads and the account's PDS for authenticated writes.
+The Expo app runs Next on iOS and Android. It reads the Zig AppView and
+writes authenticated records to the account’s PDS.
 
 ```sh
-npm ci
-npm run check
-npm run web -- --localhost --port 5174
-npm run ios
-npm run android
-npm run build:web
+bun install --frozen-lockfile # from next/
+cd app
+bun run check
+bun run ios
+bun run android
 ```
 
-Run these commands from `next/app` with Node 22 or newer. The native commands
-require a native development build and the corresponding simulator or emulator. Open the local web app at `http://127.0.0.1:5174` to use the Next API’s development CORS origin. The web build writes a
-static export and OAuth metadata to `dist/`. Cloudflare Pages serves the
-export with a fallback to `index.html` for routes such as `/oauth/callback`.
-Both OAuth client IDs use `EXPO_PUBLIC_SITE_URL`, which defaults to
-`https://next.plyr.fm`. The native OAuth redirect uses the
-`fm.plyr.next:/oauth/callback` scheme, so it requires a native build that
-registers the scheme. The API URL defaults to `https://api.next.plyr.fm`.
+Use Bun and Node 22 or newer. The native OAuth redirect is
+`fm.plyr.next:/oauth/callback`. The API URL defaults to `https://api.next.plyr.fm`.
 
 ## Account sync
 
@@ -36,21 +28,9 @@ tracked in [#2303](https://github.com/zzstoatzz/plyr.fm/issues/2303).
 
 ## Player navigation
 
-Playback stays above the route stack. On phone-width web the dock and Now
-Playing are one surface that stays mounted: tapping or dragging the dock opens
-it, the URL moves to `/now-playing` once it has settled, and Back, Close,
-Escape or a pull down closes it. A link inside it changes the page first and
-the sheet then leaves. On wide web `/now-playing` is a full-screen modal route
-with large artwork beside the controls.
-
-Native keeps a local React Native Modal and hardware-Back handling and never
-pushes the web-only route. Native exports validate bundles, not gestures.
-The iOS player requires the [pinned native audio patch](patches/README.md);
-changing it requires rebuilding the native app.
-
-Browser regressions for the player are the `check-player-*` scripts, run after
-`npm run build:web`. They use real fixture audio and block real API and PDS
-mutations.
+Playback stays above the route stack. Now Playing uses a native modal with
+hardware Back handling. The iOS player requires the
+[pinned native audio patch](patches/README.md).
 
 ## Creator portal catalog state
 

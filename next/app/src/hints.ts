@@ -1,6 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { useAuth } from './auth-state';
-import { nextHint, parseSeen, seenKey, type HintSpec } from './behaviors/hints';
+import { nextHint, parseSeen, seenKey, type HintSpec } from '@plyr/next-core/behaviors/hints';
 import { readLocal, writeLocal } from './storage';
 
 /** Every one-time hint in the app, in priority order. A screen shows one with `useHint(id, ready)`. */

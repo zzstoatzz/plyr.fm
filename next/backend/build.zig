@@ -54,6 +54,9 @@ pub fn build(b: *std.Build) void {
     root_module.addAnonymousImport("migration_0039_notification_seen", .{
         .root_source_file = b.path("migrations/0039_add_notification_seen.sql"),
     });
+    root_module.addAnonymousImport("migration_0043_legacy_album_covers", .{
+        .root_source_file = b.path("migrations/0043_add_legacy_album_covers.sql"),
+    });
     root_module.addAnonymousImport("migration_0040_space_copies", .{
         .root_source_file = b.path("migrations/0040_add_space_copies.sql"),
     });

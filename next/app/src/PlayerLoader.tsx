@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Animated, Easing, Platform, View } from 'react-native';
+import { Animated, Easing, View } from 'react-native';
 import { useAppearance } from './appearance';
 
 const resting = [0.55, 1, 0.7];
@@ -9,10 +9,9 @@ export function PlayerLoader({ color, size = 18 }: { color: string; size?: numbe
   const bars = useRef(resting.map(height => new Animated.Value(height))).current;
   useEffect(() => {
     if (reduceMotion) { bars.forEach((bar, at) => bar.setValue(resting[at])); return; }
-    const native = Platform.OS !== 'web';
     const animation = Animated.stagger(120, bars.map(bar => Animated.loop(Animated.sequence([
-      Animated.timing(bar, { toValue: 1, duration: 380, easing: Easing.inOut(Easing.sin), useNativeDriver: native, isInteraction: false }),
-      Animated.timing(bar, { toValue: 0.3, duration: 380, easing: Easing.inOut(Easing.sin), useNativeDriver: native, isInteraction: false }),
+      Animated.timing(bar, { toValue: 1, duration: 380, easing: Easing.inOut(Easing.sin), useNativeDriver: true, isInteraction: false }),
+      Animated.timing(bar, { toValue: 0.3, duration: 380, easing: Easing.inOut(Easing.sin), useNativeDriver: true, isInteraction: false }),
     ]))));
     bars.forEach(bar => bar.setValue(0.3));
     animation.start();

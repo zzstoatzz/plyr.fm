@@ -165,7 +165,17 @@ def _verify_real_product_reads(base_url: str) -> dict[str, Any]:
     detail = _request(base_url, f"/v1/tracks/{track_id}")
     assert detail.status == 200, (detail.status, detail.body)
     _expect_request_id(detail)
-    assert detail.body == listed_track, (detail.body, listed_track)
+    listed_metadata = listed_track["metadata"]
+    tags = detail.body["metadata"]["tags"]
+    assert listed_metadata.get("tags") is None, listed_metadata
+    assert isinstance(tags, list) and all(
+        isinstance(tag, str) and tag for tag in tags
+    ), detail.body
+    expected_detail = {
+        **listed_track,
+        "metadata": {**listed_metadata, "tags": tags},
+    }
+    assert detail.body == expected_detail, (detail.body, expected_detail)
 
     artist_did = listed_track["artist"]["did"]
     encoded_did = urllib.parse.quote(artist_did, safe="")

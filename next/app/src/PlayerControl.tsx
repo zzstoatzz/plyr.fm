@@ -1,6 +1,6 @@
 import { usePressIntent } from './use-press-intent';
 import { useRef } from 'react';
-import { Animated, Platform, Pressable, View } from 'react-native';
+import { Animated, Pressable, View } from 'react-native';
 import { useAppearance } from './appearance';
 import { PlayerLoader } from './PlayerLoader';
 import type { Glyph } from './PlayerGlyph';
@@ -11,10 +11,9 @@ export function PlayerControl({ icon: Icon, label, onPress, primary, large, busy
   const theme = useAppearance();
   const press = usePressIntent(onPress);
   const scale = useRef(new Animated.Value(1)).current;
-  const native = Platform.OS !== 'web';
   const squeeze = (toValue: number) => {
     if (theme.reduceMotion) return;
-    Animated.spring(scale, { toValue, stiffness: toValue < 1 ? 900 : 420, damping: toValue < 1 ? 40 : 16, mass: 1, useNativeDriver: native }).start();
+    Animated.spring(scale, { toValue, stiffness: toValue < 1 ? 900 : 420, damping: toValue < 1 ? 40 : 16, mass: 1, useNativeDriver: true }).start();
   };
   const fill = primary ? large ? theme.accent : theme.text : undefined;
   const color = destructive ? theme.danger : primary ? large ? theme.onAccent : theme.background : theme.text;

@@ -1,5 +1,6 @@
-import { api, trackIdFromUri, type Track } from '../api';
-import type { CollectionRevision } from './collection-order';
+import { api } from '../api-client';
+import { trackIdFromUri, type Track } from '@plyr/next-core/api';
+import type { CollectionRevision } from '@plyr/next-core/collections/collection-order';
 
 export async function resolveAlbumTracks(revision: CollectionRevision, known: Track[], signal: AbortSignal) {
   const tracks = new Map(known.map(track => [track.record.uri, track]));

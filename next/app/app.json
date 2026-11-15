@@ -17,10 +17,6 @@
     "android": {
       "package": "fm.plyr.next"
     },
-    "web": {
-      "output": "single",
-      "bundler": "metro"
-    },
     "plugins": [
       [
         "expo-audio",
@@ -60,6 +56,10 @@
       "eas": {
         "projectId": "680fd924-087f-4ae5-8813-2fee71cb66f8"
       }
-    }
+    },
+    "platforms": [
+      "ios",
+      "android"
+    ]
   }
 }

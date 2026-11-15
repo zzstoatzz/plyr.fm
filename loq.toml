@@ -491,15 +491,15 @@ max_lines = 831
 
 [[rules]]
 path = "next/backend/src/internal/projection/postgres_verified_snapshot_store.zig"
-max_lines = 1094
+max_lines = 1201
 
 [[rules]]
 path = "next/backend/src/internal/projection/postgres_verified_commit_store.zig"
-max_lines = 650
+max_lines = 668
 
 [[rules]]
 path = "next/backend/src/internal/index/postgres_composed_track_store.zig"
-max_lines = 1702
+max_lines = 1740
 
 [[rules]]
 path = "next/backend/src/internal/ingest/projector.zig"
@@ -511,7 +511,7 @@ max_lines = 807
 
 [[rules]]
 path = "next/backend/src/internal/index/postgres_verified_list_store.zig"
-max_lines = 540
+max_lines = 542
 
 [[rules]]
 path = "next/backend/src/api/router.zig"
@@ -546,3 +546,27 @@ max_lines = 511
 [[rules]]
 path = "next/app/src/atlas/renderer.web.ts"
 max_lines = 1160
+
+[[rules]]
+path = "next/app/src/use-personal-queue.ts"
+max_lines = 501
+
+[[rules]]
+path = "next/core/src/personal-playback.ts"
+max_lines = 561
+
+[[rules]]
+path = "next/web/src/lib/player.svelte.ts"
+max_lines = 770
+
+[[rules]]
+path = "next/web/src/lib/atlas/renderer.ts"
+max_lines = 1140
+
+[[rules]]
+path = "next/web/scripts/check-shell.cjs"
+max_lines = 586
+
+[[rules]]
+path = "next/backend/src/internal/projection/postgres_list_store.zig"
+max_lines = 511

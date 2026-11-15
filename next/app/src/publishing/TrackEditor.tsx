@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
-import { api } from '../api';
+import { api } from '../api-client';
 import { useAuth } from '../auth';
 import { getAuth, type Auth } from '../auth-state';
 import { useResource } from '../CatalogPieces';
@@ -9,10 +9,10 @@ import { Sheet } from '../Sheet';
 import { Action, Copy, Field, row } from '../controls';
 import { measureAudioDuration, pickMedia } from '../media-picker';
 import { createPds, TrackRevisionConflict, type MediaFile } from '../pds';
-import { recordTags } from './track-tags';
+import { recordTags } from '@plyr/next-core/publishing/track-tags';
 import { TagsField } from './TagsField';
 import { pickArtwork } from './artwork';
-import { canReplaceTrackAudio, validateReplacementAudio, TrackWriteUnconfirmed } from './track-audio';
+import { canReplaceTrackAudio, validateReplacementAudio, TrackWriteUnconfirmed } from '@plyr/next-core/publishing/track-audio';
 
 function close(id: string) { router.canGoBack() ? router.back() : router.replace(`/track/${id}`); }
 
@@ -63,7 +63,10 @@ type Data = { track: Awaited<ReturnType<typeof api.track>>; revision: Awaited<Re
 
 function TrackForm({ auth, data, reload, feedback }: { auth: Auth; data: Data; reload: () => void; feedback: EditorFeedback }) {
   const { track, revision } = data;
-  const text = (key: string) => typeof revision.value[key] === 'string' ? revision.value[key] : '';
+  const text = (key: string) => {
+    const value = revision.value[key];
+    return typeof value === 'string' ? value : '';
+  };
   const [title, setTitle] = useState(text('title'));
   const [album, setAlbum] = useState(text('album'));
   const [description, setDescription] = useState(text('description'));

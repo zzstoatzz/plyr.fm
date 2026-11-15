@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { getAuth, type Auth } from '../auth-state';
-import { albumIdFromUri, playlistIdFromUri, trackIdFromUri } from '../api';
+import { albumIdFromUri, playlistIdFromUri, trackIdFromUri } from '@plyr/next-core/api';
 import { Action, Copy } from '../controls';
 import { createPds } from '../pds';
 import { WaveLoading } from '../WaveLoading';
-import type { CreateOperation } from './create-operation';
+import type { CreateOperation } from '@plyr/next-core/publishing/create-operation';
+import { applyGenreTags } from '@plyr/next-core/publishing/genre-tags';
 
 export function useCreateRecovery(auth: Auth, kind: 'track' | 'playlist' | 'album') {
   const pds = useMemo(() => createPds(auth), [auth.did, auth.rpc]);
@@ -68,6 +69,9 @@ function PendingCreate({ operation, auth, kind, recovery, onDismiss }: { operati
     if (locked.current || !current()) return;
     locked.current = true; setBusy(true);
     void recovery.pds.dismissCreate(operation, keepExisting).then(async () => {
+      if (kind === 'track' && result?.state === 'accepted' && operation.autoTag) {
+        void applyGenreTags(() => recovery.pds, operation.uri).catch(() => undefined);
+      }
       if (current()) { await recovery.refresh(); if (current()) onDismiss(operation); }
     }).catch(() => { if (current()) { setError('could not clear recovery. try again.'); setBusy(false); } }).finally(() => { locked.current = false; });
   }

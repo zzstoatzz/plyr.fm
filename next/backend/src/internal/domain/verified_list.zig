@@ -15,7 +15,7 @@ pub const Summary = struct {
     metadata: Metadata,
     owner: Owner,
     metrics: Metrics,
-    /// Cover art: the first available member's artwork, in list order.
+    /// Legacy album cover or the first available member's artwork.
     media: Media = .{},
     sources: Sources,
     projection: Projection,
@@ -33,6 +33,7 @@ pub const Detail = struct {
     owner: Owner,
     members: []const Member,
     metrics: Metrics,
+    media: Media = .{},
     sources: Sources,
     projection: Projection,
 };
@@ -53,6 +54,7 @@ pub const Record = struct {
 
 pub const Metadata = struct {
     name: ?[]const u8,
+    cover_blob_cid: ?[]const u8 = null,
     created_at: []const u8,
     updated_at: ?[]const u8,
 };

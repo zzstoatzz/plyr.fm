@@ -21,8 +21,14 @@ from backend.config import settings
 from backend.models import Artist, Track
 from backend.models.job import Job, JobStatus, JobType
 from backend.storage.keys import StagedUploadKey
+from backend.upload_limits import PAUSED_UPLOAD_DIDS
 
 PAUSED_DID = "did:plc:so3ysj7gypel6w7mixdfjhkh"
+
+
+@pytest.fixture(autouse=True)
+def paused_policy(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(upload_policy, "PAUSED_UPLOAD_DIDS", frozenset({PAUSED_DID}))
 
 
 @pytest.fixture
@@ -225,3 +231,17 @@ async def test_tag_suggestions_use_cache_without_new_inference(
         response = client.get(f"/tracks/{existing_track.id}/recommended-tags")
         assert response.status_code == 200, response.text
         assert response.json()["tags"] == [{"name": "house", "score": 0.9}]
+
+
+def test_addline_can_start_uploads_under_current_policy(
+    paused_app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(upload_policy, "PAUSED_UPLOAD_DIDS", PAUSED_UPLOAD_DIDS)
+    with TestClient(paused_app) as client:
+        summary = client.get("/tracks/me/upload-summary")
+        assert summary.status_code == 200, summary.text
+        assert summary.json()["upload_pause_message"] is None
+        response = client.post(
+            "/tracks/uploads", json={"filename": "mix.wav", "size_bytes": 4}
+        )
+        assert response.status_code == 200, response.text

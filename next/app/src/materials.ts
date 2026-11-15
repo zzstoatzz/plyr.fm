@@ -1,14 +1,13 @@
-import { Platform, type ViewStyle } from 'react-native';
+import { type ViewStyle } from 'react-native';
 import type { useAppearance } from './appearance';
 
 type Theme = ReturnType<typeof useAppearance>;
 
 export function glassSurface(theme: Theme): ViewStyle {
   return {
-    backgroundColor: Platform.OS === 'web' ? theme.glass : theme.surface,
+    backgroundColor: theme.surface,
     borderWidth: 1,
     borderColor: theme.glassBorder,
-    ...(Platform.OS === 'web' ? { backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' } : {}),
   };
 }
 

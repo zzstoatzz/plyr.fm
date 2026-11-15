@@ -9,11 +9,13 @@ const list_change = @import("../projection/list_change.zig");
 const track_change = @import("../projection/track_change.zig");
 const profile_change = @import("../projection/profile_change.zig");
 const like_change = @import("../projection/like_change.zig");
+const comment_change = @import("../projection/comment_change.zig");
 const record_rejection = @import("../projection/record_rejection.zig");
 const postgres_list = @import("../projection/postgres_list_store.zig");
 const postgres_track = @import("../projection/postgres_track_store.zig");
 const postgres_profile = @import("../projection/postgres_profile_store.zig");
 const postgres_like = @import("../projection/postgres_like_store.zig");
+const postgres_comment = @import("../projection/postgres_comment_store.zig");
 const repository_lock = @import("../projection/postgres_repository_lock.zig");
 const postgres_rejections = @import("../projection/postgres_record_rejection_store.zig");
 const Collections = @import("stream_runner.zig").Collections;
@@ -128,6 +130,7 @@ const Change = union(enum) {
     track: track_change.Change,
     profile: profile_change.Change,
     like: like_change.Change,
+    comment: comment_change.Change,
 };
 
 fn buildChange(
@@ -146,6 +149,8 @@ fn buildChange(
         return .{ .profile = (try profile_change.fromVerifiedOperation(arena, did, operation, collections.profile, proof)) orelse return null };
     if (std.mem.eql(u8, collection, collections.like))
         return .{ .like = (try like_change.fromVerifiedOperation(arena, did, operation, collections.like, collections.track, proof)) orelse return null };
+    if (std.mem.eql(u8, collection, collections.comment))
+        return .{ .comment = (try comment_change.fromVerifiedOperation(arena, did, operation, collections.comment, collections.track, proof)) orelse return null };
     return null;
 }
 
@@ -153,6 +158,7 @@ fn deletionFor(collections: Collections, rejection: record_rejection.Rejection) 
     if (std.mem.eql(u8, rejection.collection, collections.list)) return .{ .list = rejection.listDelete() };
     if (std.mem.eql(u8, rejection.collection, collections.track)) return .{ .track = rejection.trackDelete() };
     if (std.mem.eql(u8, rejection.collection, collections.profile)) return .{ .profile = rejection.profileDelete() };
+    if (std.mem.eql(u8, rejection.collection, collections.comment)) return .{ .comment = rejection.commentDelete() };
     return .{ .like = rejection.likeDelete() };
 }
 
@@ -161,6 +167,7 @@ fn storeFor(comptime tag: std.meta.Tag(Change), pool: *pg.Pool) switch (tag) {
     .track => postgres_track.PostgresTrackStore,
     .profile => postgres_profile.PostgresProfileStore,
     .like => postgres_like.PostgresLikeStore,
+    .comment => postgres_comment.PostgresCommentStore,
 } {
     return .{ .pool = pool };
 }
@@ -204,6 +211,7 @@ test "PostgreSQL stream commits project, replay, reject and delete profile recor
         .track = "fm.plyr.dev.track",
         .profile = "fm.plyr.dev.actor.profile",
         .like = "fm.plyr.dev.like",
+        .comment = "fm.plyr.dev.comment",
     };
     const rev_1 = zat.Tid.fromTimestamp(1_000, 1).str();
     const rev_2 = zat.Tid.fromTimestamp(2_000, 1).str();

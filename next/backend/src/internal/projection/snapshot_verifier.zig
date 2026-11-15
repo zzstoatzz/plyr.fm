@@ -6,6 +6,7 @@ const list_change = @import("list_change.zig");
 const track_change = @import("track_change.zig");
 const profile_change = @import("profile_change.zig");
 const like_change = @import("like_change.zig");
+const comment_change = @import("comment_change.zig");
 const record_rejection = @import("record_rejection.zig");
 const verified = @import("verified_snapshot.zig");
 
@@ -21,6 +22,7 @@ pub fn verify(
     track_collection: []const u8,
     profile_collection: []const u8,
     like_collection: []const u8,
+    comment_collection: []const u8,
     indexed_at_us: i64,
 ) !verified.Snapshot {
     if (car_bytes.len > max_repo_bytes) return error.RepositoryTooLarge;
@@ -29,6 +31,7 @@ pub fn verify(
         zat.Nsid.parse(track_collection) == null or
         zat.Nsid.parse(profile_collection) == null or
         zat.Nsid.parse(like_collection) == null or
+        zat.Nsid.parse(comment_collection) == null or
         indexed_at_us < 0) return error.InvalidSnapshot;
 
     // The specialized Zat verifier proves signature, block hashes, MST layer
@@ -88,6 +91,7 @@ pub fn verify(
         .track_collection = track_collection,
         .profile_collection = profile_collection,
         .like_collection = like_collection,
+        .comment_collection = comment_collection,
         .proof = .{
             .commit_cid = commit_cid,
             .commit_rev = commit_rev,
@@ -104,11 +108,13 @@ pub fn verify(
         .track_collection = track_collection,
         .profile_collection = profile_collection,
         .like_collection = like_collection,
+        .comment_collection = comment_collection,
         .indexed_at_us = indexed_at_us,
         .list_changes = try collector.changes.toOwnedSlice(allocator),
         .track_changes = try collector.track_changes.toOwnedSlice(allocator),
         .profile_changes = try collector.profile_changes.toOwnedSlice(allocator),
         .like_changes = try collector.like_changes.toOwnedSlice(allocator),
+        .comment_changes = try collector.comment_changes.toOwnedSlice(allocator),
         .rejections = try collector.rejections.toOwnedSlice(allocator),
     };
     try snapshot.validate();
@@ -128,11 +134,13 @@ pub const Collector = struct {
     track_collection: []const u8,
     profile_collection: []const u8,
     like_collection: []const u8,
+    comment_collection: []const u8,
     proof: list_change.Proof,
     changes: std.ArrayList(list_change.Change) = .empty,
     track_changes: std.ArrayList(track_change.Change) = .empty,
     profile_changes: std.ArrayList(profile_change.Change) = .empty,
     like_changes: std.ArrayList(like_change.Change) = .empty,
+    comment_changes: std.ArrayList(comment_change.Change) = .empty,
     rejections: std.ArrayList(record_rejection.Rejection) = .empty,
 
     pub fn entry(context: *anyopaque, item: zat.mst.WalkEntry) anyerror!void {
@@ -145,7 +153,8 @@ pub const Collector = struct {
         if (!std.mem.eql(u8, collection, self.list_collection) and
             !std.mem.eql(u8, collection, self.track_collection) and
             !std.mem.eql(u8, collection, self.profile_collection) and
-            !std.mem.eql(u8, collection, self.like_collection)) return;
+            !std.mem.eql(u8, collection, self.like_collection) and
+            !std.mem.eql(u8, collection, self.comment_collection)) return;
         const rkey = item.key[separator + 1 ..];
         if (zat.Rkey.parse(rkey) == null) return error.InvalidRepoPath;
         const record_bytes = findInCars(self.cars, item.value.raw) orelse
@@ -193,6 +202,17 @@ pub const Collector = struct {
             ) catch |err| return self.rejectOperation(collection, rkey, item.value, err)) orelse
                 return error.InvalidProjectedRecord;
             try self.profile_changes.append(self.allocator, change);
+        } else if (std.mem.eql(u8, collection, self.comment_collection)) {
+            const change = (comment_change.fromVerifiedOperation(
+                self.allocator,
+                self.repo_did,
+                operation,
+                self.comment_collection,
+                self.track_collection,
+                self.proof,
+            ) catch |err| return self.rejectOperation(collection, rkey, item.value, err)) orelse
+                return error.InvalidProjectedRecord;
+            try self.comment_changes.append(self.allocator, change);
         } else {
             const change = (like_change.fromVerifiedOperation(
                 self.allocator,
@@ -256,12 +276,14 @@ test "complete repo verifier authenticates and extracts selected records" {
         "fm.plyr.dev.track",
         "fm.plyr.dev.actor.profile",
         "fm.plyr.dev.like",
+        "fm.plyr.dev.comment",
         42,
     );
     try std.testing.expectEqual(@as(usize, 1), snapshot.list_changes.len);
     try std.testing.expectEqual(@as(usize, 1), snapshot.track_changes.len);
     try std.testing.expectEqual(@as(usize, 1), snapshot.profile_changes.len);
     try std.testing.expectEqual(@as(usize, 1), snapshot.like_changes.len);
+    try std.testing.expectEqual(@as(usize, 1), snapshot.comment_changes.len);
     try std.testing.expectEqualStrings("Verified", snapshot.track_changes[0].upsert.title);
     try std.testing.expectEqualStrings("Verified artist", snapshot.profile_changes[0].upsert.bio.?);
     try std.testing.expectEqualStrings(fixture.did, snapshot.repo_did);
@@ -279,6 +301,7 @@ test "complete repo verifier authenticates and extracts selected records" {
             "fm.plyr.dev.track",
             "fm.plyr.dev.actor.profile",
             "fm.plyr.dev.like",
+            "fm.plyr.dev.comment",
             42,
         ),
     );
@@ -298,12 +321,14 @@ test "complete repo quarantines malformed selected records without losing valid 
         "fm.plyr.dev.track",
         "fm.plyr.dev.actor.profile",
         "fm.plyr.dev.like",
+        "fm.plyr.dev.comment",
         42,
     );
     try std.testing.expectEqual(@as(usize, 0), snapshot.list_changes.len);
     try std.testing.expectEqual(@as(usize, 1), snapshot.track_changes.len);
     try std.testing.expectEqual(@as(usize, 1), snapshot.profile_changes.len);
     try std.testing.expectEqual(@as(usize, 1), snapshot.like_changes.len);
+    try std.testing.expectEqual(@as(usize, 1), snapshot.comment_changes.len);
     try std.testing.expectEqual(@as(usize, 1), snapshot.rejections.len);
     try std.testing.expectEqual(
         record_rejection.Reason.invalid_schema,
@@ -386,11 +411,24 @@ pub fn buildFixture(
     } };
     const like_bytes = try zat.cbor.encodeAlloc(allocator, like_record);
     const like_cid = try zat.Cid.forDagCbor(allocator, like_bytes);
+    const comment_record: zat.cbor.Value = .{ .map = &.{
+        .{ .key = "$type", .value = .{ .text = "fm.plyr.dev.comment" } },
+        .{ .key = "subject", .value = .{ .map = &.{
+            .{ .key = "uri", .value = .{ .text = subject_uri } },
+            .{ .key = "cid", .value = .{ .text = try track_cid.toString(allocator) } },
+        } } },
+        .{ .key = "text", .value = .{ .text = "the sax here" } },
+        .{ .key = "timestampMs", .value = .{ .unsigned = 250_000 } },
+        .{ .key = "createdAt", .value = .{ .text = "2026-08-08T12:00:00Z" } },
+    } };
+    const comment_bytes = try zat.cbor.encodeAlloc(allocator, comment_record);
+    const comment_cid = try zat.Cid.forDagCbor(allocator, comment_bytes);
     var tree = zat.mst.Mst.init(allocator);
     try tree.put("fm.plyr.dev.list/3m123abc", record_cid);
     try tree.put("fm.plyr.dev.track/3m123abd", track_cid);
     try tree.put("fm.plyr.dev.actor.profile/self", profile_cid);
     try tree.put("fm.plyr.dev.like/3m123abe", like_cid);
+    try tree.put("fm.plyr.dev.comment/3m123abf", comment_cid);
     const root = try tree.rootCid();
     const signed = try zat.signCommit(allocator, .{
         .did = did,
@@ -405,6 +443,7 @@ pub fn buildFixture(
         try blocks.append(allocator, .{ .cid_raw = track_cid.raw, .data = track_bytes });
         try blocks.append(allocator, .{ .cid_raw = profile_cid.raw, .data = profile_bytes });
         try blocks.append(allocator, .{ .cid_raw = like_cid.raw, .data = like_bytes });
+        try blocks.append(allocator, .{ .cid_raw = comment_cid.raw, .data = comment_bytes });
     }
     return .{
         .car_bytes = try zat.car.writeAlloc(allocator, .{

@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowUp, ArrowDown } from '../icons';
 import { View } from 'react-native';
-import type { ListDetail } from '../api';
+import type { ListDetail } from '@plyr/next-core/api';
 import { useAppearance } from '../appearance';
 import { artistName, errorMessage, Heading, Status } from '../CatalogPieces';
 import { Action, Copy, row } from '../controls';
 import { PlayerControl } from '../PlayerControl';
 import { Text } from '../Text';
 import type { createPds } from '../pds';
-import { CollectionOrderConflict, CollectionOrderUnconfirmed, type CollectionRevision } from './collection-order';
+import { CollectionOrderConflict, CollectionOrderUnconfirmed, type CollectionRevision } from '@plyr/next-core/collections/collection-order';
 
 export function CollectionOrderEditor({ list, ordering, close, saved }: {
   list: ListDetail;

@@ -3,7 +3,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type R
 import { useMediaSession } from './media-session';
 import { PlaybackOverride, usePlayback } from './playback';
 import { useAppPreferences } from './preference-context';
-import { radioPosition, type RadioSnapshot, type RadioSong, type RadioStation } from './radio';
+import { radioPosition, type RadioSnapshot, type RadioSong, type RadioStation } from '@plyr/next-core/radio';
 import { usePlayerAccounting } from './use-player-accounting';
 import { useRadioFeed } from './use-radio-feed';
 

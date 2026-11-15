@@ -1,8 +1,8 @@
 import { useSyncExternalStore } from 'react';
-import { RadioFeed, type RadioFeedState } from './radio-feed';
-import { radioStations, readRadio, type RadioStation } from './radio';
+import { createRadioFeeds, type RadioFeedState } from '@plyr/next-core/radio-feed';
+import type { RadioStation } from '@plyr/next-core/radio';
 
-const feeds = new Map(radioStations.map(station => [station.slug, new RadioFeed(signal => readRadio(station, signal))]));
+const feeds = createRadioFeeds();
 const idle: RadioFeedState = Object.freeze({ snapshot: undefined, error: '' });
 const none = () => () => {};
 

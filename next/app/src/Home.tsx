@@ -1,10 +1,10 @@
 import { useAppearance } from './appearance';
 import { useCallback, useRef, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { HomeTrackRow } from './HomeTrackRow';
 import { HomeChart } from './HomeChart';
 import { HomeArtists } from './HomeArtists';
-import type { Track } from './api';
+import type { Track } from '@plyr/next-core/api';
 import { useAuth } from './auth';
 import { Heading, Status, type Play } from './CatalogPieces';
 import { Text } from './Text';
@@ -14,13 +14,10 @@ import { WaveLoading } from './WaveLoading';
 import { useAppPreferences } from './preference-context';
 import { useLatestFeed } from './use-latest-feed';
 import { HomeTagBar } from './HomeTagBar';
-import { DesktopHome, DESKTOP_HOME_WIDTH } from './DesktopHome';
 
 export function Home({ onPlay }: { onPlay: Play }) {
   const { preferences } = useAppPreferences();
-  const { width } = useWindowDimensions();
-  const Feed = width >= DESKTOP_HOME_WIDTH ? DesktopHome : HomeFeed;
-  return <Feed key={JSON.stringify(preferences.hiddenTags)} hiddenTags={preferences.hiddenTags} onPlay={onPlay} />;
+  return <HomeFeed key={JSON.stringify(preferences.hiddenTags)} hiddenTags={preferences.hiddenTags} onPlay={onPlay} />;
 }
 
 function HomeFeed({ onPlay, hiddenTags }: { onPlay: Play; hiddenTags: string[] }) {
@@ -40,7 +37,7 @@ function HomeFeed({ onPlay, hiddenTags }: { onPlay: Play; hiddenTags: string[] }
   const network = useNetworkArtists(did, ready);
   const header = <View style={styles.home} onLayout={event => setHeaderHeight(event.nativeEvent.layout.height)}>
     <HomeChart onPlay={onPlay} />
-    {(network.loading || network.artists.length > 0) && <HomeArtists artists={network.artists} loading={network.loading} />}
+    {(network.loading || network.artists.length > 0) && <HomeArtists artists={network.artists} loading={network.loading} onPlay={onPlay} />}
     <Status error={network.error} retry={network.retry} />
     <View style={styles.section}>
       <View style={styles.headingRow}>

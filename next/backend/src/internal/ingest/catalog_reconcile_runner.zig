@@ -17,11 +17,12 @@ pub fn run(
     track_collection: []const u8,
     profile_collection: []const u8,
     like_collection: []const u8,
+    comment_collection: []const u8,
     /// also discover every repo the relay saw write a plyr collection
     discovery_relay: ?[]const u8,
 ) !catalog.Report {
     var postgres_adapter: candidates.PostgresRepositoryCandidates = .{ .pool = pool };
-    const collections = [_][]const u8{ track_collection, list_collection, profile_collection, like_collection };
+    const collections = [_][]const u8{ track_collection, list_collection, profile_collection, like_collection, comment_collection };
     var relay_adapter: relay_candidates.RelayRepositoryCandidates = .{
         .io = io,
         .relay = discovery_relay orelse "",
@@ -40,6 +41,7 @@ pub fn run(
         track_collection,
         profile_collection,
         like_collection,
+        comment_collection,
     );
     defer repairs.deinit();
 

@@ -109,6 +109,8 @@ async function write(request, env, key, cid) {
 function objectHeaders(object) {
   const headers = new Headers(CORS);
   object.writeHttpMetadata(headers);
+  if (headers.get("content-type")?.toLowerCase() === "audio/x-flac")
+    headers.set("content-type", "audio/flac");
   headers.set("etag", object.httpEtag);
   headers.set("accept-ranges", "bytes");
   headers.set("cache-control", IMMUTABLE);

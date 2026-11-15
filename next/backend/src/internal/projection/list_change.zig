@@ -30,6 +30,7 @@ pub const Upsert = struct {
     rkey: []const u8,
     list_type: list_record.ListType,
     name: ?[]const u8,
+    cover_blob_cid: ?[]const u8 = null,
     created_at: []const u8,
     updated_at: ?[]const u8,
     members: []const Member,
@@ -117,6 +118,7 @@ pub fn fromVerifiedOperation(
         .rkey = op.rkey,
         .list_type = parsed.list_type,
         .name = parsed.name,
+        .cover_blob_cid = if (parsed.cover_blob) |blob| try blob.toString(allocator) else null,
         .created_at = parsed.created_at,
         .updated_at = parsed.updated_at,
         .members = members,
@@ -142,6 +144,7 @@ test "verified list upsert is atomic, ordered, and schema independent" {
     const track_cid = try zat.Cid.forDagCbor(a, "track");
     const record_cid = try zat.Cid.forDagCbor(a, "list");
     const commit_cid = try zat.Cid.forDagCbor(a, "commit");
+    const cover_cid = try zat.Cid.create(a, 1, zat.cbor.Codec.raw, zat.cbor.HashFn.sha2_256, "cover");
     const subject: zat.cbor.Value = .{ .map = &.{
         .{ .key = "uri", .value = .{ .text = "at://did:plc:artist/fm.plyr.dev.track/t" } },
         .{ .key = "cid", .value = .{ .text = try track_cid.toString(a) } },
@@ -152,6 +155,12 @@ test "verified list upsert is atomic, ordered, and schema independent" {
     const record: zat.cbor.Value = .{ .map = &.{
         .{ .key = "$type", .value = .{ .text = "fm.plyr.dev.list" } },
         .{ .key = "listType", .value = .{ .text = "album" } },
+        .{ .key = "imageBlob", .value = .{ .map = &.{
+            .{ .key = "$type", .value = .{ .text = "blob" } },
+            .{ .key = "ref", .value = .{ .cid = cover_cid } },
+            .{ .key = "mimeType", .value = .{ .text = "image/png" } },
+            .{ .key = "size", .value = .{ .unsigned = 5 } },
+        } } },
         .{ .key = "items", .value = .{ .array = &items } },
         .{ .key = "createdAt", .value = .{ .text = "2026-08-08T12:00:00Z" } },
     } };
@@ -171,6 +180,7 @@ test "verified list upsert is atomic, ordered, and schema independent" {
         .{ .commit_cid = commit_cid, .commit_rev = "3jqfcqzm3fo2j", .indexed_at_us = 42 },
     )).?.upsert;
 
+    try std.testing.expectEqualStrings(try cover_cid.toString(a), change.cover_blob_cid.?);
     try std.testing.expectEqualStrings(
         "at://did:plc:artist/fm.plyr.dev.list/3m123abc",
         change.record_uri,

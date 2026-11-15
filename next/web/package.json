@@ -1,0 +1,49 @@
+{
+  "name": "plyr-web-next",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check:account": "node scripts/check-account.cjs",
+    "check:jams": "node scripts/check-jams.cjs",
+    "check:creator": "node scripts/check-creator.cjs",
+    "check:collections": "node scripts/check-collections.cjs",
+    "check:browser": "node scripts/check-shell.cjs",
+    "check:player-transition": "node scripts/check-player-transition.cjs",
+    "check:player-presentation": "node scripts/check-player-presentation.cjs",
+    "check:artist-catalog": "node scripts/check-artist-catalog.cjs",
+    "check:atlas": "node scripts/check-atlas.cjs",
+    "check:performance": "node scripts/check-performance.cjs",
+    "check:radio": "node scripts/check-radio.cjs",
+    "check:upload": "node scripts/check-upload.cjs",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "check:private-audio": "node scripts/check-private-audio.cjs",
+    "check:private-audio-zds": "node scripts/check-private-audio-zds.cjs",
+    "check:outbox": "node scripts/check-play-outbox-storage.cjs"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-static": "^3.0.10",
+    "@sveltejs/kit": "^2.43.2",
+    "@sveltejs/vite-plugin-svelte": "^6.2.0",
+    "@types/node": "^22",
+    "playwright": "1.61.1",
+    "svelte": "^5.39.5",
+    "svelte-check": "^4.3.2",
+    "typescript": "~6.0.3",
+    "vite": "^7.1.7"
+  },
+  "dependencies": {
+    "@atcute/client": "5.1.2",
+    "@atproto/common-web": "file:../vendor/space-sdk/atproto-common-web-0.5.11.tgz",
+    "@atproto/crypto": "file:../vendor/space-sdk/atproto-crypto-0.5.4.tgz",
+    "@atproto/lex-data": "file:../vendor/space-sdk/atproto-lex-data-0.1.7.tgz",
+    "@atproto/lex-json": "file:../vendor/space-sdk/atproto-lex-json-0.1.6.tgz",
+    "@atproto/oauth-client-browser": "0.5.14",
+    "@atproto/space": "file:../vendor/space-sdk/atproto-space-0.0.1.tgz",
+    "@atproto/syntax": "file:../vendor/space-sdk/atproto-syntax-0.7.6.tgz",
+    "@plyr/next-core": "workspace:*"
+  }
+}

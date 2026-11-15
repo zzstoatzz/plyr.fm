@@ -1,0 +1,32 @@
+{
+  "name": "plyr-next-workspace",
+  "private": true,
+  "workspaces": [
+    "core",
+    "web",
+    "app"
+  ],
+  "devDependencies": {
+    "typescript": "~6.0.3",
+    "@plyr/next-core": "workspace:*"
+  },
+  "overrides": {
+    "@atproto/car": "0.0.0-spaces-alpha-20261029171913",
+    "@atproto/crypto": "file:vendor/space-sdk/atproto-crypto-0.5.4.tgz",
+    "@atproto/lex-cbor": "file:vendor/space-sdk/atproto-lex-cbor-0.1.6.tgz",
+    "@atproto/lex-data": "file:vendor/space-sdk/atproto-lex-data-0.1.7.tgz",
+    "@atproto/syntax": "file:vendor/space-sdk/atproto-syntax-0.7.6.tgz",
+    "@atproto/common": "file:vendor/space-sdk/atproto-common-0.8.2.tgz",
+    "@atproto/common-web": "file:vendor/space-sdk/atproto-common-web-0.5.11.tgz",
+    "@atproto/lex-json": "file:vendor/space-sdk/atproto-lex-json-0.1.6.tgz",
+    "@atproto/lex-schema": "file:vendor/space-sdk/atproto-lex-schema-0.2.7.tgz",
+    "@atproto/space": "file:vendor/space-sdk/atproto-space-0.0.1.tgz",
+    "@atproto/star": "file:vendor/space-sdk/atproto-star-0.0.1.tgz"
+  },
+  "patchedDependencies": {
+    "expo-audio@58.0.11": "patches/expo-audio+58.0.11.patch"
+  },
+  "scripts": {
+    "check:boundaries": "node scripts/check-boundaries.mjs"
+  }
+}

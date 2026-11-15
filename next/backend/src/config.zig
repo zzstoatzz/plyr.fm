@@ -50,6 +50,7 @@ pub const Config = struct {
     list_collection: []const u8,
     profile_collection: []const u8,
     like_collection: []const u8,
+    comment_collection: []const u8,
     cors_allowed_origins: []const u8,
     repair_did: ?[]const u8,
     /// Comma-separated jetstream hostnames, tried in order (zat stream first).
@@ -92,11 +93,17 @@ pub const Config = struct {
         const like_collection = getenv("LIKE_COLLECTION_NSID") orelse
             return error.LikeCollectionRequired;
         if (zat.Nsid.parse(like_collection) == null) return error.InvalidLikeCollection;
+        // comments share the like namespace (fm.plyr.like → fm.plyr.comment)
+        // unless set, so existing deployments need no new variable
+        const comment_collection = getenv("COMMENT_COLLECTION_NSID") orelse
+            try siblingCollection(&comment_collection_buffer, like_collection, "comment");
+        if (zat.Nsid.parse(comment_collection) == null) return error.InvalidCommentCollection;
         try validateDistinctCollections(.{
             track_collection,
             list_collection,
             profile_collection,
             like_collection,
+            comment_collection,
         });
         const index_mode = try IndexMode.parse(getenv("INDEX_MODE") orelse "required");
         // Fly gives every machine in an app the app's secrets, and a secret
@@ -155,6 +162,7 @@ pub const Config = struct {
             .list_collection = list_collection,
             .profile_collection = profile_collection,
             .like_collection = like_collection,
+            .comment_collection = comment_collection,
             .cors_allowed_origins = getenv("CORS_ALLOWED_ORIGINS") orelse "",
             .repair_did = repair_did,
             .discovery_relay = getenv("CATALOG_DISCOVERY_RELAY"),
@@ -237,12 +245,28 @@ fn validateDatabaseRole(value: []const u8) !void {
     }
 }
 
-fn validateDistinctCollections(collections: [4][]const u8) !void {
+/// Process-lifetime storage for a collection derived from another.
+var comment_collection_buffer: [317]u8 = undefined;
+
+/// The collection named `name` beside `collection`: fm.plyr.like → fm.plyr.comment.
+fn siblingCollection(buffer: []u8, collection: []const u8, name: []const u8) ![]const u8 {
+    const dot = std.mem.lastIndexOfScalar(u8, collection, '.') orelse return error.InvalidCommentCollection;
+    return std.fmt.bufPrint(buffer, "{s}.{s}", .{ collection[0..dot], name }) catch error.InvalidCommentCollection;
+}
+
+fn validateDistinctCollections(collections: [5][]const u8) !void {
     for (collections, 0..) |collection, index| {
         for (collections[0..index]) |prior| {
             if (std.mem.eql(u8, collection, prior)) return error.DuplicateCollection;
         }
     }
+}
+
+test "comments default to the like collection's namespace" {
+    var buffer: [317]u8 = undefined;
+    try std.testing.expectEqualStrings("fm.plyr.comment", try siblingCollection(&buffer, "fm.plyr.like", "comment"));
+    try std.testing.expectEqualStrings("fm.plyr.dev.comment", try siblingCollection(&buffer, "fm.plyr.dev.like", "comment"));
+    try std.testing.expectError(error.InvalidCommentCollection, siblingCollection(&buffer, "like", "comment"));
 }
 
 test "process roles are explicit" {
@@ -279,9 +303,9 @@ test "database role expectations use unquoted PostgreSQL identifiers" {
 }
 
 test "record collections are distinct routing keys" {
-    try validateDistinctCollections(.{ "a.b.track", "a.b.list", "a.b.profile", "a.b.like" });
+    try validateDistinctCollections(.{ "a.b.track", "a.b.list", "a.b.profile", "a.b.like", "a.b.comment" });
     try std.testing.expectError(
         error.DuplicateCollection,
-        validateDistinctCollections(.{ "a.b.track", "a.b.list", "a.b.profile", "a.b.track" }),
+        validateDistinctCollections(.{ "a.b.track", "a.b.list", "a.b.profile", "a.b.like", "a.b.track" }),
     );
 }

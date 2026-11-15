@@ -9,6 +9,7 @@ const list_change = @import("list_change.zig");
 const track_change = @import("track_change.zig");
 const profile_change = @import("profile_change.zig");
 const like_change = @import("like_change.zig");
+const comment_change = @import("comment_change.zig");
 
 pub const Reason = enum {
     invalid_dag_cbor,
@@ -73,6 +74,16 @@ pub const Rejection = struct {
     }
 
     pub fn likeDelete(self: Rejection) like_change.Change {
+        return .{ .delete = .{
+            .record_uri = self.record_uri,
+            .owner_did = self.owner_did,
+            .collection = self.collection,
+            .rkey = self.rkey,
+            .proof = self.proof,
+        } };
+    }
+
+    pub fn commentDelete(self: Rejection) comment_change.Change {
         return .{ .delete = .{
             .record_uri = self.record_uri,
             .owner_did = self.owner_did,

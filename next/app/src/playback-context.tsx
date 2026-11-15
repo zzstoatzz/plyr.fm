@@ -1,9 +1,9 @@
-import { createContext, useContext, useRef, type ReactNode } from 'react';
+import { createContext, useContext, type ReactNode } from 'react';
 import type { useAudioPlayerStatus } from 'expo-audio';
-import type { Track } from './api';
-import type { JamIntent } from './jam-connection';
-import type { RadioStation } from './radio';
-import type { ActiveJam } from './use-jam-playback';
+import type { Track } from '@plyr/next-core/api';
+import type { JamIntent } from '@plyr/next-core/jam-connection';
+import type { RadioStation } from '@plyr/next-core/radio';
+import type { ActiveJam } from '@plyr/next-core/jam-playback';
 
 export interface Playback {
   /** Set while a radio station is the output: there is nothing to seek, skip or queue. */
@@ -17,7 +17,7 @@ export interface Playback {
   jamCommand(intent: JamIntent): boolean;
   leaveJam(restore?: boolean): void;
   play(track: Track, collection?: Track[], label?: string): void;
-  tail?: import('./queue-state').QueueTail;
+  tail?: import('@plyr/next-core/queue-state').QueueTail;
   outputElsewhere: boolean;
   deviceQueue: boolean;
   queueError?: string;
@@ -48,13 +48,6 @@ export interface Playback {
 }
 
 export const PlaybackContext = createContext<Playback | null>(null);
-
-export function PlaybackFreeze({ frozen, children }: { frozen: boolean; children: ReactNode }) {
-  const live = useContext(PlaybackContext);
-  const held = useRef(live);
-  if (!frozen) held.current = live;
-  return <PlaybackContext.Provider value={frozen ? held.current : live}>{children}</PlaybackContext.Provider>;
-}
 
 export function PlaybackOverride({ value, children }: { value: Playback; children: ReactNode }) {
   return <PlaybackContext.Provider value={value}>{children}</PlaybackContext.Provider>;

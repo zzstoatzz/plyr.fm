@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
-import type { ListDetail, Track } from '../api';
+import type { ListDetail, Track } from '@plyr/next-core/api';
 import { useAuth } from '../auth';
 import { createPds } from '../pds';
 import { Action, Copy, row } from '../controls';
 import { errorMessage, Heading, Status } from '../CatalogPieces';
 import { resolveAlbumTracks } from './album-tracks';
 import { AlbumTracks, OwnAlbumTracks } from './AlbumTracks';
-import type { AlbumEntry } from './album-membership';
-import { CollectionOrderConflict, CollectionOrderUnconfirmed, type CollectionRevision } from './collection-order';
+import type { AlbumEntry } from '@plyr/next-core/collections/album-membership';
+import { CollectionOrderConflict, CollectionOrderUnconfirmed, type CollectionRevision } from '@plyr/next-core/collections/collection-order';
 
 export function AlbumEditor({ list, close, saved }: { list: ListDetail; close: () => void; saved: (revision: CollectionRevision, tracks: Track[]) => void }) {
   const { did, rpc } = useAuth();

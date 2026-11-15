@@ -33,6 +33,7 @@ pub const PostgresComposedTrackStore = struct {
         return .{
             .context = self,
             .get_by_uri_fn = getByUriOpaque,
+            .get_detail_fn = getDetailOpaque,
             .list_public_fn = listPublicOpaque,
             .ready_fn = readyOpaque,
             .tags_fn = tagsOpaque,
@@ -170,13 +171,18 @@ pub const PostgresComposedTrackStore = struct {
     }
 
     fn getByUriOpaque(context: *anyopaque, allocator: std.mem.Allocator, at_uri: []const u8) TrackStore.Error!?track.Track {
-        return postgres_read.run(TrackStore.Error!?track.Track, getByUriOnce, .{ context, allocator, at_uri });
+        return postgres_read.run(TrackStore.Error!?track.Track, getByUriOnce, .{ context, allocator, at_uri, false });
+    }
+
+    fn getDetailOpaque(context: *anyopaque, allocator: std.mem.Allocator, at_uri: []const u8) TrackStore.Error!?track.Track {
+        return postgres_read.run(TrackStore.Error!?track.Track, getByUriOnce, .{ context, allocator, at_uri, true });
     }
 
     fn getByUriOnce(
         context: *anyopaque,
         allocator: std.mem.Allocator,
         at_uri: []const u8,
+        include_tags: bool,
     ) postgres_read.Error!?track.Track {
         const self: *PostgresComposedTrackStore = @ptrCast(@alignCast(context));
         const conn = self.pool.acquire() catch |err| {
@@ -184,11 +190,11 @@ pub const PostgresComposedTrackStore = struct {
             return error.IndexUnavailable;
         };
         defer self.pool.release(conn);
-        var query_row = conn.rowOpts(detail_query, .{
+        var query_row = conn.rowOpts(if (include_tags) detail_query else lookup_query, .{
             at_uri,
             self.profile_collection,
             self.like_collection,
-        }, .{ .cache_name = "plyr_detail_query" }) catch |err| {
+        }, .{ .cache_name = if (include_tags) "plyr_detail_query" else "plyr_track_lookup" }) catch |err| {
             if (conn.err) |pg_err|
                 std.log.err("composed track lookup failed: {}: {s}", .{ err, pg_err.message })
             else
@@ -197,7 +203,7 @@ pub const PostgresComposedTrackStore = struct {
         } orelse return null;
         var active = true;
         defer if (active) forceReleaseQueryRow(&query_row);
-        const value = decodeRow(allocator, &query_row.row) catch |err| switch (err) {
+        const value = decodeLookup(allocator, &query_row.row, include_tags) catch |err| switch (err) {
             error.OutOfMemory => return error.OutOfMemory,
             else => {
                 std.log.err("composed track decode failed: {}", .{err});
@@ -306,6 +312,12 @@ pub const PostgresComposedTrackStore = struct {
         return items.toOwnedSlice(allocator) catch return error.OutOfMemory;
     }
 };
+
+fn decodeLookup(allocator: std.mem.Allocator, row: *pg.Row, include_tags: bool) !track.Track {
+    var value = try decodeRow(allocator, row);
+    if (include_tags) value.metadata.tags = try parseLabels(allocator, try row.get([]const u8, projected_column_count));
+    return value;
+}
 
 fn logQueryError(conn: *pg.Conn, message: []const u8, err: anyerror) void {
     if (conn.err) |pg_err|
@@ -619,12 +631,14 @@ const common_policy =
     \\  )
 ;
 
-const detail_query = joined_projection ++ "\n" ++
+const lookup_where =
     \\WHERE v.record_uri = $1
     \\  AND COALESCE(pol.visibility, 'public') <> 'private'
 ++ common_policy ++ "\n" ++
     \\LIMIT 1
 ;
+const lookup_query = joined_projection ++ "\n" ++ lookup_where;
+const detail_query = "SELECT\n" ++ projected_columns ++ ",\n" ++ track_tag_sql.detail_tags ++ "\n" ++ projected_from ++ "\n" ++ lookup_where;
 
 const resolve_query = joined_projection ++ "\n" ++
     \\WHERE v.record_uri = ANY($1::text[])
@@ -792,6 +806,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     try projected_profiles.createTestTable(pool);
     try projected_availability.createTestTable(pool);
     try projected_lists.createTestTables(pool);
+    _ = try pool.exec(@embedFile("migration_0043_legacy_album_covers"), .{});
     try projected_likes.createTestTable(pool);
     try @import("../projection/like_counts.zig").applyTestMigration(pool);
     _ = try pool.exec(
@@ -1117,6 +1132,13 @@ test "composed PostgreSQL reads use verified records and authoritative account s
         .like_collection = "fm.plyr.dev.like",
     };
     const list_store = verified_list_implementation.store();
+    const legacy_cover_url = "https://images.plyr.fm/images/legacy-cover.png";
+    _ = try pool.exec("INSERT INTO plyr_index.legacy_album_covers VALUES ($1, $2)", .{
+        album_list_uri, legacy_cover_url,
+    });
+    const cover_cid = try zat.Cid.create(a, 1, zat.cbor.Codec.raw, zat.cbor.HashFn.sha2_256, "album cover");
+    const cover_cid_text = try cover_cid.toString(a);
+    _ = try pool.exec("UPDATE plyr_index.list_records SET cover_blob_cid = $1 WHERE record_uri = $2", .{ cover_cid_text, album_list_uri });
     const playlist_page = try list_store.listByOwner(a, .{
         .collection = "fm.plyr.dev.list",
         .profile_collection = "fm.plyr.dev.actor.profile",
@@ -1142,6 +1164,9 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     try std.testing.expectEqual(verified_list.Kind.album, album_page[0].value.object);
     try std.testing.expectEqualStrings(album_list_uri, album_page[0].value.record.uri);
     try std.testing.expectEqualStrings("Verified Album", album_page[0].value.metadata.name.?);
+    try std.testing.expectEqualStrings(cover_cid_text, album_page[0].value.metadata.cover_blob_cid.?);
+    try std.testing.expectEqualStrings(legacy_cover_url, album_page[0].value.media.artwork.?.url);
+    try std.testing.expectEqual(track.Source.legacy_projection, album_page[0].value.media.artwork.?.source);
     try std.testing.expectEqual(@as(usize, 1), album_page[0].value.metrics.member_count);
     try std.testing.expectEqual(@as(usize, 1), album_page[0].value.metrics.available_count);
     try std.testing.expectEqual(track.Source.verified_repo, album_page[0].value.sources.record);
@@ -1167,6 +1192,9 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     })).?;
     try std.testing.expectEqual(@import("../domain/verified_list.zig").Kind.album, album_detail.object);
     try std.testing.expect(std.mem.startsWith(u8, album_detail.id, "alb_"));
+    try std.testing.expectEqualStrings(cover_cid_text, album_detail.metadata.cover_blob_cid.?);
+    try std.testing.expectEqualStrings(legacy_cover_url, album_detail.media.artwork.?.url);
+    try std.testing.expectEqual(@as(?[]const u8, null), playlist_detail.metadata.cover_blob_cid);
     try std.testing.expectEqualStrings("Verified Title", album_detail.members[0].track.?.metadata.title);
 
     _ = try pool.exec(
@@ -1403,6 +1431,14 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     try std.testing.expectEqual(@as(i64, 2), inherited[0].track_count);
     try std.testing.expectEqual(@as(i64, 1), inherited[0].sources.verified_repo);
     try std.testing.expectEqual(@as(i64, 1), inherited[0].sources.legacy_plyr);
+    try std.testing.expect((try implementation.store().getByUri(a, record_uri)).?.metadata.tags == null);
+    const authored_detail = (try implementation.store().getDetail(a, record_uri)).?.metadata.tags.?;
+    try std.testing.expectEqual(@as(usize, 1), authored_detail.len);
+    try std.testing.expectEqualStrings("drone", authored_detail[0]);
+    const inherited_detail = (try implementation.store().getDetail(a, pds_only_uri)).?.metadata.tags.?;
+    try std.testing.expectEqual(@as(usize, 2), inherited_detail.len);
+    try std.testing.expectEqualStrings("drone", inherited_detail[0]);
+    try std.testing.expectEqualStrings("legacy-only", inherited_detail[1]);
     const legacy_page = try implementation.store().listPublic(a, .{
         .collection = "fm.plyr.dev.track",
         .scope = .discovery,
@@ -1421,6 +1457,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     });
     try std.testing.expectEqual(@as(usize, 2), overlap.len);
     _ = try pool.exec("UPDATE plyr_index.track_tag_records SET tags_present=true,tags='{}' WHERE record_uri=$1", .{pds_only_uri});
+    try std.testing.expectEqual(@as(usize, 0), (try implementation.store().getDetail(a, pds_only_uri)).?.metadata.tags.?.len);
     try std.testing.expectEqual(@as(usize, 0), (try implementation.store().listPublic(a, .{
         .collection = "fm.plyr.dev.track",
         .scope = .discovery,
@@ -1430,6 +1467,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     })).len);
     _ = try pool.exec("UPDATE plyr_index.track_tag_records SET tags_present=false WHERE record_uri=$1", .{pds_only_uri});
     _ = try pool.exec("UPDATE plyr_index.legacy_track_tags SET observed_record_cid=$2 WHERE record_uri=$1", .{ pds_only_uri, stale_subject_cid });
+    try std.testing.expectEqual(@as(usize, 0), (try implementation.store().getDetail(a, pds_only_uri)).?.metadata.tags.?.len);
     try std.testing.expectEqual(@as(usize, 0), (try implementation.store().listPublic(a, .{
         .collection = "fm.plyr.dev.track",
         .scope = .discovery,

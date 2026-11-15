@@ -1,5 +1,5 @@
-import type { Artist, Playback, Track } from '../api.ts';
-import { readDownloadManifest, serviceMediaUrl, type DownloadManifest } from './manifest.ts';
+import type { Artist, Playback, Track } from '@plyr/next-core/api';
+import { readDownloadManifest, serviceMediaUrl, type DownloadManifest } from '@plyr/next-core/downloads/manifest';
 
 export const MAX_BUFFERED_DOWNLOAD_BYTES = 104_857_600;
 export type DownloadAdmission = { guard(): void; begin(): void };

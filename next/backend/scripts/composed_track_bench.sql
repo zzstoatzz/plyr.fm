@@ -123,7 +123,12 @@ CREATE TABLE plyr_index.list_records (
     deleted boolean NOT NULL,
     commit_cid text NOT NULL,
     commit_rev text NOT NULL,
-    indexed_at_us bigint NOT NULL
+    indexed_at_us bigint NOT NULL,
+    cover_blob_cid text
+);
+CREATE TABLE plyr_index.legacy_album_covers (
+    record_uri text PRIMARY KEY,
+    cover_url text NOT NULL
 );
 CREATE TABLE plyr_index.list_members (
     list_uri text NOT NULL,

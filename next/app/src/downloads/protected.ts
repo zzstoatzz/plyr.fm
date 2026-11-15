@@ -1,4 +1,4 @@
-import type { Track } from '../api';
+import type { Track } from '@plyr/next-core/api';
 import type { Auth } from '../auth-state';
 import { resolveGatedAudio } from '../gated-audio-shared';
 import { protectedTransport } from './protected-transport';

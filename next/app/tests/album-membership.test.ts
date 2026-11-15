@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { albumMembership, albumName } from '../src/collections/album-membership.ts';
-import { collectionRecord } from '../src/collections/collection-order.ts';
+import { albumMembership, albumName } from '@plyr/next-core/collections/album-membership';
+import { collectionRecord } from '@plyr/next-core/collections/collection-order';
 
 test('album edits remove exact occurrences and preserve retained unknown fields', () => {
   const items = [

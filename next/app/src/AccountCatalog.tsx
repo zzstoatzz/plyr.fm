@@ -1,16 +1,15 @@
-import { trackArtwork } from './artwork';
+import { trackArtwork } from '@plyr/next-core/artwork';
 import { X, ListPlus, MusicNote as Music2, ArrowsClockwise as RefreshCw } from './icons';
 import { PlayerControl } from './PlayerControl';
 import { AccountSection } from './AccountPieces';
 import { ActionRow } from './ActionRow';
 import { WaveLoading } from './WaveLoading';
-import { DESKTOP_HOME_WIDTH } from './DesktopHome';
-import { DesktopTrackRow } from './DesktopTrackRow';
 import { ListCards } from './ListCards';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
-import { api, playlistIdFromUri, type AwaitStatus, type ListDetail, type Track } from './api';
+import { api } from './api-client';
+import { playlistIdFromUri, type AwaitStatus, type ListDetail, type Track } from '@plyr/next-core/api';
 import { useAuth } from './auth';
 import { getAuth } from './auth-state';
 import {
@@ -23,7 +22,7 @@ import { CreateRecovery, EarlierCreates, useCreateRecovery } from './publishing/
 import { AlbumEditor } from './collections/AlbumEditor';
 import { CollectionOrderEditor } from './collections/CollectionOrderEditor';
 import { AccessSheet } from './access/AccessSheet';
-import type { CollectionRevision } from './collections/collection-order';
+import type { CollectionRevision } from '@plyr/next-core/collections/collection-order';
 
 function usePds() {
   const { did, rpc } = useAuth();
@@ -76,7 +75,6 @@ export function Library({ likesOnly, onPlay }: { likesOnly: boolean; onPlay: Pla
 
 function AccountLibrary({ did, likesOnly, onPlay }: { did: string; likesOnly: boolean; onPlay: Play }) {
   const auth = useAuth();
-  const wide = useWindowDimensions().width >= DESKTOP_HOME_WIDTH;
   const pds = usePds();
   const recovery = useCreateRecovery(auth, 'playlist');
   const router = useRouter();
@@ -84,7 +82,7 @@ function AccountLibrary({ did, likesOnly, onPlay }: { did: string; likesOnly: bo
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState<string>();
   const mutation = useMutation();
-  const loadLikes = useCallback((cursor?: string) => api.actorLikes(did, { limit: likesOnly ? 30 : wide ? 10 : 5, cursor }), [did, likesOnly, wide]);
+  const loadLikes = useCallback((cursor?: string) => api.actorLikes(did, { limit: likesOnly ? 30 : 5, cursor }), [did, likesOnly]);
   const loadLists = useCallback((cursor?: string) => likesOnly
     ? Promise.resolve({ object: 'list' as const, data: [], has_more: false })
     : api.playlists({ owner_did: did, limit: 30, cursor }), [did, likesOnly]);
@@ -117,8 +115,7 @@ function AccountLibrary({ did, likesOnly, onPlay }: { did: string; likesOnly: bo
     });
   }
   const likedTracks = <>
-    {wide ? <View>{likes.data.map(track => <DesktopTrackRow key={track.id} track={track} tracks={likes.data} onPlay={onPlay} returnTo={likesOnly ? '/liked' : '/library'} />)}</View>
-      : <TrackRows tracks={likes.data} onPlay={onPlay} />}
+    <TrackRows tracks={likes.data} onPlay={onPlay} />
     <Status loading={likes.loading} error={likes.error} retry={likes.more} empty={!likes.data.length ? 'no liked tracks yet.' : undefined} />
     {likesOnly && likes.cursor && !likes.loading && !likes.error && <Button label="More liked tracks" onPress={likes.more} />}
   </>;
@@ -128,7 +125,7 @@ function AccountLibrary({ did, likesOnly, onPlay }: { did: string; likesOnly: bo
     <InlineLink standalone href="/liked">see all liked tracks</InlineLink>
   </AccountSection>;
   const playlists = <AccountSection title="your playlists">
-    {wide ? <ListCards lists={lists.data} includeEmpty /> : <ListRows lists={lists.data} includeEmpty />}
+    <ListRows lists={lists.data} includeEmpty />
     <Status loading={lists.loading} error={lists.error} retry={lists.more} empty={!lists.data.length ? 'no playlists yet. make one for your next listen.' : undefined} />
     {lists.cursor && !lists.loading && !lists.error && <Button label="More playlists" onPress={lists.more} />}
   </AccountSection>;
@@ -143,7 +140,7 @@ function AccountLibrary({ did, likesOnly, onPlay }: { did: string; likesOnly: bo
       <Status empty={mutation.message} />
       {created && <InlineLink standalone href={{ pathname: '/playlist/[id]', params: { id: playlistIdFromUri(created) } }}>open created playlist</InlineLink>}
     </>}
-    {wide ? <>{playlists}{liked}</> : <>{liked}{playlists}</>}
+    {liked}{playlists}
     {creating && <Sheet title="new playlist" close={() => { if (!mutation.busy) setCreating(false); }}>
       <Field label="Playlist name" value={name} onChangeText={setName} maxLength={64} editable={!mutation.busy} autoFocus />
       <Status loading={mutation.busy} error={mutation.message} />
