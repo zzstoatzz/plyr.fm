@@ -1,5 +1,5 @@
 import type { Track } from './api.ts';
-import { JamConnection, jamPosition, type JamConnectionOptions, type JamIntent, type JamPhase, type JamState, type JamTrack } from './jam-connection.ts';
+import { JamConnection, jamPosition, type JamConnectionOptions, type JamIntent, type JamPhase, type JamQueueEdit, type JamState, type JamTrack } from './jam-connection.ts';
 
 export interface JamPlaybackTarget {
   queue: Track[];
@@ -268,10 +268,9 @@ export function createJamPlayback(options: JamPlaybackOptions) {
     return true;
   }
 
-  function editQueue(edit: (queue: JamTrack[], index: number) => { queue: JamTrack[]; index: number }) {
+  function editQueue(edit: JamQueueEdit) {
     if (!active) return false;
-    const room = session?.state;
-    if (room) command({ action: 'replaceQueue', ...edit(room.queue.slice(), room.index) });
+    if (session?.state) session.editQueue(edit);
     else update({ error: 'waiting for the jam to connect' });
     return true;
   }

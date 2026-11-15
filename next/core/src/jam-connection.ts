@@ -35,6 +35,7 @@ export type JamIntent =
   | { action: 'seek'; positionMs: number }
   | { action: 'replaceQueue'; queue: JamTrack[]; index: number; playing?: boolean }
   | { action: 'selectTrack'; index: number; playing?: boolean };
+export type JamQueueEdit = (queue: JamTrack[], index: number) => { queue: JamTrack[]; index: number };
 
 export type PersonalQueueIntent = DurableQueueEdit
   | { action: 'playContext'; queue: (JamTrack & { key: string })[]; index: number; label?: string; playing: boolean; positionMs?: number }
@@ -139,6 +140,7 @@ export class JamConnection {
   private commandTimer: ReturnType<typeof setTimeout> | undefined;
   private inFlight: Pending | undefined;
   private pending: Pending[] = [];
+  private readonly queueEdits = new WeakMap<Pending, JamQueueEdit>();
   private serial = 0;
   private lastMessageAt = 0;
   private readonly readTime: () => number;
@@ -237,10 +239,21 @@ export class JamConnection {
   }
 
   command(intent: PlaybackIntent, expected?: Pick<JamState, 'epoch' | 'revision' | 'occurrence'>): boolean {
+    return this.submit(intent, expected);
+  }
+
+  editQueue(edit: JamQueueEdit): boolean {
+    const state = this.state;
+    if (!state || state.personal) return false;
+    return this.submit({ action: 'replaceQueue', queue: state.queue, index: state.index }, state, edit);
+  }
+
+  private submit(intent: PlaybackIntent, expected?: Pick<JamState, 'epoch' | 'revision' | 'occurrence'>, edit?: JamQueueEdit): boolean {
     if (this.awaitingSnapshot || !this.state || this.socket?.readyState !== 1 || this.closed) { this.options.onError('the jam is reconnecting'); return false; }
     const base = expected ?? this.state;
     const command = { ...intent, id: `${Math.floor(this.now()).toString(36)}-${++this.serial}-${Math.random().toString(36).slice(2, 10)}`, epoch: base.epoch,
       expectedRevision: base.revision, occurrence: base.occurrence, ...(this.state.personal ? { expectedOutput: this.state.personal.output?.connectionId ?? null } : {}) };
+    if (edit) this.queueEdits.set(command, edit);
     return this.enqueuePrepared(command);
   }
 
@@ -277,6 +290,8 @@ export class JamConnection {
     if (!this.state?.personal && (next.epoch !== this.state?.epoch || next.occurrence !== this.state?.occurrence)) { this.flush(); return; }
     const duplicateIntent = next.expectedRevision < this.state!.revision && (next.action === 'play' && this.state!.playing || next.action === 'pause' && !this.state!.playing);
     if (!this.state?.personal && next.expectedRevision !== this.state?.revision && !duplicateIntent) { this.pending = []; this.options.onError('the jam changed. try that action again.'); return; }
+    const edit = this.queueEdits.get(next);
+    if (edit && this.state && next.action === 'replaceQueue') Object.assign(next, edit(this.state.queue.slice(), this.state.index));
     this.inFlight = next;
     this.socket.send(JSON.stringify(next));
     this.commandTimer = setTimeout(() => this.socket?.close(), 8_000);
