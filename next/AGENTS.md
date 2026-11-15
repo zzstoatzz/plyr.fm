@@ -61,3 +61,14 @@ any new feature keeps its data.
   Next API instead of broadening deployed CORS.
 - An open tab keeps the build it loaded. Reload after a deploy before judging
   a fix.
+
+## asking claude for advice
+
+- Stuck on a design call, or want a second read before a big change? Open an
+  issue with the `ask-claude` label. Put the question first, then the options
+  you see, the files/PRs involved, and what you lean toward.
+- Claude checks hourly and replies on the issue. Ask a follow-up as a new
+  comment on the same issue and it gets answered on the next check. Close the
+  issue yourself when you're done.
+- Anything that needs nate (product direction, lexicons, prod) gets routed to
+  him; otherwise just proceed on the advice.
