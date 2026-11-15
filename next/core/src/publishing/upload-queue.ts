@@ -42,7 +42,9 @@ export function createUploadQueue<Rpc extends RepoRpc>({
     const finished = jobs.filter(job => job.phase === 'done' || (job.phase === 'failed' && !job.input));
     const stale = new Set(finished.slice(0, Math.max(0, finished.length - KEEP_FINISHED)));
     if (stale.size) jobs = jobs.filter(job => !stale.has(job));
-    snapshot = jobs.map(({ id, owner, title, phase, progress, uri, error }) => ({ id, owner, title, phase, progress, uri, error }));
+    snapshot = jobs.map(({ id, owner, title, phase, progress, uri, error, draft, operation }) => ({
+      id, draftId: draft?.id ?? operation?.draftId, owner, title, phase, progress, uri, error,
+    }));
     for (const listener of listeners) listener();
   }
 
@@ -170,7 +172,7 @@ export function createUploadQueue<Rpc extends RepoRpc>({
     const ready = { ...input, duration };
     const route = uploadRoute(input.file, duration);
     if (route.kind === 'service' && !auth.uploadStorage) throw new Error('sign in again to allow plyr storage');
-    const reservation = await pds.reserveCreate('track').catch(() => { throw new Error('finish the earlier upload first'); });
+    const reservation = await pds.reserveCreate('track', draft.reservedRkey).catch(() => { throw new Error('finish the earlier upload first'); });
     session(job);
     patch(job, { phase: 'uploading', rkey: reservation.rkey });
     if (route.kind === 'pds') return runPds(job, ready, reservation, draft);
@@ -231,11 +233,12 @@ export function createUploadQueue<Rpc extends RepoRpc>({
   }
 
   return {
-    async add(input: NewTrack) {
+    async add(input: NewTrack, planned?: { owner: Did; id: string; reservedRkey: string }) {
       const owner = getAuth().did;
       if (!owner) throw new Error('sign in first.');
+      if (planned && planned.owner !== owner) throw new Error('sign in to the account that started it');
       uploadRoute(input.file);
-      const draft = queuedUploadDraft(input, owner, randomUUID());
+      const draft = queuedUploadDraft(input, owner, planned?.id ?? randomUUID(), planned?.reservedRkey);
       await queuedDrafts.put(draft);
       if (getAuth().did === owner) enqueueDraft(draft, input);
     },

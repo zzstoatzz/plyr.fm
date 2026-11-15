@@ -7,7 +7,7 @@ import type { RepoRpc } from '../src/publishing/repo-rpc.ts';
 import type { CreateOperation } from '../src/publishing/create-operation.ts';
 import { UPLOAD_PART_BYTES, type UploadOperation, type UploadStatus } from '../src/publishing/upload-model.ts';
 import { createUploadQueue } from '../src/publishing/upload-queue.ts';
-import type { QueuedUploadDraft } from '../src/publishing/queued-upload-draft.ts';
+import { queuedUploadKey, readQueuedUploadDraft, type QueuedUploadDraft } from '../src/publishing/queued-upload-draft.ts';
 import type { UploadTransport } from '../src/publishing/upload-transport.ts';
 
 const owner = 'did:plc:fixture';
@@ -22,8 +22,8 @@ const operation: UploadOperation = {
 
 function fixture({ statusGate, reserve = async () => record, beforeSaveTransfer, beforeLoadTransfers, start }: {
   statusGate?: Promise<void>;
-  reserve?: () => Promise<typeof record>;
-  beforeSaveTransfer?: () => Promise<void>;
+  reserve?: (kind: 'track', rkey?: string) => Promise<typeof record>;
+  beforeSaveTransfer?: (operation: UploadOperation) => Promise<void>;
   beforeLoadTransfers?: () => void;
   start?: () => Promise<UploadStatus>;
 } = {}) {
@@ -57,7 +57,7 @@ function fixture({ statusGate, reserve = async () => record, beforeSaveTransfer,
     sendParts: async () => { throw new Error('not used'); },
     uploadStorage: {
       load: async () => { beforeLoadTransfers?.(); return saved; },
-      put: async value => { await beforeSaveTransfer?.(); saved = [value]; },
+      put: async value => { await beforeSaveTransfer?.(value); saved = [value]; },
       delete: async () => { saved = []; },
     },
     queuedDrafts: {
@@ -214,4 +214,49 @@ test('manual publication honors auto-tag after the waiting row has been set asid
   assert.equal(f.tags(), 0);
   f.model.dismissRecovery(tagged, 'published');
   assert.equal(f.tags(), 1);
+});
+
+test('planned uploads keep their record address across the draft and transfer handoff', async () => {
+  const save = Promise.withResolvers<UploadOperation>();
+  const release = Promise.withResolvers<void>();
+  const planned = { owner, id: 'slot-two', reservedRkey: '3222222222223' } as const;
+  const expectedUri = `at://${owner}/${collection}/${planned.reservedRkey}`;
+  const f = fixture({
+    reserve: async (kind, rkey) => {
+      assert.equal(kind, 'track');
+      assert.equal(rkey, planned.reservedRkey);
+      return { ...record, rkey, uri: expectedUri };
+    },
+    beforeSaveTransfer: transfer => { save.resolve(transfer); return release.promise; },
+  });
+  f.confirm();
+  const file = { name: 'fixture.wav', type: 'audio/wav', size: 1, arrayBuffer: async () => new ArrayBuffer(1) };
+  const input = { file, artist: 'fixture', title: 'Take', album: 'Sessions' };
+  await assert.rejects(f.model.add(input, { ...planned, owner: 'did:plc:other' }), /sign in to the account that started it/);
+  assert.equal(f.drafts.size, 0);
+  await f.model.add(input, planned);
+  const transfer = await save.promise;
+  try {
+    const draft = f.drafts.get(planned.id);
+    assert.ok(draft);
+    assert.equal(readQueuedUploadDraft(draft, owner, queuedUploadKey(draft)).reservedRkey, planned.reservedRkey);
+    assert.equal(transfer.uri, expectedUri);
+    assert.equal(transfer.draftId, planned.id);
+    assert.equal(f.model.snapshot()[0].draftId, planned.id);
+  } finally { release.resolve(); }
+  await setImmediate();
+  assert.equal(f.model.snapshot()[0].uri, expectedUri);
+});
+
+test('resuming a saved service upload retains the original draft identity', async () => {
+  const f = fixture();
+  f.confirm();
+  f.seed({ ...operation, draftId: 'slot-two' });
+  await f.model.resume(owner);
+  await setImmediate();
+  const job = f.model.snapshot().find(entry => entry.phase === 'done');
+  assert.ok(job);
+  assert.notEqual(job.id, 'slot-two');
+  assert.equal(job.draftId, 'slot-two');
+  assert.equal(job.uri, uri);
 });
