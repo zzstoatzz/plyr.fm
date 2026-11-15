@@ -33,6 +33,10 @@
 [data-accent='#66cd9d'] { --palette-accent: light-dark(#166549, #66cd9d); }
 [data-accent='#f894b8'] { --palette-accent: light-dark(#9c3156, #f894b8); }
 
+@media (max-width: 720px) and (pointer: coarse) {
+	html:has(#main) { scrollbar-width: none; }
+}
+
 * { box-sizing: border-box; }
 body { margin: 0; }
 a { color: inherit; text-decoration: none; }
