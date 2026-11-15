@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { auth, logout } from '$lib/auth';
 
 	let account = $state.raw(auth.getAuth());
@@ -27,4 +28,5 @@
 	{:else if account.ready}
 		<p class="state"><a href="/login?return_to=%2Fsettings">sign in</a> to see your account.</p>
 	{/if}
+	<a class="text-button" href={resolve('/(app)/stats')}>stats</a>
 </section>
