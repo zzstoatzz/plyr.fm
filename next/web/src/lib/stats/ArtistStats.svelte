@@ -53,7 +53,7 @@
 	{/if}
 	<h2 id="artist-stats-title">artist stats</h2>
 	<label for="stat-artist">find an artist</label>
-	<input id="stat-artist" type="search" bind:value={query} placeholder="artist name or @handle" aria-describedby="artist-search-help" autocomplete="off" maxlength="160" />
+	<input id="stat-artist" type="search" bind:value={query} placeholder="artist name or @handle" aria-describedby="artist-search-help" autocomplete="off" maxlength="100" />
 	<p id="artist-search-help" class="subtle">type at least two characters, then choose an artist to see their stats.</p>
 
 	{#if searchError}
@@ -81,9 +81,6 @@
 				<div><dt>plays</dt><dd>{lookup.stats.totals.plays.toLocaleString()}</dd></div>
 				<div><dt>catalog runtime</dt><dd>{catalogDuration(lookup.stats.totals.duration_seconds)}</dd></div>
 			</dl>
-			{#if lookup.stats.top_track && lookup.stats.top_track.play_count > 0}
-				<p class="top"><span class="subtle">most played</span><a href={'/track/' + encodeURIComponent(lookup.stats.top_track.id)}>{lookup.stats.top_track.title}</a></p>
-			{/if}
 		</div>
 	{:else if lookupError}
 		<p role="alert" class="state">couldn’t load this artist’s stats. try again or choose another artist.</p>
@@ -99,7 +96,7 @@
 	input { display: block; width: 100%; min-height: 2.75rem; padding: 0.55rem 0.75rem; background: var(--bg); border: 1px solid var(--line); border-radius: 0.5rem; }
 	input + p { margin: 0.45rem 0; }
 	nav { display: flex; gap: 0.55rem; color: var(--muted); margin-bottom: 0.35rem; }
-	nav a, h3 a, .top a { text-decoration: underline; text-underline-offset: 0.18em; }
+	nav a, h3 a { text-decoration: underline; text-underline-offset: 0.18em; }
 	ul { list-style: none; padding: 0; margin: 0.55rem 0 0; }
 	li a { display: grid; gap: 0.05rem; min-height: 2.75rem; padding: 0.45rem 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
 	.artist-result { border-top: 1px solid var(--line); margin-top: 1.15rem; padding-top: 0.9rem; overflow-wrap: anywhere; }
@@ -107,5 +104,4 @@
 	dl div { display: grid; }
 	dt { grid-row: 2; color: var(--muted); font-size: 0.875rem; }
 	dd { margin: 0; font-weight: 650; font-size: 1.1rem; font-variant-numeric: tabular-nums; }
-	.top { display: grid; overflow-wrap: anywhere; }
 </style>

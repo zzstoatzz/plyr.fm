@@ -8,6 +8,9 @@
 	const ranges = [{ key: 'week', label: '7 days' }, { key: 'month', label: '30 days' }, { key: 'all_time', label: 'all time' }] as const;
 	let range = $state<(typeof ranges)[number]['key']>('month');
 	let retry = $state(0);
+	let retrying = $state(false);
+	let retryButton = $state<HTMLButtonElement>();
+	let rangesGroup: HTMLDivElement;
 	let result = $state.raw<{ range: typeof range; rows: ChartEntry[] } | { range: typeof range; error: true }>();
 	const selected = $derived(result?.range === range ? result : undefined);
 	const rows = $derived(selected && 'rows' in selected ? selected.rows : undefined);
@@ -16,11 +19,22 @@
 	$effect(() => {
 		retry;
 		const period = range;
-		result = undefined;
+
 		const request = new AbortController();
 		void api.chart(period, 5, request.signal).then(
-			({ data }) => { if (!request.signal.aborted) result = { range: period, rows: data }; },
-			() => { if (!request.signal.aborted) result = { range: period, error: true }; }
+			({ data }) => {
+				if (request.signal.aborted) return;
+				if (retryButton && document.activeElement === retryButton) {
+					rangesGroup.querySelector<HTMLButtonElement>('button[aria-pressed="true"]')?.focus();
+				}
+				retrying = false;
+				result = { range: period, rows: data };
+			},
+			() => {
+				if (request.signal.aborted) return;
+				retrying = false;
+				result = { range: period, error: true };
+			}
 		);
 		return () => request.abort();
 	});
@@ -29,9 +43,9 @@
 <section id="most-liked" aria-labelledby="most-liked-title">
 	<header>
 		<h2 id="most-liked-title">most liked tracks</h2>
-		<div class="ranges" role="group" aria-label="time range for track likes">
+		<div class="ranges" bind:this={rangesGroup} role="group" aria-label="time range for track likes">
 			{#each ranges as item (item.key)}
-				<button type="button" class="text-button" aria-pressed={range === item.key} onclick={() => { range = item.key; }}>{item.label}</button>
+				<button type="button" class="text-button" aria-pressed={range === item.key} onclick={() => { if (range !== item.key) { range = item.key; retrying = false; result = undefined; } }}>{item.label}</button>
 			{/each}
 		</div>
 	</header>
@@ -40,7 +54,8 @@
 		<Loading inline label="loading tracks" />
 	{:else if 'error' in selected}
 		<p role="alert" class="state">couldn’t load the track chart.</p>
-		<button type="button" class="text-button" onclick={() => { retry += 1; }}>retry track chart</button>
+		<button type="button" class="text-button" bind:this={retryButton} aria-disabled={retrying}
+			onclick={() => { if (!retrying) { retrying = true; retry += 1; } }}>{retrying ? 'retrying…' : 'retry track chart'}</button>
 	{:else if rows?.length}
 		<ol class="ranking">
 			{#each rows as entry (entry.track.id)}
