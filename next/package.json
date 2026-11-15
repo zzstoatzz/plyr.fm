@@ -7,7 +7,8 @@
     "app"
   ],
   "devDependencies": {
-    "typescript": "~6.0.3"
+    "typescript": "~6.0.3",
+    "@plyr/next-core": "workspace:*"
   },
   "overrides": {
     "@atproto/car": "0.0.0-spaces-alpha-20261029171913",

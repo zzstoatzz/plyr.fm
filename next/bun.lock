@@ -5,6 +5,7 @@
     "": {
       "name": "plyr-next-workspace",
       "devDependencies": {
+        "@plyr/next-core": "workspace:*",
         "typescript": "~6.0.3",
       },
     },

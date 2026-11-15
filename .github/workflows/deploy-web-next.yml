@@ -6,6 +6,7 @@ on:
     paths:
       - "next/app/**"
       - "next/core/**"
+      - "next/scripts/check-boundaries.mjs"
       - "next/package.json"
       - "next/bun.lock"
       - "next/vendor/**"
@@ -35,6 +36,9 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
+        working-directory: next
+
+      - run: bun run check:boundaries
         working-directory: next
 
       - name: check and build
