@@ -214,6 +214,7 @@
 		{/if}
 		<a class="desktop-radio" href="/radio" class:active={page.url.pathname === '/radio'}><Icon name="radio" size={21} /><span>radio</span></a>
 		<a class="desktop-stats" href={resolve('/(app)/stats')} class:active={page.url.pathname === '/stats'} aria-current={page.url.pathname === '/stats' ? 'page' : undefined}><Icon name="stats" size={21} /><span>stats</span></a>
+		<a class="desktop-only" href={resolve('/(app)/atlas')} class:active={page.url.pathname === '/atlas'} aria-current={page.url.pathname === '/atlas' ? 'page' : undefined}><Icon name="music" size={21} /><span>atlas</span></a>
 		<button class="desktop-help" type="button" onclick={() => shortcutsDialog.showModal()}><span aria-hidden="true">?</span> keyboard shortcuts</button>
 	</nav>
 	<main id="main" tabindex="-1">{@render children()}</main>

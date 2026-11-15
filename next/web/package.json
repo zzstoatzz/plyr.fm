@@ -13,6 +13,7 @@
     "check:player-transition": "node scripts/check-player-transition.cjs",
     "check:player-presentation": "node scripts/check-player-presentation.cjs",
     "check:artist-catalog": "node scripts/check-artist-catalog.cjs",
+    "check:atlas": "node scripts/check-atlas.cjs",
     "check:performance": "node scripts/check-performance.cjs",
     "check:radio": "node scripts/check-radio.cjs",
     "check:upload": "node scripts/check-upload.cjs",

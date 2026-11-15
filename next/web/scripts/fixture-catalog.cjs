@@ -40,6 +40,16 @@ async function serveAudio(route) {
     'access-control-allow-origin': '*', ...(range ? { 'content-range': `bytes ${start}-${end}/${audio.length}` } : {}) } });
 }
 
+const atlasCluster = { id: 0, label: 'field recordings', cx: 0, cy: 0, count: 1 };
+const atlas = {
+  points: [{
+    id: 19, x: 0, y: 0, title: tracks[0].metadata.title, artist: 'replyomatic', handle: 'sketches.test',
+    thumb: '', plays: 9, likes: 3, clusterCoarse: 0, clusterFine: 0, core: true
+  }],
+  artists: [], clusters: { coarse: [atlasCluster], fine: [{ ...atlasCluster, parent: 0 }] },
+  meta: { generatedAt: '2026-11-14T00:00:00Z', nTracks: 1 }
+};
+
 async function setup(browser, width, height = 900, options = {}) {
   const scheme = options.scheme || 'dark';
   const context = await browser.newContext({ viewport: { width, height }, colorScheme: scheme, isMobile: !!options.phone, hasTouch: !!options.phone, deviceScaleFactor: Number(process.env.FIXTURE_SCALE || 1) });
@@ -60,6 +70,7 @@ async function setup(browser, width, height = 900, options = {}) {
   page.setDefaultTimeout(20_000);
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
+  await page.route('https://api.plyr.fm/stats/atlas', route => route.fulfill({ json: atlas }));
   await page.route('https://api.next.plyr.fm/**', async route => {
     const url = new URL(route.request().url());
     const byId = tracks.find(track => url.pathname.startsWith('/v1/tracks/' + track.id));
@@ -97,4 +108,4 @@ async function serve() {
   return `http://127.0.0.1:${server.address().port}`;
 }
 
-module.exports = { artistDid, tracks, serveAudio, setup, serve, close: () => server.close() };
+module.exports = { artistDid, atlas, tracks, serveAudio, setup, serve, close: () => server.close() };

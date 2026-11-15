@@ -54,6 +54,9 @@ jobs:
       - run: bun run check:artist-catalog
         env:
           SCREENS_OUTPUT: ${{ runner.temp }}/next-svelte-screens/artist
+      - run: bun run check:atlas
+        env:
+          SCREENS_OUTPUT: ${{ runner.temp }}/next-svelte-screens/atlas
       - uses: actions/upload-artifact@v4
         if: always()
         with:

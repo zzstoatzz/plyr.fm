@@ -35,6 +35,9 @@
 		<a href={resolve('/(app)/stats')} onclick={() => dialog.close()}>
 			<Icon name="stats" size={21} /><span>stats</span>
 		</a>
+		<a href={resolve('/(app)/atlas')} onclick={() => dialog.close()}>
+			<Icon name="music" size={21} /><span>atlas</span>
+		</a>
 		{#each links as link (link.href)}
 			<a href={link.href} target="_blank" rel="noopener noreferrer">
 				<Icon name={link.icon} size={21} /><span>{link.title}{#if link.detail}<small>{link.detail}</small>{/if}</span>
