@@ -150,6 +150,10 @@ async function keyboard(browser, phone, scheme) {
     await page.waitForURL(origin + '/');
     await opener.waitFor();
     await page.waitForFunction(node => document.activeElement === node, await chartOpener.elementHandle());
+    assert.ok(await chartOpener.evaluate(node => {
+      const { top, bottom } = node.getBoundingClientRect();
+      return top >= 0 && bottom <= innerHeight;
+    }), 'the restored link is in view');
     assert.equal(await page.evaluate(() => history.length), searchHistoryLength, 'search and its query share one browser entry');
     await page.goForward();
     await page.waitForURL('**/search?q=q%3F');

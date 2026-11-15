@@ -93,17 +93,17 @@
 				return;
 			}
 			if (!selector) return;
-			const restore = () => {
+			const restore = (preventScroll: boolean) => {
 				const matches = document.querySelectorAll<HTMLElement>(selector);
 				const target = matches.length === 1 ? matches[0] : undefined;
-				target?.focus({ preventScroll: true });
+				target?.focus({ preventScroll });
 				return document.activeElement === target;
 			};
-			if (restore()) return;
+			if (restore(true)) return;
 			const main = document.getElementById('main');
 			if (!main) return;
 			// A streamed route can render the opener after navigation completes.
-			const observer = new MutationObserver(() => { if (restore()) cancel(); });
+			const observer = new MutationObserver(() => { if (restore(false)) cancel(); });
 			const cancel = () => {
 				observer.disconnect();
 				document.removeEventListener('focusin', cancel);
