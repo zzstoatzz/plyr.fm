@@ -1,4 +1,5 @@
 import type { JamTrack, Pending } from './jam-connection.ts';
+import { MAX_QUEUE_TRACKS } from './queue-state.ts';
 
 type Reference = JamTrack & { key: string };
 export type DurableQueueEdit =
@@ -30,7 +31,7 @@ export function durableQueueEdit(value: unknown): DurableQueueEdit | null {
     case 'moveEntry': return key(value.entryKey) && (value.beforeKey === null || key(value.beforeKey)) ? { action: 'moveEntry', entryKey: value.entryKey, beforeKey: value.beforeKey } : null;
     case 'clearPicks': return { action: 'clearPicks' };
     case 'shufflePicks': {
-      if (!Array.isArray(value.queue) || value.queue.length > 200) return null;
+      if (!Array.isArray(value.queue) || value.queue.length > MAX_QUEUE_TRACKS) return null;
       const queue: Reference[] = [];
       for (const item of value.queue) { const entry = reference(item); if (!entry || queue.some(previous => previous.key === entry.key)) return null; queue.push(entry); }
       return { action: 'shufflePicks', queue };
@@ -41,7 +42,7 @@ export function durableQueueEdit(value: unknown): DurableQueueEdit | null {
   }
 }
 export function queueMutations(value: unknown, owner: string): QueueMutation[] {
-  if (!object(value) || value.owner !== owner || !Array.isArray(value.entries) || value.entries.length > 64) return [];
+  if (!object(value) || value.owner !== owner || !Array.isArray(value.entries) || value.entries.length > MAX_QUEUE_TRACKS) return [];
   const entries: QueueMutation[] = [];
   for (const candidate of value.entries) {
     if (!object(candidate) || !key(candidate.id) || entries.some(entry => entry.id === candidate.id)) continue;
@@ -67,6 +68,6 @@ export function mergeQueueMutations(previous: QueueMutation[], entries: QueueMut
     merged.set(entry.id, known ? { ...known, base: known.base ?? entry.base } : entry);
   }
   for (const id of remove) merged.delete(id);
-  if (merged.size > 64) throw new Error('connect before adding more queue changes');
+  if (merged.size > MAX_QUEUE_TRACKS) throw new Error('connect before adding more queue changes');
   return [...merged.values()];
 }

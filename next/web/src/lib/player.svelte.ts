@@ -410,9 +410,7 @@ class Player {
 	}
 	enqueueCollection(tracks: Track[]) {
 		if (this.localMode) return;
-		for (const track of tracks) {
-			if (track.record.cid && !isPrivateTrack(track)) this.#model.enqueue(track);
-		}
+		this.#model.enqueueCollection(tracks.filter(track => track.record.cid && !isPrivateTrack(track)));
 	}
 	remove(index: number) {
 		if (this.liveStation) return;

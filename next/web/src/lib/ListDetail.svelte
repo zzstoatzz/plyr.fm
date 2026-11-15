@@ -16,6 +16,7 @@
 	let account = $state.raw(auth.getAuth());
 	let editing = $state(false);
 	let copied = $state(false);
+	let queueRequest = $state<string>();
 	let pending = $state.raw<{ revision: CollectionRevision; baseline: string; tracks: Track[]; status: AwaitStatus; rpc: typeof account.rpc }>();
 	const owned = $derived(account.did === indexed.owner.did && !!account.rpc);
 	const accepted = $derived(pending?.rpc === account.rpc && pending.revision.uri === indexed.record.uri ? pending : undefined);
@@ -63,6 +64,10 @@
 		if (active) player.toggle();
 		else if (tracks[0]) player.play(tracks[0], tracks, title);
 	}
+	function addToQueue() {
+		queueRequest = list.record.uri;
+		player.enqueueCollection(tracks);
+	}
 </script>
 
 <svelte:head><title>{title} · plyr.fm</title></svelte:head>
@@ -85,11 +90,12 @@
 			</div>
 			<div class="actions">
 				<button type="button" class="primary-button play" aria-label={`${playing ? 'Pause' : 'Play'} ${title}`} disabled={!tracks.length || active && !playing && player.snapshot.waiting} onclick={playAll}><Icon name={playing ? 'pause' : 'play'} /> {playing ? 'pause' : 'play'}</button>
-				<button type="button" class="text-button enqueue" disabled={!tracks.length || player.localMode} title={player.localMode ? "play a public track to change queues" : undefined} onclick={() => player.enqueueCollection(tracks)}><Icon name="queue" /> add to queue</button>
+				<button type="button" class="text-button enqueue" disabled={!tracks.length || player.localMode} title={player.localMode ? "play a public track to change queues" : undefined} onclick={addToQueue}><Icon name="queue" /> add to queue</button>
 				<button type="button" class="icon-button share" aria-label={`Share ${list.object}`} onclick={share}><Icon name="share" /></button>
 				{#if owned && !editing}<button type="button" class="text-button" onclick={() => { editing = true; }}>edit {list.object}</button>{/if}
 			</div>
 			{#if copied}<p role="status" class="subtle">link copied</p>{/if}
+			{#if queueRequest === list.record.uri && player.snapshot.queueError}<p role="status" class="state">{player.snapshot.queueError}</p>{/if}
 		</div>
 	</header>
 	{#if accepted}

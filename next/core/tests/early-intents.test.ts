@@ -24,7 +24,7 @@ test('a play drained before the deadline does not also expire', t => {
   const early = new EarlyIntents(intent => expired.push(intent.track.id));
   early.enqueue(track('q'));
   early.play({ track: track('a') });
-  assert.deepEqual(early.drain().map(intent => intent.kind + ':' + intent.track.id), ['enqueue:q', 'play:a']);
+  assert.deepEqual(early.drain().flatMap(intent => intent.kind === 'enqueueCollection' ? [] : [intent.kind + ':' + intent.track.id]), ['enqueue:q', 'play:a']);
   t.mock.timers.tick(EARLY_PLAY_LIMIT_MS * 2);
   assert.deepEqual(expired, []);
   assert.equal(early.length, 0);
@@ -49,4 +49,13 @@ test('queued additions stay queued when a play expires, up to the cap', t => {
   const early = new EarlyIntents(() => {}, 10);
   for (let index = 0; index < 70; index++) early.enqueue(track(String(index)));
   assert.equal(early.length, 64);
+});
+
+test('a collection is kept together before the account queue starts', () => {
+  const early = new EarlyIntents(() => {});
+  const tracks = Array.from({ length: 200 }, (_, i) => track(String(i)));
+  early.enqueue(track('one'));
+  assert.equal(early.enqueueCollection(tracks), false);
+  assert.equal(early.enqueueCollection(tracks.slice(1)), true);
+  assert.deepEqual(early.drain(), [{ kind: 'enqueue', track: track('one') }, { kind: 'enqueueCollection', tracks: tracks.slice(1) }]);
 });
