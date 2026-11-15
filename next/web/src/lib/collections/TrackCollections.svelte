@@ -1,28 +1,31 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, type Snippet } from 'svelte';
+  import { resolve } from '$app/paths';
   import type { Track } from '@plyr/next-core/api';
   import { auth } from '$lib/auth';
   import Icon from '$lib/ui/Icon.svelte';
   import Loading from '$lib/ui/Loading.svelte';
 
-  let { track }: { track: Track } = $props();
+  let { track, transport }: { track: Track; transport: Snippet } = $props();
   let account = $state.raw(auth.getAuth());
   let picking = $state(false);
   let liked = $state(false);
+  let initialLike = $state(false);
   let loading = $state(false);
   let busy = $state(false);
   let error = $state('');
   let confirmed = $state(false);
   let live = false;
-  const returnTo = $derived('/track/' + track.id);
-  const signIn = $derived('/login?' + new URLSearchParams({ return_to: returnTo }));
+  const returnTo = $derived(resolve('/(app)/track/[id]', { id: track.id }));
+  const signIn = $derived(resolve('/(app)/login') + '?' + new URLSearchParams({ return_to: returnTo }));
+  const count = $derived(track.metrics.like_count + Number(liked) - Number(initialLike));
 
   onMount(() => {
     live = true;
     const stop = auth.subscribe(() => {
       const next = auth.getAuth();
       if (account.rpc !== next.rpc) {
-        picking = liked = busy = confirmed = false;
+        picking = liked = initialLike = busy = confirmed = false;
         error = '';
       }
       account = next;
@@ -40,7 +43,7 @@
     void import('$lib/pds').then(async ({ createPds }) => {
       if (!current) return;
       const likes = await createPds(account).myLikes();
-      if (current) { liked = likes.has(uri); confirmed = true; }
+      if (current) { liked = initialLike = likes.has(uri); confirmed = true; }
     }).catch(() => {
       if (current) error = 'could not load your like. try again.';
     }).finally(() => { if (current) loading = false; });
@@ -60,6 +63,7 @@
       const pds = createPds(session);
       const hadLike = confirmed ? liked : (await pds.myLikes()).has(playing.record.uri);
       if (!current()) return;
+      if (!confirmed) initialLike = hadLike;
       if (hadLike) await pds.unlike(playing, { waitForIndex: false });
       else await pds.like(playing, { waitForIndex: false });
       if (current()) { liked = !hadLike; confirmed = true; }
@@ -71,13 +75,18 @@
 
 <div class="actions">
   {#if account.ready && account.rpc}
-    <button class="icon-button" type="button" aria-label={liked ? 'Unlike track' : 'Like track'} aria-pressed={liked} disabled={loading || busy} onclick={toggle}><Icon name={liked ? 'heart_f' : 'heart'} /></button>
-    <button class="text-button" type="button" aria-expanded={picking} onclick={() => { picking = !picking; }}>add to playlist</button>
-    {#if account.did === track.artist.did}<a class="text-button" href={`/edit-track/${track.id}`}>edit track</a>{/if}
-  {:else if account.ready}
-    <a class="icon-button" href={signIn} aria-label="Sign in to like"><Icon name="heart" /></a>
+    <button class="icon-button" type="button" aria-label={liked ? 'Unlike track' : 'Like track'} aria-pressed={liked} disabled={loading || busy} onclick={toggle}><Icon name={liked ? 'heart_f' : 'heart'} />{Math.max(0, count)}</button>
+  {:else}
+    <a class="icon-button" href={signIn} aria-label="Sign in to like"><Icon name="heart" />{track.metrics.like_count}</a>
   {/if}
+  {@render transport()}
 </div>
+{#if account.ready && account.rpc}
+  <div class="actions">
+    <button class="text-button" type="button" aria-expanded={picking} onclick={() => { picking = !picking; }}>add to playlist</button>
+    {#if account.did === track.artist.did}<a class="text-button" href={resolve('/(app)/edit-track/[id]', { id: track.id })}>edit track</a>{/if}
+  </div>
+{/if}
 {#if error}<p role="alert" class="state">{error}</p>{/if}
 {#if picking && account.did && account.rpc}
   {#key account.rpc}

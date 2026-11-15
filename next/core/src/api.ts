@@ -19,6 +19,7 @@ export interface Track {
 		album: string | null;
 		duration_seconds: number | null;
 		created_at: string;
+		tags?: string[] | null;
 	};
 	artist: {
 		did: string;

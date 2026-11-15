@@ -13,7 +13,7 @@ const tracks = Array.from({ length: 9 }, (_, index) => {
   return {
     object: 'track', id: 'trk_' + Buffer.from(uri).toString('base64url'),
     record: { uri, cid: `bafy${index}`, revision: null, collection: 'fm.plyr.track', rkey: `t${index}` },
-    metadata: { title: `${String(300 + index * 7)} - sketch number ${index + 1}${index ? '' : ', recorded on the porch at dawn with the window open and the dog joining in'}`, description: null, album: null, duration_seconds: 120 + index * 31, created_at: `2026-11-0${index + 1}T00:00:00Z` },
+    metadata: { title: `${String(300 + index * 7)} - sketch number ${index + 1}${index ? '' : ', recorded on the porch at dawn with the window open and the dog joining in'}`, description: index ? null : 'A recording made at dawn.\n\nThe dog joined in.', album: null, duration_seconds: 120 + index * 31, created_at: `2026-11-0${index + 1}T00:00:00Z` },
     artist: { did: artistDid, profile: { handle: 'sketches.test', display_name: 'replyomatic', avatar_url: 'https://panel-fixture.invalid/avatar.jpg', bio: 'ambient sketches, one a day, numbered as they come.' } },
     media: { artwork: { url: `https://panel-fixture.invalid/art/${index}.jpg` } }, access: { visibility: 'public' }, metrics: { play_count: 9 - index, like_count: 3 }
   };
@@ -66,7 +66,16 @@ async function setup(browser, width, height = 900, options = {}) {
     let body = { object: 'list', data: [], has_more: false };
     if (byId && url.pathname.endsWith('/playback')) body = { object: 'playback', track_id: byId.id, record: byId.record,
       availability: { status: 'available', delivery: { url: 'https://panel-fixture.invalid/audio.wav', media_type: 'audio/wav' } } };
-    else if (byId && url.pathname === '/v1/tracks/' + byId.id) body = byId;
+    else if (byId && url.pathname === '/v1/tracks/' + byId.id) body = { ...byId, metadata: { ...byId.metadata, tags: ['ambient', 'home recordings', 'field & nature'] } };
+    else if (byId && url.pathname.endsWith('/comments')) body.data = [{
+      record: { uri: 'at://did:plc:listener/fm.plyr.comment/123', cid: 'bafycomment', rkey: '123' },
+      author: { did: 'did:plc:listener', handle: 'listener.example', display_name: 'A Listener', avatar_url: null },
+      subject: byId.record, text: 'I love this moment.', timestamp_ms: 14_000, created_at: '2026-11-03T20:00:00Z', updated_at: null
+    }];
+    else if (url.pathname === '/v1/tracks/missing-track') {
+      await route.fulfill({ status: 400, json: { error: { code: 'invalid_request' } } });
+      return;
+    }
     else if (url.pathname === '/v1/tracks') body = { object: 'list', data: tracks, has_more: false };
     else if (url.pathname === '/v1/charts/tracks') body = { period: url.searchParams.get('period') || 'week', data: tracks.map((track, index) => ({ rank: index + 1, track, plays: 1, likes: track.metrics.like_count })) };
     else if (url.pathname.startsWith('/v1/artists/') && url.pathname.endsWith('/metrics')) body = { totals: { plays: 9, tracks: 9, duration_seconds: 2000 }, top_track: null };

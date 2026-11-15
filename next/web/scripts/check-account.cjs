@@ -5,7 +5,7 @@ const { fixtureAccounts, fixturePage, authorizeFixture } = require('./pds-browse
 const { tracks, serveAudio } = require('./fixture-catalog.cjs');
 
 const origin = 'https://next.plyr.fm';
-const track = tracks[0];
+const track = { ...tracks[0], record: { ...tracks[0].record, cid: 'bafyreib2rxk3rybk3aobmv5cjuql3bm2twh4jo5uxgf5kpqcsgz7soitae' } };
 const coordinator = 'https://jams.next.plyr.fm';
 
 (async () => {
@@ -93,6 +93,39 @@ const coordinator = 'https://jams.next.plyr.fm';
     await fallbackJoin;
     await dock.getByRole('button', { name: 'Play', exact: true }).waitFor();
     assert.ok(joins >= 3, 'SDK restore still runs when database enumeration is unavailable');
+
+    await page.getByRole('button', { name: 'comments', exact: true }).click();
+    const panel = page.getByRole('dialog', { name: 'comments' });
+    const draft = panel.getByRole('textbox', { name: 'add a comment' });
+    await draft.fill('fixture comment at the restored position');
+    let failComment = true;
+    await context.route('https://pds.fixture.test/xrpc/com.atproto.repo.createRecord', route => {
+      if (route.request().method() !== 'POST' || !failComment) return route.fallback();
+      failComment = false;
+      return route.fulfill({ status: 400, json: { error: 'InvalidRequest' }, headers: { 'access-control-allow-origin': origin } });
+    });
+    await panel.getByRole('button', { name: 'post comment' }).click();
+    await panel.getByText('could not post your comment. try again.').waitFor();
+    assert.equal(await draft.inputValue(), 'fixture comment at the restored position');
+    await panel.getByRole('button', { name: 'post comment' }).click();
+    await panel.getByText('fixture comment at the restored position', { exact: true }).waitFor();
+
+    const pds = 'http://127.0.0.1:5197/xrpc/';
+    const records = pds + 'com.atproto.repo.listRecords?' + new URLSearchParams({
+      repo: accounts[handle].did, collection: 'fm.plyr.comment'
+    });
+    const published = await fetch(records).then(response => response.json());
+    assert.equal(published.records.length, 1);
+    assert.equal(published.records[0].value.timestampMs, 12_000);
+    assert.deepEqual(published.records[0].value.subject, { uri: track.record.uri, cid: track.record.cid });
+    const deleted = page.waitForResponse(response => response.url().endsWith('/com.atproto.repo.deleteRecord') && response.request().method() === 'POST' && response.ok());
+    await panel.getByRole('button', { name: 'Delete comment', exact: true }).click();
+    await panel.getByRole('button', { name: 'delete', exact: true }).click();
+    await deleted;
+    await panel.getByText('no comments yet.').waitFor();
+    assert.deepEqual((await fetch(records).then(response => response.json())).records, []);
+    await panel.getByRole('button', { name: 'Close comments' }).click();
+
     await page.getByRole('link', { name: 'settings' }).click();
     await page.getByText('your queue syncs across devices.').waitFor();
     const revoked = page.waitForResponse(response => response.url() === 'https://pds.fixture.test/oauth/revoke' && response.ok());
@@ -101,6 +134,6 @@ const coordinator = 'https://jams.next.plyr.fm';
     await revoked;
     await dock.waitFor({ state: 'detached' });
     assert.deepEqual(errors, []);
-    console.log('Svelte OAuth callback, session restore, saved queue position and sign-out passed');
+    console.log('Svelte OAuth, queue restoration, timed PDS comment and sign-out passed');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
