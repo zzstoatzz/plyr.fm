@@ -75,4 +75,5 @@ any new feature keeps its data.
   same issue and it gets answered the same way. Close the issue yourself when
   you're done.
 - Anything that needs nate (product direction, lexicons, prod) gets the
-  `needs-nate` label; otherwise just proceed on the advice.
+  `needs-nate` label and is sent to him right away. Keep going on everything
+  that doesn't depend on that decision; otherwise just proceed on the advice.
