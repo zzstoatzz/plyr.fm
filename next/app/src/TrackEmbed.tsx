@@ -1,4 +1,4 @@
-import { trackArtwork } from '../../core/src/artwork';
+import { trackArtwork } from '@plyr/next-core/artwork';
 import { MusicNote as Music, ArrowCounterClockwise as RotateCcw } from './icons';
 import { Text } from './Text';
 import Slider from './Slider';
@@ -7,7 +7,7 @@ import { PauseGlyph as Pause, PlayGlyph as Play } from './PlayerGlyph';
 import { PlayerLoader } from './PlayerLoader';
 import { useState } from 'react';
 import { Image, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
-import type { Track } from '../../core/src/api';
+import type { Track } from '@plyr/next-core/api';
 import { useAppearance } from './appearance';
 import { artistName } from './CatalogPieces';
 import { usePlayback } from './playback';

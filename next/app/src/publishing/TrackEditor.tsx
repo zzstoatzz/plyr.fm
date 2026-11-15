@@ -9,10 +9,10 @@ import { Sheet } from '../Sheet';
 import { Action, Copy, Field, row } from '../controls';
 import { measureAudioDuration, pickMedia } from '../media-picker';
 import { createPds, TrackRevisionConflict, type MediaFile } from '../pds';
-import { recordTags } from '../../../core/src/publishing/track-tags';
+import { recordTags } from '@plyr/next-core/publishing/track-tags';
 import { TagsField } from './TagsField';
 import { pickArtwork } from './artwork';
-import { canReplaceTrackAudio, validateReplacementAudio, TrackWriteUnconfirmed } from '../../../core/src/publishing/track-audio';
+import { canReplaceTrackAudio, validateReplacementAudio, TrackWriteUnconfirmed } from '@plyr/next-core/publishing/track-audio';
 
 function close(id: string) { router.canGoBack() ? router.back() : router.replace(`/track/${id}`); }
 

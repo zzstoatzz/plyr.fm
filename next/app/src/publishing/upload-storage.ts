@@ -1,6 +1,6 @@
 import { createMMKV } from 'react-native-mmkv';
-import { sameRecord } from '../../../core/src/publishing/create-operation';
-import { uploadOperation, type UploadStorage } from '../../../core/src/publishing/upload-model';
+import { sameRecord } from '@plyr/next-core/publishing/create-operation';
+import { uploadOperation, type UploadStorage } from '@plyr/next-core/publishing/upload-model';
 const storage = createMMKV({ id: 'plyr-next-uploads' });
 export const uploadStorage: UploadStorage = {
   async load(owner) {

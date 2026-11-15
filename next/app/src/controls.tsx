@@ -5,7 +5,7 @@ import { Link, type Href } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, TextInput, type TextInputProps, type ScrollViewProps, type ScrollViewInstance, View } from 'react-native';
 import type { Glyph } from './PlayerGlyph';
 import { useAppearance } from './appearance';
-import { onAccent } from '../../core/src/colors';
+import { onAccent } from '@plyr/next-core/colors';
 
 export function Action({ label, onPress, href, disabled, selected, primary, destructive, icon: Icon, onArtwork, onAccentFill }: {
   label: string; onPress?: () => void; href?: Href; disabled?: boolean; selected?: boolean; primary?: boolean; destructive?: boolean; icon?: Glyph; onArtwork?: boolean;

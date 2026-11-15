@@ -1,9 +1,9 @@
-import type { Track } from '../../../core/src/api.ts';
-import { parsePolicy as parse, policyRecord as record, trackSpace as space, type Rule } from '../../../core/src/access/policy.ts';
+import type { Track } from '@plyr/next-core/api';
+import { parsePolicy as parse, policyRecord as record, trackSpace as space, type Rule } from '@plyr/next-core/access/policy';
 import { AUDIO_SPACE_TYPE, NSID } from '../auth-config.ts';
 
-export { describePolicy, describeRule, formatPrice, implicitRule, isOpen, parsePrice, spaceParts } from '../../../core/src/access/policy.ts';
-export type { Policy, Rule } from '../../../core/src/access/policy.ts';
+export { describePolicy, describeRule, formatPrice, implicitRule, isOpen, parsePrice, spaceParts } from '@plyr/next-core/access/policy';
+export type { Policy, Rule } from '@plyr/next-core/access/policy';
 
 export function trackSpace(track: Track) {
   return space(track, AUDIO_SPACE_TYPE);

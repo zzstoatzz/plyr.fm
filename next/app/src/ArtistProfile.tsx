@@ -3,7 +3,7 @@ import { useFocusEffect, type Href } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { api } from './api-client';
-import { type Artist } from '../../core/src/api';
+import { type Artist } from '@plyr/next-core/api';
 import { useAuth } from './auth';
 import { Action, InlineLink, Copy } from './controls';
 import { ListRows, Status, TrackRows, usePages, useResource, type Play } from './CatalogPieces';

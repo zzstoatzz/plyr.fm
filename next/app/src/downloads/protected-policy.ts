@@ -1,4 +1,4 @@
-import type { Track } from '../../../core/src/api.ts';
+import type { Track } from '@plyr/next-core/api';
 
 export function protectedDownloadPolicy(record: Record<string, unknown>, supporterAuthorized = false): 'open' | 'ask' | 'supporters' {
   const gate = record.supportGate;

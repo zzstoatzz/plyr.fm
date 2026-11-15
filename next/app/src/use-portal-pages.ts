@@ -1,8 +1,8 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
-import type { Page } from '../../core/src/api';
-import { catalogRevision, type CatalogScope } from '../../core/src/catalog/changes';
-import { createCatalogPages } from '../../core/src/catalog/pages';
+import type { Page } from '@plyr/next-core/api';
+import { catalogRevision, type CatalogScope } from '@plyr/next-core/catalog/changes';
+import { createCatalogPages } from '@plyr/next-core/catalog/pages';
 
 export function usePortalPages<T>(did: string, scope: CatalogScope, load: (cursor?: string) => Promise<Page<T>>, active: boolean) {
   const pages = useMemo(() => createCatalogPages(load, () => catalogRevision(did, scope)), [did, scope, load]);

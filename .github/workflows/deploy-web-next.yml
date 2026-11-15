@@ -6,6 +6,10 @@ on:
     paths:
       - "next/app/**"
       - "next/core/**"
+      - "next/package.json"
+      - "next/bun.lock"
+      - "next/vendor/**"
+      - "next/patches/**"
       - "next/web/src/lib/media/private-audio.ts"
       - "next/web/static/private-audio-worker.js"
       - "next/web/src/lib/storage/**"
@@ -28,17 +32,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: next/app/package-lock.json
+
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+        working-directory: next
 
       - name: check and build
         working-directory: next/app
         run: |
-          npm ci
-          npm run lint
-          npm run check
-          npm test
-          npm run build:web
+          bun run lint
+          bun run check
+          bun run test
+          bun run build:web
           test -s dist/index.html
           test -s dist/oauth-client-metadata.json
           test -s dist/oauth-native-client-metadata.json
@@ -49,9 +54,9 @@ jobs:
       - name: check key screens
         working-directory: next/app
         run: |
-          npm install --no-save --no-package-lock playwright@1.61.1
-          npx --no-install playwright install --with-deps chromium
-          PLAYWRIGHT_MODULE="$PWD/node_modules/playwright" SCREENS_OUTPUT="$RUNNER_TEMP/screens" node scripts/check-key-screens.cjs
+          (cd ../web && bun run playwright install --with-deps --only-shell chromium)
+          export PLAYWRIGHT_MODULE="$(cd ../web && node -p "require.resolve('playwright')")"
+          SCREENS_OUTPUT="$RUNNER_TEMP/screens" node scripts/check-key-screens.cjs
 
       - name: upload key screens
         if: always()
@@ -63,4 +68,4 @@ jobs:
 
       - name: bundle iOS and Android
         working-directory: next/app
-        run: npx --no-install expo export --platform ios --platform android --output-dir "$RUNNER_TEMP/next-native"
+        run: bun run expo export --platform ios --platform android --output-dir "$RUNNER_TEMP/next-native"

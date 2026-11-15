@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import type { Track } from '$core/api';
+  import type { Track } from '@plyr/next-core/api';
   import { auth } from '$lib/auth';
   import Icon from '$lib/ui/Icon.svelte';
   import Loading from '$lib/ui/Loading.svelte';

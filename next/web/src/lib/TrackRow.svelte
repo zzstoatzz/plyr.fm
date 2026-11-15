@@ -1,6 +1,6 @@
 <script lang="ts">
-	import type { Track } from '$core/api';
-	import { trackArtwork } from '$core/artwork';
+	import type { Track } from '@plyr/next-core/api';
+	import { trackArtwork } from '@plyr/next-core/artwork';
 	import { player } from './player.svelte';
 	import { artistName, clock } from './tracks';
 	import Artwork from './ui/Artwork.svelte';

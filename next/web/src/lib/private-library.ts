@@ -1,5 +1,5 @@
 import { TID } from '@atproto/common-web';
-import { createPrivateLibrary } from '$core/publishing/private-music';
+import { createPrivateLibrary } from '@plyr/next-core/publishing/private-music';
 import { auth } from './auth';
 import { authConfig } from './auth-config';
 import { createPrivateCreateStorage } from './storage/private-create-storage';

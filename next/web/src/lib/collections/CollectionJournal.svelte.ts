@@ -1,4 +1,4 @@
-import type { CreateOperation } from '$core/publishing/create-operation';
+import type { CreateOperation } from '@plyr/next-core/publishing/create-operation';
 import type { createPds } from '$lib/pds';
 
 export function collectionJournal(pds: ReturnType<typeof createPds>, current: () => boolean) {

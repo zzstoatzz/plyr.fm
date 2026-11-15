@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { albumIdFromUri, playlistIdFromUri, trackIdFromUri } from '$core/api';
-  import type { CreateOperation } from '$core/publishing/create-operation';
-  import type { CreateResult } from '$core/publishing/create-record';
+  import { albumIdFromUri, playlistIdFromUri, trackIdFromUri } from '@plyr/next-core/api';
+  import type { CreateOperation } from '@plyr/next-core/publishing/create-operation';
+  import type { CreateResult } from '@plyr/next-core/publishing/create-record';
   import type { createPds } from '$lib/pds';
 
   let { operation, pds, kind, refresh }: {

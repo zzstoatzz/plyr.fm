@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from './api-client';
-import { type ListSummary, type Track } from '../../core/src/api';
+import { type ListSummary, type Track } from '@plyr/next-core/api';
 
 const byArtist = new Map<string, Promise<ListSummary[]>>();
 

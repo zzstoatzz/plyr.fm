@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
-import { artworkName, artworkPlan, artworkType, MAX_ARTWORK_BYTES } from '../../core/src/publishing/artwork-model.ts';
+import { artworkName, artworkPlan, artworkType, MAX_ARTWORK_BYTES } from '@plyr/next-core/publishing/artwork-model';
 
 test('covers the lexicon takes are kept as picked', () => {
   assert.deepEqual(artworkPlan({ type: 'image/png', size: 400_000 }, 1400, 1400), { keep: true });

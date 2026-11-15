@@ -1,11 +1,11 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
-  import { trackIdFromUri } from '$core/api';
-  import type { CreateOperation } from '$core/publishing/create-operation';
-  import type { UploadOperation } from '$core/publishing/upload-model';
-  import { canonicalAudioType, jobLine, needsPlyrStorage } from '$core/publishing/upload-queue-model';
-  import { normalizeTrackTags } from '$core/publishing/track-tags';
-  import { creditName } from '$core/publishing/credit-name';
+  import { trackIdFromUri } from '@plyr/next-core/api';
+  import type { CreateOperation } from '@plyr/next-core/publishing/create-operation';
+  import type { UploadOperation } from '@plyr/next-core/publishing/upload-model';
+  import { canonicalAudioType, jobLine, needsPlyrStorage } from '@plyr/next-core/publishing/upload-queue-model';
+  import { normalizeTrackTags } from '@plyr/next-core/publishing/track-tags';
+  import { creditName } from '@plyr/next-core/publishing/credit-name';
   import { api } from '$lib/api';
   import { auth } from '$lib/auth';
   import { coverImage } from '$lib/media/cover-image';

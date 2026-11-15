@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { orderedCollection, collectionRecord, sameRecord } from '../../core/src/collections/collection-order.ts';
+import { orderedCollection, collectionRecord, sameRecord } from '@plyr/next-core/collections/collection-order';
 
 test('ordering preserves every occurrence and unknown fields without mutating the snapshot', () => {
   const input = { listType: 'playlist', future: { intact: true }, items: [

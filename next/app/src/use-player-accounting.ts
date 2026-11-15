@@ -2,7 +2,7 @@ import type { AudioPlayer } from 'expo-audio';
 import { randomUUID } from 'expo-crypto';
 import { useEffect, useMemo } from 'react';
 import { AppState, Platform } from 'react-native';
-import { ListeningSession } from '../../core/src/listening-session';
+import { ListeningSession } from '@plyr/next-core/listening-session';
 import { playOutbox } from './play-reporting';
 
 export function usePlayerAccounting(player: AudioPlayer) {

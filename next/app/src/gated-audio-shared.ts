@@ -3,9 +3,9 @@ import { isCid, isLexMap, type LexMap } from '@atproto/lex-data';
 import { lexParse } from '@atproto/lex-json';
 import { createSpaceSigHeaders, encapsulate, formatMacRequest, parseSpaceToken, RECORD_MAC_PROFILE, verifyRecord } from '@atproto/space';
 import { isSpaceAtUriString } from '@atproto/syntax';
-import { createGatedAudio, type SpaceAudioTransport as Transport } from '../../core/src/gated-audio.ts';
+import { createGatedAudio, type SpaceAudioTransport as Transport } from '@plyr/next-core/gated-audio';
 
-export type { GatedAudioSource } from '../../core/src/gated-audio.ts';
+export type { GatedAudioSource } from '@plyr/next-core/gated-audio';
 export type SpaceAudioTransport = Transport<P256Keypair>;
 
 export const { credentialFor, signedFetch, resolveGatedAudio, openGatedAudio } = createGatedAudio<P256Keypair, LexMap>({

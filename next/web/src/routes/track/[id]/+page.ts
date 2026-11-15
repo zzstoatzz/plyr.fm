@@ -1,5 +1,5 @@
 import { error } from '@sveltejs/kit';
-import { ApiError } from '$core/api';
+import { ApiError } from '@plyr/next-core/api';
 import { api } from '$lib/api';
 import type { PageLoad } from './$types';
 

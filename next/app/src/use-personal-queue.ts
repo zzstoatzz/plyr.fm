@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { AppState, Platform } from 'react-native';
 import { randomUUID } from 'expo-crypto';
-import { createPersonalPlayback, type PersonalPlaybackTarget } from '../../core/src/personal-playback';
+import { createPersonalPlayback, type PersonalPlaybackTarget } from '@plyr/next-core/personal-playback';
 import { api } from './api-client';
 import { useAuth } from './auth';
 import { openCoordinatorSocket } from './coordinator-origin';

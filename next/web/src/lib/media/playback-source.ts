@@ -1,6 +1,6 @@
-import type { Track } from '$core/api';
-import { isPrivateTrack } from '$core/track-access';
-import { blobUrl } from '$core/identity';
+import type { Track } from '@plyr/next-core/api';
+import { isPrivateTrack } from '@plyr/next-core/track-access';
+import { blobUrl } from '@plyr/next-core/identity';
 import { api } from '$lib/api';
 import type { AudioSource } from './gated-audio';
 

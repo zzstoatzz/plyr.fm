@@ -1,10 +1,10 @@
 import { Link } from 'expo-router';
 import { useCallback, useRef, useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, View, useWindowDimensions, type ScrollViewInstance } from 'react-native';
-import type { Track } from '../../core/src/api';
+import type { Track } from '@plyr/next-core/api';
 import { useAppearance } from './appearance';
 import { AtlasView } from './atlas/AtlasView';
-import { trackArtwork } from '../../core/src/artwork';
+import { trackArtwork } from '@plyr/next-core/artwork';
 import { useAuth } from './auth';
 import { Cover, Status, type Play } from './CatalogPieces';
 import { DesktopTrackRow } from './DesktopTrackRow';

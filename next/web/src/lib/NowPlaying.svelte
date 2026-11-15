@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { player } from './player.svelte';
 	import { artistName } from './tracks';
-	import { trackArtwork } from '$core/artwork';
+	import { trackArtwork } from '@plyr/next-core/artwork';
 	import Artwork from './ui/Artwork.svelte';
 	import Icon from './ui/Icon.svelte';
 	import Scrub from './Scrub.svelte';

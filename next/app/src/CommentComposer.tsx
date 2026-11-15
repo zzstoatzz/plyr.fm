@@ -1,7 +1,7 @@
 import { Link } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
-import type { Track } from '../../core/src/api';
+import type { Track } from '@plyr/next-core/api';
 import { useAppearance } from './appearance';
 import { useAuth } from './auth';
 import { clock } from './chapters';

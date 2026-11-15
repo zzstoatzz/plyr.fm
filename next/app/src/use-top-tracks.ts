@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from './api-client';
-import { type Track } from '../../core/src/api';
+import { type Track } from '@plyr/next-core/api';
 import { errorMessage } from './CatalogPieces';
 import { nextPopulatedChart, type ChartPeriod } from './home-state';
 

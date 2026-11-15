@@ -1,4 +1,4 @@
-import { createQueueAdmission } from '../../core/src/personal-queue-join';
+import { createQueueAdmission } from '@plyr/next-core/personal-queue-join';
 import * as config from './auth-config';
 import { coordinatorHeaders } from './coordinator-origin';
 

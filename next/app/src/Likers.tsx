@@ -2,7 +2,7 @@ import { Link } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View, type ViewInstance } from 'react-native';
 import { api } from './api-client';
-import { type Track } from '../../core/src/api';
+import { type Track } from '@plyr/next-core/api';
 import { useAppearance } from './appearance';
 import { useAuth } from './auth';
 import { Cover } from './CatalogPieces';

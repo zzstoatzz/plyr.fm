@@ -1,7 +1,7 @@
 <script lang="ts" generics="T">
   import { onMount, untrack, type Snippet } from 'svelte';
-  import type { Page } from '$core/api';
-  import { createCatalogPages } from '$core/catalog/pages';
+  import type { Page } from '@plyr/next-core/api';
+  import { createCatalogPages } from '@plyr/next-core/catalog/pages';
   import Loading from '$lib/ui/Loading.svelte';
 
   let { load, items, empty, more, label, version = 0 }: {

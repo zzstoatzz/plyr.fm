@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api-client';
 import type { Auth } from '../auth-state';
-import { creditName } from '../../../co../../core/src/publishing/credit-name';
+import { creditName } from '@plyr/next-core/publishing/credit-name';
 
 /** The name a new track is credited to: the account's profile name, else its handle. A name made of blank characters counts as no name. */
 export function useArtistName(auth: Auth): string {

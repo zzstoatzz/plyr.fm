@@ -1,4 +1,4 @@
-import { createApi } from '../../core/src/api';
+import { createApi } from '@plyr/next-core/api';
 import { API_URL } from './config';
 import { playListenerId } from './play-listener';
 

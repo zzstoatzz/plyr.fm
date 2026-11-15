@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { ListDetail, Track } from '../../../core/src/api';
+import type { ListDetail, Track } from '@plyr/next-core/api';
 import { useAuth } from '../auth';
 import { createPds } from '../pds';
-import { applyCollectionRevision } from '../../../core/src/collections/projected-collection';
-import type { CollectionRevision } from '../../../core/src/collections/collection-order';
+import { applyCollectionRevision } from '@plyr/next-core/collections/projected-collection';
+import type { CollectionRevision } from '@plyr/next-core/collections/collection-order';
 
 export function useCollectionOrder(indexed: ListDetail | undefined) {
   const { did, rpc } = useAuth();

@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { Artist, Playback, Track } from '../../core/src/api.ts';
+import type { Artist, Playback, Track } from '@plyr/next-core/api';
 import { attachmentUrl, downloadAllowed, downloadFilename, prepareDownload } from '../src/downloads/model.ts';
-import { parseDownloadManifest } from '../../core/src/downloads/manifest.ts';
+import { parseDownloadManifest } from '@plyr/next-core/downloads/manifest';
 
 const track: Track = { object: 'track', id: 'track', record: { uri: 'at://did:plc:artist/fm.plyr.track/song', cid: 'revision', revision: null, collection: 'fm.plyr.track', rkey: 'song' }, metadata: { title: 'a/b: song', artist_name: 'artist', description: null, album: null, duration_seconds: 1, created_at: '2026-11-12T00:00:00Z' }, artist: { did: 'did:plc:artist', profile: { handle: 'artist.test', display_name: 'artist', avatar_url: null } }, media: {}, access: { visibility: 'public', download_policy: 'open' }, metrics: { play_count: 0, like_count: 0 } };
 const playback: Playback = { object: 'playback', track_id: track.id, record: { uri: track.record.uri, cid: 'revision' }, availability: { status: 'available', delivery: { url: 'https://media.test/audio.wav', media_type: 'audio/wav' } } };

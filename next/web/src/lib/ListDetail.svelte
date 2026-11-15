@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
 	import { onMount, untrack } from 'svelte';
-	import type { AwaitStatus, ListDetail, Track } from '$core/api';
-	import type { CollectionRevision } from '$core/collections/collection-order';
-	import { applyCollectionRevision } from '$core/collections/projected-collection';
-	import { collectionArtwork, trackArtwork } from '$core/artwork';
+	import type { AwaitStatus, ListDetail, Track } from '@plyr/next-core/api';
+	import type { CollectionRevision } from '@plyr/next-core/collections/collection-order';
+	import { applyCollectionRevision } from '@plyr/next-core/collections/projected-collection';
+	import { collectionArtwork, trackArtwork } from '@plyr/next-core/artwork';
 	import { auth } from './auth';
 	import { player } from './player.svelte';
 	import Artwork from './ui/Artwork.svelte';

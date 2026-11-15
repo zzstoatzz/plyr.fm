@@ -1,9 +1,9 @@
 import { Link } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import type { Track } from '../../core/src/api';
+import type { Track } from '@plyr/next-core/api';
 import { useAppearance } from './appearance';
-import { trackArtwork } from '../../core/src/artwork';
+import { trackArtwork } from '@plyr/next-core/artwork';
 import { artistName, Cover, type Play } from './CatalogPieces';
 import { compactCount, formatDuration, timeAgo } from './home-state';
 import { HomeTrackActions } from './HomeTrackRow';

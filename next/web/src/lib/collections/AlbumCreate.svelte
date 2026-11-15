@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { onMount, untrack } from 'svelte';
-  import { albumIdFromUri, type Track } from '$core/api';
+  import { albumIdFromUri, type Track } from '@plyr/next-core/api';
   import { auth } from '$lib/auth';
   import EditorPanel from '$lib/catalog/EditorPanel.svelte';
   import { createPds } from '$lib/pds';

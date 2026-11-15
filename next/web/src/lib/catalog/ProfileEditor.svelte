@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
-  import type { AwaitStatus } from '$core/api';
+  import type { AwaitStatus } from '@plyr/next-core/api';
   import { auth } from '$lib/auth';
   import { createPds } from '$lib/pds';
   import Loading from '$lib/ui/Loading.svelte';

@@ -1,7 +1,7 @@
 import { api } from './api-client';
-import { PlayOutbox } from '../../core/src/play-outbox';
+import { PlayOutbox } from '@plyr/next-core/play-outbox';
 import { playOutboxStorage } from './play-outbox-storage';
-import { playMetrics } from '../../core/src/play-metrics';
+import { playMetrics } from '@plyr/next-core/play-metrics';
 import { radioTrackId } from './radio-track';
 
 let outbox: PlayOutbox | undefined;

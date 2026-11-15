@@ -1,10 +1,10 @@
 <script lang="ts">
   import { beforeNavigate } from '$app/navigation';
   import { onMount, tick, untrack } from 'svelte';
-  import { ApiError, type Artist, type Track } from '$core/api';
-  import { collectionArtwork, trackArtwork } from '$core/artwork';
-  import { accessLabel } from '$core/access/label';
-  import { isPrivateTrack } from '$core/track-access';
+  import { ApiError, type Artist, type Track } from '@plyr/next-core/api';
+  import { collectionArtwork, trackArtwork } from '@plyr/next-core/artwork';
+  import { accessLabel } from '@plyr/next-core/access/label';
+  import { isPrivateTrack } from '@plyr/next-core/track-access';
   import { api } from '$lib/api';
   import { auth } from '$lib/auth';
   import { authConfig } from '$lib/auth-config';

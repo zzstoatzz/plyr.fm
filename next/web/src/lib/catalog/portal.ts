@@ -1,5 +1,5 @@
-import { catalogRevision } from '$core/catalog/changes';
-import { createCatalogPages } from '$core/catalog/pages';
+import { catalogRevision } from '@plyr/next-core/catalog/changes';
+import { createCatalogPages } from '@plyr/next-core/catalog/pages';
 import { api } from '$lib/api';
 import { auth } from '$lib/auth';
 

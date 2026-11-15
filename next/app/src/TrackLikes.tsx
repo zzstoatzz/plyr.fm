@@ -5,7 +5,7 @@ import { Link } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { api } from './api-client';
-import { type Track } from '../../core/src/api';
+import { type Track } from '@plyr/next-core/api';
 import { Row, usePages, useResource } from './CatalogPieces';
 import { useAuth } from './auth';
 import { createPds } from './pds';

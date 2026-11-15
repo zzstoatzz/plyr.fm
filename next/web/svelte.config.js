@@ -8,7 +8,6 @@ export default {
 		// index.html fallback: cloudflare pages then serves it for every path
 		// (SPA mode). a pure client app: every route renders in the browser against the
 		// read-only zig appview, and writes go straight to the user's PDS.
-		alias: { '$core': '../core/src' },
 		adapter: adapter({ fallback: 'index.html' })
 	}
 };

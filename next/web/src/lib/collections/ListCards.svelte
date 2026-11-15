@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { ListSummary } from '$core/api';
-  import { collectionArtwork } from '$core/artwork';
+  import type { ListSummary } from '@plyr/next-core/api';
+  import { collectionArtwork } from '@plyr/next-core/artwork';
   import Artwork from '$lib/ui/Artwork.svelte';
 
   let { lists }: { lists: ListSummary[] } = $props();

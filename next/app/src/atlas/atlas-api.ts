@@ -1,5 +1,5 @@
 import { api } from '../api-client';
-import { type Track } from '../../../core/src/api';
+import { type Track } from '@plyr/next-core/api';
 import { radioTrackId } from '../radio-track';
 import type { AtlasData } from './types';
 

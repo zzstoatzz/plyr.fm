@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { onMount, untrack } from 'svelte';
-  import { playlistIdFromUri, type Track } from '$core/api';
+  import { playlistIdFromUri, type Track } from '@plyr/next-core/api';
   import { auth } from '$lib/auth';
   import { createPds } from '$lib/pds';
   import Icon from '$lib/ui/Icon.svelte';

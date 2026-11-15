@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { Track } from '$core/api';
-  import { isPrivateTrack } from '$core/track-access';
+  import type { Track } from '@plyr/next-core/api';
+  import { isPrivateTrack } from '@plyr/next-core/track-access';
   import { api } from '$lib/api';
   import PagedListing from '$lib/catalog/PagedListing.svelte';
 
