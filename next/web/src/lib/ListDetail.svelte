@@ -84,7 +84,7 @@
 				{#if list.metrics.member_count > tracks.length}<span aria-hidden="true">·</span><span>{tracks.length} playable</span>{/if}
 			</div>
 			<div class="actions">
-				<button type="button" class="primary-button play" aria-label={`${playing ? 'Pause' : 'Play'} ${title}`} disabled={!tracks.length || active && (player.loading || player.snapshot.waiting)} onclick={playAll}><Icon name={playing ? 'pause' : 'play'} /> {playing ? 'pause' : 'play'}</button>
+				<button type="button" class="primary-button play" aria-label={`${playing ? 'Pause' : 'Play'} ${title}`} disabled={!tracks.length || active && !playing && player.snapshot.waiting} onclick={playAll}><Icon name={playing ? 'pause' : 'play'} /> {playing ? 'pause' : 'play'}</button>
 				<button type="button" class="text-button enqueue" disabled={!tracks.length || player.localMode} title={player.localMode ? "play a public track to change queues" : undefined} onclick={() => player.enqueueCollection(tracks)}><Icon name="queue" /> add to queue</button>
 				<button type="button" class="icon-button share" aria-label={`Share ${list.object}`} onclick={share}><Icon name="share" /></button>
 				{#if owned && !editing}<button type="button" class="text-button" onclick={() => { editing = true; }}>edit {list.object}</button>{/if}

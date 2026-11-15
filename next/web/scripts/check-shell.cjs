@@ -239,6 +239,15 @@ async function collectionControls(browser, phone, scheme) {
   const collectionPath = `/${kind}/fixture`;
   const { context, page, errors } = await setup(browser, width, phone ? 844 : 960, { phone, scheme });
   try {
+    await page.addInitScript(() => {
+      const NativeAudio = window.Audio;
+      window.Audio = class extends NativeAudio {
+        constructor() {
+          super();
+          window.collectionAudio = this;
+        }
+      };
+    });
     const requests = [];
     page.on('request', request => {
       if (new URL(request.url()).pathname.endsWith('/playback')) requests.push(request);
@@ -247,7 +256,11 @@ async function collectionControls(browser, phone, scheme) {
     await page.getByRole('heading', { name: title, exact: true }).waitFor();
     await page.getByText('track unavailable', { exact: true }).waitFor();
     await page.getByRole('button', { name: 'add to queue', exact: true }).click();
-    await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'queue', exact: true }).click();
+    const navigation = page.getByRole('navigation', { name: 'Main navigation' });
+    if (phone) {
+      await navigation.getByRole('link', { name: 'library', exact: true }).click();
+      await page.getByRole('link', { name: 'open queue', exact: true }).click();
+    } else await navigation.getByRole('link', { name: 'queue', exact: true }).click();
     const queue = page.getByRole('region', { name: 'Queue', exact: true });
     const current = queue.getByRole('region', { name: 'now playing', exact: true });
     const picks = queue.getByRole('region', { name: 'up next', exact: true });
@@ -256,6 +269,10 @@ async function collectionControls(browser, phone, scheme) {
     assert.deepEqual(await picks.getByRole('link').allTextContents(), collectionTracks.slice(1).map(track => track.metadata.title));
     assert.equal(requests.length, 0, 'add to queue does not request audio');
     await page.goBack();
+    if (phone) {
+      await page.waitForURL(origin + '/library');
+      await page.goBack();
+    }
     const play = page.getByRole('button', { name: `Play ${title}`, exact: true });
     const pause = page.getByRole('button', { name: `Pause ${title}`, exact: true });
     const dock = page.getByTestId('player-dock');
@@ -263,7 +280,11 @@ async function collectionControls(browser, phone, scheme) {
     await play.click();
     await pause.waitFor();
     await position.fill('15');
+    await page.waitForFunction(() => window.collectionAudio?.currentTime >= 14);
+    await page.evaluate(() => window.collectionAudio.dispatchEvent(new Event('waiting')));
+    assert.equal(await pause.isEnabled(), true, 'collection playback can be paused while buffering');
     await pause.click();
+    await page.waitForFunction(() => window.collectionAudio.paused);
     await play.click();
     await pause.waitFor();
     assert.ok(Number(await position.inputValue()) >= 14, 'collection play resumes the current position');
