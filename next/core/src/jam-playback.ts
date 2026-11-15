@@ -264,14 +264,13 @@ export function createJamPlayback(options: JamPlaybackOptions) {
   function enqueue(tracks: Track[]) {
     if (!active) return false;
     const refs = references(tracks);
-    if (refs?.length) editQueue((items, index) => ({ queue: [...items, ...refs], index }));
+    if (refs?.length) session?.appendQueue(refs);
     return true;
   }
 
   function editQueue(edit: JamQueueEdit) {
     if (!active) return false;
-    if (session?.state) session.editQueue(edit);
-    else update({ error: 'waiting for the jam to connect' });
+    session?.editQueue(edit);
     return true;
   }
 

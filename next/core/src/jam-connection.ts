@@ -140,7 +140,7 @@ export class JamConnection {
   private commandTimer: ReturnType<typeof setTimeout> | undefined;
   private inFlight: Pending | undefined;
   private pending: Pending[] = [];
-  private readonly queueEdits = new WeakMap<Pending, JamQueueEdit>();
+  private readonly queueEdits = new WeakMap<Pending, { apply: JamQueueEdit; original?: JamTrack[] }>();
   private serial = 0;
   private lastMessageAt = 0;
   private readonly readTime: () => number;
@@ -243,12 +243,22 @@ export class JamConnection {
   }
 
   editQueue(edit: JamQueueEdit): boolean {
-    const state = this.state;
-    if (!state || state.personal) return false;
-    return this.submit({ action: 'replaceQueue', queue: state.queue, index: state.index }, state, edit);
+    return this.queueEdit(edit, true);
   }
 
-  private submit(intent: PlaybackIntent, expected?: Pick<JamState, 'epoch' | 'revision' | 'occurrence'>, edit?: JamQueueEdit): boolean {
+  appendQueue(tracks: JamTrack[]): boolean {
+    return this.queueEdit((queue, index) => ({ queue: [...queue, ...tracks], index }), false);
+  }
+
+  private queueEdit(apply: JamQueueEdit, requireSameQueue: boolean): boolean {
+    const state = this.state;
+    if (!state || state.personal) { this.options.onError('waiting for the jam to connect'); return false; }
+    return this.submit({ action: 'replaceQueue', queue: state.queue, index: state.index }, state,
+      { apply, original: requireSameQueue ? state.queue : undefined });
+  }
+
+  private submit(intent: PlaybackIntent, expected?: Pick<JamState, 'epoch' | 'revision' | 'occurrence'>,
+    edit?: { apply: JamQueueEdit; original?: JamTrack[] }): boolean {
     if (this.awaitingSnapshot || !this.state || this.socket?.readyState !== 1 || this.closed) { this.options.onError('the jam is reconnecting'); return false; }
     const base = expected ?? this.state;
     const command = { ...intent, id: `${Math.floor(this.now()).toString(36)}-${++this.serial}-${Math.random().toString(36).slice(2, 10)}`, epoch: base.epoch,
@@ -291,7 +301,18 @@ export class JamConnection {
     const duplicateIntent = next.expectedRevision < this.state!.revision && (next.action === 'play' && this.state!.playing || next.action === 'pause' && !this.state!.playing);
     if (!this.state?.personal && next.expectedRevision !== this.state?.revision && !duplicateIntent) { this.pending = []; this.options.onError('the jam changed. try that action again.'); return; }
     const edit = this.queueEdits.get(next);
-    if (edit && this.state && next.action === 'replaceQueue') Object.assign(next, edit(this.state.queue.slice(), this.state.index));
+    if (edit && this.state && next.action === 'replaceQueue') {
+      const { queue, index } = this.state;
+      if (edit.original && (edit.original.length !== queue.length || edit.original.some((track, at) => {
+        const latest = queue[at];
+        return track.id !== latest.id || track.uri !== latest.uri || track.cid !== latest.cid || track.key !== latest.key;
+      }))) {
+        this.options.onError('the jam queue changed. try that action again.');
+        this.flush();
+        return;
+      }
+      Object.assign(next, edit.apply(queue.slice(), index));
+    }
     this.inFlight = next;
     this.socket.send(JSON.stringify(next));
     this.commandTimer = setTimeout(() => this.socket?.close(), 8_000);
