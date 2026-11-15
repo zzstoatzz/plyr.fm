@@ -553,11 +553,11 @@ max_lines = 501
 
 [[rules]]
 path = "next/core/src/personal-playback.ts"
-max_lines = 546
+max_lines = 561
 
 [[rules]]
 path = "next/web/src/lib/player.svelte.ts"
-max_lines = 655
+max_lines = 661
 
 [[rules]]
 path = "next/web/src/lib/atlas/renderer.ts"

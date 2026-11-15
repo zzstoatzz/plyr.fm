@@ -1,7 +1,9 @@
 import type { Track } from './api.ts';
 import { recordPlayback, type DiagnosticFields } from './playback-diagnostics.ts';
+import { MAX_QUEUE_TRACKS } from './queue-state.ts';
 
-export type EarlyIntent = { kind: 'play'; track: Track; collection?: Track[]; label?: string } | { kind: 'enqueue'; track: Track };
+export type EarlyIntent = { kind: 'play'; track: Track; collection?: Track[]; label?: string }
+  | { kind: 'enqueue'; track: Track } | { kind: 'enqueueCollection'; tracks: Track[]; owner?: string };
 type EarlyPlay = Extract<EarlyIntent, { kind: 'play' }>;
 
 /** How long a play waits for the account queue to start before it plays on this device instead. */
@@ -45,7 +47,25 @@ export class EarlyIntents {
   }
 
   enqueue(track: Track, cap = 64) {
-    if (this.intents.length < cap) this.intents.push({ kind: 'enqueue', track });
+    if (this.intents.length < cap && this.queuedTracks() < MAX_QUEUE_TRACKS) this.intents.push({ kind: 'enqueue', track });
+  }
+
+  hasCollection(owner: string) {
+    return this.intents.some(intent => intent.kind === 'enqueueCollection' && (intent.owner === undefined || intent.owner === owner));
+  }
+
+  retainCollectionsFor(owner: string) {
+    this.intents = this.intents.filter(intent => intent.kind !== 'enqueueCollection' || intent.owner === undefined || intent.owner === owner);
+  }
+
+  enqueueCollection(tracks: Track[], owner?: string): boolean {
+    if (this.queuedTracks() + tracks.length > MAX_QUEUE_TRACKS) return false;
+    this.intents.push({ kind: 'enqueueCollection', tracks, ...(owner === undefined ? {} : { owner }) });
+    return true;
+  }
+
+  private queuedTracks() {
+    return this.intents.reduce((count, intent) => count + (intent.kind === 'enqueueCollection' ? intent.tracks.length : Number(intent.kind === 'enqueue')), 0);
   }
 
   /** Every pending intent, in order; the queue is empty afterwards. */

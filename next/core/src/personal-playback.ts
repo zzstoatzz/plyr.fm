@@ -97,6 +97,8 @@ export function createPersonalPlayback(options: Options) {
   function start() {
     const auth = options.account();
     if (!auth.ready) return;
+    const account = auth.did ?? 'anonymous';
+    early.retainCollectionsFor(account);
     playRequest++;
     pendingPlay = undefined;
     update('waiting', early.hasPlay());
@@ -104,7 +106,6 @@ export function createPersonalPlayback(options: Options) {
     held = false;
     pausedHere = false;
     const previous = session;
-    const account = auth.did ?? 'anonymous';
     const returning = !!auth.did && options.consumeLogin();
     const adopting = !!auth.did && (source === 'anonymous' || returning);
     let adopt: QueueCheckpoint | undefined = adopting && !returning && previous ? { version: 1, owner: account, updatedAt: Date.now(),
@@ -267,7 +268,8 @@ export function createPersonalPlayback(options: Options) {
       if (stale()) return;
       for (const intent of early.drain()) {
         if (intent.kind === 'play') play(intent.track, intent.collection, intent.label);
-        else enqueue(intent.track);
+        else if (intent.kind === 'enqueue') enqueue(intent.track);
+        else if (intent.owner === undefined || intent.owner === account) enqueueCollection(intent.tracks);
       }
     });
 
@@ -479,9 +481,22 @@ export function createPersonalPlayback(options: Options) {
     return true;
   }
   function enqueue(track: Track) {
+    if (early.hasCollection(options.account().did ?? 'anonymous')) { enqueueCollection([track]); return; }
     if (!session || source !== (options.account().did ?? 'anonymous')) { early.enqueue(track); return; }
     remember([track]);
     edit({ action: 'enqueue', entry: queueReference(track, options.id()) });
+  }
+  function enqueueCollection(tracks: Track[]) {
+    if (!tracks.length) return;
+    update('queueError', undefined);
+    const auth = options.account();
+    const owner = auth.did ?? 'anonymous';
+    if (!session?.initialized || source !== owner || early.hasCollection(owner)) {
+      if (!early.enqueueCollection(tracks, auth.ready || auth.did ? owner : undefined)) update('queueError', 'there is not enough room in your queue. remove tracks and try again.');
+      return;
+    }
+    session.remember(tracks);
+    void session.editMany(tracks.map(track => ({ action: 'enqueue', entry: queueReference(track, options.id()) })));
   }
   function edit(intent: Parameters<PersonalQueue['edit']>[0]) { void session?.edit(intent); }
   function select(at: number) {
@@ -531,7 +546,7 @@ export function createPersonalPlayback(options: Options) {
   return { subscribe, getSnapshot: () => snapshot, start, save, tick, prepareLogin, refresh, configureContinuation,
     ensureContinuation, hasRemoteClock, keepPlaying,
     diagnose: () => ({ waiting: snapshot.waiting, pendingPlay: pendingPlay !== undefined, session: !!session, synchronized: !!session?.synchronized, online: !!session?.online, owned: owned, early: early.length }), unstick: () => { playRequest++; pendingPlay = undefined; early.drain(); update('waiting', false); }, position, duration, setKeepPlaying: (value: boolean) => edit({ action: 'setContinuation', keepPlaying: value }), checkpoint, ownsOutput: () => owned, next, resume, defer, command, play, select, local, remember,
-    enqueue,
+    enqueue, enqueueCollection,
     remove: (at: number) => { const entry = session?.state.entries[at]; if (entry) edit({ action: 'removeEntry', entryKey: entry.key }); },
     move: (from: number, to: number) => {
       const entries = session?.state.entries;

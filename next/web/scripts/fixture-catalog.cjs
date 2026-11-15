@@ -19,6 +19,7 @@ const tracks = Array.from({ length: 9 }, (_, index) => {
   };
 });
 const audio = Buffer.alloc(44 + 8000 * 240 * 2);
+const collectionTracks = [tracks[2], tracks[0], tracks[1]];
 audio.write('RIFF', 0); audio.writeUInt32LE(audio.length - 8, 4); audio.write('WAVEfmt ', 8);
 audio.writeUInt32LE(16, 16); audio.writeUInt16LE(1, 20); audio.writeUInt16LE(1, 22);
 audio.writeUInt32LE(8000, 24); audio.writeUInt32LE(16000, 28); audio.writeUInt16LE(2, 32);
@@ -89,6 +90,17 @@ async function setup(browser, width, height = 900, options = {}) {
     }
     else if (url.pathname === '/v1/stats') body = { object: 'platform_stats', tracks: 9, artists: 1, duration_seconds: 2000, plays: 9, updated_at_ms: 1794651020000 };
     else if (url.pathname === '/v1/tracks') body = { object: 'list', data: tracks, has_more: false };
+    else if (/^\/v1\/(albums|playlists)\/fixture$/.test(url.pathname)) {
+      const kind = url.pathname.includes('/albums/') ? 'album' : 'playlist';
+      const members = collectionTracks.map((track, position) => ({ position, track, subject: track.record, availability: 'available' }));
+      members.splice(1, 0, { position: 3, track: null, subject: tracks[3].record, availability: 'unavailable' });
+      body = {
+        object: kind, id: 'fixture', record: { uri: `at://${artistDid}/fm.plyr.list/${kind}` },
+        metadata: { name: `Fixture ${kind}` }, owner: { did: artistDid, profile: tracks[0].artist.profile },
+        members, metrics: { member_count: members.length, available_count: 3, total_plays: 0 },
+        media: { artwork: collectionTracks[0].media.artwork }
+      };
+    }
     else if (url.pathname === '/v1/charts/tracks') body = { period: url.searchParams.get('period') || 'week', data: tracks.map((track, index) => ({ rank: index + 1, track, plays: 1, likes: track.metrics.like_count })) };
     else if (url.pathname.startsWith('/v1/artists/') && url.pathname.endsWith('/metrics')) body = { totals: { plays: 9, tracks: 9, duration_seconds: 2000 }, top_track: null };
     else if (url.pathname.startsWith('/v1/artists/')) body = { object: 'artist', did: artistDid, handle: 'sketches.test', display_name: 'replyomatic', bio: null, avatar_url: null, support_url: null };
@@ -108,4 +120,4 @@ async function serve() {
   return `http://127.0.0.1:${server.address().port}`;
 }
 
-module.exports = { artistDid, atlas, tracks, serveAudio, setup, serve, close: () => server.close() };
+module.exports = { artistDid, atlas, tracks, collectionTracks, serveAudio, setup, serve, close: () => server.close() };

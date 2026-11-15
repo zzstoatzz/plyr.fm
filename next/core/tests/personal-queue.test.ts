@@ -4,7 +4,7 @@ import { createPersonalPlayback, type PersonalPlaybackTarget } from '../src/pers
 import { PersonalQueue } from '../src/personal-queue.ts';
 import type { Track } from '../src/api.ts';
 import type { JamSocket, JamState } from '../src/jam-connection.ts';
-import { mergeQueueMutations, type QueueMutation } from '../src/queue-mutation.ts';
+import { mergeQueueMutations, queueMutations, type QueueMutation } from '../src/queue-mutation.ts';
 import type { QueueStorage } from '../src/queue-checkpoint.ts';
 
 const uri = 'at://did:plc:aaaaaaaaaaaaaaaaaaaaaaaa/fm.plyr.track/a';
@@ -27,20 +27,123 @@ class Socket implements JamSocket {
   receive(value: object) { this.onmessage?.call(this as unknown as WebSocket, new MessageEvent('message', { data: JSON.stringify(value) })); }
 }
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
-function setup(journal: QueueMutation[] = []) {
+function setup(journal: QueueMutation[] = [], id = () => 'edit') {
   const socket = new Socket();
   let stored = structuredClone(journal);
   const calls: string[][] = [];
   const changes: unknown[] = [];
   const errors: string[] = [];
+  const persisted: number[] = [];
   const storage: QueueStorage = { load: async () => null, loadMutations: async () => structuredClone(stored),
-    saveMutations: async (_, entries, remove) => { stored = structuredClone(mergeQueueMutations(stored, entries, remove)); return stored; }, save: async () => {}, progress: async () => {} };
-  const queue = new PersonalQueue({ owner: 'account', storage, id: () => 'edit',
+    saveMutations: async (_, entries, remove) => { persisted.push(entries.length); stored = structuredClone(mergeQueueMutations(stored, entries, remove)); return stored; },
+    save: async () => {}, progress: async () => {} };
+  const queue = new PersonalQueue({ owner: 'account', storage, id,
     resolve: async ids => { calls.push(ids); return { data: ids.map(id => ({ ...track, id, record: { ...track.record, uri: Buffer.from(id.slice(4), 'base64url').toString() } })).reverse(), missing: [] }; },
     changed: state => changes.push(state), remote: () => {}, error: message => errors.push(message),
     connect: { admit: async () => ({ ticket: 'test', websocketUrl: 'wss://test' }), socket: () => socket } });
-  return { queue, socket, calls, changes, errors, stored: () => stored };
+  return { queue, socket, calls, changes, errors, persisted, stored: () => stored };
 }
+
+test('a signed-in queue keeps all seventy collection entries while acknowledgements are stalled', async () => {
+  let id = 0;
+  const first = setup([], () => 'edit-' + ++id);
+  const entries = Array.from({ length: 70 }, (_, at) => ({ ...ref, key: 'collection-' + at }));
+  let journal: QueueMutation[];
+  try {
+    await first.queue.start();
+    first.socket.receive({ type: 'state', state: base });
+    first.queue.remember([track]);
+    await first.queue.editMany(entries.map(entry => ({ action: 'enqueue', entry })));
+    assert.deepEqual(first.queue.state.entries.map(entry => entry.key), [ref, ...entries].map(entry => entry.key));
+    assert.deepEqual(first.persisted, [70, 1], 'the whole collection is journaled before the first command is prepared');
+    journal = queueMutations({ owner: 'account', entries: first.stored() }, 'account');
+    assert.equal(journal.length, entries.length);
+    assert.deepEqual(first.errors, []);
+  } finally { first.queue.close(); }
+  const refreshed = setup(journal);
+  try {
+    await refreshed.queue.start();
+    const started = performance.now();
+    refreshed.socket.receive({ type: 'state', state: base });
+    let state = base;
+    for (const [at, entry] of entries.entries()) {
+      const findCommand = () => refreshed.socket.sent.filter(value => value.action === 'enqueue')[at];
+      for (let attempt = 0; !findCommand() && attempt < 40; attempt++) await new Promise(resolve => setTimeout(resolve, 5));
+      const command = findCommand();
+      assert.deepEqual(command?.entry, entry);
+      state = { ...state, revision: state.revision + 1, queue: [...state.queue, entry],
+        personal: { ...state.personal!, explicitEnd: state.queue.length + 1 } };
+      refreshed.socket.receive({ type: 'result', id: command.id, outcome: 'applied', state });
+    }
+    await tick();
+    assert.ok(performance.now() - started >= (entries.length - 1) * 45, 'replay stays below the coordinator message limit');
+    assert.deepEqual(refreshed.stored(), []);
+    assert.equal(refreshed.queue.wire?.positionMs, base.positionMs);
+    assert.deepEqual(refreshed.queue.state.entries.map(entry => entry.key), [ref, ...entries].map(entry => entry.key));
+  } finally { refreshed.queue.close(); }
+});
+
+test('collections waiting on admission stay ordered within the requesting account', async () => {
+  let did = 'account-a';
+  let blockedLoad!: (checkpoint: unknown) => void;
+  let releaseJoin!: () => void;
+  let id = 0;
+  const otherUri = track.record.uri + '-other';
+  const other = { ...track, id: 'trk_' + Buffer.from(otherUri).toString('base64url'), record: { ...track.record, uri: otherUri } };
+  const journal: { owner: string; ids: string[] }[] = [];
+  const target: PersonalPlaybackTarget = {
+    ready: false, suspended: false, repeat: 'off', keepPlaying: false, position: () => 0, duration: () => 60,
+    playing: () => false, load: async () => false, loaded: async () => {}, seek: async () => {},
+    play: () => {}, pause: () => {}, setQueue: () => {}, setRepeat: () => {}, error: assert.fail,
+  };
+  const socket = new Socket();
+  const model = createPersonalPlayback({
+    target: () => target,
+    account: () => ({ ready: true, did, accountSync: true, join: async () => {
+      await new Promise<void>(resolve => { releaseJoin = resolve; });
+      return { ticket: 'test', websocketUrl: 'wss://test' };
+    } }),
+    id: () => 'key-' + ++id,
+    storage: { load: owner => owner === 'account-a' ? new Promise(resolve => { blockedLoad = resolve; }) : Promise.resolve(null),
+      loadMutations: async () => [], save: async () => {}, progress: async () => {},
+      saveMutations: async (owner, entries) => {
+        journal.push({ owner, ids: entries.flatMap(({ intent }) => intent.action === 'enqueue' ? [intent.entry.id] : []) });
+        return entries;
+      } },
+    consumeLogin: () => false, socket: () => socket, resolve: async () => ({ data: [], missing: [] }),
+    recent: async () => ({ object: 'list', data: [], has_more: false }),
+  });
+  model.start();
+  model.enqueueCollection([other]);
+  did = 'account-b';
+  const stop = model.start();
+  try {
+    model.enqueueCollection([track]);
+    await tick();
+    model.enqueueCollection([other]);
+    blockedLoad(null);
+    releaseJoin();
+    await tick();
+    assert.deepEqual(journal, [
+      { owner: 'account-b', ids: [track.id] },
+      { owner: 'account-b', ids: [other.id] },
+    ]);
+  } finally { stop?.(); }
+});
+
+test('a collection that cannot fit leaves the queue and its journal intact', async () => {
+  const { queue, socket, errors, persisted } = setup();
+  try {
+    await queue.start();
+    socket.receive({ type: 'state', state: base });
+    await tick();
+    const entries = Array.from({ length: 200 }, (_, at) => ({ ...ref, key: 'collection-' + at }));
+    await queue.editMany(entries.map(entry => ({ action: 'enqueue', entry })));
+    assert.deepEqual(queue.state.entries.map(entry => entry.key), [ref.key]);
+    assert.deepEqual(persisted, []);
+    assert.equal(errors.length, 1);
+  } finally { queue.close(); }
+});
 
 test('queue hydration batches distinct tracks and progress does not rehydrate or republish metadata', async () => {
   const { queue, socket, calls, changes } = setup();

@@ -6,6 +6,8 @@ import { mergeQueueMutations, type DurableQueueEdit, type QueueMutation } from '
 import * as queue from './queue-state.ts';
 import { recordPlayback } from './playback-diagnostics.ts';
 
+const EDIT_INTERVAL_MS = 50;
+
 export type Reference = JamTrack & { key: string };
 export function queueReference(track: Track, key: string): Reference {
   if (isPrivateTrack(track)) throw new Error('private tracks stay in the private queue.');
@@ -38,6 +40,7 @@ export class PersonalQueue {
   private connection?: JamConnection;
   private mutations: QueueMutation[] = [];
   private sent?: string;
+  private lastEditSentAt = -Infinity;
   private closed = false;
   private connected = false;
   private readonly waiters = new Set<(connected: boolean) => void>();
@@ -112,7 +115,7 @@ export class PersonalQueue {
         if (this.mutations[0]?.id !== command.id) return;
         this.mutations.shift();
         this.sent = undefined;
-        void this.persistMutations([command.id]).then(() => this.pump()).catch(() => this.options.error('could not save your queue change'));
+        void this.persistMutations([], [command.id]).then(() => this.pump()).catch(() => this.options.error('could not save your queue change'));
         if (!['applied', 'noop', 'duplicate'].includes(outcome)) this.options.error('your queue changed. please try that edit again.');
         this.project();
       },
@@ -143,22 +146,40 @@ export class PersonalQueue {
     this.options.changed(state);
   }
 
-  async edit(intent: DurableQueueEdit) {
-    if (this.closed) return;
-    if (intent.action === 'enqueue' && this.state.entries.length >= 200 && this.state.index <= 0) { this.options.error('your queue is full. remove a track first.'); return; }
-    if (this.mutations.length >= 64) { this.options.error('connect before adding more queue changes'); return; }
-    if (!this.options.connect) { this.applyLocal(intent); return; }
-    const mutation = { id: this.options.id(), intent };
-    this.mutations.push(mutation);
-    try { await this.persistMutations(); }
-    catch {
-      this.mutations = this.mutations.filter(entry => entry !== mutation);
-      this.options.error('could not save your queue change');
+  edit(intent: DurableQueueEdit) { return this.editMany([intent]); }
+
+  async editMany(intents: DurableQueueEdit[]) {
+    if (this.closed || !intents.length) return;
+    if (!this.options.connect) {
+      if (this.canAdd(intents)) this.applyLocal(intents);
       return;
     }
-    if (this.closed) return;
-    if (this.wire) this.project(); else this.applyLocal(intent);
+    const write = this.writes.catch(() => {}).then(async () => {
+      if (this.closed || !this.canAdd(intents)) return;
+      if (this.mutations.length + intents.length > queue.MAX_QUEUE_TRACKS) {
+        this.options.error('connect before adding more queue changes');
+        return;
+      }
+      const entries = intents.map(intent => ({ id: this.options.id(), intent }));
+      await this.options.storage.saveMutations(this.options.owner, entries, []);
+      if (this.closed) return;
+      this.mutations.push(...entries);
+      if (this.wire) this.project(); else this.applyLocal(intents);
+    });
+    this.writes = write;
+    try { await write; }
+    catch { if (!this.closed) this.options.error('could not save your queue change'); return; }
     await this.pump();
+  }
+
+  private canAdd(intents: DurableQueueEdit[]) {
+    const additions = intents.filter(intent => intent.action === 'enqueue').length;
+    const occupied = this.state.entries.length - Math.max(0, this.state.index);
+    if (additions && additions > queue.MAX_QUEUE_TRACKS - occupied) {
+      this.options.error('there is not enough room in your queue. remove tracks and try again.');
+      return false;
+    }
+    return true;
   }
 
   command(intent: PlaybackIntent): boolean {
@@ -228,10 +249,10 @@ export class PersonalQueue {
     for (const finish of this.waiters) finish(false);
   }
 
-  private persistMutations(remove: string[] = []) {
-    const entries = this.mutations.map(entry => ({ ...entry }));
+  private persistMutations(entries: QueueMutation[], remove: string[] = []) {
     const write = this.writes.catch(() => {}).then(() => this.options.storage.saveMutations(this.options.owner, entries, remove)).then(merged => {
-      for (const entry of this.mutations) entry.base = merged.find(saved => saved.id === entry.id)?.base ?? entry.base;
+      const head = this.mutations[0];
+      if (head && entries[0]?.id === head.id) head.base = merged.find(saved => saved.id === head.id)?.base ?? head.base;
     });
     this.writes = write;
     return write;
@@ -241,20 +262,25 @@ export class PersonalQueue {
     if (this.pumping || this.closed || !this.connected || this.sent || !this.wire || !this.mutations.length) return;
     this.pumping = true;
     try {
+      // The coordinator accepts 30 messages per second, including transport commands and heartbeats.
+      const wait = Math.min(EDIT_INTERVAL_MS, EDIT_INTERVAL_MS - (Date.now() - this.lastEditSentAt));
+      if (wait > 0) await new Promise(resolve => setTimeout(resolve, wait));
+      if (this.closed || !this.connected || !this.wire || !this.mutations.length) return;
       const head = this.mutations[0];
       head.base ??= { epoch: this.wire.epoch, expectedRevision: this.wire.revision, occurrence: this.wire.occurrence,
         expectedOutput: this.wire.personal?.output?.connectionId ?? null };
-      await this.persistMutations();
+      await this.persistMutations([{ ...head }]);
       if (this.closed || !this.connected || this.mutations[0] !== head) return;
       const command: Pending = { ...head.intent, id: head.id, ...head.base };
       this.sent = head.id;
-      if (!this.connection?.enqueuePrepared(command)) this.sent = undefined;
+      if (this.connection?.enqueuePrepared(command)) this.lastEditSentAt = Date.now();
+      else this.sent = undefined;
     } catch { this.options.error('could not send your queue change'); }
     finally { this.pumping = false; }
   }
 
-  private applyLocal(intent: DurableQueueEdit) {
-    const next = this.reduce(this.state, intent);
+  private applyLocal(intents: DurableQueueEdit[]) {
+    const next = intents.reduce((state, intent) => this.reduce(state, intent), this.state);
     if (next !== this.state) this.localVersion++;
     this.state = next;
     this.options.changed(this.state);

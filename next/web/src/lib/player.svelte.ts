@@ -408,6 +408,10 @@ class Player {
 			else this.play(track);
 		}
 	}
+	enqueueCollection(tracks: Track[]) {
+		if (this.localMode) return;
+		this.#model.enqueueCollection(tracks.filter(track => track.record.cid && !isPrivateTrack(track)));
+	}
 	remove(index: number) {
 		if (this.liveStation) return;
 		if (this.privateMode) this.queue = editPrivateQueue(this.queue, this.index, { action: 'remove', at: index });
