@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { goto, invalidate } from '$app/navigation';
+	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import type { SearchHit } from '@plyr/next-core/api';
@@ -83,9 +83,12 @@
 		if (length === 1) { input.focus(); return; }
 		const url = new URL(resolve('/search'), page.url);
 		if (term) url.searchParams.set('q', term);
-		if (term && url.href === page.url.href) { void invalidate('plyr:catalog-search'); return; }
+		const retry = !!term && url.href === page.url.href;
 		void goto(url, {
-			replaceState: shortcutSearch,
+			replaceState: shortcutSearch || retry,
+			keepFocus: retry,
+			noScroll: retry,
+			invalidate: retry ? ['plyr:catalog-search'] : undefined,
 			state: { shortcutSearch }
 		});
 	}}>
