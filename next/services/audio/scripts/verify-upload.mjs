@@ -117,24 +117,32 @@ async function verifyPrepublication(makeTransport, source, audioUrl, recordUrl) 
   }
   await recordAbsent();
   const transport = makeTransport(60000);
+  let transferError;
   try {
     const started = await transport.start();
     assert.equal(started.state, 'transferring');
-    const bytes = source.read(0, source.size);
+    assert.equal(started.partCount, 2, 'the Worker can auto-finish a fully received transfer');
+    const bytes = source.read(0, UPLOAD_PART_BYTES);
     const receipt = { number: 1, sha256: createHash('sha256').update(bytes).digest('hex') };
     assert.deepEqual(await transport.part(1, bytes), receipt);
     const status = await transport.status();
     assert.equal(status.state, 'transferring');
     assert.equal(status.reservedBytes, source.size);
     assert.deepEqual(status.receivedParts, [receipt]);
+    assert.deepEqual(status.reservedDigests, [receipt]);
     await mediaHidden();
-  } finally {
+  } catch (error) { transferError = error; }
+  try {
     const cancelled = await makeTransport(20000).cancel();
     assert.equal(cancelled.state, 'cancelled');
     assert.equal(cancelled.reservedBytes, 0);
     await recordAbsent();
     await mediaHidden();
+  } catch (error) {
+    if (transferError) throw new AggregateError([transferError, error], 'fixture transfer and cleanup failed');
+    throw error;
   }
+  if (transferError) throw transferError;
   console.log('deployed admission, multipart receipt, cancellation and quota release verified; no record or public media');
 }
 
@@ -165,7 +173,8 @@ export async function main({ deleteObject = deleteFixtureObject, verifyProcessin
   const recordUri = `at://${owner}/${collection}/${rkey}`;
   const expectedUploadUrl = `${audioOrigin}/v1/uploads/${ownerHash}/${uploadId}`;
   const audioUrl = `${audioOrigin}/media/${ownerHash}/${uploadId}`;
-  const source = waveSource(fullSize ? MAX_SERVICE_AUDIO_BYTES : processing ? 768044 : 4044);
+  const fixtureSize = prepublication ? UPLOAD_PART_BYTES + 4044 : processing ? 768044 : 4044;
+  const source = waveSource(fullSize ? MAX_SERVICE_AUDIO_BYTES : fixtureSize);
   const recipe = processing ? { recipe: 'mp3-320k-44100-v1', outputBudget: fullSize ? 134217728 : 1048576 } : undefined;
   const operation = { owner, collection, rkey, uri: recordUri, uploadId, name: 'fixture.wav', sizeBytes: source.size, contentType: 'audio/wav', fileType: 'wav', record: {}, processing: recipe };
   let processingGeneration;
@@ -212,7 +221,11 @@ export async function main({ deleteObject = deleteFixtureObject, verifyProcessin
   const makeTransport = (timeout = (processing ? 30 : 12) * 60 * 1000) => createUploadTransport(auth, operation, () => {}, AbortSignal.timeout(timeout), observedFetch);
   if (prepublication) {
     const recordUrl = `${xrpc('com.atproto.repo.getRecord')}?${new URLSearchParams({ repo: owner, collection, rkey })}`;
-    return verifyPrepublication(makeTransport, source, audioUrl, recordUrl);
+    try { return await verifyPrepublication(makeTransport, source, audioUrl, recordUrl); }
+    catch (error) {
+      console.error(JSON.stringify({ uploadId, recordUri }));
+      throw error;
+    }
   }
   const transport = makeTransport();
   const artifact = fullSize || processing ? 'upload-acceptance/reservation.json' : null;

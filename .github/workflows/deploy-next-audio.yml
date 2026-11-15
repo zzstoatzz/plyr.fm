@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
     inputs:
       verify_prepublication:
-        description: Transfer and cancel one small part without publishing a record
+        description: Transfer the first of two parts and cancel without publishing a record
         type: boolean
         default: false
       verify_upload:

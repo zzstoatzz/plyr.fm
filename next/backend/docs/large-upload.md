@@ -136,8 +136,9 @@ for the new upload permission remains a separate acceptance requirement.
 Use `verify_prepublication=true` on the same manual workflow to check
 admission and multipart staging without writing an AT Protocol record. This
 mode skips Worker deployment and uses only the dedicated account credentials.
-It stages one 4044-byte part, verifies the saved digest, cancels the reservation
-and checks that reserved bytes return to zero. It verifies that the record is
+It stages the first 10 MiB part of a two-part transfer, leaving the final part
+unsent so the Worker cannot auto-finish. It verifies the saved digest, cancels
+the reservation and checks that reserved bytes return to zero. It verifies that the record is
 absent and the public media endpoint serves no bytes. A cancelled receipt
 remains as metadata. Browser OAuth consent and recovery after publication
 still require a separate test.
