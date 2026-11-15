@@ -260,7 +260,7 @@ async function statsScreen(browser, phone, scheme) {
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
     assert.equal(await page.getByLabel('Catalog totals').evaluate(node =>
       getComputedStyle(node).gridTemplateColumns.split(' ').filter(size => Number.parseFloat(size) > 0).length
-    ), phone ? 2 : 4);
+    ), phone ? 3 : 4);
     const chart = page.getByRole('region', { name: 'most liked tracks', exact: true });
     await chart.getByText('12 likes').waitFor();
     await page.screenshot({ path: path.join(output, `${width}-${scheme}-stats.png`) });
