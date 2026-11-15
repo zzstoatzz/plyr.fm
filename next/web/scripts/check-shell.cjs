@@ -85,7 +85,8 @@ async function keyboard(browser, phone, scheme) {
   const dock = page.getByTestId('player-dock');
   try {
     await page.goto(origin);
-    await page.getByTestId('home-track-row').first().waitFor();
+    const opener = page.getByTestId('home-track-row').first().getByRole('link', { name: tracks[0].metadata.title, exact: true });
+    await opener.focus();
     await press('?');
     const guide = page.getByRole('dialog', { name: 'keyboard shortcuts' });
     await guide.waitFor({ timeout: 3000 });
@@ -98,6 +99,7 @@ async function keyboard(browser, phone, scheme) {
     assert.equal(await page.getByTestId('queue-panel').count(), 0);
     await press('Escape');
     await guide.waitFor({ state: 'hidden' });
+    assert.ok(await opener.evaluate(node => document.activeElement === node));
 
     if (!phone) {
       const help = page.getByRole('button', { name: 'keyboard shortcuts', exact: true });
@@ -105,7 +107,7 @@ async function keyboard(browser, phone, scheme) {
       await guide.waitFor();
       await press('Escape');
       assert.equal(await help.evaluate(node => document.activeElement === node), true);
-      await blur();
+      await opener.focus();
     }
 
     await press('q');
@@ -116,6 +118,8 @@ async function keyboard(browser, phone, scheme) {
     await queue.waitFor({ state: 'hidden' });
     assert.equal(new URL(page.url()).pathname, '/');
 
+    await opener.focus();
+    const beforeSearch = await page.evaluate(() => history.length);
     await press(`${modifier}+k`);
     await page.waitForURL('**/search');
     const search = page.getByRole('searchbox');
@@ -125,8 +129,13 @@ async function keyboard(browser, phone, scheme) {
     await press('?');
     assert.equal(await search.inputValue(), 'q?');
     assert.equal(await guide.isVisible(), false);
+    await search.press('Enter');
+    await page.waitForURL('**/search?q=q%3F');
+    await page.getByText('no results for “q?”.').waitFor();
     await press('Escape');
     await page.waitForURL(origin + '/');
+    await page.waitForFunction(node => document.activeElement === node, await opener.elementHandle());
+    assert.equal(await page.evaluate(() => history.length), beforeSearch + 1, 'search and its query share one browser entry');
 
     await press(`${modifier}+Comma`);
     await page.waitForURL('**/settings');
@@ -155,8 +164,14 @@ async function keyboard(browser, phone, scheme) {
     assert.equal(await actualPosition(), 0);
 
     const volume = dock.getByRole('slider', { name: 'Volume', includeHidden: true });
-    if (!phone) { await volume.fill('0.35'); await blur(); }
+    if (!phone) {
+      await volume.fill('0.35');
+      await volume.focus();
+      await press('m');
+      assert.equal(await volume.inputValue(), '0.35', 'volume slider keeps its focus');
+    }
     const beforeMute = await volume.inputValue();
+    await dock.getByRole('button', { name: 'Play', exact: true }).focus();
     await press('m');
     assert.equal(await volume.inputValue(), '0');
     await press('M');
@@ -165,6 +180,14 @@ async function keyboard(browser, phone, scheme) {
     await dock.getByText(tracks[1].metadata.title, { exact: true }).waitFor();
     await press('j');
     await dock.getByText(tracks[0].metadata.title, { exact: true }).waitFor();
+    if (!phone) {
+      await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'queue', exact: true }).click();
+      await page.waitForURL('**/queue');
+      const dockQueue = dock.getByRole('button', { name: 'Queue', exact: true, pressed: true });
+      await dockQueue.waitFor({ timeout: 3000 });
+      assert.equal(await dockQueue.isDisabled(), true);
+      assert.equal(new URL(page.url()).pathname, '/queue');
+    }
     assert.deepEqual(errors, []);
   } finally { await context.close(); }
 }

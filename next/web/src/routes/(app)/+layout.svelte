@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount, untrack } from 'svelte';
 	import { uploadInProgress } from '@plyr/next-core/publishing/upload-queue-model';
-	import { afterNavigate, goto } from '$app/navigation';
+	import { afterNavigate, beforeNavigate, goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { auth, restoreAuth } from '$lib/auth';
@@ -13,9 +13,11 @@
 	let { children } = $props();
 	let dialog: HTMLDialogElement;
 	let shortcutsDialog: HTMLDialogElement;
-	let searchReturn: URL | undefined;
+	let searchReturn: { url: URL; restoreFocus: () => void } | undefined;
+	let cancelFocusRestore: (() => void) | undefined;
 	let queueReturn: URL | undefined;
-	const queuePanelOpen = $derived(player.queueOpen && page.url.pathname !== resolve('/queue'));
+	const queuePage = $derived(page.url.pathname === resolve('/queue'));
+	const queuePanelOpen = $derived(player.queueOpen && !queuePage);
 	let NowPlaying = $state<typeof import('$lib/NowPlaying.svelte').default>();
 	let account = $state.raw(auth.getAuth());
 	let uploading = $derived(uploadActivity.jobs.filter(job => job.owner === account.did && uploadInProgress(job.phase)).length);
@@ -36,8 +38,12 @@
 		{ action: 'mute or unmute', keys: ['M'] }
 	];
 
+	beforeNavigate(() => cancelFocusRestore?.());
 	afterNavigate(({ to }) => {
-		if (to?.url.pathname !== resolve('/search')) searchReturn = undefined;
+		if (to?.url.pathname !== resolve('/search')) {
+			if (searchReturn && searchReturn.url.href === to?.url.href) searchReturn.restoreFocus();
+			searchReturn = undefined;
+		}
 		if (to?.url.pathname !== resolve('/queue')) queueReturn = undefined;
 	});
 
@@ -73,22 +79,60 @@
 		else if (!player.nowPlaying && dialog.open) dialog.close();
 	});
 
+	function rememberFocus() {
+		const opener = document.activeElement;
+		if (!(opener instanceof HTMLElement) || opener === document.body) return () => {};
+		const attribute = ['id', 'href', 'aria-label', 'name'].find(key => opener.getAttribute(key));
+		const value = attribute && opener.getAttribute(attribute);
+		const selector = value && `${opener.localName}[${attribute}=${CSS.escape(value)}]`;
+		const index = selector ? Array.from(document.querySelectorAll(selector)).indexOf(opener) : -1;
+		return () => {
+			if (opener.isConnected) {
+				opener.focus({ preventScroll: true });
+				return;
+			}
+			if (!selector) return;
+			const restore = () => {
+				const target = document.querySelectorAll<HTMLElement>(selector)[index];
+				target?.focus({ preventScroll: true });
+				return document.activeElement === target;
+			};
+			if (restore()) return;
+			const main = document.getElementById('main');
+			if (!main) return;
+			// A streamed route can render the opener after navigation completes.
+			const observer = new MutationObserver(() => { if (restore()) cancel(); });
+			const timer = window.setTimeout(() => cancel(), 1500);
+			const cancel = () => {
+				observer.disconnect();
+				window.clearTimeout(timer);
+				document.removeEventListener('focusin', cancel);
+				cancelFocusRestore = undefined;
+			};
+			cancelFocusRestore = cancel;
+			document.addEventListener('focusin', cancel, { once: true });
+			observer.observe(main, { childList: true, subtree: true });
+		};
+	}
+
 	async function toggleSearch() {
 		if (page.url.pathname === resolve('/search') && searchReturn) {
-			await goto(searchReturn);
+			if (page.state.shortcutSearch) history.back();
+			else await goto(searchReturn.url, { replaceState: true });
 			return;
 		}
 		if (page.url.pathname !== resolve('/search')) {
-			searchReturn = new URL(page.url);
-			await goto(resolve('/search'));
+			searchReturn = { url: new URL(page.url), restoreFocus: rememberFocus() };
+			await goto(resolve('/search'), { state: { shortcutSearch: true } });
 		}
 		document.getElementById('search-query')?.focus();
 	}
 
-	function toggleQueue() {
-		if (page.url.pathname === resolve('/queue')) {
+	function toggleQueue(fromShortcut = false) {
+		if (queuePage) {
+			if (!fromShortcut) return;
 			player.queueOpen = false;
-			void goto(queueReturn ?? resolve('/'));
+			void goto(queueReturn ?? resolve('/'), { replaceState: true });
 		} else if (matchMedia('(max-width: 720px)').matches) {
 			queueReturn = new URL(page.url);
 			void goto(resolve('/queue'));
@@ -113,12 +157,15 @@
 		}
 		const target = event.target;
 		// The browser can dispatch a key from a just-closed dialog before restoring focus.
-		if (target instanceof Element && !target.closest('dialog:not([open])') &&
-			target.closest('button, a, input, select, textarea, summary, [role="slider"], [contenteditable]:not([contenteditable=false])')) return;
+		const focused = target instanceof Element && !target.closest('dialog:not([open])') ? target : undefined;
+		if (focused?.closest('input, select, textarea, [role="slider"], [contenteditable]:not([contenteditable=false])')) return;
 		if (key === '?') { event.preventDefault(); shortcutsDialog.showModal(); return; }
-		if (key === 'q') { event.preventDefault(); toggleQueue(); return; }
+		if (key === 'q') { event.preventDefault(); toggleQueue(true); return; }
 		if (!player.current && !player.liveStation) return;
-		if (event.code === 'Space' || key === ' ') { event.preventDefault(); player.toggle(); return; }
+		if (event.code === 'Space' || key === ' ') {
+			if (!focused?.closest('button, a, summary')) { event.preventDefault(); player.toggle(); }
+			return;
+		}
 		if (player.liveStation) return;
 		switch (key) {
 			case 'arrowleft': event.preventDefault(); player.seek(player.position - 10); break;
@@ -163,7 +210,7 @@
 </div>
 
 {#if player.current}
-	{#await import('$lib/PlayerDock.svelte') then { default: Dock }}<Dock onQueue={toggleQueue} />{/await}
+	{#await import('$lib/PlayerDock.svelte') then { default: Dock }}<Dock onQueue={toggleQueue} {queuePage} />{/await}
 {/if}
 <dialog bind:this={dialog} aria-label="Now playing" onclose={() => { player.nowPlaying = false; }}>
 	{#if player.nowPlaying && NowPlaying}<NowPlaying close={() => { player.nowPlaying = false; }} />{/if}
