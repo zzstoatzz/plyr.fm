@@ -58,3 +58,49 @@ test('a guest follows the room position and returns to solo playback on leave', 
     assert.equal(snapshot, undefined);
   } finally { controller.close(); }
 });
+
+test('closing during queue hydration discards the late result and permits a fresh admission', async () => {
+  const first = new Socket();
+  const second = new Socket();
+  const other = { ...track, id: 'trk_other', record: { ...track.record, uri: track.record.uri + '-other' } };
+  let resolveOther!: (track: Track) => void;
+  let admissions = 0;
+  let updates = 0;
+  let writes = 0;
+  const target: JamPlaybackTarget = {
+    queue: [track], index: 0, current: track, ready: true, buffering: false, position: () => 0, playing: () => false,
+    load: async () => true, loaded: async () => {}, seek: async () => {}, play: () => {}, pause: () => {},
+    setQueue: () => { writes++; }, clear: () => {},
+  };
+  const controller = createJamPlayback({
+    target: () => target, did: host, socket: () => admissions === 1 ? first : second,
+    track: () => new Promise(resolve => { resolveOther = resolve; }), changed: () => { updates++; },
+  });
+  const join = { host, key: 'room', admit: async () => {
+    admissions++;
+    return { ticket: 'ticket', websocketUrl: 'wss://fixture.test' };
+  } };
+  const mainRef = jamTrack(track);
+  const otherRef = jamTrack(other);
+  assert.ok(mainRef && otherRef);
+  const tick = () => new Promise(resolve => setTimeout(resolve, 0));
+  controller.join(join);
+  try {
+    await tick();
+    first.state({ epoch: 'room', revision: 1, occurrence: 1, queue: [mainRef, otherRef],
+      index: 0, playing: false, positionMs: 0, updatedAtMs: Date.now() });
+    await tick();
+    assert.ok(resolveOther, 'secondary track verification has started');
+    const before = updates;
+    controller.close();
+    assert.equal(updates, before);
+    assert.equal(controller.active(), false);
+    resolveOther(other);
+    await tick();
+    assert.equal(writes, 0);
+    controller.join(join);
+    await tick();
+    assert.equal(admissions, 2);
+    assert.equal(first.readyState, 3);
+  } finally { controller.close(); }
+});

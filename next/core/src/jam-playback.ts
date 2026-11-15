@@ -75,12 +75,11 @@ export function createJamPlayback(options: JamPlaybackOptions) {
     if (cached) return cached;
     let pending = fetching.get(key);
     if (!pending) {
-      const account = previousAccount;
       pending = options.track(ref.id).then(track => {
         if (track.record.cid !== ref.cid || track.record.uri !== ref.uri) throw new Error('the jam track has changed');
-        if (account === previousAccount) cache.set(key, track);
+        if (fetching.get(key) === pending) cache.set(key, track);
         return track;
-      }).finally(() => fetching.delete(key));
+      }).finally(() => { if (fetching.get(key) === pending) fetching.delete(key); });
       fetching.set(key, pending);
     }
     return pending;
@@ -162,18 +161,24 @@ export function createJamPlayback(options: JamPlaybackOptions) {
     } finally { if (synchronizationId === synchronization) synchronizing = false; }
   }
 
-  function leave(restore = true) {
+  function disconnect() {
     generation++;
     stateVersion++;
     synchronization++;
     synchronizing = false;
     syncingKey = '';
     pendingSync = undefined;
-    session?.close();
+    const connection = session;
     session = undefined;
     active = undefined;
     occurrence = '';
     optimisticPlaying = undefined;
+    progressSample = undefined;
+    connection?.close();
+  }
+
+  function leave(restore = true) {
+    disconnect();
     options.changed(undefined);
     target().pause();
     const solo = saved;
@@ -302,7 +307,12 @@ export function createJamPlayback(options: JamPlaybackOptions) {
     fetching.clear();
   }
 
-  function close() { generation++; session?.close(); }
+  function close() {
+    disconnect();
+    saved = undefined;
+    cache.clear();
+    fetching.clear();
+  }
 
   return { join, leave, command, replaceQueue, editQueue, toggle, setPlaying, active: () => !!active,
     state: () => active?.state, observe, setAccount, close };
