@@ -5,6 +5,7 @@ import type { CreateReservation } from './create-operation';
 import { audioFormat, uploadPublication, type ChunkReader, type UploadOperation, type UploadStatus, type UploadStorage, type transferParts } from './upload-model.ts';
 import { processingStep, retryDelay, transient, uploadInProgress, uploadRoute, type UploadJobView } from './upload-queue-model.ts';
 import type { UploadTransport } from './upload-transport';
+import type { UploadRecoveryDisposition } from './upload-recovery';
 
 type Job = UploadJobView & { owner: Did; input?: NewTrack; file?: MediaFile; operation?: UploadOperation; rkey?: string; uploadId?: string };
 type Session = Pick<Auth<unknown>, 'did' | 'agent' | 'uploadStorage'>;
@@ -66,10 +67,11 @@ export function createUploadQueue<Rpc extends RepoRpc>({
     }
   }
 
-  async function finishCreate(job: Job, uri: string, autoTag?: boolean) {
+  async function finishCreate(job: Job, uri: string, autoTag?: boolean, operation?: UploadOperation) {
     const pds = createPds(session(job));
     const pending = (await pds.pendingCreates('track')).find(item => item.uri === uri);
     if (pending) await pds.dismissCreate(pending).catch(() => undefined);
+    if (operation) await uploadStorage.delete(operation).catch(() => undefined);
     patch(job, { phase: 'done', uri });
     if (autoTag) void applyGenreTags(() => session(job), uri).catch(() => undefined);
   }
@@ -134,8 +136,7 @@ export function createUploadQueue<Rpc extends RepoRpc>({
       patch(job, { phase: 'awaiting-publication' });
       return;
     }
-    await finishCreate(job, operation.uri, operation.autoTag);
-    await uploadStorage.delete(operation).catch(() => undefined);
+    await finishCreate(job, operation.uri, operation.autoTag, operation);
   }
 
   async function prepare(job: Job, input: NewTrack) {
@@ -157,9 +158,12 @@ export function createUploadQueue<Rpc extends RepoRpc>({
   }
 
   function enqueueSaved(operation: UploadOperation, file?: MediaFile) {
+    if (jobs.some(job => job.owner === operation.owner && job.uploadId === operation.uploadId && uploadInProgress(job.phase))) return;
     const title = typeof operation.record.title === 'string' ? operation.record.title : operation.name;
     const job: Job = { id: randomUUID(), owner: operation.owner, title, phase: 'waiting', operation, file, uploadId: operation.uploadId, rkey: operation.rkey };
-    jobs = [...jobs.filter(item => item.uploadId !== operation.uploadId || item.phase !== 'awaiting-publication'), job];
+    const previous = jobs.find(item => item.owner === operation.owner && item.uploadId === operation.uploadId && item.phase === 'awaiting-publication');
+    if (previous) onDismiss?.(previous);
+    jobs = [...jobs.filter(item => item !== previous), job];
     patch(job, {});
   }
 
@@ -224,6 +228,18 @@ export function createUploadQueue<Rpc extends RepoRpc>({
       onDismiss?.(job);
       publish();
       return job.input;
+    },
+    dismissRecovery(operation: UploadOperation, disposition: UploadRecoveryDisposition) {
+      const job = jobs.find(item => item.phase === 'awaiting-publication' &&
+        item.owner === getAuth().did && item.owner === operation.owner &&
+        item.uploadId === operation.uploadId && item.operation?.uri === operation.uri);
+      if (!job) return;
+      jobs = jobs.filter(item => item !== job);
+      onDismiss?.(job);
+      publish();
+      if (disposition === 'published' && operation.autoTag) {
+        void applyGenreTags(() => session(job), operation.uri).catch(() => undefined);
+      }
     },
     /** Creations and transfers the queue is driving, so recovery screens leave them alone. */
     busy() {

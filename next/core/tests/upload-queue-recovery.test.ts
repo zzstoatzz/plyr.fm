@@ -97,10 +97,16 @@ test('publication stays recoverable until the worker confirms it, then cleans up
   assert.equal(f.publications(), 1);
 
   f.confirm();
+  let recoveryVisibleAtSuccess;
+  const unsubscribe = f.model.subscribe(() => {
+    if (f.model.snapshot().some(job => job.phase === 'done')) recoveryVisibleAtSuccess = f.recordForRecovery();
+  });
   await f.model.resume(owner);
   await setImmediate();
+  unsubscribe();
   assert.deepEqual(f.model.snapshot().map(job => [job.phase, job.uri]), [['done', uri]]);
   assert.equal(f.publications(), 1);
   assert.equal(f.dismissals(), 1);
   assert.deepEqual(f.recordForRecovery(), []);
+  assert.deepEqual(recoveryVisibleAtSuccess, []);
 });

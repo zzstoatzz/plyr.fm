@@ -37,10 +37,13 @@ export function useLargeUploads(auth: Auth, onChange: () => Promise<unknown>, on
     update(operation, { message: undefined });
     const transport = createUploadTransport(auth, operation, assertCurrent, abort.signal);
     try {
-      const dismissed = await recoverUpload({
+      const disposition = await recoverUpload({
         operation, action, pds, storage: uploadStorage, transport, assertCurrent, update: patch => update(operation, patch),
       });
-      if (dismissed && current()) onDismiss(operation);
+      if (disposition && current()) {
+        uploadQueue.dismissRecovery(operation, disposition);
+        onDismiss(operation);
+      }
     } catch (failure) { update(operation, { message: failure instanceof Error ? failure.message : 'upload stopped. check its status.' }); }
     finally {
       controller.current = undefined;

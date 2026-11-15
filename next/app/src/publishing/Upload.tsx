@@ -7,7 +7,7 @@ import { pickMedia, retype } from '../media-picker';
 import type { MediaFile } from '../pds';
 import { readLocal, removeLocal, writeLocal } from '../storage';
 import { LargeUploads, useLargeUploads } from './LargeUploads';
-import { canonicalAudioType, needsPlyrStorage } from '@plyr/next-core/publishing/upload-queue-model';
+import { canonicalAudioType, needsPlyrStorage, uploadInProgress } from '@plyr/next-core/publishing/upload-queue-model';
 import { uploadQueue, useUploadQueue } from './upload-queue';
 import { UploadQueueList } from './UploadQueue';
 import { usePendingSharedAudio, useSharedAudio } from './shared-audio';
@@ -82,7 +82,7 @@ function AccountUpload({ auth }: { auth: Auth }) {
   const creationRecovery = { ...recovery, operations: recovery.operations.filter(operation => !ours(operation)), archived: recovery.archived.filter(operation => !ours(operation)) };
   const service = !!file && needsPlyrStorage(file);
   useEffect(() => { live.current = true; return () => { live.current = false; }; }, []);
-  const settled = queue.filter(job => job.phase === 'done' || job.phase === 'failed').map(job => job.id).join();
+  const settled = queue.filter(job => !uploadInProgress(job.phase)).map(job => job.id).join();
   useEffect(() => { void recovery.refresh(); void uploads.refresh(); }, [settled]);
   // Everything typed survives a reload, a crash or the sign-in-again round trip; files are chosen again.
   useEffect(() => {

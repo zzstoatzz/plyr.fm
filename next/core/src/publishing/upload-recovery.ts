@@ -5,6 +5,7 @@ import { UploadRequestError, type UploadTransport } from './upload-transport';
 
 export type UploadRecoveryView = { archived?: boolean; status?: UploadStatus; publication?: CreateResult; message?: string };
 export type UploadRecoveryAction = 'check' | 'publish' | 'activate' | 'cancel' | 'done' | 'archive';
+export type UploadRecoveryDisposition = 'archived' | 'published' | 'cancelled';
 
 export async function recoverUpload({ operation, action, pds, storage, transport, assertCurrent, update }: {
   operation: UploadOperation;
@@ -14,7 +15,7 @@ export async function recoverUpload({ operation, action, pds, storage, transport
   transport: UploadTransport;
   assertCurrent: () => void;
   update: (patch: UploadRecoveryView) => void;
-}): Promise<boolean> {
+}): Promise<UploadRecoveryDisposition | undefined> {
   async function assertPending() {
     const pending = await storage.load(operation.owner);
     assertCurrent();
@@ -27,7 +28,7 @@ export async function recoverUpload({ operation, action, pds, storage, transport
     if (status.state !== 'complete' || !status.audioUrl) throw new Error('only an unpublished completed upload can be set aside.');
     await pds.archiveUploadedTrack(uploadPublication(operation, status), status.audioUrl);
     update({ status, archived: true, message: 'creation set aside. the uploaded audio remains available for recovery.' });
-    return true;
+    return 'archived';
   }
   if (action === 'done') {
     const status = await transport.status();
@@ -36,7 +37,7 @@ export async function recoverUpload({ operation, action, pds, storage, transport
     assertCurrent();
     if (pending) await pds.dismissCreate(pending, true);
     await storage.delete(operation);
-    return true;
+    return status.state;
   }
   if (action === 'cancel') {
     let status: UploadStatus;
@@ -50,12 +51,12 @@ export async function recoverUpload({ operation, action, pds, storage, transport
     if (status.state !== 'cancelled') throw new Error('cancellation is not confirmed. check this upload again.');
     assertCurrent();
     await storage.delete(operation);
-    return true;
+    return 'cancelled';
   }
 
   let status = await transport.status();
   update({ status });
-  if (!status.audioUrl) return false;
+  if (!status.audioUrl) return;
   const pending = (await pds.pendingCreates('track')).find(item => item.rkey === operation.rkey);
   assertCurrent();
   const publish = status.state !== 'published' && action === 'publish';
@@ -68,5 +69,4 @@ export async function recoverUpload({ operation, action, pds, storage, transport
     update({ status });
   }
   if (pending?.archived && !publish) update({ message: 'creation is set aside. publish only if you want to resume this attempt.' });
-  return false;
 }
