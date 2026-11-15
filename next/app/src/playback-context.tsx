@@ -3,7 +3,7 @@ import type { useAudioPlayerStatus } from 'expo-audio';
 import type { Track } from '@plyr/next-core/api';
 import type { JamIntent } from '@plyr/next-core/jam-connection';
 import type { RadioStation } from '@plyr/next-core/radio';
-import type { ActiveJam } from './use-jam-playback';
+import type { ActiveJam } from '@plyr/next-core/jam-playback';
 
 export interface Playback {
   /** Set while a radio station is the output: there is nothing to seek, skip or queue. */
