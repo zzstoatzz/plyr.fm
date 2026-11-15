@@ -14,6 +14,7 @@ pub const Hit = struct {
     object: []const u8 = "search_result",
     type: Kind,
     id: []const u8,
+    legacy_id: ?i32 = null,
     record: Record,
     title: []const u8,
     owner: Owner,

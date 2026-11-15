@@ -347,8 +347,12 @@ def main() -> None:
         assert status == 405
         assert playlist_method["error"]["code"] == "method_not_allowed"
 
-        status, _, invalid = _request(base_url, "/v1/tracks/42")
+        status, _, invalid = _request(base_url, "/v1/tracks/4x2")
         assert status == 400 and invalid["error"]["code"] == "invalid_request"
+
+        status, _, numeric_track = _request(base_url, "/v1/tracks/1667")
+        assert status == 503
+        assert numeric_track["error"]["code"] == "service_unavailable"
 
         status, _, invalid_artist = _request(base_url, "/v1/artists/not-an-identifier")
         assert status == 400

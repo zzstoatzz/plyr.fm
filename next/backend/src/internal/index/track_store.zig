@@ -34,6 +34,7 @@ pub const TrackStore = struct {
     get_by_uri_fn: *const fn (*anyopaque, std.mem.Allocator, []const u8) Error!?track.Track,
     list_public_fn: *const fn (*anyopaque, std.mem.Allocator, ListRequest) Error![]ListItem,
     ready_fn: *const fn (*anyopaque) bool,
+    get_legacy_detail_fn: ?*const fn (*anyopaque, std.mem.Allocator, i32, []const u8) Error!?track.Track = null,
     get_detail_fn: ?*const fn (*anyopaque, std.mem.Allocator, []const u8) Error!?track.Track = null,
 
     resolve_fn: ?*const fn (*anyopaque, std.mem.Allocator, []const []const u8) Error![]const track.Track = null,
@@ -64,6 +65,11 @@ pub const TrackStore = struct {
 
     pub fn getDetail(self: TrackStore, allocator: std.mem.Allocator, at_uri: []const u8) Error!?track.Track {
         return (self.get_detail_fn orelse self.get_by_uri_fn)(self.context, allocator, at_uri);
+    }
+
+    pub fn getLegacyDetail(self: TrackStore, allocator: std.mem.Allocator, id: i32, collection: []const u8) Error!?track.Track {
+        const get = self.get_legacy_detail_fn orelse return null;
+        return get(self.context, allocator, id, collection);
     }
 
     pub fn listPublic(
