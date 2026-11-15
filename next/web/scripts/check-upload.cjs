@@ -191,17 +191,20 @@ async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'reg
       await page.waitForFunction(() => typeof window.releaseDraftTransaction === 'function');
       await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'settings', exact: true }).click();
       await page.getByRole('heading', { name: 'settings', exact: true }).waitFor();
-      await page.evaluate(() => window.releaseDraftTransaction());
+      const uploadLink = page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'upload', exact: true });
       if (scenario === 'submit-navigation') {
-        await page.waitForFunction(key => localStorage.getItem(key) === null, `plyr-upload-draft:${did}`);
+        await uploadLink.click();
+        await page.locator('form[inert]').waitFor();
       }
-      await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'upload', exact: true }).click();
+      await page.evaluate(() => window.releaseDraftTransaction());
       if (scenario === 'edit-navigation') {
+        await uploadLink.click();
         await page.getByText('your draft is still here. choose the audio file again.').waitFor();
         assert.equal(await title.inputValue(), 'direct from Svelte');
         assert.equal(await page.getByRole('textbox', { name: 'tags', exact: true }).inputValue(), 'ambient\nfield recording');
         assert.equal(writes.length, 0);
       } else {
+        await page.waitForFunction(key => localStorage.getItem(key) === null, `plyr-upload-draft:${did}`);
         await page.getByText('"direct from Svelte" uploaded').waitFor({ timeout: 5000 });
         assert.equal(await title.inputValue(), '');
         assert.equal(writes.length, 1);

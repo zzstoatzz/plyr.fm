@@ -1,3 +1,17 @@
+<script module lang="ts">
+  function editorLock(owner: string) {
+    return `plyr-next-upload-editor/${owner}`;
+  }
+
+  function writeEditor<T>(owner: string, task: () => Promise<T>): Promise<T> {
+    if (!navigator.locks) return task();
+    return navigator.locks.request(editorLock(owner), { ifAvailable: true }, lock => {
+      if (!lock) throw new Error('another upload is saving its draft.');
+      return task();
+    });
+  }
+</script>
+
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
   import { trackIdFromUri } from '@plyr/next-core/api';
@@ -83,8 +97,8 @@
     return typeof field === 'string' ? field : '';
   }
 
-  onMount(() => {
-    live = true;
+  function restoreEditor() {
+    if (!current()) return;
     try {
       const draft: unknown = JSON.parse(localStorage.getItem(draftKey) ?? 'null');
       title = draftField(draft, 'title');
@@ -100,6 +114,12 @@
         : localStorage.getItem(autoTagKey) === 'yes';
     } catch { draftProblem = 'could not restore your draft on this device.'; }
     hydrated = true;
+  }
+
+  onMount(() => {
+    live = true;
+    if (owner && navigator.locks) void navigator.locks.request(editorLock(owner), restoreEditor).catch(restoreEditor);
+    else restoreEditor();
     if (owner) void api.artist(owner).then(profile => { if (current()) profileName = creditName(profile.display_name); }, () => {});
 
     let finished = '';
@@ -198,8 +218,8 @@
   }
 
   async function editAgain(id: string) {
-    if (!current() || imageBusy) return;
-    const input = await uploadQueue.takeBack(id, input => {
+    if (!owner || !hydrated || !current() || imageBusy) return;
+    const input = await writeEditor(owner, () => uploadQueue.takeBack(id, input => {
       if (!current()) throw new Error('reopen the upload page to edit this draft.');
       const previous = localStorage.getItem(draftKey);
       const saved = JSON.stringify({ title: input.title, album: input.album, description: input.description, tags: input.tags?.join('\n'), autoTag: !!input.autoTag });
@@ -209,7 +229,7 @@
         if (previous === null) localStorage.removeItem(draftKey);
         else localStorage.setItem(draftKey, previous);
       };
-    }).catch(failure => {
+    })).catch(failure => {
       if (current()) formProblem = message(failure, 'could not reopen the upload. try again.');
     });
     if (!current() || !input || !(input.file instanceof File)) return;
@@ -230,16 +250,19 @@
 
   async function upload(event: SubmitEvent) {
     event.preventDefault();
-    if (submitting || !current() || !audio || !title.trim() || !artist || tagProblem || imageBusy || loading || recoveryProblem || creationBlocksUpload || (service && (!consent || !account.uploadStorage))) return;
+    if (!owner || !hydrated || submitting || !current() || !audio || !title.trim() || !artist || tagProblem || imageBusy || loading || recoveryProblem || creationBlocksUpload || (service && (!consent || !account.uploadStorage))) return;
     submitting = true;
     const submittedDraft = editorDraft;
+    const input = { file: audio, artwork: cover, title, artist, album, description, tags: tags.trim() ? tags.split('\n') : undefined, autoTag };
     try {
-      await uploadQueue.add({ file: audio, artwork: cover, title, artist, album, description, tags: tags.trim() ? tags.split('\n') : undefined, autoTag });
-      try {
-        if (localStorage.getItem(draftKey) === submittedDraft) localStorage.removeItem(draftKey);
-      } catch {
-        if (current()) draftProblem = 'the upload was queued, but this device could not clear the editor draft.';
-      }
+      await writeEditor(owner, async () => {
+        await uploadQueue.add(input);
+        try {
+          if (localStorage.getItem(draftKey) === submittedDraft) localStorage.removeItem(draftKey);
+        } catch {
+          if (current()) draftProblem = 'the upload was queued, but this device could not clear the editor draft.';
+        }
+      });
       if (!current()) return;
       audio = undefined;
       cover = undefined;
@@ -259,7 +282,7 @@
       <li>
         {jobLine(job)}
         {#if job.phase === 'done' && job.uri}<a class="text-button" href={`/track/${trackIdFromUri(job.uri)}`}>view track</a>{/if}
-        {#if job.phase === 'failed' && uploadQueue.editable(job.id)}<button class="text-button" onclick={() => editAgain(job.id)} disabled={imageBusy || submitting}>edit and try again</button>{/if}
+        {#if job.phase === 'failed' && uploadQueue.editable(job.id)}<button class="text-button" onclick={() => editAgain(job.id)} disabled={!hydrated || imageBusy || submitting}>edit and try again</button>{/if}
       </li>
     {/each}
   </ul>
@@ -292,7 +315,7 @@
   </details>
 {/if}
 
-<form onsubmit={upload} inert={submitting}>
+<form onsubmit={upload} inert={!hydrated || submitting}>
   <label class="file-field">
     <strong>audio</strong>
     <span class="subtle">mp3, wav, flac, aiff, ogg, opus, m4a or aac · up to 1.5 GiB</span>
