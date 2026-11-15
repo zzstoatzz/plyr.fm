@@ -8,7 +8,7 @@ import { createGatedAudio, type SpaceAudioTransport as Transport } from '@plyr/n
 export type { GatedAudioSource } from '@plyr/next-core/gated-audio';
 export type SpaceAudioTransport = Transport<P256Keypair>;
 
-export const { credentialFor, signedFetch, resolveGatedAudio, openGatedAudio } = createGatedAudio<P256Keypair, LexMap>({
+export const { resolveGatedAudio, openGatedAudio } = createGatedAudio<P256Keypair, LexMap>({
 	isSpaceAtUriString, createSpaceSigHeaders, encapsulate, formatMacRequest, parseSpaceToken,
 	RECORD_MAC_PROFILE, verifyRecord, isCid, isLexMap, lexParse
 });

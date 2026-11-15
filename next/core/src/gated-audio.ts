@@ -16,7 +16,7 @@ export interface GatedAudioSource {
 	headers(): Promise<Record<string, string>>;
 }
 
-interface SpaceAudioSdk<Key extends SpaceKey, RecordValue extends Record<string, unknown>> {
+export interface SpaceAudioSdk<Key extends SpaceKey, RecordValue extends Record<string, unknown>> {
 	isSpaceAtUriString(value: string): boolean;
 	parseSpaceToken(type: 'credential', token: string): { payload: { exp: number } };
 	createSpaceSigHeaders(input: { keypair: Key; authorization: string; audience: Did }): Promise<{ headers: Record<string, string> }>;
