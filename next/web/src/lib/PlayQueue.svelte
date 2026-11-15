@@ -114,7 +114,7 @@
 
 {#snippet row(track: NonNullable<typeof player.current>, index: number, current: boolean)}
 		{@const promote = promotes(index)}
-		<button class="cover" type="button" aria-label={`${current && player.playing ? 'Pause' : 'Play'} ${track.metadata.title}`} onclick={() => current ? player.toggle() : player.jump(index)}>
+		<button class="cover" type="button" aria-label={`${current && player.playing ? 'Pause' : 'Play'} ${track.metadata.title}`} onclick={() => current ? player.toggle() : player.jump(index, true)}>
 			<Artwork src={trackArtwork(track)} size={44} eager={index - player.index < 8} />
 			<span class="play"><Icon name={current && player.playing ? 'pause' : 'play'} size={18} /></span>
 		</button>

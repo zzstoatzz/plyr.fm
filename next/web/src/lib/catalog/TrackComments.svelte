@@ -7,7 +7,7 @@
 	import Icon from '$lib/ui/Icon.svelte';
 	import Loading from '$lib/ui/Loading.svelte';
 
-	let { track, playFrom }: { track: Track; playFrom: (seconds: number) => void } = $props();
+	let { track, playFrom }: { track: Track; playFrom?: (seconds: number) => void } = $props();
 	let snapshot = $state.raw(comments.snapshot());
 	let account = $state.raw(auth.getAuth());
 	let draft = $state('');
@@ -89,7 +89,7 @@
 			<li>
 				<div class="row-head">
 					<a class="truncate" href={resolve('/(app)/u/[actor]', { actor: comment.author.did })}>{comment.author.display_name || comment.author.handle || 'listener'}</a>
-					<button class="text-button time" type="button" aria-label={'Play from ' + clock(comment.timestamp_ms / 1000)} onclick={() => playFrom(comment.timestamp_ms / 1000)}>{clock(comment.timestamp_ms / 1000)}</button>
+					<button class="text-button time" type="button" disabled={!playFrom} aria-label={'Play from ' + clock(comment.timestamp_ms / 1000)} onclick={() => playFrom?.(comment.timestamp_ms / 1000)}>{clock(comment.timestamp_ms / 1000)}</button>
 					{#if account.commenting && account.did === comment.author.did && confirmRemoval !== comment.record.uri}
 						<button class="icon-button" type="button" aria-label="Delete comment" onclick={() => { confirmRemoval = comment.record.uri; }}><Icon name="trash" size={16} /></button>
 					{/if}

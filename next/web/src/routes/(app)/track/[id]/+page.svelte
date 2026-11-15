@@ -98,7 +98,7 @@
 				{#await import('$lib/catalog/TrackComments.svelte')}
 					<Loading label="loading comments" />
 				{:then component}
-					<component.default {track} {playFrom} />
+				<component.default {track} playFrom={player.canPlayFrom(track) ? playFrom : undefined} />
 				{:catch}
 					<p role="alert" class="state">could not open comments.</p>
 				{/await}

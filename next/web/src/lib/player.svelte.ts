@@ -184,11 +184,17 @@ class Player {
 		this.#model.play(track, collection?.filter(item => !isPrivateTrack(item)), label);
 	}
 
+	canPlayFrom(track: Track) {
+		return !this.jam || this.canSeek && this.current?.record.uri === track.record.uri && this.current.record.cid === track.record.cid;
+	}
+
 	playFrom(track: Track, seconds: number) {
 		if (!Number.isFinite(seconds) || seconds < 0 || isPrivateTrack(track)) return;
 		if (this.jam) {
-			if (this.current?.id === track.id) this.seek(seconds);
-			else this.play(track);
+			if (this.canPlayFrom(track)) {
+				this.seek(seconds);
+				if (!this.playing) this.jamCommand({ action: 'play' });
+			}
 			return;
 		}
 		const { uri, cid } = track.record;
@@ -278,7 +284,10 @@ class Player {
 			})
 		});
 		this.repeat = 'off';
-		this.#audio?.pause();
+		this.#startAt = undefined;
+		this.#detachMedia();
+		this.#mediaTrack = undefined;
+		this.#listening.stop();
 		this.#jam.join({ ...room, admit });
 	}
 
@@ -469,10 +478,10 @@ class Player {
 		if (this.index + 1 < this.queue.length) this.jump(this.index + 1);
 		else if (this.repeat === 'all' && this.queue.length) this.jump(0);
 	}
-	jump(index: number) {
+	jump(index: number, playing?: boolean) {
 		this.#startAt = undefined;
 		if (this.liveStation) return;
-		if (this.#jam?.command({ action: 'selectTrack', index })) return;
+		if (this.#jam?.command({ action: 'selectTrack', index, playing })) return;
 		if (!this.privateMode && !this.#embedded) this.#model.select(index);
 		else if (this.queue[index]) this.#startLocal(this.queue, index);
 	}
