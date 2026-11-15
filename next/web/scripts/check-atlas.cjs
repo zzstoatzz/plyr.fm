@@ -1,0 +1,78 @@
+const assert = require('node:assert/strict');
+const path = require('node:path');
+const { chromium } = require('playwright');
+const { tracks, setup, serve, close } = require('./fixture-catalog.cjs');
+
+const output = process.env.SCREENS_OUTPUT || '/tmp/plyr-svelte-atlas';
+const [track] = tracks;
+const point = {
+  id: 19, x: 0, y: 0, title: track.metadata.title, artist: 'replyomatic', handle: 'sketches.test',
+  thumb: '', plays: 9, likes: 3, clusterCoarse: 0, clusterFine: 0, core: true
+};
+const cluster = { id: 0, label: 'field recordings', cx: 0, cy: 0, count: 1 };
+const atlas = {
+  points: [point], artists: [], clusters: { coarse: [cluster], fine: [{ ...cluster, parent: 0 }] },
+  meta: { generatedAt: '2026-11-14T00:00:00Z', nTracks: 1 }
+};
+
+async function verify(browser, origin, width) {
+  const phone = width === 390;
+  const { context, page, errors } = await setup(browser, width, 844, { phone, scheme: phone ? 'dark' : 'light' });
+  let reads = 0;
+  let selections = 0;
+  try {
+    await page.route('https://api.plyr.fm/stats/atlas', route => {
+      reads++;
+      return reads === 1 ? route.fulfill({ status: 503 }) : route.fulfill({ json: atlas });
+    });
+    await page.route('https://api.plyr.fm/tracks/19', route => {
+      selections++;
+      return route.fulfill({ json: { atproto_record_uri: track.record.uri } });
+    });
+    await page.goto(origin);
+    await page.getByTestId('home-track-row').first().waitFor();
+    assert.equal(reads, 0, 'Home leaves the atlas payload to the atlas route');
+    if (phone) await page.getByRole('button', { name: 'Open links menu' }).click();
+    const navigation = page.getByRole('navigation', { name: phone ? 'Explore' : 'Main navigation' });
+    await navigation.getByRole('link', { name: 'atlas', exact: true }).click();
+    await page.getByRole('alert').getByText('could not load the atlas.').waitFor();
+    await page.getByRole('button', { name: 'try again' }).click();
+    await page.getByText('1 track · 1 region · 1 cluster', { exact: true }).waitFor();
+    const canvas = page.getByLabel('Catalog atlas');
+    const box = await canvas.boundingBox();
+    assert.ok(box && box.width > 300 && box.height > 400);
+    const position = { x: box.width / 2, y: box.height / 2 };
+    if (phone) {
+      await canvas.tap({ position });
+      await canvas.tap({ position });
+    } else {
+      await canvas.hover({ position });
+      await page.getByText(point.title, { exact: true }).waitFor();
+      await canvas.click({ position });
+    }
+    const dock = page.getByTestId('player-dock');
+    await dock.getByRole('button', { name: 'Pause', exact: true }).waitFor();
+    assert.equal(selections, 1, 'track playback uses the resolved Next identity');
+    await page.getByRole('button', { name: 'Zoom in' }).click();
+    await canvas.press('ArrowRight');
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth));
+    await page.screenshot({ path: path.join(output, width + '-atlas.png') });
+    await page.goBack();
+    await page.getByTestId('home-track-row').first().waitFor();
+    await page.goForward();
+    await page.getByRole('button', { name: 'Zoom in' }).waitFor();
+    assert.equal(reads, 2, 'returning to the atlas uses the loaded catalog');
+    await dock.getByRole('button', { name: 'Pause', exact: true }).waitFor();
+    assert.deepEqual(errors, []);
+    console.log(`${width}px: atlas navigation, retry, point playback, zoom and cache passed`);
+  } finally {
+    await context.close();
+  }
+}
+
+(async () => {
+  const origin = await serve();
+  const browser = await chromium.launch();
+  try { for (const width of [390, 1280]) await verify(browser, origin, width); }
+  finally { await browser.close(); close(); }
+})().catch(error => { console.error(error); process.exitCode = 1; });
