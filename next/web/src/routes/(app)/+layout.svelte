@@ -4,14 +4,12 @@
 	import { auth, restoreAuth } from '$lib/auth';
 	import { player } from '$lib/player.svelte';
 	import Icon from '$lib/ui/Icon.svelte';
-	import NowPlaying from '$lib/NowPlaying.svelte';
-	import PlayQueue from '$lib/PlayQueue.svelte';
-	import PlayerDock from '$lib/PlayerDock.svelte';
 	import { uploadActivity } from '$lib/upload-activity.svelte';
 	import '../../app.css';
 
 	let { children } = $props();
 	let dialog: HTMLDialogElement;
+	let NowPlaying = $state<typeof import('$lib/NowPlaying.svelte').default>();
 	let account = $state.raw(auth.getAuth());
 	let uploading = $derived(uploadActivity.jobs.filter(job => job.owner === account.did && job.phase !== 'done' && job.phase !== 'failed').length);
 	const links = [
@@ -47,7 +45,9 @@
 		untrack(() => player.save());
 	});
 	$effect(() => {
-		if (player.nowPlaying && !dialog.open) dialog.showModal();
+		if (player.nowPlaying && !NowPlaying) {
+			void import('$lib/NowPlaying.svelte').then(module => { NowPlaying = module.default; });
+		} else if (player.nowPlaying && !dialog.open) dialog.showModal();
 		else if (!player.nowPlaying && dialog.open) dialog.close();
 	});
 
@@ -83,13 +83,19 @@
 	</nav>
 	<main id="main" tabindex="-1">{@render children()}</main>
 	{#if player.queueOpen}
-		<aside data-testid="queue-panel"><PlayQueue close={() => { player.queueOpen = false; }} /></aside>
+		<aside data-testid="queue-panel">
+			{#await import('$lib/PlayQueue.svelte') then { default: Queue }}
+				<Queue close={() => { player.queueOpen = false; }} />
+			{/await}
+		</aside>
 	{/if}
 </div>
 
-<PlayerDock />
+{#if player.current}
+	{#await import('$lib/PlayerDock.svelte') then { default: Dock }}<Dock />{/await}
+{/if}
 <dialog bind:this={dialog} aria-label="Now playing" onclose={() => { player.nowPlaying = false; }}>
-	{#if player.nowPlaying}<NowPlaying close={() => { player.nowPlaying = false; }} />{/if}
+	{#if player.nowPlaying && NowPlaying}<NowPlaying close={() => { player.nowPlaying = false; }} />{/if}
 </dialog>
 
 <style>
