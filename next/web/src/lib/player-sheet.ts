@@ -1,4 +1,5 @@
 import type { DockPull, DockPullUpdate } from './dock-pull';
+import { dismissPlayerPull, pullDirection } from '@plyr/next-core/behaviors/player-pull';
 
 export function playerSheet(panel: HTMLElement, close: () => void, dockPull?: DockPull) {
 	const sheet = panel.closest('dialog');
@@ -16,11 +17,12 @@ export function playerSheet(panel: HTMLElement, close: () => void, dockPull?: Do
 	let position = 0;
 	let target = 0;
 	let frame = 0;
+	let coastFrame = 0;
 	let finishTimeout: ReturnType<typeof setTimeout> | undefined;
 	let closing = false;
 	let ready = false;
 	let pendingPull: DockPullUpdate | undefined;
-	let touch: { x: number; y: number; lastY: number; time: number; speed: number } | undefined;
+	let touch: { x: number; y: number; lastY: number; time: number; speed: number; scroll: number; header: boolean; captured: boolean } | undefined;
 
 	function measure() {
 		rest = dock?.getBoundingClientRect().top ?? innerHeight;
@@ -83,6 +85,7 @@ export function playerSheet(panel: HTMLElement, close: () => void, dockPull?: Do
 
 	function dismiss() {
 		if (closing) return;
+		cancelAnimationFrame(coastFrame);
 		touch = undefined;
 		closing = true;
 		if (!phone.matches || reduced.matches || !ready) { close(); return; }
@@ -106,19 +109,26 @@ export function playerSheet(panel: HTMLElement, close: () => void, dockPull?: Do
 
 	function queueRender(next: number) {
 		target = Math.min(rest, Math.max(0, next));
-		if (!frame) frame = requestAnimationFrame(() => { frame = 0; render(target); });
+		if (!frame && (target || position)) frame = requestAnimationFrame(() => { frame = 0; render(target); });
 	}
 
 	function reset() {
 		touch = undefined;
+		cancelAnimationFrame(coastFrame);
 		if (!closing && (position || frame)) settle(0);
 	}
 
 	function begin(event: TouchEvent) {
+		cancelAnimationFrame(coastFrame);
 		if (event.touches.length !== 1) { if (touch) reset(); return; }
-		if (!ready || closing || frame || !phone.matches || dialog.scrollTop > 1 || (event.target instanceof Element && event.target.closest('button, a, input, textarea, select'))) return;
+		if (!ready || closing || frame || !phone.matches || !(event.target instanceof Element) ||
+			!panel.contains(event.target) || event.target.closest('button, a, input, textarea, select, [data-player-no-pull]')) return;
 		const { clientX: x, clientY: y } = event.touches[0];
-		touch = { x, y, lastY: y, time: event.timeStamp, speed: 0 };
+		const header = !!event.target.closest('[data-player-header]');
+		const scroll = Math.max(0, dialog.scrollTop);
+		// Leave scrolling to the browser when this touch cannot reach the top.
+		if (!header && scroll > dialog.getBoundingClientRect().bottom - y) return;
+		touch = { x, y, lastY: y, time: event.timeStamp, speed: 0, scroll, header, captured: false };
 		target = 0;
 	}
 
@@ -126,23 +136,52 @@ export function playerSheet(panel: HTMLElement, close: () => void, dockPull?: Do
 		if (!touch) return;
 		if (event.touches.length !== 1) { reset(); return; }
 		const { clientX: x, clientY: y } = event.touches[0];
-		const dx = Math.abs(x - touch.x), dy = y - touch.y;
-		if (!target && (dy < -10 || dx > 10 && dx >= dy)) { touch = undefined; return; }
-		if (!target && dy <= Math.max(10, dx * 1.5)) return;
+		const dy = y - touch.y;
+		if (!touch.captured) {
+			const direction = pullDirection(x - touch.x, dy);
+			if (direction === 'blocked') { touch = undefined; return; }
+			if (direction === 'waiting') return;
+			touch.captured = true;
+		}
 		if (!event.cancelable) { reset(); return; }
 		event.preventDefault();
-		if (!target && !position) measure();
+		const distance = dy - (touch.header ? 0 : touch.scroll);
+		if (!touch.header && touch.scroll > 0) dialog.scrollTop = Math.max(0, -distance);
+		if (!target && !position && distance > 0) {
+			measure();
+			if (touch.header) rest += dialog.scrollTop;
+		}
 		touch.speed = (y - touch.lastY) / Math.max(1, event.timeStamp - touch.time);
 		touch.time = event.timeStamp;
 		touch.lastY = y;
-		queueRender(dy);
+		queueRender(distance);
 	}
 
 	function end(event: TouchEvent) {
-		const speed = touch && event.timeStamp - touch.time < 90 ? touch.speed : 0;
-		if (!touch || target < Math.min(120, innerHeight * 0.16) && (target < 48 || speed < 0.8)) { if (touch) reset(); return; }
+		if (!touch) return;
+		if (event.touches.length) { reset(); return; }
+		const speed = event.timeStamp - touch.time < 90 ? touch.speed : 0;
+		if (!touch.captured || !dismissPlayerPull(target, speed, innerHeight, touch.header)) {
+			const coast = touch.captured && !touch.header && !target && dialog.scrollTop > 0;
+			reset();
+			if (coast && !reduced.matches && Math.abs(speed) >= 0.12) coastScroll(speed);
+			return;
+		}
 		render(target);
 		dismiss();
+	}
+
+	function coastScroll(speed: number) {
+		const start = performance.now();
+		const origin = dialog.scrollTop;
+		const duration = 260;
+		const distance = Math.min(2.5, Math.max(-2.5, speed)) * duration / 3;
+		const tick = (now: number) => {
+			const time = Math.min(1, Math.max(0, (now - start) / duration));
+			dialog.scrollTop = origin - distance * (1 - (1 - time) ** 3);
+			if (time < 1 && dialog.scrollTop > 0) coastFrame = requestAnimationFrame(tick);
+		};
+		coastFrame = requestAnimationFrame(tick);
 	}
 
 	const disconnect = dockPull?.connect(fromDock);
@@ -162,18 +201,21 @@ export function playerSheet(panel: HTMLElement, close: () => void, dockPull?: Do
 	if (dialog.open) onOpen();
 	else dialogOpen.observe(dialog, { attributes: true, attributeFilter: ['open'] });
 
-	panel.addEventListener('touchstart', begin, { passive: true });
+	dialog.addEventListener('touchstart', begin, { passive: true });
 	panel.addEventListener('touchmove', move, { passive: false });
 	panel.addEventListener('touchend', end);
 	panel.addEventListener('touchcancel', reset);
+	window.addEventListener('resize', reset);
 	function destroy() {
 		stopFrame();
+		cancelAnimationFrame(coastFrame);
 		dialogOpen.disconnect();
 		disconnect?.();
-		panel.removeEventListener('touchstart', begin);
+		dialog.removeEventListener('touchstart', begin);
 		panel.removeEventListener('touchmove', move);
 		panel.removeEventListener('touchend', end);
 		panel.removeEventListener('touchcancel', reset);
+		window.removeEventListener('resize', reset);
 		render(0);
 		dialog.style.removeProperty('--player-backdrop');
 	}

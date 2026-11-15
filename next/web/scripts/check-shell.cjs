@@ -106,6 +106,7 @@ async function screen(browser, phone, scheme) {
       const panel = dialog.locator('.now');
       await touch('touchStart', 120);
       await touch('touchMove', 146);
+      await page.waitForTimeout(100);
       await touch('touchEnd');
       await dialog.waitFor();
       await page.waitForFunction(node => getComputedStyle(node).transform === 'none', await panel.elementHandle());
