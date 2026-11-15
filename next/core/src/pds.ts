@@ -1,5 +1,5 @@
 import { publicTrackReference, assertPublicCollection } from './publishing/track-reference';
-import { repoOk as ok, getRecord, listRecords, createRecord, putRecord, uploadRepoBlob, type RepoRpc } from './publishing/repo-rpc';
+import { RepoResponseError, repoOk as ok, getRecord, listRecords, createRecord, putRecord, uploadRepoBlob, type RepoRpc } from './publishing/repo-rpc';
 import type { createApi, AwaitStatus, Track } from './api';
 import type { Auth } from './auth-state';
 import type { AuthConfig } from './auth-config';
@@ -10,6 +10,7 @@ import { recordCreator, CreateUnconfirmed } from './publishing/create-record';
 import { isCreateRkey, sameRecord, type CreateHandoff, type CreateOperation, type CreateReservation, type CreateStorage } from './publishing/create-operation';
 import { albumPublishing } from './collections/album-pds';
 import { collectionOrdering } from './collections/collection-order-pds';
+import { CollectionOrderConflict } from './collections/collection-order';
 import { MAX_AUDIO_BYTES } from './publishing/track-audio';
 import { trackEditor } from './publishing/track-pds';
 import { assertPublicUploadRecord } from './publishing/upload-model';
@@ -332,14 +333,37 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 		return writeList(playlistUri, value, cid);
 	}
 
-	async function deletePlaylist(playlistUri: string): Promise<AwaitStatus> {
+	async function deleteCollection(uri: string, kind: 'album' | 'playlist', confirmedCid?: string): Promise<AwaitStatus> {
 		const { rpc, did } = session();
-		const rkey = ownedRkey(playlistUri, did, LIST());
-		const { cid } = await readList(playlistUri);
+		const address = { repo: did, collection: LIST(), rkey: ownedRkey(uri, did, LIST()) };
+		async function currentCid() {
+			try { return (await readList(uri, kind)).cid; }
+			catch (error) {
+				if (confirmedCid && error instanceof RepoResponseError && error.error === 'RecordNotFound' &&
+					(error.status === 400 || error.status === 404)) return undefined;
+				throw error;
+			}
+		}
+		const changed = () => new CollectionOrderConflict(`this ${kind} changed elsewhere. reload it before deleting.`);
+		const cid = await currentCid();
+		if (cid === undefined) return await settle(uri);
+		if (confirmedCid && confirmedCid !== cid) throw changed();
 		assertSession();
-		await ok(rpc.post('com.atproto.repo.deleteRecord', { input: { repo: did, collection: LIST(), rkey, swapRecord: cid } }));
-		return await settle(playlistUri);
+		try {
+			await ok(rpc.post('com.atproto.repo.deleteRecord', { input: { ...address, swapRecord: cid } }));
+		} catch (error) {
+			if (!confirmedCid) throw error;
+			assertSession();
+			const observed = await currentCid();
+			if (observed !== undefined) {
+				if (observed !== cid || (error instanceof RepoResponseError && error.error === 'InvalidSwap')) throw changed();
+				throw error;
+			}
+		}
+		return await settle(uri);
 	}
+
+	const deletePlaylist = (uri: string) => deleteCollection(uri, 'playlist');
 
 	// uploads: the audio goes to the user's PDS as a blob and the track record
 	// points at it. the appview never touches the bytes; players fetch them from
@@ -488,5 +512,5 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 			}, draft),
 		});
 	}
-	return { albumOrganization, collectionOrder, myLikes, like, unlike, newCommentAttempt, comment, deleteComment, createPlaylist, addToPlaylist, removeFromPlaylist, renameCollection, deletePlaylist, uploadTrack, myProfile, saveProfile, myTrack, editTrack, deleteTrack, reserveCreate, pendingCreates, recoverCreate, dismissCreate, archiveCreate, prepareTrackRecord, uploadedTrack, archiveUploadedTrack };
+	return { albumOrganization, collectionOrder, myLikes, like, unlike, newCommentAttempt, comment, deleteComment, createPlaylist, addToPlaylist, removeFromPlaylist, renameCollection, deleteCollection, deletePlaylist, uploadTrack, myProfile, saveProfile, myTrack, editTrack, deleteTrack, reserveCreate, pendingCreates, recoverCreate, dismissCreate, archiveCreate, prepareTrackRecord, uploadedTrack, archiveUploadedTrack };
 }
