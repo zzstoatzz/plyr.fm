@@ -10,7 +10,7 @@
 
 	let { data }: PageProps = $props();
 	const track = $derived(data.track);
-	const active = $derived(player.current?.id === track.id);
+	const active = $derived(!player.liveStation && player.current?.id === track.id);
 	let shared = $state(false);
 
 	function play() {
@@ -37,7 +37,7 @@
 	<div class="actions">
 		<button class="icon-button" type="button" aria-label="Share track" onclick={share}><Icon name="share" /></button>
 		<button class="primary-button" type="button" aria-label={active && player.playing ? 'Pause' : 'Play'} onclick={play}><Icon name={active && player.playing ? 'pause' : 'play'} size={27} /></button>
-		<button class="icon-button" type="button" aria-label="Add to queue" disabled={player.privateMode} title={player.privateMode ? "play a public track to change queues" : undefined} onclick={() => player.enqueue(track)}><Icon name="queue" /></button>
+		<button class="icon-button" type="button" aria-label="Add to queue" disabled={player.localMode} title={player.localMode ? "play a public track to change queues" : undefined} onclick={() => player.enqueue(track)}><Icon name="queue" /></button>
 	</div>
 	{#if !isPrivateTrack(track)}{#key track.id}<TrackCollections {track} />{/key}{/if}
 	<p class="subtle">{track.metrics.play_count} {track.metrics.play_count === 1 ? 'listen' : 'listens'}</p>

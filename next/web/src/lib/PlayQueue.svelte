@@ -12,7 +12,10 @@
 		<h1>queue</h1>
 		{#if close}<button class="icon-button" type="button" aria-label="Close queue" onclick={close}><Icon name="x" /></button>{/if}
 	</header>
-	{#if player.current}
+	{#if player.liveStation}
+		<p class="state">you’re tuned to {player.liveStation.label} radio.</p>
+		<button class="text-button" onclick={() => player.stopRadio()}>leave radio</button>
+	{:else if player.current}
 		<h2>now playing</h2>
 		{@render row(player.current, player.index, true)}
 		<div class="queue-head">
@@ -30,7 +33,7 @@
 		<p class="state">your queue is empty.</p>
 		<a href="/">browse tracks</a>
 	{/if}
-	{#if !player.privateMode && player.snapshot.queueError}<p class="state" role="status">{player.snapshot.queueError}</p>{/if}
+	{#if !player.localMode && player.snapshot.queueError}<p class="state" role="status">{player.snapshot.queueError}</p>{/if}
 </section>
 
 {#snippet row(track: NonNullable<typeof player.current>, index: number, current: boolean)}

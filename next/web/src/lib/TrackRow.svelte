@@ -9,7 +9,7 @@
 	let { track, collection, label, testid }: {
 		track: Track; collection?: Track[]; label?: string; testid?: string;
 	} = $props();
-	const playing = $derived(player.current?.id === track.id && player.playing);
+	const playing = $derived(!player.liveStation && player.current?.id === track.id && player.playing);
 	const title = $derived(track.metadata.title || 'untitled');
 	function toggle() {
 		if (player.current?.id === track.id) player.toggle();
@@ -27,7 +27,7 @@
 		<a class="truncate artist" href={`/u/${track.artist.did}`}>{artistName(track)}</a>
 		<span class="metrics">{track.metrics.play_count} {track.metrics.play_count === 1 ? 'play' : 'plays'}</span>
 	</div>
-	<button class="icon-button add" type="button" aria-label={`Add ${title} to queue`} disabled={player.privateMode} title={player.privateMode ? "play a public track to change queues" : undefined} onclick={() => player.enqueue(track)}><Icon name="queue" size={20} /></button>
+	<button class="icon-button add" type="button" aria-label={`Add ${title} to queue`} disabled={player.localMode} title={player.localMode ? "play a public track to change queues" : undefined} onclick={() => player.enqueue(track)}><Icon name="queue" size={20} /></button>
 	<span class="duration">{clock(track.metadata.duration_seconds)}</span>
 </div>
 

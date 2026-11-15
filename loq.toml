@@ -554,3 +554,7 @@ max_lines = 501
 [[rules]]
 path = "next/core/src/personal-playback.ts"
 max_lines = 546
+
+[[rules]]
+path = "next/web/src/lib/player.svelte.ts"
+max_lines = 613

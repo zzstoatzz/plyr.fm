@@ -8,7 +8,7 @@
 	import PlayQueue from '$lib/PlayQueue.svelte';
 	import PlayerDock from '$lib/PlayerDock.svelte';
 	import { uploadActivity } from '$lib/upload-activity.svelte';
-	import '../app.css';
+	import '../../app.css';
 
 	let { children } = $props();
 	let dialog: HTMLDialogElement;
@@ -79,6 +79,7 @@
 		{:else}
 			<a href={'/login?' + new URLSearchParams({ return_to: page.url.pathname + page.url.search })} class:active={page.url.pathname === '/login'}><Icon name="logout" size={21} /><span>sign in</span></a>
 		{/if}
+		<a class="desktop-radio" href="/radio" class:active={page.url.pathname === '/radio'}><Icon name="radio" size={21} /><span>radio</span></a>
 	</nav>
 	<main id="main" tabindex="-1">{@render children()}</main>
 	{#if player.queueOpen}
@@ -112,7 +113,7 @@
 	@media (max-width: 720px) {
 		.frame, .frame.docked { display: block; padding-bottom: calc(var(--tabs) + env(safe-area-inset-bottom)); }
 		.frame.hasPlayer { padding-bottom: calc(var(--tabs) + var(--dock) + env(safe-area-inset-bottom)); }
-		aside, nav .brand { display: none; }
+		aside, nav .brand, nav .desktop-radio { display: none; }
 		nav { z-index: 9; position: fixed; inset: auto 0 0; min-height: var(--tabs); flex-direction: row; padding: 0 0 env(safe-area-inset-bottom); border: 0; border-top: 1px solid var(--line); }
 		nav a { gap: 0.2rem; flex-direction: column; justify-content: center; flex: 1; min-height: var(--tabs); padding: 0.15rem; border-radius: 0; font-size: 0.75rem; }
 		dialog { width: 100%; max-width: 100%; height: 100dvh; max-height: 100dvh; margin: 0; border: 0; border-radius: 0; }

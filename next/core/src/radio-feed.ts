@@ -1,4 +1,4 @@
-import { nextRead, type RadioSnapshot } from './radio.ts';
+import { nextRead, radioStations, readRadio, type RadioSnapshot } from './radio.ts';
 
 export interface RadioFeedState {
 	readonly snapshot: RadioSnapshot | undefined;
@@ -87,4 +87,8 @@ export class RadioFeed {
 	private notify(): void {
 		for (const listener of this.listeners) listener();
 	}
+}
+
+export function createRadioFeeds() {
+  return new Map(radioStations.map(station => [station.slug, new RadioFeed(signal => readRadio(station, signal))]));
 }
