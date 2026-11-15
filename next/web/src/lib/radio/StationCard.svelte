@@ -18,7 +18,10 @@
 </script>
 
 <button class="station" class:featured class:active type="button"
-  aria-label={`${active ? 'Open' : 'Listen to'} ${station.label} radio`} onclick={() => tuneRadio(station, true)}>
+  aria-label={`${active ? 'Open' : 'Listen to'} ${station.label} radio`} onclick={event => {
+    const keyboard = event.detail === 0;
+    tuneRadio(station, () => player.openNowPlaying(keyboard));
+  }}>
   <span class="cover"><Artwork src={song?.artwork ?? undefined} size={225} eager /></span>
   <span class="info">
     <strong><span class="dot" class:on={active && player.liveListening}></span>{station.label}</strong>

@@ -11,10 +11,10 @@ function onAir(snapshot: RadioSnapshot) {
   void player.setRadioTrack(song.track, song.audio, occurrence, () => radioPosition(snapshot));
 }
 
-export function tuneRadio(station: RadioStation, openNowPlaying = false) {
+export function tuneRadio(station: RadioStation, openNowPlaying?: () => void) {
   if (player.liveStation === station) {
     if (!player.liveListening) player.setRadioListening(true);
-    if (openNowPlaying && player.current) player.nowPlaying = true;
+    if (player.current) openNowPlaying?.();
     return;
   }
   const feed = feeds.get(station.slug);
@@ -31,8 +31,8 @@ export function tuneRadio(station: RadioStation, openNowPlaying = false) {
     if (!snapshot) return;
     onAir(snapshot);
     if (opening && player.current) {
-      opening = false;
-      player.nowPlaying = true;
+      opening();
+      opening = undefined;
     }
   };
   unsubscribe = feed.subscribe(changed);

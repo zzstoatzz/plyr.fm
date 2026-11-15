@@ -111,6 +111,7 @@ async function stationFlow(browser, origin, width, scheme) {
     await grid.getByRole('button', { name: 'Listen to fresh radio', exact: true }).click();
     const now = page.getByRole('dialog', { name: 'Now playing' });
     await now.getByRole('heading', { name: airing.metadata.title, exact: true }).waitFor();
+    assert.ok(await now.evaluate(node => document.activeElement === node), 'radio card pointer opens focus the sheet');
     await now.getByText('live · fresh radio', { exact: true }).waitFor();
     await page.waitForFunction(() => window.media.some(media => !media.paused && media.src.includes('fresh-first')));
     assert.equal(await now.getByRole('slider').count(), 0);
