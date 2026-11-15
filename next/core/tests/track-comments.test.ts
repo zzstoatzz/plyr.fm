@@ -22,6 +22,8 @@ const listener: Artist = {
 test('a pending comment survives indexing lag and failed deletion', async () => {
   let projected: TrackComment[] = [];
   let rejectDelete = true;
+  let rejectCreate = true;
+  const attemptedKeys: string[] = [];
   const store = createTrackComments({
     api: {
       async artist() { return listener; },
@@ -29,7 +31,12 @@ test('a pending comment survives indexing lag and failed deletion', async () => 
     },
     getAuth: () => ({ did: listener.did, handle: listener.handle, rpc: {} }),
     createPds: () => ({
-      async comment() { return { uri: commentUri, cid: 'bafycomment', rkey: 'comment', subject }; },
+      newCommentAttempt() { return { rkey: String(attemptedKeys.length + 1), createdAt: '2026-11-14T18:01:00Z' }; },
+      async comment(_track, _text, _timestampMs, attempt) {
+        attemptedKeys.push(attempt.rkey);
+        if (rejectCreate) throw new Error('temporarily unavailable');
+        return { uri: commentUri, cid: 'bafycomment', rkey: 'comment', subject };
+      },
       async deleteComment() { if (rejectDelete) throw new Error('temporarily unavailable'); }
     })
   });
@@ -40,7 +47,10 @@ test('a pending comment survives indexing lag and failed deletion', async () => 
   }
 
   await refresh();
+  await assert.rejects(store.addComment(track, 'great moment', 14_000), /temporarily unavailable/);
+  rejectCreate = false;
   await store.addComment(track, 'great moment', 14_000);
+  assert.deepEqual(attemptedKeys, ['1', '1']);
   await refresh();
   const [optimistic] = comments();
   assert.equal(optimistic.timestamp_ms, 14_000);

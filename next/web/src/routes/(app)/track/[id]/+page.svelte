@@ -17,33 +17,14 @@
 	let sharedTrack = $state<string>();
 	let comments = $state<HTMLDialogElement>();
 	let openedTrack = $state<string>();
-	let pendingSeek = $state.raw<{ id: string; seconds: number }>();
-
-	$effect(() => {
-		const seek = pendingSeek;
-		if (!seek) return;
-		if (seek.id !== track.id) pendingSeek = undefined;
-		else if (active && player.playing && player.position > 0) {
-			pendingSeek = undefined;
-			player.seek(seek.seconds);
-		}
-	});
 
 	function play() {
-		pendingSeek = undefined;
 		if (active) player.toggle();
 		else player.play(track);
 	}
 
 	function playFrom(seconds: number) {
-		if (active && player.duration) {
-			player.seek(seconds);
-			if (!player.playing) player.toggle();
-		} else {
-			pendingSeek = { id: track.id, seconds };
-			if (active) player.toggle();
-			else player.play(track);
-		}
+		player.playFrom(track, seconds);
 		comments?.close();
 	}
 

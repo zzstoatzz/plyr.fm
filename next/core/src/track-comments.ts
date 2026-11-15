@@ -6,7 +6,7 @@ export interface Snapshot { comments: TrackComment[]; loading: boolean; error: b
 
 const empty: Snapshot = { comments: [], loading: true, error: false };
 type CommentAccount = { did: string | null; handle: string | null; rpc: unknown };
-type CommentWriter = Pick<ReturnType<typeof createPublicPds>, 'comment' | 'deleteComment'>;
+type CommentWriter = Pick<ReturnType<typeof createPublicPds>, 'newCommentAttempt' | 'comment' | 'deleteComment'>;
 
 interface Options<Account extends CommentAccount> {
   api: {
@@ -22,6 +22,7 @@ export function createTrackComments<Account extends CommentAccount>({ api, getAu
   const entries = new Map<string, Entry>();
   const listeners = new Map<string, Set<() => void>>();
   const profiles = new Map<string, Promise<Artist | undefined>>();
+  const attempts = new Map<string, ReturnType<CommentWriter['newCommentAttempt']>>();
 
   const byTime = (a: TrackComment, b: TrackComment) => a.timestamp_ms - b.timestamp_ms || a.created_at.localeCompare(b.created_at) || a.record.uri.localeCompare(b.record.uri);
 
@@ -64,12 +65,19 @@ export function createTrackComments<Account extends CommentAccount>({ api, getAu
   async function addComment(track: Track, text: string, timestampMs: number): Promise<void> {
     const auth = getAuth();
     if (!auth.did || !auth.rpc) throw new Error('sign in to comment');
-    const [written, profile] = await Promise.all([createPds(auth).comment(track, text, timestampMs), viewerProfile(auth.did)]);
-    const now = new Date().toISOString();
-    entry(track.id).mine.push({
-      record: { uri: written.uri, cid: written.cid, rkey: written.rkey }, subject: written.subject, text, timestamp_ms: Math.max(0, Math.round(timestampMs)),
+    const writer = createPds(auth);
+    const moment = Math.max(0, Math.round(timestampMs));
+    const key = JSON.stringify([auth.did, track.record.uri, track.record.cid, text, moment]);
+    const attempt = attempts.get(key) ?? writer.newCommentAttempt();
+    attempts.set(key, attempt);
+    const [written, profile] = await Promise.all([writer.comment(track, text, moment, attempt), viewerProfile(auth.did)]);
+    attempts.delete(key);
+    const current = entry(track.id);
+    if (current.mine.some(comment => comment.record.uri === written.uri)) return;
+    current.mine.push({
+      record: { uri: written.uri, cid: written.cid, rkey: written.rkey }, subject: written.subject, text, timestamp_ms: moment,
       author: { did: auth.did, handle: profile?.handle ?? auth.handle, display_name: profile?.display_name ?? null, avatar_url: profile?.avatar_url ?? null },
-      created_at: now, updated_at: null,
+      created_at: attempt.createdAt, updated_at: null,
     });
     publish(track.id);
   }

@@ -72,6 +72,7 @@ type ViewerLikes = { did: string; promise: Promise<Map<string, LikeRef>> };
 const viewerLikes = new WeakMap<RepoRpc, ViewerLikes>();
 
 type PdsSession = Pick<Auth<RepoRpc>, 'did' | 'rpc'>;
+type CommentAttempt = { rkey: string; createdAt: string };
 
 export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, getAuth, newRkey, catalogChanged }: {
   NSID: AuthConfig['NSID'];
@@ -215,19 +216,30 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 		return waitForIndex ? settle(existing.uri) : 'pending';
 	}
 
-	async function comment(track: Track, text: string, timestampMs: number): Promise<{ uri: string; cid: string; rkey: string; subject: { uri: string; cid: string } }> {
+	function newCommentAttempt(): CommentAttempt {
+		return { rkey: newRkey(), createdAt: new Date().toISOString() };
+	}
+
+	async function comment(track: Track, text: string, timestampMs: number, attempt: CommentAttempt) {
+		assertSession();
 		const { rpc, did } = session();
 		const subject = publicTrackReference(track);
-		const res = await ok(
-			createRecord(rpc, {
-				input: {
-					repo: did,
-					collection: NSID.comment as `${string}.${string}.${string}`,
-					record: { $type: NSID.comment, subject, text, timestampMs: Math.max(0, Math.round(timestampMs)), createdAt: new Date().toISOString() }
-				}
-			})
-		);
-		return { uri: res.uri, cid: res.cid, rkey: ownedRkey(res.uri, did, NSID.comment), subject };
+		const collection = NSID.comment as `${string}.${string}.${string}`;
+		const params = { repo: did, collection, rkey: attempt.rkey };
+		const uri = `at://${did}/${collection}/${attempt.rkey}`;
+		const record = { $type: collection, subject, text, timestampMs: Math.max(0, Math.round(timestampMs)), createdAt: attempt.createdAt };
+		try {
+			const res = await ok(createRecord(rpc, { input: { ...params, record } }));
+			if (res.uri === uri && res.cid) return { uri, cid: res.cid, rkey: attempt.rkey, subject };
+		} catch {
+			// A committed write can outlive its response.
+		}
+		assertSession();
+		const existing = await getRecord(rpc, { params });
+		if (existing.ok && existing.data.uri === uri && existing.data.cid && sameRecord(existing.data.value, record)) {
+			return { uri, cid: existing.data.cid, rkey: attempt.rkey, subject };
+		}
+		throw new CreateUnconfirmed();
 	}
 
 	async function deleteComment(rkey: string, cid: string): Promise<void> {
@@ -458,5 +470,5 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 			}),
 		});
 	}
-	return { albumOrganization, collectionOrder, myLikes, like, unlike, comment, deleteComment, createPlaylist, addToPlaylist, removeFromPlaylist, renameCollection, deletePlaylist, uploadTrack, myProfile, saveProfile, myTrack, editTrack, deleteTrack, reserveCreate, pendingCreates, recoverCreate, dismissCreate, archiveCreate, prepareTrackRecord, uploadedTrack, archiveUploadedTrack };
+	return { albumOrganization, collectionOrder, myLikes, like, unlike, newCommentAttempt, comment, deleteComment, createPlaylist, addToPlaylist, removeFromPlaylist, renameCollection, deletePlaylist, uploadTrack, myProfile, saveProfile, myTrack, editTrack, deleteTrack, reserveCreate, pendingCreates, recoverCreate, dismissCreate, archiveCreate, prepareTrackRecord, uploadedTrack, archiveUploadedTrack };
 }

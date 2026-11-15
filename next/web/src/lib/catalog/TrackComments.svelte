@@ -2,17 +2,12 @@
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import type { Track, TrackComment } from '@plyr/next-core/api';
-	import { createTrackComments, MAX_COMMENT_BYTES } from '@plyr/next-core/track-comments';
-	import { api } from '$lib/api';
-	import { auth } from '$lib/auth';
-	import { createPds } from '$lib/pds';
 	import { player } from '$lib/player.svelte';
 	import { clock } from '$lib/tracks';
 	import Icon from '$lib/ui/Icon.svelte';
 	import Loading from '$lib/ui/Loading.svelte';
 
 	let { track, playFrom }: { track: Track; playFrom: (seconds: number) => void } = $props();
-	const comments = createTrackComments({ api, getAuth: auth.getAuth, createPds });
 	let snapshot = $state.raw(comments.snapshot());
 	let account = $state.raw(auth.getAuth());
 	let draft = $state('');
@@ -59,6 +54,15 @@
 	}
 </script>
 
+<script lang="ts" module>
+	import { createTrackComments, MAX_COMMENT_BYTES } from '@plyr/next-core/track-comments';
+	import { api } from '$lib/api';
+	import { auth } from '$lib/auth';
+	import { createPds } from '$lib/pds';
+
+	const comments = createTrackComments({ api, getAuth: auth.getAuth, createPds });
+</script>
+
 {#if account.commenting && track.record.cid}
 	<form onsubmit={event => { event.preventDefault(); void post(); }}>
 		<label for="track-comment-draft">add a comment</label>
@@ -78,9 +82,8 @@
 	<Loading label="loading comments" inline />
 {:else if snapshot.error}
 	<p class="state">could not load comments. <button class="text-button" type="button" onclick={() => comments.loadComments(track.id)}>try again</button></p>
-{:else if !snapshot.comments.length}
-	<p class="state">no comments yet.</p>
-{:else}
+{/if}
+{#if snapshot.comments.length}
 	<ul>
 		{#each snapshot.comments as comment (comment.record.uri)}
 			<li>
@@ -102,6 +105,8 @@
 			</li>
 		{/each}
 	</ul>
+{:else if !snapshot.loading && !snapshot.error}
+	<p class="state">no comments yet.</p>
 {/if}
 
 <style>
