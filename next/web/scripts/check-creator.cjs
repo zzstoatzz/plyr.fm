@@ -56,6 +56,8 @@ async function run(browser, accounts, width, theme, mp3) {
   let initialError = true, moreError = true, profileReadError = false, profileWrites = 0;
   let trackMissing = false;
   let projectedLike = false;
+  let announceLike;
+  const waitForProjection = new Promise(resolve => { announceLike = resolve; });
   const albumRequests = [];
   await context.route('https://typeahead.waow.tech/**', route => route.fulfill({ json: { actors: [] } }));
   await context.route('https://jams.next.plyr.fm/**', route => route.fulfill({ status: 403, json: {} }));
@@ -86,6 +88,7 @@ async function run(browser, accounts, width, theme, mp3) {
         const like = await pdsRecord('fm.plyr.like', address.split('/').at(-1));
         assert.equal(like.value.subject.uri, uri);
         assert.equal(url.searchParams.get('cid'), like.cid);
+        await waitForProjection;
         projectedLike = true;
       }
       if (address === uri) {
@@ -219,10 +222,12 @@ async function run(browser, accounts, width, theme, mp3) {
       return url.pathname === '/v1/records/await' && url.searchParams.get('uri')?.startsWith(`at://${did}/fm.plyr.like/`) && response.ok();
     });
     await main.getByRole('button', { name: 'Like track', exact: true }).click();
-    await indexedLike;
     await main.getByRole('button', { name: 'Unlike track', exact: true }).waitFor();
     await page.goBack();
     await main.getByRole('tab', { name: 'likes' }).click();
+    await main.getByText('no likes yet.', { exact: true }).waitFor();
+    announceLike();
+    await indexedLike;
     await main.getByRole('tabpanel', { name: 'likes' }).getByRole('link', { name: 'recording after edit', exact: true }).waitFor();
     await page.goBack();
     await page.waitForURL(origin + '/portal');
@@ -237,7 +242,7 @@ async function run(browser, accounts, width, theme, mp3) {
     assert.equal((await pdsRecord(collection, rkey)).error, 'RecordNotFound');
     assert.deepEqual(errors, []);
     console.log(`creator portal, paging, track/profile edits and deletion passed at ${width}px (${theme})`);
-  } finally { await context.close(); }
+  } finally { announceLike(); await context.close(); }
 }
 
 (async () => {

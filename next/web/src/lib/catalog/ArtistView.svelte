@@ -4,6 +4,7 @@
 	import { page } from '$app/state';
 	import { onMount, untrack } from 'svelte';
 	import { collectionArtwork } from '@plyr/next-core/artwork';
+	import { subscribeCatalogChanges } from '@plyr/next-core/catalog/changes';
 	import { tabForKey } from '@plyr/next-core/catalog/tabs';
 	import type { Artist, ArtistMetrics, ListSummary } from '@plyr/next-core/api';
 	import { api } from '$lib/api';
@@ -47,20 +48,24 @@
 			section.connect();
 			return section.subscribe(() => { views = readCatalog(); });
 		});
+		const stopChanges = subscribeCatalogChanges(artist.did, () => activateCatalog(tab));
 		active = true;
 		return () => {
 			stopAuth();
+			stopChanges();
 			for (const stop of stopCatalog) stop();
 			for (const item of tabs) catalog[item].disconnect();
 		};
 	});
 
+	function activateCatalog(selected: Tab) {
+		for (const item of tabs) catalog[item].activate(item === 'tracks' || item === selected);
+	}
+
 	$effect(() => {
 		if (!active) return;
 		const selected = tab;
-		untrack(() => {
-			for (const item of tabs) catalog[item].activate(item === 'tracks' || item === selected);
-		});
+		untrack(() => activateCatalog(selected));
 	});
 
 	function select(next: Tab) {
