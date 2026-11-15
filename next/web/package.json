@@ -11,6 +11,7 @@
     "check:collections": "node scripts/check-collections.cjs",
     "check:browser": "node scripts/check-shell.cjs",
     "check:player-transition": "node scripts/check-player-transition.cjs",
+    "check:artist-catalog": "node scripts/check-artist-catalog.cjs",
     "check:performance": "node scripts/check-performance.cjs",
     "check:radio": "node scripts/check-radio.cjs",
     "check:upload": "node scripts/check-upload.cjs",

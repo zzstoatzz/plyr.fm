@@ -44,7 +44,8 @@ async function run(browser, accounts, width, theme, mp3) {
     metadata: { title: index === 25 ? projected.title : `recording ${index}`, artist_name: author, album: null, duration_seconds: 180, description: null, created_at: fixtureTime },
     artist: { did, profile: { handle, display_name: author } }, media: { artwork: null }, access: { visibility: 'public' }, metrics: { play_count: index, like_count: 0 }
   });
-  const album = { object: 'album', id: 'alb_sample', record: { uri: `at://${did}/fm.plyr.list/album` }, metadata: { name: 'demo album' }, owner: { did, profile: { handle, display_name: author } }, metrics: { member_count: 1 }, media: { artwork: null } };
+  const album = { object: 'album', id: 'alb_sample', record: { uri: `at://${did}/fm.plyr.list/album` }, metadata: { name: 'demo album' }, owner: { did, profile: { handle, display_name: author } }, metrics: { member_count: 1, available_count: 1 }, media: { artwork: null } };
+  const emptyAlbum = { ...album, id: 'alb_empty', record: { uri: `at://${did}/fm.plyr.list/empty` }, metadata: { name: 'draft album' }, metrics: { member_count: 0, available_count: 0 } };
   const list = (data, cursor) => ({ object: 'list', data, has_more: !!cursor, next_cursor: cursor });
   const { context, page } = await fixturePage(browser, accounts, {
     dist: path.resolve(__dirname, '../build'),
@@ -54,6 +55,9 @@ async function run(browser, accounts, width, theme, mp3) {
   page.on('pageerror', error => errors.push(error.message));
   let initialError = true, moreError = true, profileReadError = false, profileWrites = 0;
   let trackMissing = false;
+  let projectedLike = false;
+  let announceLike;
+  const waitForProjection = new Promise(resolve => { announceLike = resolve; });
   const albumRequests = [];
   await context.route('https://typeahead.waow.tech/**', route => route.fulfill({ json: { actors: [] } }));
   await context.route('https://jams.next.plyr.fm/**', route => route.fulfill({ status: 403, json: {} }));
@@ -61,7 +65,7 @@ async function run(browser, accounts, width, theme, mp3) {
   await context.route('https://api.next.plyr.fm/**', async route => {
     assert.equal(route.request().method(), 'GET', 'creator activity never writes to the AppView');
     const url = new URL(route.request().url());
-    if (decodeURIComponent(url.pathname) === `/v1/artists/${did}`) return route.fulfill({ json: { display_name: author, handle, did } });
+    if ([`/v1/artists/${did}`, `/v1/artists/${handle}`].includes(decodeURIComponent(url.pathname))) return route.fulfill({ json: { display_name: author, handle, did } });
     if (url.pathname === '/v1/tracks') {
       assert.equal(url.searchParams.get('artist_did'), did);
       if (initialError) { initialError = false; return route.fulfill({ status: 503, json: { error: { message: 'fixture catalog unavailable' } } }); }
@@ -74,11 +78,19 @@ async function run(browser, accounts, width, theme, mp3) {
     if (url.pathname === '/v1/albums') {
       assert.equal(url.searchParams.get('artist_did'), did);
       albumRequests.push(url.search);
-      return route.fulfill({ json: list([album]) });
+      return route.fulfill({ json: list([album, emptyAlbum]) });
     }
     if (url.pathname === `/v1/tracks/${id}`) return route.fulfill({ json: row(25) });
+    if (decodeURIComponent(url.pathname) === `/v1/actors/${did}/likes`) return route.fulfill({ json: list(projectedLike ? [row(25)] : []) });
     if (url.pathname === '/v1/records/await') {
       const address = url.searchParams.get('uri');
+      if (address?.startsWith(`at://${did}/fm.plyr.like/`)) {
+        const like = await pdsRecord('fm.plyr.like', address.split('/').at(-1));
+        assert.equal(like.value.subject.uri, uri);
+        assert.equal(url.searchParams.get('cid'), like.cid);
+        await waitForProjection;
+        projectedLike = true;
+      }
       if (address === uri) {
         const record = await pdsRecord(collection, rkey);
         if (record.error === 'RecordNotFound') { trackMissing = true; return route.fulfill({ json: { status: 'deleted' } }); }
@@ -194,6 +206,31 @@ async function run(browser, accounts, width, theme, mp3) {
     await capture('profile-saved');
 
     await main.getByRole('link', { name: 'back to your music' }).click();
+    await main.getByRole('link', { name: /view your public profile/ }).click();
+    await main.getByRole('link', { name: 'edit profile', exact: true }).waitFor();
+    await main.getByRole('tab', { name: 'albums' }).click();
+    await main.getByRole('link', { name: 'new album', exact: true }).waitFor();
+    await main.getByRole('link', { name: 'draft album 0 tracks', exact: true }).waitFor();
+    await capture('artist-owner');
+    await main.getByRole('tab', { name: 'likes' }).click();
+    await main.getByText('no likes yet.', { exact: true }).waitFor();
+    await main.getByRole('tab', { name: 'tracks' }).click();
+    await main.getByRole('button', { name: 'more tracks' }).click();
+    await main.getByRole('link', { name: 'recording after edit', exact: true }).click();
+    const indexedLike = page.waitForResponse(response => {
+      const url = new URL(response.url());
+      return url.pathname === '/v1/records/await' && url.searchParams.get('uri')?.startsWith(`at://${did}/fm.plyr.like/`) && response.ok();
+    });
+    await main.getByRole('button', { name: 'Like track', exact: true }).click();
+    await main.getByRole('button', { name: 'Unlike track', exact: true }).waitFor();
+    await page.goBack();
+    await main.getByRole('tab', { name: 'likes' }).click();
+    await main.getByText('no likes yet.', { exact: true }).waitFor();
+    announceLike();
+    await indexedLike;
+    await main.getByRole('tabpanel', { name: 'likes' }).getByRole('link', { name: 'recording after edit', exact: true }).waitFor();
+    await page.goBack();
+    await page.waitForURL(origin + '/portal');
     await main.getByRole('link', { name: 'edit recording after edit' }).click();
     await main.getByRole('button', { name: 'delete track', exact: true }).click();
     await main.getByRole('button', { name: 'cancel delete' }).click();
@@ -205,7 +242,7 @@ async function run(browser, accounts, width, theme, mp3) {
     assert.equal((await pdsRecord(collection, rkey)).error, 'RecordNotFound');
     assert.deepEqual(errors, []);
     console.log(`creator portal, paging, track/profile edits and deletion passed at ${width}px (${theme})`);
-  } finally { await context.close(); }
+  } finally { announceLike(); await context.close(); }
 }
 
 (async () => {

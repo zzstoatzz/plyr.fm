@@ -8,7 +8,7 @@ function createPortal(did: string) {
     active: 'tracks' as 'tracks' | 'albums',
     scroll: { tracks: 0, albums: 0 },
     tracks: createCatalogPages(cursor => api.tracks({ artist_did: did, limit: 25, cursor }), () => catalogRevision(did, 'tracks')),
-    albums: createCatalogPages(cursor => api.albums(did, { limit: 25, cursor }), () => catalogRevision(did, 'albums'))
+    albums: createCatalogPages(cursor => api.albums(did, { limit: 25, cursor }), () => catalogRevision(did, 'collections'))
   };
 }
 

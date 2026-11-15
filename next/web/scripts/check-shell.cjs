@@ -193,37 +193,6 @@ async function loginScreen(browser) {
   } finally { await context.close(); }
 }
 
-async function artistScreen(browser, phone, scheme) {
-  const width = phone ? 390 : 1280;
-  const { context, page, errors } = await setup(browser, width, phone ? 844 : 960, { phone, scheme });
-  try {
-    let reads = 0;
-    await page.route('https://api.next.plyr.fm/v1/albums?**', route => {
-      reads++;
-      return route.fulfill({ json: { data: [{
-        object: 'album', id: 'alb_fixture', metadata: { name: 'Porch recordings' }, owner: { did: tracks[0].artist.did, profile: tracks[0].artist.profile }, metrics: { member_count: 2 }
-      }] } });
-    });
-    await page.goto(origin + '/u/' + tracks[0].artist.did);
-    await page.getByRole('heading', { name: 'replyomatic', exact: true }).waitFor();
-    await page.getByText('9 tracks · 9 plays', { exact: true }).waitFor();
-    await page.getByRole('button', { name: 'Play tracks by replyomatic' }).waitFor();
-    const tabs = page.getByRole('navigation', { name: 'Artist catalog' });
-    assert.equal(reads, 0);
-    await tabs.getByRole('button', { name: 'albums' }).click();
-    await page.getByRole('link', { name: 'Porch recordings 2 tracks' }).waitFor();
-    await tabs.getByRole('button', { name: 'tracks' }).click();
-    await page.getByRole('region', { name: 'tracks', exact: true }).getByRole('link', { name: tracks[0].metadata.title, exact: true }).waitFor();
-    await tabs.getByRole('button', { name: 'albums' }).click();
-    await page.getByRole('link', { name: 'Porch recordings 2 tracks' }).waitFor();
-    assert.equal(reads, 1);
-    await tabs.getByRole('button', { name: 'tracks' }).click();
-    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
-    await page.screenshot({ path: path.join(output, `${width}-${scheme}-artist.png`) });
-    assert.deepEqual(errors, []);
-  } finally { await context.close(); }
-}
-
 async function keyboard(browser, phone, scheme) {
   const width = phone ? 390 : 1280;
   const { context, page, errors } = await setup(browser, width, phone ? 844 : 960, { phone, scheme });
@@ -375,7 +344,6 @@ async function keyboard(browser, phone, scheme) {
         await screen(browser, phone, scheme);
         await queueGroups(browser, phone, scheme);
         await keyboard(browser, phone, scheme);
-        await artistScreen(browser, phone, scheme);
       }
     }
     await loginScreen(browser);
