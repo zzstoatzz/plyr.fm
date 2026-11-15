@@ -4,6 +4,7 @@
 	import { resolve } from '$app/paths';
 	import type { SearchHit } from '@plyr/next-core/api';
 	import { api } from '$lib/api';
+	import { trackHref } from '$lib/tracks';
 	import Icon from '$lib/ui/Icon.svelte';
 	import Loading from '$lib/ui/Loading.svelte';
 	import type { PageProps } from './$types';
@@ -33,10 +34,11 @@
 		return () => { clearTimeout(timer); request.abort(); };
 	});
 
-	function resultPath({ type, id }: SearchHit) {
-		switch (type) {
+	function resultPath(result: SearchHit) {
+		const { id } = result;
+		switch (result.type) {
 			case 'artist': return resolve('/(app)/u/[actor]', { actor: id });
-			case 'track': return resolve('/(app)/track/[id]', { id });
+			case 'track': return trackHref(result);
 			case 'album': return resolve('/(app)/album/[id]', { id });
 			case 'playlist': return resolve('/(app)/playlist/[id]', { id });
 		}

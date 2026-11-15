@@ -3,7 +3,7 @@
 	import { trackArtwork } from '@plyr/next-core/artwork';
 	import { resolve } from '$app/paths';
 	import { player } from './player.svelte';
-	import { artistName, clock } from './tracks';
+	import { artistName, clock, trackHref } from './tracks';
 	import Artwork from './ui/Artwork.svelte';
 	import Icon from './ui/Icon.svelte';
 
@@ -27,7 +27,7 @@
 		</span>
 	</button>
 	<div class="name">
-		<a class="truncate title" href={resolve('/(app)/track/[id]', { id: track.id })}>{title}</a>
+		<a class="truncate title" href={trackHref(track)}>{title}</a>
 		<a class="truncate artist" href={resolve('/(app)/u/[actor]', { actor: track.artist.did })}>{artistName(track)}</a>
 		<span class="metrics">{track.metrics.play_count} {track.metrics.play_count === 1 ? 'play' : 'plays'}</span>
 	</div>

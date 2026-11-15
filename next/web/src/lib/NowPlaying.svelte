@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { player } from './player.svelte';
 	import { auth } from './auth';
-	import { artistName, clock } from './tracks';
+	import { artistName, clock, trackHref } from './tracks';
 	import { trackArtwork } from '@plyr/next-core/artwork';
 	import { parseChapters, currentChapter } from '@plyr/next-core/chapters';
 	import { parseSeen, seenKey } from '@plyr/next-core/behaviors/hints';
@@ -80,7 +80,7 @@
 
 	async function shareTrack() {
 		if (!player.current) return;
-		const url = new URL(resolve('/(app)/track/[id]', { id: player.current.id }), location.origin).href;
+		const url = new URL(trackHref(player.current), location.origin).href;
 		try {
 			if (navigator.share) await navigator.share({ title: player.current.metadata.title, url });
 			else await navigator.clipboard.writeText(url);
@@ -149,7 +149,7 @@
 					<div class="avatar"><Artwork src={player.current.artist.profile.avatar_url ?? undefined} size={56} /></div>
 					<span><strong>{player.current.artist.profile.display_name || artistName(player.current)}</strong><small>@{player.current.artist.profile.handle}</small></span><Icon name="chevron" size={19} />
 				</a>{/if}
-				<a class="track-link" href={resolve('/(app)/track/[id]', { id: player.current.id })}>about this track <span aria-hidden="true">→</span></a>
+				<a class="track-link" href={trackHref(player.current)}>about this track <span aria-hidden="true">→</span></a>
 			{/if}
 			{#if chapters.prose}<p class="description">{chapters.prose}</p>{/if}
 			{#if !player.liveStation && chapters.chapters.length}

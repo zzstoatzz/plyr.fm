@@ -24,6 +24,20 @@ async function screen(browser, phone, scheme) {
       if (new URL(route.request().url()).searchParams.get('period') !== 'all_time') return route.fallback();
       return route.fulfill({ json: { data: featuredTracks.map(track => ({ track })) } });
     });
+    const linkedTrack = { ...tracks[0], legacy_id: 1667, metadata: { ...tracks[0].metadata, tags: ['ambient', 'home recordings', 'field & nature'] } };
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'share', { value: async ({ url }) => sessionStorage.setItem('shared-track', url) });
+    });
+    await page.route(/^https:\/\/api\.next\.plyr\.fm\/v1\/tracks(?:\?|$)/, route => route.fulfill({
+      json: { object: 'list', data: [linkedTrack, ...tracks.slice(1)], has_more: false }
+    }));
+    await page.route('https://api.next.plyr.fm/v1/tracks/1667', route => route.fulfill({ json: linkedTrack }));
+    await page.route('https://api.next.plyr.fm/v1/tracks/' + tracks[0].id, route => route.fulfill({ json: linkedTrack }));
+    await page.goto(origin + '/track/' + tracks[0].id + '?ref=fixture');
+    await page.waitForURL('**/track/1667?ref=fixture');
+    await page.getByRole('heading', { name: linkedTrack.metadata.title, exact: true }).waitFor();
+    await page.reload();
+    await page.getByRole('heading', { name: linkedTrack.metadata.title, exact: true }).waitFor();
     const commentsRequests = [];
     page.on('request', request => {
       if (new URL(request.url()).pathname.endsWith('/comments')) commentsRequests.push(request);
@@ -54,7 +68,10 @@ async function screen(browser, phone, scheme) {
     await firstRow.getByRole('link', { name: 'replyomatic', exact: true }).click();
     await page.waitForURL('**/u/' + tracks[0].artist.did);
     await page.goBack();
-    await firstRow.getByRole('link', { name: tracks[0].metadata.title, exact: true }).click();
+    const firstTitle = firstRow.getByRole('link', { name: tracks[0].metadata.title, exact: true });
+    assert.equal(await firstTitle.getAttribute('href'), '/track/1667');
+    await firstTitle.click();
+    await page.waitForURL('**/track/1667');
     await page.getByRole('heading', { name: tracks[0].metadata.title, exact: true }).waitFor();
     const tags = page.getByRole('navigation', { name: 'Tags', exact: true });
     const tag = tags.getByRole('link', { name: 'field & nature', exact: true });
@@ -102,6 +119,8 @@ async function screen(browser, phone, scheme) {
     await page.waitForFunction(node => getComputedStyle(node).transform === 'none', await dialog.getByTestId('now-playing-dismiss-region').elementHandle());
     const cover = await dialog.getByTestId('now-playing-artwork').boundingBox();
     if (phone) assert.ok(cover.width >= width - 35, 'now playing cover fills the phone');
+    await dialog.getByRole('button', { name: 'Share track' }).click();
+    assert.equal(await page.evaluate(() => sessionStorage.getItem('shared-track')), origin + '/track/1667');
     await capture('now-playing');
     await dialog.getByRole('slider', { name: 'Playback position' }).fill('12');
     if (phone) {

@@ -4,7 +4,7 @@
 	import { auth } from './auth';
 	import { jamRoomPath, newJamPath } from './jam-room';
 	import { player } from './player.svelte';
-	import { artistName, clock } from './tracks';
+	import { artistName, clock, trackHref } from './tracks';
 	import { trackArtwork } from '@plyr/next-core/artwork';
 	import { explicitEnd } from '@plyr/next-core/queue-state';
 	import Artwork from './ui/Artwork.svelte';
@@ -119,7 +119,7 @@
 			<span class="play"><Icon name={current && player.playing ? 'pause' : 'play'} size={18} /></span>
 		</button>
 		<div class="labels">
-			{#if player.privateMode}<span class="truncate">{track.metadata.title}</span>{:else}<a class="truncate" href={resolve('/(app)/track/[id]', { id: track.id })}>{track.metadata.title}</a>{/if}
+			{#if player.privateMode}<span class="truncate">{track.metadata.title}</span>{:else}<a class="truncate" href={trackHref(track)}>{track.metadata.title}</a>{/if}
 			<span class="subtle truncate">{artistName(track)}</span>
 		</div>
 		<span class="subtle time">{clock(track.metadata.duration_seconds)}</span>

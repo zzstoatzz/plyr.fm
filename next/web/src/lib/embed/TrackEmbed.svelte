@@ -3,7 +3,7 @@
   import type { Track } from '@plyr/next-core/api';
   import { player } from '$lib/player.svelte';
   import Scrub from '$lib/Scrub.svelte';
-  import { artistName } from '$lib/tracks';
+  import { artistName, trackHref } from '$lib/tracks';
   import Artwork from '$lib/ui/Artwork.svelte';
   import Icon from '$lib/ui/Icon.svelte';
   import { canEmbed, embedArtwork } from './catalog';
@@ -35,7 +35,7 @@
       <Icon name={playing ? 'pause' : 'play'} />
     </button>
     <div class="meta">
-      <a class="title truncate" href={`/track/${track.id}`} target="_blank" rel="noopener">{track.metadata.title}</a>
+      <a class="title truncate" href={trackHref(track)} target="_blank" rel="noopener">{track.metadata.title}</a>
       <span class="subtle truncate">{!allowed ? 'playback unavailable in this embed' : problem || artistName(track)}</span>
       {#if active && allowed}<Scrub />{/if}
     </div>

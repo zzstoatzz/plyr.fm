@@ -1,6 +1,6 @@
 <script lang="ts">
   import { player } from '$lib/player.svelte';
-  import { artistName } from '$lib/tracks';
+  import { artistName, trackHref } from '$lib/tracks';
   import Artwork from '$lib/ui/Artwork.svelte';
 
   import { canEmbed, embedArtwork, type catalogEmbed } from './catalog';
@@ -23,7 +23,7 @@
         <Artwork src={embedArtwork(track)} size={42} />
       </button>
       <div class="name">
-        <a class="truncate" href={`/track/${track.id}`} target="_blank" rel="noopener">{track.metadata.title}</a>
+        <a class="truncate" href={trackHref(track)} target="_blank" rel="noopener">{track.metadata.title}</a>
         <span class="subtle truncate">{canEmbed(track) ? artistName(track) : 'playback unavailable'}</span>
       </div>
     </div>
