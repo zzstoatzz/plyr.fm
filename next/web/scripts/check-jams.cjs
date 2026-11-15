@@ -21,6 +21,7 @@ async function run(browser, accounts) {
   const room = site + '/jam/' + slug;
   const sockets = new Set();
   const commands = [];
+  const soloCommands = [];
   const errors = [];
   let state;
   let joins = 0;
@@ -42,10 +43,27 @@ async function run(browser, accounts) {
         availability: { status: 'available', delivery: { url: 'https://panel-fixture.invalid/audio.wav' } }
       } });
       if (track) return route.fulfill({ json: track });
+      if (pathname === '/v1/tracks/resolve') {
+        const { ids } = route.request().postDataJSON();
+        const data = catalog.filter(item => ids.includes(item.id));
+        return route.fulfill({ json: { data, missing: ids.filter(id => !data.some(item => item.id === id)) } });
+      }
       if (pathname === '/v1/tracks') return route.fulfill({ json: { data: catalog, has_more: false } });
       return route.fulfill({ json: { data: [], has_more: false } });
     });
-    await context.route(coordinator + '/v1/playback/join', route => route.fulfill({ status: 503, json: {} }));
+    await context.route(coordinator + '/v1/playback/join', route => route.fulfill({ json: { ticket: 'solo-ticket', connectionId: 'solo-connection' } }));
+    await context.routeWebSocket('wss://jams.next.plyr.fm/v1/jams/socket?ticket=solo-ticket', socket => {
+      const solo = catalog[1];
+      socket.send(JSON.stringify({ type: 'state', state: {
+        epoch: 'solo', revision: 1, occurrence: 1, index: 0, playing: false, positionMs: 34000, updatedAtMs: Date.now(),
+        queue: [{ id: solo.id, uri: solo.record.uri, cid: solo.record.cid, durationMs: solo.metadata.duration_seconds * 1000, key: 'solo-track' }],
+        personal: { explicitEnd: 1, tailKind: null, label: null, repeat: 'off', keepPlaying: false, cursor: null, output: null, disconnected: false },
+      } }));
+      socket.onMessage(payload => {
+        const value = JSON.parse(String(payload));
+        if (value.type !== 'ping') soloCommands.push(value);
+      });
+    });
     await context.route(coordinator + '/v1/jams/join', route => {
       const admission = route.request().postDataJSON();
       assert.equal(admission.host, accounts[host].did);
@@ -103,10 +121,14 @@ async function run(browser, accounts) {
     await guestPage.getByRole('link', { name: 'sign in to join' }).click();
     await authorizeFixture(guestPage, accounts, guest);
     await guestPage.waitForURL(room);
+    const guestDock = guestPage.getByTestId('player-dock');
+    await guestDock.getByText(catalog[1].metadata.title).waitFor();
+    const guestPosition = guestDock.getByRole('slider', { name: 'Playback position' });
+    assert.equal(await guestPosition.inputValue(), '34');
     await guestPage.getByRole('button', { name: 'join jam', exact: true }).click();
     await guestPage.getByText('connected', { exact: true }).waitFor();
     assert.equal(joins, 2);
-    assert.equal(await guestPage.getByTestId('player-dock').getByRole('slider', { name: 'Playback position' }).isDisabled(), true);
+    assert.equal(await guestPosition.isDisabled(), true);
     await hostPage.getByRole('button', { name: 'play jam' }).click();
     await guestPage.waitForFunction(() => window.jamAudio.some(audio => !audio.paused));
     await guestPage.getByRole('button', { name: 'pause jam' }).click();
@@ -131,11 +153,15 @@ async function run(browser, accounts) {
     await guestPage.screenshot({ path: path.join(output, '390-dark-guest.png') });
     await guestPage.getByRole('button', { name: 'leave jam' }).click();
     await guestPage.getByRole('button', { name: 'join jam', exact: true }).waitFor();
+    await guestDock.getByText(catalog[1].metadata.title).waitFor();
+    assert.equal(await guestPosition.inputValue(), '34');
+    await guestDock.getByRole('button', { name: 'Play', exact: true }).waitFor();
     await hostPage.getByRole('button', { name: 'leave jam' }).click();
     await hostPage.getByRole('button', { name: 'join jam', exact: true }).click();
     await hostPage.getByText('connected', { exact: true }).waitFor();
     assert.equal(joins, 3);
     assert.deepEqual(commands.map(command => command.action), ['play', 'pause', 'seek', 'replaceQueue']);
+    assert.deepEqual(soloCommands, [], 'room actions do not touch the personal queue');
     assert.deepEqual(errors, []);
     console.log('Jam host created a Space, invited a guest, and both clients followed play, pause and seek.');
   } finally {
