@@ -133,6 +133,15 @@ the account's two-session quota. The fixture has no production target option.
 It uses app-password service authentication; real browser/native OAuth consent
 for the new upload permission remains a separate acceptance requirement.
 
+Use `verify_prepublication=true` on the same manual workflow to check
+admission and multipart staging without writing an AT Protocol record. This
+mode skips Worker deployment and uses only the dedicated account credentials.
+It stages one 4044-byte part, verifies the saved digest, cancels the reservation
+and checks that reserved bytes return to zero. It verifies that the record is
+absent and the public media endpoint serves no bytes. A cancelled receipt
+remains as metadata. Browser OAuth consent and recovery after publication
+still require a separate test.
+
 Use `full_size=true` on that same manual workflow for actual 1.5 GiB R2
 acceptance. It is restricted to a Linux GitHub Actions runner. A deterministic
 192 kHz stereo WAV is generated in at most 10 MiB reads; the real client

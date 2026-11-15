@@ -105,11 +105,49 @@ function deleteFixtureObject(object) {
   catch { throw new Error('fixture R2 cleanup requires object-delete permission'); }
 }
 
+async function verifyPrepublication(makeTransport, source, audioUrl, recordUrl) {
+  async function recordAbsent() {
+    const record = await request(recordUrl, { method: 'GET' });
+    assert.ok(record.status === 400 || record.status === 404, 'expected an absent fixture record');
+    const value = await record.json();
+    assert.ok(value.error === 'RecordNotFound', 'expected a RecordNotFound response');
+  }
+  async function mediaHidden() {
+    for (const method of ['GET', 'HEAD']) assert.equal((await request(audioUrl, { method })).status, 404);
+  }
+  await recordAbsent();
+  const transport = makeTransport(60000);
+  try {
+    const started = await transport.start();
+    assert.equal(started.state, 'transferring');
+    const bytes = source.read(0, source.size);
+    const receipt = { number: 1, sha256: createHash('sha256').update(bytes).digest('hex') };
+    assert.deepEqual(await transport.part(1, bytes), receipt);
+    const status = await transport.status();
+    assert.equal(status.state, 'transferring');
+    assert.equal(status.reservedBytes, source.size);
+    assert.deepEqual(status.receivedParts, [receipt]);
+    await mediaHidden();
+  } finally {
+    const cancelled = await makeTransport(20000).cancel();
+    assert.equal(cancelled.state, 'cancelled');
+    assert.equal(cancelled.reservedBytes, 0);
+    await recordAbsent();
+    await mediaHidden();
+  }
+  console.log('deployed admission, multipart receipt, cancellation and quota release verified; no record or public media');
+}
+
 export async function main({ deleteObject = deleteFixtureObject, verifyProcessing = verifyProcessedMedia } = {}) {
-  for (const name of ['ZAT_TEST_PDS', 'ZAT_TEST_HANDLE', 'ZAT_TEST_PASSWORD', 'CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID']) assert.ok(process.env[name], `missing ${name}`);
+  const prepublication = process.env.VERIFY_UPLOAD_PREPUBLICATION === 'true';
+  const required = ['ZAT_TEST_PDS', 'ZAT_TEST_HANDLE', 'ZAT_TEST_PASSWORD'];
+  if (!prepublication) required.push('CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID');
+  for (const name of required) assert.ok(process.env[name], `missing ${name}`);
   assert.ok(process.env.GITHUB_REF === 'refs/heads/main' && process.env.GITHUB_EVENT_NAME === 'workflow_dispatch', 'manual main-only fixture');
   const fullSize = process.env.VERIFY_UPLOAD_FULLSIZE === 'true';
   const processing = process.env.VERIFY_UPLOAD_PROCESSING === 'true';
+  assert.ok(!prepublication || !(fullSize || processing || process.env.DIAGNOSE_UPLOAD === 'true' || process.env.RESUME_UPLOAD_ID || process.env.RESUME_RECORD_RKEY),
+    'prepublication requires a fresh small fixture');
   if (fullSize) assert.ok(process.env.GITHUB_ACTIONS === 'true' && process.env.RUNNER_OS === 'Linux', 'full-size fixture is cloud-only');
   if (processing) assert.ok(process.env.GITHUB_ACTIONS === 'true' && process.env.RUNNER_OS === 'Linux', 'processing fixture is cloud-only');
   const identity = fixtureIdentity();
@@ -141,6 +179,13 @@ export async function main({ deleteObject = deleteFixtureObject, verifyProcessin
     },
   } };
   const observedFetch = async (url, init) => {
+    if (prepublication) {
+      const address = String(url);
+      assert.ok((address === `${coordinator}/v1/uploads/authorize` && init.method === 'POST')
+        || (address === expectedUploadUrl && ['POST', 'GET', 'DELETE'].includes(init.method))
+        || (address === `${expectedUploadUrl}/parts/1` && init.method === 'PUT'),
+      'unexpected prepublication transfer request');
+    }
     const response = await fetch(url, init);
     if (!response.ok) {
       const failure = await response.json().catch(() => ({}));
@@ -165,6 +210,10 @@ export async function main({ deleteObject = deleteFixtureObject, verifyProcessin
     return response;
   };
   const makeTransport = (timeout = (processing ? 30 : 12) * 60 * 1000) => createUploadTransport(auth, operation, () => {}, AbortSignal.timeout(timeout), observedFetch);
+  if (prepublication) {
+    const recordUrl = `${xrpc('com.atproto.repo.getRecord')}?${new URLSearchParams({ repo: owner, collection, rkey })}`;
+    return verifyPrepublication(makeTransport, source, audioUrl, recordUrl);
+  }
   const transport = makeTransport();
   const artifact = fullSize || processing ? 'upload-acceptance/reservation.json' : null;
   if (artifact) {
