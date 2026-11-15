@@ -313,6 +313,13 @@ async function loginScreen(browser) {
     assert.equal(await input.getAttribute('aria-expanded'), 'false');
     assert.ok(await input.evaluate(element => parseFloat(getComputedStyle(element).fontSize) >= 16));
     await page.screenshot({ path: path.join(output, '390-login.png') });
+    const jam = '/jam/did%3Aplc%3Afixture~room';
+    await page.goto(origin + jam);
+    const join = page.getByRole('link', { name: 'sign in to join' });
+    await join.waitFor();
+    assert.equal(await join.getAttribute('href'), '/login?return_to=' + encodeURIComponent(jam));
+    await page.goto(origin + jam + '~invalid');
+    await page.getByRole('alert').getByText('this jam link is invalid.').waitFor();
     assert.deepEqual(errors, []);
   } finally { await context.close(); }
 }

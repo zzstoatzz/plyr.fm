@@ -46,7 +46,7 @@
 	}
 	const title = $derived(list.metadata.name || (list.object === 'album' ? 'untitled album' : 'untitled playlist'));
 	const tracks = $derived(list.members.flatMap(member => member.track ? [member.track] : []));
-	const active = $derived(!player.localMode && tracks.some(track =>
+	const active = $derived(player.canEditPublicQueue && tracks.some(track =>
 		track.record.uri === player.current?.record.uri && track.record.cid === player.current.record.cid
 	));
 	const playing = $derived(active && player.playing && !player.outputElsewhere);
@@ -90,7 +90,7 @@
 			</div>
 			<div class="actions">
 				<button type="button" class="primary-button play" aria-label={`${playing ? 'Pause' : 'Play'} ${title}`} disabled={!tracks.length || active && !playing && player.snapshot.waiting} onclick={playAll}><Icon name={playing ? 'pause' : 'play'} /> {playing ? 'pause' : 'play'}</button>
-				<button type="button" class="text-button enqueue" disabled={!tracks.length || player.localMode} title={player.localMode ? "play a public track to change queues" : undefined} onclick={addToQueue}><Icon name="queue" /> add to queue</button>
+				<button type="button" class="text-button enqueue" disabled={!tracks.length || !player.canEditPublicQueue} title={!player.canEditPublicQueue ? "play a public track to change queues" : undefined} onclick={addToQueue}><Icon name="queue" /> add to queue</button>
 				<button type="button" class="icon-button share" aria-label={`Share ${list.object}`} onclick={share}><Icon name="share" /></button>
 				{#if owned && !editing}<button type="button" class="text-button" onclick={() => { editing = true; }}>edit {list.object}</button>{/if}
 			</div>

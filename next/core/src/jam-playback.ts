@@ -245,10 +245,27 @@ export function createJamPlayback(options: JamPlaybackOptions) {
 
   function replaceQueue(tracks: Track[], index: number, playing?: boolean) {
     if (!active) return false;
-    const refs = tracks.map(jamTrack);
-    if (refs.some(track => !track)) { update({ error: 'this track is not ready for the jam' }); return true; }
+    const refs = references(tracks);
+    if (!refs) return true;
     for (const track of tracks) if (track.record.cid) cache.set(`${track.id}/${track.record.cid}`, track);
-    return command({ action: 'replaceQueue', queue: refs as JamTrack[], index, ...(playing === undefined ? {} : { playing }) });
+    return command({ action: 'replaceQueue', queue: refs, index, ...(playing === undefined ? {} : { playing }) });
+  }
+
+  function references(tracks: Track[]) {
+    const refs = tracks.flatMap(track => {
+      const ref = jamTrack(track);
+      return ref ? [ref] : [];
+    });
+    if (refs.length === tracks.length) return refs;
+    update({ error: 'this track is not ready for the jam' });
+    return undefined;
+  }
+
+  function enqueue(tracks: Track[]) {
+    if (!active) return false;
+    const refs = references(tracks);
+    if (refs?.length) editQueue((items, index) => ({ queue: [...items, ...refs], index }));
+    return true;
   }
 
   function editQueue(edit: (queue: JamTrack[], index: number) => { queue: JamTrack[]; index: number }) {
@@ -314,6 +331,6 @@ export function createJamPlayback(options: JamPlaybackOptions) {
     fetching.clear();
   }
 
-  return { join, leave, command, replaceQueue, editQueue, toggle, setPlaying, active: () => !!active,
+  return { join, leave, command, replaceQueue, editQueue, enqueue, toggle, setPlaying, active: () => !!active,
     state: () => active?.state, observe, setAccount, close };
 }
