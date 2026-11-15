@@ -7,6 +7,7 @@ does not need a second process, while all upload phases themselves remain real.
 
 from __future__ import annotations
 
+import base64
 import contextlib
 import json
 import os
@@ -209,11 +210,13 @@ async def test_private_track_upload_playback_and_delete_live_zds(
             assert ops["commit"]["repo"] == parsed.author_did
 
             writers = await list_space_repos(session, parsed.space, limit=1)
-            assert writers["repos"]
-            for writer in writers["repos"]:
-                assert isinstance(writer["repo"], str)
-                assert isinstance(writer["spaceRev"], str)
-                assert isinstance(writer["latest"], dict)
+            [writer] = writers["repos"]
+            assert writer["$type"] == "com.atproto.space.defs#repoWrite"
+            assert writer["repo"] == parsed.author_did
+            assert isinstance(writer["spaceRev"], str)
+            assert isinstance(writer["repoRev"], str)
+            encoded = writer["data"]["$bytes"]
+            assert len(base64.b64decode(encoded + "=" * (-len(encoded) % 4))) == 32
 
             ranged = await http.get(
                 f"/audio/{track['file_id']}",
