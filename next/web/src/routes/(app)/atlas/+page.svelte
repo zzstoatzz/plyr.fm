@@ -1,70 +1,68 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { onMount } from 'svelte';
-	import { loadAtlas } from '$lib/atlas/catalog';
-	import { AtlasRenderer } from '$lib/atlas/renderer';
+	import { onMount, tick } from 'svelte';
+	import { atlasSummary, loadAtlas } from '$lib/atlas/catalog';
+	import { mountAtlas } from '$lib/atlas/canvas';
 	import type { AtlasData } from '$lib/atlas/types';
 	import { trackEmbed } from '$lib/embed/catalog';
 	import { player } from '$lib/player.svelte';
 	import Loading from '$lib/ui/Loading.svelte';
 
 	let canvas: HTMLCanvasElement;
-	let renderer: AtlasRenderer;
+	let map: ReturnType<typeof mountAtlas> | undefined;
+	let retry = $state<HTMLButtonElement>();
 	let data = $state.raw<AtlasData>();
 	let error = $state('');
+	let loading = $state(false);
 	let starting = $state('');
 	let playbackError = $state('');
 	let tooltip = $state<{ x: number; y: number; name: string; detail: string }>();
 	let pending: AbortController | undefined;
-	const summary = $derived(data ? [tally(data.meta.nTracks, 'track'), tally(data.clusters.coarse.length, 'region'), tally(data.clusters.fine.length, 'cluster')].join(' · ') : '');
+	const summary = $derived(data ? atlasSummary(data) : '');
 	const moves = new Map<string, [number, number]>([
 		['ArrowLeft', [60, 0]], ['ArrowRight', [-60, 0]], ['ArrowUp', [0, 60]], ['ArrowDown', [0, -60]]
 	]);
 
 	onMount(() => {
-		const system = matchMedia('(prefers-color-scheme: dark)');
-		const root = document.documentElement;
-		const dark = () => root.dataset.theme === 'dark' || (root.dataset.theme !== 'light' && system.matches);
-		const theme = () => renderer.setDark(dark());
-		const observer = new MutationObserver(theme);
-		renderer = new AtlasRenderer(canvas, {
-			onHover: (point, x, y) => { tooltip = point ? place(x, y, point.title, `${point.artist} · ${point.plays} ${point.plays === 1 ? 'play' : 'plays'}`) : undefined; },
-			onHoverArtist: (artist, x, y) => { tooltip = artist ? place(x, y, artist.name, `@${artist.handle} · ${artist.count} tracks`) : undefined; },
-			onActivate: point => { void play(point.id, point.title); },
-			onActivateArtist: artist => { void goto(resolve('/(app)/u/[actor]', { actor: artist.handle || artist.did })); }
-		}, { dark: dark(), preview: false });
-		observer.observe(root, { attributes: true, attributeFilter: ['data-theme'] });
-		system.addEventListener('change', theme);
 		void refresh();
 		return () => {
-			observer.disconnect();
-			system.removeEventListener('change', theme);
 			pending?.abort();
-			renderer.destroy();
+			map?.destroy();
 			active = false;
 		};
 	});
 
 	let active = true;
 	async function refresh() {
-		error = '';
+		if (loading) return;
+		loading = true;
 		try {
 			const atlas = await loadAtlas();
 			if (!active) return;
+			map ??= mountAtlas(canvas, {
+				onHover: (point, x, y) => { tooltip = point ? place(x, y, point.title, `${point.artist} · ${point.plays} ${point.plays === 1 ? 'play' : 'plays'}`) : undefined; },
+				onHoverArtist: (artist, x, y) => { tooltip = artist ? place(x, y, artist.name, `@${artist.handle} · ${artist.count} tracks`) : undefined; },
+				onActivate: point => { void play(point.id, point.title); },
+				onActivateArtist: artist => { void goto(resolve('/(app)/u/[actor]', { actor: artist.handle || artist.did })); }
+			});
+			map.renderer.setData(atlas);
+			const focusedRetry = document.activeElement === retry;
 			data = atlas;
-			renderer.setData(atlas);
+			error = '';
+			if (focusedRetry) {
+				await tick();
+				if (active && document.activeElement === document.body) canvas.focus({ preventScroll: true });
+			}
 		} catch {
 			if (active) error = 'could not load the atlas.';
+		} finally {
+			loading = false;
 		}
 	}
 
 	function place(x: number, y: number, name: string, detail: string) {
 		return { x: Math.max(8, Math.min(canvas.clientWidth - 252, x + 16)), y: Math.max(8, y - 60), name, detail };
-	}
-
-	function tally(count: number, singular: string) {
-		return `${count.toLocaleString()} ${singular}${count === 1 ? '' : 's'}`;
 	}
 
 	async function play(id: number, title: string) {
@@ -73,21 +71,29 @@
 		pending = request;
 		starting = title;
 		playbackError = '';
+		const timeout = setTimeout(() => {
+			if (!active || pending !== request) return;
+			request.abort();
+			pending = undefined;
+			starting = '';
+			playbackError = 'could not play this track from the atlas. select it to try again.';
+		}, 10_000);
 		try {
 			const track = await trackEmbed(String(id), (input, init) => fetch(input, { ...init, signal: request.signal }));
 			if (!request.signal.aborted) player.play(track);
 		} catch {
 			if (!request.signal.aborted) playbackError = 'could not play this track from the atlas.';
 		} finally {
+			clearTimeout(timeout);
 			if (pending === request) { pending = undefined; starting = ''; }
 		}
 	}
 
 	function keys(event: KeyboardEvent) {
 		const move = moves.get(event.key);
-		if (move) renderer.panBy(...move);
-		else if (event.key === '+' || event.key === '=') renderer.zoomBy(1.25);
-		else if (event.key === '-') renderer.zoomBy(0.8);
+		if (move) map?.renderer.panBy(...move);
+		else if (event.key === '+' || event.key === '=') map?.renderer.zoomBy(1.25);
+		else if (event.key === '-') map?.renderer.zoomBy(0.8);
 		else return;
 		event.preventDefault();
 	}
@@ -105,13 +111,15 @@
 		<canvas bind:this={canvas} tabindex={data ? 0 : -1} aria-label="Catalog atlas" aria-describedby="atlas-help" onkeydown={keys}></canvas>
 		{#if !data}
 			<div class="notice">
-				{#if error}<p role="alert">{error}</p><button class="text-button" type="button" onclick={refresh}>try again</button>
+				{#if error}
+					{#if !loading}<p role="alert">{error}</p>{/if}
+					<button class="text-button" type="button" bind:this={retry} aria-disabled={loading} onclick={refresh}>{loading ? 'loading the atlas…' : 'try again'}</button>
 				{:else}<Loading label="loading the atlas" />{/if}
 			</div>
 		{:else}
 			<div class="zoom">
-				<button class="icon-button" type="button" aria-label="Zoom in" onclick={() => renderer.zoomBy(1.25)}>+</button>
-				<button class="icon-button" type="button" aria-label="Zoom out" onclick={() => renderer.zoomBy(0.8)}>−</button>
+				<button class="icon-button" type="button" aria-label="Zoom in" onclick={() => map?.renderer.zoomBy(1.25)}>+</button>
+				<button class="icon-button" type="button" aria-label="Zoom out" onclick={() => map?.renderer.zoomBy(0.8)}>−</button>
 			</div>
 		{/if}
 		{#if tooltip}<div class="tooltip" style:left={tooltip.x + 'px'} style:top={tooltip.y + 'px'}><strong>{tooltip.name}</strong><p>{tooltip.detail}</p></div>{/if}

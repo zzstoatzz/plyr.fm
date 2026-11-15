@@ -2,6 +2,11 @@ import type { AtlasData } from './types';
 
 let cached: { at: number; load: Promise<AtlasData> } | undefined;
 
+export function atlasSummary(data: AtlasData) {
+	const tally = (count: number, noun: string) => `${count.toLocaleString()} ${noun}${count === 1 ? '' : 's'}`;
+	return [tally(data.meta.nTracks, 'track'), tally(data.clusters.coarse.length, 'region'), tally(data.clusters.fine.length, 'cluster')].join(' · ');
+}
+
 function isAtlas(value: unknown): value is AtlasData {
 	if (!value || typeof value !== 'object') return false;
 	const data = value as Partial<AtlasData>;

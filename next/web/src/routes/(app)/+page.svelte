@@ -6,6 +6,7 @@
 	import { player } from '$lib/player.svelte';
 	import { artistName } from '$lib/tracks';
 	import Artwork from '$lib/ui/Artwork.svelte';
+	import AtlasTile from '$lib/atlas/AtlasTile.svelte';
 	import Icon from '$lib/ui/Icon.svelte';
 	import LinksMenu from '$lib/LinksMenu.svelte';
 	import Loading from '$lib/ui/Loading.svelte';
@@ -79,6 +80,7 @@
 			</section>
 		{/if}
 	{/await}
+	<AtlasTile />
 	<section class="chart" data-testid="home-chart" aria-labelledby="home-top-tracks">
 		<header><h2 id="home-top-tracks">top tracks</h2><span>past month</span></header>
 		{#await data.chart}
@@ -136,6 +138,10 @@
 	header span, header a { color: var(--muted); font-size: 0.8rem; }
 	ol { margin: 0; padding-left: 1.6rem; }
 	li::marker { color: var(--faint); font-size: 0.75rem; }
+	@media (min-width: 1240px) {
+		.home { grid-template-columns: minmax(0, 1fr) minmax(16rem, 29%); grid-template-areas: "brand brand" "featured atlas" "latest chart"; }
+		.home:not(:has(.featured)) { grid-template-areas: "brand brand" "atlas atlas" "latest chart"; }
+	}
 	.chart :global(.track) { grid-template-columns: 2.5rem minmax(0, 1fr); min-height: 3.6rem; }
 	.chart :global(.duration), .chart :global(.add), .chart :global(.metrics) { display: none; }
 	@media (max-width: 900px) {
