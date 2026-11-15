@@ -17,6 +17,7 @@
     "check:atlas": "node scripts/check-atlas.cjs",
     "check:performance": "node scripts/check-performance.cjs",
     "check:radio": "node scripts/check-radio.cjs",
+    "check:album-upload": "node scripts/check-album-upload.cjs",
     "check:upload": "node scripts/check-upload.cjs",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "test": "node --experimental-strip-types --test tests/*.test.ts",

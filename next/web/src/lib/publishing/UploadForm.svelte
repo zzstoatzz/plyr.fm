@@ -75,7 +75,7 @@
   let jobs = $state.raw(uploadQueue.snapshot());
   let active = $derived.by(() => { jobs; return uploadQueue.busy(); });
   let transfersToRecover = $derived(transfers.filter(operation => !active.uploadIds.has(operation.uploadId)));
-  let draftsToRecover = $derived(drafts.filter(draft => !draftInRecovery(draft, pending, transfers) && !jobs.some(job => job.id === draft.id)));
+  let draftsToRecover = $derived(drafts.filter(draft => !draftInRecovery(draft, pending, transfers) && !jobs.some(job => job.id === draft.id && !(draft.reservedRkey && job.phase === 'failed'))));
   let creationsToRecover = $derived(pending.filter(operation => !active.rkeys.has(operation.rkey) && !transfers.some(transfer => transfer.rkey === operation.rkey)));
   let creationBlocksUpload = $derived(creationsToRecover.some(operation => !operation.archived));
   let service = $derived(!!audio && needsPlyrStorage(audio));

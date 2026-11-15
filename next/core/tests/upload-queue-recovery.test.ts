@@ -260,3 +260,19 @@ test('resuming a saved service upload retains the original draft identity', asyn
   assert.equal(job.draftId, 'slot-two');
   assert.equal(job.uri, uri);
 });
+
+test('editing a failed album song cannot replace its reserved address', async () => {
+  let attempts = 0;
+  const f = fixture({ reserve: async (_kind, rkey) => { attempts++; assert.equal(rkey, record.rkey); return record; } });
+  const file = { name: 'fixture.mp3', type: 'audio/mpeg', size: 1, arrayBuffer: async () => new ArrayBuffer(1) };
+  const planned = { owner, id: 'album-song', reservedRkey: record.rkey };
+  await f.model.add({ file, artist: 'fixture', title: 'Take' }, planned);
+  await setImmediate();
+  const draft = f.drafts.get(planned.id);
+  assert.ok(draft);
+  assert.equal(f.model.editable(planned.id), false);
+  assert.equal(await f.model.takeBack(planned.id, () => { throw new Error('must keep the original address'); }), undefined);
+  f.model.reattach(draft, file);
+  await setImmediate();
+  assert.equal(attempts, 2);
+});
