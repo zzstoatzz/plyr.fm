@@ -491,7 +491,7 @@ max_lines = 831
 
 [[rules]]
 path = "next/backend/src/internal/projection/postgres_verified_snapshot_store.zig"
-max_lines = 1201
+max_lines = 1202
 
 [[rules]]
 path = "next/backend/src/internal/projection/postgres_verified_commit_store.zig"
@@ -499,7 +499,7 @@ max_lines = 668
 
 [[rules]]
 path = "next/backend/src/internal/index/postgres_composed_track_store.zig"
-max_lines = 1801
+max_lines = 1826
 
 [[rules]]
 path = "next/backend/src/internal/ingest/projector.zig"
@@ -540,7 +540,7 @@ max_lines = 563
 
 [[rules]]
 path = "next/backend/src/internal/projection/postgres_track_store.zig"
-max_lines = 511
+max_lines = 513
 
 # ported from frontend/src/routes/atlas/renderer.ts, kept whole so the two stay comparable
 [[rules]]

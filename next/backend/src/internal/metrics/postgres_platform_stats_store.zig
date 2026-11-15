@@ -62,6 +62,7 @@ const query =
     \\WHERE v.collection = $1 AND NOT v.deleted
     \\  AND v.support_gate_type IS DISTINCT FROM 'owner'
     \\  AND COALESCE(pol.visibility, 'public') IN ('public', 'supporters')
+    \\  AND NOT v.unlisted
     \\  AND pol.moderation_decision IS DISTINCT FROM 'exclude'
     \\  AND (pol.moderation_decision IS NOT DISTINCT FROM 'allow' OR NOT (
     \\    v.self_labels && ARRAY['copyright-violation']::text[]
@@ -86,7 +87,7 @@ test "platform stats exclude unavailable and non-discoverable records and cache 
     _ = try pool.exec("DROP SCHEMA IF EXISTS plyr_index CASCADE", .{});
     _ = try pool.exec("CREATE SCHEMA plyr_index", .{});
     _ = try pool.exec("CREATE TABLE plyr_index.account_availability (repo_did text PRIMARY KEY, available boolean)", .{});
-    _ = try pool.exec("CREATE TABLE plyr_index.track_records (record_uri text PRIMARY KEY, owner_did text, collection text, duration_seconds bigint, support_gate_type text, deleted boolean DEFAULT false, self_labels text[] DEFAULT '{}')", .{});
+    _ = try pool.exec("CREATE TABLE plyr_index.track_records (record_uri text PRIMARY KEY, owner_did text, collection text, duration_seconds bigint, support_gate_type text, unlisted boolean NOT NULL DEFAULT false, deleted boolean DEFAULT false, self_labels text[] DEFAULT '{}')", .{});
     _ = try pool.exec("CREATE TABLE plyr_index.track_policies (record_uri text PRIMARY KEY, visibility text, moderation_decision text, operator_labels jsonb DEFAULT '[]')", .{});
     _ = try pool.exec("CREATE TABLE plyr_index.track_metrics (record_uri text PRIMARY KEY, play_count bigint)", .{});
     _ = try pool.exec("INSERT INTO plyr_index.account_availability VALUES ('a',true),('b',true),('c',false)", .{});

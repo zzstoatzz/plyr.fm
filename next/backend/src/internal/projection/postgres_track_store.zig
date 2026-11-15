@@ -103,7 +103,7 @@ pub const PostgresTrackStore = struct {
             .indexed_at_us = change.proof.indexed_at_us,
         });
         if (result != .stale) {
-            _ = conn.exec("UPDATE plyr_index.track_records SET download_policy = $3 WHERE record_uri = $1 AND record_cid = $2", .{ change.record_uri, change.record_cid, change.download_policy }) catch return error.ProjectionUnavailable;
+            _ = conn.exec("UPDATE plyr_index.track_records SET download_policy = $3, unlisted = $4 WHERE record_uri = $1 AND record_cid = $2", .{ change.record_uri, change.record_cid, change.download_policy, change.unlisted }) catch return error.ProjectionUnavailable;
             _ = conn.exec(upsert_tags_sql, .{ change.record_uri, change.record_cid, change.tags, change.tags_present }) catch |err| {
                 std.log.err("track tag projection upsert failed: {}", .{err});
                 return error.ProjectionUnavailable;
@@ -285,6 +285,7 @@ const upsert_record_sql =
     \\  support_gate_type = EXCLUDED.support_gate_type,
     \\  audio_space = EXCLUDED.audio_space,
     \\  download_policy = NULL,
+    \\  unlisted = false,
     \\  description = EXCLUDED.description,
     \\  self_labels = EXCLUDED.self_labels,
     \\  deleted = EXCLUDED.deleted,
@@ -355,6 +356,7 @@ pub fn createTestTable(pool: *pg.Pool) !void {
         \\)
     , .{});
     _ = try pool.exec(@embedFile("migration_0038_download_policy"), .{});
+    _ = try pool.exec(@embedFile("migration_0045_authored_unlisted"), .{});
     try created_at_us.addTestColumn(pool, "track_records");
     var statements = std.mem.splitScalar(u8, @embedFile("migration_0032_track_tags"), ';');
     while (statements.next()) |raw| {

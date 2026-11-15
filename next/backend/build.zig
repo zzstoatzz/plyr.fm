@@ -63,6 +63,9 @@ pub fn build(b: *std.Build) void {
     root_module.addAnonymousImport("migration_0044_legacy_track_links", .{
         .root_source_file = b.path("migrations/0044_add_legacy_track_links.sql"),
     });
+    root_module.addAnonymousImport("migration_0045_authored_unlisted", .{
+        .root_source_file = b.path("migrations/0045_add_authored_unlisted.sql"),
+    });
     const zat_module = b.dependency("zat", .{
         .target = target,
         .optimize = optimize,

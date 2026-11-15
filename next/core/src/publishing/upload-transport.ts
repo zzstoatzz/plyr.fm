@@ -22,7 +22,7 @@ export function uploadTransport({ UPLOAD_AUTHORIZE_METHOD, UPLOAD_COORDINATOR_UR
     active();
     const admission = await fetcher(`${UPLOAD_COORDINATOR_URL}/v1/uploads/authorize`, { method: 'POST', signal, redirect: 'error', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ serviceToken: token.token, uploadId: operation.uploadId, recordUri: operation.uri, sizeBytes: operation.sizeBytes,
-        contentType: operation.contentType, fileType: operation.fileType, visibility: 'public', downloadPolicy: 'open', processing: operation.processing }) });
+        contentType: operation.contentType, fileType: operation.fileType, visibility: operation.record.visibility === 'unlisted' ? 'unlisted' : 'public', downloadPolicy: 'open', processing: operation.processing }) });
     if (!admission.ok) throw new UploadRequestError(admission.status, admission.status === 403 ? 'large uploads are not allowed for this account.' : 'large upload service is unavailable. try again.');
     const value: unknown = await admission.json();
     if (!value || typeof value !== 'object' || !('uploadUrl' in value) || !('capability' in value) || !('expiresAt' in value)

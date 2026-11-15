@@ -77,7 +77,10 @@ async function fixture(browser, accounts, handle, width, scheme, scenario, audio
     const body = route.request().postDataJSON();
     activeWrite = body.collection;
     assert.equal(body.repo, did);
-    if (body.collection === trackCollection) assert.equal(body.record.album, title);
+    if (body.collection === trackCollection) {
+      assert.equal(body.record.album, title);
+      assert.equal(body.record.visibility, scenario === 'reload' ? 'unlisted' : undefined);
+    }
     if (body.collection === listCollection) {
       albumAttempts++;
       albumUri = `at://${did}/${listCollection}/${body.rkey}`;
@@ -130,6 +133,7 @@ async function fixture(browser, accounts, handle, width, scheme, scenario, audio
     await page.waitForURL(upload);
     const fields = page.getByRole('textbox', { name: 'album name' });
     await fields.fill(title);
+    if (scenario === 'reload') await page.getByRole('checkbox', { name: 'unlisted songs', exact: true }).check();
     const chooser = page.waitForEvent('filechooser');
     await page.getByRole('button', { name: 'choose songs', exact: true }).click();
     await (await chooser).setFiles([...selection, { name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('notes') }]);

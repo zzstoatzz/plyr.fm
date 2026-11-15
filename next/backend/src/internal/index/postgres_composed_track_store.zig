@@ -586,8 +586,8 @@ pub const projected_columns =
     \\  p.bio IS NOT NULL,
     \\  NULL::text,
     \\  NULL::text,
-    \\  COALESCE(pol.visibility, 'public'),
-    \\  COALESCE(pol.visibility, 'public') IN ('public', 'supporters'),
+    \\  CASE WHEN v.unlisted AND COALESCE(pol.visibility, 'public') = 'public' THEN 'unlisted' ELSE COALESCE(pol.visibility, 'public') END,
+    \\  NOT v.unlisted AND COALESCE(pol.visibility, 'public') IN ('public', 'supporters'),
     \\  pol.space_uri,
     \\  COALESCE(pol.operator_labels, '[]'::jsonb)::text,
     \\  pol.moderation_decision,
@@ -671,6 +671,7 @@ const resolve_query = joined_projection ++ "\n" ++
 pub const discovery_policy = common_policy ++
     \\  AND v.collection = $1
     \\  AND COALESCE(pol.visibility, 'public') IN ('public', 'supporters')
+    \\  AND NOT v.unlisted
     \\  AND NOT (
     \\    v.self_labels && ARRAY['sexual', 'porn']::text[]
     \\    OR COALESCE(pol.operator_labels, '[]'::jsonb) ?| ARRAY['sexual', 'porn']
@@ -1313,6 +1314,30 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     try std.testing.expectEqual(track.Source.derived, pds_only_value.sources.operator_labels);
     try std.testing.expectEqual(@as(usize, 0), pds_only_value.moderation.operator_labels.len);
     try std.testing.expectEqual(@as(i64, 0), pds_only_value.metrics.play_count);
+
+    var authored_query = search_request;
+    authored_query.query = "PDS-only Track";
+    authored_query.types = .{ .artist = false, .album = false, .playlist = false };
+    try std.testing.expectEqual(@as(usize, 1), (try search_store.search(a, authored_query)).len);
+    pds_only.upsert.unlisted = true;
+    try std.testing.expectEqual(
+        @import("../projection/track_store.zig").ApplyResult.idempotent,
+        try track_writer.store().apply(a, pds_only),
+    );
+    const authored_unlisted = (try implementation.store().getByUri(a, pds_only_uri)).?;
+    try std.testing.expectEqual(track.Visibility.unlisted, authored_unlisted.access.visibility);
+    try std.testing.expect(!authored_unlisted.access.in_discovery);
+    try std.testing.expectEqual(@as(usize, 0), (try search_store.search(a, authored_query)).len);
+    const unlisted_playback = (try playback_implementation.store().getByUri(a, pds_only_uri)).?;
+    try std.testing.expectEqual(.unlisted, unlisted_playback.visibility);
+    try std.testing.expectEqual(@as(usize, 1), (try implementation.store().listPublic(a, .{
+        .collection = "fm.plyr.dev.track",
+        .scope = .discovery,
+        .limit = 2,
+        .after = null,
+    })).len);
+    pds_only.upsert.unlisted = false;
+    _ = try track_writer.store().apply(a, pds_only);
 
     _ = try pool.exec(
         "UPDATE plyr_index.track_policies SET visibility = 'unlisted' WHERE record_uri = $1",

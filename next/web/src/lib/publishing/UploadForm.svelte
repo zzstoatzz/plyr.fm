@@ -57,7 +57,8 @@
   let details = $state(false);
   let consent = $state(false);
   let autoTag = $state(false);
-  let editorDraft = $derived(JSON.stringify({ title, album, description, tags, autoTag, named: !!title && title === autoTitle }));
+  let unlisted = $state(false);
+  let editorDraft = $derived(JSON.stringify({ title, album, description, tags, autoTag, unlisted, named: !!title && title === autoTitle }));
   let reattach = $state(false);
   let imageBusy = $state(false);
   let imageVersion = 0;
@@ -108,6 +109,7 @@
       album = draftField(draft, 'album');
       description = draftField(draft, 'description');
       tags = draftField(draft, 'tags');
+      unlisted = !!draft && typeof draft === 'object' && 'unlisted' in draft && draft.unlisted === true;
       details = !!(album || description || tags);
       reattach = !!(title || details);
       consent = localStorage.getItem(consentKey) === 'yes';
@@ -228,7 +230,7 @@
     const input = await writeEditor(owner, () => uploadQueue.takeBack(id, input => {
       if (!current()) throw new Error('reopen the upload page to edit this draft.');
       const previous = localStorage.getItem(draftKey);
-      const saved = JSON.stringify({ title: input.title, album: input.album, description: input.description, tags: input.tags?.join('\n'), autoTag: !!input.autoTag });
+      const saved = JSON.stringify({ title: input.title, album: input.album, description: input.description, tags: input.tags?.join('\n'), autoTag: !!input.autoTag, unlisted: !!input.unlisted });
       localStorage.setItem(draftKey, saved);
       return () => {
         if (localStorage.getItem(draftKey) !== saved) return;
@@ -247,6 +249,7 @@
     description = input.description ?? '';
     tags = input.tags?.join('\n') ?? '';
     autoTag = !!input.autoTag;
+    unlisted = !!input.unlisted;
     details = !!(album || description || tags);
     reattach = false;
     formProblem = '';
@@ -259,7 +262,7 @@
     if (!owner || !hydrated || submitting || !current() || !audio || !title.trim() || !artist || tagProblem || imageBusy || loading || recoveryProblem || creationBlocksUpload || (service && (!consent || !account.uploadStorage))) return;
     submitting = true;
     const submittedDraft = editorDraft;
-    const input = { file: audio, artwork: cover, title, artist, album, description, tags: tags.trim() ? tags.split('\n') : undefined, autoTag };
+    const input = { file: audio, artwork: cover, title, artist, album, description, tags: tags.trim() ? tags.split('\n') : undefined, autoTag, unlisted };
     try {
       await writeEditor(owner, async () => {
         await uploadQueue.add(input);
@@ -276,6 +279,7 @@
       if (coverInput) coverInput.value = '';
       title = autoTitle = album = description = tags = formProblem = audioProblem = coverProblem = '';
       details = false;
+      unlisted = false;
     } catch (failure) {
       formProblem = message(failure, 'could not start the upload.');
     } finally { submitting = false; }
@@ -366,6 +370,8 @@
   {:else}
     <button type="button" class="text-button" onclick={() => { details = true; }}>add album, description or tags</button>
   {/if}
+  <label class="check"><input type="checkbox" bind:checked={unlisted} /> unlisted</label>
+  {#if unlisted}<p class="subtle">people can play this track from its link. it stays out of home, search, and radio.</p>{/if}
   <label class="check"><input type="checkbox" bind:checked={autoTag} /> auto-tag with recommended genres</label>
   {#if draftProblem}<p role="alert">{draftProblem}</p>{/if}
   {#if formProblem}<p role="alert">{formProblem}</p>{/if}

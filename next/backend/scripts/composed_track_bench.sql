@@ -18,6 +18,7 @@ DROP TABLE IF EXISTS artists CASCADE;
 
 CREATE SCHEMA plyr_index;
 CREATE TABLE plyr_index.track_records (
+  unlisted boolean NOT NULL DEFAULT false,
     record_uri text PRIMARY KEY,
     record_cid text NOT NULL,
     owner_did text NOT NULL,

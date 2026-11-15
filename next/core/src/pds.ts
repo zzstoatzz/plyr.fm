@@ -39,6 +39,7 @@ export { MAX_AUDIO_BYTES } from './publishing/track-audio';
 export { TrackRevisionConflict, type TrackEdits } from './publishing/track-pds';
 
 export interface NewTrack {
+	unlisted?: boolean;
 	tags?: string[];
 	file: MediaFile;
 	title: string;
@@ -370,6 +371,7 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 			fileType: (ext || input.file.type.split('/')[1] || 'audio').slice(0, 16),
 			createdAt: new Date().toISOString()
 		};
+		if (input.unlisted) record.visibility = 'unlisted';
 		if (input.album?.trim()) record.album = input.album.trim();
 		if (tags !== undefined) record.tags = tags;
 		if (input.description?.trim()) record.description = input.description.trim();

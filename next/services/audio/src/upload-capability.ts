@@ -33,7 +33,7 @@ export function validClaim(value: unknown, now = Date.now()): value is UploadCla
     typeof claim.sizeBytes === "number" && Number.isSafeInteger(claim.sizeBytes) && claim.sizeBytes > 0 && claim.sizeBytes <= MAX_UPLOAD_BYTES &&
     (processing == null || validProcessing(processing, claim.sizeBytes)) &&
     typeof claim.fileType === "string" && typeof claim.contentType === "string" && (processing ? processingFormats : formats).get(claim.fileType) === claim.contentType &&
-    claim.visibility === "public" && claim.downloadPolicy === "open" &&
+    (claim.visibility === "public" || claim.visibility === "unlisted") && claim.downloadPolicy === "open" &&
     typeof claim.expiresAt === "number" && Number.isSafeInteger(claim.expiresAt) && claim.expiresAt > now && claim.expiresAt <= now + 600000;
 }
 

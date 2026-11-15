@@ -43,6 +43,8 @@ async function session(state: DurableObjectState, id: string) {
 test("capability verifies identity-bound size/policy and rejects tampering or expiry", async () => {
   const value = claim(undefined, MAX_UPLOAD_BYTES);
   expect(await verifyCapability(await token(value), secret)).toEqual(value);
+  const unlisted = { ...value, visibility: "unlisted" };
+  expect(await verifyCapability(await token(unlisted), secret)).toEqual(unlisted);
   for (const patch of [{ sizeBytes: MAX_UPLOAD_BYTES + 1 }, { sizeBytes: 0 }, { visibility: "private" }, { downloadPolicy: "off" }, { expiresAt: Date.now() - 1 }]) {
     expect(await verifyCapability(await token({ ...value, ...patch }), secret)).toBeNull();
   }

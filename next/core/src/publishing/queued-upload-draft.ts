@@ -37,11 +37,12 @@ export function queuedUploadDraft(input: NewTrack, owner: Did, id: string, reser
 
 export function readQueuedUploadDraft(value: unknown, owner: Did, key: unknown): QueuedUploadDraft {
   if (!value || typeof value !== 'object') throw new Error('could not read a queued upload.');
-  const { id, title, artist, album, description, tags, autoTag, audio, coverName, reservedRkey } = value as Record<string, unknown>;
+  const { id, title, artist, album, description, tags, autoTag, unlisted, audio, coverName, reservedRkey } = value as Record<string, unknown>;
   if (typeof id !== 'string' || key !== queuedUploadKey({ owner, id }) || !('owner' in value) || value.owner !== owner ||
     typeof title !== 'string' || typeof artist !== 'string' ||
     (album !== undefined && typeof album !== 'string') || (description !== undefined && typeof description !== 'string') ||
     (tags !== undefined && (!Array.isArray(tags) || !tags.every(tag => typeof tag === 'string'))) ||
+    (unlisted !== undefined && typeof unlisted !== 'boolean') ||
     (autoTag !== undefined && typeof autoTag !== 'boolean') || (coverName !== undefined && typeof coverName !== 'string') ||
     (reservedRkey !== undefined && !isCreateRkey(reservedRkey)) ||
     !audio || typeof audio !== 'object' || !('name' in audio) || typeof audio.name !== 'string' ||
@@ -50,7 +51,7 @@ export function readQueuedUploadDraft(value: unknown, owner: Did, key: unknown):
   }
   const file = { name: audio.name, type: audio.type, size: audio.size };
   canonicalAudioType(file);
-  return { owner, id, title, artist, album, description, tags, autoTag, audio: file, coverName, ...(reservedRkey ? { reservedRkey } : {}) };
+  return { owner, id, title, artist, album, description, tags, autoTag, ...(unlisted ? { unlisted } : {}), audio: file, coverName, ...(reservedRkey ? { reservedRkey } : {}) };
 }
 
 export function reattachQueuedUpload(draft: QueuedUploadDraft, file: MediaFile, artwork?: MediaFile): NewTrack {
@@ -58,6 +59,6 @@ export function reattachQueuedUpload(draft: QueuedUploadDraft, file: MediaFile, 
     throw new Error('choose the original audio file.');
   }
   if (draft.coverName && !artwork) throw new Error('choose the cover again.');
-  const { title, artist, album, description, tags, autoTag } = draft;
-  return { title, artist, album, description, tags, autoTag, file, artwork };
+  const { title, artist, album, description, tags, autoTag, unlisted } = draft;
+  return { title, artist, album, description, tags, autoTag, ...(unlisted ? { unlisted } : {}), file, artwork };
 }
