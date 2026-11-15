@@ -168,7 +168,7 @@ export function createApi(origin: string, playListenerId: () => string) {
 	return {
 		resolveTracks: (ids: string[], signal?: AbortSignal) => request<{ object: 'list'; data: Track[]; missing: string[] }>(origin + '/v1/tracks/resolve', 15_000, signal,
 			{ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ids }) }),
-		stats: () => get<{ object: 'platform_stats'; tracks: number; artists: number; duration_seconds: number; plays: number; updated_at_ms: number }>('/v1/stats'),
+		stats: (signal?: AbortSignal) => get<{ object: 'platform_stats'; tracks: number; artists: number; duration_seconds: number; plays: number; updated_at_ms: number }>('/v1/stats', undefined, signal),
 		recordPlay: async (play: QualifiedPlay): Promise<PlayReceipt> => {
 			const url = new URL(`${origin}/v1/tracks/${encodeURIComponent(play.trackId)}/plays`);
 			url.searchParams.set('occurrence', play.occurrenceId);

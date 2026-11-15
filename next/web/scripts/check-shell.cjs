@@ -185,6 +185,52 @@ async function queueGroups(browser, phone, scheme) {
   } finally { await context.close(); }
 }
 
+async function statsScreen(browser, phone, scheme) {
+  const width = phone ? 390 : 1280;
+  const { context, page, errors } = await setup(browser, width, phone ? 844 : 960, { phone, scheme });
+  let reads = 0;
+  try {
+    await page.route('https://api.next.plyr.fm/v1/stats', route => {
+      const visits = ++reads - Number(phone);
+      if (visits === 2 || visits === 4) return route.fulfill({ status: 503, json: {} });
+      return route.fulfill({ json: { object: 'platform_stats', plays: 393 + visits, tracks: 1422, artists: 122, duration_seconds: 532800, updated_at_ms: 1794651020000 } });
+    });
+    await page.goto(origin);
+    await page.getByTestId('home-track-row').first().waitFor();
+    assert.equal(reads, 0, 'stats do not load in the home shell');
+    if (phone) {
+      await page.getByRole('button', { name: 'Open links menu' }).click();
+      await page.getByText('1,422 tracks · 122 artists', { exact: true }).waitFor();
+      await page.getByRole('navigation', { name: 'Explore' }).getByRole('link', { name: 'stats', exact: true }).click();
+    } else {
+      await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'stats', exact: true }).click();
+    }
+    await page.waitForURL('**/stats');
+    await page.getByRole('heading', { name: 'stats', exact: true }).waitFor();
+    await page.getByText('394', { exact: true }).waitFor();
+    await page.getByText('6d 4h', { exact: true }).waitFor();
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    assert.equal(await page.getByLabel('Catalog totals').evaluate(node =>
+      getComputedStyle(node).gridTemplateColumns.split(' ').filter(size => Number.parseFloat(size) > 0).length
+    ), phone ? 2 : 4);
+    await page.screenshot({ path: path.join(output, `${width}-${scheme}-stats.png`) });
+    await page.getByRole('button', { name: 'refresh stats' }).click();
+    await page.getByRole('alert').getByText('could not refresh stats.').waitFor();
+    assert.ok(await page.getByText('394', { exact: true }).isVisible(), 'failed refresh keeps the last totals');
+    await page.getByRole('button', { name: 'try again' }).click();
+    await page.getByText('396', { exact: true }).waitFor();
+    assert.equal(reads, 3 + Number(phone));
+    await page.reload();
+    await page.getByRole('alert').getByText('could not load stats.').waitFor();
+    await page.getByRole('button', { name: 'try again' }).press('Enter');
+    await page.getByText('398', { exact: true }).waitFor();
+    assert.ok(await page.getByRole('button', { name: 'refresh stats' }).evaluate(button => document.activeElement === button),
+      'retry keeps keyboard focus on the same action');
+    assert.equal(reads, 5 + Number(phone));
+    assert.deepEqual(errors, []);
+  } finally { await context.close(); }
+}
+
 async function loginScreen(browser) {
   const { context, page, errors } = await setup(browser, 390, 844, { phone: true });
   try {
@@ -358,6 +404,7 @@ async function keyboard(browser, phone, scheme) {
         await screen(browser, phone, scheme);
         await queueGroups(browser, phone, scheme);
         await keyboard(browser, phone, scheme);
+        await statsScreen(browser, phone, scheme);
       }
     }
     await loginScreen(browser);
