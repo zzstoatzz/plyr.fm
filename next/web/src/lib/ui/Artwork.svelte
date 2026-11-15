@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { displayUrl } from '@plyr/next-core/artwork';
-	import Icon from './Icon.svelte';
+	import Icon, { type IconName } from './Icon.svelte';
 
-	let { src, fallback, size = 56, eager = false }: { src?: string; fallback?: string; size?: number; eager?: boolean } = $props();
+	let { src, fallback, size = 56, eager = false, fallbackIcon = 'music' }: { src?: string; fallback?: string; size?: number; eager?: boolean; fallbackIcon?: IconName } = $props();
 	let failed = $state(0);
 	const optimized = $derived(src ? displayUrl(src, size, typeof window === 'undefined' ? 1 : window.devicePixelRatio) : undefined);
 	const candidates = $derived([...new Set([optimized, src,
@@ -17,7 +17,7 @@
 	{#if image}
 		<img src={image} alt="" loading={eager ? 'eager' : 'lazy'} decoding="async" onerror={() => { failed = untrack(() => failed) + 1; }} />
 	{:else}
-		<span class="fallback"><Icon name="music" size={24} /></span>
+		<span class="fallback"><Icon name={fallbackIcon} size={24} /></span>
 	{/if}
 </span>
 
