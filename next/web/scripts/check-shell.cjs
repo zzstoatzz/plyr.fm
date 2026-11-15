@@ -454,6 +454,10 @@ async function keyboard(browser, phone, scheme) {
     }
 
     const chartOpener = page.getByTestId('home-chart').getByRole('link', { name: tracks[0].metadata.title, exact: true });
+    await page.route('https://api.next.plyr.fm/v1/playlists?**', route => route.fulfill({ json: { data: [{
+      object: 'playlist', id: 'fixture', metadata: { name: 'At the edge of the day' },
+      owner: { did: tracks[0].artist.did, profile: tracks[0].artist.profile }, media: tracks[0].media
+    }], has_more: false } }));
     await chartOpener.focus();
     await press(`${modifier}+k`);
     await page.waitForURL('**/search');
@@ -461,13 +465,19 @@ async function keyboard(browser, phone, scheme) {
     const search = page.getByRole('searchbox');
     await search.waitFor();
     assert.ok(await search.evaluate(node => document.activeElement === node));
-    await page.getByText('try a track title, artist name or handle, album, or playlist.').waitFor();
+    const popular = page.getByRole('region', { name: 'popular tracks' });
+    const playlists = page.getByRole('region', { name: 'playlists', exact: true });
+    await popular.getByRole('link').first().waitFor();
+    await page.getByRole('region', { name: 'artists to explore' }).getByRole('link').first().waitFor();
+    await playlists.getByRole('link').first().waitFor();
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
     await page.screenshot({ path: path.join(output, `${width}-${scheme}-search-empty.png`) });
     const hit = {
       object: 'search_result', type: 'track', id: tracks[0].id, title: tracks[0].metadata.title,
-      record: tracks[0].record, image_url: null,
+      record: tracks[0].record, image_url: tracks[0].media.artwork.url,
       owner: { did: tracks[0].artist.did, ...tracks[0].artist.profile }
     };
+    const artistHit = { ...hit, type: 'artist', id: hit.owner.did, title: hit.owner.display_name, image_url: hit.owner.avatar_url };
     let submitted = 0;
     await page.route('https://api.next.plyr.fm/v1/search?**', route => {
       const params = new URL(route.request().url()).searchParams;
@@ -475,13 +485,19 @@ async function keyboard(browser, phone, scheme) {
       if (term === 'q?' && params.get('limit') === '40' && ++submitted === 1) {
         return route.fulfill({ status: 503, json: { error: 'temporarily unavailable' } });
       }
-      return route.fulfill({ json: { object: 'list', data: term === 'sketch' ? [hit] : [], has_more: false } });
+      return route.fulfill({ json: { object: 'list', data: term === 'sketch' ? [hit, artistHit] : [], has_more: false } });
     });
     await search.fill('🎧');
     await page.getByText('type at least two characters to search.').waitFor();
     await search.fill('sketch');
-    const suggestion = page.getByRole('list', { name: 'search suggestions' }).getByRole('link');
+    const suggestions = page.getByRole('list', { name: 'search suggestions' }).getByRole('link');
+    const suggestion = suggestions.first();
     await suggestion.waitFor();
+    await page.waitForFunction(() => {
+      const images = [...document.querySelectorAll('[aria-label="search suggestions"] img')];
+      return images.length === 2 && images.every(image => image.complete && image.naturalWidth > 0);
+    });
+    assert.equal(await suggestions.nth(1).locator('img').getAttribute('src'), artistHit.image_url);
     assert.equal(new URL(page.url()).search, '', 'suggestions do not submit the query');
     await search.press('ArrowDown');
     assert.ok(await suggestion.evaluate(node => document.activeElement === node));
@@ -517,6 +533,16 @@ async function keyboard(browser, phone, scheme) {
     await page.waitForURL('**/search?q=q%3F');
     await page.getByText('no results for “q?”.').waitFor();
     await press('Escape');
+    await page.waitForURL(origin + '/');
+    const navigation = page.getByRole('navigation', { name: 'Main navigation' });
+    await navigation.getByRole('link', { name: 'search', exact: true }).click();
+    await page.waitForURL(origin + '/search');
+    const recent = page.getByRole('region', { name: 'recent searches' });
+    await recent.getByRole('link', { name: 'q?', exact: true }).waitFor();
+    await recent.getByRole('button', { name: 'clear', exact: true }).click();
+    await recent.waitFor({ state: 'hidden' });
+    assert.ok(await search.evaluate(node => document.activeElement === node));
+    await navigation.getByRole('link', { name: 'home', exact: true }).click();
     await page.waitForURL(origin + '/');
 
     await press(`${modifier}+Comma`);
