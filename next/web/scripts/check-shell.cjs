@@ -385,11 +385,16 @@ async function keyboard(browser, phone, scheme) {
       record: tracks[0].record, image_url: null,
       owner: { did: tracks[0].artist.did, ...tracks[0].artist.profile }
     };
+    let submitted = 0;
     await page.route('https://api.next.plyr.fm/v1/search?**', route => {
-      const term = new URL(route.request().url()).searchParams.get('q');
+      const params = new URL(route.request().url()).searchParams;
+      const term = params.get('q');
+      if (term === 'q?' && params.get('limit') === '40' && ++submitted === 1) {
+        return route.fulfill({ status: 503, json: { error: 'temporarily unavailable' } });
+      }
       return route.fulfill({ json: { object: 'list', data: term === 'sketch' ? [hit] : [], has_more: false } });
     });
-    await search.fill('s');
+    await search.fill('🎧');
     await page.getByText('type at least two characters to search.').waitFor();
     await search.fill('sketch');
     const suggestion = page.getByRole('list', { name: 'search suggestions' }).getByRole('link');
@@ -407,6 +412,8 @@ async function keyboard(browser, phone, scheme) {
     assert.equal(await guide.isVisible(), false);
     await search.press('Enter');
     await page.waitForURL('**/search?q=q%3F');
+    await page.getByText('could not search. try again.').waitFor();
+    await search.press('Enter');
     await page.getByText('no results for “q?”.').waitFor();
     await page.route('https://api.next.plyr.fm/v1/charts/tracks?**', async route => {
       if (new URL(route.request().url()).searchParams.get('period') === 'month') {

@@ -565,4 +565,4 @@ max_lines = 1140
 
 [[rules]]
 path = "next/web/scripts/check-shell.cjs"
-max_lines = 515
+max_lines = 522

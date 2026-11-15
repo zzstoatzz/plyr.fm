@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { goto, invalidate } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import type { SearchHit } from '@plyr/next-core/api';
@@ -15,13 +15,14 @@
 	type Preview = { query: string; results: SearchHit[] } | { query: string; error: true };
 	let preview = $state.raw<Preview>();
 	const term = $derived(query.trim());
+	const length = $derived([...term].length);
 	const matching = $derived(preview?.query === term ? preview : undefined);
 	const suggestionCount = $derived(matching && 'results' in matching ? matching.results.length : 0);
 
 	$effect(() => {
 		const value = term;
 		preview = undefined;
-		if (value.length < 2 || value === data.query) return;
+		if (length < 2 || value === data.query) return;
 		const request = new AbortController();
 		const timer = setTimeout(() => {
 			void api.search(value, { limit: 8, signal: request.signal }).then(
@@ -79,9 +80,10 @@
 	<form action="/search" onsubmit={event => {
 		event.preventDefault();
 		const shortcutSearch = page.state.shortcutSearch;
-		if (term.length === 1) { input.focus(); return; }
+		if (length === 1) { input.focus(); return; }
 		const url = new URL(resolve('/search'), page.url);
 		if (term) url.searchParams.set('q', term);
+		if (term && url.href === page.url.href) { void invalidate('plyr:catalog-search'); return; }
 		void goto(url, {
 			replaceState: shortcutSearch,
 			state: { shortcutSearch }
@@ -98,7 +100,7 @@
 			<Icon name="search" size={22} />
 			<p id="search-hint">try a track title, artist name or handle, album, or playlist.</p>
 		</div>
-	{:else if term.length < 2}
+	{:else if length < 2}
 		<p class="state" role="status">type at least two characters to search.</p>
 	{:else if term === data.query}
 		{#await data.results}
