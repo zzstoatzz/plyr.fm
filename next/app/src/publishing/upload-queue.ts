@@ -20,6 +20,7 @@ export const uploadQueue = createUploadQueue({
   onJob(job) {
     const key = `upload:${job.id}`;
     if (job.phase === 'done') toast.add(jobLine(job), 'success', 6000, job.uri ? { label: 'view track', href: `/track/${trackIdFromUri(job.uri)}` } : undefined, key);
+    else if (job.phase === 'awaiting-publication') toast.add(jobLine(job), 'info', 10000, { label: 'open upload', href: '/upload' }, key);
     else if (job.phase === 'failed') toast.add(jobLine(job), 'error', 10000, { label: 'open upload', href: '/upload' }, key);
     else if (job.phase !== 'waiting') toast.add(jobLine(job), 'info', 0, undefined, key);
   },

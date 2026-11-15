@@ -1,0 +1,106 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { setImmediate } from 'node:timers/promises';
+import type { Auth } from '../src/auth-state.ts';
+import type { createPublicPds } from '../src/pds.ts';
+import type { RepoRpc } from '../src/publishing/repo-rpc.ts';
+import type { CreateOperation } from '../src/publishing/create-operation.ts';
+import { UPLOAD_PART_BYTES, type UploadOperation, type UploadStatus } from '../src/publishing/upload-model.ts';
+import { createUploadQueue } from '../src/publishing/upload-queue.ts';
+import type { UploadTransport } from '../src/publishing/upload-transport.ts';
+
+const owner = 'did:plc:fixture';
+const collection = 'fm.plyr.track';
+const uri = `at://${owner}/${collection}/3222222222222`;
+const record: CreateOperation = {
+  owner, collection, uri, rkey: '3222222222222', record: { $type: collection, title: 'fixture' },
+};
+const operation: UploadOperation = {
+  ...record, uploadId: 'fixture', name: 'fixture.mp3', sizeBytes: 1, contentType: 'audio/mpeg', fileType: 'mp3',
+};
+
+function fixture() {
+  let counter = 0;
+  let confirmations = 0;
+  let dismissed = 0;
+  let publicationAttempts = 0;
+  let published = false;
+  let saved: UploadOperation[] = [];
+  const status = (): UploadStatus => ({
+    state: published ? 'published' : 'complete', recoveryRequired: false, reservedBytes: 1,
+    partSizeBytes: UPLOAD_PART_BYTES, partCount: 1, receivedParts: [], reservedDigests: [],
+    audioUrl: 'https://fixture.invalid/media/fixture',
+  });
+  const pds = {
+    reserveCreate: async () => record,
+    uploadTrack: async () => { throw new Error('host rejected the upload'); },
+    pendingCreates: async () => [record],
+    recoverCreate: async () => ({ state: 'different' }),
+    uploadedTrack: async () => { publicationAttempts++; return { state: 'accepted' }; },
+    dismissCreate: async () => { dismissed++; },
+  } as unknown as ReturnType<typeof createPublicPds>;
+  const model = createUploadQueue({
+    getAuth: () => ({ did: owner, rpc: {}, uploadStorage: true }) as Auth<RepoRpc>,
+    createPds: () => pds,
+    measureAudioDuration: async () => 1,
+    openUploadReader: () => { throw new Error('not used'); },
+    sendParts: async () => { throw new Error('not used'); },
+    uploadStorage: {
+      load: async () => saved,
+      put: async value => { saved = [value]; },
+      delete: async () => { saved = []; },
+    },
+    createUploadTransport: () => ({
+      start: async () => status(),
+      status: async () => status(),
+      activate: async () => { confirmations++; return status(); },
+    }) as UploadTransport,
+    applyGenreTags: async () => {},
+    randomUUID: () => String(++counter),
+    sha256: async () => new ArrayBuffer(32),
+  });
+  return {
+    model, recordForRecovery: () => saved,
+    confirmations: () => confirmations, dismissals: () => dismissed, publications: () => publicationAttempts,
+    seed: () => { saved = [operation]; }, confirm: () => { published = true; },
+  };
+}
+
+test('failed jobs retain each editable input when more than four attempts fail', async () => {
+  const { model } = fixture();
+  const file = { name: 'fixture.mp3', type: 'audio/mpeg', size: 1, arrayBuffer: async () => new ArrayBuffer(1) };
+  for (let index = 0; index < 6; index++) model.add({ file, artist: 'fixture', title: `Take ${index}` });
+  await setImmediate();
+  assert.deepEqual(model.snapshot().map(job => job.phase), Array(6).fill('failed'));
+  const oldest = model.snapshot()[0];
+  assert.equal(model.editable(oldest.id), true);
+  assert.deepEqual(model.takeBack(oldest.id), { file, artist: 'fixture', title: 'Take 0' });
+});
+
+test('publication stays recoverable until the worker confirms it, then cleans up the same upload', async context => {
+  context.mock.timers.enable({ apis: ['setTimeout'] });
+  const f = fixture();
+  f.seed();
+  await f.model.resume(owner);
+  await setImmediate();
+  for (let attempt = 1; attempt < 3; attempt++) {
+    context.mock.timers.tick(4_000);
+    await setImmediate();
+  }
+  assert.equal(f.confirmations(), 3);
+  assert.equal(f.model.snapshot()[0].phase, 'awaiting-publication');
+  assert.equal(f.model.snapshot()[0].uri, undefined);
+  assert.equal(f.model.active(), false);
+  assert.equal(f.model.busy().uploadIds.size, 0);
+  assert.equal(f.dismissals(), 0);
+  assert.deepEqual(f.recordForRecovery(), [operation]);
+  assert.equal(f.publications(), 1);
+
+  f.confirm();
+  await f.model.resume(owner);
+  await setImmediate();
+  assert.deepEqual(f.model.snapshot().map(job => [job.phase, job.uri]), [['done', uri]]);
+  assert.equal(f.publications(), 1);
+  assert.equal(f.dismissals(), 1);
+  assert.deepEqual(f.recordForRecovery(), []);
+});

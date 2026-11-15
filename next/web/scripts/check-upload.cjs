@@ -64,6 +64,8 @@ async function verify(browser, accounts, width, theme, mp3, wav) {
   const partStarted = Promise.withResolvers();
   const releasePart = Promise.withResolvers();
   let state = 'transferring';
+  const waitForConfirmation = width === 390 && theme === 'light';
+  let activationChecks = 0;
   const worker = 'https://audio.fixture';
   await context.route(coordinator + '/v1/uploads/authorize', route => {
     const request = route.request().postDataJSON();
@@ -99,7 +101,8 @@ async function verify(browser, accounts, width, theme, mp3, wav) {
       assert.equal(value.audioBlob, undefined);
       assert.equal(value.downloadPolicy, 'open');
       assert.equal(value.fileType, 'mp3');
-      state = 'published';
+      activationChecks++;
+      if (!waitForConfirmation) state = 'published';
     }
     return route.fulfill({ json: {
       state, processing: upload.processing, recoveryRequired: false, partSizeBytes: partSize, partCount: 1,
@@ -166,7 +169,16 @@ async function verify(browser, accounts, width, theme, mp3, wav) {
     releasePart.resolve();
     await progress.waitFor({ state: 'detached' });
     await page.getByRole('link', { name: 'upload', exact: true }).click();
-    await page.getByRole('list', { name: 'Upload queue' }).getByRole('link', { name: 'view track' }).nth(1).waitFor();
+    if (waitForConfirmation) {
+      await page.getByText('"for conversion" is waiting for playback confirmation').waitFor();
+      assert.equal(activationChecks, 3);
+      assert.equal(state, 'complete');
+      assert.equal(await page.getByRole('list', { name: 'Upload queue' }).getByRole('link', { name: 'view track' }).count(), 1);
+      state = 'published';
+      await page.reload();
+    }
+    const jobLinks = page.getByRole('list', { name: 'Upload queue' }).getByRole('link', { name: 'view track' });
+    await (waitForConfirmation ? jobLinks.first() : jobLinks.nth(1)).waitFor();
     assert.equal(state, 'published');
     assert.equal(writes.length, 2);
     assert.equal(blobWrites, 2, 'converted source bytes never go to the PDS');
