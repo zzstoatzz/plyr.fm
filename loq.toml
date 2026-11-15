@@ -562,3 +562,7 @@ max_lines = 665
 [[rules]]
 path = "next/web/src/lib/atlas/renderer.ts"
 max_lines = 1140
+
+[[rules]]
+path = "next/web/scripts/check-shell.cjs"
+max_lines = 515
