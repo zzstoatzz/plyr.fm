@@ -64,7 +64,7 @@ export default function JamRoom() {
     if (player.privatePlayback) throw new Error('play a public track before starting a jam.');
     const current = player.current && (!trackId || player.current.id === trackId) ? player.current : undefined;
     const capture = current && { tracks: player.queue, index: player.index, duration: player.status.duration,
-      position: player.status.currentTime, playing: player.status.playing };
+      position: player.seekPreview ?? player.status.currentTime, playing: player.status.playing };
     const track = current ?? (trackId ? await api.track(trackId) : undefined);
     const seed = track && initialJam(track, capture);
     if (!seed) throw new Error('couldn’t start a jam with this track.');
