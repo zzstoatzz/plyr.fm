@@ -4,7 +4,7 @@
 	import { onMount, untrack } from 'svelte';
 	import { resolveHandle } from '@plyr/next-core/auth-state';
 	import { pdsEndpoint, pdsSupportsSpaces } from '@plyr/next-core/identity';
-	import { JamNotStarted, parseJamTrackSnapshot, type InitialJam } from '@plyr/next-core/jam-space';
+	import { JamAccessDenied, JamNotStarted, parseJamTrackSnapshot, type InitialJam } from '@plyr/next-core/jam-space';
 	import { api } from '$lib/api';
 	import { auth, login } from '$lib/auth';
 	import { isJamDid, jamRoomPath, parseJamRoom, takeJamStart } from '$lib/jam-room';
@@ -22,6 +22,8 @@
 	const room = $derived(parseJamRoom(page.params.room ?? ''));
 	const trackId = $derived(page.url.searchParams.get('track') ?? undefined);
 	const link = $derived(room ? jamRoomPath(room.host, room.key, trackId) : '/');
+	const joinAfterLogin = $derived(page.url.searchParams.get('join') === '1');
+	const loginReturn = $derived(link + (trackId ? '&' : '?') + 'join=1');
 	const host = $derived(!!room && room.host === account.did);
 	const currentJam = $derived(player.jam && player.jam.host === room?.host && player.jam.key === room.key ? player.jam : undefined);
 	const support = $derived.by(() => {
@@ -32,6 +34,18 @@
 	$effect(() => {
 		if (!room || !trackId || !host || !account.jamSpace || !takeJamStart(room)) return;
 		untrack(() => { void enter(true, true); });
+	});
+	$effect(() => {
+		if (!room || !account.did || !account.jamSpace || !joinAfterLogin || busy) return;
+		untrack(() => {
+			const url = new URL(page.url);
+			const slug = page.params.room;
+			const agent = account.agent;
+			url.searchParams.delete('join');
+			void goto(url, { replaceState: true, keepFocus: true, noScroll: true }).then(() => {
+				if (page.params.room === slug && account.agent === agent && !host && !currentJam) void enter(false);
+			}, () => {});
+		});
 	});
 
 	async function run(action: (check: () => void) => Promise<void>, errorCopy: string) {
@@ -46,7 +60,9 @@
 		try { await action(check); }
 		catch (error) {
 			if (page.params.room === initial.slug && auth.getAuth().agent === initial.agent) {
-				failure = error instanceof JamNotStarted ? 'the host hasn’t started this jam yet.' : errorCopy;
+				if (error instanceof JamNotStarted) failure = 'the host hasn’t started this jam yet.';
+				else if (error instanceof JamAccessDenied) failure = 'check that the host invited this account.';
+				else failure = errorCopy;
 			}
 		} finally { busy = false; }
 	}
@@ -66,14 +82,22 @@
 		};
 		return {
 			space,
-			enter: (initial?: InitialJam, recover?: () => Promise<InitialJam>) => player.joinJam(activeRoom, async () => {
-				checkAccount();
-				try { return await joinJam({ agent }, activeRoom.host, activeRoom.key, initial); }
-				catch (error) { if (!recover || !(error instanceof JamNotStarted)) throw error; }
-				const fallback = await recover();
-				checkAccount();
-				return joinJam({ agent }, activeRoom.host, activeRoom.key, fallback);
-			}, check)
+			async enter(initial?: InitialJam, recover?: () => Promise<InitialJam>) {
+				const admit = async () => {
+					checkAccount();
+					try { return await joinJam({ agent }, activeRoom.host, activeRoom.key, initial); }
+					catch (error) { if (!recover || !(error instanceof JamNotStarted)) throw error; }
+					const fallback = await recover();
+					checkAccount();
+					return joinJam({ agent }, activeRoom.host, activeRoom.key, fallback);
+				};
+				let admission = did === activeRoom.host ? undefined : await admit();
+				return player.joinJam(activeRoom, async () => {
+					const ticket = admission;
+					admission = undefined;
+					return ticket ?? admit();
+				}, check);
+			}
 		};
 	}
 
@@ -162,7 +186,7 @@
 	{:else if !account.ready}
 		<Loading label="checking sign-in" inline />
 	{:else if !account.did}
-		<a class="text-button" href={'/login?return_to=' + encodeURIComponent(link)}>sign in to join</a>
+		<a class="text-button" href={'/login?return_to=' + encodeURIComponent(loginReturn)}>sign in to join</a>
 	{:else if !account.jamSpace}
 		{#await support}
 			<Loading label="checking jam support" inline />
@@ -170,7 +194,7 @@
 			{#if supported}
 				<p>allow plyr.fm to create and join jams with this account.</p>
 				<button class="text-button" type="button" disabled={busy} onclick={() => run(async () => {
-					if (account.did) await login(account.did, false, link);
+					if (account.did) await login(account.did, false, joinAfterLogin ? loginReturn : link);
 				}, 'couldn’t open sign-in. try again.')}>enable jams</button>
 			{:else}<p>your account’s server doesn’t support jams yet.</p>{/if}
 		{:catch}
@@ -182,7 +206,7 @@
 			{#if host && trackId}
 				<button class="text-button" type="button" disabled={busy} onclick={() => enter(true)}>{busy ? 'starting jam…' : 'start jam'}</button>
 			{:else}
-				<button class="text-button" type="button" disabled={busy} onclick={() => enter(false)}>join jam</button>
+				<button class="text-button" type="button" disabled={busy} onclick={() => enter(false)}>{busy && !host ? 'joining jam…' : 'join jam'}</button>
 			{/if}
 		</div>
 	{:else}

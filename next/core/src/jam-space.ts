@@ -11,6 +11,7 @@ export interface InitialJam {
 }
 
 export class JamNotStarted extends Error {}
+export class JamAccessDenied extends Error {}
 
 type JamConfig = Pick<AuthConfig, 'JAM_SPACE' | 'JAM_COORDINATOR_URL' | 'JAM_SERVICE_AUDIENCE' | 'JAM_JOIN_METHOD'>;
 
@@ -122,6 +123,7 @@ export function createJamSpace<Key extends { did(): string }, Value extends Reco
         auth.agent.handle(`/xrpc/com.atproto.space.getDelegationToken?${new URLSearchParams({ space })}`, { method: 'GET', signal: controller.signal })
       ]);
       if (!service.ok) throw new Error('enable jams again to allow real-time playback');
+      if (delegation.status === 403) throw new JamAccessDenied('your account cannot access this jam');
       if (!delegation.ok) throw new Error('your account cannot access this jam');
       const serviceBody = await service.json() as { token?: unknown };
       const delegationBody = await delegation.json() as { token?: unknown };
@@ -132,6 +134,7 @@ export function createJamSpace<Key extends { did(): string }, Value extends Reco
       });
       const body = await response.json() as { ticket?: unknown; error?: { message?: string } };
       if (response.status === 409) throw new JamNotStarted('the host hasn’t started this jam yet.');
+      if (response.status === 403) throw new JamAccessDenied('your account cannot access this jam');
       if (!response.ok || typeof body.ticket !== 'string') throw new Error(body.error?.message || 'could not connect to this jam');
       const socket = new URL('/v1/jams/socket', JAM_COORDINATOR_URL);
       socket.protocol = socket.protocol === 'https:' ? 'wss:' : 'ws:';

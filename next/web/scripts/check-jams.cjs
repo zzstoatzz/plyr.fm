@@ -26,9 +26,11 @@ async function run(browser, accounts, { delayedSolo = false, startFromQueue = fa
   let state;
   let joins = 0;
   let rejectFirstPublish = startFromQueue;
+  const guestFailures = [503, 403];
   const firstAdd = Promise.withResolvers();
+  const guestAdmission = Promise.withResolvers();
 
-  async function setup(width, scheme) {
+  async function setup(width, scheme, isGuest = false) {
     const result = await fixturePage(browser, accounts, {
       dist: path.resolve(__dirname, '../build'),
       context: { viewport: { width, height: 844 }, colorScheme: scheme, isMobile: width === 390, hasTouch: width === 390 },
@@ -79,13 +81,17 @@ async function run(browser, accounts, { delayedSolo = false, startFromQueue = fa
         if (value.type !== 'ping') soloCommands.push(value);
       });
     });
-    await context.route(coordinator + '/v1/jams/join', route => {
+    await context.route(coordinator + '/v1/jams/join', async route => {
       const admission = route.request().postDataJSON();
       assert.equal(admission.host, accounts[host].did);
       if (startFromQueue) assert.match(admission.key, /^[a-f\d-]{36}$/);
       else assert.equal(admission.key, key);
       assert.equal(typeof admission.serviceToken, 'string');
       assert.equal(typeof admission.delegationToken, 'string');
+      if (isGuest && guestFailures.length) {
+        await guestAdmission.promise;
+        return route.fulfill({ status: guestFailures.shift(), json: {} });
+      }
       if (admission.initial) {
         assert.equal(admission.initial.queue[0].id, catalog[0].id);
         state ??= { ...admission.initial, epoch: 'room-epoch', revision: 1, occurrence: 1, updatedAtMs: Date.now() };
@@ -123,7 +129,7 @@ async function run(browser, accounts, { delayedSolo = false, startFromQueue = fa
   }
 
   const hostTab = await setup(1280, 'light');
-  const guestTab = await setup(390, 'dark');
+  const guestTab = await setup(390, 'dark', true);
   const hostPage = hostTab.page;
   const guestPage = guestTab.page;
   const hostLink = room + '?track=' + encodeURIComponent(catalog[0].id);
@@ -172,12 +178,22 @@ async function run(browser, accounts, { delayedSolo = false, startFromQueue = fa
 
     await guestPage.goto(room);
     await guestPage.getByRole('link', { name: 'sign in to join' }).click();
+    const admitting = guestPage.waitForRequest(coordinator + '/v1/jams/join', { timeout: 15_000 });
     await authorizeFixture(guestPage, accounts, guest);
     await guestPage.waitForURL(room);
+    await admitting;
+    await guestPage.getByRole('button', { name: 'joining jam…', exact: true }).waitFor();
+    await fs.mkdir(output, { recursive: true });
+    await guestPage.screenshot({ path: path.join(output, '390-dark-guest-joining.png') });
+    guestAdmission.resolve();
+    await guestPage.getByRole('alert').getByText('couldn’t join the jam. try again.').waitFor();
+    await guestPage.screenshot({ path: path.join(output, '390-dark-guest-retry.png') });
     const guestDock = guestPage.getByTestId('player-dock');
     await guestDock.getByText(catalog[1].metadata.title).waitFor();
     const guestPosition = guestDock.getByRole('slider', { name: 'Playback position' });
     assert.equal(await guestPosition.inputValue(), '34');
+    await guestPage.getByRole('button', { name: 'join jam', exact: true }).click();
+    await guestPage.getByRole('alert').getByText('check that the host invited this account.').waitFor();
     await guestPage.getByRole('button', { name: 'join jam', exact: true }).click();
     await guestPage.getByText('jam is live', { exact: true }).waitFor();
     assert.equal(joins, 2);
@@ -229,6 +245,7 @@ async function run(browser, accounts, { delayedSolo = false, startFromQueue = fa
     console.log('Jam host created a Space, invited a guest, and both clients followed play, pause and seek.');
   } finally {
     firstAdd.resolve();
+    guestAdmission.resolve();
     await hostTab.context.close();
     await guestTab.context.close();
   }
