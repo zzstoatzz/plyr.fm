@@ -13,7 +13,7 @@
 		{ label: 'portal', detail: identity, icon: 'portal', href: resolve('/(app)/portal') },
 		{ label: 'upload', detail: uploadDetail, icon: 'upload', href: resolve('/(app)/upload') },
 		{ label: 'private music', detail: 'listen to your private tracks', icon: 'music', href: resolve('/(app)/private') },
-		{ label: 'settings', detail: 'queue sync', icon: 'settings', href: resolve('/(app)/settings') }
+		{ label: 'settings', detail: null, icon: 'settings', href: resolve('/(app)/settings') }
 	] as const);
 
 	afterNavigate(({ from }) => {
@@ -44,7 +44,7 @@
 			{#each entries as entry (entry.label)}
 				<a href={entry.href} onclick={() => dialog.close()}>
 					<Icon name={entry.icon} size={22} />
-					<span class="row-label"><strong>{entry.label}</strong><small>{entry.detail}</small></span>
+					<span class="row-label"><strong>{entry.label}</strong>{#if entry.detail}<small>{entry.detail}</small>{/if}</span>
 					{#if entry.icon === 'settings'}<Icon name="chevron" size={17} />{/if}
 				</a>
 			{/each}

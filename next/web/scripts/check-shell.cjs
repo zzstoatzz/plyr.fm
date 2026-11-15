@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const { mkdir } = require('node:fs/promises');
 const path = require('node:path');
 const { chromium } = require('playwright');
+const homePagination = require('./home-pagination.cjs');
 process.env.PLAYER_DIST ??= path.resolve(__dirname, '../build');
 const { tracks, collectionTracks, setup, serve, close } = require('./fixture-catalog.cjs');
 
@@ -644,7 +645,7 @@ async function textFields(browser) {
   if (staticBuild) origin = await serve();
   const browser = await chromium.launch();
   try {
-    await textFields(browser);
+    await Promise.all([textFields(browser), homePagination(browser, origin)]);
     for (const phone of [true, false]) {
       for (const scheme of ['light', 'dark']) {
         await screen(browser, phone, scheme);

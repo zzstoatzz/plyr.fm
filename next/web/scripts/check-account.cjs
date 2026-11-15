@@ -169,10 +169,10 @@ const coordinator = 'https://jams.next.plyr.fm';
     await page.waitForURL(origin + activePath);
     await menu.waitFor({ state: 'hidden' });
     await account.click();
-    await menu.getByRole('link', { name: /settings queue sync/ }).click();
+    await menu.getByRole('link', { name: 'settings', exact: true }).click();
     await page.waitForURL(origin + '/settings');
     await menu.waitFor({ state: 'hidden' });
-    await page.getByText('your queue syncs across devices.').waitFor();
+    assert.equal(await page.getByText(/queue sync|queue stays|queue is saved/i).count(), 0);
     if (process.env.SCREENS_OUTPUT) {
       await page.screenshot({ path: path.join(process.env.SCREENS_OUTPUT, 'next-settings-mobile.png') });
     }

@@ -21,18 +21,7 @@
 <section class="page-content settings">
 	<h1>settings</h1>
 	{#if account.did}
-		<section aria-labelledby="playback-settings">
-			<h2 id="playback-settings">playback</h2>
-			<div class="card">
-				<div class="row">
-					<Icon name="queue" size={21} />
-					<div><strong>queue sync</strong><p class="subtle">{account.accountSync ? 'your queue syncs across devices.' : 'your queue stays on this device.'}</p></div>
-					{#if !account.accountSync}<a class="text-button" href="/login?return_to=%2Fsettings">set up queue sync</a>{/if}
-				</div>
-			</div>
-		</section>
-		<section aria-labelledby="account-settings">
-			<h2 id="account-settings">account</h2>
+		<section aria-label="Account">
 			<div class="card">
 				<div class="row"><Icon name="user" size={21} /><span>{account.handle ? '@' + account.handle : account.did}</span></div>
 				<a class="row" href="/portal"><Icon name="portal" size={21} />your music</a>
@@ -50,13 +39,10 @@
 <style>
 	.settings { max-width: 44rem; }
 	.settings > section { margin-block: 1.35rem; }
-	h2 { font-size: 1rem; margin-bottom: 0.45rem; }
 	.card { background: var(--surface); border: 1px solid var(--line); border-radius: 0.85rem; padding: 0.25rem 0.8rem; }
 	.row { display: flex; align-items: center; flex-wrap: wrap; gap: 0.35rem 0.8rem; min-height: 3rem; padding: 0.6rem 0.2rem; overflow-wrap: anywhere; }
 	.row > :global(svg) { flex: none; color: var(--muted); }
 	.row:not(:first-child) { border-top: 1px solid var(--line); }
-	.row p { font-size: 0.875rem; }
-	.row .text-button { color: var(--accent); margin-left: auto; }
 	button.row { border: 0; border-radius: 0; background: none; width: 100%; text-align: start; }
 	button.row:hover { text-decoration: underline; text-underline-offset: 0.2em; }
 </style>
