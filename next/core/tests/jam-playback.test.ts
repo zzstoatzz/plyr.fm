@@ -14,13 +14,16 @@ const track: Track = {
 };
 
 test('starting from a queue keeps the active occurrence and playback position', () => {
-  const unknown = { ...track, id: 'track_without_duration', metadata: { ...track.metadata, duration_seconds: null } };
-  const next = { ...track, id: 'following_track' };
-  const seed = initialJam(unknown, { tracks: [track, unknown, unknown, next], index: 1,
+  const unknown = { ...track, id: 'active_without_duration', metadata: { ...track.metadata, duration_seconds: null } };
+  const unavailable = { ...unknown, id: 'unrelated_without_duration', record: { ...track.record, cid: 'another-cid' } };
+  const next = { ...track, id: 'following_track', record: { ...track.record, uri: track.record.uri + '-next' } };
+  const seed = initialJam(unknown, { tracks: [track, unknown, unavailable, unknown, next], index: 1,
     duration: 120, position: 21.25, playing: true });
 
-  assert.deepEqual(seed?.queue.map(item => item.id), [track.id, unknown.id, next.id]);
+  assert.deepEqual(seed?.queue.map(item => item.id), [track.id, unknown.id, unknown.id, next.id]);
   assert.equal(seed?.index, 1);
+  assert.equal(seed?.queue[2].durationMs, 120_000);
+  assert.equal(seed?.queue[3].durationMs, 70_000);
   assert.equal(seed?.positionMs, 21250);
   assert.equal(seed?.playing, true);
   assert.equal(initialJam(unknown), null);

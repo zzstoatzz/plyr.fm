@@ -45,8 +45,10 @@ export function initialJam(track: Track, capture?: {
   const ref = jamTrack(track, capture?.duration);
   if (!ref) return null;
 
-  const before = capture?.tracks.slice(0, capture.index).flatMap(item => jamTrack(item) ?? []) ?? [];
-  const after = capture?.tracks.slice(capture.index + 1).flatMap(item => jamTrack(item) ?? []) ?? [];
+  const shareable = (item: Track) =>
+    jamTrack(item, item.record.uri === ref.uri && item.record.cid === ref.cid ? capture?.duration : undefined) ?? [];
+  const before = capture?.tracks.slice(0, capture.index).flatMap(shareable) ?? [];
+  const after = capture?.tracks.slice(capture.index + 1).flatMap(shareable) ?? [];
   const seconds = capture?.position ?? 0;
   const positionMs = Number.isFinite(seconds) ? Math.min(ref.durationMs, Math.max(0, Math.round(seconds * 1000))) : 0;
   return { queue: [...before, ref, ...after], index: before.length, playing: capture?.playing ?? false, positionMs };
