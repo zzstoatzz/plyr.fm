@@ -24,10 +24,11 @@ async function fixtureAccounts(names) {
 async function fixturePage(browser,accounts,options={}) {
   const origin=options.origin||'https://next.plyr.fm';
   const context=await browser.newContext(options.context);
-  if(options.dist) await context.route(origin+'/**',async route=>{
+  const dist = process.env.NEXT_WEB_FIXTURE_HOSTED === '1' ? undefined : options.dist;
+  if(dist) await context.route(origin+'/**',async route=>{
    const pathname=decodeURIComponent(new URL(route.request().url()).pathname);
-   let file=path.join(options.dist,pathname);
-   try{if(!(await fs.stat(file)).isFile()) throw Error();}catch{if(pathname.endsWith('.js')) console.log('Missing JS asset',pathname);file=path.join(options.dist,'index.html');}
+   let file=path.join(dist,pathname);
+   try{if(!(await fs.stat(file)).isFile()) throw Error();}catch{if(pathname.endsWith('.js')) console.log('Missing JS asset',pathname);file=path.join(dist,'index.html');}
    const type=file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':file.endsWith('.json')?'application/json':file.endsWith('.png')?'image/png':file.endsWith('.jpg')?'image/jpeg':file.endsWith('.ttf')?'font/ttf':file.endsWith('.woff2')?'font/woff2':'text/html';
    await route.fulfill({body:await fs.readFile(file),contentType:type});
   });

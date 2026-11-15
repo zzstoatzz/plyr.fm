@@ -175,7 +175,42 @@ async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'reg
     assert.equal(await title.inputValue(), 'direct from Svelte');
     await audioInput.setInputFiles({ name: 'direct.mp3', mimeType: 'audio/mpeg', buffer: mp3 });
     const cover = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aMTsAAAAASUVORK5CYII=', 'base64');
-    await page.locator('input[type=file][accept^="image"]').setInputFiles({ name: 'cover.png', mimeType: 'image/png', buffer: cover });
+    const coverInput = page.locator('input[type=file][accept^="image"]');
+    if (scenario === 'regular') {
+      const tags = page.getByRole('textbox', { name: 'tags', exact: true });
+      const [chooser] = await Promise.all([
+        page.waitForEvent('filechooser'), page.getByRole('button', { name: 'change audio', exact: true }).click()
+      ]);
+      await chooser.setFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('notes') });
+      await page.getByRole('alert').filter({ hasText: /choose an MP3.*WebM/ }).waitFor({ timeout: 5000 });
+      await page.getByText('selected: direct.mp3').waitFor();
+      assert.ok(await submit.isEnabled(), 'an invalid replacement leaves the valid audio attached');
+      await coverInput.setInputFiles({ name: 'IMG_0001.HEIC', mimeType: 'image/heic', buffer: Buffer.from('not an image') });
+      await page.getByRole('alert').filter({ hasText: "couldn't read that image" }).waitFor();
+      assert.equal(await title.inputValue(), 'direct from Svelte');
+      assert.equal(await tags.inputValue(), 'ambient\nfield recording');
+
+      const bitmap = Buffer.alloc(70, 0);
+      bitmap.write('BM');
+      bitmap.writeUInt32LE(bitmap.length, 2);
+      bitmap.writeUInt32LE(54, 10);
+      bitmap.writeUInt32LE(40, 14);
+      bitmap.writeInt32LE(2, 18);
+      bitmap.writeInt32LE(2, 22);
+      bitmap.writeUInt16LE(1, 26);
+      bitmap.writeUInt16LE(24, 28);
+      bitmap.writeUInt32LE(16, 34);
+      bitmap.fill(0x80, 54);
+      await coverInput.setInputFiles({ name: 'scan.bmp', mimeType: 'image/bmp', buffer: bitmap });
+      const preview = page.getByRole('img', { name: 'selected cover preview', exact: true });
+      await preview.waitFor();
+      assert.equal(await preview.evaluate(async image => { await image.decode(); return image.naturalWidth; }), 2);
+      assert.equal(await page.getByRole('alert').filter({ hasText: "couldn't read that image" }).count(), 0);
+      await page.screenshot({ path: path.join(output, `converted-cover-${width}-${theme}.png`), fullPage: true });
+      await page.getByRole('button', { name: 'remove cover', exact: true }).click();
+      await preview.waitFor({ state: 'detached' });
+    }
+    await coverInput.setInputFiles({ name: 'cover.png', mimeType: 'image/png', buffer: cover });
     if (scenario === 'regular') await page.screenshot({ path: path.join(output, width + '-' + theme + '.png'), fullPage: true });
     if (scenario === 'after-create') await interruptDraftCleanup(page);
     if (scenario === 'after-create') await page.getByRole('checkbox', { name: 'auto-tag with recommended genres' }).check();
@@ -261,6 +296,8 @@ async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'reg
       console.error(await page.locator('main').innerText());
       throw failure;
     });
+    await page.getByRole('button', { name: 'choose audio', exact: true }).waitFor();
+    assert.equal(await page.getByRole('alert').filter({ hasText: /choose an MP3.*WebM/ }).count(), 0);
     assert.equal(loseReply, false);
     assert.equal(writes.length, 1, 'a lost create response reconciles at the same address');
     const { value } = await getRecord(`at://${did}/${collection}/${writes[0].rkey}`);

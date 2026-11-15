@@ -32,11 +32,10 @@ export function uploadRoute(file: { name: string; type: string; size: number }, 
   if (!Number.isSafeInteger(file.size) || file.size <= 0) throw new Error('choose a nonempty audio file.');
   if (file.size > MAX_SERVICE_AUDIO_BYTES) throw new Error('audio files are limited to 1.5 GiB.');
   const type = fileType(file.name);
+  audioFormat(file.name, file.type, type !== '');
   if (PROCESSED.has(type)) {
-    audioFormat(file.name, file.type, true);
     return { kind: 'service', processing: { recipe: 'mp3-320k-44100-v1', outputBudget: outputBudget(file.size, type, duration) } };
   }
-  audioFormat(file.name, file.type);
   return file.size > MAX_AUDIO_BYTES ? { kind: 'service' } : { kind: 'pds' };
 }
 
