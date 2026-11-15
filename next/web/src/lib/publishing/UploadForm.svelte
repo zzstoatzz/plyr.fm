@@ -3,7 +3,7 @@
   import { trackIdFromUri } from '@plyr/next-core/api';
   import type { CreateOperation } from '@plyr/next-core/publishing/create-operation';
   import type { UploadOperation } from '@plyr/next-core/publishing/upload-model';
-  import { canonicalAudioType, jobLine, needsPlyrStorage } from '@plyr/next-core/publishing/upload-queue-model';
+  import { canonicalAudioType, jobLine, needsPlyrStorage, uploadInProgress } from '@plyr/next-core/publishing/upload-queue-model';
   import { normalizeTrackTags } from '@plyr/next-core/publishing/track-tags';
   import { creditName } from '@plyr/next-core/publishing/credit-name';
   import { api } from '$lib/api';
@@ -95,7 +95,7 @@
     let finished = '';
     const unsubscribe = uploadQueue.subscribe(() => {
       jobs = uploadQueue.snapshot();
-      const signature = jobs.filter(job => job.phase === 'done' || job.phase === 'failed').map(job => job.id).join();
+      const signature = jobs.filter(job => !uploadInProgress(job.phase)).map(job => job.id).join();
       if (signature !== finished) { finished = signature; void refresh(); }
     });
     void refresh();
