@@ -57,8 +57,13 @@ async function openClient(browser, width, permitSpaceWrite) {
   return { context, page };
 }
 
-function playing(page) {
-  return page.waitForFunction(() => window.testAudio.some(audio => !audio.paused && !audio.seeking && audio.readyState >= 2 && audio.currentTime > 0.4));
+async function playing(page) {
+  const sample = await page.waitForFunction(() => {
+    const audio = window.testAudio.find(item => !item.paused && !item.seeking && item.readyState >= 2);
+    return audio && { url: audio.currentSrc, time: audio.currentTime };
+  });
+  await page.waitForFunction(start => window.testAudio.some(audio => audio.currentSrc === start.url && !audio.paused
+    && !audio.seeking && audio.readyState >= 2 && audio.currentTime > start.time + 0.25), await sample.jsonValue());
 }
 
 async function openQueue(page) {
@@ -81,11 +86,13 @@ try {
   hostClient = await openClient(browser, 1280, (url, body, currentPage) => {
     if (url.origin !== host.pds.origin) return false;
     if (url.pathname === '/xrpc/com.atproto.space.createSpace') {
-      if (space || body.spaceType !== jamType || !/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(body.skey)) return false;
+      if (body.spaceType !== jamType || !/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(body.skey)) return false;
       const current = new URL(currentPage);
       if (current.origin !== app || decodeURIComponent(current.pathname) !== `/jam/${session.did}~${body.skey}`) return false;
       if (body.policy?.$type !== 'com.atproto.memberspace.policy' || ['publicRead', 'publicWrite', 'publishPolicy', 'publishMembers'].some(field => body.policy[field] !== false)) return false;
-      space = `at://${session.did}/space/${jamType}/${body.skey}`;
+      const candidate = `at://${session.did}/space/${jamType}/${body.skey}`;
+      if (space && space !== candidate) return false;
+      space = candidate;
       return true;
     }
     if (!space || body.space !== space) return false;
@@ -176,8 +183,8 @@ try {
   try {
     if (space) {
       const removed = await hostRpc('space.deleteSpace', { space }, session.accessJwt);
-      assert.ok(removed.ok, `fixture Space deletion returned HTTP ${removed.status}`);
-      console.log('deleted the exact private fixture Space');
+      assert.ok(removed.ok || removed.status === 404, `fixture Space deletion returned HTTP ${removed.status}`);
+      console.log(removed.ok ? 'deleted the exact private fixture Space' : 'fixture Space was already absent');
     }
   } catch (error) { errors.push(error); }
   try {
