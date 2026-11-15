@@ -7,7 +7,7 @@ table has one writing module; everything else reads.
 
 | role | module | writes |
 | --- | --- | --- |
-| ingester | `internal/projection` | `plyr_index.track_records`, `track_tag_records`, `list_records`, `list_members`, `like_records`, `profile_records`, `repo_heads`, `record_rejections` |
+| ingester | `internal/projection` | `plyr_index.track_records`, `track_tag_records`, `list_records`, `list_members`, `like_records`, `profile_records`, `comment_records`, `repo_heads`, `record_rejections` |
 | ingester | `internal/ingest` | `plyr_index.relay_cursors` (stream sources) |
 | ingester (side thread) / mirror | `internal/delivery` | `plyr_index.track_delivery_origins`, `track_mirror_attempts` |
 | ingester (side thread) | `internal/identity` | `plyr_index.actor_identities` |
