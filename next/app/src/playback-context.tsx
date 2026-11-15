@@ -1,4 +1,4 @@
-import { createContext, useContext, useRef, type ReactNode } from 'react';
+import { createContext, useContext, type ReactNode } from 'react';
 import type { useAudioPlayerStatus } from 'expo-audio';
 import type { Track } from '@plyr/next-core/api';
 import type { JamIntent } from '@plyr/next-core/jam-connection';
@@ -48,13 +48,6 @@ export interface Playback {
 }
 
 export const PlaybackContext = createContext<Playback | null>(null);
-
-export function PlaybackFreeze({ frozen, children }: { frozen: boolean; children: ReactNode }) {
-  const live = useContext(PlaybackContext);
-  const held = useRef(live);
-  if (!frozen) held.current = live;
-  return <PlaybackContext.Provider value={frozen ? held.current : live}>{children}</PlaybackContext.Provider>;
-}
 
 export function PlaybackOverride({ value, children }: { value: Playback; children: ReactNode }) {
   return <PlaybackContext.Provider value={value}>{children}</PlaybackContext.Provider>;

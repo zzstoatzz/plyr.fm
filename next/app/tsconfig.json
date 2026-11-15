@@ -2,6 +2,7 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
+    "types": ["node"],
     "allowImportingTsExtensions": true,
     "paths": {
       "phosphor-react-native/src/icons/*": [

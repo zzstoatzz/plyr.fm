@@ -6,14 +6,13 @@ const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { Transform } = require('node:stream');
-const { chromium } = require(process.env.PLAYWRIGHT_MODULE || '../../../frontend/node_modules/playwright');
+const { chromium } = require('playwright');
 const { fixtureAccounts, fixturePage, authorizeFixture } = require('./pds-browser-fixture.cjs');
 
 const pds = process.env.PRIVATE_AUDIO_PDS || 'http://127.0.0.1:5197';
 const origin = process.env.PRIVATE_AUDIO_ORIGIN || 'http://127.0.0.1:5310';
-const svelte = process.env.PRIVATE_AUDIO_CLIENT === 'svelte';
 const phone = process.env.PRIVATE_AUDIO_PHONE === '1';
-const ownerFlow = svelte && process.env.PRIVATE_AUDIO_OWNER === '1';
+const ownerFlow = process.env.PRIVATE_AUDIO_OWNER === '1';
 const ownerTitle = 'Owner-only recording fixture';
 const output = process.env.PRIVATE_AUDIO_OUTPUT || '/tmp/plyr-private-audio-zds';
 const list = data => ({ object: 'list', data, has_more: false });
@@ -113,36 +112,34 @@ async function checkPrivateMusic(page, audio, previousSource, origin, appView, c
   const workerServer = http.createServer(async (request, response) => {
     if (request.url !== '/private-audio-worker.js') { response.writeHead(404); response.end(); return; }
     response.writeHead(200, { 'content-type': 'text/javascript', 'cache-control': 'no-store' });
-    response.end(await fs.readFile(path.join(__dirname, '../../web/static/private-audio-worker.js')));
+    response.end(await fs.readFile(path.join(__dirname, '../static/private-audio-worker.js')));
   });
   await new Promise(resolve => workerServer.listen(Number(new URL(origin).port), '127.0.0.1', resolve));
   const browser = await chromium.launch({ channel: 'chrome', args: ['--disable-features=LocalNetworkAccessChecks', '--ignore-certificate-errors', '--no-proxy-server', `--host-rules=MAP pds.fixture.test:443 127.0.0.1:${proxy.address().port}`] });
   try {
-    const { page, context } = await fixturePage(browser, accounts, { origin, dist: process.env.PRIVATE_AUDIO_DIST || (svelte ? path.resolve(__dirname, '../../web/build') : '/tmp/plyr-jam-mvp-web'), context: { viewport: phone ? { width: 390, height: 844 } : { width: 1280, height: 900 }, colorScheme: phone ? 'dark' : 'light', isMobile: phone, hasTouch: phone, ignoreHTTPSErrors: true } });
+    const { page, context } = await fixturePage(browser, accounts, { origin, dist: process.env.PRIVATE_AUDIO_DIST || path.resolve(__dirname, '../build'), context: { viewport: phone ? { width: 390, height: 844 } : { width: 1280, height: 900 }, colorScheme: phone ? 'dark' : 'light', isMobile: phone, hasTouch: phone, ignoreHTTPSErrors: true } });
     const requestsToAppView = [], coordinatorMessages = [];
-    if (svelte) {
-      let clientId;
-      await context.route('https://jams.next.plyr.fm/v1/playback/join', route => {
-        const request = route.request().postDataJSON();
-        coordinatorMessages.push(JSON.stringify(request.initial));
-        clientId = request.clientId;
-        return route.fulfill({ json: { ticket: 'protected-fixture', connectionId: 'protected-fixture' } });
+    let clientId;
+    await context.route('https://jams.next.plyr.fm/v1/playback/join', route => {
+      const request = route.request().postDataJSON();
+      coordinatorMessages.push(JSON.stringify(request.initial));
+      clientId = request.clientId;
+      return route.fulfill({ json: { ticket: 'protected-fixture', connectionId: 'protected-fixture' } });
+    });
+    await context.routeWebSocket('wss://jams.next.plyr.fm/v1/jams/socket?ticket=protected-fixture', socket => {
+      const personal = { explicitEnd: 0, tailKind: null, label: null, repeat: 'off', keepPlaying: false, cursor: null, output: null, disconnected: false };
+      let state = { epoch: 'protected-fixture', revision: 0, occurrence: 0, queue: [], index: 0, playing: false, positionMs: 0, updatedAtMs: Date.now(), personal };
+      socket.send(JSON.stringify({ type: 'state', state }));
+      socket.onMessage(message => {
+        coordinatorMessages.push(String(message));
+        const command = JSON.parse(String(message));
+        if (command.action === 'playContext') {
+          state = { ...state, revision: 1, occurrence: 1, queue: command.queue, index: command.index, playing: true,
+            updatedAtMs: Date.now(), personal: { ...personal, explicitEnd: command.queue.length, output: { clientId, connectionId: 'protected-fixture' } } };
+        }
+        if (command.id && command.action) socket.send(JSON.stringify({ type: 'result', id: command.id, outcome: 'applied', state }));
       });
-      await context.routeWebSocket('wss://jams.next.plyr.fm/v1/jams/socket?ticket=protected-fixture', socket => {
-        const personal = { explicitEnd: 0, tailKind: null, label: null, repeat: 'off', keepPlaying: false, cursor: null, output: null, disconnected: false };
-        let state = { epoch: 'protected-fixture', revision: 0, occurrence: 0, queue: [], index: 0, playing: false, positionMs: 0, updatedAtMs: Date.now(), personal };
-        socket.send(JSON.stringify({ type: 'state', state }));
-        socket.onMessage(message => {
-          coordinatorMessages.push(String(message));
-          const command = JSON.parse(String(message));
-          if (command.action === 'playContext') {
-            state = { ...state, revision: 1, occurrence: 1, queue: command.queue, index: command.index, playing: true,
-              updatedAtMs: Date.now(), personal: { ...personal, explicitEnd: command.queue.length, output: { clientId, connectionId: 'protected-fixture' } } };
-          }
-          if (command.id && command.action) socket.send(JSON.stringify({ type: 'result', id: command.id, outcome: 'applied', state }));
-        });
-      });
-    }
+    });
     await context.route('https://typeahead.waow.tech/**', route => route.fulfill({ json: { actors: [] } }));
     await context.route('https://api.next.plyr.fm/**', route => {
       requestsToAppView.push(route.request().url() + (route.request().postData() ?? ''));
@@ -174,35 +171,28 @@ async function checkPrivateMusic(page, audio, previousSource, origin, appView, c
     assert.ok(active.includes('/__plyr_private_audio/'), 'Real protected playback uses the streaming worker');
     assert.ok(startupBytes < audio.length, 'Playback starts before the full protected source is transferred');
     await page.getByRole('button', { name: 'Open now playing', exact: true }).click(); await page.getByRole('dialog').waitFor();
-    const controls = svelte ? page.getByRole('dialog', { name: 'Now playing' }) : page;
+    const controls = page.getByRole('dialog', { name: 'Now playing' });
     const slider = controls.getByRole('slider', { name: 'Playback position', exact: true });
     const seekMs = [];
     for (const target of [240, 15, 270]) {
       const before = Date.now();
-      if (svelte) await slider.fill(String(target));
-      else {
-        await slider.focus();
-        const bounds = await slider.boundingBox();
-        await page.mouse.click(bounds.x + bounds.width * target / 300, bounds.y + bounds.height / 2);
-      }
-      const selected = Number(svelte ? await slider.inputValue() : await slider.getAttribute('aria-valuenow'));
+      await slider.fill(String(target));
+      const selected = Number(await slider.inputValue());
       await page.waitForFunction(target => window.jamAudio.some(a => !a.paused && !a.seeking && Math.abs(a.currentTime - target) < 2), selected, { timeout: 15000 });
       seekMs.push(Date.now() - before);
     }
     assert.ok(requests.some(r => r.status === 206 && Number(/^bytes=(\d+)/.exec(r.range || '')?.[1]) > audio.length / 2));
     await page.screenshot({ path: output + '/protected-playing.png' });
-    if (svelte) {
-      await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
+    await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'settings' }).click();
+    if (ownerFlow) {
+      await checkPrivateMusic(page, audio, active, origin, requestsToAppView, coordinatorMessages);
       await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'settings' }).click();
-      if (ownerFlow) {
-        await checkPrivateMusic(page, audio, active, origin, requestsToAppView, coordinatorMessages);
-        await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'settings' }).click();
-      }
-      await page.getByRole('button', { name: 'sign out', exact: true }).click();
-      await page.getByTestId('player-dock').waitFor({ state: 'detached' });
-      const status = await page.evaluate(async source => (await fetch(source)).status, active);
-      assert.equal(status, 410, 'sign-out releases the protected source');
     }
+    await page.getByRole('button', { name: 'sign out', exact: true }).click();
+    await page.getByTestId('player-dock').waitFor({ state: 'detached' });
+    const status = await page.evaluate(async source => (await fetch(source)).status, active);
+    assert.equal(status, 410, 'sign-out releases the protected source');
     assert.deepEqual(failures, []);
     const result = { spaceType: 'fm.plyr.next.audio', policy: 'com.atproto.managedspace.policy', recordCid: stored.cid, browser: 'Chrome', startupMs, startupBytes, fileBytes: audio.length, seekMs, source: 'real ZDS, OAuth, MAC and range body; appview catalog fixture', requests };
     await fs.writeFile(output + '/result.json', JSON.stringify(result, null, 2)); console.log(JSON.stringify(result));

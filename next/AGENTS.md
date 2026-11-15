@@ -36,8 +36,11 @@ any new feature keeps its data.
 - Phone first. Judge a change on a phone-sized screen with a finger, in the
   rendered result, before shipping it. Show a mockup when the direction is a
   choice.
-- One codebase for web, iOS and Android. Use cross-platform primitives and
-  keep web-only code behind a small named seam.
+- SvelteKit owns web and Expo owns iOS and Android. Both import
+  `@plyr/next-core` through package exports. Core owns shared models and
+  ports. Each client owns its audio, persistence and auth adapters. Run
+  `bun run check:boundaries` from `next/`. The frozen Expo web build ships
+  from `next-expo`.
 - Next uses client-owned OAuth through its browser/native SDK adapters, unlike
   the legacy app's HttpOnly session cookies. Keep credentials inside those
   adapters; do not add auth tokens to app storage or localStorage.
@@ -49,10 +52,10 @@ any new feature keeps its data.
 - Records are shared with production, so keep published lexicon shapes and
   preserve fields Next does not know. Next deploys never promote production.
 - Ship a backend change before the client change that depends on it.
-- Browser checks sit beside the client and are not in CI. Build the web export,
-  then run the checks for the area you touched, and the player set after any
-  player change. A check must fail without the change and assert what the user
-  sees, not a URL or a fixed wait.
+- Run affected browser checks in `next/web` and `svelte-autofixer` for
+  changed Svelte files. Cover shared transitions with invariants and storage
+  ports with contract cases. Get an independent, diff-scoped review before
+  merging Next changes.
 - Signed-in behaviour is testable without a PDS account through the queue
   fixture, which generates identities and runs local coordinators against the
   compose Redis and Postgres.

@@ -12,7 +12,11 @@
     "check:browser": "node scripts/check-shell.cjs",
     "check:performance": "node scripts/check-performance.cjs",
     "check:upload": "node scripts/check-upload.cjs",
-    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "check:private-audio": "node scripts/check-private-audio.cjs",
+    "check:private-audio-zds": "node scripts/check-private-audio-zds.cjs",
+    "check:outbox": "node scripts/check-play-outbox-storage.cjs"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "^3.0.10",

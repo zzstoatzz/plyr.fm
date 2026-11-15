@@ -1,8 +1,8 @@
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { chromium } = require('playwright');
-const { fixtureAccounts, fixturePage, authorizeFixture } = require('../../app/scripts/pds-browser-fixture.cjs');
-const { tracks, serveAudio } = require('../../app/scripts/fixture-catalog.cjs');
+const { fixtureAccounts, fixturePage, authorizeFixture } = require('./pds-browser-fixture.cjs');
+const { tracks, serveAudio } = require('./fixture-catalog.cjs');
 
 const origin = 'https://next.plyr.fm';
 const track = tracks[0];

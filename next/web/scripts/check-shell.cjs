@@ -3,7 +3,7 @@ const { mkdir } = require('node:fs/promises');
 const path = require('node:path');
 const { chromium } = require('playwright');
 process.env.PLAYER_DIST ??= path.resolve(__dirname, '../build');
-const { tracks, setup, serve, close } = require('../../app/scripts/fixture-catalog.cjs');
+const { tracks, setup, serve, close } = require('./fixture-catalog.cjs');
 
 let origin = process.env.NEXT_WEB_URL;
 const output = process.env.SCREENS_OUTPUT || '/tmp/plyr-svelte-shell';

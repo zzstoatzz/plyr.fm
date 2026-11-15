@@ -2,8 +2,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { chromium } = require('playwright');
-const { authorizeFixture, fixtureAccounts, fixturePage } = require('../../app/scripts/pds-browser-fixture.cjs');
-const { serveAudio } = require('../../app/scripts/fixture-catalog.cjs');
+const { authorizeFixture, fixtureAccounts, fixturePage } = require('./pds-browser-fixture.cjs');
+const { serveAudio } = require('./fixture-catalog.cjs');
 
 const origin = 'https://next.plyr.fm';
 const pds = 'http://127.0.0.1:5197/xrpc/';

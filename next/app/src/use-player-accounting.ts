@@ -1,7 +1,7 @@
 import type { AudioPlayer } from 'expo-audio';
 import { randomUUID } from 'expo-crypto';
 import { useEffect, useMemo } from 'react';
-import { AppState, Platform } from 'react-native';
+import { AppState } from 'react-native';
 import { ListeningSession } from '@plyr/next-core/listening-session';
 import { playOutbox } from './play-reporting';
 
@@ -77,11 +77,8 @@ export function usePlayerAccounting(player: AudioPlayer) {
     const outbox = playOutbox();
     outbox.retry();
     const active = AppState.addEventListener('change', state => { if (state === 'active') outbox.retry(); });
-    const online = () => outbox.retry();
-    if (Platform.OS === 'web') window.addEventListener('online', online);
     return () => {
       active.remove();
-      if (Platform.OS === 'web') window.removeEventListener('online', online);
       accounting.stop();
     };
   }, [accounting]);

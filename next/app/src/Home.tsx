@@ -1,6 +1,6 @@
 import { useAppearance } from './appearance';
 import { useCallback, useRef, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { HomeTrackRow } from './HomeTrackRow';
 import { HomeChart } from './HomeChart';
 import { HomeArtists } from './HomeArtists';
@@ -14,13 +14,10 @@ import { WaveLoading } from './WaveLoading';
 import { useAppPreferences } from './preference-context';
 import { useLatestFeed } from './use-latest-feed';
 import { HomeTagBar } from './HomeTagBar';
-import { DesktopHome, DESKTOP_HOME_WIDTH } from './DesktopHome';
 
 export function Home({ onPlay }: { onPlay: Play }) {
   const { preferences } = useAppPreferences();
-  const { width } = useWindowDimensions();
-  const Feed = width >= DESKTOP_HOME_WIDTH ? DesktopHome : HomeFeed;
-  return <Feed key={JSON.stringify(preferences.hiddenTags)} hiddenTags={preferences.hiddenTags} onPlay={onPlay} />;
+  return <HomeFeed key={JSON.stringify(preferences.hiddenTags)} hiddenTags={preferences.hiddenTags} onPlay={onPlay} />;
 }
 
 function HomeFeed({ onPlay, hiddenTags }: { onPlay: Play; hiddenTags: string[] }) {

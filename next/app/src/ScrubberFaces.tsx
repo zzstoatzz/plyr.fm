@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, View } from 'react-native';
 import type { TrackComment } from '@plyr/next-core/api';
 import { useAppearance } from './appearance';
 import { Cover } from './CatalogPieces';
@@ -8,7 +8,7 @@ import { COUNT_WIDTH, FACE, SHOWN, STEP, clampLeft, passingComment, pileFaces, t
 import { Text } from './Text';
 
 /** Half the slider's thumb: where its track starts and ends, so a stem lands on the moment its comment names. */
-export const SLIDER_INSET = Platform.OS === 'web' ? 10 : 15;
+export const SLIDER_INSET = 15;
 export const FACES_HEIGHT = 32;
 const LIFTED = 24;
 const CARD_WIDTH = 248;
@@ -129,7 +129,7 @@ function Bubble({ comment, anchor, width, reduceMotion }: { comment: TrackCommen
   const rise = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
   useEffect(() => {
     if (reduceMotion) { rise.setValue(1); return; }
-    Animated.timing(rise, { toValue: 1, duration: 180, useNativeDriver: Platform.OS !== 'web' }).start();
+    Animated.timing(rise, { toValue: 1, duration: 180, useNativeDriver: true }).start();
   }, [rise, reduceMotion]);
   const left = clampLeft(anchor, size, width);
   const surface = { backgroundColor: theme.surface, borderColor: theme.dark ? theme.line : theme.border };

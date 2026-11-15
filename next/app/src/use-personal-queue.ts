@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { AppState, Platform } from 'react-native';
+import { AppState } from 'react-native';
 import { randomUUID } from 'expo-crypto';
 import { createPersonalPlayback, type PersonalPlaybackTarget } from '@plyr/next-core/personal-playback';
 import { api } from './api-client';
 import { useAuth } from './auth';
 import { openCoordinatorSocket } from './coordinator-origin';
 import { joinPersonalQueue } from './personal-queue-join';
-import { consumeQueueLogin, registerQueueLogin } from './queue-login';
+import { registerQueueLogin } from './queue-login';
 import { queueStorage } from './queue-storage';
 
 export function usePersonalQueue(target: PersonalPlaybackTarget) {
@@ -30,7 +30,7 @@ export function usePersonalQueue(target: PersonalPlaybackTarget) {
     id: randomUUID,
     resolve: api.resolveTracks,
     recent: (cursor, signal) => api.tracks({ limit: 10, cursor }, signal),
-    consumeLogin: consumeQueueLogin,
+    consumeLogin: () => false,
     socket: openCoordinatorSocket,
   }));
   const snapshot = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
@@ -47,8 +47,7 @@ export function usePersonalQueue(target: PersonalPlaybackTarget) {
   useEffect(() => {
     const save = () => model.checkpoint();
     const subscription = AppState.addEventListener('change', state => { if (state !== 'active') save(); });
-    if (Platform.OS === 'web') window.addEventListener('pagehide', save);
-    return () => { subscription.remove(); if (Platform.OS === 'web') window.removeEventListener('pagehide', save); };
+    return () => subscription.remove();
   }, [model]);
   useEffect(() => { model.refresh(); }, [model, target.suspended]);
   useEffect(() => { model.configureContinuation(); }, [model, target.keepPlaying, target.suspended, remote?.personal?.keepPlaying]);

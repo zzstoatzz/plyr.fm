@@ -10,13 +10,6 @@ const browserGlobals = new Set([
   'window', 'document', 'navigator', 'location', 'indexedDB', 'localStorage', 'sessionStorage',
   'caches', 'XMLHttpRequest', 'HTMLElement', 'File', 'Blob'
 ]);
-const expoWebImports = new Map([
-  ['app/src/gated-audio.web.ts', 'web/src/lib/media/private-audio'],
-  ['app/src/publishing/create-storage.web.ts', 'web/src/lib/storage/create-storage'],
-  ['app/src/publishing/private-create-storage.web.ts', 'web/src/lib/storage/private-create-storage'],
-  ['app/src/publishing/upload-reader.web.ts', 'web/src/lib/storage/upload-reader'],
-  ['app/src/publishing/upload-storage.web.ts', 'web/src/lib/storage/upload-storage']
-]);
 const failures = [];
 
 function filesIn(directory) {
@@ -33,7 +26,7 @@ function checkImport(file, specifier) {
   const target = specifier.startsWith('.') ? path.normalize(path.join(path.dirname(file), specifier)) : '';
   if (/^\$core(?:\/|$)/.test(specifier) || (target.startsWith('core/') && owner !== 'core')) {
     failures.push(`${file} must import ${specifier} through @plyr/next-core`);
-  } else if (privateClients.test(specifier) || (/^(?:app|web)\//.test(target) && !target.startsWith(owner + '/') && expoWebImports.get(file) !== target)) {
+  } else if (privateClients.test(specifier) || (/^(?:app|web)\//.test(target) && !target.startsWith(owner + '/'))) {
     failures.push(`${file} cannot import ${specifier} across workspaces`);
   }
   if (owner === 'core' && /^(?:svelte|react|react-native(?:-[^/]+)?|expo(?:-[^/]+)?|@expo\/[^/]+|@react-native\/[^/]+|node:[^/]+)(?:\/|$)/.test(specifier)) {
@@ -64,10 +57,14 @@ function checkSource(file, source) {
 }
 
 for (const file of ['app/index.js', ...sourceDirectories.flatMap(filesIn)]) {
+  if (file.startsWith('app/') && /\.web\.[jt]sx?$/.test(file)) failures.push(`${file} belongs in next/web`);
   if (file.startsWith('core/') && /\.(?:web|native|ios|android)\.[jt]sx?$/.test(file)) {
     failures.push(`${file} has a platform-specific filename`);
   }
   const source = readFileSync(path.join(root, file), 'utf8');
+  if (file.startsWith('app/') && /\bPlatform\.OS\s*(?:[!=]={1,2})\s*['"]web['"]/.test(source)) {
+    failures.push(`${file} checks for the removed Expo web target`);
+  }
   const scripts = file.endsWith('.svelte')
     ? [...source.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].map(match => match[1])
     : [source];

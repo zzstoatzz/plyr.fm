@@ -3,7 +3,7 @@ import { ListPlus, DotsThree as Ellipsis } from './icons';
 import { collectionArtwork } from '@plyr/next-core/artwork';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useRef, useState, type ReactNode } from 'react';
-import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { PauseGlyph as PauseIcon, PlayGlyph as PlayIcon } from './PlayerGlyph';
 import { api } from './api-client';
 import { type Track } from '@plyr/next-core/api';
@@ -19,8 +19,7 @@ import { TrackComments } from './TrackComments';
 import { PlayerControl } from './PlayerControl';
 import { usePlayback } from './playback';
 import { TrackLikes } from './TrackLikes';
-import { InlineLink, pageFrame, wideFrame, Copy } from './controls';
-import { DESKTOP_HOME_WIDTH } from './DesktopHome';
+import { InlineLink, pageFrame, Copy } from './controls';
 import { ArtistProfile } from './ArtistProfile';
 import { ShareLink } from './ShareLink';
 import { TrackMenu } from './TrackMenu';
@@ -109,7 +108,6 @@ export function Catalog({
   screen, onPlay, onEnqueue, trackActions,
 }: { screen: CatalogScreen; onPlay: Play; onEnqueue: (track: Track) => void; trackActions?: TrackActions }) {
   const colors = useAppearance();
-  const wide = useWindowDimensions().width >= DESKTOP_HOME_WIDTH;
   const { id, handle } = useLocalSearchParams<{ id?: string; handle?: string }>();
   let content: ReactNode;
   if (screen === 'home') return <Home onPlay={onPlay} />;
@@ -122,11 +120,10 @@ export function Catalog({
   } else if (screen === 'artist' && handle) content = <ArtistProfile key={handle} handle={handle} onPlay={onPlay} />;
   else content = <Copy>this catalog link is incomplete.</Copy>;
   return <ScrollView style={{ flex: 1, backgroundColor: colors.background }} keyboardShouldPersistTaps="handled" keyboardDismissMode={screen === 'search' ? 'on-drag' : undefined} automaticallyAdjustKeyboardInsets={screen === 'search'}>
-    <View style={[styles.page, wide && (screen === 'library' || screen === 'liked') && styles.wide]}>{content}</View>
+    <View style={styles.page}>{content}</View>
   </ScrollView>;
 }
 
 const styles = StyleSheet.create({
   page: { ...pageFrame, paddingTop: 16, paddingBottom: 32, gap: 16 },
-  wide: { ...wideFrame, gap: 28 },
 });

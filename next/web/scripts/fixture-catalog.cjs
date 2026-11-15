@@ -4,7 +4,7 @@
 const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
-const dist = process.env.PLAYER_DIST || path.resolve(__dirname, '../dist');
+const dist = process.env.PLAYER_DIST || path.resolve(__dirname, '../build');
 const images = process.env.FIXTURE_IMAGES || process.env.QUEUE_PANEL_IMAGES;
 
 const artistDid = 'did:plc:fixtureartist';

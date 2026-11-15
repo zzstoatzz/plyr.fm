@@ -2,16 +2,14 @@ const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const http = require('node:http');
-const { createRequire } = require('node:module');
 const os = require('node:os');
 const path = require('node:path');
 
-const requireFrontend = createRequire(path.resolve(__dirname, '../../../frontend/package.json'));
-const playwright = process.env.PLAYWRIGHT_MODULE ? require(process.env.PLAYWRIGHT_MODULE) : requireFrontend('playwright');
+const playwright = require('playwright');
 const browserName = process.env.PLAYBACK_BROWSER || 'chromium';
 const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'plyr-play-outbox-'));
 const bundle = path.join(temporary, 'storage.js');
-execFileSync('bun', ['build', path.resolve(__dirname, '../src/play-outbox-storage.web.ts'), '--target=browser', '--format=esm', `--outfile=${bundle}`]);
+execFileSync('bun', ['build', path.resolve(__dirname, '../src/lib/storage/play-outbox-storage.ts'), '--target=browser', '--format=esm', `--outfile=${bundle}`]);
 const source = fs.readFileSync(bundle);
 
 async function run() {

@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { DotsSix as GripHorizontal } from './icons';
-import { PanResponder, Platform, StyleSheet, useWindowDimensions, View, type ScrollViewInstance, type ViewInstance } from 'react-native';
+import { PanResponder, StyleSheet, useWindowDimensions, View, type ScrollViewInstance, type ViewInstance } from 'react-native';
 import type { Track } from '@plyr/next-core/api';
 import { useAppearance } from './appearance';
 import { autoscrollVelocity, dragTarget, landingTop, rowShift, type Row } from './behaviors/reorder';
@@ -138,8 +138,7 @@ function DragHandle({ register, position, total, label, active, begin, update, f
   const handle = useReorderHandle({ label, position, total, moving: active, move });
   const latest = useRef({ begin, update, finish, cancel });
   latest.current = { begin, update, finish, cancel };
-  const webStyle = { touchAction: 'none', cursor: 'pointer' } as const;
-  const responder = useRef(PanResponder.create({
+    const responder = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: () => true,
     onPanResponderGrant: event => latest.current.begin(event.nativeEvent.pageY),
@@ -148,7 +147,7 @@ function DragHandle({ register, position, total, label, active, begin, update, f
     onPanResponderTerminate: () => latest.current.cancel(),
     onPanResponderTerminationRequest: () => false
   })).current;
-  return <View ref={register} {...responder.panHandlers} {...handle} style={[styles.handle, Platform.OS === 'web' ? webStyle : {}]}>
+  return <View ref={register} {...responder.panHandlers} {...handle} style={styles.handle}>
     <View style={{ width: 32, height: 36, borderRadius: 8, backgroundColor: theme.surface, alignItems: 'center', justifyContent: 'center' }}>
       <GripHorizontal size={22} color={active ? theme.accent : theme.text} />
     </View>

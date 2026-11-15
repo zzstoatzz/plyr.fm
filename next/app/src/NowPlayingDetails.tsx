@@ -1,7 +1,7 @@
 import type { Href } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, CaretDown, CaretRight as ChevronRight, CaretUp, Disc, Equalizer, Play } from './icons';
-import { Pressable, StyleSheet, View, type ViewInstance, type ViewProps } from 'react-native';
+import { Pressable, StyleSheet, View, type ViewInstance } from 'react-native';
 import type { Track } from '@plyr/next-core/api';
 import { isPrivateTrack } from '@plyr/next-core/track-access';
 import { useAppearance } from './appearance';
@@ -17,8 +17,8 @@ import { useAlbumId } from './use-album-id';
 
 const SHOWN = 7;
 
-export function NowPlayingDetails({ track, plays, protect, navigate, wide, position, seek }: {
-  track: Track; plays: number; protect: ViewProps; navigate: (target: Href) => void; wide: boolean; position: number; seek?: (seconds: number) => void;
+export function NowPlayingDetails({ track, plays, navigate, position, seek }: {
+  track: Track; plays: number; navigate: (target: Href) => void; position: number; seek?: (seconds: number) => void;
 }) {
   const theme = useAppearance();
   const body = { color: theme.text, fontFamily: theme.fontFamily, fontSize: 15 * theme.scale, lineHeight: 22 * theme.scale } as const;
@@ -29,8 +29,8 @@ export function NowPlayingDetails({ track, plays, protect, navigate, wide, posit
   const { chapters, prose } = useMemo(() => parseChapters(track.metadata.description, duration), [track.metadata.description, duration]);
 
   return <View>
-    {!wide && <View testID="now-playing-artist" style={[styles.section, { borderColor: theme.line }]}>
-      <View {...protect}>
+    <View testID="now-playing-artist" style={[styles.section, { borderColor: theme.line }]}>
+      <View >
         <Pressable accessibilityRole="link" accessibilityLabel={`Artist: ${artistName(track)}`}
           onPress={() => navigate(`/u/${encodeURIComponent(profile.handle || track.artist.did)}`)}
           style={({ pressed }) => [styles.artist, { backgroundColor: pressed ? theme.hover : 'transparent' }]}>
@@ -43,10 +43,10 @@ export function NowPlayingDetails({ track, plays, protect, navigate, wide, posit
         </Pressable>
       </View>
       {profile.bio ? <Text numberOfLines={4} style={{ ...body, color: theme.muted }}>{profile.bio}</Text> : null}
-    </View>}
-    <View testID="now-playing-about" style={[styles.about, { borderColor: wide ? theme.hairline : theme.line }]}>
-      {!privateTrack && <Facts track={track} plays={plays} protect={protect} />}
-      {!privateTrack && <View {...protect}>
+    </View>
+    <View testID="now-playing-about" style={[styles.about, { borderColor: theme.line }]}>
+      {!privateTrack && <Facts track={track} plays={plays} />}
+      {!privateTrack && <View >
         <Pressable accessibilityRole="link" accessibilityLabel={`About ${track.metadata.title}`} onPress={() => navigate(`/track/${track.id}`)}
           style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [styles.open, { backgroundColor: pressed || hovered ? theme.hover : theme.raised, borderColor: theme.border }]}>
           <Text style={{ ...body, fontWeight: '600' }}>about this track</Text>
@@ -56,19 +56,19 @@ export function NowPlayingDetails({ track, plays, protect, navigate, wide, posit
       {prose ? <Text style={body}>{prose}</Text> : null}
       <AccessSummary track={track} style={quiet} />
       {chapters.length > 0 && <Text accessibilityRole="header" aria-level={2} style={{ ...body, fontWeight: '700' }}>tracklist <Text style={{ ...body, color: theme.faint }}>{chapters.length}</Text></Text>}
-      {chapters.length > 0 && <Chapters chapters={chapters} position={position} seek={seek} protect={protect} />}
+      {chapters.length > 0 && <Chapters chapters={chapters} position={position} seek={seek} />}
     </View>
   </View>;
 }
 
 /** The album under the artist; a plain label when the artist has no album record by that name. */
-export function AlbumLink({ track, wide, navigate }: { track: Track; wide: boolean; navigate: (target: Href) => void }) {
+export function AlbumLink({ track, navigate }: { track: Track; navigate: (target: Href) => void }) {
   const theme = useAppearance();
   const id = useAlbumId(track);
   const name = track.metadata.album;
   const text = (hovered?: boolean) => ({ color: hovered ? theme.text : theme.muted, fontFamily: theme.fontFamily, fontSize: 15 * theme.scale, textDecorationLine: hovered ? 'underline' : 'none' } as const);
   const content = (hovered?: boolean) => <>
-    <View style={wide ? styles.albumIcon : undefined}><Disc size={16 * theme.scale} color={hovered ? theme.text : theme.muted} /></View>
+    <View><Disc size={16 * theme.scale} color={hovered ? theme.text : theme.muted} /></View>
     <Text numberOfLines={1} style={text(hovered)}>{name}</Text>
   </>;
   if (!id) return <View style={styles.album}>{content()}</View>;
@@ -78,7 +78,7 @@ export function AlbumLink({ track, wide, navigate }: { track: Track; wide: boole
 }
 
 /** Plays, likes (with who), when it was added and how long it runs, labelled like the columns of a track list. */
-function Facts({ track, plays, protect }: { track: Track; plays: number; protect: ViewProps }) {
+function Facts({ track, plays }: { track: Track; plays: number }) {
   const theme = useAppearance();
   const likes = track.metrics.like_count;
   const added = new Date(track.metadata.created_at);
@@ -88,7 +88,7 @@ function Facts({ track, plays, protect }: { track: Track; plays: number; protect
   const date = Number.isNaN(added.getTime()) ? '' : added.toLocaleDateString(undefined, { month: 'short', day: 'numeric', ...(sameYear ? {} : { year: 'numeric' }) }).toLowerCase();
   const facts = [
     { label: 'plays', value: <Text accessibilityLabel={`${plays} ${plays === 1 ? 'play' : 'plays'}`} style={value}>{compactCount(plays)}</Text> },
-    { label: 'likes', value: <Likers track={track} count={likes} style={value} protect={protect} /> },
+    { label: 'likes', value: <Likers track={track} count={likes} style={value} /> },
     ...date ? [{ label: 'added', value: <Text style={value}>{date}</Text> }] : [],
     ...track.metadata.duration_seconds ? [{ label: 'length', value: <Text style={value}>{clock(track.metadata.duration_seconds)}</Text> }] : [],
   ];
@@ -100,7 +100,7 @@ function Facts({ track, plays, protect }: { track: Track; plays: number; protect
   </View>;
 }
 
-function Likers({ track, count, style, protect }: { track: Track; count: number; style: object; protect: ViewProps }) {
+function Likers({ track, count, style }: { track: Track; count: number; style: object }) {
   const theme = useAppearance();
   const [faces, setFaces] = useState<{ did: string; avatar?: string | null }[]>([]);
   const [open, setOpen] = useState<Anchor>();
@@ -113,7 +113,7 @@ function Likers({ track, count, style, protect }: { track: Track; count: number;
     return () => { live = false; };
   }, [track.id, count]);
   if (!count) return <Text style={style}>0</Text>;
-  return <View ref={cell} {...protect}>
+  return <View ref={cell} >
     <Pressable accessibilityRole="button" accessibilityLabel={`See who liked ${track.metadata.title}, ${count} ${count === 1 ? 'like' : 'likes'}`}
       onPress={() => cell.current?.measureInWindow((x, y, width, height) => setOpen({ x, y, width, height }))} style={styles.likers}>
       {({ hovered }: { pressed: boolean; hovered?: boolean }) => <>
@@ -127,7 +127,7 @@ function Likers({ track, count, style, protect }: { track: Track; count: number;
 }
 
 /** A tracklist read from the description. Each line jumps there; the playing one is marked. */
-function Chapters({ chapters, position, seek, protect }: { chapters: Chapter[]; position: number; seek?: (seconds: number) => void; protect: ViewProps }) {
+function Chapters({ chapters, position, seek }: { chapters: Chapter[]; position: number; seek?: (seconds: number) => void }) {
   const theme = useAppearance();
   const [all, setAll] = useState(false);
   const now = currentChapter(chapters, position);
@@ -137,7 +137,7 @@ function Chapters({ chapters, position, seek, protect }: { chapters: Chapter[]; 
   return <View testID="now-playing-chapters" style={styles.chapters}>
     {shown.map((chapter, index) => {
       const current = index === now;
-      return <View key={chapter.start} {...protect}><Pressable accessibilityRole="button" accessibilityLabel={`Jump to ${clock(chapter.start)}, ${chapter.label}`}
+      return <View key={chapter.start} ><Pressable accessibilityRole="button" accessibilityLabel={`Jump to ${clock(chapter.start)}, ${chapter.label}`}
         aria-current={current ? 'true' : undefined} disabled={!seek} onPress={() => seek?.(chapter.start)}
         style={({ hovered }: { pressed: boolean; hovered?: boolean }) => [styles.chapter, { backgroundColor: current ? theme.accent + '1f' : hovered && seek ? theme.hover : 'transparent' }]}>
         {({ hovered }: { pressed: boolean; hovered?: boolean }) => <>
@@ -149,7 +149,7 @@ function Chapters({ chapters, position, seek, protect }: { chapters: Chapter[]; 
         </>}
       </Pressable></View>;
     })}
-    {shown.length < chapters.length || all ? <View {...protect} style={{ alignSelf: 'flex-start' }}>
+    {shown.length < chapters.length || all ? <View  style={{ alignSelf: 'flex-start' }}>
       <Pressable accessibilityRole="button" onPress={() => setAll(!all)} style={styles.link}>
         <Text style={{ ...text, color: theme.muted }}>{all ? 'show less' : `show all ${chapters.length}`}</Text>
         {all ? <CaretUp size={14} color={theme.muted} /> : <CaretDown size={14} color={theme.muted} />}
@@ -171,7 +171,6 @@ const styles = StyleSheet.create({
   link: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 44, minWidth: 44 },
   open: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48, borderRadius: 12, borderWidth: 1 },
   album: { alignSelf: 'flex-start', maxWidth: '100%', minHeight: 28, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  albumIcon: { width: 22, alignItems: 'center' },
   chapters: { marginTop: -10 },
   chapter: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 36, paddingHorizontal: 8, marginHorizontal: -8, borderRadius: 8 },
   stamp: { textAlign: 'right', fontVariant: ['tabular-nums'] },

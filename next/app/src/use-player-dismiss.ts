@@ -1,29 +1,21 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Animated, PanResponder, Platform, type ScrollEvent } from 'react-native';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Animated, type ScrollEvent } from 'react-native';
 import { playerSheet } from './player-sheet';
 
 export function usePlayerDismiss(enabled: boolean, width: number, height: number, close: () => void, still = false, rest = height, present = true) {
-  const [panel, setPanel] = useState<HTMLElement | null>(null);
-  const panelRef = useCallback((node: unknown) => {
-    if (Platform.OS === 'web') setPanel(node instanceof HTMLElement ? node : null);
-  }, []);
-  const directionalTouch = Platform.OS === 'web' && typeof CSS !== 'undefined' && CSS.supports('touch-action', 'pan-x pan-down');
   const translation = playerSheet.translation;
   const latest = useRef({ enabled, rest, close, still });
   latest.current = { enabled, rest, close, still };
   const closing = useRef(false);
   const blocked = useRef(false);
-  const canPull = useRef(true);
   const offset = useRef(0);
   const [atTop, setAtTop] = useState(true);
   const [dragging, setDragging] = useState(false);
   // Native only: true while the sheet sits open with nothing moving it, so the open state renders as plain styles.
   const [resting, setResting] = useState(false);
-  const markResting = (open: boolean) => { if (native) setResting(open); };
+  const markResting = setResting;
   const generation = useRef(0);
-  const acquiredAt = useRef({ dx: 0, dy: 0 });
   const active = useRef<number | null>(null);
-  const native = Platform.OS !== 'web';
   // Native pulls come from a gesture-handler pan running beside the scroll view: it moves the sheet only once the content is at its top.
   const pullFrom = useRef<number | null>(null);
   const firstMove = useRef(true);
@@ -63,7 +55,6 @@ export function usePlayerDismiss(enabled: boolean, width: number, height: number
       if (!finished || request !== generation.current) return;
       translation.setValue(0);
       markResting(true);
-      playerSheet.opened?.();
     });
   };
   const api = useRef({ exit, settle });
@@ -76,40 +67,6 @@ export function usePlayerDismiss(enabled: boolean, width: number, height: number
       if (finished && request === generation.current && !closing.current) { translation.setValue(0); markResting(true); }
     });
   };
-  const responder = useRef(PanResponder.create({
-    onStartShouldSetPanResponderCapture: (_, gesture) => {
-      blocked.current = gesture.numberActiveTouches > 1;
-      canPull.current = true;
-      if (blocked.current) snapBack();
-      return false;
-    },
-    onMoveShouldSetPanResponderCapture: (_, gesture) => {
-      if (gesture.dy < -10 || Math.abs(gesture.dx) > 10 && Math.abs(gesture.dx) >= Math.abs(gesture.dy)) canPull.current = false;
-      const acquire = latest.current.enabled && !closing.current && !blocked.current && canPull.current && gesture.numberActiveTouches === 1 &&
-        gesture.dy > 10 && gesture.dy > Math.abs(gesture.dx) * 1.5;
-      if (acquire) acquiredAt.current = { dx: gesture.dx, dy: gesture.dy };
-      return acquire;
-    },
-    onPanResponderGrant: () => { active.current = generation.current; setDragging(true); translation.stopAnimation(); },
-    onPanResponderStart: (_, gesture) => { if (gesture.numberActiveTouches !== 1) snapBack(); },
-    onPanResponderMove: (_, gesture) => {
-      if (active.current !== generation.current) return;
-      if (gesture.numberActiveTouches !== 1) { snapBack(); return; }
-      translation.setValue(Math.min(latest.current.rest, Math.max(0, gesture.dy + acquiredAt.current.dy)));
-    },
-    onPanResponderRelease: (_, gesture) => {
-      if (active.current !== generation.current) return;
-      active.current = null;
-      const dy = gesture.dy + acquiredAt.current.dy;
-      const dx = gesture.dx + acquiredAt.current.dx;
-      const downward = dy > Math.abs(dx) * 1.2;
-      const dismiss = downward && (dy >= Math.min(120, height * 0.16) || dy >= 48 && gesture.vy >= 0.8);
-      if (dismiss) api.current.exit(latest.current.close, gesture.vy * 1000);
-      else snapBack();
-    },
-    onPanResponderTerminate: snapBack,
-    onPanResponderTerminationRequest: () => active.current === null
-  })).current;
   const sized = useRef({ width, height });
   useLayoutEffect(() => {
     generation.current++;
@@ -119,9 +76,8 @@ export function usePlayerDismiss(enabled: boolean, width: number, height: number
     pullFrom.current = null;
     if (!present) { translation.stopAnimation(); translation.setValue(rest); return; }
     markResting(false);
-    if (still || playerSheet.instant) { playerSheet.instant = false; translation.stopAnimation(); translation.setValue(0); markResting(true); playerSheet.opened?.(); }
-    else if (playerSheet.release) { const { open, velocity } = playerSheet.release; playerSheet.release = undefined; api.current.settle(open, velocity); }
-    else if (!playerSheet.dragging) { translation.setValue(rest); api.current.settle(true); }
+    if (still) { translation.stopAnimation(); translation.setValue(0); markResting(true); }
+    else { translation.setValue(rest); api.current.settle(true); }
   }, [present, translation]);
   useEffect(() => {
     if (sized.current.width === width && sized.current.height === height) return;
@@ -134,35 +90,7 @@ export function usePlayerDismiss(enabled: boolean, width: number, height: number
     translation.setValue(present ? 0 : rest);
     markResting(present);
   }, [enabled, width, height, translation]);
-  useEffect(() => {
-    playerSheet.settle = (open, velocity) => api.current.settle(open, velocity);
-    return () => { playerSheet.settle = undefined; generation.current++; active.current = null; translation.stopAnimation(); };
-  }, [translation]);
-  useEffect(() => {
-    if (!panel || !enabled || directionalTouch) return;
-    let start: { x: number; y: number } | null = null;
-    const begin = (event: TouchEvent) => {
-      start = event.touches.length === 1 ? { x: event.touches[0].clientX, y: event.touches[0].clientY } : null;
-    };
-    const move = (event: TouchEvent) => {
-      if (!start || event.touches.length !== 1 || blocked.current || !canPull.current) return;
-      const dx = event.touches[0].clientX - start.x;
-      const dy = event.touches[0].clientY - start.y;
-      if (dy < -10 || Math.abs(dx) > 10 && Math.abs(dx) >= Math.abs(dy)) canPull.current = false;
-      if (canPull.current && dy > 0 && dy > Math.abs(dx) * 1.5 && event.cancelable) event.preventDefault();
-    };
-    const end = () => { start = null; };
-    panel.addEventListener('touchstart', begin, { capture: true, passive: true });
-    panel.addEventListener('touchmove', move, { capture: true, passive: false });
-    panel.addEventListener('touchend', end, true);
-    panel.addEventListener('touchcancel', end, true);
-    return () => {
-      panel.removeEventListener('touchstart', begin, true);
-      panel.removeEventListener('touchmove', move, true);
-      panel.removeEventListener('touchend', end, true);
-      panel.removeEventListener('touchcancel', end, true);
-    };
-  }, [panel, enabled, directionalTouch]);
+  useEffect(() => () => { generation.current++; active.current = null; translation.stopAnimation(); }, [translation]);
   const guard = { onStartShouldSetResponderCapture: () => { blocked.current = true; return false; } };
   const onScroll = (event: ScrollEvent) => {
     const wasAtTop = offset.current <= 1;
@@ -203,19 +131,16 @@ export function usePlayerDismiss(enabled: boolean, width: number, height: number
   };
   return {
     translation, scrolled,
-    dragging, resting, atTop, directionalTouch, exit,
-    panelRef,
+    dragging, resting, atTop, exit,
     pull,
-    panHandlers: enabled && !native ? responder.panHandlers : {},
-    panelStartHandlers: native ? {
+    panelStartHandlers: {
       onStartShouldSetResponderCapture: () => { blocked.current = false; fromContent.current = false; return false; }
-    } : {},
+    },
     contentStartHandlers: {
-      onStartShouldSetResponderCapture: () => { canPull.current = offset.current <= 1; fromContent.current = true; return false; }
+      onStartShouldSetResponderCapture: () => { fromContent.current = true; return false; }
     },
     // On native an active pull cancels a press on its own, so only the seek slider keeps a drag to itself.
-    protect: native ? {} : guard,
     protectSlider: guard,
-    scrollProps: { onScroll, ...(native ? { bounces: !atTop } : {}) },
+    scrollProps: { onScroll, bounces: !atTop },
   };
 }
