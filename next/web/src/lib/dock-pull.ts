@@ -49,10 +49,11 @@ export function createDockPull(open: () => void, preload: () => void) {
 
 		function release(allowOpen: boolean) {
 			start = undefined;
-			if (rest === undefined || !pull) return;
+			const dragging = rest !== undefined;
+			rest = undefined;
+			if (!dragging || !pull) return;
 			const shouldOpen = allowOpen && pull.distance >= Math.min(120, innerHeight * 0.16);
 			const last = { distance: pull.distance, released: true, open: shouldOpen };
-			rest = undefined;
 			if (reduced.matches) {
 				pull = undefined;
 				if (shouldOpen) open();

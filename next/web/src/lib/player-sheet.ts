@@ -11,7 +11,7 @@ export function playerSheet(panel: HTMLElement, close: () => void, dockPull?: Do
 		{ expanded: panel.querySelector<HTMLElement>('[data-testid="now-playing-artwork"]'), docked: dock?.querySelector<HTMLElement>('.cover'), art: true },
 		{ expanded: panel.querySelector<HTMLElement>('[data-testid="now-playing-title"]'), docked: dock?.querySelector<HTMLElement>('.description strong'), art: false }
 	];
-	let flights: { expanded: HTMLElement; docked: HTMLElement; x: number; y: number; scale: number }[] = [];
+	let flights: { expanded: HTMLElement; docked: HTMLElement; bounds: DOMRect; x: number; y: number; scale: number; art: boolean }[] = [];
 	let rest = innerHeight;
 	let position = 0;
 	let target = 0;
@@ -30,7 +30,7 @@ export function playerSheet(panel: HTMLElement, close: () => void, dockPull?: Do
 			const to = docked.getBoundingClientRect();
 			if (!from.width || !to.width) return [];
 			const scale = art ? to.width / from.width : parseFloat(getComputedStyle(docked).fontSize) / parseFloat(getComputedStyle(expanded).fontSize);
-			return [{ expanded, docked, x: to.left - from.left, y: to.top - from.top - rest, scale }];
+			return [{ expanded, docked, bounds: from, x: to.left - from.left, y: to.top - from.top - rest, scale, art }];
 		});
 	}
 
@@ -41,9 +41,19 @@ export function playerSheet(panel: HTMLElement, close: () => void, dockPull?: Do
 		const phase = Math.max(0, (progress - 0.6) / 0.4);
 		const horizontal = phase * phase * (3 - 2 * phase);
 		dialog.style.setProperty('--player-backdrop', String(0.18 * Math.min(1, (1 - progress) / 0.15)));
-		for (const { expanded, docked, x, y, scale } of flights) {
+		const art = flights.find(flight => flight.art);
+		for (const flight of flights) {
+			const { expanded, docked, bounds, x, y, scale } = flight;
+			const size = 1 - (1 - scale) * progress;
+			let lift = 0;
+			if (art && !flight.art) {
+				const artSize = 1 - (1 - art.scale) * progress;
+				const horizontalOverlap = art.bounds.left + art.x * horizontal + art.bounds.width * artSize - (bounds.left + x * horizontal);
+				const artBottom = art.bounds.top + art.y * progress + art.bounds.height * artSize;
+				lift = Math.max(0, artBottom + 8 - (bounds.top + y * progress)) * Math.min(1, Math.max(0, horizontalOverlap / 24));
+			}
 			docked.style.visibility = next ? 'hidden' : '';
-			expanded.style.transform = next ? `translate(${x * horizontal}px, ${y * progress}px) scale(${1 - (1 - scale) * progress})` : '';
+			expanded.style.transform = next ? `translate(${x * horizontal}px, ${y * progress + lift}px) scale(${size})` : '';
 		}
 	}
 
@@ -76,7 +86,10 @@ export function playerSheet(panel: HTMLElement, close: () => void, dockPull?: Do
 		touch = undefined;
 		closing = true;
 		if (!phone.matches || reduced.matches || !ready) { close(); return; }
-		if (!position) measure();
+		if (!position) {
+			measure();
+			rest += dialog.scrollTop;
+		}
 		settle(rest, close);
 	}
 

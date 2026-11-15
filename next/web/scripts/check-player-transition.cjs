@@ -18,6 +18,11 @@ async function transition(browser, origin, width, reducedMotion) {
     page.on('request', request => {
       if (new URL(request.url()).pathname.endsWith('/playback')) deliveries.push(request);
     });
+    const moreTracks = tracks.map(track => ({ ...track, id: track.id + 'more', metadata: { ...track.metadata, title: 'Later page: ' + track.metadata.title } }));
+    await page.route(url => url.pathname === '/v1/tracks' && url.hostname === 'api.next.plyr.fm', route => {
+      const more = new URL(route.request().url()).searchParams.has('cursor');
+      return route.fulfill({ json: { object: 'list', data: more ? moreTracks : tracks, has_more: !more, next_cursor: more ? null : 'next-page' } });
+    });
     await page.goto(origin);
     await page.getByTestId('home-track-row').first().getByRole('button', { name: /^Play / }).click();
     const dock = page.getByTestId('player-dock');
@@ -47,7 +52,9 @@ async function transition(browser, origin, width, reducedMotion) {
     });
     const rest = (await dock.boundingBox()).y;
     await sampleFrames();
-    await page.evaluate(() => window.scrollTo(0, 230));
+    await page.getByRole('button', { name: 'load more', exact: true }).click();
+    const pagedTrack = page.getByRole('link', { name: moreTracks[0].metadata.title, exact: true });
+    await pagedTrack.scrollIntoViewIfNeeded();
     const homeScroll = await page.evaluate(() => window.scrollY);
     assert.ok(homeScroll > 0, 'the fixture can exercise Home scroll restoration');
     await opener.click();
@@ -90,6 +97,12 @@ async function transition(browser, origin, width, reducedMotion) {
       await finger('touchEnd');
       await dialog.waitFor({ state: 'hidden' });
       await finger('touchStart', 0);
+      await finger('touchMove', 0.25);
+      await dialog.waitFor();
+      await page.keyboard.press('Escape');
+      await dialog.waitFor({ state: 'hidden' });
+      await finger('touchEnd');
+      await finger('touchStart', 0);
       const sizes = [];
       for (const stop of [0.25, 0.5, 0.75]) {
         await finger('touchMove', stop);
@@ -127,7 +140,11 @@ async function transition(browser, origin, width, reducedMotion) {
       const left = await page.evaluate(() => window.playerFrames);
       assert.ok(left.some(frame => frame.path === source), 'observed the source while navigating');
       assert.ok(left.filter(frame => frame.path === source).every(frame => frame.top !== null && frame.top - atRest < 8), 'the previous page remains covered');
-      if (phone && reducedMotion === 'no-preference') assert.ok(left.some(frame => frame.path === destination && frame.top !== null && frame.top - atRest > 40), 'the sheet slides over the destination');
+      if (phone && reducedMotion === 'no-preference') {
+        const exits = left.filter(frame => frame.path === destination && frame.top !== null);
+        assert.ok(exits.some(frame => frame.top - atRest > 40), 'the sheet slides over the destination');
+        assert.ok(exits.at(-1).top > rest - 24, 'the scrolled sheet reaches the dock before disappearing');
+      }
       if (destination !== destinations.at(-1)[1]) {
         await opener.click();
         await dialog.waitFor();
@@ -138,6 +155,7 @@ async function transition(browser, origin, width, reducedMotion) {
       await page.goBack();
       await page.waitForURL(origin + path);
     }
+    await pagedTrack.waitFor();
     await page.waitForFunction(expected => Math.abs(window.scrollY - expected) < 2, homeScroll);
     await dock.getByRole('button', { name: 'Pause', exact: true }).waitFor();
     assert.equal(deliveries.length, 1, 'no playback delivery refetch');

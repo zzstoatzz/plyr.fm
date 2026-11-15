@@ -21,16 +21,19 @@
 	let error = $state('');
 	$effect(() => { data.latest; extra = []; nextCursor = undefined; error = ''; });
 
-	export const snapshot: Snapshot<number> = {
-		capture: () => window.scrollY,
-		restore: y => {
+	export const snapshot: Snapshot<{ y: number; tracks: Track[]; cursor?: string }> = {
+		capture: () => ({ y: window.scrollY, tracks: extra, cursor: nextCursor }),
+		restore: ({ y, tracks, cursor }) => {
 			const position = window.scrollY;
-			if (position === y) return;
 			const request = data.latest;
-			// The browser can clamp the saved scroll before the streamed rows render.
 			void Promise.allSettled([request, data.chart, data.featured]).then(async () => {
 				await tick();
-				if (home?.isConnected && data.latest === request && window.scrollY === position) window.scrollTo(0, y);
+				if (!home?.isConnected || data.latest !== request) return;
+				extra = tracks;
+				nextCursor = cursor;
+				// The browser can clamp the saved scroll before the streamed rows render.
+				await tick();
+				if (home.isConnected && data.latest === request && window.scrollY === position) window.scrollTo(0, y);
 			});
 		}
 	};
