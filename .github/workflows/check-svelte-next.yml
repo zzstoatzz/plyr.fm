@@ -6,7 +6,14 @@ on:
       target:
         description: Deploy Next web or verify the live browser
         type: choice
-        options: [preview, live, verify-live-upload-consent, verify-live-jam]
+        options:
+          [
+            preview,
+            live,
+            verify-live-upload-consent,
+            verify-live-jam,
+            verify-live-like,
+          ]
         default: preview
   pull_request:
     paths:
@@ -134,7 +141,7 @@ jobs:
           curl -fsS https://api.plyr.fm/health | jq -e '.status == "ok"'
 
   verify-live-browser:
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.target == 'verify-live-upload-consent' || inputs.target == 'verify-live-jam')
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.target == 'verify-live-upload-consent' || inputs.target == 'verify-live-jam' || inputs.target == 'verify-live-like')
     runs-on: ubuntu-latest
     timeout-minutes: 8
     concurrency: next-live-browser
@@ -166,3 +173,11 @@ jobs:
           ALPHA_TEST_HANDLE: ${{ secrets.ALPHA_TEST_HANDLE }}
           ALPHA_TEST_PASSWORD: ${{ secrets.ALPHA_TEST_PASSWORD }}
         run: node scripts/check-live-jam.mjs
+      - name: verify live Like and Unlike
+        if: inputs.target == 'verify-live-like'
+        working-directory: next/web
+        env:
+          ZAT_TEST_HANDLE: ${{ secrets.ZAT_TEST_HANDLE }}
+          ZAT_TEST_PASSWORD: ${{ secrets.ZAT_TEST_PASSWORD }}
+          ZAT_TEST_PDS: ${{ secrets.ZAT_TEST_PDS }}
+        run: node scripts/check-live-like.mjs
