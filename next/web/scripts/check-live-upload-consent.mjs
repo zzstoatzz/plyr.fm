@@ -8,6 +8,10 @@ const { ZAT_TEST_HANDLE: handle, ZAT_TEST_PASSWORD: password, ZAT_TEST_PDS: pdsU
 assert.ok(handle && password && pdsUrl, 'missing dedicated account credentials');
 const pds = new URL(pdsUrl);
 assert.ok(pds.protocol === 'https:' && !pds.username && !pds.password, 'invalid dedicated account host');
+const discovery = await fetch(new URL('/.well-known/oauth-authorization-server', pds), { redirect: 'error', signal: AbortSignal.timeout(10000) });
+assert.ok(discovery.ok, 'could not discover the dedicated authorization server');
+const { issuer, authorization_endpoint: authorize, revocation_endpoint: revoke } = await discovery.json();
+assert.ok(issuer === pds.origin && new URL(authorize).origin === issuer && new URL(revoke).origin === issuer, 'unexpected authorization server metadata');
 
 function wave(name) {
   const bytes = Buffer.alloc(8044);
@@ -22,7 +26,7 @@ async function signIn(page) {
   await page.locator('main').getByRole('link', { name: 'sign in', exact: true }).click();
   await page.getByLabel('atmosphere account').fill(handle);
   await page.locator('main form button[type=submit]').click();
-  await page.waitForURL(url => url.origin === pds.origin && url.pathname === '/oauth/authorize');
+  await page.waitForURL(url => url.origin + url.pathname === authorize);
   const passwordInput = page.locator('input[name=password]:visible');
   const passwordMode = page.getByText(/^(use password(?: instead)?)$/i);
   await passwordInput.or(passwordMode).first().waitFor();
@@ -35,11 +39,40 @@ async function signIn(page) {
   await page.getByRole('button', { name: 'authorize', exact: true }).click();
 }
 
+async function signOut(page, destination) {
+  await page.goto(app + '/settings', { waitUntil: 'domcontentloaded' });
+  const signOutButton = page.getByRole('button', { name: 'sign out', exact: true });
+  const signedOut = page.locator('main').getByRole('link', { name: 'sign in', exact: true });
+  await signOutButton.or(signedOut).first().waitFor();
+  if (!await signOutButton.isVisible()) return;
+  await Promise.all([
+    page.waitForResponse(response => response.url() === revoke && response.request().method() === 'POST' && response.ok()),
+    signOutButton.click()
+  ]);
+  await page.waitForURL(app + '/');
+  await page.waitForFunction(() => new Promise((resolve, reject) => {
+    const open = indexedDB.open('@atproto-oauth-client');
+    open.onerror = () => reject(open.error);
+    open.onsuccess = () => {
+      const db = open.result;
+      const count = db.transaction('session').objectStore('session').count();
+      db.close();
+      count.onerror = () => reject(count.error);
+      count.onsuccess = () => resolve(count.result === 0);
+    };
+  }));
+  await page.goto(app + destination, { waitUntil: 'domcontentloaded' });
+  await signedOut.waitFor();
+}
+
 async function verify(browser, width, album) {
   const context = await browser.newContext({ viewport: { width, height: 900 }, isMobile: width === 390, hasTouch: width === 390, serviceWorkers: 'block' });
   const page = await context.newPage();
   page.setDefaultTimeout(15_000);
   let stage = 'guarding publication';
+  let failure;
+  let consented = false;
+  const destination = album ? '/upload?mode=album' : '/upload';
   const forbidden = [];
   try {
     await context.route('**/xrpc/**', route => {
@@ -53,10 +86,10 @@ async function verify(browser, width, album) {
     await context.route('**/v1/uploads/**', route => route.request().url() === authorizer ? route.continue() : route.abort());
 
     stage = 'opening signed-out upload';
-    const destination = album ? '/upload?mode=album' : '/upload';
     await page.goto(app + destination, { waitUntil: 'domcontentloaded' });
     stage = 'authorizing through the dedicated PDS';
     await signIn(page);
+    consented = true;
     stage = 'returning to the original upload form';
     await page.waitForURL(app + destination);
     if (album) {
@@ -70,27 +103,27 @@ async function verify(browser, width, album) {
     await page.getByRole('checkbox', { name: 'use plyr storage' }).check();
 
     stage = 'checking upload authority from the browser';
+    const blocked = page.waitForEvent('requestfailed', { predicate: request => request.method() === 'POST' && /^\/v1\/uploads\/[a-f0-9]{64}\/[a-f0-9-]+$/.test(new URL(request.url()).pathname) }).catch(() => undefined);
     const [admission] = await Promise.all([
       page.waitForResponse(response => response.url() === authorizer && response.request().method() === 'POST'),
-      page.waitForEvent('requestfailed', { predicate: request => request.method() === 'POST' && /^\/v1\/uploads\/[a-f0-9]{64}\/[a-f0-9-]+$/.test(new URL(request.url()).pathname) }),
       page.getByRole('button', { name: album ? 'upload songs' : 'upload', exact: true }).click()
     ]);
     if (!admission.ok()) throw new Error(`upload admission returned HTTP ${admission.status()}`);
+    assert.ok(await blocked, 'transfer start did not reach the browser guard');
     assert.deepEqual(forbidden, [], 'no repository or Space mutation was attempted');
-
-    stage = 'signing out';
-    await page.goto(app + '/settings', { waitUntil: 'domcontentloaded' });
-    await page.getByRole('button', { name: 'sign out', exact: true }).click();
-    await page.waitForURL(app + '/');
-    await page.goto(app + destination, { waitUntil: 'domcontentloaded' });
-    await page.locator('main').getByRole('link', { name: 'sign in', exact: true }).waitFor();
-    console.log(`${width}px ${album ? 'album' : 'track'}: OAuth return, upload admission, and sign-out passed`);
   } catch (error) {
     const detail = stage === 'checking upload authority from the browser' && error.message.startsWith('upload admission returned HTTP') ? `: ${error.message}` : '';
-    throw new Error(`${width}px failed at ${stage} (${error.name})${detail}`);
+    failure = new Error(`${width}px failed at ${stage} (${error.name})${detail}`);
   } finally {
-    await context.close();
+    try {
+      if (consented) await signOut(page, destination);
+    } catch (error) {
+      const cleanup = new Error(`${width}px failed to revoke the browser session (${error.name})`);
+      failure = failure ? new AggregateError([failure, cleanup], 'browser check and cleanup failed') : cleanup;
+    } finally { await context.close(); }
   }
+  if (failure) throw failure;
+  console.log(`${width}px ${album ? 'album' : 'track'}: OAuth return, upload admission, and sign-out passed`);
 }
 
 const browser = await chromium.launch();
