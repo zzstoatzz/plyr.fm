@@ -10,7 +10,7 @@
   import { draftInRecovery, queuedUploadDraft, reattachQueuedUpload } from '@plyr/next-core/publishing/queued-upload-draft';
   import { RepoResponseError } from '@plyr/next-core/publishing/repo-rpc';
   import { PUBLIC_AUDIO_FORMATS } from '@plyr/next-core/publishing/upload-model';
-  import { canonicalAudioType, jobLine, needsPlyrStorage, uploadInProgress } from '@plyr/next-core/publishing/upload-queue-model';
+  import { jobLine, needsPlyrStorage, uploadInProgress } from '@plyr/next-core/publishing/upload-queue-model';
   import { api } from '$lib/api';
   import { auth } from '$lib/auth';
   import { authConfig } from '$lib/auth-config';
@@ -18,6 +18,7 @@
   import CollectionJournal from '$lib/collections/CollectionJournal.svelte';
   import { collectionJournal } from '$lib/collections/CollectionJournal.svelte.ts';
   import OrderRows from '$lib/collections/OrderRows.svelte';
+  import { canonicalAudioFile } from '$lib/media/audio-file';
   import { createPds } from '$lib/pds';
   import { albumUploads, queuedDrafts, uploadStorage } from '$lib/storage/upload-storage';
   import Loading from '$lib/ui/Loading.svelte';
@@ -57,6 +58,7 @@
   let statusProblem = $state('');
   let savedUrl = $state('');
   let confirming = $state(false);
+  let journalReady = $state(false);
   let ready = $derived(songs.flatMap(song => song.state === 'ready' ? [song.reference] : []));
   let working = $derived(songs.some(song => song.state === 'working'));
   let blocked = $derived(journal.view.loading || !!journal.view.error || journal.view.operations.some(operation => !operation.archived));
@@ -64,6 +66,8 @@
   const signInPath = resolve('/(app)/login') + '?return_to=%2Fupload%3Fmode%3Dalbum';
 
   const address = (slot: AlbumUploadSlot) => `at://${slot.owner}/${authConfig.NSID.track}/${slot.reservedRkey}`;
+  const albumAddress = (saved: AlbumUploadPlan) => `at://${saved.owner}/${authConfig.NSID.list}/${saved.reservedRkey}`;
+  const albumHref = (uri: string) => resolve('/(app)/album/[id]', { id: albumIdFromUri(uri) });
   const message = (error: unknown, fallback: string) => error instanceof Error && !(error instanceof RepoResponseError) ? error.message : fallback;
 
   onMount(() => {
@@ -85,14 +89,36 @@
     return () => { mounted = false; unsubscribe(); };
   });
 
+  async function readSavedAlbum(plan: AlbumUploadPlan) {
+    return organization.read(albumAddress(plan)).catch((failure: unknown) => {
+      if (failure instanceof RepoResponseError && failure.error === 'RecordNotFound') return null;
+      throw failure;
+    });
+  }
+
   async function refresh(refetch = false) {
     if (!current()) return;
     const attempt = ++revision;
+    journalReady = false;
     try {
-      const [nextPlan, creates, transfers] = await Promise.all([
+      const [storedPlan, creates, transfers] = await Promise.all([
         albumUploads.load(owner), pds.pendingCreates('track'), uploadStorage.load(owner), journal.refresh()
       ]);
       if (!current() || attempt !== revision) return;
+      if (journal.view.error) throw new Error(journal.view.error);
+      let nextPlan = storedPlan;
+      if (storedPlan) {
+        const handedOff = journal.view.operations.some(operation => operation.draftId === storedPlan.id && operation.uri === albumAddress(storedPlan));
+        const existing = !handedOff && (refetch || plan?.id !== storedPlan.id) ? await readSavedAlbum(storedPlan) : null;
+        if (!current() || attempt !== revision) return;
+        if (handedOff || existing) {
+          await albumUploads.finish(storedPlan);
+          nextPlan = undefined;
+        }
+        if (existing && current() && attempt === revision) savedUrl = albumHref(existing.uri);
+      }
+      if (!current() || attempt !== revision) return;
+      journalReady = true;
       const previous = !refetch && plan?.id === nextPlan?.id ? songs : [];
       plan = nextPlan;
       const updated: Song[] = [];
@@ -127,8 +153,8 @@
     const rejected: string[] = [];
     for (const file of Array.from(input.files ?? [])) {
       try {
-        canonicalAudioType(file);
-        additions.push({ key: crypto.randomUUID(), file, title: file.name.replace(/\.[^.]+$/, '').trim().slice(0, 256) || file.name.slice(0, 256) });
+        const audio = canonicalAudioFile(file);
+        additions.push({ key: crypto.randomUUID(), file: audio, title: file.name.replace(/\.[^.]+$/, '').trim().slice(0, 256) || file.name.slice(0, 256) });
       } catch (failure) { rejected.push(`${file.name} — ${message(failure, 'could not open the file.')}`); }
     }
     input.value = '';
@@ -165,7 +191,7 @@
         const slots = entries.map(({ input, id, reservedRkey }) => ({
           ...queuedUploadDraft(input, owner, id, reservedRkey), reservedRkey
         }));
-        const saved: AlbumUploadPlan = { owner, id: crypto.randomUUID(), name: title, coverName: cover?.name, slots };
+        const saved: AlbumUploadPlan = { owner, id: crypto.randomUUID(), reservedRkey: TID.nextStr(), name: title, coverName: cover?.name, slots };
         if (!current()) return;
         await albumUploads.add(saved);
         if (usesStorage) { try { localStorage.setItem(consentKey, 'yes'); } catch {} }
@@ -189,8 +215,9 @@
     saving = true;
     problem = '';
     try {
-      const input = reattachQueuedUpload(slot, file);
-      if (needsPlyrStorage(file) && !account.uploadStorage) throw new Error('sign in again to allow plyr storage.');
+      const audio = canonicalAudioFile(file);
+      const input = reattachQueuedUpload(slot, audio);
+      if (needsPlyrStorage(audio) && !account.uploadStorage) throw new Error('sign in again to allow plyr storage.');
       await albumUploads.withLock(owner, async () => {
         if ((await albumUploads.load(owner))?.id !== planId) throw new Error('this album upload has already changed. refresh and try again.');
         const [reference, drafts, creates, transfers] = await Promise.all([
@@ -198,7 +225,7 @@
         ]);
         if (!current() || reference || draftInRecovery(slot, creates, transfers)) return;
         const draft = drafts.find(item => item.id === slot.id);
-        if (draft) uploadQueue.reattach(draft, file);
+        if (draft) uploadQueue.reattach(draft, audio);
         else await uploadQueue.add(input, slot);
       });
     } catch (failure) {
@@ -210,11 +237,16 @@
 
   async function keepUnfinished(saved: AlbumUploadPlan, tracks: Reference[]) {
     const included = new Set(tracks.map(reference => reference.uri));
-    const [creates, transfers] = await Promise.all([pds.pendingCreates('track'), uploadStorage.load(owner)]);
     for (const slot of saved.slots) {
       if (!current()) return;
-      if (included.has(address(slot)) || draftInRecovery(slot, creates, transfers) || await queuedDrafts.has(slot)) continue;
-      await queuedDrafts.put(slot);
+      if (included.has(address(slot))) continue;
+      await queuedDrafts.withLock(slot, async () => {
+        if (!current() || await queuedDrafts.has(slot)) return;
+        const [creates, transfers, reference] = await Promise.all([
+          pds.pendingCreates('track'), uploadStorage.load(owner), organization.readUpload(address(slot))
+        ]);
+        if (current() && !reference && !draftInRecovery(slot, creates, transfers)) await queuedDrafts.put(slot);
+      });
     }
   }
 
@@ -255,13 +287,21 @@
         const saved = await albumUploads.load(owner);
         if (saved?.id !== selected.id) throw new Error('this album upload has already changed. refresh and try again.');
         if (!current()) return;
+        const uri = albumAddress(saved);
+        const existing = await readSavedAlbum(saved);
+        if (!current()) return;
+        if (existing) {
+          await albumUploads.finish(saved);
+          savedUrl = albumHref(uri);
+          return;
+        }
         await keepUnfinished(saved, tracks);
         if (!current()) return;
         const result = await organization.createFromUploads(selected.name, tracks, cover, {
-          id: selected.id, handedOff: () => albumUploads.finish(selected)
+          id: selected.id, reservedRkey: selected.reservedRkey, handedOff: () => albumUploads.finish(selected)
         });
         if (!current()) return;
-        savedUrl = resolve('/(app)/album/[id]', { id: albumIdFromUri(result.uri) });
+        savedUrl = albumHref(result.uri);
         await journal.refresh();
         if (result.status !== 'indexed' || !current()) return;
         const accepted = journal.view.operations.find(operation => operation.uri === result.uri && operation.cid);
@@ -279,8 +319,11 @@
   }
 </script>
 
-<CollectionJournal {...journal.view} {pds} refresh={refresh} />
-{#if statusProblem}<p role="alert">{statusProblem}</p>{/if}
+{#if journalReady}<CollectionJournal {...journal.view} {pds} refresh={refresh} />{/if}
+{#if statusProblem}
+  <p role="alert">{statusProblem}</p>
+  {#if !plan}<button type="button" class="text-button" onclick={() => refresh(true)}>retry</button>{/if}
+{/if}
 {#if problem}<p role="alert">{problem}</p>{/if}
 {#if loading}
   <Loading label="checking saved album uploads" inline />
@@ -369,7 +412,6 @@
       disabled={!!statusProblem || blocked || coverPending || !name.trim() || !selections.length || selections.some(item => !item.title.trim()) || (usesStorage && !consent)}>
       {saving ? 'starting…' : usesStorage && !account.uploadStorage ? 'save album draft and sign in' : 'upload songs'}
     </button>
-    {#if statusProblem}<button type="button" class="text-button" onclick={() => refresh(true)}>retry</button>{/if}
   </form>
 {/if}
 

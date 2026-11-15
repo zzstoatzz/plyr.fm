@@ -483,7 +483,7 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 	}
 	function albumOrganization() {
 		return albumPublishing({ ...session(), trackCollection: NSID.track as Nsid, assertSession, ordering: collectionOrder('album'), uploadCover,
-			publish: async (name, items, cover, draft) => publishCreate(await reserveCreate('album'), {
+			publish: async (name, items, cover, draft) => publishCreate(await reserveCreate('album', draft?.reservedRkey), {
 				$type: NSID.list, name, listType: 'album', items, ...cover, createdAt: new Date().toISOString(),
 			}, draft),
 		});

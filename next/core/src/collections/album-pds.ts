@@ -7,6 +7,8 @@ import type { CollectionItem, CollectionRevision } from './collection-order.ts';
 import type { collectionOrdering } from './collection-order-pds';
 import { albumName, albumMembership, type AlbumEntry } from './album-membership.ts';
 
+type AlbumHandoff = CreateHandoff & { reservedRkey: string };
+
 export function albumPublishing({ rpc, did, trackCollection, assertSession, ordering, publish, uploadCover }: {
   rpc: RepoRpc;
   did: `did:${string}:${string}`;
@@ -14,7 +16,7 @@ export function albumPublishing({ rpc, did, trackCollection, assertSession, orde
   assertSession: () => void;
   ordering: ReturnType<typeof collectionOrdering>;
   uploadCover: (file: MediaFile) => Promise<{ imageBlob: unknown }>;
-  publish: (name: string, items: CollectionItem[], cover?: { imageBlob: unknown }, draft?: CreateHandoff) => Promise<{ uri: string; status: AwaitStatus }>;
+  publish: (name: string, items: CollectionItem[], cover?: { imageBlob: unknown }, draft?: AlbumHandoff) => Promise<{ uri: string; status: AwaitStatus }>;
 }) {
   async function readTrack(uri: string) {
     assertSession();
@@ -69,7 +71,7 @@ export function albumPublishing({ rpc, did, trackCollection, assertSession, orde
     assertSession();
     return publish(title, [...items.values()], cover);
   }
-  async function createFromUploads(name: string, tracks: readonly { uri: string; cid: string }[], artwork: MediaFile | undefined, draft: CreateHandoff) {
+  async function createFromUploads(name: string, tracks: readonly { uri: string; cid: string }[], artwork: MediaFile | undefined, draft: AlbumHandoff) {
     const title = albumName(name);
     assertTrackCount(tracks.map(track => track.uri));
     const cover = await prepareCover(artwork);

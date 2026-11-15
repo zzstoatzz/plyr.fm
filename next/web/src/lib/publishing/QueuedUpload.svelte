@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { QueuedUploadDraft } from '@plyr/next-core/publishing/queued-upload-draft';
-  import { canonicalAudioType } from '@plyr/next-core/publishing/upload-queue-model';
+  import { canonicalAudioFile } from '$lib/media/audio-file';
   import { coverImage } from '$lib/media/cover-image';
   import { queuedDrafts } from '$lib/storage/upload-storage';
   import { uploadQueue } from '$lib/upload';
@@ -16,8 +16,7 @@
     problem = '';
     if (!file) return;
     try {
-      const type = canonicalAudioType(file);
-      audio = file.type === type ? file : new File([file], file.name, { type, lastModified: file.lastModified });
+      audio = canonicalAudioFile(file);
     } catch (failure) {
       problem = failure instanceof Error ? failure.message : 'could not open the audio file.';
     }

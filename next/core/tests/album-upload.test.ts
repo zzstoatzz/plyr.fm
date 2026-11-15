@@ -41,7 +41,7 @@ function fixture() {
       return { uri: `at://${did}/${collection}/3album`, status: 'pending' };
     },
   });
-  const draft = { id: 'album-draft', async handedOff() { handoffs++; } };
+  const draft = { id: 'album-draft', reservedRkey: '3222222222232', async handedOff() { handoffs++; } };
   return { albums, draft, reads, published, handoffs: () => handoffs };
 }
 
@@ -72,7 +72,7 @@ test('an album plan preserves the selected order and stays with its original acc
     reservedRkey, owner: did, id: `slot-${index}`, album: 'recordings', artist: 'fixture', title: `song ${index}`,
     audio: { name: `song-${index}.mp3`, type: 'audio/mpeg', size: 1024 },
   }));
-  const plan = { id: 'album-draft', owner: did, name: 'recordings', coverName: 'scan.jpg', slots };
+  const plan = { id: 'album-draft', owner: did, reservedRkey: '3222222222232', name: 'recordings', coverName: 'scan.jpg', slots };
   const restored = readAlbumUploadPlan(plan, did);
   assert.deepEqual(restored.slots.map(slot => slot.reservedRkey), slots.map(slot => slot.reservedRkey));
   assert.equal(restored.coverName, plan.coverName);

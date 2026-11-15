@@ -17,6 +17,7 @@ const idFromUri = (type, uri) => type + '_' + Buffer.from(uri).toString('base64u
 
 async function fixture(browser, accounts, handle, width, scheme, scenario, audio) {
   const did = accounts[handle].did;
+  const failSong = scenario === 'partial' || scenario === 'stale';
   const session = await fetch(pds + 'com.atproto.server.createSession', {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ identifier: handle, password: accounts[handle].pass })
@@ -51,7 +52,7 @@ async function fixture(browser, accounts, handle, width, scheme, scenario, audio
   let projected = false;
   const write = 'https://pds.fixture.test/xrpc/com.atproto.repo.createRecord';
   const audioMime = 'audio/mpeg';
-  const selection = ['alpha', 'beta', 'gamma'].map(name => ({ name: name + '.mp3', mimeType: audioMime, buffer: audio }));
+  const selection = ['alpha', 'beta', 'gamma'].map(name => ({ name: name + '.mp3', mimeType: name === 'gamma' ? 'application/octet-stream' : audioMime, buffer: audio }));
   const title = 'Field recordings';
   const signIn = origin + '/login';
   page.on('pageerror', error => errors.push(error.message));
@@ -60,7 +61,7 @@ async function fixture(browser, accounts, handle, width, scheme, scenario, audio
   await context.route('https://pds.fixture.test/xrpc/com.atproto.repo.uploadBlob', async route => {
     if (!(await route.request().allHeaders())['content-type']?.startsWith(audioMime)) return route.fallback();
     blobCount++;
-    if (scenario === 'partial' && blobCount === 2) {
+    if (failSong && blobCount === 2) {
       return route.fulfill({ status: 400, json: { error: 'InvalidRequest', message: 'could not upload this audio file' } });
     }
     if (scenario === 'reload' && blobCount === 3) {
@@ -160,7 +161,7 @@ async function fixture(browser, accounts, handle, width, scheme, scenario, audio
       await page.getByText('2 of 3 songs uploaded').waitFor();
       await page.getByLabel('original file for gamma').setInputFiles(selection[2]);
     }
-    const count = scenario === 'partial' ? 2 : 3;
+    const count = failSong ? 2 : 3;
     await page.getByText(`${count} of 3 songs uploaded`).waitFor();
     if (scenario === 'reload') {
       await page.locator('input[type="file"][accept^="image"]').setInputFiles({ name: 'cover.png', mimeType: 'image/png', buffer: cover });
@@ -179,6 +180,44 @@ async function fixture(browser, accounts, handle, width, scheme, scenario, audio
       await page.getByRole('button', { name: 'resume creation' }).click();
       await page.getByRole('link', { name: 'view album' }).waitFor();
       await page.getByRole('link', { name: 'view album' }).click();
+    } else if (scenario === 'stale') {
+      const other = await context.newPage();
+      await other.goto(upload);
+      await other.getByText('2 of 3 songs uploaded').waitFor();
+      await other.getByLabel('original file for Alpha remastered').setInputFiles(selection[0]);
+      await other.getByText('3 of 3 songs uploaded').waitFor();
+      await other.close();
+      await page.getByRole('button', { name: 'create album with 2 songs' }).click();
+      await page.waitForURL('**/album/**');
+    } else if (scenario === 'journal' || scenario === 'journal-other') {
+      await page.evaluate(() => {
+        const prototype = IDBTransaction.prototype;
+        const original = Object.getOwnPropertyDescriptor(prototype, 'oncomplete');
+        Object.defineProperty(prototype, 'oncomplete', {
+          ...original,
+          set(callback) {
+            if (this.mode !== 'readwrite' || this.db.name !== 'plyr-next-pending-creates') return original.set.call(this, callback);
+            return original.set.call(this, () => {
+              Object.defineProperty(prototype, 'oncomplete', original);
+              window.albumJournalCommitted = true;
+            });
+          }
+        });
+      });
+      await page.getByRole('button', { name: 'create album', exact: true }).click();
+      await page.waitForFunction(() => window.albumJournalCommitted === true);
+      assert.equal(albumAttempts, 0, 'the album journal was durable before any record write');
+      const elsewhere = scenario === 'journal-other';
+      if (elsewhere) await page.goto(origin + '/create-album');
+      else await page.reload();
+      await page.getByRole('button', { name: 'resume creation' }).click();
+      await page.getByRole('button', { name: 'done with creation' }).click();
+      if (elsewhere) {
+        await page.goto(upload);
+        await page.getByRole('link', { name: 'view album' }).waitFor();
+      }
+      await page.reload();
+      assert.equal(await page.getByRole('textbox', { name: 'album name' }).inputValue(), '');
     } else {
       const other = await context.newPage();
       await other.goto(upload);
@@ -199,13 +238,17 @@ async function fixture(browser, accounts, handle, width, scheme, scenario, audio
     assert.equal(created[0].value.imageBlob.mimeType, 'image/png');
     assert.equal(albumAttempts, scenario === 'partial' ? 2 : 1);
     const uploaded = (await records(trackCollection)).filter(record => !tracksAtStart.has(record.uri));
-    assert.equal(uploaded.length, count, 'only successful songs created records');
-    const expected = scenario === 'partial' ? ['beta', 'gamma'] : ['beta', 'Alpha remastered', 'gamma'];
+    assert.equal(uploaded.length, scenario === 'stale' ? 3 : count, 'only successful songs created records');
+    const expected = failSong ? ['beta', 'gamma'] : ['beta', 'Alpha remastered', 'gamma'];
     assert.deepEqual(created[0].value.items.map(item => uploaded.find(record => record.uri === item.subject.uri).value.title), expected);
     if (scenario === 'partial') {
       await page.goto(origin + '/upload');
       await page.getByRole('heading', { name: 'Alpha remastered' }).waitFor();
       await page.getByRole('button', { name: 'resume queued upload' }).waitFor();
+    } else if (scenario === 'stale') {
+      await page.goto(origin + '/upload');
+      await page.getByRole('button', { name: 'choose audio', exact: true }).waitFor();
+      assert.equal(await page.getByRole('button', { name: 'resume queued upload' }).count(), 0);
     }
     assert.deepEqual(errors, []);
     console.log(`${width}px ${scheme}: ${scenario}, ordered songs and exactly one album verified`);
@@ -217,8 +260,8 @@ async function fixture(browser, accounts, handle, width, scheme, scenario, audio
 
 (async () => {
   await mkdir(output, { recursive: true });
-  const frames = [[390, 'dark', 'reload'], [1280, 'light', 'partial']];
-  const handles = frames.map(([width]) => 'album-upload-' + width);
+  const frames = [[390, 'dark', 'reload'], [1280, 'light', 'partial'], [390, 'light', 'stale'], [1280, 'dark', 'journal'], [390, 'dark', 'journal-other']];
+  const handles = frames.map(([, , scenario]) => 'albqa-' + (scenario === 'journal-other' ? 'elsewhere' : scenario));
   const accounts = await fixtureAccounts([...handles, 'album-upload-other']);
   const audio = execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1', '-f', 'mp3', 'pipe:1']);
   const browser = await chromium.launch();
