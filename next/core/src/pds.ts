@@ -62,9 +62,11 @@ export interface ProfileRecord {
 	[key: string]: unknown;
 }
 
-async function uploadBlob(rpc: RepoRpc, file: MediaFile) {
+async function uploadBlob(rpc: RepoRpc, file: MediaFile, assertSession: () => void) {
+	const bytes = await file.arrayBuffer();
+	assertSession();
 	return ok(uploadRepoBlob(rpc, {
-		input: await file.arrayBuffer(),
+		input: bytes,
 		headers: { 'content-type': file.type }
 	}));
 }
@@ -349,7 +351,7 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 		assertSession();
 		if (!input.file.type.startsWith('audio/')) throw new Error('pick an audio file');
 		if (input.file.size > MAX_AUDIO_BYTES) throw new Error('audio files are limited to 100 MB');
-		const uploaded = await uploadBlob(rpc, input.file);
+		const uploaded = await uploadBlob(rpc, input.file, assertSession);
 		assertSession();
 		const record = await prepareTrackRecord(input);
 		assertSession();
@@ -457,13 +459,21 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 	 * upload cover art as a blob and return the record fields: imageBlob is the
 	 * canonical cover; imageUrl is its getBlob url for clients that only read urls.
 	 */
-	async function uploadArtwork(file: MediaFile): Promise<{ imageBlob: unknown; imageUrl: string }> {
-		const { rpc, did } = session();
+	async function uploadCover(file: MediaFile) {
+		const { rpc } = session();
+		assertSession();
 		if (!(ARTWORK_TYPES as readonly string[]).includes(file.type)) throw new Error('choose a PNG, JPEG, WebP, or GIF cover');
 		if (file.size > MAX_ARTWORK_BYTES) throw new Error('cover art is limited to 10 MB');
-		const uploaded = await uploadBlob(rpc, file);
-		const cid = (uploaded.blob as { ref: { $link: string } }).ref.$link;
-		return { imageBlob: uploaded.blob, imageUrl: await blobUrl(did, cid) };
+		const uploaded = await uploadBlob(rpc, file, assertSession);
+		assertSession();
+		return { imageBlob: uploaded.blob };
+	}
+
+	async function uploadArtwork(file: MediaFile): Promise<{ imageBlob: unknown; imageUrl: string }> {
+		const { did } = session();
+		const { imageBlob } = await uploadCover(file);
+		const cid = (imageBlob as { ref: { $link: string } }).ref.$link;
+		return { imageBlob, imageUrl: await blobUrl(did, cid) };
 	}
 
 	const { myTrack, editTrack, deleteTrack } = trackEditor({ session, assertSession, ownedRkey, uploadArtwork, settle, trackCollection: NSID.track as Nsid, readPublicTrack: api.track });
@@ -471,9 +481,9 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 		return collectionOrdering({ ...session(), collection: LIST(), kind, assertSession, settle });
 	}
 	function albumOrganization() {
-		return albumPublishing({ ...session(), trackCollection: NSID.track as Nsid, assertSession, ordering: collectionOrder('album'),
-			publish: async (name, items) => publishCreate(await reserveCreate('album'), {
-				$type: NSID.list, name, listType: 'album', items, createdAt: new Date().toISOString(),
+		return albumPublishing({ ...session(), trackCollection: NSID.track as Nsid, assertSession, ordering: collectionOrder('album'), uploadCover,
+			publish: async (name, items, cover) => publishCreate(await reserveCreate('album'), {
+				$type: NSID.list, name, listType: 'album', items, ...cover, createdAt: new Date().toISOString(),
 			}),
 		});
 	}

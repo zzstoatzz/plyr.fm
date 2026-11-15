@@ -66,7 +66,7 @@ export interface ListSummary {
 	object: 'album' | 'playlist';
 	id: string;
 	record: { uri: string; cid: string; collection: string; rkey: string };
-	metadata: { name: string | null; created_at: string; updated_at: string | null };
+	metadata: { name: string | null; created_at: string; updated_at: string | null; cover_blob_cid?: string | null };
 	owner: { did: string; profile: { handle: string; display_name: string; avatar_url?: string | null } | null };
 	/** a cover: the first available member's artwork, or null */
 	media?: { artwork?: { url: string } | null };

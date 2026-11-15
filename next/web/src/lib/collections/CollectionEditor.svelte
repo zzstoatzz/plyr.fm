@@ -8,6 +8,7 @@
   import { auth } from '$lib/auth';
   import { createPds } from '$lib/pds';
   import Loading from '$lib/ui/Loading.svelte';
+  import AlbumCoverPicker from './AlbumCoverPicker.svelte';
   import AlbumTrackPicker from './AlbumTrackPicker.svelte';
   import OrderRows from './OrderRows.svelte';
 
@@ -26,6 +27,8 @@
   let known = $state.raw<Track[]>([]);
   let entries = $state.raw<AlbumEntry[]>([]);
   let name = $state('');
+  let artwork = $state<File>();
+  let imagePending = $state(false);
   let loading = $state(true);
   let busy = $state(false);
   let conflict = $state(false);
@@ -47,7 +50,7 @@
     const track = subject && trackVersions.get(subject.uri + '\0' + subject.cid);
     return { key: entry, title: track?.metadata.title || `unavailable track ${entry + 1}` };
   }));
-  const changed = $derived(revision && (name.trim() !== (revision.value.name ?? '')
+  const changed = $derived(revision && (artwork || name.trim() !== (revision.value.name ?? '')
     || entries.length !== revision.value.items.length || entries.some((entry, index) => entry !== index)));
 
   onMount(() => {
@@ -58,6 +61,8 @@
 
   async function load() {
     loading = true;
+    artwork = undefined;
+    imagePending = false;
     reader?.abort();
     const request = reader = new AbortController();
     error = '';
@@ -94,12 +99,12 @@
 
   async function save(event: SubmitEvent) {
     event.preventDefault();
-    if (!revision || !changed || busy || conflict || confirming || !name.trim() || !current()) return;
+    if (!revision || !changed || busy || imagePending || conflict || confirming || !name.trim() || !current()) return;
     busy = true;
     error = '';
     try {
       const currentRevision = revision;
-      const result = list.object === 'album' ? await pds.albumOrganization().save(currentRevision, entries, name.trim()) :
+      const result = list.object === 'album' ? await pds.albumOrganization().save(currentRevision, entries, name.trim(), artwork) :
         await ordering.write(currentRevision, entries.flatMap(entry => typeof entry === 'number' ? [currentRevision.value.items[entry]] : []), name.trim());
       if (!current()) return;
       const additions = entries.filter((entry): entry is Track => typeof entry !== 'number');
@@ -142,6 +147,9 @@
     {#if conflict}<button type="button" class="text-button" onclick={load}>discard draft and reload</button>{/if}
     <form onsubmit={save}>
       <label>{list.object} name <input bind:value={name} maxlength="64" required disabled={busy || confirming} /></label>
+      {#if list.object === 'album'}
+        <AlbumCoverPicker bind:file={artwork} bind:pending={imagePending} disabled={busy || conflict || confirming} editing />
+      {/if}
       <OrderRows {rows} {move} remove={index => { entries = entries.filter((_, position) => position !== index); }} disabled={busy || conflict || confirming} />
       {#if confirming}
         <p>delete this playlist?</p>
@@ -151,7 +159,7 @@
         </div>
       {:else}
         <div class="actions">
-          <button type="submit" class="text-button save" disabled={busy || conflict || !changed || !name.trim()}>{busy ? 'saving…' : 'save changes'}</button>
+          <button type="submit" class="text-button save" disabled={busy || imagePending || conflict || !changed || !name.trim()}>{busy ? 'saving…' : 'save changes'}</button>
           <button type="button" class="text-button" disabled={busy} onclick={close}>cancel</button>
           {#if list.object === 'playlist'}
             <button type="button" class="text-button" disabled={busy || conflict} onclick={() => { confirming = true; }}>delete playlist</button>

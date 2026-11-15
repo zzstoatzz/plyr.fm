@@ -1,16 +1,18 @@
 import { artworkName, artworkPlan, artworkType, MAX_ARTWORK_BYTES, UNREADABLE_ARTWORK } from '@plyr/next-core/publishing/artwork-model';
 
-export async function coverImage(file: File): Promise<File> {
+export async function coverImage(file: File, maximumEdge?: number): Promise<File> {
   const type = artworkType(file.type);
-  if (artworkPlan(file).keep) return type === file.type ? file : new File([file], file.name, { type });
-
   const address = URL.createObjectURL(file);
   try {
     const image = new Image();
     image.src = address;
-    await image.decode();
+    await image.decode().catch(() => { throw new Error(UNREADABLE_ARTWORK); });
     const plan = artworkPlan(file, image.naturalWidth, image.naturalHeight);
-    const width = plan.keep ? image.naturalWidth : Math.min(image.naturalWidth, plan.width ?? image.naturalWidth);
+    const edge = Math.max(image.naturalWidth, image.naturalHeight);
+    const override = maximumEdge && edge > maximumEdge && type !== 'image/gif';
+    if (plan.keep && !override) return type === file.type ? file : new File([file], file.name, { type });
+    const plannedWidth = plan.keep ? image.naturalWidth : plan.width ?? image.naturalWidth;
+    const width = Math.min(plannedWidth, override ? Math.round(image.naturalWidth * maximumEdge / edge) : image.naturalWidth);
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = Math.round(image.naturalHeight * width / image.naturalWidth);

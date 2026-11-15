@@ -30,9 +30,9 @@ export function collectionOrdering({ rpc, did, collection, kind, assertSession, 
     return write(revision, orderedCollection(revision.value, order).items);
   }
 
-  async function write(revision: CollectionRevision, items: CollectionItem[], name?: string) {
+  async function write(revision: CollectionRevision, items: CollectionItem[], name?: string, cover?: { imageBlob: unknown }) {
     assertSession();
-    const value = { ...collectionRecord({ ...revision.value, items, ...(name === undefined ? {} : { name }) }, kind), $type: collection, updatedAt: new Date().toISOString() };
+    const value = { ...collectionRecord({ ...revision.value, ...cover, items, ...(name === undefined ? {} : { name }) }, kind), $type: collection, updatedAt: new Date().toISOString() };
     assertPublicCollection(value, collection);
     let saved: CollectionRevision;
     try {

@@ -1,8 +1,9 @@
 <script lang="ts">
+  import CollectionArtwork from '$lib/collections/CollectionArtwork.svelte';
   import { beforeNavigate } from '$app/navigation';
   import { onMount, tick, untrack } from 'svelte';
   import { ApiError, type Artist, type Track } from '@plyr/next-core/api';
-  import { collectionArtwork, trackArtwork } from '@plyr/next-core/artwork';
+  import { trackArtwork } from '@plyr/next-core/artwork';
   import { accessLabel } from '@plyr/next-core/access/label';
   import { isPrivateTrack } from '@plyr/next-core/track-access';
   import { api } from '$lib/api';
@@ -178,7 +179,7 @@
     <ul aria-label="Your albums">
       {#each albums.data as album (album.record.uri)}
         <li>
-          <div class="thumb"><Artwork src={collectionArtwork(album)} size={52} /></div>
+          <div class="thumb"><CollectionArtwork list={album} size={52} /></div>
           <div class="names">
             <a href={`/album/${album.id}`}>{album.metadata.name || 'untitled album'}</a>
             <p class="subtle">{album.metrics.member_count} {album.metrics.member_count === 1 ? 'track' : 'tracks'}</p>

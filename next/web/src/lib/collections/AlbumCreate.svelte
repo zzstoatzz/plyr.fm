@@ -5,6 +5,7 @@
   import { auth } from '$lib/auth';
   import EditorPanel from '$lib/catalog/EditorPanel.svelte';
   import { createPds } from '$lib/pds';
+  import AlbumCoverPicker from './AlbumCoverPicker.svelte';
   import AlbumTrackPicker from './AlbumTrackPicker.svelte';
   import CollectionJournal from './CollectionJournal.svelte';
   import { collectionJournal } from './CollectionJournal.svelte.ts';
@@ -17,6 +18,8 @@
   const current = () => live && auth.getAuth().rpc === account.rpc;
   const journal = collectionJournal(pds, current);
   let name = $state('');
+  let artwork = $state<File>();
+  let imagePending = $state(false);
   let entries = $state.raw<Track[]>([]);
   let selected = $derived(new Set(entries.map(track => track.record.uri)));
   let error = $state('');
@@ -37,11 +40,11 @@
 
   async function create(event: SubmitEvent) {
     event.preventDefault();
-    if (blocked || !name.trim() || !entries.length || !current()) return;
+    if (blocked || imagePending || !name.trim() || !entries.length || !current()) return;
     busy = true;
     error = '';
     try {
-      const result = await organization.create(name, entries);
+      const result = await organization.create(name, entries, artwork);
       if (!current()) return;
       await journal.refresh();
       if (result.status === 'indexed' && current()) {
@@ -60,13 +63,14 @@
   <CollectionJournal {...journal.view} pds={pds} refresh={journal.refresh} />
   <form onsubmit={create}>
     <label>album name <input bind:value={name} required maxlength="64" disabled={blocked} /></label>
+    <AlbumCoverPicker bind:file={artwork} bind:pending={imagePending} disabled={blocked} />
     {#if entries.length}
       <OrderRows rows={entries.map(track => ({ key: track.record.uri, title: track.metadata.title }))} {move}
         remove={index => { entries = entries.filter((_, position) => position !== index); }} disabled={blocked} />
     {/if}
     {#if error}<p role="alert">{error}</p>{/if}
     <div class="editor-actions">
-      <button type="submit" class="text-button editor-save" disabled={blocked || !name.trim() || !entries.length}>
+      <button type="submit" class="text-button editor-save" disabled={blocked || imagePending || !name.trim() || !entries.length}>
         {busy ? 'creating…' : 'create album'}
       </button>
     </div>

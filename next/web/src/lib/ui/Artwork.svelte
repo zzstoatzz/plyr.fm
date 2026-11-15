@@ -3,11 +3,14 @@
 	import { displayUrl } from '@plyr/next-core/artwork';
 	import Icon from './Icon.svelte';
 
-	let { src, size = 56, eager = false }: { src?: string; size?: number; eager?: boolean } = $props();
+	let { src, fallback, size = 56, eager = false }: { src?: string; fallback?: string; size?: number; eager?: boolean } = $props();
 	let failed = $state(0);
-	$effect(() => { if (src) failed = 0; });
 	const optimized = $derived(src ? displayUrl(src, size, typeof window === 'undefined' ? 1 : window.devicePixelRatio) : undefined);
-	const image = $derived(failed === 0 ? optimized : failed === 1 && src !== optimized ? src : undefined);
+	const candidates = $derived([...new Set([optimized, src,
+    fallback ? displayUrl(fallback, size, typeof window === 'undefined' ? 1 : window.devicePixelRatio) : undefined,
+    fallback].filter(Boolean))]);
+  const image = $derived(candidates[failed]);
+  $effect(() => { if (candidates.length) failed = 0; });
 </script>
 
 <span class="artwork">
