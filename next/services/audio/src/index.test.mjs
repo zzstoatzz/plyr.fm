@@ -21,15 +21,34 @@ for (const [header, range, span, body] of [
             httpEtag: '"fixture"',
             range,
             body,
-            writeHttpMetadata() {},
+            writeHttpMetadata(headers) { headers.set("content-type", "audio/x-flac"); },
           };
         },
       },
     });
 
     assert.equal(response.status, 206);
+    assert.equal(response.headers.get("content-type"), "audio/flac");
     assert.equal(response.headers.get("content-range"), `bytes ${span}/${data.length}`);
     assert.equal(response.headers.get("content-length"), String(body.length));
     assert.equal(await response.text(), body);
   });
 }
+
+test("reports the standard FLAC content type on HEAD requests", async () => {
+  const response = await worker.fetch(new Request(url, { method: "HEAD" }), {
+    AUDIO: {
+      async head() {
+        return {
+          size: data.length,
+          httpEtag: '"fixture"',
+          writeHttpMetadata(headers) { headers.set("content-type", "audio/x-flac"); },
+        };
+      },
+    },
+  });
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("content-type"), "audio/flac");
+  assert.equal(response.headers.get("content-length"), String(data.length));
+  assert.equal(await response.text(), "");
+});
