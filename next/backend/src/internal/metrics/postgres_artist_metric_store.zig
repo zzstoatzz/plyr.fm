@@ -131,6 +131,7 @@ const metrics_query =
     \\  WHERE v.owner_did = $1
     \\    AND v.collection = $2
     \\    AND NOT v.deleted
+    \\    AND v.support_gate_type IS DISTINCT FROM 'owner'
     \\    AND COALESCE(pol.visibility, 'public') <> 'private'
     \\    AND pol.moderation_decision IS DISTINCT FROM 'exclude'
     \\    AND (
@@ -215,6 +216,7 @@ test "PostgreSQL artist metrics aggregate only admitted canonical tracks" {
         \\  collection text NOT NULL,
         \\  title text NOT NULL,
         \\  duration_seconds bigint,
+        \\  support_gate_type text,
         \\  record_created_at timestamptz NOT NULL,
         \\  self_labels text[] NOT NULL DEFAULT '{}',
         \\  deleted boolean NOT NULL DEFAULT false
@@ -244,6 +246,7 @@ test "PostgreSQL artist metrics aggregate only admitted canonical tracks" {
     const supporters_uri = "at://did:plc:artist/fm.plyr.dev.track/supporters";
     const allowed_uri = "at://did:plc:artist/fm.plyr.dev.track/allowed";
     const private_uri = "at://did:plc:artist/fm.plyr.dev.track/private";
+    const owner_uri = "at://did:plc:artist/fm.plyr.dev.track/owner";
     const blocked_uri = "at://did:plc:artist/fm.plyr.dev.track/blocked";
     const insert_record =
         \\INSERT INTO plyr_index.track_records (
@@ -256,6 +259,10 @@ test "PostgreSQL artist metrics aggregate only admitted canonical tracks" {
     _ = try postgres.pool.exec(insert_record, .{ allowed_uri, cid, "did:plc:artist", "fm.plyr.dev.track", "Allowed", @as(?i64, 50), "2026-08-09T02:00:00Z", &[_][]const u8{"copyright-violation"} });
     _ = try postgres.pool.exec(insert_record, .{ private_uri, cid, "did:plc:artist", "fm.plyr.dev.track", "Private", @as(?i64, 1000), "2026-08-09T03:00:00Z", &[_][]const u8{} });
     _ = try postgres.pool.exec(insert_record, .{ blocked_uri, cid, "did:plc:artist", "fm.plyr.dev.track", "Blocked", @as(?i64, 2000), "2026-08-09T04:00:00Z", &[_][]const u8{"copyright-violation"} });
+
+    _ = try postgres.pool.exec(insert_record, .{ owner_uri, cid, "did:plc:artist", "fm.plyr.dev.track", "Owner only", @as(?i64, 500), "2026-08-09T05:00:00Z", &[_][]const u8{} });
+    _ = try postgres.pool.exec("UPDATE plyr_index.track_records SET support_gate_type='owner' WHERE record_uri=$1", .{owner_uri});
+    _ = try postgres.pool.exec("INSERT INTO plyr_index.track_metrics VALUES ($1, 300)", .{owner_uri});
 
     _ = try postgres.pool.exec("INSERT INTO plyr_index.track_policies VALUES ($1, 'supporters', NULL, '[]')", .{supporters_uri});
     _ = try postgres.pool.exec("INSERT INTO plyr_index.track_policies VALUES ($1, 'public', 'allow', '[]')", .{allowed_uri});

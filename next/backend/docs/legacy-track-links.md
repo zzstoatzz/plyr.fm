@@ -27,3 +27,19 @@ checked separately by the normal verified track lookup.
 
 Smoke `GET /v1/tracks/1667` and the returned track's canonical ID. Both should
 return the same record URI, canonical ID and current CID.
+
+## unlisted visibility
+
+Record identity and legacy visibility are separate. The shared track record
+does not carry the legacy application's unlisted setting. Before exposing an
+index rebuilt from records, refresh the unlisted policy snapshot from the
+legacy source in a read-only transaction. Use the same canonical URI and
+owner checks as the link export, with `visibility = 'unlisted'`.
+
+On the database marked `plyr-zig-next`, write these URIs to
+`plyr_index.track_policies` with `visibility='unlisted'`,
+`access_write_source='legacy_import'`, and an observation timestamp in
+microseconds. Fill missing visibility only and preserve existing moderation
+fields. Compare the resulting policies with the snapshot before cutover and
+resolve any conflicting explicit settings. Verify a direct link still opens
+and that search omits the track.

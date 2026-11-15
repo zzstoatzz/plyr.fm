@@ -639,6 +639,7 @@ const joined_projection = "SELECT\n" ++ projected_columns ++ "\n" ++ projected_f
 
 const common_policy =
     \\  AND NOT v.deleted
+    \\  AND v.support_gate_type IS DISTINCT FROM 'owner'
     \\  AND pol.moderation_decision IS DISTINCT FROM 'exclude'
     \\  AND (
     \\    pol.moderation_decision IS NOT DISTINCT FROM 'allow'
@@ -1349,6 +1350,29 @@ test "composed PostgreSQL reads use verified records and authoritative account s
         "UPDATE plyr_index.track_policies SET visibility = 'public' WHERE record_uri = $1",
         .{record_uri},
     );
+
+    _ = try pool.exec("UPDATE plyr_index.track_records SET support_gate_type = 'owner' WHERE record_uri = $1", .{record_uri});
+    try std.testing.expectEqual(get_track.Result.not_found, get_track.execute(a, implementation.store(), "fm.plyr.dev.track", "1667"));
+    try std.testing.expect((try implementation.store().getByUri(a, record_uri)) == null);
+    try std.testing.expectEqual(@as(usize, 0), (try implementation.store().resolve(a, &.{record_uri})).len);
+    try std.testing.expectEqual(@as(usize, 0), (try search_store.search(a, private_query)).len);
+    try std.testing.expectEqual(@as(usize, 1), (try implementation.store().listPublic(a, .{
+        .collection = "fm.plyr.dev.track",
+        .scope = .{ .artist = did },
+        .limit = 2,
+        .after = null,
+    })).len);
+    const owner_album = (try list_store.getByUri(a, .{
+        .uri = album_list_uri,
+        .list_collection = "fm.plyr.dev.list",
+        .track_collection = "fm.plyr.dev.track",
+        .profile_collection = "fm.plyr.dev.actor.profile",
+        .kind = .album,
+    })).?;
+    try std.testing.expectEqual(@as(usize, 0), owner_album.metrics.available_count);
+    try std.testing.expect(owner_album.members[0].track == null);
+    try std.testing.expect((try playback_implementation.store().getByUri(a, record_uri)) != null);
+    _ = try pool.exec("UPDATE plyr_index.track_records SET support_gate_type = 'future-gate' WHERE record_uri = $1", .{record_uri});
 
     _ = try pool.exec(
         "UPDATE plyr_index.track_policies SET operator_labels = '[\"sexual\"]', moderation_decision = NULL WHERE record_uri = $1",
