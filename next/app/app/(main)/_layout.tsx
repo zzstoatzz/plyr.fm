@@ -1,5 +1,6 @@
 import { DarkTheme, DefaultTheme, Tabs, ThemeProvider } from 'expo-router';
 import { NativeTabs } from 'expo-router/native-tabs';
+import { PixelRatio } from 'react-native';
 import { useAppearance } from '../../src/appearance';
 import { useAuth } from '../../src/auth';
 import { useMyAvatar } from '../../src/use-my-avatar';
@@ -43,7 +44,7 @@ function LiquidTabs() {
         <NativeTabs.Trigger.Label>upload</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="(you)" contentStyle={contentStyle}>
-        {avatar && did ? <NativeTabs.Trigger.Icon src={{ uri: avatar }} renderingMode="original" />
+        {avatar && did ? <NativeTabs.Trigger.Icon src={{ uri: avatar, width: 22, height: 22, scale: PixelRatio.get() }} renderingMode="original" />
           : <NativeTabs.Trigger.Icon sf={did ? 'person.crop.circle' : 'person.crop.circle.badge.plus'} />}
         <NativeTabs.Trigger.Label>{did ? 'you' : 'sign in'}</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
