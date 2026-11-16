@@ -16,15 +16,15 @@ export function CatalogMetrics({ metrics, lead }: {
   lead?: { label: string; value: string };
 }) {
   const theme = useAppearance();
-  const { width } = useWindowDimensions();
-  const stack = width < 350 || theme.scale > 1.15;
+  const { width, fontScale } = useWindowDimensions();
+  const stack = width < 350 || theme.scale * fontScale > 1.15;
   const cells = lead ? [lead, ...metrics] : metrics;
   return <View style={[styles.group, { backgroundColor: theme.surface, borderColor: theme.line }]} accessibilityRole="summary">
-    <View style={{ flexDirection: stack ? 'column' : 'row', flexWrap: 'wrap' }}>
+    <View style={{ flexDirection: stack ? 'column' : 'row', flexWrap: stack ? 'nowrap' : 'wrap' }}>
       {cells.map((metric, index) => {
         const featured = metric === lead;
         return <View key={metric.label} accessible accessibilityLabel={`${metric.value} ${metric.label}`}
-          style={[styles.metric, { backgroundColor: featured ? theme.raised : theme.surface, flexBasis: stack || featured ? '100%' : 0,
+          style={[styles.metric, { backgroundColor: featured ? theme.raised : theme.surface, flexBasis: stack ? 'auto' : featured ? '100%' : 0,
             borderColor: theme.line, borderLeftWidth: !stack && index > (lead ? 1 : 0) ? StyleSheet.hairlineWidth : 0,
             borderTopWidth: (stack && index > 0 || !!lead && !featured) ? StyleSheet.hairlineWidth : 0 }]}>
           <Text style={{ color: featured ? theme.accent : theme.text, fontSize: (featured ? 38 : 21) * theme.scale, fontWeight: '700', fontVariant: ['tabular-nums'] }}>{metric.value}</Text>
