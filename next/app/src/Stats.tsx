@@ -8,6 +8,7 @@ import { Choice } from './AccountPieces';
 import { CatalogMetrics, catalogRuntime } from './CatalogMetrics';
 import { Cover, Heading, Status, artistName, useResource } from './CatalogPieces';
 import { Copy, Field, Page, row } from './controls';
+import { ArrowClockwise } from './icons';
 import { compactCount } from './home-state';
 import { Text } from './Text';
 
@@ -19,7 +20,8 @@ const ranges = [
 type Period = typeof ranges[number]['period'];
 
 export default function Stats() {
-  const result = useResource(api.stats);
+  const theme = useAppearance();
+  const result = useResource(api.stats, 0, true);
   const [query, setQuery] = useState('');
   const term = query.trim().replace(/^@/, '');
   const stats = result.data;
@@ -36,6 +38,14 @@ export default function Stats() {
       { label: 'catalog runtime', value: catalogRuntime(stats.duration_seconds) },
     ]} /> : <Status loading={!result.error} error={result.error && 'couldn’t load catalog totals.'} retry={result.retry} />}
     <TrackChart />
+    {stats && <View style={[row, { justifyContent: 'flex-end' }]}>
+      <Text style={{ color: theme.muted, fontSize: 13 * theme.scale }}>
+        updated {new Date(stats.updated_at_ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+      </Text>
+      <Pressable accessibilityRole="button" accessibilityLabel="Refresh catalog totals" onPress={result.retry} style={styles.refresh}>
+        <ArrowClockwise size={18} color={theme.muted} />
+      </Pressable>
+    </View>}
   </Page>;
 }
 
@@ -99,5 +109,6 @@ const styles = StyleSheet.create({
   line: { minHeight: 54, flexDirection: 'row', alignItems: 'center', gap: 9, borderTopWidth: StyleSheet.hairlineWidth, paddingVertical: 6 },
   name: { flex: 1, minWidth: 0, gap: 2 },
   count: { minWidth: 13, textAlign: 'right', fontVariant: ['tabular-nums'] },
+  refresh: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   columnLabels: { flexDirection: 'row', justifyContent: 'space-between', paddingLeft: 22, paddingBottom: 6 },
 });
