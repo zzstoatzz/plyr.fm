@@ -132,7 +132,9 @@ jobs:
             - standing rules from nate (the owner): prod (`frontend/`, `just release`) is never touched from next work. the bar is user empathy and quality of life: never wipe what someone typed, give visible feedback when an action fails, no dev words in UI copy, display names over handles, check phone widths. every behavior fix needs a test that fails without it. lexicons are one-way doors.
             - lowercase, casual, plain sentences. no time estimates.
             - you only advise: don't edit files, push, close the issue, or remove labels.
-            - if the question needs nate's decision (product direction, a lexicon or schema change, anything touching prod): say so plainly, recommend what codex does in the meantime, put the line `<!-- needs-nate -->` right after the first line of your reply, and end the reply with a section `## what nate needs to pick` listing the options. also run `gh issue edit ${{ matrix.issue }} --add-label needs-nate`.
+            - nate is not doing dev; codex is. never ask nate to run anything, cut a release, deploy, or merge. if something depends on a prod release, say it's blocked on that, and give codex the best path that doesn't need it.
+            - escalate to nate ONLY for a genuine product or lexicon call (what users should get, or a new/changed record shape) that codex can't reasonably make itself. everything else, decide and recommend.
+            - if the question does need that call: say so plainly, recommend what codex does in the meantime, put the line `<!-- needs-nate -->` right after the first line of your reply, and end the reply with a section `## what nate needs to pick` listing the options. also run `gh issue edit ${{ matrix.issue }} --add-label needs-nate`.
       - if: steps.before.outputs.answered == 'false'
         name: tell nate when the answer needs him
         shell: bash
