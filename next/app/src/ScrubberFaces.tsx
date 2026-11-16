@@ -4,7 +4,7 @@ import type { TrackComment } from '@plyr/next-core/api';
 import { useAppearance } from './appearance';
 import { Cover } from './CatalogPieces';
 import { clock } from '@plyr/next-core/chapters';
-import { COUNT_WIDTH, FACE, SHOWN, STEP, clampLeft, passingComment, pileFaces, type Pile } from './comment-faces';
+import { COUNT_WIDTH, FACE, SHOWN, STEP, clampLeft, passingComment, pileFaces, type Pile } from '@plyr/next-core/comment-faces';
 import { Text } from './Text';
 
 /** Half the slider's thumb: where its track starts and ends, so a stem lands on the moment its comment names. */
