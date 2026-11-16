@@ -2,7 +2,7 @@ import type { AudioPlayer } from 'expo-audio';
 import { randomUUID } from 'expo-crypto';
 import { useEffect, useMemo } from 'react';
 import { AppState } from 'react-native';
-import { ListeningSession } from '@plyr/next-core/listening-session';
+import { ListeningSession, type QualifiedPlay } from '@plyr/next-core/listening-session';
 import { playOutbox } from './play-reporting';
 
 export function usePlayerAccounting(player: AudioPlayer) {
@@ -25,7 +25,7 @@ export function usePlayerAccounting(player: AudioPlayer) {
       source = undefined;
     }
 
-    function begin(trackId: string, duration?: number | null) {
+    function begin(trackId: string, duration?: number | null, onQualified?: (play: QualifiedPlay) => void) {
       stop();
       source = { trackId, duration };
       token = session.begin(trackId, randomUUID(), duration ?? undefined);
@@ -50,6 +50,7 @@ export function usePlayerAccounting(player: AudioPlayer) {
         if (qualified) {
           console.info('[plays] qualified', { track: qualified.trackId, occurrence: qualified.occurrenceId });
           playOutbox().enqueue(qualified);
+          onQualified?.(qualified);
         }
       });
     }

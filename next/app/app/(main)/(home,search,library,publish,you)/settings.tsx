@@ -10,6 +10,7 @@ import { Sheet } from '../../../src/Sheet';
 import { usePlayback } from '../../../src/playback';
 import { useAppPreferences } from '../../../src/preference-context';
 import { DiscoverySettings } from '../../../src/discovery/DiscoverySettings';
+import { TealSettings } from '../../../src/TealSettings';
 import { sharePlaybackLog } from '../../../src/share-playback-log';
 
 const themes = ['system', 'light', 'dark'] as const;
@@ -47,6 +48,7 @@ export default function Settings() {
       </SettingsRow>)}
       <SettingsRow label="share playback log" detail="recent play attempts on this device, to send when tracks won’t play" disclosure={false} onPress={() => void sharePlaybackLog(!!auth.did, auth.ready)} />
     </SettingsSection>
+    <TealSettings key={auth.did ?? 'anonymous'} />
     <DiscoverySettings key={auth.did ?? 'anonymous'} />
     <SettingsSection title="account" icon={UserRound}>
       {auth.did ? <>

@@ -17,11 +17,11 @@ const play = { trackId: track.id, occurrenceId: 'fe84c36c-7418-4bf9-ad35-220b288
 const time = Date.parse('2026-11-15T12:00:00Z');
 const url = 'https://next.plyr.fm/track/trk_fixture';
 
-test('Teal consent is advertised for web but excluded from ordinary login', () => {
+test('Teal consent is advertised by both clients and excluded from ordinary login', () => {
 	const config = createAuthConfig();
 	assert.equal(hasTealGrant(config.SCOPE_PARTS.join(' ')), false);
 	assert.equal(hasTealGrant(oauthMetadata(config, 'web').scope), true);
-	assert.equal(hasTealGrant(oauthMetadata(config, 'native').scope), false);
+	assert.equal(hasTealGrant(oauthMetadata(config, 'native').scope), true);
 	assert.equal(hasTealGrant(TEAL_SCOPE.replace('create', 'delete')), false);
 	assert.equal(hasTealGrant('repo:fm.teal.feed.play'), true);
 });
