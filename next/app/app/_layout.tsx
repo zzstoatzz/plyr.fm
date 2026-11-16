@@ -1,6 +1,6 @@
 import { Text } from '../src/Text';
 import { type Icon, ArrowLeft, House, MagnifyingGlass as Search, Books as Library, UserCircle as UserRound, PlusCircle as CirclePlus, Radio, GearSix as Settings, SignIn } from '../src/icons';
-import { Link, Stack, router, usePathname, type Href } from 'expo-router';
+import { Link, Stack, router, usePathname, useSegments, type Href } from 'expo-router';
 import { useEffect } from 'react';
 import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
@@ -18,6 +18,7 @@ import { Cover } from '../src/CatalogPieces';
 import { useFinishPendingLike } from '../src/RowActions';
 import { useMyAvatar } from '../src/use-my-avatar';
 import { usePreferences } from '../src/preferences';
+import { usesLiquidTabs } from '../src/tab-platform';
 import { UploadQueueHost } from '../src/publishing/UploadQueue';
 
 export default function RootLayout() {
@@ -44,23 +45,24 @@ export default function RootLayout() {
 function Shell() {
   const theme = useAppearance();
   const path = usePathname();
+  const segments: readonly string[] = useSegments();
+  const tab = segments[1];
   const auth = useAuth();
-  const avatar = useMyAvatar(auth.did);
+  const avatar = useMyAvatar(usesLiquidTabs ? null : auth.did);
   useFinishPendingLike();
-  const accountPath = auth.did ? '/portal' : '/login';
   const tabs: { label: string; href: Href; icon: Icon; active: boolean }[] = [
-    { label: 'Home', href: '/', icon: House, active: path === '/' },
-    { label: 'Search', href: '/search', icon: Search, active: path === '/search' },
-    { label: 'Library', href: '/library', icon: Library, active: ['/library', '/liked', '/playlists'].includes(path) },
-    ...(auth.did ? [{ label: 'Upload', href: '/upload' as Href, icon: CirclePlus, active: path === '/upload' }] : []),
-    { label: auth.did ? 'You' : 'Sign in', href: accountPath, icon: auth.did ? UserRound : SignIn, active: ['/portal', '/login'].includes(path) || !auth.did && path === '/upload' || path === '/settings' }
+    { label: 'Home', href: '/(main)/(home)', icon: House, active: tab === '(home)' },
+    { label: 'Search', href: '/(main)/(search)/search', icon: Search, active: tab === '(search)' },
+    { label: 'Library', href: '/(main)/(library)/library', icon: Library, active: tab === '(library)' },
+    ...(auth.did ? [{ label: 'Upload', href: '/(main)/(publish)/upload' as Href, icon: CirclePlus, active: tab === '(publish)' }] : []),
+    { label: auth.did ? 'You' : 'Sign in', href: '/(main)/(you)/portal', icon: auth.did ? UserRound : SignIn, active: tab === '(you)' }
   ];
-  const showBack = !['/', '/search', '/library', '/portal', '/login', '/upload'].includes(path);
+  const showBack = !['/', '/search', '/library', '/portal', '/oauth/callback'].includes(path) && !(tab === '(publish)' && path === '/upload');
   const detail = /^\/(track|u|album|playlist|edit-track)\//.test(path);
-  const tabTitle = path === '/' ? 'plyr.fm' : path === '/search' ? 'search' : path === '/library' ? 'library' : path === '/portal' ? 'your music' : undefined;
+  const tabTitle = path === '/' ? 'plyr.fm' : path === '/search' ? 'search' : path === '/library' ? 'library' : path === '/portal' && auth.did ? 'your music' : undefined;
   const detailTitle = path.startsWith('/u/') ? 'artist' : path.startsWith('/edit-track/') ? 'edit track'
     : path.startsWith('/album/') ? 'album' : path.startsWith('/playlist/') ? 'playlist' : 'track';
-  const nav = <SafeAreaView edges={['bottom']} role="navigation" accessibilityLabel="Main navigation" style={{
+  const nav = !usesLiquidTabs && <SafeAreaView edges={['bottom']} role="navigation" accessibilityLabel="Main navigation" style={{
     flexDirection: 'row', paddingHorizontal: 8, width: '100%',
     backgroundColor: theme.surface,
     borderTopWidth: 1, borderColor: theme.line
@@ -75,7 +77,7 @@ function Shell() {
       </Pressable>
     </Link>)}
   </SafeAreaView>;
-  const dock = <RadioPlayback><PlayerBar /></RadioPlayback>;
+  const dock = !usesLiquidTabs && <RadioPlayback><PlayerBar /></RadioPlayback>;
   return <SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1, backgroundColor: theme.background }}>
     <StatusBar style={theme.dark ? 'light' : 'dark'} />
     <View testID="app-frame" style={{ flex: 1, width: '100%', overflow: 'hidden' }}>
@@ -101,7 +103,9 @@ function Shell() {
             <Settings size={20} color={theme.muted} />
           </Pressable></Link>}
         </View>
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.background } }} />
+        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.background } }}>
+          <Stack.Screen name="(main)" />
+        </Stack>
         {dock}
         {nav}
       </View>

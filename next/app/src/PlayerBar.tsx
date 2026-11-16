@@ -15,7 +15,7 @@ import { NowPlaying } from './NowPlaying';
 import { PlayerControl } from './PlayerControl';
 import { useRadio } from './radio-session';
 
-export function PlayerBar() {
+export function PlayerBar({ accessory = false }: { accessory?: boolean } = {}) {
   const player = usePlayback();
   const radio = useRadio();
   const theme = useAppearance();
@@ -68,12 +68,12 @@ export function PlayerBar() {
     </View>
   </Pressable>;
   return <>
-    <View ref={dock} testID="player-dock" style={[glassSurface(theme), {
+    <View ref={dock} testID="player-dock" style={accessory ? { flex: 1, justifyContent: 'center', paddingHorizontal: 12 } : [glassSurface(theme), {
       borderWidth: 0, borderTopWidth: 1, paddingHorizontal: 12, paddingVertical: 4, overflow: 'hidden'
     }]}>
-      <View pointerEvents="none" accessible={false} testID="playback-status-inlay" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2,
+      {!accessory && <View pointerEvents="none" accessible={false} testID="playback-status-inlay" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2,
         opacity: playing ? 0.65 : 0.16, backgroundColor: theme.accent,
-        boxShadow: `0px 0px 5px ${theme.accent}66` }} />
+        boxShadow: `0px 0px 5px ${theme.accent}66` }} />}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
         <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center' }}>{identity}{!player.privatePlayback && <TrackLikes key={track.id} track={track} iconOnly returnTo={path} />}</View>
         {play}{player.live ? stopRadio : <PlayerControl label="Next" icon={SkipForward} onPress={() => void player.next()} />}

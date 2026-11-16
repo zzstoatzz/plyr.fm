@@ -21,9 +21,11 @@ instead. Add one when something bites.
 
 ## platform
 
-- **A bottom inset on the whole app leaves a strip below the tab bar.** Apply
-  it to the tab bar so the surface reaches the edge and controls stay above
-  the home indicator.
+- **An app-level bottom inset stops content above Liquid Glass.** On iOS 26
+  put the tabs and player accessory in the native tab controller and let it
+  own the insets. The fallback tab bar still owns its own bottom inset.
+- **A hidden native tab cannot receive a deep link.** Keep /upload reachable
+  from the other stacks so incoming audio still opens the sign-in flow.
 
 - **Browser globals can crash native startup.** Keep browser integrations in `next/web`.
 - **The iOS player depends on a pinned `expo-audio` patch.** Changing it needs
