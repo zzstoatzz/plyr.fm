@@ -179,6 +179,22 @@ async function queueGroups(browser, phone, scheme) {
     await page.getByTestId('home-chart').getByRole('button', { name: `Play ${tracks[0].metadata.title}`, exact: true }).click();
     await dock.getByRole('button', { name: 'Pause', exact: true }).waitFor();
     const picks = page.getByTestId('home-track-row');
+    const first = picks.first();
+    const marker = first.getByTestId('playing-wave');
+    await page.mouse.move(0, 0);
+    await marker.waitFor();
+    assert.equal(await marker.evaluate(node => getComputedStyle(node.parentElement).opacity), '1');
+    const bar = marker.locator('i').first();
+    assert.equal(await bar.evaluate(node => getComputedStyle(node).clipPath), 'none', 'the playing bars are independent of the loading wave');
+    assert.equal(await picks.nth(1).getByTestId('playing-wave').count(), 0);
+    assert.notEqual(await bar.evaluate(node => getComputedStyle(node).animationName), 'none');
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    assert.equal(await bar.evaluate(node => getComputedStyle(node).animationName), 'none');
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await first.getByRole('button', { name: `Pause ${tracks[0].metadata.title}`, exact: true }).click();
+    await marker.waitFor({ state: 'detached' });
+    await first.getByRole('button', { name: `Play ${tracks[0].metadata.title}`, exact: true }).click();
+    await marker.waitFor();
     for (const index of [0, 1, 2, 3]) {
       await picks.nth(index).getByRole('button', { name: `Add ${tracks[index].metadata.title} to queue` }).click();
     }

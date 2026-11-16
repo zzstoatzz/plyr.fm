@@ -60,7 +60,7 @@ function Shell() {
   const tabTitle = path === '/' ? 'plyr.fm' : path === '/search' ? 'search' : path === '/library' ? 'library' : path === '/portal' ? 'your music' : undefined;
   const detailTitle = path.startsWith('/u/') ? 'artist' : path.startsWith('/edit-track/') ? 'edit track'
     : path.startsWith('/album/') ? 'album' : path.startsWith('/playlist/') ? 'playlist' : 'track';
-  const nav = <View role="navigation" accessibilityLabel="Main navigation" style={{
+  const nav = <SafeAreaView edges={['bottom']} role="navigation" accessibilityLabel="Main navigation" style={{
     flexDirection: 'row', paddingHorizontal: 8, width: '100%',
     backgroundColor: theme.surface,
     borderTopWidth: 1, borderColor: theme.line
@@ -74,9 +74,9 @@ function Shell() {
         <Text style={{ color: active ? theme.accent : theme.muted, fontSize: 10 * theme.scale, fontWeight: active ? '700' : '500', textTransform: 'lowercase' }}>{label}</Text>
       </Pressable>
     </Link>)}
-  </View>;
+  </SafeAreaView>;
   const dock = <RadioPlayback><PlayerBar /></RadioPlayback>;
-  return <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
+  return <SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1, backgroundColor: theme.background }}>
     <StatusBar style={theme.dark ? 'light' : 'dark'} />
     <View testID="app-frame" style={{ flex: 1, width: '100%', overflow: 'hidden' }}>
       <View style={{ flex: 1, minWidth: 0 }}>

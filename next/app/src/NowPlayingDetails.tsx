@@ -1,12 +1,13 @@
 import type { Href } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, CaretDown, CaretRight as ChevronRight, CaretUp, Disc, Equalizer, Play } from './icons';
+import { ArrowRight, CaretDown, CaretRight as ChevronRight, CaretUp, Disc, Play } from './icons';
 import { Pressable, StyleSheet, View, type ViewInstance } from 'react-native';
 import type { Track } from '@plyr/next-core/api';
 import { isPrivateTrack } from '@plyr/next-core/track-access';
 import { useAppearance } from './appearance';
 import { Cover, artistName } from './CatalogPieces';
 import { Text } from './Text';
+import { PlayingWave } from './PlayingWave';
 import { AccessSummary } from './access/AccessSummary';
 import { clock, currentChapter, parseChapters, type Chapter } from '@plyr/next-core/chapters';
 import { compactCount } from './home-state';
@@ -17,8 +18,8 @@ import { useAlbumId } from './use-album-id';
 
 const SHOWN = 7;
 
-export function NowPlayingDetails({ track, plays, navigate, position, seek }: {
-  track: Track; plays: number; navigate: (target: Href) => void; position: number; seek?: (seconds: number) => void;
+export function NowPlayingDetails({ track, plays, navigate, position, playing, seek }: {
+  track: Track; plays: number; navigate: (target: Href) => void; position: number; playing: boolean; seek?: (seconds: number) => void;
 }) {
   const theme = useAppearance();
   const body = { color: theme.text, fontFamily: theme.fontFamily, fontSize: 15 * theme.scale, lineHeight: 22 * theme.scale } as const;
@@ -56,7 +57,7 @@ export function NowPlayingDetails({ track, plays, navigate, position, seek }: {
       {prose ? <Text style={body}>{prose}</Text> : null}
       <AccessSummary track={track} style={quiet} />
       {chapters.length > 0 && <Text accessibilityRole="header" aria-level={2} style={{ ...body, fontWeight: '700' }}>tracklist <Text style={{ ...body, color: theme.faint }}>{chapters.length}</Text></Text>}
-      {chapters.length > 0 && <Chapters chapters={chapters} position={position} seek={seek} />}
+      {chapters.length > 0 && <Chapters chapters={chapters} position={position} playing={playing} seek={seek} />}
     </View>
   </View>;
 }
@@ -127,7 +128,7 @@ function Likers({ track, count, style }: { track: Track; count: number; style: o
 }
 
 /** A tracklist read from the description. Each line jumps there; the playing one is marked. */
-function Chapters({ chapters, position, seek }: { chapters: Chapter[]; position: number; seek?: (seconds: number) => void }) {
+function Chapters({ chapters, position, playing, seek }: { chapters: Chapter[]; position: number; playing: boolean; seek?: (seconds: number) => void }) {
   const theme = useAppearance();
   const [all, setAll] = useState(false);
   const now = currentChapter(chapters, position);
@@ -145,7 +146,7 @@ function Chapters({ chapters, position, seek }: { chapters: Chapter[]; position:
           <Text numberOfLines={1} style={[text, { flex: 1, color: current ? theme.accent : theme.text, fontWeight: '600' }]}>
             {chapter.title}{chapter.artist ? <Text style={[text, { color: theme.muted, fontWeight: '400' }]}> · {chapter.artist}</Text> : null}
           </Text>
-          {current ? <Equalizer size={16} color={theme.accent} /> : hovered && seek ? <Play size={14} weight="fill" color={theme.muted} /> : null}
+          {current && playing ? <PlayingWave size={16} color={theme.accent} /> : hovered && seek ? <Play size={14} weight="fill" color={theme.muted} /> : null}
         </>}
       </Pressable></View>;
     })}
