@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { onDestroy, tick } from 'svelte';
+	import { tagColors } from '@plyr/next-core/tag-colors';
+	import { palettes } from '@plyr/next-core/colors';
 	import { resolve } from '$app/paths';
 	import { invalidateAll } from '$app/navigation';
 	import type { Snapshot } from '@sveltejs/kit';
@@ -190,7 +192,10 @@
 			{#if tags.length}
 				<nav class="tag-shelf" aria-label="Browse by tag">
 					{#each tags as tag (tag.name)}
-						<a href={resolve('/(app)/tag/[name]', { name: tag.name })} aria-current={data.tags.includes(tag.name) ? 'page' : undefined}>{tag.name} <small>{tag.track_count}</small></a>
+						{@const selected = data.tags.includes(tag.name)}
+						{@const light = tagColors(tag.name, palettes.light.background, selected)}
+						{@const dark = tagColors(tag.name, palettes.dark.background, selected)}
+						<a style:color="light-dark({light.color}, {dark.color})" style:background-color="light-dark({light.backgroundColor}, {dark.backgroundColor})" style:border-color="light-dark({light.borderColor}, {dark.borderColor})" href={resolve('/(app)/tag/[name]', { name: tag.name })} aria-current={data.tags.includes(tag.name) ? 'page' : undefined}>{tag.name} <small>{tag.track_count}</small></a>
 					{/each}
 				</nav>
 			{/if}

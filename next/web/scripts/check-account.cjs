@@ -164,6 +164,17 @@ const coordinator = 'https://jams.next.plyr.fm';
     assert.deepEqual((await fetch(records).then(response => response.json())).records, []);
     await panel.getByRole('button', { name: 'Close comments' }).click();
 
+    const desktopNav = page.getByRole('navigation', { name: 'Main navigation' });
+    const you = desktopNav.getByRole('link', { name: 'you', exact: true });
+    assert.equal(await you.getAttribute('href'), '/portal');
+    await you.click();
+    await page.waitForURL('**/portal');
+    assert.equal(await desktopNav.locator('[aria-current="page"]:visible').count(), 1);
+    await desktopNav.getByRole('link', { name: 'settings', exact: true }).click();
+    await page.waitForURL('**/settings');
+    assert.equal(await desktopNav.locator('[aria-current="page"]:visible').count(), 1);
+    await mkdir('/tmp/plyr-desktop-restoration', { recursive: true });
+    await page.screenshot({ path: '/tmp/plyr-desktop-restoration/signed-in-settings.png' });
     await page.setViewportSize({ width: 390, height: 844 });
     const nav = page.getByRole('navigation', { name: 'Main navigation' });
     const account = nav.getByRole('button', { name: 'you', exact: true });

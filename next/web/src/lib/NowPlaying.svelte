@@ -119,6 +119,7 @@
 				<div class="commands" class:live={!!player.liveStation}>
 					<Transport />
 				</div>
+				<div class="utilities">
 				{#if !player.liveStation && !player.privateMode}
 					{#key player.current.id}<TrackCollections track={player.current} transport={trackActions} compact />{/key}
 				{/if}
@@ -128,6 +129,7 @@
 						<input type="range" aria-label="Volume" min="0" max="1" step="0.01" value={player.volume} oninput={event => player.setVolume(event.currentTarget.valueAsNumber)} />
 					</label>
 				{/if}
+				</div>
 				{#if player.error}<p class="state" role="status">{player.error}</p>{/if}
 				{#if player.liveStation}<button class="text-button stop" onclick={() => { player.stopRadio(); close?.(); }}>leave radio</button>{/if}
 			</div>
@@ -201,10 +203,22 @@
 	.chapters button { display: flex; justify-content: start; text-align: start; width: 100%; gap: 0.8rem; }
 	.chapters button span, .chapters [aria-current] { color: var(--accent); }
 	@media (min-width: 800px) {
-		.sheet { max-width: 64rem; padding-inline: 1.75rem; }
-		.sheet .hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(1rem, 4vw, 3rem); align-items: center; }
-		.sheet .copy { min-width: 0; padding-top: 0; }
-		.sheet .volume { display: flex; gap: 0.5rem; justify-content: center; align-items: center; color: var(--muted); margin-top: 1rem; }
+		.sheet { max-width: 90rem; min-height: 100dvh; padding: 5.625rem 2.5rem 2.5rem; display: grid; grid-template-columns: max(10rem, min(41.25rem, calc(48vw - 3.5rem), calc(100dvh - 9rem))) minmax(0, 27.5rem); column-gap: 3.5rem; justify-content: center; align-content: center; }
+		.sheet header { position: fixed; inset: 0 1.25rem auto; height: 3.125rem; }
+		.sheet .dismiss { order: 1; }
+		.sheet header > a { display: none; }
+		.sheet .hero { display: contents; }
+		.sheet .artwork-frame { grid-column: 1; grid-row: 1 / 3; align-self: start; }
+		.sheet .cover { box-shadow: 0 0.25rem 0.625rem rgb(0 0 0 / 0.12); }
+		.sheet .copy { grid-column: 2; min-width: 0; padding-top: 0; align-self: end; }
+		.sheet h1 { font-size: 1.5625rem; line-height: 1.2; letter-spacing: -0.4px; font-weight: 800; }
+		.sheet .artist-card { display: none; }
+		.sheet .commands :global(.transport) { justify-content: center; gap: clamp(0.5rem, 3vw, 2.25rem); }
+		.sheet .commands :global(.toggle) { width: 4.5rem; height: 4.5rem; }
+		.sheet .details { grid-column: 2; padding-bottom: 0; align-self: start; }
+		.sheet .utilities { display: flex; gap: 0.5rem; align-items: center; }
+		.utilities :global(.actions) { flex: 1; justify-content: flex-start; }
+		.sheet .volume { display: flex; gap: 0.5rem; justify-content: center; align-items: center; color: var(--muted); margin-left: auto; }
 		.volume input { width: 8rem; }
 	}
 	@media (max-width: 720px) {
