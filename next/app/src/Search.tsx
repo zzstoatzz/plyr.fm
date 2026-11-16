@@ -9,7 +9,7 @@ import { type SearchHit } from '@plyr/next-core/api';
 import { Cover, Heading, Status, errorMessage, useResource, type Play } from './CatalogPieces';
 import { Text } from './Text';
 import { useAppearance } from './appearance';
-import { usePlayback } from './playback';
+import { useTrackPlaybackState } from './playback-context';
 import { HomeTrackRow } from './HomeTrackRow';
 import { WaveLoading } from './WaveLoading';
 import { useSearch } from './use-search';
@@ -29,7 +29,7 @@ function destination(hit: SearchHit): Href {
 
 export function Search({ onPlay }: { onPlay: Play }) {
   const theme = useAppearance();
-  const player = usePlayback();
+  const player = useTrackPlaybackState();
   const { q, focus } = useLocalSearchParams<{ q?: string | string[]; focus?: string }>();
   const routeQuery = typeof q === 'string' ? Array.from(q).slice(0, 100).join('') : '';
   const [query, setQuery] = useState(routeQuery);
@@ -55,7 +55,13 @@ export function Search({ onPlay }: { onPlay: Play }) {
   }
   async function play(hit: SearchHit) {
     const attempt = ++request.current;
-    setLoadingTrack(hit.id); setFailure(undefined);
+    setFailure(undefined);
+    if (canToggleTrack(player.current, hit, player.inJam)) {
+      setLoadingTrack(undefined);
+      player.setPlaying(!player.playing);
+      return;
+    }
+    setLoadingTrack(hit.id);
     try { const track = await api.track(hit.id); if (attempt === request.current) onPlay(track); }
     catch (error) { if (attempt === request.current) setFailure({ id: hit.id, message: errorMessage(error) }); }
     finally { if (attempt === request.current) setLoadingTrack(undefined); }
@@ -77,8 +83,8 @@ export function Search({ onPlay }: { onPlay: Play }) {
       <Status error={results.error} retry={results.retry} empty={results.data?.length === 0 ? `no results for “${term}”` : undefined} />
       <View testID="search-results">
         {results.data?.map(hit => {
-          const current = hit.type === 'track' && canToggleTrack(player.current, hit, !!player.jam);
-          const playing = current && player.status.playing;
+          const current = hit.type === 'track' && canToggleTrack(player.current, hit, player.inJam);
+          const playing = current && player.playing;
           const content = <>
             <Cover uri={hit.image_url} size={48} round={hit.type === 'artist'} />
             <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
@@ -92,7 +98,7 @@ export function Search({ onPlay }: { onPlay: Play }) {
           </>;
           const control = <Pressable testID={hit.type === 'track' ? 'track-play-control' : undefined} accessibilityRole={hit.type === 'track' ? 'button' : 'link'} accessibilityLabel={`${hit.type}: ${hit.title}, ${hit.owner.display_name || hit.owner.handle}`}
             accessibilityHint={hit.type === 'track' ? playing ? 'Pause this track' : 'Play this track' : undefined}
-            disabled={loadingTrack === hit.id} accessibilityState={{ disabled: loadingTrack === hit.id, busy: loadingTrack === hit.id, selected: current }} onPress={hit.type === 'track' ? () => current ? player.setPlaying(!playing) : void play(hit) : undefined} onPressIn={() => setPressed(hit.id)} onPressOut={() => setPressed(undefined)}
+            disabled={loadingTrack === hit.id} accessibilityState={{ disabled: loadingTrack === hit.id, busy: loadingTrack === hit.id, selected: current }} onPress={hit.type === 'track' ? () => void play(hit) : undefined} onPressIn={() => setPressed(hit.id)} onPressOut={() => setPressed(undefined)}
             style={{ ...styles.result, backgroundColor: pressed === hit.id ? theme.hover : current ? theme.surface : 'transparent' }}>{content}</Pressable>;
           return <View key={`${hit.type}:${hit.id}`}>{hit.type === 'track' ? control : <Link href={destination(hit)} asChild>{control}</Link>}
             {failure?.id === hit.id && <View style={{ paddingVertical: 8, gap: 8 }}><Copy>{failure.message}</Copy><Action label="retry playback" onPress={() => void play(hit)} /></View>}

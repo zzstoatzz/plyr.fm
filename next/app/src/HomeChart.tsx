@@ -8,7 +8,7 @@ import { periodLabels } from './home-state';
 import { useTopTracks } from './use-top-tracks';
 import { Text } from './Text';
 import { PlayingArtworkOverlay } from './PlayingWave';
-import { useTrackPlayback } from './use-track-playback';
+import { useTrackPlayback } from './playback-context';
 import type { Track } from '@plyr/next-core/api';
 import type { StyleProp, ViewStyle } from 'react-native';
 

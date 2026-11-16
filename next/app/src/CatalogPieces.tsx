@@ -6,7 +6,7 @@ import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } 
 import { Animated, PixelRatio, Pressable, StyleSheet, View } from 'react-native';
 import { PlayGlyph as PlayIcon } from './PlayerGlyph';
 import { PlayingWave } from './PlayingWave';
-import { useTrackPlayback } from './use-track-playback';
+import { useTrackPlayback } from './playback-context';
 import type { ListSummary, Page, Track } from '@plyr/next-core/api';
 import { Action, Copy } from './controls';
 import { WaveLoading } from './WaveLoading';

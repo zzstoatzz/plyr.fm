@@ -6,7 +6,7 @@ import { type Track } from '@plyr/next-core/api';
 import { useAppearance } from './appearance';
 import { trackArtwork } from '@plyr/next-core/artwork';
 import { PlayingWave } from './PlayingWave';
-import { useTrackPlayback } from './use-track-playback';
+import { useTrackPlayback } from './playback-context';
 import { Cover, type Play } from './CatalogPieces';
 import type { NetworkArtist } from './home-api';
 import { formatDuration, timeAgo } from './home-state';

@@ -12,7 +12,7 @@ import { TrackMenu } from './TrackMenu';
 import type { Anchor } from './Sheet';
 import { PlayerControl } from './PlayerControl';
 import { PlayingArtworkOverlay } from './PlayingWave';
-import { useTrackPlayback } from './use-track-playback';
+import { useTrackPlayback } from './playback-context';
 
 export function HomeTrackRow({ track, tracks, onPlay, returnTo = '/', height }: { height?: number; track: Track; tracks: Track[]; onPlay: Play; returnTo?: string }) {
   const theme = useAppearance();
