@@ -1,6 +1,6 @@
 import { Client } from '@atcute/client';
 import type { BrowserOAuthClient, OAuthSession } from '@atproto/oauth-client-browser';
-import { createAuthState } from '@plyr/next-core/auth-state';
+import { createAuthState, type Did } from '@plyr/next-core/auth-state';
 import { hasTealGrant, TEAL_SCOPE } from '@plyr/next-core/teal-scrobble';
 import { setPrefs } from './prefs.svelte';
 import { returnPath } from '@plyr/next-core/return-path';
@@ -12,6 +12,43 @@ const tealUpgradeKey = 'plyr-next:teal-upgrade';
 let grantedScope = '';
 export function canScrobble() { return hasTealGrant(grantedScope); }
 export const auth = createAuthState(authConfig, handler => new Client({ handler }));
+
+const addAccountKey = 'plyr-next:add-account';
+const accountDirectoryKey = 'plyr-next:recent-accounts';
+type AccountIdentity = { did: Did; handle: string | null };
+
+function knownAccounts(): AccountIdentity[] {
+	try {
+		const accounts: unknown = JSON.parse(sessionStorage.getItem(accountDirectoryKey) ?? '[]');
+		if (Array.isArray(accounts)) return accounts.filter(item => typeof item?.did === 'string'
+			&& /^did:[a-z]+:[a-zA-Z0-9._:%-]+$/.test(item.did) && (typeof item.handle === 'string' || item.handle === null));
+	} catch {}
+	return [];
+}
+
+function saveKnownAccounts(accounts: AccountIdentity[]) {
+	try { sessionStorage.setItem(accountDirectoryKey, JSON.stringify(accounts.slice(0, 8))); } catch {}
+}
+
+auth.subscribe(() => {
+	const { did, handle } = auth.getAuth();
+	if (!did) return;
+	const known = knownAccounts();
+	saveKnownAccounts([{ did, handle: handle || known.find(item => item.did === did)?.handle || null }, ...known.filter(item => item.did !== did)]);
+});
+
+export function otherAccounts() { return knownAccounts().filter(item => item.did !== auth.getAuth().did); }
+
+let switchingAccount: Promise<void> | undefined;
+export function switchAccount(did: Did): Promise<void> {
+	if (switchingAccount) return switchingAccount;
+	const previous = auth.getAuth().rpc;
+	switchingAccount = oauthClient()
+		.then(client => client.restore(did))
+		.then(session => activate(session, () => auth.getAuth().rpc === previous))
+		.finally(() => { switchingAccount = undefined; });
+	return switchingAccount;
+}
 
 let client: Promise<BrowserOAuthClient> | undefined;
 function oauthClient() {
@@ -31,8 +68,9 @@ function oauthClient() {
 	return client;
 }
 
-async function activate(session: OAuthSession) {
+async function activate(session: OAuthSession, current = () => true) {
 	const token = await session.getTokenInfo();
+	if (!current()) return;
 	grantedScope = token.scope;
 	auth.setAuth(session.did, { handle: session.fetchHandler.bind(session) }, token.scope);
 }
@@ -61,9 +99,12 @@ async function initialize() {
 		const params = new URLSearchParams(location.hash.slice(1) || location.search.slice(1));
 		history.replaceState(history.state, '', location.pathname);
 		let tealUpgrade: string | null = null;
+		let previousAccount: string | null = null;
 		try {
 			tealUpgrade = sessionStorage.getItem(tealUpgradeKey);
+			previousAccount = sessionStorage.getItem(addAccountKey);
 			sessionStorage.removeItem(tealUpgradeKey);
+			sessionStorage.removeItem(addAccountKey);
 		} catch {}
 		try {
 			const { session, state } = await (await oauthClient()).initCallback(params);
@@ -79,10 +120,11 @@ async function initialize() {
 			}
 		} catch {
 			completeQueueLogin(false);
-			if (tealUpgrade) {
+			const restoreDid = tealUpgrade ?? previousAccount;
+			if (restoreDid) {
 				try {
-					await activate(await (await oauthClient()).restore(tealUpgrade));
-					callbackIntent = '/settings?teal=permission';
+					await activate(await (await oauthClient()).restore(restoreDid));
+					callbackIntent = tealUpgrade ? '/settings?teal=permission' : '/settings';
 					return;
 				} catch {}
 			}
@@ -104,10 +146,17 @@ async function initialize() {
 	auth.clearAuth();
 }
 
-export async function login(identifier: string, deviceOnly: boolean, intent?: string) {
+export async function login(identifier: string, deviceOnly: boolean, intent?: string, addAccount = false) {
 	await prepareQueueLogin();
 	const scope = await auth.scopeFor(identifier, deviceOnly);
-	await (await oauthClient()).signInRedirect(identifier, { scope, state: returnPath(intent) });
+	const previous = addAccount ? auth.getAuth().did : null;
+	if (previous) sessionStorage.setItem(addAccountKey, previous);
+	try {
+		await (await oauthClient()).signInRedirect(identifier, { scope, state: returnPath(intent), ...(addAccount ? { prompt: 'login' as const } : {}) });
+	} catch (error) {
+		if (previous) sessionStorage.removeItem(addAccountKey);
+		throw error;
+	}
 }
 
 export async function authorizeScrobbling() {
@@ -131,5 +180,7 @@ export async function logout() {
 	const { did } = auth.getAuth();
 	grantedScope = '';
 	auth.clearAuth();
+	if (did) saveKnownAccounts(knownAccounts().filter(item => item.did !== did));
+	await switchingAccount?.catch(() => undefined);
 	if (did) await oauthClient().then(client => client.revoke(did)).catch(() => undefined);
 }

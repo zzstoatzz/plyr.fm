@@ -17,6 +17,12 @@
 	let input: HTMLInputElement;
 	let list = $state<HTMLUListElement>();
 	let recent = $state<string[]>([]);
+	let browseTags = $state.raw<{ name: string; track_count: number }[]>([]);
+	onMount(() => {
+		const request = new AbortController();
+		void api.tags(100, request.signal).then(({ data }) => { browseTags = data; }, () => {});
+		return () => request.abort();
+	});
 	const recentKey = 'plyr:recent-searches';
 	const resultIcons = { track: 'music', artist: 'user', album: 'library', playlist: 'queue' } as const;
 
@@ -49,6 +55,7 @@
 	let preview = $state.raw<Preview>();
 	const term = $derived(query.trim());
 	const length = $derived([...term].length);
+	const matchingTags = $derived(length >= 2 ? browseTags.filter(tag => tag.name.toLocaleLowerCase().includes(term.toLocaleLowerCase())).slice(0, 8) : []);
 	const matching = $derived(preview?.query === term ? preview : undefined);
 	const suggestionCount = $derived(matching && 'results' in matching ? matching.results.length : 0);
 
@@ -124,7 +131,7 @@
 				</li>
 			{/each}
 		</ul>
-	{:else}
+	{:else if !matchingTags.length}
 		<p class="state" role="status">no results for “{term}”.</p>
 	{/if}
 {/snippet}
@@ -158,9 +165,21 @@
 	{:else}
 		<Loading label="searching" />
 	{/if}
+	{#if matchingTags.length}
+			<nav class="search-tags" aria-label="Matching tags">
+				<h2>tags</h2>
+				{#each matchingTags as tag (tag.name)}
+					<a href={resolve('/(app)/tag/[name]', { name: tag.name })}>{tag.name} <small>{tag.track_count}</small></a>
+				{/each}
+			</nav>
+	{/if}
 </section>
 
 <style>
+	.search-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-block-start: 1rem; }
+	.search-tags h2 { flex-basis: 100%; font-size: 1rem; }
+	.search-tags a { display: inline-flex; align-items: center; gap: 0.3rem; min-height: 2.75rem; border: 1px solid var(--line); border-radius: 2rem; padding-inline: 0.7rem; }
+	.search-tags small { color: var(--muted); }
 	.search-page { max-width: 66rem; }
 	form { display: flex; gap: 0.5rem; margin: 0.75rem 0; max-width: 40rem; }
 	input { flex: 1; min-width: 0; min-height: 2.75rem; border: 1px solid var(--line); border-radius: 0.6rem; background: var(--surface); padding: 0.65rem; }

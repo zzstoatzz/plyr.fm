@@ -286,7 +286,10 @@
 	nav a.active { background: var(--hover); color: var(--text); font-weight: 650; }
 	nav .brand { font-weight: 750; font-size: 1.4rem; letter-spacing: -0.04em; color: var(--text); margin-bottom: 0.7rem; }
 	.brand span { color: var(--accent); }
-	.mobile-account { display: none; }
+	.mobile-account { display: flex; align-items: center; gap: 0.7rem; min-height: 2.75rem; border: 0; border-radius: 0.7rem; background: none; padding: 0.65rem 0.8rem; text-align: start; color: var(--muted); }
+	.mobile-account:hover { background: var(--raised); }
+	.profile-avatar { width: 1.3125rem; border-radius: 50%; }
+	.profile-avatar :global(svg) { width: 1.3125rem; height: 1.3125rem; }
 	.desktop-help { display: flex; align-items: center; gap: 0.7rem; min-height: 2.75rem; border: 0; background: none; border-radius: 0.7rem; padding: 0.65rem 0.8rem; color: var(--muted); text-align: start; font-size: 0.875rem; }
 	.desktop-help:hover { background: var(--raised); }
 	.desktop-help span { width: 21px; text-align: center; font-size: 1.15rem; }
@@ -313,8 +316,6 @@
 		nav { z-index: 9; position: fixed; inset: auto 0 0; min-height: var(--tabs); flex-direction: row; padding: 0 0 env(safe-area-inset-bottom); border: 0; border-top: 1px solid var(--line); }
 		nav :is(a, .mobile-account) { gap: 0.2rem; flex-direction: column; justify-content: center; flex: 1; min-height: var(--tabs); padding: 0.15rem; border-radius: 0; font-size: 0.75rem; }
 		nav .mobile-account { display: flex; align-items: center; border: 0; background: none; color: var(--muted); -webkit-tap-highlight-color: transparent; }
-		.profile-avatar { width: 1.3125rem; border-radius: 50%; }
-		.profile-avatar :global(svg) { width: 1.3125rem; height: 1.3125rem; }
 		nav .mobile-account:focus-visible { outline-offset: -3px; }
 		nav .mobile-account.active { background: var(--hover); color: var(--text); font-weight: 650; }
 		dialog:not(.shortcuts) { width: 100%; max-width: 100%; height: 100dvh; max-height: 100dvh; margin: 0; border: 0; border-radius: 0; }

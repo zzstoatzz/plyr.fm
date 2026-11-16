@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { player } from './player.svelte';
 	import { trackArtwork } from '@plyr/next-core/artwork';
-	import { artistName } from './tracks';
+	import { artistName, clock } from './tracks';
 	import Artwork from './ui/Artwork.svelte';
 	import Icon from './ui/Icon.svelte';
 	import Transport from './Transport.svelte';
@@ -18,7 +18,10 @@
 			<span class="cover"><Artwork src={trackArtwork(player.current)} size={48} /></span>
 			<span class="description">
 				<strong class="truncate">{player.current.metadata.title}</strong>
-				<span class="truncate">{player.liveStation ? `live · ${player.liveStation.label} radio` : player.outputElsewhere ? 'playing on another device' : artistName(player.current)}</span>
+				<span class="subtitle">
+					<span class="truncate">{player.liveStation ? `live · ${player.liveStation.label} radio` : player.outputElsewhere ? 'playing on another device' : artistName(player.current)}</span>
+					{#if !player.liveStation && !player.outputElsewhere}<span class="mobile-time" aria-hidden="true">· {clock(player.position)}</span>{/if}
+				</span>
 			</span>
 		</button>
 		<div class="controls">
@@ -44,6 +47,8 @@
 	.song { display: flex; align-items: center; gap: 0.75rem; background: none; border: 0; min-width: 0; padding: 0; text-align: start; }
 	.cover { width: 2.75rem; flex: none; border-radius: 0.4rem; }
 	.description { display: grid; min-width: 0; }
+	.subtitle { display: flex; gap: 0.25rem; }
+	.mobile-time { display: none; flex-shrink: 0; font-variant-numeric: tabular-nums; }
 	.description span { color: var(--muted); font-size: 0.8rem; }
 	.controls { min-width: 0; display: flex; align-items: center; gap: 0.8rem; }
 	.desktop-progress { flex: 1; min-width: 0; }
@@ -51,9 +56,10 @@
 	.volume { display: flex; align-items: center; gap: 0.5rem; width: 7.5rem; }
 	.mobile-progress { display: none; }
 	@media (max-width: 720px) {
+		.mobile-time { display: inline; }
 		.song { touch-action: pan-x; }
-		.dock { grid-template-columns: minmax(0, 1fr) auto; bottom: calc(var(--tabs) + env(safe-area-inset-bottom)); gap: 0.25rem; padding: 0.3rem 0.75rem; }
-		.extras, .desktop-progress { display: none; }
+		.dock { grid-template-columns: minmax(0, 1fr) auto auto; bottom: calc(var(--tabs) + env(safe-area-inset-bottom)); gap: 0.25rem; padding: 0.3rem 0.75rem; }
+		.volume, .desktop-progress { display: none; }
 		.mobile-progress { position: absolute; inset: -0.42rem 0 auto; display: block; }
 		.mobile-progress :global(input) { height: 0.65rem; }
 	}

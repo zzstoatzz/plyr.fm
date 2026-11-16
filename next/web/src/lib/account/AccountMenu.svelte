@@ -1,12 +1,15 @@
 <script lang="ts">
 	import { afterNavigate, goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { logout } from '$lib/auth';
+	import { logout, otherAccounts, switchAccount } from '$lib/auth';
 	import Icon from '$lib/ui/Icon.svelte';
 
 	let { identity, uploads }: { identity: string; uploads: number } = $props();
 	let dialog: HTMLDialogElement;
 	let startedOutside = false;
+	let others = $state.raw<ReturnType<typeof otherAccounts>>([]);
+	let switching = $state(false);
+	let error = $state(false);
 	const uploadDetail = $derived(uploads === 0 ? 'add a track or album'
 		: uploads === 1 ? '1 upload in progress' : `${uploads} uploads in progress`);
 	const entries = $derived([
@@ -20,8 +23,18 @@
 	});
 
 	export function open(trigger: HTMLButtonElement) {
+		others = otherAccounts();
+		error = false;
 		trigger.focus({ preventScroll: true });
 		dialog.showModal();
+	}
+
+	async function selectAccount(did: ReturnType<typeof otherAccounts>[number]['did']) {
+		switching = true;
+		error = false;
+		try { await switchAccount(did); dialog.close(); }
+		catch { error = true; }
+		finally { switching = false; }
 	}
 
 	async function signOut() {
@@ -47,7 +60,12 @@
 					{#if entry.icon === 'settings'}<Icon name="chevron" size={17} />{/if}
 				</a>
 			{/each}
-			<button type="button" onclick={signOut}><Icon name="logout" size={22} /><span class="row-label">sign out</span></button>
+			{#each others as account (account.did)}
+				<button type="button" disabled={switching} onclick={() => selectAccount(account.did)}><Icon name="user" size={22} /><span class="row-label">switch to {account.handle ? '@' + account.handle : account.did}</span></button>
+			{/each}
+			{#if !switching}<a href={resolve('/login?addAccount=1&return_to=%2Fsettings')} onclick={() => dialog.close()}><Icon name="users" size={22} /><span class="row-label">add account</span></a>{/if}
+			{#if error}<p class="switch-error" role="alert">couldn’t switch accounts. sign in again to reconnect.</p>{/if}
+			<button type="button" disabled={switching} onclick={signOut}><Icon name="logout" size={22} /><span class="row-label">sign out</span></button>
 		</nav>
 	</div>
 </dialog>
@@ -63,5 +81,6 @@
 	nav :is(a, button):focus-visible { outline-offset: -2px; }
 	.row-label { display: grid; flex: 1; min-width: 0; color: var(--text); overflow-wrap: anywhere; }
 	strong { font-weight: 620; }
+	.switch-error { color: var(--muted); padding-inline: 0.9rem; }
 	small { color: var(--muted); }
 </style>
