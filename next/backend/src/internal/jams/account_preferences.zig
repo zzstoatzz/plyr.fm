@@ -11,6 +11,7 @@ pub const Patch = struct {
     font: ?[]const u8 = null,
     keepPlaying: ?bool = null,
     playThrough: ?bool = null,
+    tealScrobbling: ?bool = null,
     scale: ?u16 = null,
     hiddenTags: ?[]const []const u8 = null,
 
@@ -29,7 +30,7 @@ pub const Patch = struct {
     }
 
     pub fn empty(self: Patch) bool {
-        return self.theme == null and self.accent == null and self.font == null and self.keepPlaying == null and self.playThrough == null and self.scale == null and self.hiddenTags == null;
+        return self.theme == null and self.accent == null and self.font == null and self.keepPlaying == null and self.playThrough == null and self.tealScrobbling == null and self.scale == null and self.hiddenTags == null;
     }
 };
 
@@ -90,6 +91,7 @@ test "a settings patch accepts only known values" {
     try std.testing.expect(!(Patch{ .hiddenTags = &.{} }).empty());
     try std.testing.expect((Patch{}).empty());
     try std.testing.expect(!(Patch{ .playThrough = false }).empty());
+    try std.testing.expect(!(Patch{ .tealScrobbling = false }).empty());
 }
 
 test "account settings merge per owner" {
@@ -118,20 +120,21 @@ test "account settings merge per owner" {
     try std.testing.expectEqualStrings("{}", none);
     const first = try preferences.merge(allocator, owner, .{ .theme = "dark", .scale = 115, .hiddenTags = &.{ " SUNO ", "ai", "ai" } });
     defer allocator.free(first);
-    const second = try preferences.merge(allocator, owner, .{ .theme = "light", .keepPlaying = true });
+    const second = try preferences.merge(allocator, owner, .{ .theme = "light", .keepPlaying = true, .tealScrobbling = true });
     defer allocator.free(second);
     const parsed = try std.json.parseFromSlice(Patch, allocator, second, .{});
     defer parsed.deinit();
     try std.testing.expectEqualStrings("light", parsed.value.theme.?);
     try std.testing.expectEqual(@as(usize, 2), parsed.value.hiddenTags.?.len);
     try std.testing.expectEqualStrings("ai", parsed.value.hiddenTags.?[0]);
-    const cleared = try preferences.merge(allocator, owner, .{ .hiddenTags = &.{} });
+    const cleared = try preferences.merge(allocator, owner, .{ .hiddenTags = &.{}, .tealScrobbling = false });
     defer allocator.free(cleared);
     const cleared_value = try std.json.parseFromSlice(Patch, allocator, cleared, .{});
     defer cleared_value.deinit();
     try std.testing.expectEqual(@as(usize, 0), cleared_value.value.hiddenTags.?.len);
     try std.testing.expectEqual(@as(?u16, 115), parsed.value.scale);
     try std.testing.expectEqual(@as(?bool, true), parsed.value.keepPlaying);
+    try std.testing.expectEqual(@as(?bool, false), cleared_value.value.tealScrobbling);
     try std.testing.expectError(error.InvalidPreferences, preferences.merge(allocator, owner, .{ .font = "papyrus" }));
     const other = try preferences.read(allocator, "did:plc:bbbbbbbbbbbbbbbbbbbbbbbb");
     defer allocator.free(other);
