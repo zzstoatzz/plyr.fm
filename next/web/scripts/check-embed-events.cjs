@@ -10,7 +10,7 @@ const output = process.env.SCREENS_OUTPUT || '/tmp/plyr-embed-screens';
 
 (async () => {
   await fs.mkdir(output, { recursive: true });
-  const origin = await serve();
+  const origin = process.env.EMBED_SITE_ORIGIN || await serve();
   const host = http.createServer((req, res) => { res.setHeader('content-type', 'text/html'); res.end('<!doctype html><html><body><iframe title="embed" style="width:600px;height:150px"></iframe></body></html>'); });
   await new Promise(resolve => host.listen(0, '127.0.0.1', resolve));
   const parent = `http://127.0.0.1:${host.address().port}`;
@@ -35,6 +35,10 @@ const output = process.env.SCREENS_OUTPUT || '/tmp/plyr-embed-screens';
     await embed.getByRole('button', { name: 'Play', exact: true }).click();
     await page.waitForTimeout(400);
     assert.equal(await page.evaluate(() => window.messages.length), 0, 'no unsolicited messages');
+    const sourceFrame = page.frames().find(frame => frame.url().includes('/embed/track/'));
+    await sourceFrame.evaluate(protocol => window.postMessage({ protocol, type: 'subscribe', subscription: 'not-parent', hz: 10 }, window.location.origin), protocol);
+    await page.waitForTimeout(200);
+    assert.equal(await page.evaluate(() => window.messages.length), 0, 'reject non-parent window');
     const post = data => page.evaluate(({ origin, data }) => document.querySelector('iframe').contentWindow.postMessage(data, origin), { origin, data });
     await post({ protocol, type: 'subscribe', subscription: 'test', hz: 999 });
     await page.waitForFunction(() => window.messages.some(message => message.state === 'playing'));

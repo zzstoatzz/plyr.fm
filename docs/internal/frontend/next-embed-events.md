@@ -114,6 +114,14 @@ need CORS-authorized media on the existing audio owner. The
 [HTML messaging specification](https://html.spec.whatwg.org/multipage/web-messaging.html#crossDocumentMessages)
 is the source for sender/origin checks and bounded request handling.
 
+## verification
+
+`bun run check:embed` in `next/web` runs against the local build. Set
+`EMBED_SITE_ORIGIN=https://plyr-fm-next-svelte.pages.dev` (or the live Next
+origin) to exercise deployed JavaScript. Catalog/audio requests in the embed
+case use synthetic browser fixtures; no account or catalog writes are made.
+The experiment case loads the deployed public fixture directly.
+
 ## acceptance boundary
 
 This ships an experiment, not a stable analysis API or upload-time pipeline.
