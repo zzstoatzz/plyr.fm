@@ -65,7 +65,7 @@ function CommentRow({ track, comment, passing, seek }: { track: Track; comment: 
   const profile = comment.author.handle ? { pathname: '/u/[handle]' as const, params: { handle: comment.author.handle } } : undefined;
   const time = <Text style={[styles.numeric, { color: seek ? theme.accent : theme.muted, fontSize: 12 * theme.scale, fontWeight: '700' }]}>{stamp}</Text>;
   return <View testID="comment-row" style={[styles.row, { backgroundColor: passing ? theme.raised : theme.surface }]}>
-    {seek ? <Pressable accessibilityRole="button" accessibilityLabel={`Seek to ${stamp}`} style={styles.timestamp}
+    {seek ? <Pressable accessibilityRole="button" accessibilityLabel={`Seek to ${stamp}, comment by ${name}`} style={styles.timestamp}
       onPress={() => seek(comment.timestamp_ms / 1000)}>{time}</Pressable>
       : <View style={styles.timestamp}>{time}</View>}
     <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
