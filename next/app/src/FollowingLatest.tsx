@@ -5,12 +5,12 @@ import { api } from './api-client';
 import { type Track } from '@plyr/next-core/api';
 import { useAppearance } from './appearance';
 import { trackArtwork } from '@plyr/next-core/artwork';
-import { canToggleTrack } from '@plyr/next-core/track-revision';
+import { PlayingWave } from './PlayingWave';
+import { useTrackPlayback } from './use-track-playback';
 import { Cover, type Play } from './CatalogPieces';
 import type { NetworkArtist } from './home-api';
 import { formatDuration, timeAgo } from './home-state';
-import { Equalizer, Play as PlayIcon, Shuffle } from './icons';
-import { usePlayback } from './playback';
+import { Play as PlayIcon, Shuffle } from './icons';
 import { cardSurface } from './materials';
 import { Text } from './Text';
 
@@ -61,9 +61,7 @@ export function PlayOneFromEach({ tracks, onPlay }: { tracks: Track[]; onPlay: P
 /** One person's newest track: the cover with their face on its corner, who posted it and when, and a play button. */
 export function FollowingTrack({ track, tracks, onPlay, now, width }: { track: Track; tracks: Track[]; onPlay: Play; now: number; width?: number }) {
   const theme = useAppearance();
-  const player = usePlayback();
-  const current = canToggleTrack(player.current, track, !!player.jam);
-  const playing = current && player.status.playing;
+  const { current, playing, toggle } = useTrackPlayback(track);
   const who = name(track);
   const profile = { pathname: '/u/[handle]' as const, params: { handle: track.artist.profile.handle || track.artist.did } };
   return <View testID="following-track" style={[cardSurface(theme), styles.card, width ? { width } : undefined]}>
@@ -79,9 +77,9 @@ export function FollowingTrack({ track, tracks, onPlay, now, width }: { track: T
       </Text>
     </View>
     <Pressable accessibilityRole="button" accessibilityLabel={`${playing ? 'Pause' : current ? 'Resume' : 'Play'} ${track.metadata.title} by ${who}`}
-      onPress={() => current ? player.setPlaying(!player.status.playing) : onPlay(track, tracks, 'new from people you follow')}
+      onPress={() => toggle(() => onPlay(track, tracks, 'new from people you follow'))}
       style={[styles.play, { backgroundColor: current ? theme.accent : theme.raised }]}>
-      {playing ? <Equalizer size={16} color={theme.onAccent} /> : <PlayIcon size={15} color={current ? theme.onAccent : theme.text} fill={current ? theme.onAccent : theme.text} />}
+      {playing ? <PlayingWave size={16} color={theme.onAccent} /> : <PlayIcon size={15} color={current ? theme.onAccent : theme.text} fill={current ? theme.onAccent : theme.text} />}
     </Pressable>
   </View>;
 }

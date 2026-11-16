@@ -152,7 +152,7 @@ export function NowPlaying({ track, close: leave, navigate: go }: {
   const seek = player.canSeek && !player.live && !error ? player.seek : undefined;
   const seeAll = { label: comments.comments.length === 1 ? 'See the comment' : `See all ${comments.comments.length} comments`, open: () => navigate(`/track/${encodeURIComponent(track.id)}`) };
   const composer = <View><CommentComposer track={track} positionMs={position * 1000} returnTo={returnTo} /></View>;
-  const details = <NowPlayingDetails track={track} plays={plays} navigate={navigate} position={position} seek={seek} />;
+  const details = <NowPlayingDetails track={track} plays={plays} navigate={navigate} position={position} playing={playing} seek={seek} />;
   const chapters = useMemo(() => parseChapters(track.metadata.description, track.metadata.duration_seconds ?? undefined).chapters, [track.metadata.description, track.metadata.duration_seconds]);
   const chapter = player.live ? undefined : chapters[currentChapter(chapters, position)];
 

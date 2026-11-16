@@ -5,7 +5,8 @@ import { Link, type Href } from 'expo-router';
 import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Animated, PixelRatio, Pressable, StyleSheet, View } from 'react-native';
 import { PlayGlyph as PlayIcon } from './PlayerGlyph';
-import { PlayerLoader } from './PlayerLoader';
+import { PlayingWave } from './PlayingWave';
+import { useTrackPlayback } from './use-track-playback';
 import type { ListSummary, Page, Track } from '@plyr/next-core/api';
 import { Action, Copy } from './controls';
 import { WaveLoading } from './WaveLoading';
@@ -212,15 +213,16 @@ export function TrackRows({ tracks, onPlay }: { tracks: Track[]; onPlay: Play })
     subtitle={artistName(track)}
     meta={trackMeta(track)}
     image={trackArtwork(track)}
-    action={<RowPlay onPress={() => onPlay(track, tracks)} />}
+    action={<RowPlay track={track} onPress={() => onPlay(track, tracks)} />}
   />)}</View>;
 }
 
-export function RowPlay({ onPress, label = 'Play', busy = false }: { onPress: () => void; label?: string; busy?: boolean }) {
+function RowPlay({ track, onPress }: { track: Track; onPress: () => void }) {
   const colors = useAppearance();
-  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ busy }} disabled={busy} onPress={onPress}
+  const { playing, toggle } = useTrackPlayback(track);
+  return <Pressable accessibilityRole="button" accessibilityLabel={`${playing ? 'Pause' : 'Play'} ${track.metadata.title}`} onPress={() => toggle(onPress)}
     style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
-    {busy ? <PlayerLoader color={colors.muted} size={18} /> : <PlayIcon size={20} color={colors.text} fill={colors.text} />}
+    {playing ? <PlayingWave color={colors.accent} /> : <PlayIcon size={20} color={colors.text} fill={colors.text} />}
   </Pressable>;
 }
 

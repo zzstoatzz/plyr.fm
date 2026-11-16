@@ -1,4 +1,5 @@
 import { Text } from './Text';
+import { PlayingWave } from './PlayingWave';
 import { Users, X, Repeat, RepeatOnce as Repeat1, Shuffle, Trash, SpeakerHigh as Volume2 } from './icons';
 import { randomUUID } from 'expo-crypto';
 import { router } from 'expo-router';
@@ -50,7 +51,7 @@ export function QueueContent({ scrollRef, scrollMetrics, onDragging, returnTo = 
           </View>
         </View>
         <View style={{ backgroundColor: theme.surface, borderRadius: 12 }}>
-          <QueueTrack track={player.current} />
+          <QueueTrack track={player.current} playing={player.status.playing} />
         </View>
       </View>
       <View style={styles.section}>
@@ -99,7 +100,7 @@ export function QueueContent({ scrollRef, scrollMetrics, onDragging, returnTo = 
   </>;
 }
 
-function QueueTrack({ track, play, remove }: { track: Track; play?: () => void; remove?: () => void }) {
+function QueueTrack({ track, play, remove, playing }: { track: Track; playing?: boolean; play?: () => void; remove?: () => void }) {
   const theme = useAppearance();
   const title = track.metadata.title;
   const artist = artistName(track);
@@ -114,6 +115,7 @@ function QueueTrack({ track, play, remove }: { track: Track; play?: () => void; 
     {play ? <Pressable accessibilityRole="button" accessibilityLabel={`Play ${title} by ${artist}`} onPress={play}
       style={({ pressed }) => [styles.track, { opacity: pressed ? 0.65 : 1 }]}>{contents}</Pressable>
       : <View style={styles.track}>{contents}</View>}
+    {playing && <View style={styles.icon}><PlayingWave color={theme.accent} /></View>}
     {remove && <IconButton label={`Remove ${title} from queue`} onPress={remove}><X size={18} color={theme.muted} /></IconButton>}
   </View>;
 }

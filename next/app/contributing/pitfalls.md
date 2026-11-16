@@ -21,6 +21,10 @@ instead. Add one when something bites.
 
 ## platform
 
+- **A bottom inset on the whole app leaves a strip below the tab bar.** Apply
+  it to the tab bar so the surface reaches the edge and controls stay above
+  the home indicator.
+
 - **Browser globals can crash native startup.** Keep browser integrations in `next/web`.
 - **The iOS player depends on a pinned `expo-audio` patch.** Changing it needs
   a native rebuild; see [patches/README.md](../patches/README.md).

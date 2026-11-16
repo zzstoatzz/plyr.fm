@@ -10,6 +10,7 @@
 	import { explicitEnd } from '@plyr/next-core/queue-state';
 	import Artwork from './ui/Artwork.svelte';
 	import Icon from './ui/Icon.svelte';
+	import PlayingWave from './ui/PlayingWave.svelte';
 	let { close }: { close?: () => void } = $props();
 	let account = $state.raw(auth.getAuth());
 	onMount(() => auth.subscribe(() => { account = auth.getAuth(); }));
@@ -178,9 +179,11 @@
 
 {#snippet row(track: NonNullable<typeof player.current>, index: number, current: boolean)}
 		{@const promote = promotes(index)}
-		<button class="cover" type="button" aria-label={`${current && player.playing ? 'Pause' : 'Play'} ${track.metadata.title}`} onclick={() => current ? player.toggle() : player.jump(index, true)}>
+		<button class="cover" type="button" aria-label={`${current && player.playing && !player.outputElsewhere ? 'Pause' : 'Play'} ${track.metadata.title}`} onclick={() => current ? player.toggle() : player.jump(index, true)}>
 			<Artwork src={trackArtwork(track)} size={44} eager={index - player.index < 8} />
-			<span class="play"><Icon name={current && player.playing ? 'pause' : 'play'} size={18} /></span>
+			<span class="play" class:playing={current && player.playing && !player.outputElsewhere}>
+				{#if current && player.playing && !player.outputElsewhere}<PlayingWave />{:else}<Icon name="play" size={18} />{/if}
+			</span>
 		</button>
 		<div class="labels">
 			<a class="truncate" href={trackHref(track)}>{track.metadata.title}</a>
@@ -214,7 +217,7 @@
 	.current { border-color: color-mix(in srgb, var(--accent), var(--line) 55%); background: color-mix(in srgb, var(--accent) 9%, var(--raised)); }
 	.cover { border: 0; padding: 0; width: 2.75rem; flex: none; border-radius: 0.35rem; background: none; position: relative; }
 	.play { position: absolute; inset: 0; display: grid; place-items: center; background: rgb(0 0 0 / 0.48); color: white; border-radius: inherit; }
-	@media (hover: hover) { .cover:not(:hover, :focus-visible) .play { opacity: 0; } }
+	@media (hover: hover) { .cover:not(:hover, :focus-visible) .play:not(.playing) { opacity: 0; } }
 	.labels { min-width: 0; flex: 1; display: grid; gap: 0.12rem; font-size: 0.9rem; }
 	.labels > :first-child { font-weight: 650; }
 	.labels span, .time { font-size: 0.75rem; }

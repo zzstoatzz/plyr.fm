@@ -10,6 +10,7 @@
 	import Artwork from './ui/Artwork.svelte';
 	import TrackCollections from './collections/TrackCollections.svelte';
 	import Icon from './ui/Icon.svelte';
+	import PlayingWave from './ui/PlayingWave.svelte';
 	import Scrub from './Scrub.svelte';
 	import Transport from './Transport.svelte';
 	import LiveProgress from './radio/LiveProgress.svelte';
@@ -158,6 +159,7 @@
 					{#each chapters.chapters as item, index (item.start)}
 						<button type="button" class="text-button" aria-current={chapter === index ? 'true' : undefined} onclick={() => player.seek(item.start)}>
 							<span>{clock(item.start)}</span>{item.label}
+							{#if chapter === index && playing}<PlayingWave />{/if}
 						</button>
 					{/each}
 				</section>
