@@ -7,7 +7,11 @@
   let { children } = $props();
   onMount(() => {
     const stopPlayer = player.mount(true);
-    const stopEvents = mountEmbedEvents(() => player.embedSnapshot());
+    const stopEvents = mountEmbedEvents(() => player.embedSnapshot(), () => player.readEmbedAnalysis(), {
+      live: () => player.embedLiveAvailable,
+      status: () => player.embedAnalysisStatus,
+      subscribed: value => player.subscribeEmbedAnalysis(value)
+    });
     return () => { stopEvents(); stopPlayer(); };
   });
 </script>

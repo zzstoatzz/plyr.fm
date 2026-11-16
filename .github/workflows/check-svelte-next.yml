@@ -58,6 +58,7 @@ jobs:
       - run: bun run check:browser
         env:
           SCREENS_OUTPUT: ${{ runner.temp }}/next-svelte-screens
+      - run: bun run check:embed-live
       - run: bun run check:embed
         env:
           SCREENS_OUTPUT: ${{ runner.temp }}/next-svelte-screens/embed
