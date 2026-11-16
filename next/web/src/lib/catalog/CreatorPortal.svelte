@@ -36,6 +36,15 @@
   let albumsTab: HTMLButtonElement;
 
   const name = $derived(profile?.display_name || account.handle || 'your music');
+  let filter = $state('');
+  let loadingAll = $state(false);
+  let sort = $state<'recent' | 'title' | 'plays'>('recent');
+  const matchingMusic = $derived.by(() => {
+    const query = filter.trim().toLocaleLowerCase();
+    return music.filter(track => !query || [track.metadata.title, track.metadata.album].some(value => value?.toLocaleLowerCase().includes(query)))
+      .sort((a, b) => sort === 'title' ? a.metadata.title.localeCompare(b.metadata.title)
+        : sort === 'plays' ? b.metrics.play_count - a.metrics.play_count : 0);
+  });
   const publicPath = $derived('/u/' + encodeURIComponent(account.handle || did));
   const music = $derived([...tracks.data, ...ownerTracks].sort((a, b) => b.metadata.created_at.localeCompare(a.metadata.created_at)));
   const catalog = $derived(tab === 'tracks' ? tracks : albums);
@@ -94,6 +103,20 @@
     } catch {
       if (current()) ownerError = true;
     } finally { if (current()) ownerLoading = false; }
+  }
+
+  async function loadAllTracks() {
+    if (loadingAll) return;
+    loadingAll = true;
+    try {
+      while (current() && tab === 'tracks') {
+        const cursor = tracks.cursor;
+        const privateCursor = ownerCursor;
+        if ((!cursor && !privateCursor) || tracks.error || ownerError || tracks.loading || ownerLoading) return;
+        await Promise.all([cursor ? owned.tracks.more() : undefined, privateCursor ? loadOwnerTracks(privateCursor) : undefined]);
+        if (cursor === tracks.cursor && privateCursor === ownerCursor) return;
+      }
+    } finally { loadingAll = false; }
   }
 
   async function selectTab(next: Tab, focus = false) {
@@ -159,8 +182,21 @@
   </div>
 
   <div id="creator-tracks" role="tabpanel" aria-labelledby="creator-tracks-tab" hidden={tab !== 'tracks'}>
+    <div class="catalog-filter">
+      <input type="search" placeholder="filter your tracks" aria-label="Filter your tracks" bind:value={filter} />
+      <select aria-label="Sort tracks" bind:value={sort}>
+        <option value="recent">recent</option>
+        <option value="title">title</option>
+        <option value="plays">most played</option>
+      </select>
+    </div>
+    {#if (filter.trim() || sort !== 'recent') && (tracks.cursor || ownerCursor)}
+      <button class="text-button full-catalog" type="button" disabled={loadingAll || tracks.loading || ownerLoading} onclick={loadAllTracks}>
+        {loadingAll ? 'loading the rest of your tracks…' : 'include the rest of your tracks'}
+      </button>
+    {/if}
     <ul aria-label="Your tracks">
-      {#each music as track (track.record.uri)}
+      {#each matchingMusic as track (track.record.uri)}
         <li>
           <div class="thumb"><Artwork src={trackArtwork(track)} size={52} /></div>
           <div class="names">
@@ -171,6 +207,9 @@
         </li>
       {/each}
     </ul>
+    {#if music.length && !matchingMusic.length && !catalog.loading && !ownerLoading}
+      <p class="state" role="status">{tracks.cursor || ownerCursor ? 'no matches in loaded tracks' : 'no matching tracks'}</p>
+    {/if}
     {#if ownerError}
       <p class="state" role="alert">couldn’t load all your tracks.</p>
       <button class="text-button" onclick={() => loadOwnerTracks(ownerCursor)}>try again</button>
@@ -217,6 +256,10 @@
   .settings { margin-left: auto; }
   .upload { color: var(--on-accent); background: var(--accent); padding-inline: 0.85rem; }
   .upload:hover { background: var(--accent); filter: brightness(1.12); }
+  .catalog-filter { display: flex; flex-wrap: wrap; gap: 0.5rem; padding-block: 0.75rem; }
+  .full-catalog { margin-block-end: 0.5rem; color: var(--accent); }
+  .catalog-filter input { flex: 1 1 11rem; min-width: 0; }
+  .catalog-filter :is(input, select) { min-height: 2.75rem; padding-inline: 0.7rem; border-radius: 0.6rem; border: 1px solid var(--line); background: var(--surface); }
   .tabs { display: flex; gap: 0.2rem; border-bottom: 1px solid var(--line); }
   .tabs button { border: 0; border-radius: 0.5rem 0.5rem 0 0; padding: 0.7rem 1rem; background: none; color: var(--muted); }
   .tabs button[aria-selected='true'] { color: var(--text); box-shadow: inset 0 -2px var(--accent); }

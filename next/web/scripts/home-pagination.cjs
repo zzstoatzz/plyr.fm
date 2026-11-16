@@ -10,6 +10,7 @@ async function homePagination(browser, origin) {
       const requests = [];
       await page.route('https://api.next.plyr.fm/v1/tracks?**', route => {
         const query = new URL(route.request().url()).searchParams;
+        if (!query.has('tag')) return route.fallback();
         assert.equal(query.get('tag'), 'ambient');
         const cursor = query.get('cursor');
         requests.push(cursor);
@@ -28,29 +29,10 @@ async function homePagination(browser, origin) {
         if (period === 'week' && chartReads.filter(read => read === 'week').length === 1) return route.fulfill({ status: 503 });
         return route.fulfill({ json: { period, data: rankings[period].map(track => ({ track })) } });
       });
-      await page.goto(origin + '/?tag=ambient');
-      const rows = page.getByTestId('home-track-row');
-      await rows.nth(23).waitFor();
-      assert.deepEqual(requests, [null], 'waits until the end of the list approaches');
-      assert.equal(await page.getByRole('button', { name: 'load more' }).count(), 0);
-      assert.equal(await page.evaluate(() => getComputedStyle(document.scrollingElement).scrollbarWidth),
-        width === 390 ? 'none' : 'auto', 'the page scrollbar is only hidden on narrow touch screens');
-      await page.mouse.move(width / 2, 320);
-      await page.mouse.wheel(0, 450);
-      await page.waitForFunction(() => window.scrollY > 0);
-      await rows.nth(23).scrollIntoViewIfNeeded();
-      await rows.getByText(tracks[1].metadata.title, { exact: true }).waitFor();
-      await rows.last().scrollIntoViewIfNeeded();
-      const retry = page.getByRole('button', { name: 'try again' });
-      await retry.waitFor();
-      assert.equal(secondReads, 1, 'stops requesting after a failure');
-      await retry.press('Enter');
-      const appended = rows.getByRole('link', { name: tracks[2].metadata.title, exact: true });
-      await appended.waitFor();
-      assert.equal(await appended.evaluate(node => document.activeElement === node), true);
-      assert.equal(await rows.count(), 26, 'keeps existing tracks and removes duplicates');
-      assert.deepEqual(requests, [null, 'next', 'last', 'last'], 'stops if a cursor repeats');
-      assert.equal(new URL(page.url()).searchParams.get('tag'), 'ambient');
+      await page.route('https://api.next.plyr.fm/v1/tags?**', route => route.fulfill({
+        json: { data: [{ name: 'ambient', track_count: 24 }] }
+      }));
+      await page.goto(origin);
       const chart = page.getByTestId('home-chart');
       const period = label => chart.getByRole('button', { name: new RegExp('^top tracks period: ' + label) });
       await chart.getByRole('link', { name: tracks[0].metadata.title, exact: true }).waitFor();
@@ -73,6 +55,32 @@ async function homePagination(browser, origin) {
       await page.goBack();
       await period('all time').waitFor();
       await topTrack.waitFor();
+      await page.getByRole('navigation', { name: 'Browse by tag' }).getByRole('link', { name: 'ambient 24' }).click();
+      await page.waitForURL('**/?tag=ambient');
+      await page.getByRole('heading', { name: 'ambient', exact: true }).waitFor();
+      assert.equal(await page.getByTestId('home-chart').count(), 0);
+      const rows = page.getByTestId('home-track-row');
+      await rows.nth(23).waitFor();
+      assert.deepEqual(requests, [null], 'waits until the end of the list approaches');
+      assert.equal(await page.getByRole('button', { name: 'load more' }).count(), 0);
+      assert.equal(await page.evaluate(() => getComputedStyle(document.scrollingElement).scrollbarWidth),
+        width === 390 ? 'none' : 'auto', 'the page scrollbar is only hidden on narrow touch screens');
+      await page.mouse.move(width / 2, 320);
+      await page.mouse.wheel(0, 450);
+      await page.waitForFunction(() => window.scrollY > 0);
+      await rows.nth(23).scrollIntoViewIfNeeded();
+      await rows.getByText(tracks[1].metadata.title, { exact: true }).waitFor();
+      await rows.last().scrollIntoViewIfNeeded();
+      const retry = page.getByRole('button', { name: 'try again' });
+      await retry.waitFor();
+      assert.equal(secondReads, 1, 'stops requesting after a failure');
+      await retry.press('Enter');
+      const appended = rows.getByRole('link', { name: tracks[2].metadata.title, exact: true });
+      await appended.waitFor();
+      assert.equal(await appended.evaluate(node => document.activeElement === node), true);
+      assert.equal(await rows.count(), 26, 'keeps existing tracks and removes duplicates');
+      assert.deepEqual(requests, [null, 'next', 'last', 'last'], 'stops if a cursor repeats');
+      assert.equal(new URL(page.url()).searchParams.get('tag'), 'ambient');
       assert.deepEqual(errors, []);
     } finally { await context.close(); }
   }

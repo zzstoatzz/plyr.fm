@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onDestroy, tick } from 'svelte';
+	import { resolve } from '$app/paths';
 	import { invalidateAll } from '$app/navigation';
 	import type { Snapshot } from '@sveltejs/kit';
 	import type { Track } from '@plyr/next-core/api';
@@ -25,7 +26,7 @@
 	let selectedChart = $state.raw<typeof data.chart>();
 	const chart = $derived(selectedChart ?? data.chart);
 	let chartRequest: AbortController | undefined;
-	let periodButton: HTMLButtonElement;
+	let periodButton = $state<HTMLButtonElement>();
 
 	function showChart(value: ChartPeriod) {
 		chartRequest?.abort();
@@ -64,7 +65,7 @@
 			pending?.abort();
 			pending = undefined;
 			loading = false;
-			void Promise.allSettled([request, chart, data.featured]).then(async ([first]) => {
+			void Promise.allSettled([request, chart, data.featured, data.discovery]).then(async ([first]) => {
 				await tick();
 				if (!home?.isConnected || data.latest !== request) return;
 				const firstIds = new Set(first.status === 'fulfilled' ? first.value.data.map(track => track.id) : []);
@@ -126,7 +127,7 @@
 
 <svelte:head><title>plyr.fm</title></svelte:head>
 
-<div class="page-content home" bind:this={home}>
+<div class="page-content home" class:filtered={data.tags.length > 0} bind:this={home}>
 	<header class="mobile-brand"><LinksMenu /><h1>plyr.fm</h1></header>
 	{#await data.featured}
 		<div class="featured" aria-hidden="true"></div>
@@ -150,6 +151,7 @@
 			</section>
 		{/if}
 	{/await}
+	{#if !data.tags.length}
 	<AtlasTile />
 	<section class="chart" data-testid="home-chart" aria-labelledby="home-top-tracks">
 		<header>
@@ -174,15 +176,25 @@
 				<div class="chart-empty">
 					<p role="status">could not load top tracks</p>
 					<button type="button" class="text-button" onclick={event => {
-						if (document.activeElement === event.currentTarget) periodButton.focus({ preventScroll: true });
+						if (document.activeElement === event.currentTarget) periodButton?.focus({ preventScroll: true });
 						showChart(period);
 					}}>try again</button>
 				</div>
 			{/if}
 		{/await}
 	</section>
+	{/if}
 	<section class="latest" aria-labelledby="home-latest">
-		<header><h2 id="home-latest" tabindex="-1">latest</h2>{#if data.tags.length}<a href="/">clear filters</a>{:else}<span>newest first</span>{/if}</header>
+		<header><h2 id="home-latest" tabindex="-1">{data.tags.length ? data.tags.join(', ') : 'latest'}</h2>{#if data.tags.length}<a href={resolve('/')}>all tracks</a>{:else}<span>newest first</span>{/if}</header>
+		{#await data.discovery then tags}
+			{#if tags.length}
+				<nav class="tag-shelf" aria-label="Browse by tag">
+					{#each tags as tag (tag.name)}
+						<a href={resolve('/(app)/tag/[name]', { name: tag.name })} aria-current={data.tags.includes(tag.name) ? 'page' : undefined}>{tag.name} <small>{tag.track_count}</small></a>
+					{/each}
+				</nav>
+			{/if}
+		{/await}
 		{#await data.latest}
 			<Loading label="loading the latest tracks" />
 		{:then first}
@@ -228,6 +240,11 @@
 	.feature-content h1 { font-size: clamp(1.75rem, 4vw, 3.25rem); margin-block: 0.5rem 1.2rem; }
 	.more { min-height: 2.75rem; color: var(--muted); }
 	.latest { grid-area: latest; min-width: 0; }
+	.home.filtered { grid-template-columns: minmax(0, 1fr); grid-template-areas: "brand" "latest"; }
+	.tag-shelf { display: flex; gap: 0.45rem; overflow-x: auto; padding: 0.2rem 0.15rem 0.75rem; scrollbar-width: none; }
+	.tag-shelf a { display: inline-flex; align-items: center; gap: 0.3rem; min-height: 2.75rem; padding-inline: 0.65rem; border: 1px solid var(--line); border-radius: 1.5rem; white-space: nowrap; color: var(--muted); }
+	.tag-shelf a[aria-current=page] { border-color: var(--accent); color: var(--accent); }
+	.tag-shelf small { font-variant-numeric: tabular-nums; }
 	.chart { grid-area: chart; min-width: 0; }
 	.chart-loading, .chart-empty { display: grid; align-items: center; min-height: 4.75rem; color: var(--muted); }
 	.chart-empty button { justify-self: start; }
@@ -240,7 +257,7 @@
 	li::marker { color: var(--faint); font-size: 0.75rem; }
 	@media (min-width: 1240px) {
 		.home { grid-template-columns: minmax(0, 1fr) minmax(16rem, 29%); grid-template-areas: "brand brand" "featured atlas" "latest chart"; }
-		.home:not(:has(.featured)) { grid-template-areas: "brand brand" "atlas atlas" "latest chart"; }
+		.home:not(.filtered):not(:has(.featured)) { grid-template-areas: "brand brand" "atlas atlas" "latest chart"; }
 	}
 	.chart :global(.track) { grid-template-columns: 2.5rem minmax(0, 1fr); min-height: 3.6rem; }
 	.chart :global(.duration), .chart :global(.add), .chart :global(.metrics) { display: none; }
