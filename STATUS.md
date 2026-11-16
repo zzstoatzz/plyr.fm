@@ -1,147 +1,7 @@
 # plyr.fm - status
 
-Start here for the next agent: [November 12 daily-driver checkpoint](docs/research/2026-11-12-next-daily-driver-checkpoint.md).
-
-## Next daily-driver work (2026-11-12)
-
-#2525 adds explicit owner deletion for private tracks, including uncertain-response
-recovery and removal from private playback. Eight deployed browser cases and an
-iOS simulator deletion/recovery check pass. Confirmation covers the current
-record, including concurrent changes; conflict-safe private metadata editing still
-requires conditional writes absent from the current Spaces API.
-
-#2519 and #2522 ship public audio replacement and private publishing/playback.
-Replacement preserves the track URI and labels with CAS/reconciliation; eight
-deployed browser cases pass. Private music uses the existing player and stays out
-of public writes, metrics and queue sync; four deployed cases and scoped native
-playback/storage checks pass. Both paths currently cap PDS blobs at 100 MiB.
-Native touch/VoiceOver and real-account Next OAuth limits remain explicit.
-
-#2517 ships the public/open large-upload client after #2528 fixed the Worker's
-unsupported redirect mode. Deployed acceptance verified the actual client
-decoder, signed activation, bytes and exact fixture cleanup. #2530/#2532 add
-browser attachment delivery and expose its header through CORS. #2531 adds a
-cloud-only 1.5 GiB acceptance fixture. After its first run hit part/cancellation
-conflicts, #2536 bounded owner-lock waiting and #2535 resumed the same 69-part
-reservation. All 154 parts, streaming SHA-256, signed publication, attachment/CORS
-checks, quota release and exact cleanup passed. This is one cloud capacity check,
-not a throughput SLO or real-account OAuth acceptance.
-
-#2529 projects verified download preferences; historical reconciliation finished
-with 461 verified, one absent, 16 retryable and two rejected outcomes, so complete
-backfill remains open. #2526 adds a disabled processing executor, not an enabled upload
-processing flow. Protected/large replacements, processing ownership, real-account
-OAuth and physical-device/native distribution acceptance remain open.
-
-#2512 verifies current Spaces response signatures and canonical record/commit
-bindings in the legacy backend and Next client. Next web, staging and deployed
-private-media E2E passed at `0580d72c`; native Hermes verified the SDK crypto path.
-This restores protocol compatibility, not real-account Next OAuth acceptance.
-
-#2518 adds album creation and canonical track organization. Eight deployed
-browser cases verify recovery, membership/order, return navigation and playback
-through appview delay; native creation, organizing and playback also passed.
-
-#2515 ships canonical playlist reordering to Next. Accepted order drives playback
-through appview delay and retained-screen saves; eight deployed browser cases and
-actual iOS simulator move/save/playback passed.
-
-#2511 and #2514 restore current Spaces credential and membership requests.
-Next/staging deployments and the real private-media browser flow passed:
-grant, member playback, removal, fresh-session playback and private recording.
-The failure was a removed PDS RPC alias; production was not promoted.
-
-#2505, #2508–#2510 add durable upload/playlist create recovery, verified
-iOS next/previous command dispatch and session-isolated collection editing.
-Recovery passed deployed browser checks and actual native MMKV acceptance.
-Native commands worked with the patch and failed on the unpatched control build.
-Physical device gestures and native distribution remain unverified.
-Uncertain attempts can be explicitly set aside without losing their recovery
-history or an unrelated fresh upload draft.
-
-#2504 keeps the existing Next API machine warm after a measured 2.225-second
-cold start. Deployment and public readiness/catalog checks passed; no replica
-was added. The estimated incremental compute cost is $1.60–2/month.
-
-#2490–#2499 and #2501–#2503 are deployed to Next: faster composed reads with
-bounded broken-connection recovery, clearer catalog/Search/Library journeys,
-session-isolated uploads, a simpler creator portal and recoverable profile edits.
-Discovery settings honor creator tags and existing account AI labels; live browser
-checks verify default filtering, explicit show-all and restored defaults.
-Creators can upload/edit canonical tags, with explicit clearing, preserved
-unknown fields and actionable revision-conflict recovery.
-Actual iOS simulator playback now starts, survives navigation/backgrounding and
-pauses/resumes. Physical-device controls and real-account consent/sync acceptance
-remain open; fixture PDS checks do not prove them. Production was not promoted.
-
-The [MVP goal](docs/plans/2026-11-12-next-daily-driver.md) fixes the scope;
-the [checkpoint](docs/research/2026-11-12-next-daily-driver-checkpoint.md)
-records evidence, publishing gaps, profile-link/AI-label research and the concrete
-guide/screenshot changes required at cutover. The earlier entries below describe
-their respective checkpoints, not the latest native acceptance.
-
-## Next phone client and account state (2026-11-12)
-
-#2459–#2484 are deployed to Next. The web client carries production's look and
-lowercase voice, compact Home shelves, a single-row tag filter, a dock that
-morphs into Now Playing under the finger, solid transport controls, Media
-Session, toasts and an animated like. A personal queue and an account's
-settings are now kept in Postgres behind one service-auth permission requested
-at every sign-in, with Redis as a 24 hour live cache; neither depends on PDS
-Spaces. Verified with local identities, a stubbed PDS and Chrome at phone
-size; a real signed-in account and the native apps have not exercised it
-(#2485). Production was not promoted.
-
-## Personal queue synchronization live (2026-11-07)
-
-#2447–#2451 and #2453 are deployed to Next. One account's queue synchronizes across
-clients; explicit Play transfers connected output, refresh restores paused, edits
-survive lost acknowledgements, metadata hydrates in batches and continuation is
-bounded. Real live Chrome checks passed concurrency, reconnect, retry, pointer
-drag/promotion, repeat and decoded Jam/radio handoffs. The deployed Firefox core matrix also passed.
-TypeScript and 77 client
-tests pass, along with the normal Zig/Postgres/Redis suite and 500-case property
-campaign. iOS/Android bundles export; physical native lifecycle remains unverified.
-[Acceptance, architecture and limits](docs/research/2026-11-07-personal-queue-verification.md).
-
-Normal production machine versions/images remain unchanged and health is good;
-no production promotion ran. Personal queues reuse existing infrastructure, with
-retained Redis capacity noted in COSTS.md. Optional ReleaseFast fixture failures
-reproduce on the baseline and remain tracked in #2452.
-
-## Next real-time Jams verified (2026-11-06)
-
-The Spaces-backed Zig/Redis Jam MVP is live on Next. Two independent browsers
-passed real OAuth create/invite/join, held duplicate Pause, host scrubbing,
-guest seek restrictions, coordinator SIGKILL/re-admission, and decoded radio
-handoff without pausing the remaining participant. Both coordinators were
-restored and are healthy. No normal production promotion ran.
-
-The resumed run measured 187 ms UI play delivery, about 6 ms maximum post-seek
-and post-failover playhead separation, and 92 ms guest Pause delivery afterward.
-These are observations from one live run, not latency guarantees. The
-[completion audit](docs/research/2026-11-06-jams-live-verification.md) records
-requirements, evidence, storage/cost and remaining boundaries. The
-[MVP plan](docs/plans/2026-11-05-realtime-jams-mvp.md) is complete.
-
-#2429 also shipped the player scrubbing crash/snap-back fix to Next. Live Chrome
-and WebKit checks passed in Now Playing and the desktop dock. Physical iPhone
-Safari, native background playback and broad concurrency remain unverified;
-Chromium ALAC support remains tracked in #2427. Jam Redis is persistent but has
-one primary; this MVP establishes coordinator failover, not Redis failover.
-
-## Rewrite inventory and discovery follow-up (2026-11-06)
-
-The [migration inventory](docs/research/2026-11-04-rewrite-progress-and-scope.md)
-is refreshed through #2441. It distinguishes shipped accounting/Jam foundations
-from remaining native lifecycle, persistence/history, publishing and collection
-work. SDK/MCP, legacy URLs and cutover rehearsal remain deferred; the cost note
-separates the earlier baseline from additional Jam infrastructure.
-
-Recent Next changes fix the signed-in Firefox/Zen homepage crash (#2436), cycle
-chart periods directly (#2438), reuse artist avatars where artwork is absent
-(#2439/#2440), and paginate the horizontal tag catalog (#2441). No normal
-production promotion is part of this work.
+Start here for the next agent: the [Next handoff](docs/research/2026-11-12-next-handoff.md)
+and the Svelte web port in #2650; production (plyr.fm) is unchanged by Next.
 
 ## long-term vision
 
@@ -190,242 +50,156 @@ plyr.fm should become:
 
 ### November 2026
 
-#### Spaces and real-time playback research (November 5)
+455 commits merged between November 1 and 16, nearly all under `next/`, the
+rewrite that runs beside production at next.plyr.fm. Next deploys through its own
+workflows to its own Fly apps, Neon branch, Redis, R2 and Pages project, so none of
+that work is in a production release; "live on Next" below never means plyr.fm.
+Production shipped in six backend releases (`2026.1102.163235` → `2026.1115.064451`)
+and five frontend promotes. The verbose checkpoint entries the Next sessions wrote
+into this file as they landed are preserved in `.status_history/2026-11.md`.
 
-The [research/proposal](docs/research/2026-11-05-spaces-realtime-playback.md)
-compares the current Spaces proposal and handlers, prior Jam behavior, and pinned
-Zig WebSocket/Redis/Docket capabilities. It proposes state and command boundaries
-and a measured implementation sequence; no runtime architecture was changed.
+#### the Next client went to Expo on November 3 and back to Svelte for the web on November 15 (#2280–#2331, #2650–#2687 — next.plyr.fm; production untouched)
 
-#### Next full-screen player correction (November 5)
+Next's shape on November 2: the Zig backend, web client and audio worker moved
+under `next/` (#2291); the appview became read-only with client-owned OAuth and
+direct PDS writes (#2281–#2284); a blob mirror copies PDS audio into R2 verified
+by CID (#2285–#2287); ingest reads jetstreams instead of the relay (#2292); the
+real `fm.plyr.*` records are indexed and written (#2299), and cover art is an
+`imageBlob` on `fm.plyr.track` and `fm.plyr.list` on the artist's PDS (#2306).
+On November 3, #2331 replaced the SvelteKit client with one Expo / React Native
+app for iOS, Android and web, and the Expo web export took over next.plyr.fm.
+The next ten days earned back what the swap lost (#2332 onward: player, queue,
+editors, Home, Search, Settings, a dock that morphs into Now Playing) and ported
+production's look and lowercase voice (#2459–#2484), then the desktop home with
+artist of the week, the atlas and a docked queue panel (#2613–#2645).
 
-#2419 removes the rejected desktop side panel. Now Playing is full-screen again,
-with large artwork and familiar controls. The desktop dock spans the entire
-window, with centered transport/seek and queue/volume on the right; expanded
-playback hides the dock. The root audio owner and track detail page are unchanged.
-Mobile retains protected body-swipe dismissal. Production was not promoted.
+On November 14 nate decided (#2650) that the web client moves to **Svelte** and
+Expo stays for iOS and Android only, both over one plain-TypeScript `next/core`.
+The reasons are in the issue: 31 `.web.ts` files had native twins, Now Playing
+was built twice across about 18 PRs, and much of the web work was fighting React
+Native (Safari theming #2360, screens re-rendering while music plays #2626,
+scroll #2443–#2445, text-field zoom #2649). Capacitor and Swift were rejected.
+#2651 froze the Expo web build and extracted the core; #2653–#2661 added the
+Svelte shell, OAuth, protected streaming, owner-only music, publishing, the
+portal, library, radio and embeds; #2665 made Expo native-only; #2664 exposed
+the shared code through Bun workspaces; #2669 deployed an isolated preview and
+#2687 added the live target for next.plyr.fm (#2663 keeps a manual hotfix path
+from the frozen `next-expo` branch). November 15–16 restored parity on Svelte:
+phone player and navigation (#2677), artist catalog (#2678), stats (#2675,
+#2697, #2731), atlas (#2681), Jams (#2683, #2689, #2705), keyboard shortcuts
+(#2668), the production track layout (#2672), settings and the You tab (#2734),
+Search as a place to discover music (#2730), album covers and deletion (#2691,
+#2728), and opt-in teal.fm scrobbling written from the listener's client
+(#2737, #2739). Next's own NSIDs moved off `fm.plyr.stg.*` to `fm.plyr.next.*`
+(#2595) and the coordinator serves from jams.next.plyr.fm (#2596).
 
-#### Next Home and desktop player (November 5)
+#### the native app: App Store slot, Voice Memos, Liquid Glass (#2564, #2599–#2606, #2742–#2751, November 13–16 — TestFlight builds; not accepted on devices)
 
-#2413–#2417 add visible playback/navigation accents, explain saving preferences
-across devices, restore colored tags and automatic virtualized Home loading,
-and replace desktop's blocking player modal with a browsing side panel.
-Mobile keeps its full-screen player. The [verification record](docs/research/2026-11-05-next-home-player.md)
-separates controlled failures, live catalog/media checks and native bundle limits.
-Production was not promoted.
+#2564 builds `next/app` into the existing plyr.fm App Store slot (bundle id
+`fm.plyr`); the "existing iOS app" was the unmerged Expo client shipped once to
+internal TestFlight, so there is no user migration. #2599 lets you share a
+recording from Voice Memos straight into upload; on TestFlight 37 the shared
+memo arrived as an empty file because the copy was not awaited before the share
+payload was cleared (#2601, with a lint rule so it cannot recur). #2602–#2606
+add a background upload queue with a progress toast, iOS picker types for WAV
+and WebM, background uploads, auto-tagging with recommended genres (classified
+once per audio source, never written by the server) and a crash fix. #2743
+adopts iOS 26's native Liquid Glass tab bar and mini player; #2742, #2745,
+#2747–#2751 animate active rows, keep timed comments inline, bring stats into
+native navigation and teal.fm into native Settings. Simulator checks pass;
+physical-device acceptance is still the cutover gate.
 
-#### Next Settings and Search (November 5)
+#### real-time Jams, personal queues and account state (#2420–#2430, #2447–#2453, #2478–#2482, November 6–12 — live on Next)
 
-Home actions are quiet again behind one menu. Settings now uses compact icon-led
-sections and focused pickers; Search follows the iOS mixed-result shape with
-cancellable reads. Search metrics hydrate after the ranked limit, reducing a broad
-20k-track benchmark's metric probes from 19,900 to 20. #2407–#2411 are live on Next;
-production was not promoted. The [verification record](docs/research/2026-11-05-next-settings-search.md)
-separates real API/PDS/audio checks, controlled failures, local benchmarks and native
-acceptance gaps.
+Jam rooms use a Zig/Redis WebSocket coordinator instead of polling host
+snapshots (#2423, after the [research](docs/research/2026-11-05-spaces-realtime-playback.md)).
+Two independent browsers passed real OAuth create/invite/join, held duplicate
+Pause, host-only seeks, coordinator SIGKILL re-admission and radio handoff;
+one live run measured 187 ms play delivery, an observation, not a guarantee
+([audit](docs/research/2026-11-06-jams-live-verification.md)). One account's
+queue synchronizes across clients with paused-playback restore (#2447–#2453,
+[acceptance](docs/research/2026-11-07-personal-queue-verification.md)). The
+queue and an account's settings then moved into Postgres behind one
+service-auth permission requested at sign-in, with Redis as a 24 hour cache
+(#2478–#2482): #2482 reverses #2330's Spaces-backed preferences, because an
+account's settings are not a record anyone else needs to read.
 
-#### Next listening controls and structure review (November 5)
+#### publishing on Next: large uploads, processing, closed music (#2507–#2557, #2584–#2590, #2702, November 12–15)
 
-Home now supports body playback and independent like/queue actions. Artist avatar
-fallbacks, navigation, icons and documented keyboard shortcuts are live on Next
-(#2402–#2405), including a fix for delayed-state music-to-radio handoff. Production
-was not promoted. The [structure review](docs/research/2026-11-05-next-structure-review.md)
-records live verification and proposes scoped tooling, client data/playback ownership,
-feature organization and backend adapter cleanups. Those cleanups are proposals.
+#2507 adds recoverable public audio staging up to 1.5 GiB: the audio Worker
+owns multipart bytes and recovery, the client reserves the track URI and stays
+the only writer of its PDS record. Because the Worker and the Python backend
+share one admission contract, #2507 and the processing executor (#2526, #2533,
+#2538, #2541, #2542) reached production in `2026.1112.201458`; the executor had
+been placed in `services/transcoder` on the staging transcoder, so #2557 moved
+it to its own app (`plyr-next-processing`) and restored the legacy transcoder
+byte-identical to `2026.1107.011947`. Admission was turned off (#2555) and back
+on (#2566) once the app was up. #2517 is the client; #2528 fixed the Worker's
+redirect mode; #2531–#2536 pushed a 154-part cloud fixture through. Around it:
+audio replacement (#2519, #2706, #2708), private publishing and owner deletion
+(#2522, #2525), albums and canonical playlist order (#2518, #2515), verified
+downloads with supporter proofs bound to the payer (#2529–#2550, #2578), and
+on Svelte a batch of songs uploaded and recovered as an album (#2702).
 
-#### Next rewrite checkpoint (November 4)
+**space access became policy records** (#2584): an artist puts a track, album
+or playlist in a space and opens it with any number of `fm.plyr.policy` records
+(`signedIn`, `members`, `supporter`, `purchase`); passing any one reads the whole
+space, and the atprotofans fallback is gone. #2587/#2588/#2590 show who can
+listen and let artists close or reopen their own music from Next, after Nick
+Gerakines' write-up on Space Access. **space sync**: after the AT Protocol
+blog's "A Jetstream for Spaces" (November 6), #2627 forks space-stream as plyr's
+syncer, #2632 adds the Zig consumer and event seam, #2634 runs it as the
+plyr.fm account. Nothing reads the copy yet and no Fly process runs the
+consumer.
 
-Next now runs a Zig appview with independently verified PDS projections and an
-Expo / React Native client with client-owned OAuth and direct PDS writes.
-Spaces-backed preferences, basic creator-owned Jam rooms, catalog/playback,
-Radio and embeds are implemented foundations. Production parity and cutover
-remain substantial work.
+#### production, meanwhile (`2026.1102.163235` → `2026.1115.064451`)
 
-The [progress and scope inventory](docs/research/2026-11-04-rewrite-progress-and-scope.md)
-records the changed ownership boundaries, partial and missing ports, retained
-production read dependencies, service migration work and decisions still open.
-It supersedes the implementation status in the November 3 handoffs, including
-the temporary Svelte client and resolved migration hold.
+- **November 2**: browser telemetry forwarding is opt in and SQL telemetry
+  is off (#2262–#2265); album details edit in a dialog with a live plylst
+  preview (#2270, #2271); tracks delete from the edit modal everywhere
+  (#2260). The year-one essay, "ready plyr one — a year of people and
+  sounds", was posted November 2, with the episode rewritten around the
+  people and garrison's essay credit corrected (#2257–#2259).
+- **November 3** (frontend promote): the collection embed goes compact under
+  500 px wide or 280 px tall; a phone in leaflet shows 3.5 rows instead of
+  one (#2297).
+- **November 7** (`2026.1107.011947`): radio-only exclusions (#2434). Joe
+  Germuska's eleven radiator recordings leave the broadcast and stay in the
+  catalog.
+- **November 12** (`2026.1112.201458`): the Spaces alpha churn. ZDS 0.9
+  removed the `credentialKid` field (#2511), renamed membership methods
+  (#2514) and changed response signatures (#2512); both backends were fixed
+  and the private-media flow passed. Poe's atmosphere dispatch and Tom
+  Scanlan's Snowglobe write-up describe the same alphas from outside.
+- **November 15** (`2026.1115.064451`): AddLine's upload pause is lifted
+  (#2685); previously ignored firehose events and failed jobs are not
+  replayed. **Merged after that release, staging only**: the hosted PDS then
+  removed `getSpaceCredential`, so #2714 moved Next to `authorizeSpaceSync` and
+  #2724 did the same for the legacy client with the current commit MAC tag
+  (production still calls the removed method; see known issues); #2722 honors
+  an unlisted first record from Next in legacy ingest and must deploy before
+  the Next publisher (#2723); #2726, #2727 adjust staging tests.
+- **agents answering agents**: codex's questions on `ask-claude` issues are
+  answered by a workflow within minutes (#2692), swept every ten minutes with
+  `needs-nate` answers relayed to nate (#2720), escalating only product and
+  lexicon calls (#2738).
 
-The [player study and core parity cycles](docs/research/2026-11-04-player-lessons-and-core-cycles.md)
-make trustworthy play accounting the next cycle, followed by personal listening,
-queue continuity, Jam rooms, collections, publishing and discovery. Cutover
-rehearsal, legacy URLs, SDK and MCP are deferred. The study preserves production's
-listened-time semantics and player lifecycle research while identifying retry,
-repeat and dedup defects to avoid copying. [Next's cost checkpoint](COSTS.md#next-backend-checkpoint-november-4-2026)
-budgets roughly $30–35/month at current baseline, before unmeasured usage.
-
-Cycle 1 implementation: [#2363](https://github.com/zzstoatzz/plyr.fm/pull/2363),
-[#2364](https://github.com/zzstoatzz/plyr.fm/pull/2364) and
-[#2366](https://github.com/zzstoatzz/plyr.fm/pull/2366) add transactional anonymous
-play receipts, actual-listened qualification across the player/embeds/Radio/Jams,
-durable client retries and receipt-driven counts. Radio shares polling and avoids
-silent audio preload. The [contract](docs/internal/architecture/next-play-accounting.md)
-and [verification record](docs/research/2026-11-04-cycle-1-verification.md) distinguish
-real media/API checks from fixtures and physical-device gaps. Personal listening
-and broader queue continuity remain subsequent cycles. Separately,
-[#2368](https://github.com/zzstoatzz/plyr.fm/pull/2368) adds direct queue dragging
-and player controls that follow the selected accent.
+The plyr.fm account did not announce the rewrite. It quoted alias's wish for a
+myspace-like page that autoplays a plyr track (November 8) and ran a poll on
+whether song and album radios should be personalized (November 12).
+thunderbird.cafe's Mixtape C60 Web Tile (October 7) builds cassettes from a
+user's own plyr uploads and only works for audio stored on the user's account,
+which is what Next's upload path produces.
 
 ### October 2026
 
-The day-by-day October entries are in `.status_history/2026-10.md`. The October
-1–9 arcs (the copyright flag rework, the review queue's first decisions, private
-media against current Spaces hosts, the embeds and the equalizer) were covered by
-#2141 on October 11; what follows is October 11–31.
-
-#### a third-party player, and the API changes it asked for (#2250–#2254, October 30–31 — prod `2026.1031.194332`)
-
-renderg.host built **plylst**: a frontend-only site that gives every public
-plyr.fm album a shareable page with a DJ-style waveform at the same path, links
-back, credits plays after 30 s and honors `default_hidden_tags`. Their
-[Tangled issue #6](https://tangled.org/zzstoatzz.io/plyr.fm/issues/6) (October 30)
-asked for small API changes, all shipped October 31: the `?cors=1` audio proxy
-exposes its range headers, signs HEAD requests to private R2 correctly (a
-GET-signed URL used for HEAD got 403), and answers unsupported multi-range
-requests with 416 instead of 502; track duration and album artwork, creation
-time and play totals come straight from the API. Album owners can opt in to a
-minimal plylst link (off by default, only for nonempty albums whose tracks allow
-public listening), and album settings became compact disclosures with one
-save/cancel footer. Plylst supports albums, not playlists, and reads production.
-See [the integration](docs/internal/frontend/plylst.md). The same week, #2222
-added the first public guide to playing plyr from a Subsonic app (docs only);
-it lists six `/rest` defects noticed while writing it (known issues).
-
-#### protected audio stays on the artist's PDS (#2233, #2237, #2238, #2244, #2246–#2249, October 28–29 — prod `2026.1029.040850` → `2026.1029.204905`)
-
-Audio with public metadata but restricted listening or downloads used to live
-only in plyr's private R2. When the artist's PDS supports Spaces, the audio now
-stays there: the artist owns a public-read, app-restricted **playback** Space that only
-plyr's attested client can open, listeners stream through plyr and need neither a
-Spaces PDS nor a credential, and the private R2 copy is a best-effort mirror
-established after ownership. Member-private works retain their separate `self`
-Space and reader-specific authorization. Uploaders on hosts without Spaces must
-explicitly accept plyr-only storage. Existing catalogs are not migrated. Along the way: the
-1.5 GiB case found a single-copy R2 promotion timeout, fixed with bounded
-multipart copy (#2237); account deletion learned the protected source boundaries
-(#2238, closing #2235); the October 29 spaces alpha removed
-`com.atproto.simplespace.*`, so private spaces moved to `com.atproto.space.createSpace`
-with a `memberspace` policy (#2248, prod `2026.1029.204905`); the client names
-the authority as `#atproto_pds` and verifies commit MACs on `listRepoOps` (#2216,
-#2226). Production browser smoke passed at desktop/light and mobile/dark, through
-PDS ownership, anonymous playback, download denial and byte-exact owner recovery.
-See [the contract and runbook](docs/internal/architecture/protected-pds-audio.md).
-
-The same day, a real report (track 1656) showed that **owner-only listening
-blocked audio but left title, policy and feed eligibility public** (#2244, prod
-`2026.1029.063143`). Owner-only now restricts metadata to its owner across
-listings, search, albums, interactions, Subsonic, activity, queue/jam hydration
-and cached radio rotations; new owner-only uploads skip public post-create hooks.
-Already-published public PDS records are not retracted (#2245, a separate
-decision). Permission consent copy was rewritten and the deployed grants audited
-(#2246); readiness now requires the complete owner-management grant per Space
-(#2247). See the [permission audit](docs/internal/research/2026-10-29-permission-consent-audit.md)
-and [owner-only visibility](docs/internal/backend/owner-only-visibility.md).
-
-#### an AI agent's catalog, tags that travel, and a fairer latest feed (#2201, #2208, #2209, October 21–23 — prod `2026.1021.202702`, `2026.1023.055206`, `2026.1023.061530`)
-
-penny.hailey.at, an AI agent, uploaded dozens of untagged tracks; 16 of the top 50
-in latest were hers. plyr asked publicly on October 21 that they carry the `ai`
-tag. Two changes made that possible without plyr writing on anyone's behalf:
-**tags are now part of the track record** (#2201, prod October 21) — uploads and
-edits write `tags` to the PDS, ingestion projects them, other clients' tags are
-honored, and legacy DB-only tags migrate on an authorized login; Penny's 63
-indexed tracks were refreshed and the three carrying `tags: ["ai"]` show it. And
-**the labeler can label an account `ai`** (#2208, prod October 23): the label's
-subject is the DID, it projects to `artists.operator_labels`, and the account's
-tracks hide wherever the `ai` tag hides them (latest, for you, radio outside slop);
-the artist page says so and still lists everything. Penny's own January essay had
-proposed exactly an account-level label. Operators apply it with
-`scripts/label_account.py`; see `docs/internal/moderation/label-policy.md`.
-Separately, one artist uploading 4–11 mixes a day filled 41 of the top 50 latest
-tracks; **latest now shows at most three tracks per artist per UTC week** (#2209,
-prod October 23, announced October 27), computed after hidden-tag and label
-filters so hidden tracks use no slot. Radio and for-you already diversified.
-
-#### costs, and asking heavy uploaders for help (#2184, #2197, #2198, #2202, #2231, October 17–27)
-
-The upload page offers GitHub sponsorship once an account's catalog passes
-`UPLOAD_SPONSOR_THRESHOLD_HOURS` (default 24), showing uploaded hours and an
-estimated copyright-scan cost (#2184, prod `2026.1018.011142`, announced October
-18: moderation is plyr's largest operational cost). Uploads stay unrestricted.
-Uploads and processing are paused for an explicit DID list in `upload_policy.py`
-(#2197, prod `2026.1020.232806`); paused accounts see a notice and a private
-feedback form that DMs the operator in full (#2198). Staging rests its worker and
-Jetstream between tests and scales the app to zero (#2202), and the CLAP embedding
-service source now allows scale-to-zero (#2231); its separate Modal rollout is
-not established by a backend release. Run `just staging-up` before verifying
-anything that ingests.
-
-#### listening history, and the chart to read it (#2191, #2212, #2218–#2220, October 19–23 — prod `2026.1019.172214` → `2026.1023.212809`)
-
-The activity page has day/week/month/year/all-time ranges with hourly, daily and
-monthly UTC buckets (#2191), a rolling-average line over faint raw bars, and
-all-time starts at launch instead of six backdated 2021–2023 records (#2212). A
-**plays** series reads the new `track_plays` table: one row per counted web or
-Subsonic play, no listener identity. History before October 23 comes from
-plyr-origin teal.fm scrobbles, backfilled as hourly docket tasks per account
-(#2218–#2220; a refused collection is skipped, an unreachable host gives up after
-a day), about a fifth of counted plays, drawn dashed and labeled "scrobbled plays
-only". See `docs/internal/frontend/activity-chart.md`.
-
-#### the sign-in page says where you're going (#2186, #2188, #2195, October 18–20 — prod `2026.1019.172214`, `2026.1020.202916`)
-
-Once a handle resolves, the login page shows the account's avatar and name and the
-button reads "continue at bsky.social ↗" (or the self-hosted host), with a line
-that plyr.fm never sees your password. The host comes from the DID doc → PDS →
-protected-resource metadata, never hardcoded. The lookup never blocks sign-in; a
-cold resolution can take 3–10 s. The add-account menus still redirect immediately.
-
-#### reliability, October 16–29
-
-- **a Redis that accepts and never replies froze the API** (#2161, prod
-  `2026.1016.204035`): py-spy caught SlowAPI's synchronous `evalsha` on the event
-  loop. Reads bounded at 500 ms, limit checks in the thread pool.
-- **uploads accepted 1.5 GiB, the transcoder rejected above 1 GiB; a Redis blip
-  killed the Docket consumer while its heartbeat kept beating** (#2170, prod
-  `2026.1017.062711`): one size contract, consumer failure exits the worker for
-  Fly to restart, `/health/freshness` reports overdue queue work. The PDS alert
-  retrospective and a CI audit from the same day were committed late (#2224).
-- **expired PDS tokens were rejected mid-stream and never refreshed** (#2183);
-  **a publishing token with a rejected refresh grant kept admitting uploads** —
-  24 failed attempts for one account on October 28 — and is retired on confirmed
-  `invalid_grant` (#2239; hotfixed from `production-fe` as #2240,
-  `2026.1029.032248`, ahead of the protected-audio release). `just release` now
-  refuses on diverged production history and offers a reconciliation (#2241).
-- **deleting a track could deadlock with Jetstream's delete of the same record**
-  and take an album cascade with it (#2228): the row is locked before the cascade.
-- **moderation records private indexing decisions and ingest enforces them**
-  (#2149–#2151, prod `2026.1016.192720`): an excluded URI can no longer trigger
-  writes, mirroring or post-create work; the 42 operator exclusions were
-  documented, not written.
-- also: the new-track DM waits for the optimized rendition (#2221, closes
-  #1932); ffmpeg from a digest-pinned image (#2200); certifi/webpki bumped for
-  the eMudhra CA compromise (#2196); atlas and image moderation on Claude 5.5
-  (#2225); staging integration suites run one at a time (#2227).
-
-#### smaller, mostly frontend promotes
-
-Drawers dismiss reliably by touch and don't flash back (#2148, #2167, #2179);
-comments close button clears the composer (#2182); full-size covers before
-thumbnails (#2159); queue artist links keep audio playing (#2160); radio skips a
-station entry whose audio fails (#2187); catalog duration in weeks and days
-(#2194); hide-tags is a ⌘K-style sheet above the iOS keyboard (#2211, #2215);
-links menu fits phones (#2214); no touch focus or double-tap zoom (#2232); tag
-suggestions survive focus moves and WebKit touch, caught only by real-browser
-regressions (#2243); artist guide refreshed (#2223). Haptics on sheet settle
-(#2169) merged with no promote behind it.
-
-#### first anniversary (October 28)
-
-The first commit was October 28, 2025; 400 production releases to date. The
-whole-history episode, [plyr.fm update - year one](https://plyr.fm/track/1394),
-was published October 11 (#2146). Three maintenance PRs (#2147, #2190, #2229)
-remain unmerged, so this pass covers October 11–31 in one episode.
-
-Episode audio used to expire after seven days; the October 12/19 audio is gone,
-although their transcripts remain in the PRs. Retention is now 30 days, matching
-the lab. The October 26 audio and this run were also backed up locally.
+See `.status_history/2026-10.md` for detailed history: the day-by-day entries
+and the October 11–31 arcs (plylst and the API changes it asked for, #2250–#2254;
+protected audio on the artist's PDS, #2233–#2249; Penny's `ai` label and
+portable tags, #2201, #2208; three-per-artist latest, #2209; the sponsorship
+prompt and AddLine's pause, #2184, #2197; the activity chart, #2191–#2220; the
+sign-in page, #2186–#2195; reliability, #2161–#2241; first anniversary). The
+October 1–9 arcs were covered by #2141.
 
 ### September 2026
 
@@ -454,76 +228,56 @@ deleted its PDS audio (#1904).
 ### November 2025 – July 2026
 
 See `.status_history/`, one file per month, `2025-11.md` through `2026-07.md`.
-Arcs that used to sit under current focus are in `2026-09.md` with their open
-threads; anything still live is in known issues.
+Arcs that used to sit under current focus are in `2026-09.md` and `2026-10.md`
+with their open threads; anything still live is in known issues.
 
 ## priorities
 
 ### current focus
 
-**the radio page is the sister-radio fork, and the catalog is on the sister
-network** (#2097–#2107, September 28 — prod `2026.0928.035150`,
-`2026.0928.140223`; `plyr-radio` Fly app): the vendored SolidJS page from our
-fork of Ana's sister-radio drives plyr's one audio element; presence is a
-Redis lease per socket, identity from the session cookie only; four stations
-are `did:web` identities with signed `pet.nkp.radio.station` records that
-Ana's tuner discovers. Firehose is the single live HLS exception, and since
-October 9 the radio embed airs it too (#2136). **next**:
-#2102 moves the protocol surface into the backend and retires the one-machine
-adapter (its signing key lives on a volume — losing it changes the station's
-public key); verify mute, HLS and the reported track-boundary loop on a
-physical iPhone; decide whether the compact embed gets a Media Session policy.
+**the Next rewrite, and its cutover** (#2650; `next/README.md`, the
+[November 12 handoff](docs/research/2026-11-12-next-handoff.md) and the
+[inventory](docs/research/2026-11-04-rewrite-progress-and-scope.md)): Next is
+a read-only Zig appview whose index rebuilds from records, a SvelteKit web
+client at next.plyr.fm, an Expo client for iOS and Android, one TypeScript
+core, a playback coordinator at jams.next.plyr.fm, an audio Worker and a
+processing app. Clients write `fm.plyr.*` records straight to the PDS; the
+server keeps only what is rebuildable or its own named state. Live on Next:
+browsing, playback, the queue, Jams, radio, settings, sign-in, the creator
+portal, public and private publishing, albums and playlists, downloads.
+**Not ported**: personalised and semantic discovery, private listening
+history, moderation preferences; login discovery, legacy embeds and Radio
+still read production services. **next**: deploy the #2722 reader, then the
+Next publisher (#2723); accept the native app on physical devices; cutover
+rehearsal, legacy URLs; SDK and MCP are deferred. Records Next writes are the
+user's and survive any rollback, so lexicon shapes change in both apps together.
 
-**an upload is two writes and one promise** (#2063, #2070, #2075, September
-18–19 — prod `2026.0918.172630` → `2026.0919.214851`): the job row now decides
-whether an upload is alive, hints precede bytes, and a failed job's media is
-re-swept for seven days. The same window closed three races of one shape —
-the Jetstream echo of plyr's own PDS write beating the task that made it
-(#2066, #2069, #2070) — and the double-submitted form (#2063). Since
-September 21 an external monitor can read the pipeline's pulse at
-`/health/freshness`, and the reaper sweeps the pre-worker `pending` rows that
-check measures (#2084, #2085, #2087). **next**, from garrison's essay: verify
-the promoted object inside the publication step; a read-only inventory of
-`audio/` against every media column; a sweep on `result.transfer`; a
-compare-and-set finalize in `ingest_track_create` so the post-create hooks
-cannot run twice (known issues); and, once a PDS nonce problem is not the
-first suspect, a test account on blacksky.app.
-
-**publishing permissions are independent of storage** (#2049, #2056, #2057):
-Portal defaults, album application and per-track exceptions are in production.
-Listening audience, downloads, discovery and rights metadata are separate choices.
-Today “my Space members” also means private metadata; private R2 audio alone does
-not hide a work, and since October 29 owner-only listening hides metadata too
-(#2244). The playback Space (prod `2026.1029.040850`) preserves audience choices
-without making a protected public work members-only. Moving existing works across
-Space boundaries remains a separate migration decision.
-
-**records are moving into the client's hands — parked until the sign-in design is redone** (plan `docs/plans/2026-08-31-client-side-writes.md`; #1948–#1950 shipped in prod `2026.0901.065150`, reverted September 1 in #1952): phase 0 made the frontend a second OAuth client and chained its consent after the cookie login, so every sign-in showed two authorization screens. the direction stands — the file an artist uploads goes in their PDS as-is, plyr indexes/mirrors/serves, and the backend stops authoring records on anyone's behalf — but the next attempt must fit inside the single existing login, with scope growing only when a feature that needs it is used. **next**: redesign how the browser gets a repo-write capability without a second flow, then phase 1 (likes).
-
-**private media on permissioned spaces — in production since October 29, still
-alpha-tracking** (#1557→#1574, #1684, #1876–#1905, #2233–#2249, epic #1384):
-member-private metadata/audio lives in the artist-owned `self` Space, created
-since #2248 with the October 29 `com.atproto.space` / `memberspace` methods; its
-authority decides membership for each reader; supporter standing is independent.
-Protected public audio lives in the separate public-read, app-restricted
-`playback` Space (prod `2026.1029.040850`). Host support
-(`describeServer.spacesAlpha`) and approved OAuth permissions are separate facts;
-readiness requires the complete owner-management grant (#2247). Authority and
-repo hosts resolve through `#atproto_pds`. Credential caches and issued mirror
-URLs bound revocation without promising immediate recall. See [private media](docs/internal/architecture/permissioned-private-media.md)
+**private media is in production and still alpha-tracking** (#2233–#2249,
+#2511–#2514, #2714, #2724, epic #1384): the October 29 alpha moved private
+spaces to `com.atproto.space`; the November 12 alpha renamed the credential key
+and membership methods (fixed in prod `2026.1112.201458`); the November 15
+build removed `getSpaceCredential` (fixed on staging only). Issued credentials
+run to their TTL, so removal is eventual. See [private media](docs/internal/architecture/permissioned-private-media.md)
 and [protected public audio](docs/internal/architecture/protected-pds-audio.md).
-Existing-catalog migration is a separate decision; the spec is still moving
-(Bryan Newbold, October 11: network rollout expected by end of November).
+Next adds policy records on top (#2584); the spec is still moving.
 
-**next**: remove the `/admin/*` machine-endpoint aliases now that prod calls `/internal/*` (#1691); re-enable `test_private_media.py` somewhere that has the local postgres/redis fixtures (it is excluded from the staging-facing workflow). which surfaces beyond albums/playlists count as queueable contexts (artist catalogs #1353, feeds/search). publish the five record lexicons (`fm.plyr.track`, `.like`, `.comment`, `.list`, `.actor.profile`) with a docs-quality pass on each (next phase after #1569); a production smoke-test harness for private media (file-types × visibilities, fully inert — no DM/listing/stats — per prod release); enable the `copyright-paradigm` flag for own DID and start dogfooding on prod; co-writer / publisher editing UI for `additionalInterestedParties` (backend plumbed end-to-end, frontend deferred); prefill ISWC/ISRC/masterOwner on the portal edit form (we only have the URIs locally, not field contents); fly worker tcp health check (running-but-stuck symptom detector); upstream `atproto_oauth.OAuthClient` body-factory support (lets us drop `_signed_streaming_post`); deploy-docs sanity check; `config.py` decomposition.
+**still open from earlier arcs** (text in `.status_history/2026-10.md`): the
+radio page is the sister-radio fork and four stations are on Ana's network
+(#2097–#2107; #2102 consolidates the one-machine adapter); an upload is two
+writes and one promise (#2075; compare-and-set finalize still pending);
+client-side writes in the legacy app are parked (#1948–#1952), which Next makes
+moot by writing from the client from the start.
 
 ### known issues
 
+- **production's legacy Spaces client calls a method the hosted PDS removed** (#2724, November 15, staging only): the November 15 PDS build dropped `getSpaceCredential` and changed the commit MAC tag, so production private-media reads against that host fail until the next backend release carries #2724; the live private-media CI failure is #2574. #2714 fixed Next the same day.
+- **an unlisted first record from Next is public in legacy search until #2722 ships** (staging only, November 15): legacy ingest now projects the unlisted intent on the initial write; the Next publisher (#2723) waits on this reader reaching production.
+- **the native Next app has not been accepted on a physical device**: TestFlight builds exist (#2564, #2601 fixed a bug found on build 37) and simulator checks pass, but gestures, background playback and the share extension on a real iPhone remain the cutover gate.
+- **Next's space-sync consumer runs nowhere yet** (#2632, #2634): the copy table and the sync account exist, no Fly process group runs the consumer, and closed tracks keep their metadata public until something reads the copy.
 - **an owner-only work's public PDS record still names it** (#2245, October 29): #2244 hides title, policy and feed eligibility inside plyr, but the `fm.plyr.track` record for the reported track stays public on the PDS. Retracting or privately republishing it is an explicit decision, not made yet.
 - **six `/rest` defects noticed while writing the Subsonic guide** (#2222, October 26, not fixed): `getArtist` loads the first 500 albums catalog-wide and then filters; `getOpenSubsonicExtensions` requires auth; `serverVersion` is `0.0.0`; album/playlist `duration` is 0; `scrobble` skips the adult/copyright filter; `getPlaylist` leaks raw exception text.
 - **the moderation stream fixes are still open PRs** (#2152–#2155, October 16): replaying labels from ordered durable events, accepting standard CBOR label notifications, and keeping historical retractions from resolving current flags were prepared alongside #2149–#2151 and not merged. Also open: resuming stalled R2 reads (#2199) and signed-out hidden tags on latest (#2230).
 - **optimizing a non-web-playable upload still takes ~5 minutes** (#1933): ~88 s of it is streaming the source out of R2 before ffmpeg starts. #2221 made the DM wait for it; the copy itself is unchanged.
-- **AddLine’s upload pause is lifted in source** (November 15): the Python backend now has an empty pause list; Next is unchanged. Production takes effect on the backend release; previously ignored firehose events and failed jobs are not replayed.
 - **native radio has not been checked on a physical iPhone** (#2101, #2104, #2105, September 28): the mute fix targets a Safari behavior (`volume = 0` ignored) verified only with a stubbed element; a reported iPhone loop at a track boundary was not reproduced on desktop; HLS Firehose and the lock-screen presentation are unverified on a device. The same gap as the live-radio item below, now for the whole page. Station switching that "plays for a while and then dies" got a fix on October 8 (#2111) written as a hope; whether it held is unreported.
 - **sister-radio syndication is one Fly machine with no redundancy** (#2103 → #2102): the `plyr-radio` adapter advertises four stations from a 512 MB machine in Chicago; if it is down, native `/radio` keeps playing but Ana's directory drops the stations after health checks. Consolidation into the backend is the fix.
 - **post-create hooks may run twice when the Jetstream echo and the upload task both finalize a track** (staging track 9392, September 18, unreproduced): `ingest_track_create` finalizes a pending row with a plain ORM write, not a compare-and-set, and the upload task's own `post-create hooks completed` landed 14 s after `ingest: finalized pending track` for the same row. The hooks send the notification DM and start the copyright scan. Written up in #2070.
@@ -612,6 +366,12 @@ Existing-catalog migration is a separate decision; the spec is still moving
 - styling: vanilla CSS with shared design tokens
 - state management: Svelte 5 runes
 
+**next** (the rewrite beside production; `next/README.md`)
+- appview: Zig, read-only, index rebuildable from records; Neon branch, Redis, R2
+- web: SvelteKit static build at next.plyr.fm; native: Expo for iOS and Android; shared `next/core`
+- services: playback coordinator (jams.next.plyr.fm), audio Worker, space-stream syncer, Rust processing app
+- API at api.next.plyr.fm; deploys never promote production
+
 **deployment**
 - ci/cd: GitHub Actions
 - staging: backend (Fly.io) and frontend (Cloudflare Pages) deploy from `main`
@@ -631,6 +391,7 @@ Existing-catalog migration is a separate decision; the spec is still moving
 - production frontend: https://plyr.fm
 - production backend: https://api.plyr.fm
 - staging: https://stg.plyr.fm / https://api-stg.plyr.fm
+- next: https://next.plyr.fm / https://api.next.plyr.fm (own deploys, never a production promote)
 
 ### technical decisions
 
@@ -680,6 +441,7 @@ see the [contributing guide](https://docs.plyr.fm/contributing/) for setup instr
 
 ---
 
-this is a living document. last updated 2026-10-31 by the status-maintenance
-pass covering October 11–31 (window opened by #2141): October's day-by-day
-entries moved to `.status_history/2026-10.md`, resolved known issues archived.
+this is a living document. last updated 2026-11-16 by the status-maintenance
+pass covering November 1–16 (window opened by #2256): the October arcs and the
+old current-focus text moved to `.status_history/2026-10.md`, the November 4–12
+Next checkpoint entries moved verbatim to `.status_history/2026-11.md`.
