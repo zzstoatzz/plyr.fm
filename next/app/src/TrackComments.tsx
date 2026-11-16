@@ -22,7 +22,7 @@ export function TrackComments({ track }: { track: Track }) {
   const comments = useTrackComments(track.id);
   const current = player.current?.id === track.id;
   const positionMs = current ? player.status.currentTime * 1000 : 0;
-  const seek = current && player.canSeek ? player.seek : undefined;
+  const seek = current && player.status.isLoaded && player.canSeek ? player.seek : undefined;
   const passing = current && player.status.playing
     ? passingComment(comments.comments, comment => comment.timestamp_ms, positionMs) : undefined;
   const count = comments.comments.length;
