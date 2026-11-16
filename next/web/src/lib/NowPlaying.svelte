@@ -254,7 +254,7 @@
 	@media (max-width: 720px) and (max-height: 820px) {
 		.sheet .position { margin-top: 0.5rem; }
 		.sheet .commands { margin-block: 0.4rem; }
-		.sheet .copy { padding-top: 0.75rem; }
+		.sheet .copy { padding-top: 0.5rem; }
 		.sheet h1 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
 	}
 </style>
