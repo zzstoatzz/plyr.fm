@@ -2,13 +2,26 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { auth, logout } from '$lib/auth';
+	import { page } from '$app/state';
+	import { auth, authorizeScrobbling, canScrobble, logout } from '$lib/auth';
 	import { player } from '$lib/player.svelte';
 	import { accents, prefs, scales, setPrefs, themes } from '$lib/prefs.svelte';
 	import Icon from '$lib/ui/Icon.svelte';
 
 	let account = $state.raw(auth.getAuth());
 	onMount(() => auth.subscribe(() => { account = auth.getAuth(); }));
+	let authorizing = $state(false);
+	let scrobbleError = $state(false);
+	const granted = $derived(account.did && canScrobble());
+
+	async function toggleScrobbling(input: HTMLInputElement) {
+		if (!input.checked) { setPrefs({ tealScrobbling: false }); return; }
+		scrobbleError = false;
+		authorizing = true;
+		try { await authorizeScrobbling(); }
+		catch { scrobbleError = true; input.checked = false; }
+		finally { authorizing = false; }
+	}
 
 	async function signOut() {
 		void logout();
@@ -75,6 +88,18 @@
 	</section>
 
 	{#if account.did}
+		<section aria-labelledby="integrations">
+			<h2 id="integrations">integrations</h2>
+			<div class="card">
+				<label class="toggle">
+					<span><strong>teal.fm scrobbling</strong><small id="scrobble-detail">log your listens to public tracks on teal.fm</small></span>
+					<input type="checkbox" role="switch" aria-label="teal.fm scrobbling" aria-describedby="scrobble-detail" checked={prefs.tealScrobbling && !!granted} disabled={authorizing} onchange={event => toggleScrobbling(event.currentTarget)} />
+				</label>
+				{#if authorizing}<p class="integration-status" role="status">opening sign-in…</p>
+				{:else if scrobbleError || page.url.searchParams.has('teal')}<p class="integration-status" role="status">couldn’t connect teal.fm. try again.</p>
+				{:else if prefs.tealScrobbling && !granted}<p class="integration-status" role="status">sign in again to reconnect teal.fm on this device.</p>{/if}
+			</div>
+		</section>
 		<section aria-labelledby="account">
 			<h2 id="account">account</h2>
 			<div class="card account">
@@ -107,5 +132,6 @@
 	.toggle input::before { content: ''; display: block; width: 1.2rem; height: 1.2rem; border-radius: 50%; background: var(--muted); }
 	.toggle input:checked { background: var(--accent); border-color: var(--accent); }
 	.toggle input:checked::before { transform: translateX(0.9rem); background: var(--on-accent); }
+	.integration-status { padding-block-end: 0.8rem; color: var(--muted); }
 	.account button { flex: none; }
 </style>

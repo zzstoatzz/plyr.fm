@@ -23,10 +23,11 @@ type Preferences = {
 	scale: number;
 	playThrough: boolean;
 	keepPlaying: boolean;
+	tealScrobbling: boolean;
 };
 
 const defaults: Preferences = {
-	theme: 'system', accent: accents[0].color, scale: 1, playThrough: true, keepPlaying: false
+	theme: 'system', accent: accents[0].color, scale: 1, playThrough: true, keepPlaying: false, tealScrobbling: false
 };
 type Account = {
 	key: string;
@@ -38,10 +39,23 @@ type Account = {
 
 export const prefs = $state({ ...defaults });
 let account: Account | undefined;
+let tealVerified = false;
+export function scrobblingEnabled() { return prefs.tealScrobbling && !!account && (!account.request || tealVerified); }
+
+export async function confirmScrobblingConsent(): Promise<boolean> {
+	const current = account;
+	if (!current || !scrobblingEnabled()) return false;
+	try {
+		const confirmed = current.request
+			? decode(await current.request(), true).tealScrobbling === true
+			: decode(read(current.key).prefs).tealScrobbling !== false;
+		return account === current && confirmed && scrobblingEnabled();
+	} catch { return false; }
+}
 
 function decode(value: unknown, remote = false): Partial<Preferences> {
 	if (!value || typeof value !== 'object') return {};
-	const { theme, accent, scale, playThrough, keepPlaying } = value as Record<string, unknown>;
+	const { theme, accent, scale, playThrough, keepPlaying, tealScrobbling } = value as Record<string, unknown>;
 	const result: Partial<Preferences> = {};
 	if (theme === 'system' || theme === 'light' || theme === 'dark') result.theme = theme;
 	if (typeof accent === 'string' && /^#[0-9a-f]{6}$/i.test(accent)) result.accent = accent.toLowerCase();
@@ -51,6 +65,7 @@ function decode(value: unknown, remote = false): Partial<Preferences> {
 	}
 	if (typeof playThrough === 'boolean') result.playThrough = playThrough;
 	if (typeof keepPlaying === 'boolean') result.keepPlaying = keepPlaying;
+	if (typeof tealScrobbling === 'boolean') result.tealScrobbling = tealScrobbling;
 	return result;
 }
 
@@ -86,6 +101,7 @@ async function sync() {
 		const changed = Object.keys(patch).length > 0;
 		const remote = decode(await current.request(changed ? { ...fields, ...(scale === undefined ? {} : { scale: Math.round(scale * 100) }) } : undefined), true);
 		if (account !== current) return;
+		tealVerified = remote.tealScrobbling === true;
 		const pending = { ...current.pending };
 		for (const field of Object.keys(patch) as (keyof Preferences)[]) {
 			if (pending[field] === patch[field]) delete pending[field];
@@ -103,6 +119,7 @@ async function sync() {
 export function restorePrefs(did: string | null, agent: Agent | null, accountSync: boolean) {
 	account?.controller.abort();
 	account = undefined;
+	tealVerified = false;
 	const local = { ...defaults, ...decode(read(key)) };
 	if (!did) {
 		apply(local);
