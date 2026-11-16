@@ -357,7 +357,10 @@ async function collectionControls(browser, phone, scheme) {
     if (phone) {
       await navigation.getByRole('link', { name: 'library', exact: true }).click();
       await page.getByRole('link', { name: 'open queue', exact: true }).click();
-    } else await navigation.getByRole('link', { name: 'queue', exact: true }).click();
+    } else {
+      await page.getByTestId('player-dock').getByRole('button', { name: 'Open now playing' }).click();
+      await page.getByRole('dialog', { name: 'Now playing' }).getByRole('link', { name: 'Open queue' }).click();
+    }
     const queue = page.getByRole('region', { name: 'Queue', exact: true });
     const current = queue.getByRole('region', { name: 'now playing', exact: true });
     const picks = queue.getByRole('region', { name: 'up next', exact: true });
@@ -627,7 +630,8 @@ async function keyboard(browser, phone, scheme) {
     await press('j');
     await dock.getByText(tracks[0].metadata.title, { exact: true }).waitFor();
     if (!phone) {
-      await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'queue', exact: true }).click();
+      await dock.getByRole('button', { name: 'Open now playing' }).click();
+      await page.getByRole('dialog', { name: 'Now playing' }).getByRole('link', { name: 'Open queue' }).click();
       await page.waitForURL('**/queue');
       const dockQueue = dock.getByRole('button', { name: 'Queue', exact: true, pressed: true });
       await dockQueue.waitFor({ timeout: 3000 });
