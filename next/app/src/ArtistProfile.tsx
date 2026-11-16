@@ -8,6 +8,7 @@ import { useAuth } from './auth';
 import { Action, InlineLink, Copy } from './controls';
 import { ListRows, Status, TrackRows, usePages, useResource, type Play } from './CatalogPieces';
 import { Choice } from './AccountPieces';
+import { CatalogMetrics, catalogRuntime } from './CatalogMetrics';
 import { DetailHeader } from './DetailHeader';
 import { PlayerControl } from './PlayerControl';
 import { PlayGlyph } from './PlayerGlyph';
@@ -58,10 +59,14 @@ function ArtistCatalog({ artist, onPlay }: { artist: Artist; onPlay: Play }) {
       {auth.did === artist.did && <Action label="Edit profile" href="/edit-profile" />}
     </>}>
       <Copy>@{artist.handle}</Copy>
-      {metrics.data && <Copy>{metrics.data.totals.tracks} {metrics.data.totals.tracks === 1 ? 'track' : 'tracks'} · {metrics.data.totals.plays} {metrics.data.totals.plays === 1 ? 'play' : 'plays'}</Copy>}
     </DetailHeader>
     {artist.bio && <Copy>{artist.bio}</Copy>}
     {support && <InlineLink standalone href={support as Href}>support artist</InlineLink>}
+    {metrics.data && <CatalogMetrics metrics={[
+      { label: 'plays on Next', value: metrics.data.totals.plays.toLocaleString() },
+      { label: 'tracks', value: metrics.data.totals.tracks.toLocaleString() },
+      { label: 'catalog runtime', value: catalogRuntime(metrics.data.totals.duration_seconds) },
+    ]} />}
     {metrics.error && <View style={styles.actions}><Copy>couldn’t load totals.</Copy><Action label="Retry totals" onPress={metrics.retry} /></View>}
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }}>
       <View {...catalogTabs.list} style={[styles.tabs, { borderColor: theme.hairline }]}>

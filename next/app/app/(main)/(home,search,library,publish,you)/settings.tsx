@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChartBar as ChartNoAxesColumn, Check, Palette, Headphones, UserCircle as UserRound } from '../../../src/icons';
+import { Check, Palette, Headphones, UserCircle as UserRound } from '../../../src/icons';
 import { Pressable, Switch, View } from 'react-native';
 import { useAuth, logout } from '../../../src/auth';
 import { useAppearance } from '../../../src/appearance';
@@ -57,7 +57,6 @@ export default function Settings() {
         <SettingsRow label="sign out" destructive onPress={() => void logout().catch(() => setError('could not revoke this session.'))} />
       </> : <SettingsRow label="sign in" detail="settings are saved on this device. sign in to save them with your account." href={login} />}
     </SettingsSection>
-    <SettingsSection title="plyr.fm" icon={ChartNoAxesColumn}><SettingsRow label="stats" detail="tracks, artists and listening across Next" href="/stats" /></SettingsSection>
     {error && <Copy live>{error}</Copy>}
     {savingHelp && <Sheet title="save preferences across devices" close={() => setSavingHelp(false)}>
       <Copy>your appearance and playback settings are saved on this device for this sign-in. sign in again to save them with your account and use them on other devices.</Copy>
