@@ -100,7 +100,7 @@ function TrackDetail({ id, onPlay, onEnqueue, trackActions }: {
         <ShareLink compact path={`/track/${encodeURIComponent(track.id)}`} />
         <PlayerControl icon={Ellipsis} label="More" onPress={() => setActionsOpen(true)} />
       </>}
-      comments={<TrackComments track={track} play={() => onPlay(track)} />} />
+      comments={<TrackComments track={track} />} />
     {actionsOpen && <TrackMenu track={track} close={() => setActionsOpen(false)} actions={trackActions?.(track)} />}
   </>;
 }
