@@ -101,7 +101,7 @@ function AccountPortal({ did, handle }: { did: string; handle: string | null }) 
       </Pressable>
     </Link>
     <View style={row}>
-      <Action primary label="upload" href="/upload" />
+      <Action primary label="upload" href="/(main)/(publish)/upload" />
       <Action label="edit profile" href="/edit-profile" />
       <ShareLink path={'/u/' + (handle || did)} />
     </View>

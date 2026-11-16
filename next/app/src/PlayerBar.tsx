@@ -15,12 +15,12 @@ import { NowPlaying } from './NowPlaying';
 import { PlayerControl } from './PlayerControl';
 import { useRadio } from './radio-session';
 
-export function PlayerBar() {
+export function PlayerBar({ accessory = false }: { accessory?: boolean } = {}) {
   const player = usePlayback();
   const radio = useRadio();
   const theme = useAppearance();
   const path = usePathname();
-  const { width, height } = useWindowDimensions();
+  const { width, height, fontScale } = useWindowDimensions();
   const [expanded, setExpanded] = useState(false);
   useEffect(() => { setExpanded(false); }, [path]);
   const flying = useFlying();
@@ -59,21 +59,26 @@ export function PlayerBar() {
     onPress={() => player.setPlaying(!playing)} busy={player.loading} />;
   const error = player.error ?? player.status.error;
   const stopRadio = <PlayerControl label="Stop radio" icon={X} onPress={radio.stop} />;
-  const identity = <Pressable accessibilityRole="button" accessibilityLabel="Open now playing" onPress={() => setExpanded(true)}
+  const artist = artistName(track);
+  const subtitle = error ? "couldn’t play this track" : player.outputElsewhere ? "playing on another device" : player.live ? `${artist} · ${player.live.station.label} radio` : artist;
+  const compactAccessory = accessory && theme.scale * fontScale >= 1.6;
+  const titleMaxScale = accessory ? 2.2 / theme.scale : undefined;
+  const identity = <Pressable accessibilityRole="button" accessibilityLabel={`Open now playing, ${track.metadata.title}, ${subtitle}`} onPress={() => setExpanded(true)}
     style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44 }}>
     <View ref={node => { playerSheet.dock.art = node; }} style={carried}><Cover uri={trackArtwork(track)} size={40} radius={6} /></View>
     <View style={{ flex: 1, minWidth: 0 }}>
-      <View ref={node => { playerSheet.dock.title = node; }} style={carried}><Text numberOfLines={1} style={{ color: theme.text, fontSize: 14 * theme.scale, fontWeight: '700' }}>{track.metadata.title}</Text></View>
-      <Text numberOfLines={1} style={{ color: theme.muted, fontSize: 12 * theme.scale }}>{error ? "couldn’t play this track" : player.outputElsewhere ? "playing on another device" : player.live ? `${artistName(track)} · ${player.live.station.label} radio` : artistName(track)}</Text>
+      <View ref={node => { playerSheet.dock.title = node; }} style={carried}><Text numberOfLines={1} maxFontSizeMultiplier={titleMaxScale}
+        style={{ color: theme.text, fontSize: 14 * theme.scale, fontWeight: '700' }}>{compactAccessory && error ? subtitle : track.metadata.title}</Text></View>
+      {!compactAccessory && <Text numberOfLines={1} style={{ color: theme.muted, fontSize: 12 * theme.scale }}>{subtitle}</Text>}
     </View>
   </Pressable>;
   return <>
-    <View ref={dock} testID="player-dock" style={[glassSurface(theme), {
+    <View ref={dock} testID="player-dock" style={accessory ? { flex: 1, justifyContent: 'center', paddingHorizontal: 12 } : [glassSurface(theme), {
       borderWidth: 0, borderTopWidth: 1, paddingHorizontal: 12, paddingVertical: 4, overflow: 'hidden'
     }]}>
-      <View pointerEvents="none" accessible={false} testID="playback-status-inlay" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2,
+      {!accessory && <View pointerEvents="none" accessible={false} testID="playback-status-inlay" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2,
         opacity: playing ? 0.65 : 0.16, backgroundColor: theme.accent,
-        boxShadow: `0px 0px 5px ${theme.accent}66` }} />
+        boxShadow: `0px 0px 5px ${theme.accent}66` }} />}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
         <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center' }}>{identity}{!player.privatePlayback && <TrackLikes key={track.id} track={track} iconOnly returnTo={path} />}</View>
         {play}{player.live ? stopRadio : <PlayerControl label="Next" icon={SkipForward} onPress={() => void player.next()} />}
