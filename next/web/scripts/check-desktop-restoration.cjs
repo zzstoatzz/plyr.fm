@@ -15,6 +15,13 @@ async function verify(browser, origin, width, scheme) {
     } }));
     await page.goto(origin);
     const nav = page.getByRole('navigation', { name: 'Main navigation' });
+    const links = nav.getByRole('button', { name: 'Open links menu' });
+    await links.waitFor();
+    const menuBox = await links.boundingBox();
+    const brandBox = await nav.getByRole('link', { name: 'plyr.fm home' }).boundingBox();
+    assert.ok(menuBox.x + menuBox.width <= brandBox.x, 'links menu sits left of the brand');
+    const featuredBox = await page.getByTestId('home-featured').boundingBox();
+    assert.ok(featuredBox.y < 50, 'Home starts with content, without a reserved links row');
     const home = nav.getByRole('link', { name: 'home', exact: true });
     const radio = nav.getByRole('link', { name: 'radio', exact: true });
     await home.waitFor();

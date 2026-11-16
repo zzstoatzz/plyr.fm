@@ -1,3 +1,4 @@
+const restoredListening = require('./restored-listening-account.cjs');
 const { EventEmitter, once } = require('node:events');
 const assert = require('node:assert/strict');
 const { mkdir } = require('node:fs/promises');
@@ -82,7 +83,11 @@ const coordinator = 'https://jams.next.plyr.fm';
             state: { ...state, revision: 3, personal: { ...personal, keepPlaying: continuation } } }));
           return;
         }
-        if (command.action !== 'play') return;
+        if (command.action === 'playContext') {
+          coordinatorEvents.emit('playContext', command);
+          Object.assign(state, { queue: command.queue, index: command.index, playing: command.playing, revision: state.revision + 1 });
+        }
+        if (command.action !== 'play' && command.action !== 'playContext') return;
         const playing = { ...state, playing: true, revision: 2, updatedAtMs: Date.now(),
           personal: { ...personal, output: { clientId: client, connectionId: 'fixture-socket' } } };
         socket.send(JSON.stringify({ type: 'result', id: command.id, outcome: 'applied', state: playing }));
@@ -244,6 +249,7 @@ const coordinator = 'https://jams.next.plyr.fm';
     }
     await page.setViewportSize({ width: 1280, height: 900 });
     await nav.getByRole('link', { name: 'settings', exact: true }).waitFor();
+    await restoredListening({ page, context, origin, coordinatorEvents, track, did: accounts[handle].did });
     const revoked = page.waitForResponse(response => response.url() === 'https://pds.fixture.test/oauth/revoke' && response.ok());
     await page.getByRole('button', { name: 'sign out' }).click();
     await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'sign in' }).waitFor();

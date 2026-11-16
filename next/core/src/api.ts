@@ -56,6 +56,8 @@ export interface Artist {
 	support_url: string | null;
 }
 
+export interface NetworkArtist { did: string; handle: string; display_name: string; avatar_url: string | null; track_count: number }
+
 export interface ArtistMetrics {
 	object: 'artist_metrics';
 	artist_did: string;
@@ -168,6 +170,8 @@ export function createApi(origin: string, playListenerId: () => string) {
 	}
 
 	return {
+		resolveArtists: (dids: string[], signal?: AbortSignal) => request<{ object: 'list'; data: NetworkArtist[] }>(origin + '/v1/artists/resolve', 15_000, signal,
+			{ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dids }) }).then(page => page.data),
 		resolveTracks: (ids: string[], signal?: AbortSignal) => request<{ object: 'list'; data: Track[]; missing: string[] }>(origin + '/v1/tracks/resolve', 15_000, signal,
 			{ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ids }) }),
 		stats: (signal?: AbortSignal) => get<{ object: 'platform_stats'; tracks: number; artists: number; duration_seconds: number; plays: number; updated_at_ms: number }>('/v1/stats', undefined, signal),

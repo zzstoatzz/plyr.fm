@@ -58,5 +58,4 @@
 	nav a:hover { background: var(--raised); text-decoration: none; }
 	small { display: block; color: var(--muted); }
 	.totals { padding: 0.7rem 0.65rem 0.3rem; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.86rem; }
-	@media (min-width: 721px) { dialog { margin-left: calc(var(--sidebar) + 1rem); } }
 </style>
