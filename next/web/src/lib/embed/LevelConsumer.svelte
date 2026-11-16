@@ -22,6 +22,9 @@
     return () => cancelAnimationFrame(frame);
   });
 </script>
+{#if snapshot && !matchesAnalysis(analysis, snapshot)}
+  <p>analysis unavailable for this audio revision.</p>
+{:else}
 <div class="levels">
   <label>precomputed RMS <meter min="0" max="1" value={rms}></meter><output>{rms.toFixed(3)}</output></label>
   <label>live RMS <meter min="0" max="1" value={liveRms}></meter><output>{snapshot?.analysis ? liveRms.toFixed(3) : 'unavailable'}</output></label>
@@ -29,6 +32,7 @@
     <label>{analysis.bandsHz[i].join('–')} Hz <meter min="0" max="0.1" value={energy}></meter><output>{energy.toFixed(4)}</output></label>
   {/each}
 </div>
+{/if}
 <style>
   .levels { display: grid; gap: 0.75rem; }
   label { display: grid; grid-template-columns: minmax(8rem, 1fr) 2fr 6rem; align-items: center; gap: 0.5rem; }
