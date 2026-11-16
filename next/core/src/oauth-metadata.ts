@@ -10,7 +10,7 @@ export function oauthMetadata(config: AuthConfig, applicationType: 'web' | 'nati
 		client_name: 'plyr.fm (next)',
 		client_uri: SITE_URL,
 		redirect_uris: [native ? NATIVE_REDIRECT_URI : `${SITE_URL}/oauth/callback`],
-		scope: (native ? SCOPE_PARTS : [...SCOPE_PARTS, TEAL_SCOPE]).join(' '),
+		scope: [...SCOPE_PARTS, TEAL_SCOPE].join(' '),
 		grant_types: ['authorization_code', 'refresh_token'],
 		response_types: ['code'],
 		token_endpoint_auth_method: 'none',

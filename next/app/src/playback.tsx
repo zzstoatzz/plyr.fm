@@ -7,6 +7,8 @@ import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-au
 import type { Track } from '@plyr/next-core/api';
 import { useAuth } from './auth';
 import { getAuth } from './auth-state';
+import { useAppPreferences } from './preference-context';
+import { scrobble } from './teal';
 import { isPrivateTrack } from '@plyr/next-core/track-access';
 import { editPrivateQueue, withoutPrivateTrack } from '@plyr/next-core/publishing/private-music';
 import { privateLibrary } from './publishing/private-config';
@@ -25,6 +27,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
   children: ReactNode; playThrough: boolean; keepPlaying: boolean; volume: number;
 }) {
   const auth = useAuth();
+  const { confirmScrobblingConsent } = useAppPreferences();
   const player = useAudioPlayer(null, { updateInterval: 250 });
   const emittedStatus = useAudioPlayerStatus(player);
   const accounting = usePlayerAccounting(player);
@@ -181,7 +184,9 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
       }
       objectUrl.current = availability === 'gated' ? url : null;
       if (previousSource) releaseGatedAudioUrl(previousSource);
-      if (!privateTrack) accounting.begin(track.id, track.metadata.duration_seconds);
+      if (!privateTrack) accounting.begin(track.id, track.metadata.duration_seconds, play => {
+        if (availability === 'available') void scrobble(track, play, auth.did, confirmScrobblingConsent);
+      });
       let settled = false;
       sourceEvents.current = player.addListener('playbackStatusUpdate', (event) => {
         if (request !== sequence.current) return;

@@ -1,4 +1,5 @@
 import { ExpoOAuthClient, TokenInvalidError, TokenRefreshError, TokenRevokedError, type OAuthSession } from '@atproto/oauth-client-expo';
+import { hasTealGrant, TEAL_SCOPE } from '@plyr/next-core/teal-scrobble';
 import { NATIVE_REDIRECT_URI, BASE_SCOPE_PARTS, SCOPE_PARTS, SITE_URL } from './auth-config';
 import { restoreWithin, type RestoreOutcome } from './auth-restore';
 import { clearAuth, getAuth, scopeFor, setAuth } from './auth-state';
@@ -10,6 +11,7 @@ export const authAvailable = true;
 const ACTIVE_KEY = 'plyr-next:active-did';
 const RESTORE_DEADLINE_MS = 8000;
 
+let grantedScope = '';
 let client: ExpoOAuthClient | undefined;
 function oauthClient() {
 	return client ??= new ExpoOAuthClient({
@@ -19,7 +21,7 @@ function oauthClient() {
 			client_name: 'plyr.fm (next)',
 			client_uri: SITE_URL,
 			redirect_uris: [NATIVE_REDIRECT_URI],
-			scope: SCOPE_PARTS.join(' '),
+			scope: [...SCOPE_PARTS, TEAL_SCOPE].join(' '),
 			grant_types: ['authorization_code', 'refresh_token'],
 			response_types: ['code'],
 			token_endpoint_auth_method: 'none',
@@ -29,9 +31,9 @@ function oauthClient() {
 	});
 }
 
-async function activate(session: OAuthSession) {
-	const token = await session.getTokenInfo();
-	setAuth(session.did, { handle: session.fetchHandler.bind(session) }, token.scope);
+function activate(session: OAuthSession, scope: string) {
+	grantedScope = scope;
+	setAuth(session.did, { handle: session.fetchHandler.bind(session) }, scope);
 }
 
 // The library also treats network TypeErrors as fatal; a dropped connection is not a revoked session.
@@ -61,7 +63,7 @@ type Restored = { session: OAuthSession; scope: string };
 function settleRestore(outcome: RestoreOutcome<Restored>) {
 	if (outcome.kind === 'restored') {
 		const { session, scope } = outcome.value;
-		return setAuth(session.did, { handle: session.fetchHandler.bind(session) }, scope);
+		return activate(session, scope);
 	}
 	if (outcome.kind === 'expired') {
 		removeLocal(ACTIVE_KEY);
@@ -80,7 +82,7 @@ export async function login(identifier: string, deviceOnly = false, intent?: str
 		scope: await scopeFor(handle, deviceOnly),
 		redirect_uri: NATIVE_REDIRECT_URI
 	});
-	await activate(session);
+	activate(session, (await session.getTokenInfo()).scope);
 	writeLocal(ACTIVE_KEY, session.did);
 }
 
@@ -89,8 +91,26 @@ export async function createAccount(provider: string, _intent?: string) {
 	const session = await oauthClient().signIn(provider, {
 		scope: BASE_SCOPE_PARTS.join(' '), prompt: 'create', redirect_uri: NATIVE_REDIRECT_URI
 	});
-	await activate(session);
+	activate(session, (await session.getTokenInfo()).scope);
 	writeLocal(ACTIVE_KEY, session.did);
+}
+
+export function canScrobble() {
+	return !!getAuth().did && hasTealGrant(grantedScope);
+}
+
+export async function authorizeScrobbling() {
+	const { did, agent } = getAuth();
+	if (!did) throw new Error('sign in to connect teal.fm');
+	if (canScrobble()) return;
+	const scope = [...new Set([...grantedScope.split(' ').filter(Boolean), TEAL_SCOPE])].join(' ');
+	await prepareQueueLogin();
+	if (getAuth().agent !== agent) throw new Error('account changed');
+	const session = await oauthClient().signIn(did, { scope, redirect_uri: NATIVE_REDIRECT_URI });
+	const token = await session.getTokenInfo();
+	if (session.did !== did || getAuth().agent !== agent) throw new Error('account changed');
+	activate(session, token.scope);
+	if (!hasTealGrant(token.scope)) throw new Error('teal.fm permission was not granted');
 }
 
 export async function logout() {
