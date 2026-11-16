@@ -12,7 +12,8 @@ import { LargeUploads, useLargeUploads } from './LargeUploads';
 import { canonicalAudioType, needsPlyrStorage, uploadInProgress } from '@plyr/next-core/publishing/upload-queue-model';
 import { uploadQueue, useUploadQueue } from './upload-queue';
 import { UploadQueueList } from './UploadQueue';
-import { usePendingSharedAudio, useSharedAudio } from './shared-audio';
+import { useSharedAudio } from './shared-audio';
+import { UploadSignIn } from './UploadSignIn';
 import { TagsField } from './TagsField';
 import { normalizeTrackTags } from '@plyr/next-core/publishing/track-tags';
 import { CreateRecovery, EarlierCreates, useCreateRecovery } from './CreateRecovery';
@@ -30,17 +31,9 @@ export default function Upload() {
   const [session, setSession] = useState({ rpc: auth.rpc, version: 0 });
   if (session.rpc !== auth.rpc) setSession({ rpc: auth.rpc, version: session.version + 1 });
   return <Page title="upload">
-    {!auth.ready ? <Copy>loading your account…</Copy> : !auth.did ? <SignedOut onlyYou={onlyYou} />
+    {!auth.ready ? <Copy>loading your account…</Copy> : !auth.did ? <UploadSignIn onlyYou={onlyYou} />
       : <TrackUpload key={`${auth.did}:${session.version}`} auth={auth} onlyYou={onlyYou} />}
   </Page>;
-}
-
-function SignedOut({ onlyYou }: { onlyYou: boolean }) {
-  const shared = usePendingSharedAudio();
-  return <>
-    {shared && <Copy>sign in to upload {shared}.</Copy>}
-    <Action label="Sign in" href={{ pathname: '/login', params: { return_to: onlyYou ? '/upload?visibility=only-you' : '/upload' } }} />
-  </>;
 }
 
 type Draft = { title: string; album: string; description: string; tags: string; named?: boolean; autoTag?: boolean };

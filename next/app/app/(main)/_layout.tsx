@@ -23,8 +23,9 @@ function LiquidTabs() {
   const contentStyle = { backgroundColor: theme.background };
   const hasPlayer = !!current || !!(radio.station && radio.song && radio.snapshot);
   return <ThemeProvider value={{ ...base, colors: { ...base.colors, ...contentStyle } }}>
-    <NativeTabs backBehavior="history" minimizeBehavior="never" tintColor={theme.accent}>
-      {hasPlayer && <NativeTabs.BottomAccessory><LiquidPlayerAccessory /></NativeTabs.BottomAccessory>}
+    <NativeTabs backBehavior="history" minimizeBehavior="never" tintColor={theme.accent}
+      unstable_nativeProps={{ ios: { bottomAccessoryHidden: !hasPlayer } }}>
+      <NativeTabs.BottomAccessory><LiquidPlayerAccessory /></NativeTabs.BottomAccessory>
       <NativeTabs.Trigger name="(home)" contentStyle={contentStyle}>
         <NativeTabs.Trigger.Icon sf={{ default: 'house', selected: 'house.fill' }} />
         <NativeTabs.Trigger.Label>home</NativeTabs.Trigger.Label>
