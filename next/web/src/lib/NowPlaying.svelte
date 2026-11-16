@@ -16,6 +16,9 @@
 	import LiveProgress from './radio/LiveProgress.svelte';
 	import { playerSheet } from './player-sheet';
 	import type { DockPull } from './dock-pull';
+	import CommentComposer from './listening/CommentComposer.svelte';
+	import Likers from './listening/Likers.svelte';
+	import { compactCount } from './listening/format';
 
 	let { close, pull }: { close?: () => void; pull?: DockPull } = $props();
 	let motion: ReturnType<typeof playerSheet>;
@@ -115,7 +118,7 @@
 				<h1 data-testid="now-playing-title">{player.current.metadata.title}</h1>
 				<a class="subtle" href={resolve('/(app)/u/[actor]', { actor: player.current.artist.profile.handle || player.current.artist.did })}>{artistName(player.current)}</a>
 				{#if player.current.metadata.album}<p class="subtle">{player.current.metadata.album}</p>{/if}
-				<div class="position">{#if player.liveStation}<LiveProgress />{:else}<Scrub stacked chapter={chapters.chapters[chapter]?.title} />{/if}</div>
+				<div class="position">{#if player.liveStation}<LiveProgress />{:else}<Scrub stacked comments chapter={chapters.chapters[chapter]?.title} />{/if}</div>
 				<div class="commands" class:live={!!player.liveStation}>
 					<Transport />
 				</div>
@@ -140,6 +143,13 @@
 			{/if}
 		</div>
 		<div class="details" data-testid="now-playing-details">
+				{#if !player.liveStation && !player.privateMode}
+					{#key player.current.id}<div class="composer"><CommentComposer track={player.current} compact /></div>{/key}
+				{/if}
+
+			{#if !player.privateMode && !player.liveStation}
+				<div class="facts" data-testid="now-playing-facts"><div><small>plays</small><strong>{compactCount(player.current.metrics.play_count)}</strong></div><div><small>likes</small><Likers track={player.current} /></div><div><small>added</small><strong>{new Date(player.current.metadata.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }).toLowerCase()}</strong></div><div><small>length</small><strong>{clock(player.current.metadata.duration_seconds ?? 0)}</strong></div></div>
+			{/if}
 			{#if !player.liveStation}
 				<div class="options">
 					<button class="icon-button" type="button" aria-label="Shuffle queue" onclick={() => player.shuffle()}><Icon name="shuffle" size={20} /></button>
@@ -192,6 +202,10 @@
 	.commands.live { justify-content: center; }
 	.stop { display: flex; margin-inline: auto; }
 	.options { justify-content: center; }
+	.composer { margin-top: 0.75rem; }
+	.facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.5rem; padding-block: 1rem; border-block: 1px solid var(--line); font-size: 0.875rem; }
+	.facts strong { font-weight: 650; }
+	.facts small { font-size: 0.7rem; color: var(--faint); }
 	.details { padding-block: 0.5rem 1rem; }
 	.artist-card { display: grid; grid-template-columns: 3.5rem minmax(0, 1fr) auto; align-items: center; gap: 0.7rem; padding: 0.65rem; border: 1px solid var(--line); border-radius: 0.85rem; background: var(--surface); overflow-wrap: anywhere; }
 	.avatar { border-radius: 50%; overflow: hidden; }
@@ -238,6 +252,9 @@
 		.desktop-close { display: none; }
 	}
 	@media (max-width: 720px) and (max-height: 820px) {
+		.sheet .position { margin-top: 0.5rem; }
+		.sheet .commands { margin-block: 0.4rem; }
+		.sheet .copy { padding-top: 0.5rem; }
 		.sheet h1 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
 	}
 </style>

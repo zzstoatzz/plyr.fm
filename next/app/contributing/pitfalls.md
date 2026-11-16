@@ -33,6 +33,12 @@ instead. Add one when something bites.
 - **The iOS player depends on a pinned `expo-audio` patch.** Changing it needs
   a native rebuild; see [patches/README.md](../patches/README.md).
 
+## web layers and space
+
+- **A hidden action menu can duplicate a track link.** When restoring focus after navigation, match visible controls, not hidden menu links with the same href.
+- **A popover inside Now Playing can inherit its dismissal gesture.** Mark the popup body `data-player-no-pull` and swipe its text in the browser check.
+- **An absent shelf can still reserve a CSS grid row.** Add its area only while the shelf renders; the desktop links menu belongs beside the brand, without a separate Home header row.
+
 ## network and data
 
 - **The Next API allows only the configured origins and

@@ -589,8 +589,8 @@ async function keyboard(browser, phone, scheme) {
     await row.scrollIntoViewIfNeeded();
     const artistLink = row.getByRole('link', { name: 'replyomatic', exact: true });
     const artistBounds = await artistLink.boundingBox();
-    const rowBounds = await row.boundingBox();
-    const x = rowBounds.x + rowBounds.width - (phone ? 66 : 120);
+    const nameBounds = await row.locator('.name').boundingBox();
+    const x = artistBounds.x + artistBounds.width + Math.min(10, (nameBounds.x + nameBounds.width - artistBounds.x - artistBounds.width) / 2);
     const y = artistBounds.y + artistBounds.height / 2;
     assert.ok(x > artistBounds.x + artistBounds.width, 'artist link ends before the blank part of the row');
     if (phone) await page.touchscreen.tap(x, y);

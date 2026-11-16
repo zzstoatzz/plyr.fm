@@ -10,7 +10,7 @@ import { CommentComposer } from './CommentComposer';
 import { timeAgo } from './home-state';
 import { Trash } from './icons';
 import { usePlayback } from './playback';
-import { passingComment } from './comment-faces';
+import { passingComment } from '@plyr/next-core/comment-faces';
 import { commentAuthor } from './ScrubberFaces';
 import { Text } from './Text';
 import { toast } from './toast';
