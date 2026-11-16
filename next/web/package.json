@@ -16,6 +16,7 @@
     "check:artist-catalog": "node scripts/check-artist-catalog.cjs",
     "check:atlas": "node scripts/check-atlas.cjs",
     "check:performance": "node scripts/check-performance.cjs",
+    "check:embed-live": "node scripts/check-embed-live.cjs",
     "check:embed": "node scripts/check-embed-events.cjs",
     "check:radio": "node scripts/check-radio.cjs",
     "check:album-upload": "node scripts/check-album-upload.cjs",
