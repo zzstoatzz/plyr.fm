@@ -5,8 +5,8 @@ import { getAuth, type Auth } from '../auth-state';
 import { Action, Copy, row } from '../controls';
 import type { privatePds } from './private-pds';
 
-export function PrivateTrackDelete({ track, auth, deletion, pending, deleted }: {
-  track: Track; auth: Auth; deletion: ReturnType<typeof privatePds>['deletion']; pending: boolean; deleted: () => void;
+export function PrivateTrackDelete({ track, auth, deletion, deleted }: {
+  track: Track; auth: Auth; deletion: ReturnType<typeof privatePds>['deletion']; deleted: () => void;
 }) {
   const [state, setState] = useState<'closed' | 'confirm' | 'unknown' | 'present'>('closed');
   const [busy, setBusy] = useState(false), [message, setMessage] = useState<string>();
@@ -19,22 +19,20 @@ export function PrivateTrackDelete({ track, auth, deletion, pending, deleted }: 
     try {
       const result = await (remove ? deletion.remove(track) : deletion.check(track));
       if (!sameSession()) return;
-      if (result === 'deleted') { deleted(); return; }
+      if (result === 'deleted') { if (live.current) deleted(); return; }
       if (live.current) { setState('present'); setMessage('this track is still here. review it before deleting again.'); }
     } catch (error) {
       if (live.current && sameSession()) { setState('unknown'); setMessage(error instanceof Error ? error.message : 'could not confirm deletion. check again.'); }
     } finally { locked.current = false; if (live.current && sameSession()) setBusy(false); }
   }
   if (state === 'closed') return <View style={{ alignSelf: 'flex-start', gap: 6 }}>
-    <Action label={`Delete ${track.metadata.title}`} destructive disabled={pending} onPress={() => setState('confirm')} />
-    {pending && <Copy>finish this track’s creation recovery before deleting it.</Copy>}
+    <Action label={`Delete ${track.metadata.title}`} destructive onPress={() => setState('confirm')} />
   </View>;
   return <View style={{ gap: 10 }}>
-    <Copy>delete “{track.metadata.title}” from your private music? this deletes the current version, including changes made elsewhere. it cannot be undone here.</Copy>
-    <Copy>people who already downloaded the audio may still have a copy.</Copy>
+    <Copy>delete “{track.metadata.title}”? this deletes the current version, including changes made elsewhere. it cannot be undone here.</Copy>
     {message && <Copy live>{message}</Copy>}
     <View style={row}>
-      {!auth.privateDeleting ? <Action label="Sign in to delete private music" href={{ pathname: '/login', params: { return_to: '/private' } }} />
+      {!auth.privateDeleting ? <Action label="Sign in again to delete" href={{ pathname: '/login', params: { return_to: '/track/' + track.id } }} />
         : state === 'unknown' ? <Action label={busy ? 'Checking deletion…' : 'Check deletion'} disabled={busy} onPress={() => void run(false)} />
           : <Action label={busy ? 'Deleting…' : 'Delete current track'} primary destructive disabled={busy} onPress={() => void run(true)} />}
       <Action label="Cancel deletion" disabled={busy} onPress={() => { setState('closed'); setMessage(undefined); }} />

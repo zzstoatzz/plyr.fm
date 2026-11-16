@@ -10,13 +10,15 @@
     "check:jams": "node scripts/check-jams.cjs",
     "check:creator": "node scripts/check-creator.cjs",
     "check:collections": "node scripts/check-collections.cjs",
-    "check:browser": "node scripts/check-shell.cjs",
+    "check:browser": "node scripts/check-shell.cjs && node scripts/check-queue-gestures.cjs",
     "check:player-transition": "node scripts/check-player-transition.cjs",
     "check:player-presentation": "node scripts/check-player-presentation.cjs",
     "check:artist-catalog": "node scripts/check-artist-catalog.cjs",
     "check:atlas": "node scripts/check-atlas.cjs",
     "check:performance": "node scripts/check-performance.cjs",
+    "check:embed": "node scripts/check-embed-events.cjs",
     "check:radio": "node scripts/check-radio.cjs",
+    "check:album-upload": "node scripts/check-album-upload.cjs",
     "check:upload": "node scripts/check-upload.cjs",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
@@ -44,6 +46,7 @@
     "@atproto/oauth-client-browser": "0.5.14",
     "@atproto/space": "file:../vendor/space-sdk/atproto-space-0.0.1.tgz",
     "@atproto/syntax": "file:../vendor/space-sdk/atproto-syntax-0.7.6.tgz",
-    "@plyr/next-core": "workspace:*"
+    "@plyr/next-core": "workspace:*",
+    "heic-to": "1.6.7"
   }
 }

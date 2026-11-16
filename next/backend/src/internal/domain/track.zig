@@ -7,6 +7,7 @@
 pub const Track = struct {
     object: []const u8 = "track",
     id: []const u8,
+    legacy_id: ?i32 = null,
     record: Record,
     metadata: Metadata,
     artist: Artist,

@@ -1,6 +1,7 @@
-import { createContext, useContext, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import type { useAudioPlayerStatus } from 'expo-audio';
 import type { Track } from '@plyr/next-core/api';
+import { canToggleTrack } from '@plyr/next-core/track-revision';
 import type { JamIntent } from '@plyr/next-core/jam-connection';
 import type { RadioStation } from '@plyr/next-core/radio';
 import type { ActiveJam } from '@plyr/next-core/jam-playback';
@@ -47,10 +48,41 @@ export interface Playback {
   shuffle(): void;
 }
 
-export const PlaybackContext = createContext<Playback | null>(null);
+const PlaybackContext = createContext<Playback | null>(null);
+const TrackPlaybackContext = createContext<{
+  current: Track | undefined;
+  playing: boolean;
+  inJam: boolean;
+  setPlaying: Playback['setPlaying'];
+} | null>(null);
 
-export function PlaybackOverride({ value, children }: { value: Playback; children: ReactNode }) {
-  return <PlaybackContext.Provider value={value}>{children}</PlaybackContext.Provider>;
+export function PlaybackScope({ value, children }: { value: Playback; children: ReactNode }) {
+  const { current, status: { playing } } = value;
+  const inJam = !!value.jam;
+  const latestSetPlaying = useRef(value.setPlaying);
+  useLayoutEffect(() => { latestSetPlaying.current = value.setPlaying; }, [value.setPlaying]);
+  const setPlaying = useCallback((playing: boolean) => latestSetPlaying.current(playing), []);
+  const trackPlayback = useMemo(() => ({ current, playing, inJam, setPlaying }), [current, playing, inJam, setPlaying]);
+  return <PlaybackContext.Provider value={value}>
+    <TrackPlaybackContext.Provider value={trackPlayback}>{children}</TrackPlaybackContext.Provider>
+  </PlaybackContext.Provider>;
+}
+
+export function useTrackPlaybackState() {
+  const value = useContext(TrackPlaybackContext);
+  if (!value) throw new Error('playback provider is missing');
+  return value;
+}
+
+export function useTrackPlayback(track: Track) {
+  const player = useTrackPlaybackState();
+  const current = canToggleTrack(player.current, track, player.inJam);
+  const playing = current && player.playing;
+  return {
+    current,
+    playing,
+    toggle: (start: () => void) => current ? player.setPlaying(!playing) : start()
+  };
 }
 
 export function usePlayback(): Playback {

@@ -1,7 +1,7 @@
-import { assertPublicCollection } from '../publishing/track-reference';
-import { repoOk as ok, getRecord, putRecord, type RepoRpc } from '../publishing/repo-rpc';
+import { assertPublicCollection } from '../publishing/track-reference.ts';
+import { repoOk as ok, getRecord, putRecord, type RepoRpc } from '../publishing/repo-rpc.ts';
 import type { AwaitStatus } from '../api';
-import { orderedCollection, collectionRecord, CollectionOrderConflict, CollectionOrderUnconfirmed, sameRecord, type CollectionRevision, type CollectionRecord, type CollectionItem } from './collection-order';
+import { orderedCollection, collectionRecord, CollectionOrderConflict, CollectionOrderUnconfirmed, sameRecord, type CollectionRevision, type CollectionRecord, type CollectionItem } from './collection-order.ts';
 
 export function collectionOrdering({ rpc, did, collection, kind, assertSession, settle }: {
   rpc: RepoRpc;

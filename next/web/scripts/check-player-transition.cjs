@@ -52,7 +52,7 @@ async function transition(browser, origin, width, reducedMotion) {
     });
     const rest = (await dock.boundingBox()).y;
     await sampleFrames();
-    await page.getByRole('button', { name: 'load more', exact: true }).click();
+    await page.getByTestId('home-track-row').last().scrollIntoViewIfNeeded();
     const pagedTrack = page.getByRole('link', { name: moreTracks[0].metadata.title, exact: true });
     await pagedTrack.scrollIntoViewIfNeeded();
     const homeScroll = await page.evaluate(() => window.scrollY);

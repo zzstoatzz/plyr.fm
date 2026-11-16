@@ -7,7 +7,8 @@ import type { RepoRpc } from '../src/publishing/repo-rpc.ts';
 import type { CreateOperation } from '../src/publishing/create-operation.ts';
 import { UPLOAD_PART_BYTES, type UploadOperation, type UploadStatus } from '../src/publishing/upload-model.ts';
 import { createUploadQueue } from '../src/publishing/upload-queue.ts';
-import type { QueuedUploadDraft } from '../src/publishing/queued-upload-draft.ts';
+import { jobLine, uploadInProgress } from '../src/publishing/upload-queue-model.ts';
+import { queuedUploadKey, readQueuedUploadDraft, type QueuedUploadDraft } from '../src/publishing/queued-upload-draft.ts';
 import type { UploadTransport } from '../src/publishing/upload-transport.ts';
 
 const owner = 'did:plc:fixture';
@@ -22,8 +23,8 @@ const operation: UploadOperation = {
 
 function fixture({ statusGate, reserve = async () => record, beforeSaveTransfer, beforeLoadTransfers, start }: {
   statusGate?: Promise<void>;
-  reserve?: () => Promise<typeof record>;
-  beforeSaveTransfer?: () => Promise<void>;
+  reserve?: (kind: 'track', rkey?: string) => Promise<typeof record>;
+  beforeSaveTransfer?: (operation: UploadOperation) => Promise<void>;
   beforeLoadTransfers?: () => void;
   start?: () => Promise<UploadStatus>;
 } = {}) {
@@ -57,7 +58,7 @@ function fixture({ statusGate, reserve = async () => record, beforeSaveTransfer,
     sendParts: async () => { throw new Error('not used'); },
     uploadStorage: {
       load: async () => { beforeLoadTransfers?.(); return saved; },
-      put: async value => { await beforeSaveTransfer?.(); saved = [value]; },
+      put: async value => { await beforeSaveTransfer?.(value); saved = [value]; },
       delete: async () => { saved = []; },
     },
     queuedDrafts: {
@@ -132,6 +133,33 @@ test('a worker rejection after handoff leaves transfer recovery without a second
   assert.equal(job.phase, 'failed');
   assert.equal(f.recordForRecovery()[0].draftId, job.id);
   assert.equal(f.model.editable(job.id), false);
+});
+
+test('an automatic retry is visible and keeps the same active upload until it succeeds', async context => {
+  context.mock.timers.enable({ apis: ['setTimeout'] });
+  let attempts = 0;
+  const f = fixture({ start: async () => {
+    if (++attempts < 3) throw Object.assign(new Error('service unavailable'), { status: 503 });
+    return {
+      state: 'published', recoveryRequired: false, reservedBytes: 1, partSizeBytes: UPLOAD_PART_BYTES,
+      partCount: 1, receivedParts: [], reservedDigests: [],
+    };
+  } });
+  f.seed();
+  await f.model.resume(owner);
+  await setImmediate();
+  const retry = f.model.snapshot()[0];
+  assert.ok(uploadInProgress(retry.phase));
+  assert.equal(jobLine(retry), 'retrying "fixture"…');
+  context.mock.timers.tick(2_000);
+  await setImmediate();
+  assert.equal(jobLine(f.model.snapshot()[0]), 'retrying "fixture"…');
+  context.mock.timers.tick(4_000);
+  await setImmediate();
+  const finished = f.model.snapshot()[0];
+  assert.equal(finished.id, retry.id);
+  assert.equal(jobLine(finished), '"fixture" uploaded');
+  assert.deepEqual(f.recordForRecovery(), []);
 });
 
 test('a completed recovery cannot race a stale draft into a new reservation', async () => {
@@ -214,4 +242,65 @@ test('manual publication honors auto-tag after the waiting row has been set asid
   assert.equal(f.tags(), 0);
   f.model.dismissRecovery(tagged, 'published');
   assert.equal(f.tags(), 1);
+});
+
+test('planned uploads keep their record address across the draft and transfer handoff', async () => {
+  const save = Promise.withResolvers<UploadOperation>();
+  const release = Promise.withResolvers<void>();
+  const planned = { owner, id: 'slot-two', reservedRkey: '3222222222223' } as const;
+  const expectedUri = `at://${owner}/${collection}/${planned.reservedRkey}`;
+  const f = fixture({
+    reserve: async (kind, rkey) => {
+      assert.equal(kind, 'track');
+      assert.equal(rkey, planned.reservedRkey);
+      return { ...record, rkey, uri: expectedUri };
+    },
+    beforeSaveTransfer: transfer => { save.resolve(transfer); return release.promise; },
+  });
+  f.confirm();
+  const file = { name: 'fixture.wav', type: 'audio/wav', size: 1, arrayBuffer: async () => new ArrayBuffer(1) };
+  const input = { file, artist: 'fixture', title: 'Take', album: 'Sessions' };
+  await assert.rejects(f.model.add(input, { ...planned, owner: 'did:plc:other' }), /sign in to the account that started it/);
+  assert.equal(f.drafts.size, 0);
+  await f.model.add(input, planned);
+  const transfer = await save.promise;
+  try {
+    const draft = f.drafts.get(planned.id);
+    assert.ok(draft);
+    assert.equal(readQueuedUploadDraft(draft, owner, queuedUploadKey(draft)).reservedRkey, planned.reservedRkey);
+    assert.equal(transfer.uri, expectedUri);
+    assert.equal(transfer.draftId, planned.id);
+    assert.equal(f.model.snapshot()[0].draftId, planned.id);
+  } finally { release.resolve(); }
+  await setImmediate();
+  assert.equal(f.model.snapshot()[0].uri, expectedUri);
+});
+
+test('resuming a saved service upload retains the original draft identity', async () => {
+  const f = fixture();
+  f.confirm();
+  f.seed({ ...operation, draftId: 'slot-two' });
+  await f.model.resume(owner);
+  await setImmediate();
+  const job = f.model.snapshot().find(entry => entry.phase === 'done');
+  assert.ok(job);
+  assert.notEqual(job.id, 'slot-two');
+  assert.equal(job.draftId, 'slot-two');
+  assert.equal(job.uri, uri);
+});
+
+test('editing a failed album song cannot replace its reserved address', async () => {
+  let attempts = 0;
+  const f = fixture({ reserve: async (_kind, rkey) => { attempts++; assert.equal(rkey, record.rkey); return record; } });
+  const file = { name: 'fixture.mp3', type: 'audio/mpeg', size: 1, arrayBuffer: async () => new ArrayBuffer(1) };
+  const planned = { owner, id: 'album-song', reservedRkey: record.rkey };
+  await f.model.add({ file, artist: 'fixture', title: 'Take' }, planned);
+  await setImmediate();
+  const draft = f.drafts.get(planned.id);
+  assert.ok(draft);
+  assert.equal(f.model.editable(planned.id), false);
+  assert.equal(await f.model.takeBack(planned.id, () => { throw new Error('must keep the original address'); }), undefined);
+  f.model.reattach(draft, file);
+  await setImmediate();
+  assert.equal(attempts, 2);
 });

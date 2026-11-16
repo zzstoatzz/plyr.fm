@@ -67,11 +67,15 @@ async function check(browser, accounts, width, scheme) {
       metrics: { member_count: members.length, available_count: members.filter(member => member.track).length, total_plays: 0 }
     };
   }
-  let loseCreate = true, creates = 0, playlistUri, albumUri;
+  let loseCreate = true, loseDelete = false, creates = 0, playlistUri, albumUri;
   let createBody;
   const { page, context } = await fixturePage(browser, accounts, {
     dist: path.resolve(__dirname, '../build'), context: { viewport: { width, height: 900 }, colorScheme: scheme },
     discardPdsResponse(endpoint) {
+      if (loseDelete && endpoint === '/xrpc/com.atproto.repo.deleteRecord') {
+        loseDelete = false;
+        return true;
+      }
       if (!loseCreate || endpoint !== '/xrpc/com.atproto.repo.createRecord' || createBody?.record?.listType !== 'playlist') return false;
       loseCreate = false;
       return true;
@@ -158,12 +162,12 @@ async function check(browser, accounts, width, scheme) {
     }, color);
     return { name, mimeType: 'image/png', buffer: Buffer.from(data, 'base64') };
   };
-  async function readCover() {
+  async function readCover(width = 32) {
     const ref = (await read(albumUri)).value.imageBlob?.ref?.$link;
     assert.ok(ref, 'the signed album has a cover blob');
     await cover.waitFor();
-    await page.waitForFunction(cid => [...document.querySelectorAll('main header .cover img')].some(img =>
-      img.complete && img.naturalWidth === 32 && new URL(img.currentSrc).searchParams.get('cid') === cid), ref);
+    await page.waitForFunction(({ cid, width }) => [...document.querySelectorAll('main header .cover img')].some(img =>
+      img.complete && img.naturalWidth === width && new URL(img.currentSrc).searchParams.get('cid') === cid), { cid: ref, width });
     return ref;
   }
   const button = name => main.getByRole('button', { name, exact: true });
@@ -265,7 +269,7 @@ async function check(browser, accounts, width, scheme) {
     assert.deepEqual((await read(albumUri)).value.items.map(item => item.subject), expected);
     const originalCover = await readCover();
     await button('edit album').click();
-    const replacementFile = await image('replacement.png', '#5277f5');
+    const replacementFile = { name: 'replacement.heic', mimeType: 'image/heic', buffer: await fs.readFile(path.join(__dirname, 'fixtures/cover.heic')) };
     await main.getByLabel('change album cover').setInputFiles(replacementFile);
     await button('keep current cover').click();
     assert.equal(await main.getByRole('img', { name: 'selected cover preview' }).count(), 0);
@@ -280,10 +284,11 @@ async function check(browser, accounts, width, scheme) {
     failCover = false;
     await button('save changes').click();
     await button('edit album').waitFor();
-    const replacement = await readCover();
+    const replacement = await readCover(96);
     assert.notEqual(replacement, originalCover);
+    assert.equal((await read(albumUri)).value.imageBlob.mimeType, 'image/jpeg');
     await page.reload();
-    assert.equal(await readCover(), replacement);
+    assert.equal(await readCover(96), replacement);
     await button('edit album').click();
     await button('Remove Beta').click();
     await button('add tracks').click();
@@ -292,7 +297,7 @@ async function check(browser, accounts, width, scheme) {
     await button('edit album').waitFor();
     assert.deepEqual((await read(albumUri)).value.items.map(item => item.subject), [tracks[0], tracks[2]].map(subject));
     await main.getByRole('link', { name: 'Gamma', exact: true }).waitFor();
-    assert.equal(await readCover(), replacement, 'membership-only edits preserve the cover');
+    assert.equal(await readCover(96), replacement, 'membership-only edits preserve the cover');
     for (const track of tracks) assert.equal((await read(track.record.uri)).cid, track.record.cid, 'album edits leave track metadata alone');
     await capture('album');
     await context.route('https://pds.fixture.test/xrpc/com.atproto.sync.getBlob?*', route => route.fulfill({ status: 404 }));
@@ -303,6 +308,35 @@ async function check(browser, accounts, width, scheme) {
       const image = document.querySelector('main header .cover img');
       return image?.currentSrc === avatar && image.complete && image.naturalWidth === 1;
     }, avatar);
+    await button('edit album').click();
+    await button('delete album').click();
+    await main.getByText('delete this album? its songs will stay published.', { exact: true }).waitFor();
+    await page.waitForFunction(() => document.activeElement?.textContent.trim() === 'cancel delete');
+    await capture('album-delete-confirmation');
+    await button('cancel delete').click();
+    await page.waitForFunction(() => document.activeElement?.textContent.trim() === 'delete album');
+    const beforeDelete = await read(albumUri);
+    assert.ok(beforeDelete.cid);
+    await button('delete album').click();
+    const changedAlbum = await put(listCollection, albumUri.split('/').at(-1), { ...beforeDelete.value, name: 'Changed elsewhere' });
+    await button('confirm delete').click();
+    await main.getByRole('alert').filter({ hasText: 'this album changed elsewhere. reload it before deleting.' }).waitFor();
+    assert.equal((await read(albumUri)).cid, changedAlbum.cid);
+    await button('reload latest album').click();
+    await button('delete album').click();
+    if (width === 390) {
+      loseDelete = true;
+    } else {
+      await xrpc('com.atproto.repo.deleteRecord', { token, input: {
+        repo: did, collection: listCollection, rkey: albumUri.split('/').at(-1), swapRecord: changedAlbum.cid
+      } });
+    }
+    await button('confirm delete').click();
+    await page.waitForURL(origin + '/library');
+    assert.equal(loseDelete, false);
+    assert.equal((await read(albumUri)).error, 'RecordNotFound');
+    assert.equal(projection.has(albumUri), false);
+    for (const track of tracks) assert.equal((await read(track.record.uri)).cid, track.record.cid, 'album deletion leaves tracks published');
     assert.deepEqual(errors, []);
     console.log(`library, likes, playlist and album writes passed at ${width}px (${scheme})`);
   } finally { await context.close(); }

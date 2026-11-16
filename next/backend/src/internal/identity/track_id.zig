@@ -23,6 +23,12 @@ pub fn decode(destination: []u8, id: []const u8) ![]const u8 {
     };
 }
 
+pub fn parseLegacy(id: []const u8) ?i32 {
+    if (id.len == 0 or id.len > 10 or id[0] == '0') return null;
+    for (id) |digit| if (!std.ascii.isDigit(digit)) return null;
+    return std.fmt.parseInt(i32, id, 10) catch null;
+}
+
 test "track IDs round trip a canonical record URI" {
     const uri = "at://did:plc:ewvi7nxzyoun6zhxrhs64oiz/fm.plyr.dev.track/3m123abc";
     var id_buffer: [256]u8 = undefined;
@@ -34,7 +40,7 @@ test "track IDs round trip a canonical record URI" {
     try std.testing.expectEqualStrings(uri, try decode(&uri_buffer, id));
 }
 
-test "track IDs reject database IDs and non-record AT-URIs" {
+test "canonical track IDs reject numeric aliases and non-record AT-URIs" {
     var buffer: [256]u8 = undefined;
     try std.testing.expectError(error.InvalidTrackId, decode(&buffer, "42"));
     try std.testing.expectError(

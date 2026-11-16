@@ -16,6 +16,9 @@ nate first. Add an entry when a PR settles something.
   stay inside the OAuth adapters.
 - **Playback lives above the route stack** in `PlaybackProvider`; screens
   issue commands through `usePlayback`.
+- **On iOS 26 the system owns the tab bar and mini-player material.**
+  Shared detail routes stay in the tab that opened them, so the content can
+  scroll behind the same bar. OAuth completion is outside the tab stacks.
 - **Now Playing uses a native Modal.** It stays above the route stack and handles hardware Back.
 - **Queue and settings live with the coordinator** behind one service-auth
   permission, not in a Space.

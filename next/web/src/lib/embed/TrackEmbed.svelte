@@ -1,15 +1,16 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import type { Track } from '@plyr/next-core/api';
+  import { canToggleTrack } from '@plyr/next-core/track-revision';
   import { player } from '$lib/player.svelte';
   import Scrub from '$lib/Scrub.svelte';
-  import { artistName } from '$lib/tracks';
+  import { artistName, trackHref } from '$lib/tracks';
   import Artwork from '$lib/ui/Artwork.svelte';
   import Icon from '$lib/ui/Icon.svelte';
   import { canEmbed, embedArtwork } from './catalog';
 
   let { track, autoplay }: { track: Track; autoplay: boolean } = $props();
-  let active = $derived(player.current?.id === track.id);
+  let active = $derived(canToggleTrack(player.current, track));
   let allowed = $derived(canEmbed(track));
   let playing = $derived(active && player.playing);
   let problem = $derived(active && player.error);
@@ -35,7 +36,7 @@
       <Icon name={playing ? 'pause' : 'play'} />
     </button>
     <div class="meta">
-      <a class="title truncate" href={`/track/${track.id}`} target="_blank" rel="noopener">{track.metadata.title}</a>
+      <a class="title truncate" href={trackHref(track)} target="_blank" rel="noopener">{track.metadata.title}</a>
       <span class="subtle truncate">{!allowed ? 'playback unavailable in this embed' : problem || artistName(track)}</span>
       {#if active && allowed}<Scrub />{/if}
     </div>

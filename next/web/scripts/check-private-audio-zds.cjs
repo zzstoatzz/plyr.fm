@@ -14,6 +14,7 @@ const origin = process.env.PRIVATE_AUDIO_ORIGIN || 'http://127.0.0.1:5310';
 const phone = process.env.PRIVATE_AUDIO_PHONE === '1';
 const ownerFlow = process.env.PRIVATE_AUDIO_OWNER === '1';
 const ownerTitle = 'Owner-only recording fixture';
+const dist = process.env.PRIVATE_AUDIO_DIST || path.resolve(__dirname, '../build');
 const output = process.env.PRIVATE_AUDIO_OUTPUT || '/tmp/plyr-private-audio-zds';
 const list = data => ({ object: 'list', data, has_more: false });
 async function rpc(method, body, token) {
@@ -22,20 +23,32 @@ async function rpc(method, body, token) {
   if (!response.ok) throw new Error(method + ' failed: ' + response.status + ' ' + (value.error || ''));
   return value;
 }
-async function checkPrivateMusic(page, audio, previousSource, origin, appView, coordinator) {
-  await page.getByRole('link', { name: 'private music', exact: true }).click();
-  await page.getByText('no private tracks yet.').waitFor();
+async function checkOwnerTrack(page, audio, previousSource, origin, appView, coordinator) {
+  await page.getByRole('link', { name: 'upload', exact: true }).last().click();
   const shortAudio = Buffer.from(audio.subarray(0, 44 + 8000 * 2 * 4));
   shortAudio.writeUInt32LE(shortAudio.length - 8, 4);
   shortAudio.writeUInt32LE(shortAudio.length - 44, 40);
-  await page.getByLabel('audio', { exact: true }).setInputFiles({ name: 'fixture.wav', mimeType: 'audio/wav', buffer: shortAudio });
-  await page.getByLabel('title', { exact: true }).fill(ownerTitle);
-  await page.getByLabel('artist', { exact: true }).fill('fixture artist');
-  await page.getByRole('checkbox', { name: 'use my private space' }).check();
-  await page.getByRole('button', { name: 'upload privately', exact: true }).click();
-  await page.getByText('saved in your private space.').waitFor();
-  await page.getByRole('button', { name: 'done with private upload' }).click();
-  const play = page.getByRole('button', { name: 'Play ' + ownerTitle, exact: true });
+  const policy = page.getByRole('navigation', { name: 'Who can listen' });
+  const editor = page.locator('form:visible');
+  await editor.getByRole('textbox', { name: 'title', exact: true }).fill(ownerTitle);
+  await editor.getByLabel('audio file', { exact: true }).setInputFiles({ name: 'fixture.wav', mimeType: 'audio/wav', buffer: shortAudio });
+  await policy.getByRole('link', { name: 'only you' }).click();
+  await page.waitForURL('**/upload?visibility=only-you');
+  assert.equal(await editor.getByRole('textbox', { name: 'title', exact: true }).inputValue(), ownerTitle);
+  await editor.getByText(/fixture\.wav/).waitFor();
+  await editor.getByRole('textbox', { name: 'tags', exact: true }).fill('field\nambient');
+  await policy.getByRole('link', { name: 'everyone' }).click();
+  assert.equal(await editor.getByRole('textbox', { name: 'tags', exact: true }).inputValue(), 'field\nambient');
+  await policy.getByRole('link', { name: 'only you' }).click();
+  await editor.getByRole('textbox', { name: 'artist', exact: true }).fill('fixture artist');
+  await page.getByRole('button', { name: 'upload', exact: true }).click();
+  await page.waitForURL('**/portal');
+  const row = page.getByRole('list', { name: 'Your tracks' }).getByRole('listitem').filter({ hasText: ownerTitle });
+  await row.getByText('only you', { exact: true }).waitFor();
+  await row.getByRole('link', { name: ownerTitle }).click();
+  await page.getByRole('heading', { name: ownerTitle, exact: true }).waitFor();
+  const ownerId = decodeURIComponent(new URL(page.url()).pathname.split('/').at(-1));
+  const play = page.locator('article').getByRole('button', { name: 'Play', exact: true });
   await play.click();
   await page.getByTestId('player-dock').getByText(ownerTitle).waitFor();
   await page.waitForFunction(() => window.jamAudio.some(media => !media.paused && media.currentTime > 2.2));
@@ -54,16 +67,30 @@ async function checkPrivateMusic(page, audio, previousSource, origin, appView, c
     };
   }));
   for (const messages of [appView, coordinator, [publicCheckpoints]]) {
-    assert.ok(!messages.some(message => /private_|privateMedia|Owner-only recording fixture/i.test(message)),
+    assert.ok(!messages.some(message => /privateMedia|Owner-only recording fixture/i.test(message) || message.includes(ownerId) || message.includes(encodeURIComponent(ownerId)) || message.includes(ownerId.replace('|', '%7C'))),
       'private track stayed out of public API requests, queue messages and checkpoints');
   }
-  await page.screenshot({ path: output + '/private-music-playing.png' });
-  await page.getByRole('button', { name: 'Delete ' + ownerTitle, exact: true }).click();
-  await page.getByRole('button', { name: 'delete current track', exact: true }).click();
-  await page.getByText('no private tracks yet.').waitFor();
+  await page.screenshot({ path: output + '/track-visibility-only-you.png' });
+  const anonymous = await page.context().browser().newContext({ ignoreHTTPSErrors: true });
+  try {
+    await anonymous.route(origin + '/**', async route => {
+      const request = route.request();
+      if (request.isNavigationRequest()) return route.fulfill({ path: path.join(dist, 'index.html') });
+      const filename = path.join(dist, new URL(request.url()).pathname);
+      await route.fulfill({ path: filename }).catch(() => route.abort());
+    });
+    await anonymous.route('https://api.next.plyr.fm/**', route => route.abort());
+    const guest = await anonymous.newPage();
+    await guest.goto(page.url());
+    await guest.getByRole('heading', { name: 'track not found' }).waitFor();
+    assert.equal(await guest.getByText(ownerTitle, { exact: true }).count(), 0);
+  } finally { await anonymous.close(); }
+  await page.getByRole('button', { name: 'delete track', exact: true }).click();
+  await page.getByRole('button', { name: 'delete track', exact: true }).click();
+  await page.getByText('no tracks yet.', { exact: true }).waitFor();
   assert.equal(await page.evaluate(async url => (await fetch(url)).status, source), 410);
   await page.getByTestId('player-dock').getByText('Protected streaming fixture').waitFor();
-  console.log('Svelte private upload, recovery, isolated playback, deletion and public queue restoration passed');
+  console.log('Track visibility passed upload, catalog, detail, signed-out access, isolated playback, deletion and queue restoration');
 }
 
 (async () => {
@@ -117,7 +144,7 @@ async function checkPrivateMusic(page, audio, previousSource, origin, appView, c
   await new Promise(resolve => workerServer.listen(Number(new URL(origin).port), '127.0.0.1', resolve));
   const browser = await chromium.launch({ channel: 'chrome', args: ['--disable-features=LocalNetworkAccessChecks', '--ignore-certificate-errors', '--no-proxy-server', `--host-rules=MAP pds.fixture.test:443 127.0.0.1:${proxy.address().port}`] });
   try {
-    const { page, context } = await fixturePage(browser, accounts, { origin, dist: process.env.PRIVATE_AUDIO_DIST || path.resolve(__dirname, '../build'), context: { viewport: phone ? { width: 390, height: 844 } : { width: 1280, height: 900 }, colorScheme: phone ? 'dark' : 'light', isMobile: phone, hasTouch: phone, ignoreHTTPSErrors: true } });
+    const { page, context } = await fixturePage(browser, accounts, { origin, dist, context: { viewport: phone ? { width: 390, height: 844 } : { width: 1280, height: 900 }, colorScheme: phone ? 'dark' : 'light', isMobile: phone, hasTouch: phone, ignoreHTTPSErrors: true } });
     const requestsToAppView = [], coordinatorMessages = [];
     let clientId;
     await context.route('https://jams.next.plyr.fm/v1/playback/join', route => {
@@ -184,10 +211,17 @@ async function checkPrivateMusic(page, audio, previousSource, origin, appView, c
     assert.ok(requests.some(r => r.status === 206 && Number(/^bytes=(\d+)/.exec(r.range || '')?.[1]) > audio.length / 2));
     await page.screenshot({ path: output + '/protected-playing.png' });
     await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
-    await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'settings' }).click();
+    async function settings() {
+      const nav = page.getByRole('navigation', { name: 'Main navigation' });
+      if (phone) {
+        await nav.getByRole('button', { name: 'you', exact: true }).click();
+        await page.getByRole('dialog', { name: 'account', exact: true }).getByRole('link', { name: /^settings/ }).click();
+      } else await nav.getByRole('link', { name: /^settings/ }).click();
+    }
+    await settings();
     if (ownerFlow) {
-      await checkPrivateMusic(page, audio, active, origin, requestsToAppView, coordinatorMessages);
-      await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'settings' }).click();
+      await checkOwnerTrack(page, audio, active, origin, requestsToAppView, coordinatorMessages);
+      await settings();
     }
     await page.getByRole('button', { name: 'sign out', exact: true }).click();
     await page.getByTestId('player-dock').waitFor({ state: 'detached' });

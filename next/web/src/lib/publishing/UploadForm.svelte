@@ -16,14 +16,15 @@
   import { onMount, untrack } from 'svelte';
   import { trackIdFromUri } from '@plyr/next-core/api';
   import type { CreateOperation } from '@plyr/next-core/publishing/create-operation';
-  import type { UploadOperation } from '@plyr/next-core/publishing/upload-model';
+  import { PUBLIC_AUDIO_FORMATS, type UploadOperation } from '@plyr/next-core/publishing/upload-model';
   import { draftInRecovery, type QueuedUploadDraft } from '@plyr/next-core/publishing/queued-upload-draft';
-  import { canonicalAudioType, jobLine, needsPlyrStorage, uploadInProgress } from '@plyr/next-core/publishing/upload-queue-model';
+  import { jobLine, needsPlyrStorage, uploadInProgress } from '@plyr/next-core/publishing/upload-queue-model';
   import { normalizeTrackTags } from '@plyr/next-core/publishing/track-tags';
   import { creditName } from '@plyr/next-core/publishing/credit-name';
   import { api } from '$lib/api';
   import { auth } from '$lib/auth';
   import { coverImage } from '$lib/media/cover-image';
+  import { canonicalAudioFile } from '$lib/media/audio-file';
   import { createPds } from '$lib/pds';
   import { queuedDrafts, uploadStorage } from '$lib/storage/upload-storage';
   import { uploadQueue } from '$lib/upload';
@@ -32,7 +33,9 @@
   import LargeUpload from './LargeUpload.svelte';
   import QueuedUpload from './QueuedUpload.svelte';
 
-  let { account }: { account: ReturnType<typeof auth.getAuth> } = $props();
+  let { account, submitting = $bindable(false), audio = $bindable(), title = $bindable(''), description = $bindable(''), tags = $bindable('') }: {
+    account: ReturnType<typeof auth.getAuth>; submitting: boolean; audio: File | undefined; title: string; description: string; tags: string;
+  } = $props();
 
   const owner = untrack(() => account.did);
   const pds = untrack(() => createPds(account));
@@ -43,15 +46,12 @@
   let hydrated = $state(false);
   let profileName = $state<string>();
   let artist = $derived(profileName || account.handle || account.did || '');
-  let audio = $state<File>();
   let cover = $state<File>();
+  let coverPreview = $state<string>();
   let audioInput = $state<HTMLInputElement>();
   let coverInput = $state<HTMLInputElement>();
-  let title = $state('');
   let autoTitle = $state('');
   let album = $state('');
-  let description = $state('');
-  let tags = $state('');
   let details = $state(false);
   let consent = $state(false);
   let autoTag = $state(false);
@@ -64,7 +64,6 @@
   let coverProblem = $state('');
   let formProblem = $state('');
   let draftProblem = $state('');
-  let submitting = $state(false);
   let recoveryProblem = $state('');
   let queuedProblem = $state('');
   let loading = $state(true);
@@ -74,9 +73,10 @@
   let jobs = $state.raw(uploadQueue.snapshot());
   let active = $derived.by(() => { jobs; return uploadQueue.busy(); });
   let transfersToRecover = $derived(transfers.filter(operation => !active.uploadIds.has(operation.uploadId)));
-  let draftsToRecover = $derived(drafts.filter(draft => !draftInRecovery(draft, pending, transfers) && !jobs.some(job => job.id === draft.id)));
+  let draftsToRecover = $derived(drafts.filter(draft => !draftInRecovery(draft, pending, transfers) && !jobs.some(job => job.id === draft.id && !(draft.reservedRkey && job.phase === 'failed'))));
   let creationsToRecover = $derived(pending.filter(operation => !active.rkeys.has(operation.rkey) && !transfers.some(transfer => transfer.rkey === operation.rkey)));
   let creationBlocksUpload = $derived(creationsToRecover.some(operation => !operation.archived));
+  $effect(() => { if (description || tags) details = true; });
   let service = $derived(!!audio && needsPlyrStorage(audio));
   let tagProblem = $derived.by(() => {
     try { if (tags.trim()) normalizeTrackTags(tags.split('\n')); return ''; }
@@ -180,20 +180,24 @@
     }
   }
 
+  $effect(() => {
+    const url = cover && URL.createObjectURL(cover);
+    coverPreview = url;
+    if (url) return () => URL.revokeObjectURL(url);
+  });
+
   function pickAudio(file?: File) {
     audioProblem = '';
     formProblem = '';
     if (!file) return;
     try {
-      const type = canonicalAudioType(file);
-      audio = file.type === type ? file : new File([file], file.name, { type, lastModified: file.lastModified });
+      audio = canonicalAudioFile(file);
       reattach = false;
       if (!title.trim() || title === autoTitle) {
         autoTitle = file.name.replace(/\.[^.]+$/, '').slice(0, 256);
         title = autoTitle;
       }
     } catch (failure) {
-      audio = undefined;
       if (audioInput) audioInput.value = '';
       audioProblem = message(failure, 'could not open the audio file.');
     }
@@ -263,12 +267,12 @@
           if (current()) draftProblem = 'the upload was queued, but this device could not clear the editor draft.';
         }
       });
-      if (!current()) return;
+      if (!current() || audio !== input.file || cover !== input.artwork || editorDraft !== submittedDraft) return;
       audio = undefined;
       cover = undefined;
       if (audioInput) audioInput.value = '';
       if (coverInput) coverInput.value = '';
-      title = autoTitle = album = description = tags = formProblem = coverProblem = '';
+      title = autoTitle = album = description = tags = formProblem = audioProblem = coverProblem = '';
       details = false;
     } catch (failure) {
       formProblem = message(failure, 'could not start the upload.');
@@ -316,12 +320,15 @@
 {/if}
 
 <form onsubmit={upload} inert={!hydrated || submitting}>
-  <label class="file-field">
+  <div class="file-field">
     <strong>audio</strong>
-    <span class="subtle">mp3, wav, flac, aiff, ogg, opus, m4a or aac · up to 1.5 GiB</span>
-    <input type="file" accept="audio/*,.aif,.aiff,.m4a,.mp3,.aac,.ogg,.opus,.wav,.flac,.webm" bind:this={audioInput} onchange={event => pickAudio(event.currentTarget.files?.[0])} />
-    {#if audio && !audioInput?.files?.length}<span>{audio.name}</span>{/if}
-  </label>
+    <span class="subtle">{PUBLIC_AUDIO_FORMATS.toLowerCase()} · up to 1.5 GiB</span>
+    <div class="audio-selection">
+      <button type="button" class="text-button" onclick={() => audioInput?.click()}>{audio ? 'change audio' : 'choose audio'}</button>
+      {#if audio}<span>selected: {audio.name}</span>{/if}
+    </div>
+    <input type="file" aria-label="audio file" hidden accept="audio/*,.aif,.aiff,.m4a,.mp3,.aac,.ogg,.opus,.wav,.flac,.webm" bind:this={audioInput} onchange={event => pickAudio(event.currentTarget.files?.[0])} />
+  </div>
   {#if audioProblem}<p role="alert">{audioProblem}</p>
   {:else if reattach && !audio}<p class="subtle">your draft is still here. choose the audio file again.</p>{/if}
   {#if service}
@@ -342,7 +349,12 @@
   </label>
   {#if imageBusy}<p role="status">preparing your cover…</p>{/if}
   {#if coverProblem}<p role="alert">{coverProblem}</p>{/if}
-  {#if cover}<button type="button" class="text-button" disabled={imageBusy} onclick={() => { cover = undefined; if (coverInput) coverInput.value = ''; }}>remove cover</button>{/if}
+  {#if coverPreview}
+    <div class="cover-preview">
+      <img src={coverPreview} alt="selected cover preview" width="64" height="64" />
+      <button type="button" class="text-button" disabled={imageBusy} onclick={() => { cover = undefined; if (coverInput) { coverInput.value = ''; coverInput.focus(); } }}>remove cover</button>
+    </div>
+  {/if}
 
   {#if details}
     <label>album <input bind:value={album} maxlength="256" placeholder="optional" /></label>
@@ -364,8 +376,11 @@
   label { display: grid; gap: 0.45rem; }
   .check { display: flex; align-items: center; gap: 0.65rem; min-height: 2.75rem; }
   .check input { width: 1.15rem; height: 1.15rem; accent-color: var(--accent); }
-  .file-field { padding: 0.9rem; border: 1px dashed var(--line); border-radius: 0.55rem; overflow-wrap: anywhere; }
-  input:not([type='checkbox']), textarea { width: 100%; min-width: 0; border: 1px solid var(--line); padding: 0.6rem; border-radius: 0.5rem; background: var(--bg); color: inherit; font: inherit; font-size: 1rem; }
+  .cover-preview { display: flex; align-items: center; gap: 0.65rem; }
+  .cover-preview img { border-radius: 0.45rem; object-fit: cover; }
+  .audio-selection { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+  .file-field { display: grid; gap: 0.45rem; padding: 0.9rem; border: 1px dashed var(--line); border-radius: 0.55rem; overflow-wrap: anywhere; }
+  input:not([type='checkbox']), textarea { width: 100%; min-width: 0; border: 1px solid var(--line); padding: 0.6rem; border-radius: 0.5rem; background: var(--bg); color: inherit; }
   .text-button { justify-self: start; }
   .submit { background: var(--accent); color: var(--on-accent); padding-inline: 1rem; }
   .submit:hover { background: var(--accent); filter: brightness(1.12); }

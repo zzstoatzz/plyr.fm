@@ -50,6 +50,17 @@ async function holdDraftCompletion(page) {
   });
 }
 
+async function openSettings(page) {
+  const nav = page.getByRole('navigation', { name: 'Main navigation' });
+  const account = nav.getByRole('button', { name: 'you', exact: true });
+  if (await account.isVisible()) {
+    await account.click();
+    await page.getByRole('dialog', { name: 'account', exact: true }).getByRole('link', { name: /^settings/ }).click();
+  } else {
+    await nav.getByRole('link', { name: /^settings/ }).click();
+  }
+}
+
 async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'regular') {
   const did = accounts[handle].did;
   let loseReply = true, blobWrites = 0;
@@ -64,6 +75,10 @@ async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'reg
     }
   });
   const errors = [];
+  const workerRequests = [];
+  page.on('request', request => {
+    if (new URL(request.url()).pathname.includes('/cover-heic.worker-')) workerRequests.push(request.url());
+  });
   page.on('pageerror', error => errors.push(error.message));
   const session = await fetch(pds + 'com.atproto.server.createSession', {
     method: 'POST', headers: { 'content-type': 'application/json' },
@@ -175,7 +190,53 @@ async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'reg
     assert.equal(await title.inputValue(), 'direct from Svelte');
     await audioInput.setInputFiles({ name: 'direct.mp3', mimeType: 'audio/mpeg', buffer: mp3 });
     const cover = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aMTsAAAAASUVORK5CYII=', 'base64');
-    await page.locator('input[type=file][accept^="image"]').setInputFiles({ name: 'cover.png', mimeType: 'image/png', buffer: cover });
+    const heic = await fs.readFile(path.join(__dirname, 'fixtures/cover.heic'));
+    const coverInput = page.locator('input[type=file][accept^="image"]');
+    if (scenario === 'regular') {
+      const tags = page.getByRole('textbox', { name: 'tags', exact: true });
+      const [chooser] = await Promise.all([
+        page.waitForEvent('filechooser'), page.getByRole('button', { name: 'change audio', exact: true }).click()
+      ]);
+      await chooser.setFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('notes') });
+      await page.getByRole('alert').filter({ hasText: /choose an MP3.*WebM/ }).waitFor({ timeout: 5000 });
+      await page.getByText('selected: direct.mp3').waitFor();
+      assert.ok(await submit.isEnabled(), 'an invalid replacement leaves the valid audio attached');
+      assert.equal(await title.inputValue(), 'direct from Svelte');
+      assert.equal(await tags.inputValue(), 'ambient\nfield recording');
+
+      const bitmap = Buffer.alloc(70, 0);
+      bitmap.write('BM');
+      bitmap.writeUInt32LE(bitmap.length, 2);
+      bitmap.writeUInt32LE(54, 10);
+      bitmap.writeUInt32LE(40, 14);
+      bitmap.writeInt32LE(2, 18);
+      bitmap.writeInt32LE(2, 22);
+      bitmap.writeUInt16LE(1, 26);
+      bitmap.writeUInt16LE(24, 28);
+      bitmap.writeUInt32LE(16, 34);
+      bitmap.fill(0x80, 54);
+      await coverInput.setInputFiles({ name: 'scan.bmp', mimeType: 'image/bmp', buffer: bitmap });
+      const preview = page.getByRole('img', { name: 'selected cover preview', exact: true });
+      await preview.waitFor();
+      assert.equal(await preview.evaluate(async image => { await image.decode(); return image.naturalWidth; }), 2);
+      assert.equal(await page.getByRole('alert').filter({ hasText: "couldn't read that image" }).count(), 0);
+      await page.screenshot({ path: path.join(output, `converted-cover-${width}-${theme}.png`), fullPage: true });
+      await page.getByRole('button', { name: 'remove cover', exact: true }).click();
+      await preview.waitFor({ state: 'detached' });
+      assert.deepEqual(workerRequests, [], 'ordinary covers never load the HEIC decoder');
+
+      await coverInput.setInputFiles({ name: 'bad.heic', mimeType: 'image/heic', buffer: Buffer.from('not an image') });
+      await page.getByRole('alert').filter({ hasText: "couldn't read that image" }).waitFor();
+      assert.equal(await title.inputValue(), 'direct from Svelte');
+      assert.equal(await tags.inputValue(), 'ambient\nfield recording');
+      await coverInput.setInputFiles({ name: 'cover.HEIC', mimeType: 'application/octet-stream', buffer: heic });
+      await preview.waitFor();
+      assert.deepEqual(await preview.evaluate(async image => {
+        await image.decode();
+        return [image.naturalWidth, image.naturalHeight];
+      }), [96, 64]);
+      await page.screenshot({ path: path.join(output, `heic-cover-${width}-${theme}.png`), fullPage: true });
+    } else await coverInput.setInputFiles({ name: 'cover.png', mimeType: 'image/png', buffer: cover });
     if (scenario === 'regular') await page.screenshot({ path: path.join(output, width + '-' + theme + '.png'), fullPage: true });
     if (scenario === 'after-create') await interruptDraftCleanup(page);
     if (scenario === 'after-create') await page.getByRole('checkbox', { name: 'auto-tag with recommended genres' }).check();
@@ -189,7 +250,7 @@ async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'reg
         await edit.click();
       }
       await page.waitForFunction(() => typeof window.releaseDraftTransaction === 'function');
-      await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: /^(account|settings)$/ }).click();
+      await openSettings(page);
       await page.getByRole('heading', { name: 'settings', exact: true }).waitFor();
       const uploadLink = page.getByRole('main').getByRole('link', { name: 'upload', exact: true });
       if (scenario === 'submit-navigation') {
@@ -238,11 +299,11 @@ async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'reg
         await page.getByText(/fixture interrupted draft cleanup/).waitFor({ timeout: 5000 });
         assert.equal(writes.length, 0, 'the draft handoff runs before the PDS record write');
         await page.reload();
-        await draft.getByRole('button', { name: 'resume creation' }).waitFor();
+        await draft.getByRole('button', { name: 'try saving again' }).waitFor();
         assert.equal(await draft.getByRole('button', { name: 'resume queued upload' }).count(), 0);
-        await draft.getByRole('button', { name: 'resume creation' }).click();
+        await draft.getByRole('button', { name: 'try saving again' }).click();
         const genreRequest = page.waitForRequest(genreEndpoint, { timeout: 5000 });
-        await draft.getByRole('button', { name: 'done with creation' }).click();
+        await draft.getByRole('button', { name: 'done' }).click();
         assert.equal((await genreRequest).postDataJSON().uri, `at://${did}/${collection}/${writes[0].rkey}`);
         await draft.waitFor({ state: 'detached', timeout: 5000 });
       }
@@ -261,6 +322,8 @@ async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'reg
       console.error(await page.locator('main').innerText());
       throw failure;
     });
+    await page.getByRole('button', { name: 'choose audio', exact: true }).waitFor();
+    assert.equal(await page.getByRole('alert').filter({ hasText: /choose an MP3.*WebM/ }).count(), 0);
     assert.equal(loseReply, false);
     assert.equal(writes.length, 1, 'a lost create response reconciles at the same address');
     const { value } = await getRecord(`at://${did}/${collection}/${writes[0].rkey}`);
@@ -270,8 +333,8 @@ async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'reg
     assert.equal(value.fileType, 'mp3');
     assert.equal(value.audioBlob.mimeType, 'audio/mpeg');
     assert.equal(value.audioBlob.size, mp3.length);
-    assert.equal(value.imageBlob.mimeType, 'image/png');
-    assert.equal(value.imageBlob.size, cover.length);
+    assert.equal(value.imageBlob.mimeType, scenario === 'regular' ? 'image/jpeg' : 'image/png');
+    if (scenario !== 'regular') assert.equal(value.imageBlob.size, cover.length);
     assert.equal(new URL(value.imageUrl).hostname, 'pds.fixture.test');
     assert.equal(blobWrites, 2);
 
@@ -353,7 +416,7 @@ async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'reg
       console.log(`a waiting upload survives reload and publishes once at ${width}px (${theme})`);
       return;
     }
-    await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: /^(account|settings)$/ }).click();
+    await openSettings(page);
     await page.getByRole('heading', { name: 'settings', exact: true }).waitFor();
     const main = page.getByRole('main');
     const progress = main.getByRole('link', { name: '1 upload in progress', exact: true });

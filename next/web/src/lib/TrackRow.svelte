@@ -1,21 +1,25 @@
 <script lang="ts">
 	import type { Track } from '@plyr/next-core/api';
 	import { trackArtwork } from '@plyr/next-core/artwork';
+	import { canToggleTrack } from '@plyr/next-core/track-revision';
 	import { resolve } from '$app/paths';
+	import { prefs } from './prefs.svelte';
 	import { player } from './player.svelte';
-	import { artistName, clock } from './tracks';
+	import { artistName, clock, trackHref } from './tracks';
 	import Artwork from './ui/Artwork.svelte';
 	import Icon from './ui/Icon.svelte';
+	import PlayingWave from './ui/PlayingWave.svelte';
 
 	let { track, collection, label, testid }: {
 		track: Track; collection?: Track[]; label?: string; testid?: string;
 	} = $props();
-	const currentTrack = $derived(!player.liveStation && player.current?.id === track.id);
-	const playing = $derived(currentTrack && player.playing);
+	const currentTrack = $derived(!player.liveStation && canToggleTrack(player.current, track, !!player.jam));
+	const playing = $derived(currentTrack && player.playing && !player.outputElsewhere);
 	const title = $derived(track.metadata.title || 'untitled');
 	function toggle() {
 		if (currentTrack) player.toggle();
-		else player.play(track, collection, label);
+		else if (prefs.playThrough) player.play(track, collection, label);
+		else player.play(track);
 	}
 </script>
 
@@ -23,11 +27,11 @@
 	<button class="playback" type="button" data-testid="track-play-control" aria-label={`${playing ? 'Pause' : 'Play'} ${title}`} onclick={toggle}>
 		<span class="cover">
 			<Artwork src={trackArtwork(track)} />
-			<span class="play"><Icon name={playing ? 'pause' : 'play'} size={20} /></span>
+			<span class="play" class:playing>{#if playing}<PlayingWave />{:else}<Icon name="play" size={20} />{/if}</span>
 		</span>
 	</button>
 	<div class="name">
-		<a class="truncate title" href={resolve('/(app)/track/[id]', { id: track.id })}>{title}</a>
+		<a class="truncate title" href={trackHref(track)}>{title}</a>
 		<a class="truncate artist" href={resolve('/(app)/u/[actor]', { actor: track.artist.did })}>{artistName(track)}</a>
 		<span class="metrics">{track.metrics.play_count} {track.metrics.play_count === 1 ? 'play' : 'plays'}</span>
 	</div>
@@ -41,7 +45,7 @@
 	.playback::after { content: ''; position: absolute; inset: 0; z-index: 1; }
 	.cover { position: relative; display: block; border-radius: inherit; overflow: hidden; }
 	.play { position: absolute; inset: 0; display: grid; place-items: center; background: rgb(0 0 0 / 0.5); color: white; opacity: 0; }
-	.track:hover .play, .playback:focus-visible .play { opacity: 1; }
+	.play.playing, .track:hover .play, .playback:focus-visible .play { opacity: 1; }
 	.name { display: grid; justify-items: start; min-width: 0; }
 	.name a { position: relative; z-index: 2; max-width: 100%; }
 	.title { font-weight: 650; }

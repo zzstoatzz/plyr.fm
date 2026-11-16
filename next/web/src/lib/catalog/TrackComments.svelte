@@ -3,7 +3,7 @@
 	import { resolve } from '$app/paths';
 	import type { Track, TrackComment } from '@plyr/next-core/api';
 	import { player } from '$lib/player.svelte';
-	import { clock } from '$lib/tracks';
+	import { clock, trackHref } from '$lib/tracks';
 	import Icon from '$lib/ui/Icon.svelte';
 	import Loading from '$lib/ui/Loading.svelte';
 
@@ -18,7 +18,7 @@
 	const position = $derived(!player.liveStation && player.current?.id === track.id ? player.position : 0);
 	const seconds = $derived(pinned ?? position);
 	const tooLong = $derived(new TextEncoder().encode(draft.trim()).length > MAX_COMMENT_BYTES);
-	const signIn = $derived(resolve('/(app)/login') + '?' + new URLSearchParams({ return_to: resolve('/(app)/track/[id]', { id: track.id }) }));
+	const signIn = $derived(resolve('/(app)/login') + '?' + new URLSearchParams({ return_to: trackHref(track) }));
 
 	onMount(() => {
 		const id = track.id;
@@ -111,7 +111,7 @@
 
 <style>
 	form { display: grid; gap: 0.35rem; }
-	textarea { width: 100%; min-height: 4rem; resize: vertical; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 0.65rem; padding: 0.55rem; font: inherit; font-size: max(1rem, 16px); }
+	textarea { width: 100%; min-height: 4rem; resize: vertical; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 0.65rem; padding: 0.55rem; }
 	.form-actions, .row-head { display: flex; align-items: center; gap: 0.35rem; }
 	.form-actions { justify-content: space-between; }
 	.time, .state a { color: var(--accent); }

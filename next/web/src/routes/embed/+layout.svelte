@@ -1,10 +1,15 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { mountEmbedEvents } from '$lib/embed/events';
   import { player } from '$lib/player.svelte';
   import '../../app.css';
 
   let { children } = $props();
-  onMount(() => player.mount(true));
+  onMount(() => {
+    const stopPlayer = player.mount(true);
+    const stopEvents = mountEmbedEvents(() => player.embedSnapshot());
+    return () => { stopEvents(); stopPlayer(); };
+  });
 </script>
 
 <main id="main" class="embed">{@render children()}</main>

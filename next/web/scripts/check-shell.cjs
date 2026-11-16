@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const { mkdir } = require('node:fs/promises');
 const path = require('node:path');
 const { chromium } = require('playwright');
+const homePagination = require('./home-pagination.cjs');
 process.env.PLAYER_DIST ??= path.resolve(__dirname, '../build');
 const { tracks, collectionTracks, setup, serve, close } = require('./fixture-catalog.cjs');
 
@@ -24,6 +25,20 @@ async function screen(browser, phone, scheme) {
       if (new URL(route.request().url()).searchParams.get('period') !== 'all_time') return route.fallback();
       return route.fulfill({ json: { data: featuredTracks.map(track => ({ track })) } });
     });
+    const linkedTrack = { ...tracks[0], legacy_id: 1667, metadata: { ...tracks[0].metadata, tags: ['ambient', 'home recordings', 'field & nature'] } };
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'share', { value: async ({ url }) => sessionStorage.setItem('shared-track', url) });
+    });
+    await page.route(/^https:\/\/api\.next\.plyr\.fm\/v1\/tracks(?:\?|$)/, route => route.fulfill({
+      json: { object: 'list', data: [linkedTrack, ...tracks.slice(1)], has_more: false }
+    }));
+    await page.route('https://api.next.plyr.fm/v1/tracks/1667', route => route.fulfill({ json: linkedTrack }));
+    await page.route('https://api.next.plyr.fm/v1/tracks/' + tracks[0].id, route => route.fulfill({ json: linkedTrack }));
+    await page.goto(origin + '/track/' + tracks[0].id + '?ref=fixture');
+    await page.waitForURL('**/track/1667?ref=fixture');
+    await page.getByRole('heading', { name: linkedTrack.metadata.title, exact: true }).waitFor();
+    await page.reload();
+    await page.getByRole('heading', { name: linkedTrack.metadata.title, exact: true }).waitFor();
     const commentsRequests = [];
     page.on('request', request => {
       if (new URL(request.url()).pathname.endsWith('/comments')) commentsRequests.push(request);
@@ -40,7 +55,7 @@ async function screen(browser, phone, scheme) {
     await capture('home');
     if (phone) {
       const links = page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link');
-      assert.deepEqual((await links.allTextContents()).map(label => label.trim().replace(/sign in$/, '')), ['home', 'search', 'library', 'account']);
+      assert.deepEqual((await links.allTextContents()).map(label => label.trim()), ['home', 'search', 'library', 'sign in']);
     }
     await page.getByRole('button', { name: 'Open links menu' }).click();
     const linksMenu = page.getByRole('dialog', { name: 'links' });
@@ -54,7 +69,10 @@ async function screen(browser, phone, scheme) {
     await firstRow.getByRole('link', { name: 'replyomatic', exact: true }).click();
     await page.waitForURL('**/u/' + tracks[0].artist.did);
     await page.goBack();
-    await firstRow.getByRole('link', { name: tracks[0].metadata.title, exact: true }).click();
+    const firstTitle = firstRow.getByRole('link', { name: tracks[0].metadata.title, exact: true });
+    assert.equal(await firstTitle.getAttribute('href'), '/track/1667');
+    await firstTitle.click();
+    await page.waitForURL('**/track/1667');
     await page.getByRole('heading', { name: tracks[0].metadata.title, exact: true }).waitFor();
     const tags = page.getByRole('navigation', { name: 'Tags', exact: true });
     const tag = tags.getByRole('link', { name: 'field & nature', exact: true });
@@ -102,6 +120,8 @@ async function screen(browser, phone, scheme) {
     await page.waitForFunction(node => getComputedStyle(node).transform === 'none', await dialog.getByTestId('now-playing-dismiss-region').elementHandle());
     const cover = await dialog.getByTestId('now-playing-artwork').boundingBox();
     if (phone) assert.ok(cover.width >= width - 35, 'now playing cover fills the phone');
+    await dialog.getByRole('button', { name: 'Share track' }).click();
+    assert.equal(await page.evaluate(() => sessionStorage.getItem('shared-track')), origin + '/track/1667');
     await capture('now-playing');
     await dialog.getByRole('slider', { name: 'Playback position' }).fill('12');
     if (phone) {
@@ -159,6 +179,22 @@ async function queueGroups(browser, phone, scheme) {
     await page.getByTestId('home-chart').getByRole('button', { name: `Play ${tracks[0].metadata.title}`, exact: true }).click();
     await dock.getByRole('button', { name: 'Pause', exact: true }).waitFor();
     const picks = page.getByTestId('home-track-row');
+    const first = picks.first();
+    const marker = first.getByTestId('playing-wave');
+    await page.mouse.move(0, 0);
+    await marker.waitFor();
+    assert.equal(await marker.evaluate(node => getComputedStyle(node.parentElement).opacity), '1');
+    const bar = marker.locator('i').first();
+    assert.equal(await bar.evaluate(node => getComputedStyle(node).clipPath), 'none', 'the playing bars are independent of the loading wave');
+    assert.equal(await picks.nth(1).getByTestId('playing-wave').count(), 0);
+    assert.notEqual(await bar.evaluate(node => getComputedStyle(node).animationName), 'none');
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    assert.equal(await bar.evaluate(node => getComputedStyle(node).animationName), 'none');
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await first.getByRole('button', { name: `Pause ${tracks[0].metadata.title}`, exact: true }).click();
+    await marker.waitFor({ state: 'detached' });
+    await first.getByRole('button', { name: `Play ${tracks[0].metadata.title}`, exact: true }).click();
+    await marker.waitFor();
     for (const index of [0, 1, 2, 3]) {
       await picks.nth(index).getByRole('button', { name: `Add ${tracks[index].metadata.title} to queue` }).click();
     }
@@ -241,7 +277,7 @@ async function statsScreen(browser, phone, scheme) {
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
     assert.equal(await page.getByLabel('Catalog totals').evaluate(node =>
       getComputedStyle(node).gridTemplateColumns.split(' ').filter(size => Number.parseFloat(size) > 0).length
-    ), phone ? 2 : 4);
+    ), phone ? 3 : 4);
     const chart = page.getByRole('region', { name: 'most liked tracks', exact: true });
     await chart.getByText('12 likes').waitFor();
     await page.screenshot({ path: path.join(output, `${width}-${scheme}-stats.png`) });
@@ -253,12 +289,12 @@ async function statsScreen(browser, phone, scheme) {
     await chart.getByRole('button', { name: 'all time', exact: true }).click();
     await chart.getByText('no likes in this time range.').waitFor();
     assert.equal(artistLookups, 0, 'artist metrics are fetched only after selection');
-    const input = page.getByRole('searchbox', { name: 'find an artist', exact: true });
+    const input = page.getByRole('searchbox', { name: 'find an artist', description: 'type at least two characters.', exact: true });
     await input.fill('unknown');
     await page.getByText('no artists found for “unknown”.').waitFor();
     await input.fill('@alice');
+    await page.getByRole('status').filter({ hasText: '1 artist found' }).waitFor();
     const link = page.getByRole('link', { name: 'Alice Example @alice.test' });
-    await link.waitFor();
     await input.press('Tab');
     assert.ok(await link.evaluate(item => item === document.activeElement));
     await page.keyboard.press('Enter');
@@ -378,7 +414,7 @@ async function loginScreen(browser) {
     await page.goto(origin + jam);
     const join = page.getByRole('link', { name: 'sign in to join' });
     await join.waitFor();
-    assert.equal(await join.getAttribute('href'), '/login?return_to=' + encodeURIComponent(jam));
+    assert.equal(await join.getAttribute('href'), '/login?return_to=' + encodeURIComponent(jam + '?join=1'));
     await page.goto(origin + jam + '~invalid');
     await page.getByRole('alert').getByText('this jam link is invalid.').waitFor();
     assert.deepEqual(errors, []);
@@ -435,6 +471,10 @@ async function keyboard(browser, phone, scheme) {
     }
 
     const chartOpener = page.getByTestId('home-chart').getByRole('link', { name: tracks[0].metadata.title, exact: true });
+    await page.route('https://api.next.plyr.fm/v1/playlists?**', route => route.fulfill({ json: { data: [{
+      object: 'playlist', id: 'fixture', metadata: { name: 'At the edge of the day' },
+      owner: { did: tracks[0].artist.did, profile: tracks[0].artist.profile }, media: tracks[0].media
+    }], has_more: false } }));
     await chartOpener.focus();
     await press(`${modifier}+k`);
     await page.waitForURL('**/search');
@@ -442,13 +482,19 @@ async function keyboard(browser, phone, scheme) {
     const search = page.getByRole('searchbox');
     await search.waitFor();
     assert.ok(await search.evaluate(node => document.activeElement === node));
-    await page.getByText('try a track title, artist name or handle, album, or playlist.').waitFor();
+    const popular = page.getByRole('region', { name: 'popular tracks' });
+    const playlists = page.getByRole('region', { name: 'playlists', exact: true });
+    await popular.getByRole('link').first().waitFor();
+    await page.getByRole('region', { name: 'artists to explore' }).getByRole('link').first().waitFor();
+    await playlists.getByRole('link').first().waitFor();
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
     await page.screenshot({ path: path.join(output, `${width}-${scheme}-search-empty.png`) });
     const hit = {
       object: 'search_result', type: 'track', id: tracks[0].id, title: tracks[0].metadata.title,
-      record: tracks[0].record, image_url: null,
+      record: tracks[0].record, image_url: tracks[0].media.artwork.url,
       owner: { did: tracks[0].artist.did, ...tracks[0].artist.profile }
     };
+    const artistHit = { ...hit, type: 'artist', id: hit.owner.did, title: hit.owner.display_name, image_url: hit.owner.avatar_url };
     let submitted = 0;
     await page.route('https://api.next.plyr.fm/v1/search?**', route => {
       const params = new URL(route.request().url()).searchParams;
@@ -456,13 +502,19 @@ async function keyboard(browser, phone, scheme) {
       if (term === 'q?' && params.get('limit') === '40' && ++submitted === 1) {
         return route.fulfill({ status: 503, json: { error: 'temporarily unavailable' } });
       }
-      return route.fulfill({ json: { object: 'list', data: term === 'sketch' ? [hit] : [], has_more: false } });
+      return route.fulfill({ json: { object: 'list', data: term === 'sketch' ? [hit, artistHit] : [], has_more: false } });
     });
     await search.fill('🎧');
     await page.getByText('type at least two characters to search.').waitFor();
     await search.fill('sketch');
-    const suggestion = page.getByRole('list', { name: 'search suggestions' }).getByRole('link');
+    const suggestions = page.getByRole('list', { name: 'search suggestions' }).getByRole('link');
+    const suggestion = suggestions.first();
     await suggestion.waitFor();
+    await page.waitForFunction(() => {
+      const images = [...document.querySelectorAll('[aria-label="search suggestions"] img')];
+      return images.length === 2 && images.every(image => image.complete && image.naturalWidth > 0);
+    });
+    assert.equal(await suggestions.nth(1).locator('img').getAttribute('src'), artistHit.image_url);
     assert.equal(new URL(page.url()).search, '', 'suggestions do not submit the query');
     await search.press('ArrowDown');
     assert.ok(await suggestion.evaluate(node => document.activeElement === node));
@@ -498,6 +550,27 @@ async function keyboard(browser, phone, scheme) {
     await page.waitForURL('**/search?q=q%3F');
     await page.getByText('no results for “q?”.').waitFor();
     await press('Escape');
+    await page.waitForURL(origin + '/');
+    const navigation = page.getByRole('navigation', { name: 'Main navigation' });
+    await chartOpener.waitFor();
+    await chartOpener.focus();
+    await press(`${modifier}+k`);
+    await page.waitForURL(origin + '/search');
+    const recent = page.getByRole('region', { name: 'recent searches' });
+    const recentQuery = recent.getByRole('link', { name: 'q?', exact: true });
+    await recentQuery.waitFor();
+    const recentHistory = await page.evaluate(() => history.length);
+    await recentQuery.click();
+    await page.waitForURL('**/search?q=q%3F');
+    await press('Escape');
+    await page.waitForURL(origin + '/');
+    assert.equal(await page.evaluate(() => history.length), recentHistory);
+    await navigation.getByRole('link', { name: 'search', exact: true }).click();
+    await page.waitForURL(origin + '/search');
+    await recent.getByRole('button', { name: 'clear', exact: true }).click();
+    await recent.waitFor({ state: 'hidden' });
+    assert.ok(await search.evaluate(node => document.activeElement === node));
+    await navigation.getByRole('link', { name: 'home', exact: true }).click();
     await page.waitForURL(origin + '/');
 
     await press(`${modifier}+Comma`);
@@ -565,12 +638,30 @@ async function keyboard(browser, phone, scheme) {
   } finally { await context.close(); }
 }
 
+async function textFields(browser) {
+  const { context, page } = await setup(browser, 390, 664, { phone: true, scheme: 'light', scale: 0.9 });
+  try {
+    for (const [path, field] of [
+      ['/search', '#search-query'],
+      ['/stats', '#stat-artist'],
+      ['/login', '#account-handle']
+    ]) {
+      await page.goto(origin + path);
+      const input = page.locator(field);
+      await input.tap();
+      assert.ok(await input.evaluate(node => parseFloat(getComputedStyle(node).fontSize)) >= 16,
+        `${path}: a focused text field below 16px triggers iOS Safari zoom`);
+    }
+  } finally { await context.close(); }
+}
+
 (async () => {
   await mkdir(output, { recursive: true });
   const staticBuild = !origin;
   if (staticBuild) origin = await serve();
   const browser = await chromium.launch();
   try {
+    await Promise.all([textFields(browser), homePagination(browser, origin)]);
     for (const phone of [true, false]) {
       for (const scheme of ['light', 'dark']) {
         await screen(browser, phone, scheme);

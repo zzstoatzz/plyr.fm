@@ -1,6 +1,7 @@
 import type { Did } from '../auth-state.ts';
 
 export type CreateReservation = { owner: Did; collection: string; rkey: string; uri: string };
+export type CreateHandoff = { id: string; handedOff: () => Promise<void> };
 export type CreateOperation = CreateReservation & { record: Record<string, unknown>; cid?: string; archived?: boolean; draftId?: string; autoTag?: boolean };
 export interface CreateStorage {
   load(owner: string, collection: string): Promise<CreateOperation[]>;
@@ -20,11 +21,15 @@ export function createKey(operation: Pick<CreateReservation, 'owner' | 'collecti
   return `${operation.owner}/${operation.collection}/${operation.rkey}`;
 }
 
+export function isCreateRkey(value: unknown): value is string {
+  return typeof value === 'string' && /^[234567abcdefghij][234567abcdefghijklmnopqrstuvwxyz]{12}$/.test(value);
+}
+
 export function createOperation(value: unknown): CreateOperation {
   if (!value || typeof value !== 'object') throw new Error('could not read pending creation.');
   const item = value as Record<string, unknown>;
   if (typeof item.owner !== 'string' || !/^did:[a-z]+:.+$/u.test(item.owner) || typeof item.collection !== 'string'
-    || typeof item.rkey !== 'string' || !/^[234567abcdefghij][234567abcdefghijklmnopqrstuvwxyz]{12}$/.test(item.rkey)
+    || !isCreateRkey(item.rkey)
     || item.uri !== `at://${item.owner}/${item.collection}/${item.rkey}`
     || !item.record || typeof item.record !== 'object' || Array.isArray(item.record)
     || (item.record as Record<string, unknown>).$type !== item.collection

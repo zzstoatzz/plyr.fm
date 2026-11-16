@@ -7,6 +7,10 @@ import { cardSurface } from './materials';
 import { periodLabels } from './home-state';
 import { useTopTracks } from './use-top-tracks';
 import { Text } from './Text';
+import { PlayingArtworkOverlay } from './PlayingWave';
+import { useTrackPlayback } from './playback-context';
+import type { Track } from '@plyr/next-core/api';
+import type { StyleProp, ViewStyle } from 'react-native';
 
 export function HomeChart({ onPlay }: { onPlay: Play }) {
   const colors = useAppearance();
@@ -26,19 +30,28 @@ export function HomeChart({ onPlay }: { onPlay: Play }) {
       {loading && !tracks.length ? [0, 1, 2].map(index => <View key={index} accessibilityRole={index ? undefined : 'progressbar'} accessibilityLabel={index ? undefined : 'loading top tracks...'} style={card}>
         <View style={{ width: 48, height: 48, borderRadius: 6, backgroundColor: colors.raised }} />
         <View style={{ flex: 1, height: lines[0] + lines[1] + lines[2] + 2, justifyContent: 'center' }}><View style={{ width: '70%', height: 10 * colors.scale, borderRadius: 5, backgroundColor: colors.raised }} /></View>
-      </View>) : tracks.map(track => <Pressable key={track.id} testID="track-play-control" accessibilityRole="button" accessibilityLabel={`Play ${track.metadata.title}`} onPress={() => onPlay(track)}
-        style={({ pressed }) => StyleSheet.flatten([card, pressed && { backgroundColor: colors.hover }])}>
-        <Cover uri={trackArtwork(track)} size={48} radius={6} />
-        <View style={styles.text}>
-          <Text numberOfLines={1} style={{ color: colors.text, fontSize: 14 * colors.scale, lineHeight: lines[0], fontWeight: '600' }}>{track.metadata.title}</Text>
-          <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 12 * colors.scale, lineHeight: lines[1] }}>{artistName(track)}</Text>
-          <Text numberOfLines={1} style={{ color: colors.faint, fontSize: 11 * colors.scale, lineHeight: lines[2] }}>{track.metrics.like_count} {track.metrics.like_count === 1 ? 'like' : 'likes'}</Text>
-        </View>
-      </Pressable>)}
+      </View>) : tracks.map(track => <ChartTrack key={track.id} track={track} onPlay={onPlay} card={card} lines={lines} />)}
     </HomeShelf>
     {!loading && <Status error={error} retry={retry}
       empty={!tracks.length ? period === 'all_time' ? 'nothing liked yet' : `nothing liked in the ${periodLabels[period]}` : undefined} />}
   </View>;
+}
+
+function ChartTrack({ track, onPlay, card, lines }: { track: Track; onPlay: Play; card: StyleProp<ViewStyle>; lines: number[] }) {
+  const colors = useAppearance();
+  const { playing, toggle } = useTrackPlayback(track);
+  return <Pressable testID="track-play-control" accessibilityRole="button" accessibilityLabel={`${playing ? 'Pause' : 'Play'} ${track.metadata.title}`} onPress={() => toggle(() => onPlay(track))}
+    style={({ pressed }) => StyleSheet.flatten([card, pressed && { backgroundColor: colors.hover }])}>
+    <View pointerEvents="none">
+      <Cover uri={trackArtwork(track)} size={48} radius={6} />
+      {playing && <PlayingArtworkOverlay />}
+    </View>
+    <View style={styles.text}>
+      <Text numberOfLines={1} style={{ color: colors.text, fontSize: 14 * colors.scale, lineHeight: lines[0], fontWeight: '600' }}>{track.metadata.title}</Text>
+      <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 12 * colors.scale, lineHeight: lines[1] }}>{artistName(track)}</Text>
+      <Text numberOfLines={1} style={{ color: colors.faint, fontSize: 11 * colors.scale, lineHeight: lines[2] }}>{track.metrics.like_count} {track.metrics.like_count === 1 ? 'like' : 'likes'}</Text>
+    </View>
+  </Pressable>;
 }
 
 const styles = StyleSheet.create({

@@ -52,9 +52,11 @@ async function credential(account, space) {
     token: account.token, query: { space },
   }), 'get delegation');
   const key = await P256Keypair.create();
-  const issued = await xrpc(hostPds, 'com.atproto.space.getSpaceCredential', {
-    body: { space, credentialKey: key.did(), delegationToken: token },
-  });
+  const options = { body: { space, credentialKey: key.did(), delegationToken: token } };
+  let issued = await xrpc(hostPds, 'com.atproto.space.authorizeSpaceSync', options);
+  if (issued.status === 404 && issued.data.error === 'UnknownMethod') {
+    issued = await xrpc(hostPds, 'com.atproto.space.getSpaceCredential', options);
+  }
   return { issued, key };
 }
 

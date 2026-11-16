@@ -34,14 +34,18 @@ def _verify(
     )
 
 
+@pytest.mark.parametrize("legacy", [False, True])
 async def test_credential_request_is_unsigned_and_binds_the_key(
     monkeypatch: pytest.MonkeyPatch,
+    legacy: bool,
 ) -> None:
     space = "at://did:plc:authority/space/fm.plyr.privateMedia/self"
     seen: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen.append(request)
+        if legacy and len(seen) == 1:
+            return httpx.Response(404, json={"error": "UnknownMethod"})
         return httpx.Response(200, json={"credential": "a.b.c"})
 
     real_client = httpx.AsyncClient
@@ -67,11 +71,11 @@ async def test_credential_request_is_unsigned_and_binds_the_key(
 
     credential = await space_client._mint_credential(session, space)
 
-    [request] = seen
-    assert (
-        str(request.url)
-        == "https://host.test/xrpc/com.atproto.space.getSpaceCredential"
-    )
+    urls = ["https://host.test/xrpc/com.atproto.space.authorizeSpaceSync"]
+    if legacy:
+        urls.append("https://host.test/xrpc/com.atproto.space.getSpaceCredential")
+    assert [str(request.url) for request in seen] == urls
+    request = seen[-1]
     assert "authorization" not in request.headers
     assert "signature" not in request.headers
     body = json.loads(request.content)
@@ -82,6 +86,26 @@ async def test_credential_request_is_unsigned_and_binds_the_key(
     }
     assert parse_did_key(body["credentialKey"]).jwt_alg == "ES256"
     assert credential.token == "a.b.c"
+
+
+async def test_credential_request_does_not_fall_back_on_space_not_found(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(str(request.url))
+        return httpx.Response(404, json={"error": "SpaceNotFound"})
+
+    real_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        space_client.httpx,
+        "AsyncClient",
+        lambda **kwargs: real_client(transport=httpx.MockTransport(handler), **kwargs),
+    )
+    response = await space_client._request_space_credential("https://host.test", {})
+    assert response.status_code == 404
+    assert seen == ["https://host.test/xrpc/com.atproto.space.authorizeSpaceSync"]
 
 
 def test_credential_use_signs_the_credential_and_its_audience() -> None:

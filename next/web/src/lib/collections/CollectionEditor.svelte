@@ -37,6 +37,8 @@
   let error = $state('');
   let deleted = $state(false);
   let notice = $state<HTMLParagraphElement>();
+  let deleteButton = $state<HTMLButtonElement>();
+  let cancelDeleteButton = $state<HTMLButtonElement>();
   const current = () => live && auth.getAuth().rpc === account.rpc;
   const selected = $derived(new Set(entries.flatMap(entry => {
     if (typeof entry !== 'number') return [entry.record.uri];
@@ -117,17 +119,26 @@
     } finally { if (current()) busy = false; }
   }
 
-  async function deletePlaylist() {
-    if (busy || !confirming || !current()) return;
+  async function confirmDeletion(show: boolean) {
+    confirming = show;
+    await tick();
+    if (current()) (show ? cancelDeleteButton : deleteButton)?.focus();
+  }
+
+  async function deleteCollection() {
+    if (!revision || busy || !confirming || !current()) return;
     busy = true;
     error = '';
     try {
-      const status = await pds.deletePlaylist(list.record.uri);
+      const status = await pds.deleteCollection(list.record.uri, list.object, revision.cid);
       if (!current()) return;
       deleted = true;
       if (status === 'deleted' || status === 'absent') await goto('/library', { replaceState: true });
     } catch (failure) {
-      if (current()) error = failure instanceof Error ? failure.message : 'could not delete this playlist.';
+      if (!current()) return;
+      conflict = failure instanceof CollectionOrderConflict;
+      error = failure instanceof CollectionOrderConflict ? failure.message : 'could not confirm deletion. try again.';
+      if (conflict) { confirming = false; await tick(); if (current()) notice?.focus(); }
     } finally { if (current()) busy = false; }
   }
 </script>
@@ -137,14 +148,14 @@
   {#if loading}
     <Loading label={`loading ${list.object}`} inline />
   {:else if deleted}
-    <p role="status">playlist deleted. the catalog is catching up.</p>
+    <p role="status">{list.object} deleted. the catalog is catching up.</p>
     <a class="text-button" href="/library">back to library</a>
   {:else if !revision}
     <p role="alert">{error}</p>
     <button type="button" class="text-button" onclick={load}>retry loading {list.object}</button>
   {:else}
     {#if error}<p role="alert" tabindex="-1" bind:this={notice}>{error}</p>{/if}
-    {#if conflict}<button type="button" class="text-button" onclick={load}>discard draft and reload</button>{/if}
+    {#if conflict}<button type="button" class="text-button" onclick={load}>{changed ? 'discard draft and reload' : 'reload latest ' + list.object}</button>{/if}
     <form onsubmit={save}>
       <label>{list.object} name <input bind:value={name} maxlength="64" required disabled={busy || confirming} /></label>
       {#if list.object === 'album'}
@@ -152,18 +163,17 @@
       {/if}
       <OrderRows {rows} {move} remove={index => { entries = entries.filter((_, position) => position !== index); }} disabled={busy || conflict || confirming} />
       {#if confirming}
-        <p>delete this playlist?</p>
+        <p>delete this {list.object}?{list.object === 'album' ? ' its songs will stay published.' : ''}</p>
         <div class="actions">
-          <button type="button" class="text-button" disabled={busy} onclick={deletePlaylist}>confirm delete</button>
-          <button type="button" class="text-button" disabled={busy} onclick={() => { confirming = false; }}>cancel delete</button>
+          <button type="button" class="text-button" disabled={busy} onclick={deleteCollection}>confirm delete</button>
+          <button type="button" class="text-button" bind:this={cancelDeleteButton} disabled={busy} onclick={() => confirmDeletion(false)}>cancel delete</button>
         </div>
       {:else}
         <div class="actions">
           <button type="submit" class="text-button save" disabled={busy || imagePending || conflict || !changed || !name.trim()}>{busy ? 'saving…' : 'save changes'}</button>
           <button type="button" class="text-button" disabled={busy} onclick={close}>cancel</button>
-          {#if list.object === 'playlist'}
-            <button type="button" class="text-button" disabled={busy || conflict} onclick={() => { confirming = true; }}>delete playlist</button>
-          {:else}
+          <button type="button" class="text-button" bind:this={deleteButton} disabled={busy || conflict} onclick={() => confirmDeletion(true)}>delete {list.object}</button>
+          {#if list.object === 'album'}
             <button type="button" class="text-button" disabled={busy || conflict} onclick={() => { finding = !finding; }} aria-expanded={finding}>{finding ? 'hide published tracks' : 'add tracks'}</button>
           {/if}
         </div>
@@ -181,7 +191,7 @@
 <style>
   .editing { padding: 1rem; margin-bottom: 1rem; border: 1px solid var(--line); border-radius: 0.75rem; background: var(--surface); }
   form, label { display: grid; gap: 0.55rem; margin-top: 0.75rem; }
-  input { width: 100%; padding: 0.55rem; border: 1px solid var(--line); border-radius: 0.45rem; background: var(--bg); font-size: 1rem; }
+  input { width: 100%; padding: 0.55rem; border: 1px solid var(--line); border-radius: 0.45rem; background: var(--bg); }
   .actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
   .save { color: var(--on-accent); background: var(--accent); padding-inline: 0.85rem; }
   .save:hover { background: var(--accent); filter: brightness(1.1); }

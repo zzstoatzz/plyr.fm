@@ -33,7 +33,7 @@ test('lost acknowledgement reconciles by authoritative read and never repeats au
 test('a record that still exists requires a new explicit deletion, and creation recovery blocks mutation', async () => {
   const { state, deletion } = fixture();
   assert.equal(await deletion.check(track), 'present'); assert.equal(state.writes, 0);
-  state.pending = true; await assert.rejects(deletion.remove(track), /creation recovery/); assert.equal(state.writes, 0);
+  state.pending = true; await assert.rejects(deletion.remove(track), /finish this upload before deleting/); assert.equal(state.writes, 0);
 });
 test('another owner or expired session cannot send deletion', async () => {
   const { state, deletion } = fixture();

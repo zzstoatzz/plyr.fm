@@ -11,13 +11,19 @@ import { Text } from './Text';
 import { TrackMenu } from './TrackMenu';
 import type { Anchor } from './Sheet';
 import { PlayerControl } from './PlayerControl';
+import { PlayingArtworkOverlay } from './PlayingWave';
+import { useTrackPlayback } from './playback-context';
 
 export function HomeTrackRow({ track, tracks, onPlay, returnTo = '/', height }: { height?: number; track: Track; tracks: Track[]; onPlay: Play; returnTo?: string }) {
   const theme = useAppearance();
+  const { playing, toggle } = useTrackPlayback(track);
   return <View testID="home-track-row" style={{ height, paddingBottom: 8 }}><View style={[styles.row, cardSurface(theme)]}>
-    <Pressable testID="track-play-control" accessibilityRole="button" accessibilityLabel={`Play ${track.metadata.title}`} onPress={() => onPlay(track, tracks)}
+    <Pressable testID="track-play-control" accessibilityRole="button" accessibilityLabel={`${playing ? 'Pause' : 'Play'} ${track.metadata.title}`} onPress={() => toggle(() => onPlay(track, tracks))}
       style={({ pressed }) => [StyleSheet.absoluteFill, { borderRadius: 8, backgroundColor: pressed ? theme.hover : 'transparent' }]} />
-    <View pointerEvents="none"><Cover uri={trackArtwork(track)} size={44} /></View>
+    <View pointerEvents="none">
+      <Cover uri={trackArtwork(track)} size={44} />
+      {playing && <PlayingArtworkOverlay />}
+    </View>
     <View pointerEvents="box-none" style={styles.meta}>
       <Link href={`/track/${track.id}`} asChild><Pressable accessibilityRole="link" accessibilityLabel={`Track details: ${track.metadata.title}`} style={styles.link}><Text numberOfLines={1} style={{ color: theme.text, fontSize: 15 * theme.scale, fontWeight: '600' }}>{track.metadata.title}</Text></Pressable></Link>
       <Link href={`/u/${encodeURIComponent(track.artist.profile.handle || track.artist.did)}`} asChild><Pressable accessibilityRole="link" style={styles.link}><Text numberOfLines={1} style={{ color: theme.muted, fontSize: 13 * theme.scale }}>{artistName(track)}</Text></Pressable></Link>

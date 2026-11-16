@@ -4,6 +4,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { chromium } = require('playwright');
 const { authorizeFixture, fixtureAccounts, fixturePage } = require('./pds-browser-fixture.cjs');
+const { serveAudio } = require('./fixture-catalog.cjs');
 
 const origin = 'https://next.plyr.fm';
 const pds = 'http://127.0.0.1:5197/xrpc/';
@@ -31,18 +32,24 @@ async function run(browser, accounts, width, theme, mp3) {
   const pdsRecord = (recordCollection, key) => call('com.atproto.repo.getRecord', accessJwt, { repo: did, collection: recordCollection, rkey: key });
   const pdsWrite = (recordCollection, rkey, record, swapRecord) => call('com.atproto.repo.putRecord', accessJwt, undefined, { repo: did, collection: recordCollection, rkey, record, swapRecord });
   const rkey = `creator-${width}-${theme}-${Date.now().toString(36)}`;
-  const seed = { $type: collection, title: 'late recording', artist: author, fileType: 'mp3', audioUrl: 'https://fixture.invalid/audio.mp3', createdAt: fixtureTime, tags: ['ambient'], unseen: { preserved: true } };
+  const visibility = theme === 'dark' ? 'unlisted' : 'public';
+  const seed = { $type: collection, title: 'late recording', artist: author, fileType: 'mp3', audioUrl: 'https://fixture.invalid/audio.mp3', createdAt: fixtureTime, tags: ['ambient'], unseen: { preserved: true },
+    ...(visibility === 'unlisted' && width === 390 ? { visibility } : {}) };
   const { uri } = await pdsWrite(collection, rkey, seed);
   const id = 'trk_' + Buffer.from(uri).toString('base64url');
   const seededProfile = await pdsWrite(profileCollection, 'self', {
     $type: profileCollection, bio: 'fixture profile bio', avatar: 'https://fixture.invalid/old.png', createdAt: fixtureTime, favoriteTrack: uri
   });
   let projected = { ...seed, cid: (await pdsRecord(collection, rkey)).cid };
+  let gateAfterAudioUpload = width === 390 && visibility === 'unlisted';
+  let gated = false;
   const row = index => ({
     object: 'track', id: index === 25 ? id : `trk_fixture_${index}`,
     record: { uri: index === 25 ? uri : `at://${did}/${collection}/t${index}`, cid: index === 25 ? projected.cid : 'fixture' + index, collection, revision: null },
     metadata: { title: index === 25 ? projected.title : `recording ${index}`, artist_name: author, album: null, duration_seconds: 180, description: null, created_at: fixtureTime },
-    artist: { did, profile: { handle, display_name: author } }, media: { artwork: null }, access: { visibility: 'public' }, metrics: { play_count: index, like_count: 0 }
+    artist: { did, profile: { handle, display_name: author } }, media: { artwork: null },
+    access: { visibility: index === 25 ? visibility : 'public', gate: index === 25 && gated ? { type: 'supporter' } : null },
+    metrics: { play_count: index, like_count: 0 }
   });
   const album = { object: 'album', id: 'alb_sample', record: { uri: `at://${did}/fm.plyr.list/album` }, metadata: { name: 'demo album' }, owner: { did, profile: { handle, display_name: author } }, metrics: { member_count: 1, available_count: 1 }, media: { artwork: null } };
   const emptyAlbum = { ...album, id: 'alb_empty', record: { uri: `at://${did}/fm.plyr.list/empty` }, metadata: { name: 'draft album' }, metrics: { member_count: 0, available_count: 0 } };
@@ -54,19 +61,22 @@ async function run(browser, accounts, width, theme, mp3) {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   let initialError = true, moreError = true, profileReadError = false, profileWrites = 0;
-  let trackMissing = false;
+  let trackMissing = false, trackLoadFailed = false;
   let projectedLike = false;
   let announceLike;
   const waitForProjection = new Promise(resolve => { announceLike = resolve; });
   const albumRequests = [];
   await context.route('https://typeahead.waow.tech/**', route => route.fulfill({ json: { actors: [] } }));
   await context.route('https://jams.next.plyr.fm/**', route => route.fulfill({ status: 403, json: {} }));
-  await context.route('https://fixture.invalid/**', route => route.fulfill({ status: 404, body: '' }));
+  await context.route('https://fixture.invalid/**', route => route.request().url() === seed.audioUrl
+    ? serveAudio(route) : route.fulfill({ status: 404, body: '' }));
   await context.route('https://api.next.plyr.fm/**', async route => {
-    assert.equal(route.request().method(), 'GET', 'creator activity never writes to the AppView');
     const url = new URL(route.request().url());
+    if (url.pathname === `/v1/tracks/${id}/plays`) return route.fulfill({ status: 204 });
+    assert.equal(route.request().method(), 'GET', 'creator activity never writes to the AppView');
     if ([`/v1/artists/${did}`, `/v1/artists/${handle}`].includes(decodeURIComponent(url.pathname))) return route.fulfill({ json: { display_name: author, handle, did } });
     if (url.pathname === '/v1/tracks') {
+      if (!url.searchParams.has('artist_did')) return route.fulfill({ json: list([]) });
       assert.equal(url.searchParams.get('artist_did'), did);
       if (initialError) { initialError = false; return route.fulfill({ status: 503, json: { error: { message: 'fixture catalog unavailable' } } }); }
       if (url.searchParams.get('cursor') === 'next') {
@@ -80,7 +90,15 @@ async function run(browser, accounts, width, theme, mp3) {
       albumRequests.push(url.search);
       return route.fulfill({ json: list([album, emptyAlbum]) });
     }
-    if (url.pathname === `/v1/tracks/${id}`) return route.fulfill({ json: row(25) });
+    if (url.pathname === `/v1/tracks/${id}`) {
+      if (!trackLoadFailed) { trackLoadFailed = true; return route.abort('failed'); }
+      return route.fulfill({ json: row(25) });
+    }
+    if (url.pathname === `/v1/tracks/${id}/playback`) return route.fulfill({ json: {
+      availability: { status: 'available', ...(projected.audioBlob
+        ? { artifact: { cid: projected.audioBlob.ref.$link } }
+        : { delivery: { url: seed.audioUrl } }) }
+    } });
     if (decodeURIComponent(url.pathname) === `/v1/actors/${did}/likes`) return route.fulfill({ json: list(projectedLike ? [row(25)] : []) });
     if (url.pathname === '/v1/records/await') {
       const address = url.searchParams.get('uri');
@@ -108,6 +126,13 @@ async function run(browser, accounts, width, theme, mp3) {
       assert.equal(input.swapRecord, seededProfile.cid);
       assert.equal(input.record.favoriteTrack, uri);
       profileReadError = true;
+    }
+    return route.fallback();
+  });
+  await context.route('https://pds.fixture.test/xrpc/com.atproto.repo.uploadBlob', route => {
+    if (gateAfterAudioUpload && route.request().headers()['content-type'] === 'audio/mpeg') {
+      gateAfterAudioUpload = false;
+      gated = true;
     }
     return route.fallback();
   });
@@ -155,12 +180,22 @@ async function run(browser, accounts, width, theme, mp3) {
     await editTrack.scrollIntoViewIfNeeded();
     const previousScroll = await page.evaluate(() => scrollY);
     await editTrack.click();
+    const retryTrack = main.getByRole('button', { name: 'retry loading track', exact: true });
+    await retryTrack.waitFor();
+    assert.equal(await main.getByRole('alert').innerText(), 'could not load this track.');
+    await retryTrack.click();
     const title = main.getByRole('textbox', { name: 'title', exact: true });
     await title.waitFor();
     assert.equal(await title.inputValue(), 'late recording');
     await main.getByRole('link', { name: 'Close', exact: true }).click();
     await main.getByRole('link', { name: 'edit late recording' }).waitFor();
     await page.waitForFunction(previous => Math.abs(scrollY - previous) < 30, previousScroll);
+
+    await main.getByRole('link', { name: 'late recording', exact: true }).click();
+    await main.getByRole('button', { name: 'Play', exact: true }).click();
+    await page.waitForFunction(url => window.jamAudio.some(audio => audio.currentSrc === url && audio.currentTime > 0.2), seed.audioUrl);
+    await main.getByRole('button', { name: 'Pause', exact: true }).click();
+    await page.goBack();
     await editTrack.click();
     await title.waitFor();
     await pdsWrite(collection, rkey, { ...seed, description: 'edited elsewhere' }, projected.cid);
@@ -173,7 +208,20 @@ async function run(browser, accounts, width, theme, mp3) {
     await main.getByRole('textbox', { name: 'description' }).waitFor();
     assert.equal(await main.getByRole('textbox', { name: 'description' }).inputValue(), 'edited elsewhere');
     await title.fill('recording after edit');
-    await main.getByLabel('replace audio', { exact: true }).setInputFiles({ name: 'replacement.mp3', mimeType: 'audio/mpeg', buffer: mp3 });
+    const cover = await fs.readFile(path.join(__dirname, 'fixtures/cover.heic'));
+    await main.getByLabel('change cover', { exact: true }).setInputFiles({ name: 'edited.heif', mimeType: '', buffer: cover });
+    await main.getByRole('img', { name: 'selected cover preview', exact: true }).waitFor();
+    const replacement = main.getByLabel('replace audio', { exact: true });
+    await replacement.waitFor({ timeout: 5000 });
+    await replacement.setInputFiles({ name: 'replacement.mp3', mimeType: 'audio/mpeg', buffer: mp3 });
+    await capture('track-replacement');
+    if (gateAfterAudioUpload) {
+      const before = await pdsRecord(collection, rkey);
+      await main.getByRole('button', { name: 'save', exact: true }).click();
+      await main.getByText('replace protected or restricted audio in the current app.', { exact: true }).waitFor();
+      assert.equal((await pdsRecord(collection, rkey)).cid, before.cid);
+      gated = false;
+    }
     await main.getByRole('button', { name: 'save', exact: true }).click();
     await page.waitForURL(origin + '/track/' + id);
     await main.getByRole('heading', { name: 'recording after edit' }).waitFor();
@@ -181,8 +229,18 @@ async function run(browser, accounts, width, theme, mp3) {
     assert.equal(saved.uri, uri);
     assert.equal(saved.value.title, 'recording after edit');
     assert.equal(saved.value.audioBlob.size, mp3.length);
+    assert.equal(saved.value.visibility, seed.visibility);
+    assert.equal(saved.value.imageBlob.mimeType, 'image/jpeg');
     assert.deepEqual(saved.value.unseen, seed.unseen);
 
+    const audioCid = saved.value.audioBlob.ref.$link;
+    const delivery = page.waitForResponse(response => {
+      const url = new URL(response.url());
+      return url.pathname.endsWith('/com.atproto.sync.getBlob') && url.searchParams.get('cid') === audioCid && response.ok();
+    }, { timeout: 7000 }).catch(() => undefined);
+    await main.getByRole('button', { name: 'Play', exact: true }).click();
+    assert.ok(await delivery, 'playing from the edited page fetches the replacement audio without a reload');
+    await page.waitForFunction(cid => window.jamAudio.some(audio => audio.currentSrc.includes(cid) && audio.currentTime > 0.15), audioCid);
     await page.goBack();
     await main.getByRole('link', { name: 'edit recording after edit' }).waitFor();
     await main.getByRole('link', { name: 'edit profile' }).click();
@@ -207,6 +265,7 @@ async function run(browser, accounts, width, theme, mp3) {
 
     await main.getByRole('link', { name: 'back to your music' }).click();
     await main.getByRole('link', { name: /view your public profile/ }).click();
+    await page.waitForURL(origin + '/u/' + handle);
     await main.getByRole('link', { name: 'edit profile', exact: true }).waitFor();
     await main.getByRole('tab', { name: 'albums' }).click();
     await main.getByRole('link', { name: 'new album', exact: true }).waitFor();

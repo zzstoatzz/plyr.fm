@@ -78,5 +78,5 @@
   dialog { width: min(26rem, calc(100% - 2rem)); border: 1px solid var(--line); border-radius: 0.85rem; background: var(--surface); color: var(--text); padding: 1rem; }
   dialog::backdrop { background: rgb(0 0 0 / 0.55); }
   form, label { display: grid; gap: 0.65rem; margin-top: 0.6rem; }
-  input { width: 100%; height: 2.8rem; padding: 0.6rem; border: 1px solid var(--line); border-radius: 0.45rem; background: var(--bg); font-size: 1rem; }
+  input { width: 100%; height: 2.8rem; padding: 0.6rem; border: 1px solid var(--line); border-radius: 0.45rem; background: var(--bg); }
 </style>

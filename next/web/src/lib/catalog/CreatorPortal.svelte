@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { trackHref } from '$lib/tracks';
   import CollectionArtwork from '$lib/collections/CollectionArtwork.svelte';
   import { beforeNavigate } from '$app/navigation';
   import { onMount, tick, untrack } from 'svelte';
@@ -9,7 +10,6 @@
   import { api } from '$lib/api';
   import { auth } from '$lib/auth';
   import { authConfig } from '$lib/auth-config';
-  import { player } from '$lib/player.svelte';
   import { privateMusic } from '$lib/private-library';
   import Artwork from '$lib/ui/Artwork.svelte';
   import Icon from '$lib/ui/Icon.svelte';
@@ -25,18 +25,28 @@
   let tracks = $state.raw(owned.tracks.snapshot());
   let albums = $state.raw(owned.albums.snapshot());
   let profile = $state.raw<Artist | null>(null);
-  let privateTracks = $state.raw<Track[]>([]);
-  let privateLoading = $state(true);
+  let ownerTracks = $state.raw<Track[]>([]);
+  let ownerCursor = $state<string>();
+  let ownerLoading = $state(true);
   let profileError = $state(false);
   let profileLoading = $state(true);
-  let privateError = $state(false);
+  let ownerError = $state(false);
   let copied = $state(false);
   let tracksTab: HTMLButtonElement;
   let albumsTab: HTMLButtonElement;
 
   const name = $derived(profile?.display_name || account.handle || 'your music');
+  let filter = $state('');
+  let loadingAll = $state(false);
+  let sort = $state<'recent' | 'title' | 'plays'>('recent');
+  const matchingMusic = $derived.by(() => {
+    const query = filter.trim().toLocaleLowerCase();
+    return music.filter(track => !query || [track.metadata.title, track.metadata.album].some(value => value?.toLocaleLowerCase().includes(query)))
+      .sort((a, b) => sort === 'title' ? a.metadata.title.localeCompare(b.metadata.title)
+        : sort === 'plays' ? b.metrics.play_count - a.metrics.play_count : 0);
+  });
   const publicPath = $derived('/u/' + encodeURIComponent(account.handle || did));
-  const music = $derived([...tracks.data, ...privateTracks].sort((a, b) => b.metadata.created_at.localeCompare(a.metadata.created_at)));
+  const music = $derived([...tracks.data, ...ownerTracks].sort((a, b) => b.metadata.created_at.localeCompare(a.metadata.created_at)));
   const catalog = $derived(tab === 'tracks' ? tracks : albums);
   let live = false;
   const current = () => live && auth.getAuth().rpc === account.rpc;
@@ -49,7 +59,7 @@
     owned.albums.connect();
     owned[tab].activate(true);
     void loadProfile();
-    void loadPrivate();
+    void loadOwnerTracks();
     const restore = requestAnimationFrame(() => {
       if (owned.scroll[tab]) window.scrollTo({ top: owned.scroll[tab], behavior: 'instant' });
     });
@@ -78,16 +88,35 @@
     } finally { if (current()) profileLoading = false; }
   }
 
-  async function loadPrivate() {
-    privateError = false;
-    privateLoading = true;
+  async function loadOwnerTracks(cursor?: string) {
+    ownerError = false;
+    ownerLoading = true;
     try {
-      if (!account.privatePublishing) return;
-      const result = await privateMusic(account).list();
-      if (current()) privateTracks = result.tracks;
+      if (!account.privatePublishing && !account.privateDeleting) return;
+      const result = await privateMusic(account).list(cursor);
+      if (current()) {
+        const previous = cursor ? ownerTracks : [];
+        const known = new Set(previous.map(track => track.record.uri));
+        ownerTracks = [...previous, ...result.tracks.filter(track => !known.has(track.record.uri))];
+        ownerCursor = result.cursor;
+      }
     } catch {
-      if (current()) privateError = true;
-    } finally { if (current()) privateLoading = false; }
+      if (current()) ownerError = true;
+    } finally { if (current()) ownerLoading = false; }
+  }
+
+  async function loadAllTracks() {
+    if (loadingAll) return;
+    loadingAll = true;
+    try {
+      while (current() && tab === 'tracks') {
+        const cursor = tracks.cursor;
+        const privateCursor = ownerCursor;
+        if ((!cursor && !privateCursor) || tracks.error || ownerError || tracks.loading || ownerLoading) return;
+        await Promise.all([cursor ? owned.tracks.more() : undefined, privateCursor ? loadOwnerTracks(privateCursor) : undefined]);
+        if (cursor === tracks.cursor && privateCursor === ownerCursor) return;
+      }
+    } finally { loadingAll = false; }
   }
 
   async function selectTab(next: Tab, focus = false) {
@@ -153,25 +182,37 @@
   </div>
 
   <div id="creator-tracks" role="tabpanel" aria-labelledby="creator-tracks-tab" hidden={tab !== 'tracks'}>
+    <div class="catalog-filter">
+      <input type="search" placeholder="filter your tracks" aria-label="Filter your tracks" bind:value={filter} />
+      <select aria-label="Sort tracks" bind:value={sort}>
+        <option value="recent">recent</option>
+        <option value="title">title</option>
+        <option value="plays">most played</option>
+      </select>
+    </div>
+    {#if (filter.trim() || sort !== 'recent') && (tracks.cursor || ownerCursor)}
+      <button class="text-button full-catalog" type="button" disabled={loadingAll || tracks.loading || ownerLoading} onclick={loadAllTracks}>
+        {loadingAll ? 'loading the rest of your tracks…' : 'include the rest of your tracks'}
+      </button>
+    {/if}
     <ul aria-label="Your tracks">
-      {#each music as track (track.record.uri)}
+      {#each matchingMusic as track (track.record.uri)}
         <li>
           <div class="thumb"><Artwork src={trackArtwork(track)} size={52} /></div>
           <div class="names">
-            {#if isPrivateTrack(track)}
-              <button class="private-play" onclick={() => player.play(track, privateTracks)} aria-label={`Play ${track.metadata.title}`}>{track.metadata.title}</button>
-            {:else}
-              <a href={`/track/${track.id}`}>{track.metadata.title}</a>
-            {/if}
+            <a href={trackHref(track)}>{track.metadata.title}</a>
             <p class="subtle">{subtitle(track)}</p>
           </div>
-          <a class="icon-button" href={isPrivateTrack(track) ? '/private' : `/edit-track/${track.id}?return_to=%2Fportal`} aria-label={`${isPrivateTrack(track) ? 'manage' : 'edit'} ${track.metadata.title}`}><Icon name="edit" size={18} /></a>
+          {#if !isPrivateTrack(track)}<a class="icon-button" href={`/edit-track/${track.id}?return_to=%2Fportal`} aria-label={`edit ${track.metadata.title}`}><Icon name="edit" size={18} /></a>{/if}
         </li>
       {/each}
     </ul>
-    {#if privateError}
-      <p class="state" role="alert">couldn’t load your private tracks.</p>
-      <button class="text-button" onclick={loadPrivate}>retry private tracks</button>
+    {#if music.length && !matchingMusic.length && !catalog.loading && !ownerLoading}
+      <p class="state" role="status">{tracks.cursor || ownerCursor ? 'no matches in loaded tracks' : 'no matching tracks'}</p>
+    {/if}
+    {#if ownerError}
+      <p class="state" role="alert">couldn’t load all your tracks.</p>
+      <button class="text-button" onclick={() => loadOwnerTracks(ownerCursor)}>try again</button>
     {/if}
   </div>
 
@@ -189,16 +230,19 @@
     </ul>
   </div>
 
-  {#if catalog.loading || (tab === 'tracks' && privateLoading && !music.length)}
+  {#if catalog.loading || (tab === 'tracks' && ownerLoading && !music.length)}
     <Loading label="loading your music" inline />
   {:else if catalog.error}
     <p class="state" role="alert">{catalog.error}</p>
     <button class="text-button" onclick={() => owned[tab].retry()}>retry</button>
-  {:else if !(tab === 'tracks' ? music.length : albums.data.length)}
-    <p class="state">{tab === 'tracks' ? 'nothing here yet. upload something and it shows up here, open to everyone or just for you.' : 'no albums yet.'}</p>
+  {:else if tab === 'tracks' ? !music.length && !ownerError : !albums.data.length}
+    <p class="state">{tab === 'tracks' ? 'no tracks yet.' : 'no albums yet.'}</p>
   {/if}
-  {#if catalog.cursor && !catalog.loading && !catalog.error}
-    <button class="text-button" onclick={() => owned[tab].more()}>more {tab}</button>
+  {#if !catalog.loading && !catalog.error && (catalog.cursor || tab === 'tracks' && ownerCursor && !ownerError)}
+    <button class="text-button" disabled={tab === 'tracks' && ownerLoading} onclick={() => {
+      if (catalog.cursor) owned[tab].more();
+      if (tab === 'tracks' && ownerCursor && !ownerError) void loadOwnerTracks(ownerCursor);
+    }}>more {tab}</button>
   {/if}
 </div>
 
@@ -212,6 +256,10 @@
   .settings { margin-left: auto; }
   .upload { color: var(--on-accent); background: var(--accent); padding-inline: 0.85rem; }
   .upload:hover { background: var(--accent); filter: brightness(1.12); }
+  .catalog-filter { display: flex; flex-wrap: wrap; gap: 0.5rem; padding-block: 0.75rem; }
+  .full-catalog { margin-block-end: 0.5rem; color: var(--accent); }
+  .catalog-filter input { flex: 1 1 11rem; min-width: 0; }
+  .catalog-filter :is(input, select) { min-height: 2.75rem; padding-inline: 0.7rem; border-radius: 0.6rem; border: 1px solid var(--line); background: var(--surface); }
   .tabs { display: flex; gap: 0.2rem; border-bottom: 1px solid var(--line); }
   .tabs button { border: 0; border-radius: 0.5rem 0.5rem 0 0; padding: 0.7rem 1rem; background: none; color: var(--muted); }
   .tabs button[aria-selected='true'] { color: var(--text); box-shadow: inset 0 -2px var(--accent); }
@@ -220,7 +268,6 @@
   .thumb { width: 3.25rem; flex: 0 0 3.25rem; border-radius: 0.35rem; }
   h1 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; font-size: clamp(1.35rem, 4.8vw, 1.85rem); line-height: 1.25; }
   .names { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-  .names a, .private-play { font-weight: 600; }
-  .private-play { text-align: left; padding: 0; border: 0; background: none; overflow-wrap: anywhere; }
+  .names a { font-weight: 600; }
   @media (max-width: 480px) { .person { gap: 0.75rem; } }
 </style>

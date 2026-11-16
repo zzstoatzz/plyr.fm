@@ -19,7 +19,7 @@ import { useMediaSession } from './media-session';
 import { useRemoteTrackControls } from './use-remote-track-controls';
 import { toast } from './toast';
 import { playbackFor, warm } from './playback-lookup';
-import { PlaybackContext, type Playback } from './playback-context';
+import { PlaybackScope, type Playback } from './playback-context';
 
 export function PlaybackProvider({ children, playThrough, keepPlaying, volume }: {
   children: ReactNode; playThrough: boolean; keepPlaying: boolean; volume: number;
@@ -439,7 +439,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     seek: seekable ? value.seek : undefined,
     skip: seekable ? value.skip : undefined,
   } : null);
-  return <PlaybackContext.Provider value={value}>{children}</PlaybackContext.Provider>;
+  return <PlaybackScope value={value}>{children}</PlaybackScope>;
 }
 
-export { PlaybackOverride, usePlayback, type Playback } from './playback-context';
+export { usePlayback, type Playback } from './playback-context';

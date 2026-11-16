@@ -4,9 +4,16 @@ on:
   workflow_dispatch:
     inputs:
       target:
-        description: Next web deployment target
+        description: Deploy Next web or verify the live browser
         type: choice
-        options: [preview, live]
+        options:
+          [
+            preview,
+            live,
+            verify-live-upload-consent,
+            verify-live-jam,
+            verify-live-like,
+          ]
         default: preview
   pull_request:
     paths:
@@ -23,6 +30,7 @@ permissions:
 
 jobs:
   check:
+    if: github.event_name != 'workflow_dispatch' || inputs.target == 'preview' || inputs.target == 'live'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     concurrency: next-svelte-web-${{ github.event_name == 'workflow_dispatch' && format('pages-{0}', inputs.target) || github.ref }}
@@ -50,6 +58,9 @@ jobs:
       - run: bun run check:browser
         env:
           SCREENS_OUTPUT: ${{ runner.temp }}/next-svelte-screens
+      - run: bun run check:embed
+        env:
+          SCREENS_OUTPUT: ${{ runner.temp }}/next-svelte-screens/embed
       - run: bun run check:radio
         env:
           SCREENS_OUTPUT: ${{ runner.temp }}/next-svelte-screens/radio
@@ -131,3 +142,45 @@ jobs:
         run: |
           curl -fsS https://plyr.fm/ -o /dev/null
           curl -fsS https://api.plyr.fm/health | jq -e '.status == "ok"'
+
+  verify-live-browser:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.target == 'verify-live-upload-consent' || inputs.target == 'verify-live-jam' || inputs.target == 'verify-live-like')
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    concurrency: next-live-browser
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+        working-directory: next
+      - run: bun run playwright install --with-deps --only-shell chromium
+        working-directory: next/web
+      - name: verify live OAuth and upload admission in the browser
+        if: inputs.target == 'verify-live-upload-consent'
+        working-directory: next/web
+        env:
+          ZAT_TEST_HANDLE: ${{ secrets.ZAT_TEST_HANDLE }}
+          ZAT_TEST_PASSWORD: ${{ secrets.ZAT_TEST_PASSWORD }}
+          ZAT_TEST_PDS: ${{ secrets.ZAT_TEST_PDS }}
+        run: node scripts/check-live-upload-consent.mjs
+      - name: verify live Jam host and signed-out guest
+        if: inputs.target == 'verify-live-jam'
+        working-directory: next/web
+        env:
+          ZAT_TEST_HANDLE: ${{ secrets.ZAT_TEST_HANDLE }}
+          ZAT_TEST_PASSWORD: ${{ secrets.ZAT_TEST_PASSWORD }}
+          ZAT_TEST_PDS: ${{ secrets.ZAT_TEST_PDS }}
+          ALPHA_TEST_HANDLE: ${{ secrets.ALPHA_TEST_HANDLE }}
+          ALPHA_TEST_PASSWORD: ${{ secrets.ALPHA_TEST_PASSWORD }}
+        run: node scripts/check-live-jam.mjs
+      - name: verify live Like and Unlike
+        if: inputs.target == 'verify-live-like'
+        working-directory: next/web
+        env:
+          ZAT_TEST_HANDLE: ${{ secrets.ZAT_TEST_HANDLE }}
+          ZAT_TEST_PASSWORD: ${{ secrets.ZAT_TEST_PASSWORD }}
+          ZAT_TEST_PDS: ${{ secrets.ZAT_TEST_PDS }}
+        run: node scripts/check-live-like.mjs

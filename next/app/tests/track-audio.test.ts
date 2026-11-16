@@ -18,10 +18,16 @@ test('replacement preserves identity metadata and warnings while removing obsole
 });
 
 test('protected, supporter, private and restricted records cannot publish replacement public blobs', () => {
-  for (const record of [{ audioSpace: 'at://protected' }, { audioSpace: null }, { audioFileId: 'protected' }, { originalAudioBlob: {} }, { originalFileId: 'protected' }, { originalFileType: 'flac' }, { supportGate: {} }, { visibility: 'private' }, ...['ask', 'supporters', 'off', 'future-policy'].map(downloadPolicy => ({ downloadPolicy }))]) {
+  for (const record of [{ audioSpace: 'at://protected' }, { audioSpace: null }, { audioFileId: 'protected' }, { originalAudioBlob: {} }, { originalFileId: 'protected' }, { originalFileType: 'flac' }, { supportGate: {} }, { visibility: 'private' }, ...['ask', 'supporters', 'off', 'future-policy'].map(downloadPolicy => ({ downloadPolicy, visibility: 'unlisted' }))]) {
     assert.equal(canReplaceTrackAudio(record), false);
     assert.throws(() => validateReplacementAudio(record, file), /protected or restricted/);
   }
+});
+
+test('replacing an unlisted track preserves its authored visibility', () => {
+  const record = { visibility: 'unlisted', downloadPolicy: 'open' };
+  assert.equal(canReplaceTrackAudio(record), true);
+  assert.equal(replacedTrackAudio(record, file, blob).visibility, 'unlisted');
 });
 
 test('replacement validates the actual blob contract and rejects empty or non-audio input', () => {

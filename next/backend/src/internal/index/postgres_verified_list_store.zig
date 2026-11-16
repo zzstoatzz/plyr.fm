@@ -436,6 +436,7 @@ const collection_joins =
     \\LEFT JOIN plyr_index.track_records AS v
     \\  ON v.record_uri = members.track_uri AND v.record_cid = members.track_cid
     \\  AND NOT v.deleted AND COALESCE(pol.visibility, 'public') <> 'private'
+    \\  AND v.support_gate_type IS DISTINCT FROM 'owner'
     \\  AND pol.moderation_decision IS DISTINCT FROM 'exclude'
     \\  AND (
     \\    pol.moderation_decision IS NOT DISTINCT FROM 'allow'
@@ -514,6 +515,7 @@ const detail_query = "SELECT\n" ++ header_columns ++ "\n" ++
     \\  ON v.record_uri = members.track_uri AND v.record_cid = members.track_cid
     \\  AND v.collection = $3 AND NOT v.deleted
     \\  AND COALESCE(pol.visibility, 'public') <> 'private'
+    \\  AND v.support_gate_type IS DISTINCT FROM 'owner'
     \\  AND pol.moderation_decision IS DISTINCT FROM 'exclude'
     \\  AND (
     \\    pol.moderation_decision IS NOT DISTINCT FROM 'allow'

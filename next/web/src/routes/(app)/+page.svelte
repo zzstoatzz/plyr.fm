@@ -1,5 +1,7 @@
 <script lang="ts">
-	import { tick } from 'svelte';
+	import { onDestroy, tick } from 'svelte';
+	import { resolve } from '$app/paths';
+	import { invalidateAll } from '$app/navigation';
 	import type { Snapshot } from '@sveltejs/kit';
 	import type { Track } from '@plyr/next-core/api';
 	import { api } from '$lib/api';
@@ -14,19 +16,56 @@
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
+	const chartPeriods = ['month', 'week', 'day', 'all_time'] as const;
+	type ChartPeriod = typeof chartPeriods[number];
+	const chartLabels: Record<ChartPeriod, string> = {
+		month: 'past month', week: 'past week', day: 'past day', all_time: 'all time'
+	};
+	let period = $state<ChartPeriod>('month');
+	const nextPeriod = $derived(chartPeriods[(chartPeriods.indexOf(period) + 1) % chartPeriods.length]);
+	let selectedChart = $state.raw<typeof data.chart>();
+	const chart = $derived(selectedChart ?? data.chart);
+	let chartRequest: AbortController | undefined;
+	let periodButton = $state<HTMLButtonElement>();
+
+	function showChart(value: ChartPeriod) {
+		chartRequest?.abort();
+		chartRequest = new AbortController();
+		period = value;
+		selectedChart = api.chart(value, 10, chartRequest.signal).then(result => result.data, () => null);
+	}
+
 	let home: HTMLDivElement;
 	let extra: Track[] = $state.raw([]);
 	let nextCursor: string | undefined = $state();
 	let loading = $state(false);
 	let error = $state('');
-	$effect(() => { data.latest; extra = []; nextCursor = undefined; error = ''; });
+	let restoring = $state<typeof data.latest>();
+	let pending: AbortController | undefined;
+	const completed = new Set<string>();
+	$effect(() => {
+		data.latest;
+		pending?.abort();
+		pending = undefined;
+		completed.clear();
+		extra = [];
+		nextCursor = undefined;
+		loading = false;
+		error = '';
+	});
+	onDestroy(() => { pending?.abort(); chartRequest?.abort(); });
 
-	export const snapshot: Snapshot<{ y: number; tracks: Track[]; cursor?: string }> = {
-		capture: () => ({ y: window.scrollY, tracks: extra, cursor: nextCursor }),
-		restore: ({ y, tracks, cursor }) => {
+	export const snapshot: Snapshot<{ y: number; tracks: Track[]; cursor?: string; period?: ChartPeriod }> = {
+		capture: () => ({ y: window.scrollY, tracks: extra, cursor: nextCursor, period }),
+		restore: ({ y, tracks, cursor, period: savedPeriod }) => {
+			if (savedPeriod && savedPeriod !== period) showChart(savedPeriod);
 			const position = window.scrollY;
 			const request = data.latest;
-			void Promise.allSettled([request, data.chart, data.featured]).then(async ([first]) => {
+			restoring = request;
+			pending?.abort();
+			pending = undefined;
+			loading = false;
+			void Promise.allSettled([request, chart, data.featured, data.discovery]).then(async ([first]) => {
 				await tick();
 				if (!home?.isConnected || data.latest !== request) return;
 				const firstIds = new Set(first.status === 'fulfilled' ? first.value.data.map(track => track.id) : []);
@@ -35,28 +74,60 @@
 				// The browser can clamp the saved scroll before the streamed rows render.
 				await tick();
 				if (home.isConnected && data.latest === request && window.scrollY === position) window.scrollTo(0, y);
-			});
+			}).finally(() => { if (restoring === request) restoring = undefined; });
 		}
 	};
 
-	async function more(cursor: string) {
+	function observeMore(node: HTMLElement, cursor: string) {
 		const request = data.latest;
+		if (typeof IntersectionObserver === 'undefined') return;
+		const observer = new IntersectionObserver(entries => {
+			if (entries.some(entry => entry.isIntersecting) && restoring !== request && data.latest === request && !error) void more(cursor);
+		}, { rootMargin: '0px 0px 200px' });
+		observer.observe(node);
+		return () => observer.disconnect();
+	}
+
+	async function more(cursor: string, retry?: HTMLButtonElement) {
+		if (pending || completed.has(cursor)) return;
+		const controller = new AbortController();
+		const request = data.latest;
+		pending = controller;
 		loading = true;
-		error = '';
 		try {
-			const [page, first] = await Promise.all([api.tracks({ cursor, tag: data.tags, limit: 24 }), request]);
-			if (request !== data.latest) return;
+			const [page, first] = await Promise.all([api.tracks({ cursor, tag: data.tags, limit: 24 }, controller.signal), request]);
+			if (controller.signal.aborted || request !== data.latest) return;
 			const known = new Set([...first.data, ...extra].map(track => track.id));
-			extra = [...extra, ...page.data.filter(track => !known.has(track.id))];
-			nextCursor = page.next_cursor ?? '';
-		} catch { error = 'could not load more tracks.'; }
-		finally { loading = false; }
+			const added = page.data.filter(track => {
+				if (known.has(track.id)) return false;
+				known.add(track.id);
+				return true;
+			});
+			const restoreFocus = retry && document.activeElement === retry;
+			extra = [...extra, ...added];
+			error = '';
+			completed.add(cursor);
+			nextCursor = page.next_cursor && !completed.has(page.next_cursor) ? page.next_cursor : '';
+			if (restoreFocus) {
+				await tick();
+				if (controller.signal.aborted || request !== data.latest || document.activeElement !== document.body) return;
+				const row = added[0] && home.querySelector(`[data-track-id="${CSS.escape(added[0].id)}"][data-testid="home-track-row"] .title`);
+				(row instanceof HTMLElement ? row : home.querySelector<HTMLElement>('#home-latest'))?.focus();
+			}
+		} catch {
+			if (!controller.signal.aborted && request === data.latest) error = 'could not load more tracks.';
+		} finally {
+			if (pending === controller) {
+				pending = undefined;
+				loading = false;
+			}
+		}
 	}
 </script>
 
 <svelte:head><title>plyr.fm</title></svelte:head>
 
-<div class="page-content home" bind:this={home}>
+<div class="page-content home" class:filtered={data.tags.length > 0} bind:this={home}>
 	<header class="mobile-brand"><LinksMenu /><h1>plyr.fm</h1></header>
 	{#await data.featured}
 		<div class="featured" aria-hidden="true"></div>
@@ -80,24 +151,50 @@
 			</section>
 		{/if}
 	{/await}
+	{#if !data.tags.length}
 	<AtlasTile />
 	<section class="chart" data-testid="home-chart" aria-labelledby="home-top-tracks">
-		<header><h2 id="home-top-tracks">top tracks</h2><span>past month</span></header>
-		{#await data.chart}
+		<header>
+			<h2 id="home-top-tracks">top tracks</h2>
+			<button bind:this={periodButton} type="button" class="chart-period" aria-label={`top tracks period: ${chartLabels[period]}. show ${chartLabels[nextPeriod]}`} onclick={() => showChart(nextPeriod)}>
+				{chartLabels[period]} <Icon name="chevron" size={15} />
+			</button>
+		</header>
+		{#await chart}
 			<div class="chart-loading"><Loading label="loading top tracks" inline /></div>
-		{:then chart}
-			{@const tracks = chart.map(item => item.track)}
-			<ol>
-				{#each chart as item (item.track.id)}
-					<li><TrackRow track={item.track} collection={tracks} label="top tracks" /></li>
-				{:else}
-					<li class="chart-empty">no top tracks yet.</li>
-				{/each}
-			</ol>
+		{:then entries}
+			{#if entries?.length}
+				{@const tracks = entries.map(item => item.track)}
+				<ol>
+					{#each entries as item (item.track.id)}
+						<li><TrackRow track={item.track} collection={tracks} label="top tracks" /></li>
+					{/each}
+				</ol>
+			{:else if entries}
+				<p class="chart-empty" role="status">no top tracks for this period</p>
+			{:else}
+				<div class="chart-empty">
+					<p role="status">could not load top tracks</p>
+					<button type="button" class="text-button" onclick={event => {
+						if (document.activeElement === event.currentTarget) periodButton?.focus({ preventScroll: true });
+						showChart(period);
+					}}>try again</button>
+				</div>
+			{/if}
 		{/await}
 	</section>
+	{/if}
 	<section class="latest" aria-labelledby="home-latest">
-		<header><h2 id="home-latest">latest</h2>{#if data.tags.length}<a href="/">clear filters</a>{:else}<span>newest first</span>{/if}</header>
+		<header><h2 id="home-latest" tabindex="-1">{data.tags.length ? data.tags.join(', ') : 'latest'}</h2>{#if data.tags.length}<a href={resolve('/')}>all tracks</a>{:else}<span>newest first</span>{/if}</header>
+		{#await data.discovery then tags}
+			{#if tags.length}
+				<nav class="tag-shelf" aria-label="Browse by tag">
+					{#each tags as tag (tag.name)}
+						<a href={resolve('/(app)/tag/[name]', { name: tag.name })} aria-current={data.tags.includes(tag.name) ? 'page' : undefined}>{tag.name} <small>{tag.track_count}</small></a>
+					{/each}
+				</nav>
+			{/if}
+		{/await}
 		{#await data.latest}
 			<Loading label="loading the latest tracks" />
 		{:then first}
@@ -107,10 +204,22 @@
 				<p class="state">no tracks found.</p>
 			{/each}
 			{@const cursor = nextCursor ?? first.next_cursor}
-			{#if cursor}<button class="text-button" disabled={loading} onclick={() => more(cursor)}>{loading ? 'loading…' : 'load more'}</button>{/if}
-			{#if error}<p role="status" class="state">{error}</p>{/if}
+			{#if cursor && restoring !== data.latest}
+				{#key cursor}
+					<div class="more" {@attach node => observeMore(node, cursor)}>
+						{#if error}
+							<p role="status">{loading ? 'loading more tracks…' : error}</p>
+							<button type="button" class="text-button" aria-disabled={loading} onclick={event => more(cursor, event.currentTarget)}>try again</button>
+						{:else if loading}<Loading label="loading more tracks" inline />
+						{:else if typeof IntersectionObserver === 'undefined'}
+							<button type="button" class="text-button" onclick={event => more(cursor, event.currentTarget)}>load more</button>
+						{/if}
+					</div>
+				{/key}
+			{/if}
 		{:catch}
-			<p role="status" class="state">could not load tracks. <a href="/">try again</a></p>
+			<p role="status" class="state">could not load tracks.</p>
+			<button type="button" class="text-button" onclick={() => invalidateAll()}>try again</button>
 		{/await}
 	</section>
 
@@ -129,10 +238,18 @@
 	.feature-content span { font-weight: 650; color: var(--accent); font-size: 0.8rem; }
 	h1 { line-height: 1.1; letter-spacing: -0.035em; }
 	.feature-content h1 { font-size: clamp(1.75rem, 4vw, 3.25rem); margin-block: 0.5rem 1.2rem; }
+	.more { min-height: 2.75rem; color: var(--muted); }
 	.latest { grid-area: latest; min-width: 0; }
+	.home.filtered { grid-template-columns: minmax(0, 1fr); grid-template-areas: "brand" "latest"; }
+	.tag-shelf { display: flex; gap: 0.45rem; overflow-x: auto; padding: 0.2rem 0.15rem 0.75rem; scrollbar-width: none; }
+	.tag-shelf a { display: inline-flex; align-items: center; gap: 0.3rem; min-height: 2.75rem; padding-inline: 0.65rem; border: 1px solid var(--line); border-radius: 1.5rem; white-space: nowrap; color: var(--muted); }
+	.tag-shelf a[aria-current=page] { border-color: var(--accent); color: var(--accent); }
+	.tag-shelf small { font-variant-numeric: tabular-nums; }
 	.chart { grid-area: chart; min-width: 0; }
 	.chart-loading, .chart-empty { display: grid; align-items: center; min-height: 4.75rem; color: var(--muted); }
-	.chart-empty { list-style: none; }
+	.chart-empty button { justify-self: start; }
+	.chart-period { display: inline-flex; align-items: center; justify-content: flex-end; gap: 0.2rem; min-height: 2.75rem; padding: 0; border: 0; background: none; color: var(--accent); white-space: nowrap; }
+	.chart-period:hover { text-decoration: underline; text-underline-offset: 0.2em; }
 	.latest header, .chart header { display: flex; justify-content: space-between; align-items: baseline; gap: 0.65rem; padding-bottom: 0.65rem; }
 	h2 { font-size: 1.07rem; }
 	header span, header a { color: var(--muted); font-size: 0.8rem; }
@@ -140,7 +257,7 @@
 	li::marker { color: var(--faint); font-size: 0.75rem; }
 	@media (min-width: 1240px) {
 		.home { grid-template-columns: minmax(0, 1fr) minmax(16rem, 29%); grid-template-areas: "brand brand" "featured atlas" "latest chart"; }
-		.home:not(:has(.featured)) { grid-template-areas: "brand brand" "atlas atlas" "latest chart"; }
+		.home:not(.filtered):not(:has(.featured)) { grid-template-areas: "brand brand" "atlas atlas" "latest chart"; }
 	}
 	.chart :global(.track) { grid-template-columns: 2.5rem minmax(0, 1fr); min-height: 3.6rem; }
 	.chart :global(.duration), .chart :global(.add), .chart :global(.metrics) { display: none; }

@@ -19,7 +19,7 @@
 		handle = identifier;
 		failure = '';
 		busy = true;
-		try { await login(identifier, deviceOnly, intent); }
+		try { await login(identifier, deviceOnly, intent, page.url.searchParams.has('addAccount')); }
 		catch {
 			failure = 'could not sign in. check your handle and try again.';
 			busy = false;

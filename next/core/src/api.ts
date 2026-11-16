@@ -11,6 +11,7 @@ export interface Page<T> {
 export interface Track {
 	object: 'track';
 	id: string;
+	legacy_id?: number | null;
 	record: { uri: string; cid: string | null; revision: string | null; collection: string; rkey: string };
 	metadata: {
 		title: string;
@@ -86,6 +87,7 @@ export interface SearchHit {
 	object: 'search_result';
 	type: 'track' | 'artist' | 'album' | 'playlist';
 	id: string;
+	legacy_id?: number | null;
 	record: { uri: string; cid: string };
 	title: string;
 	owner: { did: string; handle: string; display_name: string };
@@ -190,6 +192,7 @@ export function createApi(origin: string, playListenerId: () => string) {
 		trackComments: (id: string, signal?: AbortSignal) =>
 			get<Page<TrackComment>>(`/v1/tracks/${encodeURIComponent(id)}/comments`, {}, signal),
 		tracks: (p: { limit?: number; cursor?: string; artist_did?: string; tag?: string[]; hidden_tag?: string[] } = {}, signal?: AbortSignal) => get<Page<Track>>('/v1/tracks', p, signal),
+		tags: (limit = 24, signal?: AbortSignal) => get<Page<{ name: string; track_count: number }>>('/v1/tags', { limit }, signal),
 		track: (id: string, options?: { fresh?: boolean }) => options?.fresh
 			? request<Track>(`${origin}/v1/tracks/${encodeURIComponent(id)}`, 15_000, undefined, { cache: 'no-store' })
 			: get<Track>(`/v1/tracks/${encodeURIComponent(id)}`),

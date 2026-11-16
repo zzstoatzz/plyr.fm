@@ -3,11 +3,13 @@ import { MagnifyingGlass as SearchIcon, X, CaretRight as ChevronRight } from './
 import { useCallback, useEffect, useRef, useState, type ComponentRef } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { api } from './api-client';
+import { canToggleTrack } from '@plyr/next-core/track-revision';
+import { PlayingWave } from './PlayingWave';
 import { type SearchHit } from '@plyr/next-core/api';
 import { Cover, Heading, Status, errorMessage, useResource, type Play } from './CatalogPieces';
 import { Text } from './Text';
 import { useAppearance } from './appearance';
-import { usePlayback } from './playback';
+import { useTrackPlaybackState } from './playback-context';
 import { HomeTrackRow } from './HomeTrackRow';
 import { WaveLoading } from './WaveLoading';
 import { useSearch } from './use-search';
@@ -27,7 +29,7 @@ function destination(hit: SearchHit): Href {
 
 export function Search({ onPlay }: { onPlay: Play }) {
   const theme = useAppearance();
-  const player = usePlayback();
+  const player = useTrackPlaybackState();
   const { q, focus } = useLocalSearchParams<{ q?: string | string[]; focus?: string }>();
   const routeQuery = typeof q === 'string' ? Array.from(q).slice(0, 100).join('') : '';
   const [query, setQuery] = useState(routeQuery);
@@ -35,7 +37,7 @@ export function Search({ onPlay }: { onPlay: Play }) {
   const [expanded, setExpanded] = useState<string>();
   const [focused, setFocused] = useState(false);
   const [pressed, setPressed] = useState<string>();
-  const [playing, setPlaying] = useState<string>();
+  const [loadingTrack, setLoadingTrack] = useState<string>();
   const [failure, setFailure] = useState<{ id: string; message: string }>();
   const input = useRef<ComponentRef<typeof TextInput>>(null);
   const request = useRef(0);
@@ -43,20 +45,26 @@ export function Search({ onPlay }: { onPlay: Play }) {
   const key = JSON.stringify([term, filter]);
   const limit = expanded === key ? 50 : 20;
   const results = useSearch(term, filter === 'all' ? undefined : filter, limit);
-  useEffect(() => { request.current++; setQuery(routeQuery); setPlaying(undefined); setFailure(undefined); }, [routeQuery]);
+  useEffect(() => { request.current++; setQuery(routeQuery); setLoadingTrack(undefined); setFailure(undefined); }, [routeQuery]);
   useFocusEffect(useCallback(() => {
     if (focus) input.current?.focus();
-    return () => { request.current++; setPlaying(undefined); };
+    return () => { request.current++; setLoadingTrack(undefined); };
   }, [focus]));
   function change(value: string) {
-    request.current++; setPlaying(undefined); setFailure(undefined); setExpanded(undefined); setQuery(Array.from(value).slice(0, 100).join(''));
+    request.current++; setLoadingTrack(undefined); setFailure(undefined); setExpanded(undefined); setQuery(Array.from(value).slice(0, 100).join(''));
   }
   async function play(hit: SearchHit) {
     const attempt = ++request.current;
-    setPlaying(hit.id); setFailure(undefined);
+    setFailure(undefined);
+    if (canToggleTrack(player.current, hit, player.inJam)) {
+      setLoadingTrack(undefined);
+      player.setPlaying(!player.playing);
+      return;
+    }
+    setLoadingTrack(hit.id);
     try { const track = await api.track(hit.id); if (attempt === request.current) onPlay(track); }
     catch (error) { if (attempt === request.current) setFailure({ id: hit.id, message: errorMessage(error) }); }
-    finally { if (attempt === request.current) setPlaying(undefined); }
+    finally { if (attempt === request.current) setLoadingTrack(undefined); }
   }
   return <>
     <View style={[glassSurface(theme), styles.field, { borderColor: focused ? theme.accent : theme.line }]}>
@@ -68,28 +76,30 @@ export function Search({ onPlay }: { onPlay: Play }) {
     </View>
     {Array.from(term).length < 2 ? <Suggestions onPlay={onPlay} /> : <>
       <ScrollView horizontal accessibilityLabel="Result types" showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 4 }}>
-        {filters.map(([value, label]) => <Pressable key={value} accessibilityRole="button" accessibilityLabel={label} aria-pressed={filter === value} accessibilityState={{ selected: filter === value }} onPress={() => { request.current++; setPlaying(undefined); setFailure(undefined); setExpanded(undefined); setFilter(value); }}
+        {filters.map(([value, label]) => <Pressable key={value} accessibilityRole="button" accessibilityLabel={label} aria-pressed={filter === value} accessibilityState={{ selected: filter === value }} onPress={() => { request.current++; setLoadingTrack(undefined); setFailure(undefined); setExpanded(undefined); setFilter(value); }}
           style={({ pressed }) => ({ minWidth: 44, minHeight: 44, paddingHorizontal: 12, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: filter === value || pressed ? theme.surface : 'transparent' })}><Text style={{ color: filter === value ? theme.text : theme.muted, fontSize: 13 * theme.scale, fontWeight: filter === value ? '700' : '400' }}>{label}</Text></Pressable>)}
       </ScrollView>
       {results.loading && !results.data && <WaveLoading label="searching…" />}
       <Status error={results.error} retry={results.retry} empty={results.data?.length === 0 ? `no results for “${term}”` : undefined} />
       <View testID="search-results">
         {results.data?.map(hit => {
+          const current = hit.type === 'track' && canToggleTrack(player.current, hit, player.inJam);
+          const playing = current && player.playing;
           const content = <>
             <Cover uri={hit.image_url} size={48} round={hit.type === 'artist'} />
             <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
-              <Text numberOfLines={1} style={{ color: player.current?.id === hit.id ? theme.accent : theme.text, fontSize: 15 * theme.scale, fontWeight: '600' }}>{hit.title}</Text>
+              <Text numberOfLines={1} style={{ color: current ? theme.accent : theme.text, fontSize: 15 * theme.scale, fontWeight: '600' }}>{hit.title}</Text>
               <Text numberOfLines={1} style={{ color: theme.muted, fontSize: 13 * theme.scale }}>{hit.type} · {hit.type === 'artist' ? hit.owner.handle : hit.owner.display_name || hit.owner.handle}</Text>
             </View>
-            {playing === hit.id ? <Text accessibilityLiveRegion="polite" style={{ color: theme.muted, fontSize: 12 * theme.scale }}>loading…</Text> :
+            {loadingTrack === hit.id ? <Text accessibilityLiveRegion="polite" style={{ color: theme.muted, fontSize: 12 * theme.scale }}>loading…</Text> :
               <View pointerEvents="none" style={{ width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: hit.type === 'track' ? theme.surface : 'transparent' }}>
-                {hit.type === 'track' ? <PlayGlyph size={20} color={theme.text} /> : <ChevronRight size={20} color={theme.muted} />}
+                {playing ? <PlayingWave color={theme.accent} /> : hit.type === 'track' ? <PlayGlyph size={20} color={theme.text} /> : <ChevronRight size={20} color={theme.muted} />}
               </View>}
           </>;
           const control = <Pressable testID={hit.type === 'track' ? 'track-play-control' : undefined} accessibilityRole={hit.type === 'track' ? 'button' : 'link'} accessibilityLabel={`${hit.type}: ${hit.title}, ${hit.owner.display_name || hit.owner.handle}`}
-            accessibilityHint={hit.type === 'track' ? 'Play this track' : undefined}
-            disabled={playing === hit.id} accessibilityState={{ disabled: playing === hit.id, busy: playing === hit.id, selected: player.current?.id === hit.id }} onPress={hit.type === 'track' ? () => void play(hit) : undefined} onPressIn={() => setPressed(hit.id)} onPressOut={() => setPressed(undefined)}
-            style={{ ...styles.result, backgroundColor: pressed === hit.id ? theme.hover : player.current?.id === hit.id ? theme.surface : 'transparent' }}>{content}</Pressable>;
+            accessibilityHint={hit.type === 'track' ? playing ? 'Pause this track' : 'Play this track' : undefined}
+            disabled={loadingTrack === hit.id} accessibilityState={{ disabled: loadingTrack === hit.id, busy: loadingTrack === hit.id, selected: current }} onPress={hit.type === 'track' ? () => void play(hit) : undefined} onPressIn={() => setPressed(hit.id)} onPressOut={() => setPressed(undefined)}
+            style={{ ...styles.result, backgroundColor: pressed === hit.id ? theme.hover : current ? theme.surface : 'transparent' }}>{content}</Pressable>;
           return <View key={`${hit.type}:${hit.id}`}>{hit.type === 'track' ? control : <Link href={destination(hit)} asChild>{control}</Link>}
             {failure?.id === hit.id && <View style={{ paddingVertical: 8, gap: 8 }}><Copy>{failure.message}</Copy><Action label="retry playback" onPress={() => void play(hit)} /></View>}
           </View>;

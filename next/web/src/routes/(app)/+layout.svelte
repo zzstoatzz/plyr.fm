@@ -6,6 +6,10 @@
 	import { auth, restoreAuth } from '$lib/auth';
 	import { player } from '$lib/player.svelte';
 	import Icon from '$lib/ui/Icon.svelte';
+	import { accountAvatar } from '$lib/api';
+	import { mountPrefs, restorePrefs } from '$lib/prefs.svelte';
+	import Artwork from '$lib/ui/Artwork.svelte';
+	import AccountMenu from '$lib/account/AccountMenu.svelte';
 	import { activeUploadCount } from '$lib/upload-activity.svelte';
 	import { createDockPull } from '$lib/dock-pull';
 	import '../../app.css';
@@ -13,8 +17,10 @@
 	let { children } = $props();
 	let dialog: HTMLDialogElement;
 	let shortcutsDialog: HTMLDialogElement;
+	let accountMenu = $state<{ open: (trigger: HTMLButtonElement) => void }>();
 	let searchReturn: { url: URL; restoreFocus: () => void } | undefined;
 	let cancelFocusRestore: (() => void) | undefined;
+	const settingsPath = resolve('/(app)/settings');
 	const queuePage = $derived(page.url.pathname === resolve('/queue'));
 	const queuePanelOpen = $derived(player.queueOpen && !queuePage);
 	let NowPlaying = $state<typeof import('$lib/NowPlaying.svelte').default>();
@@ -30,6 +36,17 @@
 	}
 	const pull = createDockPull(() => player.openNowPlaying(), preloadNowPlaying);
 	let account = $state.raw(auth.getAuth());
+	let avatar = $state.raw<{ did: string; url: string }>();
+	const did = $derived(account.did);
+	$effect(() => {
+		if (!did) return;
+		const owner = did;
+		const controller = new AbortController();
+		void accountAvatar(owner, controller.signal).catch(() => undefined).then(url => {
+			if (!controller.signal.aborted) avatar = url ? { did: owner, url } : undefined;
+		});
+		return () => controller.abort();
+	});
 	let uploading = $derived(activeUploadCount(account.did));
 	const links = [
 		{ path: '/', label: 'home', icon: 'home' },
@@ -58,9 +75,15 @@
 	});
 
 	onMount(() => {
+		restorePrefs(account.did, account.agent, account.accountSync);
+		const stopPrefs = mountPrefs();
 		let resumed = account.rpc;
 		const unsubscribe = auth.subscribe(() => {
-			account = auth.getAuth();
+			const next = auth.getAuth();
+			if (account.did !== next.did || account.agent !== next.agent || account.accountSync !== next.accountSync) {
+				restorePrefs(next.did, next.agent, next.accountSync);
+			}
+			account = next;
 			if (resumed === account.rpc) return;
 			resumed = account.rpc;
 			const owner = account.did;
@@ -73,7 +96,7 @@
 		});
 		const stop = player.mount();
 		void restoreAuth();
-		return () => { cancelFocusRestore?.(); unsubscribe(); stop(); };
+		return () => { cancelFocusRestore?.(); unsubscribe(); stop(); stopPrefs(); };
 	});
 	$effect(() => {
 		// Queue snapshots, rather than the media clock, trigger checkpoint writes.
@@ -209,10 +232,13 @@
 			<Icon name="upload" size={21} /><span>{uploading ? `uploading ${uploading}` : 'upload'}</span>
 		</a>
 		{#if account.did}
-			<a href="/settings" class:active={page.url.pathname === '/settings'}><Icon name="user" size={21} /><span class="account-label">account</span><span class="desktop-only">settings</span></a>
+			<button type="button" class="mobile-account" aria-haspopup="dialog" class:active={page.url.pathname === settingsPath} onclick={event => accountMenu?.open(event.currentTarget)}>
+				<span class="profile-avatar"><Artwork src={avatar?.did === did ? avatar?.url : undefined} size={24} fallbackIcon="user" eager /></span><span>you</span>
+			</button>
 		{:else}
-			<a href={'/login?' + new URLSearchParams({ return_to: page.url.pathname + page.url.search })} class:active={page.url.pathname === '/login'}><Icon name="user" size={21} /><span class="account-label">account</span><span class="desktop-only">sign in</span></a>
+			<a href={resolve('/(app)/login') + '?' + new URLSearchParams({ return_to: page.url.pathname + page.url.search })} class:active={page.url.pathname === '/login'}><Icon name="user" size={21} /><span>sign in</span></a>
 		{/if}
+		<a href={settingsPath} class="desktop-only" class:active={page.url.pathname === settingsPath} aria-current={page.url.pathname === settingsPath ? 'page' : undefined}><Icon name="settings" size={21} /><span>settings</span></a>
 		<a class="desktop-radio" href="/radio" class:active={page.url.pathname === '/radio'}><Icon name="radio" size={21} /><span>radio</span></a>
 		<a class="desktop-stats" href={resolve('/(app)/stats')} class:active={page.url.pathname === '/stats'} aria-current={page.url.pathname === '/stats' ? 'page' : undefined}><Icon name="stats" size={21} /><span>stats</span></a>
 		<a class="desktop-only" href={resolve('/(app)/atlas')} class:active={page.url.pathname === '/atlas'} aria-current={page.url.pathname === '/atlas' ? 'page' : undefined}><Icon name="music" size={21} /><span>atlas</span></a>
@@ -227,6 +253,10 @@
 		</aside>
 	{/if}
 </div>
+
+{#if account.did}
+	<AccountMenu bind:this={accountMenu} identity={account.handle ? '@' + account.handle : account.did} uploads={uploading} />
+{/if}
 
 {#if player.current}
 	{#await import('$lib/PlayerDock.svelte') then { default: Dock }}<Dock onQueue={toggleQueue} {queuePage} {pull} />{/await}
@@ -256,7 +286,10 @@
 	nav a.active { background: var(--hover); color: var(--text); font-weight: 650; }
 	nav .brand { font-weight: 750; font-size: 1.4rem; letter-spacing: -0.04em; color: var(--text); margin-bottom: 0.7rem; }
 	.brand span { color: var(--accent); }
-	.account-label { display: none; }
+	.mobile-account { display: flex; align-items: center; gap: 0.7rem; min-height: 2.75rem; border: 0; border-radius: 0.7rem; background: none; padding: 0.65rem 0.8rem; text-align: start; color: var(--muted); }
+	.mobile-account:hover { background: var(--raised); }
+	.profile-avatar { width: 1.3125rem; border-radius: 50%; }
+	.profile-avatar :global(svg) { width: 1.3125rem; height: 1.3125rem; }
 	.desktop-help { display: flex; align-items: center; gap: 0.7rem; min-height: 2.75rem; border: 0; background: none; border-radius: 0.7rem; padding: 0.65rem 0.8rem; color: var(--muted); text-align: start; font-size: 0.875rem; }
 	.desktop-help:hover { background: var(--raised); }
 	.desktop-help span { width: 21px; text-align: center; font-size: 1.15rem; }
@@ -280,9 +313,11 @@
 		.frame, .frame.docked { display: block; padding-bottom: calc(var(--tabs) + env(safe-area-inset-bottom)); }
 		.frame.hasPlayer { padding-bottom: calc(var(--tabs) + var(--dock) + env(safe-area-inset-bottom)); }
 		aside, nav .brand, nav .desktop-only, nav .desktop-radio, nav .desktop-stats, nav .desktop-help { display: none; }
-		.account-label { display: inline; }
 		nav { z-index: 9; position: fixed; inset: auto 0 0; min-height: var(--tabs); flex-direction: row; padding: 0 0 env(safe-area-inset-bottom); border: 0; border-top: 1px solid var(--line); }
-		nav a { gap: 0.2rem; flex-direction: column; justify-content: center; flex: 1; min-height: var(--tabs); padding: 0.15rem; border-radius: 0; font-size: 0.75rem; }
+		nav :is(a, .mobile-account) { gap: 0.2rem; flex-direction: column; justify-content: center; flex: 1; min-height: var(--tabs); padding: 0.15rem; border-radius: 0; font-size: 0.75rem; }
+		nav .mobile-account { display: flex; align-items: center; border: 0; background: none; color: var(--muted); -webkit-tap-highlight-color: transparent; }
+		nav .mobile-account:focus-visible { outline-offset: -3px; }
+		nav .mobile-account.active { background: var(--hover); color: var(--text); font-weight: 650; }
 		dialog:not(.shortcuts) { width: 100%; max-width: 100%; height: 100dvh; max-height: 100dvh; margin: 0; border: 0; border-radius: 0; }
 		dialog.now-sheet { background: transparent; overscroll-behavior: contain; }
 		.now-sheet::backdrop { background: rgb(0 0 0 / var(--player-backdrop, 0.18)); }

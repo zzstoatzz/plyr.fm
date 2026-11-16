@@ -110,6 +110,10 @@ CREATE TABLE plyr_index.like_records (
     commit_rev text NOT NULL,
     indexed_at_us bigint NOT NULL
 );
+CREATE TABLE plyr_index.legacy_track_links (
+    legacy_id integer PRIMARY KEY,
+    record_uri text NOT NULL UNIQUE
+);
 CREATE TABLE plyr_index.list_records (
     record_uri text PRIMARY KEY,
     record_cid text NOT NULL,

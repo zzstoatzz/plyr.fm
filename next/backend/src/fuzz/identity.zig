@@ -6,6 +6,7 @@
 const std = @import("std");
 const hegel = @import("hegel");
 const gen = @import("gen.zig");
+const track_id = @import("../internal/identity/track_id.zig");
 const record_id = @import("../internal/identity/record_id.zig");
 const record_cursor = @import("../internal/identity/record_cursor.zig");
 const scoped_record_cursor = @import("../internal/identity/scoped_record_cursor.zig");
@@ -17,6 +18,7 @@ pub fn run() error{PropertyFailed}!void {
     try gen.runAll(.{
         .{ "identity.id_round_trip", idRoundTrip },
         .{ "identity.id_canonical", idCanonical },
+        .{ "identity.legacy_track_alias", legacyTrackAlias },
         .{ "identity.cursor_round_trip", cursorRoundTrip },
         .{ "identity.cursor_canonical", cursorCanonical },
         .{ "identity.scoped_cursor", scopedCursor },
@@ -100,6 +102,17 @@ fn idCanonical(_: void, case: *hegel.TestCase) !void {
         case.event("non-canonical token accepted");
         return case.fail("an accepted id is not the id the server issues for it");
     }
+}
+
+fn legacyTrackAlias(_: void, case: *hegel.TestCase) !void {
+    const value = try case.int(i32, 1, std.math.maxInt(i32));
+    var buffer: [32]u8 = undefined;
+    const text = try std.fmt.bufPrint(&buffer, "{d}", .{value});
+    if (track_id.parseLegacy(text) != value) return case.fail("numeric track alias does not round-trip");
+    const prefix: u8 = try gen.pick(case, u8, &.{ '+', '-', '0', ' ', '_' });
+    var mutated: [32]u8 = undefined;
+    const malformed = try std.fmt.bufPrint(&mutated, "{c}{s}", .{ prefix, text });
+    if (track_id.parseLegacy(malformed) != null) return case.fail("non-canonical numeric track alias accepted");
 }
 
 fn timestamp(case: *hegel.TestCase) !i64 {

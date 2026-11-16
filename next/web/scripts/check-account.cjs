@@ -1,4 +1,6 @@
+const { EventEmitter, once } = require('node:events');
 const assert = require('node:assert/strict');
+const { mkdir } = require('node:fs/promises');
 const path = require('node:path');
 const { chromium } = require('playwright');
 const { fixtureAccounts, fixturePage, authorizeFixture } = require('./pds-browser-fixture.cjs');
@@ -29,6 +31,9 @@ const coordinator = 'https://jams.next.plyr.fm';
     await page.route('https://api.next.plyr.fm/**', route => {
       const pathname = new URL(route.request().url()).pathname;
       if (pathname.endsWith('/comments') && failCommentsRead) return route.fulfill({ status: 503, json: {} });
+      if (pathname === '/v1/artists/' + encodeURIComponent(accounts[handle].did)) {
+        return route.fulfill({ json: { avatar_url: 'https://panel-fixture.invalid/avatar.svg' } });
+      }
       if (pathname === '/v1/tracks/resolve') return route.fulfill({ json: { data: [track], missing: [] } });
       if (pathname.endsWith('/playback')) return route.fulfill({ json: {
         availability: { status: 'available', delivery: { url: 'https://panel-fixture.invalid/audio.wav' } }
@@ -39,9 +44,20 @@ const coordinator = 'https://jams.next.plyr.fm';
     });
     await context.route('https://panel-fixture.invalid/**', route => route.request().url().endsWith('/audio.wav')
       ? serveAudio(route)
-      : route.fulfill({ status: 404 }));
+      : route.request().url().endsWith('/avatar.svg')
+        ? route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect width="24" height="24" fill="#7a52ab"/><circle cx="12" cy="12" r="6" fill="#f9c5a3"/></svg>' })
+        : route.fulfill({ status: 404 }));
     let client;
     let joins = 0;
+    let continuation = false;
+    const coordinatorEvents = new EventEmitter();
+    const preferences = { theme: 'system', accent: '#6a9fff', scale: 100, playThrough: true };
+    await context.route(coordinator + '/v1/preferences', route => {
+      const request = route.request().postDataJSON();
+      assert.match(request.serviceToken, /^[^.]+\.[^.]+\.[^.]+$/);
+      Object.assign(preferences, request.patch);
+      return route.fulfill({ json: { preferences } });
+    });
     await context.route(coordinator + '/v1/playback/join', route => {
       const request = route.request().postDataJSON();
       assert.ok(typeof request.serviceToken === 'string' && request.serviceToken.split('.').length === 3);
@@ -50,7 +66,7 @@ const coordinator = 'https://jams.next.plyr.fm';
       return route.fulfill({ json: { ticket: 'fixture-ticket', connectionId: 'fixture-socket' } });
     });
     await context.routeWebSocket('wss://jams.next.plyr.fm/v1/jams/socket?ticket=fixture-ticket', socket => {
-      const personal = { explicitEnd: 1, tailKind: null, label: null, repeat: 'off', keepPlaying: false, cursor: null, output: null, disconnected: false };
+      const personal = { explicitEnd: 1, tailKind: null, label: null, repeat: 'off', keepPlaying: continuation, cursor: null, output: null, disconnected: false };
       const state = {
         epoch: 'fixture-epoch', revision: 1, occurrence: 1,
         queue: [{ id: track.id, uri: track.record.uri, cid: track.record.cid, key: 'saved', durationMs: 240_000 }],
@@ -59,6 +75,13 @@ const coordinator = 'https://jams.next.plyr.fm';
       socket.send(JSON.stringify({ type: 'state', state }));
       socket.onMessage(message => {
         const command = JSON.parse(String(message));
+        if (command.action === 'setContinuation') {
+          continuation = command.keepPlaying;
+          coordinatorEvents.emit('continuation');
+          socket.send(JSON.stringify({ type: 'result', id: command.id, outcome: 'applied',
+            state: { ...state, revision: 3, personal: { ...personal, keepPlaying: continuation } } }));
+          return;
+        }
         if (command.action !== 'play') return;
         const playing = { ...state, playing: true, revision: 2, updatedAtMs: Date.now(),
           personal: { ...personal, output: { clientId: client, connectionId: 'fixture-socket' } } };
@@ -141,8 +164,75 @@ const coordinator = 'https://jams.next.plyr.fm';
     assert.deepEqual((await fetch(records).then(response => response.json())).records, []);
     await panel.getByRole('button', { name: 'Close comments' }).click();
 
-    await page.getByRole('link', { name: 'settings' }).click();
-    await page.getByText('your queue syncs across devices.').waitFor();
+    await page.setViewportSize({ width: 390, height: 844 });
+    const nav = page.getByRole('navigation', { name: 'Main navigation' });
+    const account = nav.getByRole('button', { name: 'you', exact: true });
+    const menu = page.getByRole('dialog', { name: 'account', exact: true });
+    await page.waitForFunction(() => document.querySelector('.mobile-account img')?.naturalWidth > 0);
+    const activePath = new URL(page.url()).pathname;
+    await account.focus();
+    await account.press('Enter');
+    await menu.waitFor();
+    assert.equal(new URL(page.url()).pathname, activePath, 'opening the account menu keeps the current page');
+    await menu.getByRole('link', { name: 'portal @' + handle }).waitFor();
+    assert.equal(await menu.getByRole('link', { name: /private music/ }).count(), 0);
+    assert.ok(await menu.evaluate(node => node.scrollWidth <= node.clientWidth));
+    if (process.env.SCREENS_OUTPUT) {
+      await mkdir(process.env.SCREENS_OUTPUT, { recursive: true });
+      await page.screenshot({ path: path.join(process.env.SCREENS_OUTPUT, 'next-account-mobile.png') });
+    }
+    await page.keyboard.press('Escape');
+    await menu.waitFor({ state: 'hidden' });
+    await page.waitForFunction(element => document.activeElement === element, await account.elementHandle());
+    await nav.getByRole('link', { name: 'library', exact: true }).click();
+    await page.waitForURL(origin + '/library');
+    await account.click();
+    await menu.waitFor();
+    await page.goBack();
+    await page.waitForURL(origin + activePath);
+    await menu.waitFor({ state: 'hidden' });
+    await account.click();
+    await menu.getByRole('link', { name: /^settings/ }).click();
+    await page.waitForURL(origin + '/settings');
+    await menu.waitFor({ state: 'hidden' });
+    await page.getByRole('heading', { name: 'appearance', exact: true }).waitFor();
+    await page.getByRole('heading', { name: 'playback', exact: true }).waitFor();
+    assert.equal(await page.locator('main').getByRole('link', { name: /your music|upload|portal/i }).count(), 0);
+    assert.equal(await page.getByText(/queue sync|queue stays|queue is saved/i).count(), 0);
+    if (process.env.SCREENS_OUTPUT) {
+      await page.screenshot({ path: path.join(process.env.SCREENS_OUTPUT, 'next-settings-mobile.png') });
+    }
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.getByRole('radio', { name: 'dark', exact: true }).check();
+    const swatches = await page.locator('.swatch i').evaluateAll(items => items.map(item => getComputedStyle(item).backgroundColor));
+    assert.equal(new Set(swatches).size, 4, 'the color buttons show distinct colors');
+    await page.getByRole('radio', { name: 'violet', exact: true }).check();
+    await page.getByRole('radio', { name: 'large', exact: true }).check();
+    const playThrough = page.getByRole('switch', { name: 'play through collections' });
+    await playThrough.uncheck();
+    const keepPlaying = page.getByRole('switch', { name: 'keep playing' });
+    const updated = once(coordinatorEvents, 'continuation', { signal: AbortSignal.timeout(10_000) });
+    const synced = page.waitForResponse(response => response.url() === coordinator + '/v1/preferences'
+      && response.request().postDataJSON().patch?.keepPlaying === true && response.ok());
+    await keepPlaying.check();
+    await updated;
+    assert.equal(continuation, true, 'continuation updates the personal playback service');
+    await synced;
+    assert.deepEqual(preferences, { theme: 'dark', accent: '#c2a2ff', scale: 115, playThrough: false, keepPlaying: true });
+    await page.evaluate(did => localStorage.removeItem('plyr-next:prefs:' + did), accounts[handle].did);
+    await page.reload();
+    await page.locator('input[aria-label="keep playing"]:checked').waitFor();
+    await playThrough.waitFor();
+    assert.equal(await playThrough.isChecked(), false);
+    assert.equal(await page.getByRole('radio', { name: 'dark', exact: true }).isChecked(), true);
+    assert.equal(await page.getByRole('radio', { name: 'violet', exact: true }).isChecked(), true);
+    assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme), 'dark');
+    assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize), '18.4px');
+    if (process.env.SCREENS_OUTPUT) {
+      await page.screenshot({ path: path.join(process.env.SCREENS_OUTPUT, 'next-settings-mobile-dark.png') });
+    }
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await nav.getByRole('link', { name: 'settings', exact: true }).waitFor();
     const revoked = page.waitForResponse(response => response.url() === 'https://pds.fixture.test/oauth/revoke' && response.ok());
     await page.getByRole('button', { name: 'sign out' }).click();
     await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'sign in' }).waitFor();

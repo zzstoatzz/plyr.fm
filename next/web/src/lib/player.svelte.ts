@@ -1,3 +1,4 @@
+import type { EmbedSnapshot } from '@plyr/next-core/embed-events';
 import type { RadioStation } from '@plyr/next-core/radio';
 import type { Track } from '@plyr/next-core/api';
 import { ListeningSession } from '@plyr/next-core/listening-session';
@@ -11,6 +12,8 @@ import { trackArtwork } from '@plyr/next-core/artwork';
 import { editPrivateQueue, withoutPrivateTrack } from '@plyr/next-core/publishing/private-music';
 import { isPrivateTrack } from '@plyr/next-core/track-access';
 import { privateLibrary } from './private-library';
+import { scrobble } from './teal';
+import { prefs, setPrefs } from './prefs.svelte';
 import { api } from './api';
 import { auth } from './auth';
 import { authConfig } from './auth-config';
@@ -34,7 +37,12 @@ class Player {
 	#lastAudibleVolume = 1;
 	error = $state<string>();
 	repeat = $state<PersonalPlaybackTarget['repeat']>('off');
-	keepPlaying = $state(false);
+	get keepPlaying() { return prefs.keepPlaying; }
+	get continuesPlaying() { return this.snapshot.remote?.personal?.keepPlaying ?? this.keepPlaying; }
+	setKeepPlaying(value: boolean) {
+		setPrefs({ keepPlaying: value });
+		this.#model.setKeepPlaying(value);
+	}
 	nowPlaying = $state(false);
 	#keyboardOpenedNowPlaying = false;
 	get focusNowPlayingSheet() { return !this.#keyboardOpenedNowPlaying; }
@@ -58,6 +66,21 @@ class Player {
 	#embedded = false;
 	get outputElsewhere() { return !this.localMode && this.snapshot.outputElsewhere; }
 	#publicRepeat: PersonalPlaybackTarget['repeat'] = 'off';
+	#embedInstance = '';
+	#embedDiscontinuity = 0;
+	embedSnapshot(): EmbedSnapshot {
+		const audio = this.#audio;
+		const track = this.#mediaTrack;
+		return {
+			instance: this.#embedInstance, discontinuity: this.#embedDiscontinuity, audioContent: null,
+			track: track ? { uri: track.record.uri, cid: track.record.cid } : null,
+			state: this.error ? 'error' : !audio || !track ? this.loading ? 'buffering' : 'idle' : audio.error ? 'error' : audio.seeking ? 'seeking'
+				: audio.ended ? 'ended' : audio.paused ? 'paused' : audio.readyState < 3 ? 'buffering' : 'playing',
+			position: audio?.currentTime ?? 0,
+			duration: audio && Number.isFinite(audio.duration) ? audio.duration : null,
+			rate: audio?.playbackRate ?? 1, visible: document.visibilityState === 'visible'
+		};
+	}
 	#audio: HTMLAudioElement | undefined;
 	#audioSource: AbortController | undefined;
 	#releaseMedia: (() => void) | undefined;
@@ -231,6 +254,8 @@ class Player {
 		this.#dropRadio();
 		this.#detachMedia();
 		this.#mediaTrack = undefined;
+		this.#embedInstance = crypto.randomUUID();
+		this.#embedDiscontinuity++;
 		this.#listening.stop();
 		this.privateMode = false;
 		this.repeat = 'off';
@@ -293,6 +318,8 @@ class Player {
 		this.#startAt = undefined;
 		this.#detachMedia();
 		this.#mediaTrack = undefined;
+		this.#embedInstance = crypto.randomUUID();
+		this.#embedDiscontinuity++;
 		this.#listening.stop();
 		this.#jam.join({ ...room, admit });
 	}
@@ -321,6 +348,8 @@ class Player {
 		this.#detachMedia();
 		this.#audioElement();
 		this.#mediaTrack = undefined;
+		this.#embedInstance = crypto.randomUUID();
+		this.#embedDiscontinuity++;
 		this.#listening.stop();
 		this.liveStation = station;
 		this.#leaveRadio = leave;
@@ -370,6 +399,8 @@ class Player {
 		this.#liveClock = undefined;
 		this.#detachMedia();
 		this.#mediaTrack = undefined;
+		this.#embedInstance = crypto.randomUUID();
+		this.#embedDiscontinuity++;
 		this.#listening.stop();
 		this.queue = [];
 		this.index = -1;
@@ -556,6 +587,7 @@ class Player {
 		if (this.#audio) return this.#audio;
 		const audio = new Audio();
 		audio.preload = 'auto';
+		audio.addEventListener('seeking', () => { this.#embedDiscontinuity++; });
 		audio.volume = this.volume;
 		const observe = () => {
 			this.time = audio.currentTime;
@@ -569,7 +601,10 @@ class Player {
 				monotonicMs: performance.now(),
 				playbackRate: audio.playbackRate
 			});
-			if (play) this.#outbox?.enqueue(play);
+			if (play) {
+				this.#outbox?.enqueue(play);
+				if (!this.#embedded && this.#mediaTrack) void scrobble(this.#mediaTrack, play);
+			}
 			this.#jam?.observe();
 		};
 		for (const event of ['timeupdate', 'durationchange', 'play', 'pause', 'playing', 'waiting', 'ended']) {
@@ -625,6 +660,8 @@ class Player {
 		const source = new AbortController();
 		this.#audioSource = source;
 		this.#mediaTrack = undefined;
+		this.#embedInstance = crypto.randomUUID();
+		this.#embedDiscontinuity++;
 		this.#listening.stop();
 		this.time = 0;
 		this.length = 0;

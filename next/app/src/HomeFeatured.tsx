@@ -9,7 +9,7 @@ import { trackArtwork } from '@plyr/next-core/artwork';
 import { Cover, type Play } from './CatalogPieces';
 import { Action } from './controls';
 import { compactCount, distinctTracks, formatDuration, rankedArtists, weekNumber } from './home-state';
-import { Equalizer, Play as PlayIcon, Shuffle } from './icons';
+import { Play as PlayIcon, Shuffle } from './icons';
 import { usePlayback } from './playback';
 import { PauseGlyph } from './PlayerGlyph';
 import { cardSurface } from './materials';

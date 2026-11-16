@@ -151,6 +151,7 @@ fn decodeRow(
     return .{
         .type = kind,
         .id = id,
+        .legacy_id = try row.get(?i32, 17),
         .record = .{ .uri = record_uri, .cid = record_cid },
         .title = title,
         .owner = .{
@@ -247,6 +248,7 @@ const search_query =
     \\  JOIN plyr_index.actor_identities AS a ON a.did = v.owner_did
     \\  LEFT JOIN plyr_index.track_policies AS pol ON pol.record_uri = v.record_uri
     \\  WHERE $5::boolean AND v.collection = $2 AND NOT v.deleted
+    \\    AND v.support_gate_type IS DISTINCT FROM 'owner'
     \\    AND COALESCE(pol.visibility, 'public') IN ('public', 'supporters')
     \\    AND pol.moderation_decision IS DISTINCT FROM 'exclude'
     \\    AND (
@@ -390,8 +392,11 @@ const search_query =
     \\    WHEN image_profile.avatar IS NOT NULL AND (image_identity.avatar_url IS NULL OR image_profile.avatar NOT LIKE 'https://cdn.bsky.app/img/avatar/plain/%') THEN 'authored_profile'
     \\    WHEN image_identity.avatar_url IS NOT NULL THEN 'legacy_projection'
     \\    ELSE 'derived'
-    \\  END AS image_source
+    \\  END AS image_source,
+    \\  links.legacy_id
     \\FROM limited
+    \\LEFT JOIN plyr_index.legacy_track_links AS links
+    \\  ON entity_type = 'track' AND links.record_uri = limited.record_uri
     \\LEFT JOIN plyr_index.track_metrics AS metrics
     \\  ON entity_type = 'track' AND metrics.record_uri = limited.record_uri
     \\LEFT JOIN plyr_index.profile_records AS image_profile

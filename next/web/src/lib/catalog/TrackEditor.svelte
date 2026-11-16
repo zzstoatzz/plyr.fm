@@ -1,6 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { onMount, tick, untrack } from 'svelte';
+  import { isOpen } from '@plyr/next-core/access/policy';
   import type { AwaitStatus, Track } from '@plyr/next-core/api';
   import { TrackRevisionConflict } from '@plyr/next-core/pds';
   import { canReplaceTrackAudio, TrackWriteUnconfirmed, validateReplacementAudio } from '@plyr/next-core/publishing/track-audio';
@@ -25,6 +26,12 @@
   let tags = $state('');
   let tagsEdited = $state(false);
   let artwork = $state<File | null>();
+  let artworkPreview = $state<string>();
+  $effect(() => {
+    const url = artwork && URL.createObjectURL(artwork);
+    artworkPreview = url || undefined;
+    if (url) return () => URL.revokeObjectURL(url);
+  });
   let audio = $state<File>();
   let audioInput = $state<HTMLInputElement>();
   let artworkInput = $state<HTMLInputElement>();
@@ -41,7 +48,7 @@
   let saved = $state<{ status: AwaitStatus; deleting: boolean }>();
   const trackPath = $derived(`/track/${encodeURIComponent(id)}`);
   const close = $derived(returnTo ?? trackPath);
-  const canReplace = $derived(track?.access.visibility === 'public' && !!revision && canReplaceTrackAudio(revision.value));
+  const canReplace = $derived(!!track && isOpen(track) && !!revision && canReplaceTrackAudio(revision.value));
 
   onMount(() => {
     live = true;
@@ -55,7 +62,10 @@
     try {
       const item = await api.track(id, { fresh: true });
       if (!current()) return;
-      if (item.artist.did !== account.did) throw new Error('only the artist can edit this track.');
+      if (item.artist.did !== account.did) {
+        failure = 'only the artist can edit this track.';
+        return;
+      }
       const record = await pds.myTrack(item.record.uri);
       if (!current()) return;
       const text = (key: string) => {
@@ -71,8 +81,8 @@
       track = item;
       revision = record;
       conflict = confirm = false;
-    } catch (error) {
-      if (current()) failure = error instanceof Error ? error.message : 'could not load this track.';
+    } catch {
+      if (current()) failure = 'could not load this track.';
     } finally { if (current()) loading = false; }
   }
 
@@ -163,6 +173,7 @@
           {artwork === null ? 'keep current cover' : 'remove cover'}
         </button>
       </div>
+      {#if artworkPreview}<img class="cover-preview" src={artworkPreview} alt="selected cover preview" width="64" height="64" />{/if}
       {#if imageBusy}<p role="status">preparing your cover…</p>{/if}
       {#if failure && !conflict}<p role="alert" class="editor-error">{failure}</p>{/if}
       {#if confirm}
@@ -180,3 +191,7 @@
     </form>
   {/if}
 </EditorPanel>
+
+<style>
+  .cover-preview { border-radius: 0.45rem; object-fit: cover; }
+</style>

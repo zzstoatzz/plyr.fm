@@ -1,7 +1,7 @@
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useMediaSession } from './media-session';
-import { PlaybackOverride, usePlayback } from './playback';
+import { PlaybackScope, usePlayback } from './playback-context';
 import { useAppPreferences } from './preference-context';
 import { radioPosition, type RadioSnapshot, type RadioSong, type RadioStation } from '@plyr/next-core/radio';
 import { usePlayerAccounting } from './use-player-accounting';
@@ -114,9 +114,9 @@ export function RadioPlayback({ children }: { children: ReactNode }) {
   }, [tuned]);
   const { station, song, snapshot, status, listening } = radio;
   // Always the same element, so tuning in or out never remounts the dock or now playing below it.
-  if (!station || !song || !snapshot) return <PlaybackOverride value={solo}>{children}</PlaybackOverride>;
+  if (!station || !song || !snapshot) return <PlaybackScope value={solo}>{children}</PlaybackScope>;
   const position = radioPosition(snapshot);
-  return <PlaybackOverride value={{
+  return <PlaybackScope value={{
     ...solo,
     live: { station },
     current: song.track, queue: [song.track], index: 0, tail: undefined, jam: undefined,
@@ -130,5 +130,5 @@ export function RadioPlayback({ children }: { children: ReactNode }) {
     isPlaying: () => listening,
     pauseLocal: () => radio.setListening(false),
     next: async () => {}, previous: () => {}, seek: () => {}, skip: () => {}, jump: () => {},
-  }}>{children}</PlaybackOverride>;
+  }}>{children}</PlaybackScope>;
 }

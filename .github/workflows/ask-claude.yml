@@ -1,40 +1,112 @@
 name: ask claude
 
 # answers `ask-claude` issues (codex asking for advice) within minutes of the
-# issue being opened/labeled or getting a follow-up comment. see next/AGENTS.md.
+# label being added or a follow-up comment. a 10-minute sweep re-answers any
+# issue whose newest comment still isn't an answer, so a missed event can't
+# leave a question sitting. answers that need nate are posted to the inbox PR
+# (head branch `ask-claude-inbox`), which wakes the claude session that brings
+# them to him. see next/AGENTS.md.
 
 on:
   issues:
-    types: [opened, labeled]
+    # opening an issue with the label also fires `labeled`, so `opened` would double-answer
+    types: [labeled]
   issue_comment:
     types: [created]
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
 
-concurrency:
-  group: ask-claude-${{ github.event.issue.number }}
-  cancel-in-progress: false
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
 
 jobs:
+  find:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      issues: ${{ steps.pick.outputs.issues }}
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      EVENT: ${{ github.event_name }}
+    steps:
+      - id: pick
+        shell: bash
+        run: |
+          set -euo pipefail
+          # an issue needs an answer when its newest comment isn't one (answers carry the marker)
+          unanswered() {
+            last=$(gh api "repos/$REPO/issues/$1/comments?per_page=100" --paginate --jq 'if length == 0 then "none" else (.[-1].body | test("<!-- claude-advice -->") | tostring) end' | tail -1)
+            [ "$last" != "true" ]
+          }
+          picked='[]'
+          case "$EVENT" in
+            issues)
+              if [ '${{ github.event.label.name }}' = 'ask-claude' ] && [ '${{ github.event.issue.state }}' = 'open' ]; then
+                picked='[${{ github.event.issue.number }}]'
+              fi ;;
+            issue_comment)
+              if [ '${{ github.event.issue.pull_request && 'pr' || '' }}' = '' ] \
+                && [ '${{ contains(github.event.issue.labels.*.name, 'ask-claude') }}' = 'true' ] \
+                && [ '${{ github.event.comment.user.type }}' != 'Bot' ] \
+                && [ '${{ contains(github.event.comment.body, '<!-- claude-advice -->') }}' = 'false' ]; then
+                picked='[${{ github.event.issue.number }}]'
+              fi ;;
+            *)
+              # sweep: open ask-claude issues whose newest activity is >5 min old and unanswered
+              # (the 5-minute grace leaves fresh ones to their own event run)
+              cutoff=$(date -u -d '5 minutes ago' +%Y-%m-%dT%H:%M:%SZ)
+              nums=()
+              for n in $(gh api "repos/$REPO/issues?labels=ask-claude&state=open&per_page=100" --jq '.[] | select(.pull_request == null) | .number'); do
+                updated=$(gh api "repos/$REPO/issues/$n" --jq .updated_at)
+                [[ "$updated" > "$cutoff" ]] && continue
+                if unanswered "$n"; then nums+=("$n"); fi
+              done
+              picked=$(printf '%s\n' "${nums[@]}" | jq -R 'select(length > 0) | tonumber' | jq -cs .) ;;
+          esac
+          echo "issues=$picked" | tee -a "$GITHUB_OUTPUT"
+
   answer:
-    if: >-
-      !github.event.issue.pull_request &&
-      contains(github.event.issue.labels.*.name, 'ask-claude') &&
-      (github.event_name != 'issues' || github.event.action == 'opened' || github.event.label.name == 'ask-claude') &&
-      (github.event_name != 'issue_comment' || (github.event.comment.user.type != 'Bot' && !contains(github.event.comment.body, '<!-- claude-advice -->')))
+    needs: find
+    if: needs.find.outputs.issues != '[]' && needs.find.outputs.issues != ''
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        issue: ${{ fromJSON(needs.find.outputs.issues) }}
+    concurrency:
+      group: ask-claude-${{ matrix.issue }}
+      cancel-in-progress: false
     permissions:
       contents: read
       issues: write
+      pull-requests: write
       id-token: write
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      ISSUE: ${{ matrix.issue }}
     steps:
-      - uses: actions/checkout@v4
+      - id: before
+        name: skip if another run already answered
+        shell: bash
+        run: |
+          last=$(gh api "repos/$REPO/issues/$ISSUE/comments?per_page=100" --paginate --jq 'if length == 0 then "none" else (.[-1].body | test("<!-- claude-advice -->") | tostring) end' | tail -1)
+          echo "answered=$([ "$last" = "true" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "started=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+      - if: steps.before.outputs.answered == 'false'
+        uses: actions/checkout@v4
         with:
           fetch-depth: 50
-      - name: fetch the frozen Expo lineage for reference
+      - if: steps.before.outputs.answered == 'false'
+        name: fetch the frozen Expo lineage for reference
         run: git fetch --depth 1 origin next-expo:next-expo || true
-      - uses: anthropics/claude-code-action@v1
+      - if: steps.before.outputs.answered == 'false'
+        uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -43,13 +115,13 @@ jobs:
             --allowedTools "Read,Grep,Glob,Bash(git:*),Bash(gh issue view:*),Bash(gh issue comment:*),Bash(gh issue edit:*),Bash(gh pr view:*),Bash(gh pr list:*),Bash(gh pr diff:*),Bash(gh api:*),Bash(ls:*),Bash(cat:*),Bash(wc:*),Bash(sed:*)"
             --disallowedTools "Edit,Write,Task,Agent"
           prompt: |
-            you are claude, giving advice to codex (an agent working on plyr.fm's `next/` client) on github issue #${{ github.event.issue.number }} in ${{ github.repository }}.
-            codex labels an issue `ask-claude` when it wants a second opinion. ${{ github.event_name == 'issue_comment' && 'this run is for a follow-up comment on that issue: answer the newest comment, in context of the thread.' || 'this run is for a new question: answer the issue body.' }}
+            you are claude, giving advice to codex (an agent working on plyr.fm's `next/` client) on github issue #${{ matrix.issue }} in ${{ github.repository }}.
+            codex labels an issue `ask-claude` when it wants a second opinion. answer whatever is still unanswered: the issue body if nobody has answered yet, otherwise the comments after the last comment that starts with `<!-- claude-advice -->`.
 
             do this:
-            1. read the issue and all its comments: `gh issue view ${{ github.event.issue.number }} --comments`.
+            1. read the issue and all its comments: `gh issue view ${{ matrix.issue }} --comments`.
             2. ground every claim in the repo. read the code it names. read issue #2650 (the Svelte migration plan, its per-surface picks table, and its rules), `next/AGENTS.md`, and the PRs it references (`gh pr view N`, `gh pr diff N`). the frozen Expo build is on the local branch `next-expo` (`git show next-expo:path`), and its browser checks in `next/app/scripts/check-*.cjs` are the best spec for prior behavior. production's frontend is `frontend/` on main. cite files, line ranges, commits and PRs.
-            3. reply once, with `gh issue comment ${{ github.event.issue.number }} --body-file <file>` (write the body under /tmp via bash heredoc). the body MUST start with the line `<!-- claude-advice -->` and end with:
+            3. reply once, with `gh issue comment ${{ matrix.issue }} --body-file <file>` (write the body under /tmp via bash heredoc). the body MUST start with the line `<!-- claude-advice -->` and end with:
 
                ---
                _Generated by [Claude Code](https://claude.ai/code)_
@@ -60,4 +132,20 @@ jobs:
             - standing rules from nate (the owner): prod (`frontend/`, `just release`) is never touched from next work. the bar is user empathy and quality of life: never wipe what someone typed, give visible feedback when an action fails, no dev words in UI copy, display names over handles, check phone widths. every behavior fix needs a test that fails without it. lexicons are one-way doors.
             - lowercase, casual, plain sentences. no time estimates.
             - you only advise: don't edit files, push, close the issue, or remove labels.
-            - if the question needs nate's decision (product direction, a lexicon or schema change, anything touching prod), say so plainly in your reply, recommend what codex does in the meantime, and run `gh issue edit ${{ github.event.issue.number }} --add-label needs-nate`.
+            - nate is not doing dev; codex is. never ask nate to run anything, cut a release, deploy, or merge. if something depends on a prod release, say it's blocked on that, and give codex the best path that doesn't need it.
+            - escalate to nate ONLY for a genuine product or lexicon call (what users should get, or a new/changed record shape) that codex can't reasonably make itself. everything else, decide and recommend.
+            - if the question does need that call: say so plainly, recommend what codex does in the meantime, put the line `<!-- needs-nate -->` right after the first line of your reply, and end the reply with a section `## what nate needs to pick` listing the options. also run `gh issue edit ${{ matrix.issue }} --add-label needs-nate`.
+      - if: steps.before.outputs.answered == 'false'
+        name: tell nate when the answer needs him
+        shell: bash
+        env:
+          STARTED: ${{ steps.before.outputs.started }}
+        run: |
+          set -euo pipefail
+          reply=$(gh api "repos/$REPO/issues/$ISSUE/comments?per_page=100" --paginate --jq '.[] | select(.created_at >= env.STARTED) | select(.body | test("<!-- claude-advice -->")) | .html_url + " " + (.body | test("<!-- needs-nate -->") | tostring)' | tail -1)
+          [ -n "$reply" ] || { echo "::error::no answer was posted on #$ISSUE"; exit 1; }
+          url=${reply% *}; needs=${reply##* }
+          [ "$needs" = "true" ] || exit 0
+          inbox=$(gh pr list --repo "$REPO" --head ask-claude-inbox --state open --json number --jq '.[0].number // empty')
+          [ -n "$inbox" ] || { echo "::error::ask-claude inbox PR is missing; nate was not told about #$ISSUE"; exit 1; }
+          gh pr comment "$inbox" --repo "$REPO" --body "needs nate: #$ISSUE ($url)"

@@ -1,18 +1,20 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import Icon from '$lib/ui/Icon.svelte';
 
-  let { rows, move, remove, disabled = false }: {
+  let { rows, move, remove, disabled = false, titleField }: {
     rows: { key: string | number; title: string }[];
     move: (from: number, to: number) => void;
     remove: (index: number) => void;
     disabled?: boolean;
+    titleField?: Snippet<[number]>;
   } = $props();
 </script>
 
 <ol>
   {#each rows as row, index (row.key)}
     <li><div class="row">
-      <span>{row.title}</span>
+      <span>{#if titleField}{@render titleField(index)}{:else}{row.title}{/if}</span>
       <div class="controls">
         <button type="button" class="icon-button up" aria-label={`Move ${row.title} up`} disabled={disabled || index === 0} onclick={() => move(index, index - 1)}><Icon name="down" size={18} /></button>
         <button type="button" class="icon-button" aria-label={`Move ${row.title} down`} disabled={disabled || index + 1 === rows.length} onclick={() => move(index, index + 1)}><Icon name="down" size={18} /></button>

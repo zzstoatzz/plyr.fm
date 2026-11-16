@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { player } from './player.svelte';
 	import { auth } from './auth';
-	import { artistName, clock } from './tracks';
+	import { artistName, clock, trackHref } from './tracks';
 	import { trackArtwork } from '@plyr/next-core/artwork';
 	import { parseChapters, currentChapter } from '@plyr/next-core/chapters';
 	import { parseSeen, seenKey } from '@plyr/next-core/behaviors/hints';
@@ -10,6 +10,7 @@
 	import Artwork from './ui/Artwork.svelte';
 	import TrackCollections from './collections/TrackCollections.svelte';
 	import Icon from './ui/Icon.svelte';
+	import PlayingWave from './ui/PlayingWave.svelte';
 	import Scrub from './Scrub.svelte';
 	import Transport from './Transport.svelte';
 	import LiveProgress from './radio/LiveProgress.svelte';
@@ -80,7 +81,7 @@
 
 	async function shareTrack() {
 		if (!player.current) return;
-		const url = new URL(resolve('/(app)/track/[id]', { id: player.current.id }), location.origin).href;
+		const url = new URL(trackHref(player.current), location.origin).href;
 		try {
 			if (navigator.share) await navigator.share({ title: player.current.metadata.title, url });
 			else await navigator.clipboard.writeText(url);
@@ -143,13 +144,13 @@
 					<button class="icon-button" type="button" aria-label={`Repeat ${player.repeat}`} aria-pressed={player.repeat !== 'off'} onclick={() => player.cycleRepeat()}><Icon name="repeat" size={20} /></button>
 				</div>
 			{/if}
-			{#if player.privateMode}<a class="track-link" href={resolve('/(app)/private')}>private music <span aria-hidden="true">→</span></a>
+			{#if player.privateMode}<a class="track-link" href={trackHref(player.current)}>about this track <span aria-hidden="true">→</span></a>
 			{:else if !player.liveStation || player.current.id.startsWith('trk_')}
 				{#if !player.liveStation}<a class="artist-card" data-testid="now-playing-artist" href={resolve('/(app)/u/[actor]', { actor: player.current.artist.profile.handle || player.current.artist.did })}>
 					<div class="avatar"><Artwork src={player.current.artist.profile.avatar_url ?? undefined} size={56} /></div>
 					<span><strong>{player.current.artist.profile.display_name || artistName(player.current)}</strong><small>@{player.current.artist.profile.handle}</small></span><Icon name="chevron" size={19} />
 				</a>{/if}
-				<a class="track-link" href={resolve('/(app)/track/[id]', { id: player.current.id })}>about this track <span aria-hidden="true">→</span></a>
+				<a class="track-link" href={trackHref(player.current)}>about this track <span aria-hidden="true">→</span></a>
 			{/if}
 			{#if chapters.prose}<p class="description">{chapters.prose}</p>{/if}
 			{#if !player.liveStation && chapters.chapters.length}
@@ -158,6 +159,7 @@
 					{#each chapters.chapters as item, index (item.start)}
 						<button type="button" class="text-button" aria-current={chapter === index ? 'true' : undefined} onclick={() => player.seek(item.start)}>
 							<span>{clock(item.start)}</span>{item.label}
+							{#if chapter === index && playing}<PlayingWave />{/if}
 						</button>
 					{/each}
 				</section>

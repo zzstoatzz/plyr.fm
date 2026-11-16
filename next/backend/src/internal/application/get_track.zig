@@ -18,6 +18,14 @@ pub fn execute(
     expected_collection: []const u8,
     id: []const u8,
 ) Result {
+    if (id.len != 0 and std.ascii.isDigit(id[0])) {
+        const legacy_id = track_id.parseLegacy(id) orelse return .invalid_id;
+        const configured_store = store orelse return .unavailable;
+        const value = configured_store.getLegacyDetail(allocator, legacy_id, expected_collection) catch |err|
+            return classifyStoreError(err);
+        return if (value) |found| .{ .found = found } else .not_found;
+    }
+
     const decoded = allocator.alloc(u8, id.len) catch return .unavailable;
     const at_uri = track_id.decode(decoded, id) catch return .invalid_id;
     const parsed = zat.AtUri.parse(at_uri) orelse return .invalid_id;
@@ -96,9 +104,12 @@ test "lookup is canonical-URI keyed and environment scoped" {
         execute(arena.allocator(), fake.asStore(), "fm.plyr.track", id),
     );
     try std.testing.expectEqual(
-        Result.invalid_id,
+        Result.not_found,
         execute(arena.allocator(), fake.asStore(), "fm.plyr.dev.track", "42"),
     );
+    for ([_][]const u8{ "0", "12_34", "-1", "999999999999999999999999" }) |invalid| {
+        try std.testing.expectEqual(Result.invalid_id, execute(arena.allocator(), fake.asStore(), "fm.plyr.dev.track", invalid));
+    }
 }
 
 test "store errors preserve corruption versus availability semantics" {

@@ -1,3 +1,4 @@
+import { readAlbumUploadPlan, type AlbumUploadPlan } from '@plyr/next-core/publishing/album-upload-plan';
 import { sameRecord } from '@plyr/next-core/publishing/create-operation';
 import { uploadOperation, type UploadStorage } from '@plyr/next-core/publishing/upload-model';
 import { queuedUploadKey, readQueuedUploadDraft, type QueuedUploadDrafts } from '@plyr/next-core/publishing/queued-upload-draft';
@@ -12,6 +13,7 @@ function databaseFor(name: string, store: string) {
 }
 const open = databaseFor('plyr-next-uploads', 'uploads');
 const openDrafts = databaseFor('plyr-next-upload-drafts', 'drafts');
+const openAlbums = databaseFor('plyr-next-album-uploads', 'albums');
 export const uploadStorage: UploadStorage = {
   async load(owner) {
     const database = await open();
@@ -103,6 +105,54 @@ export const queuedDrafts: QueuedUploadDrafts = {
     if (!locks) throw new Error('queued uploads need a secure browser session.');
     return locks.request(`plyr-next-queued-upload/${queuedUploadKey(draft)}`, { ifAvailable: true }, lock => {
       if (!lock) throw new Error('this queued upload is open in another tab.');
+      return task();
+    });
+  },
+};
+
+export const albumUploads = {
+  async load(owner: AlbumUploadPlan['owner']) {
+    const db = await openAlbums();
+    return new Promise<AlbumUploadPlan | undefined>((resolve, reject) => {
+      const request = db.transaction('albums').objectStore('albums').get(owner);
+      request.onsuccess = () => {
+        try { resolve(request.result === undefined ? undefined : readAlbumUploadPlan(request.result, owner)); }
+        catch (failure) { reject(failure); }
+      };
+      request.onerror = () => reject(request.error);
+    });
+  },
+  async add(plan: AlbumUploadPlan) {
+    const db = await openAlbums();
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction('albums', 'readwrite');
+      transaction.objectStore('albums').add(readAlbumUploadPlan(plan, plan.owner), plan.owner);
+      transaction.oncomplete = () => resolve();
+      transaction.onabort = () => reject(transaction.error ?? new Error('could not save the album upload.'));
+    });
+  },
+  async finish(plan: Pick<AlbumUploadPlan, 'owner' | 'id'>) {
+    const db = await openAlbums();
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction('albums', 'readwrite');
+      const albums = transaction.objectStore('albums');
+      const request = albums.get(plan.owner);
+      request.onsuccess = () => {
+        try {
+          if (request.result === undefined) return;
+          if (readAlbumUploadPlan(request.result, plan.owner).id === plan.id) albums.delete(plan.owner);
+          else transaction.abort();
+        } catch { transaction.abort(); }
+      };
+      transaction.oncomplete = () => resolve();
+      transaction.onabort = () => reject(transaction.error ?? new Error('could not close the saved album upload.'));
+    });
+  },
+  withLock<T>(owner: AlbumUploadPlan['owner'], task: () => Promise<T>) {
+    const { locks } = navigator;
+    if (!locks) throw new Error('album uploads need a secure browser session.');
+    return locks.request(`plyr-next-album-upload/${owner}`, { ifAvailable: true }, lock => {
+      if (!lock) throw new Error('this album is open in another tab.');
       return task();
     });
   },

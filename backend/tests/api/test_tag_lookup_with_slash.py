@@ -157,3 +157,26 @@ async def test_the_tag_list_endpoint_still_routes(
 
     assert response.status_code == 200
     assert isinstance(response.json(), list)
+
+
+@pytest.mark.parametrize("authored", [False, True])
+async def test_unlisted_track_tag_discovery(
+    test_app: FastAPI, db_session: AsyncSession, tagged_track: Track, authored: bool
+) -> None:
+    tagged_track.visibility = "unlisted"
+    tagged_track.extra = {**tagged_track.extra, "authored_unlisted": authored}
+    await db_session.commit()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        tag_page = await client.get("/tracks/tags/7/4")
+        tag_list = await client.get("/tracks/tags", params={"q": "7/4"})
+        search = await client.get("/search/", params={"q": "7/4", "type": "tags"})
+
+    assert tag_page.status_code == tag_list.status_code == search.status_code == 200
+    assert [track["title"] for track in tag_page.json()["tracks"]] == (
+        [] if authored else ["Seven Four"]
+    )
+    assert [tag["name"] for tag in tag_list.json()] == ([] if authored else ["7/4"])
+    assert search.json()["counts"]["tags"] == (0 if authored else 1)
