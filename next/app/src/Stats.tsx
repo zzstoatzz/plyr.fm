@@ -1,6 +1,6 @@
 import { Link } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { trackArtwork } from '@plyr/next-core/artwork';
 import { api } from './api-client';
 import { useAppearance } from './appearance';
@@ -79,15 +79,17 @@ function TrackChart() {
 
 function TrackRanking({ period }: { period: Period }) {
   const theme = useAppearance();
+  const { fontScale } = useWindowDimensions();
+  const stacked = fontScale * theme.scale > 1.35;
   const load = useCallback(() => api.chart(period, 5), [period]);
   const ranking = useResource(load);
   if (!ranking.data) return <Status loading={!ranking.error} error={ranking.error && 'couldn’t load the track chart.'} retry={ranking.retry} />;
   if (!ranking.data.data.length) return <Copy live>no likes in this time range.</Copy>;
   return <View>
-    <View style={styles.columnLabels}>
+    {!stacked && <View style={styles.columnLabels}>
       <Text style={{ color: theme.muted, fontSize: 13 * theme.scale }}>track</Text>
       <Text style={{ color: theme.muted, fontSize: 13 * theme.scale }}>likes</Text>
-    </View>
+    </View>}
     {ranking.data.data.map(({ rank, track, period_like_count }) => <Link key={track.id}
       href={{ pathname: '/track/[id]', params: { id: track.id } }} asChild>
       <Pressable accessibilityRole="link" accessibilityLabel={`Rank ${rank}, ${track.metadata.title}, ${artistName(track)}, ${period_like_count} likes`}
@@ -95,10 +97,11 @@ function TrackRanking({ period }: { period: Period }) {
         <Text style={[styles.count, { color: theme.muted, fontSize: 13 * theme.scale }]}>{rank}</Text>
         <Cover uri={trackArtwork(track)} size={40} radius={6} />
         <View style={styles.name}>
-          <Text numberOfLines={2} style={{ color: theme.text, fontWeight: '700', fontSize: 15 * theme.scale }}>{track.metadata.title}</Text>
-          <Text numberOfLines={2} style={{ color: theme.muted, fontSize: 13 * theme.scale }}>{artistName(track)}</Text>
+          <Text numberOfLines={stacked ? undefined : 2} style={{ color: theme.text, fontWeight: '700', fontSize: 15 * theme.scale }}>{track.metadata.title}</Text>
+          <Text numberOfLines={stacked ? undefined : 2} style={{ color: theme.muted, fontSize: 13 * theme.scale }}>{artistName(track)}</Text>
+          {stacked && <Text style={{ color: theme.muted, fontSize: 13 * theme.scale }}>{period_like_count.toLocaleString()} {period_like_count === 1 ? 'like' : 'likes'}</Text>}
         </View>
-        <Text style={[styles.count, { color: theme.text, fontSize: 15 * theme.scale, fontWeight: '700' }]}>{compactCount(period_like_count)}</Text>
+        {!stacked && <Text style={[styles.count, { color: theme.text, fontSize: 15 * theme.scale, fontWeight: '700' }]}>{compactCount(period_like_count)}</Text>}
       </Pressable>
     </Link>)}
   </View>;
