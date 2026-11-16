@@ -185,7 +185,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
       objectUrl.current = availability === 'gated' ? url : null;
       if (previousSource) releaseGatedAudioUrl(previousSource);
       if (!privateTrack) accounting.begin(track.id, track.metadata.duration_seconds, play => {
-        if (availability === 'available') void scrobble(track, play, confirmScrobblingConsent);
+        if (availability === 'available') void scrobble(track, play, auth.did, confirmScrobblingConsent);
       });
       let settled = false;
       sourceEvents.current = player.addListener('playbackStatusUpdate', (event) => {

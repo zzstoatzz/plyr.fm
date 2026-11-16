@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
-import type { Auth } from './auth-state';
+import type { Auth, Did } from './auth-state';
 import { accountPreferences, type PersonalPreferences } from './preference-sync';
 import { readLocal, writeLocal } from './storage';
 import { DEFAULT_HIDDEN_TAGS, hiddenTags } from './discovery/preferences';
@@ -134,9 +134,9 @@ export function usePreferences(auth: Auth) {
 		}
 	}
 
-	const confirmScrobblingConsent = useCallback(async () => {
+	const confirmScrobblingConsent = useCallback(async (did: Did) => {
 		const account = active.current;
-		if (!account || current.current.tealScrobbling !== true) return false;
+		if (account?.did !== did || current.current.tealScrobbling !== true) return false;
 		const confirmed = !account.remote || (await account.remote.read()).tealScrobbling === true;
 		return confirmed && active.current === account && current.current.tealScrobbling === true;
 	}, []);
