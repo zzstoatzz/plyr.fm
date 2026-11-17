@@ -11,7 +11,7 @@ import { Sheet } from '../Sheet';
 import { WaveLoading } from '../WaveLoading';
 
 type Profile = Awaited<ReturnType<ReturnType<typeof createPds>['myProfile']>>;
-type Edits = Parameters<ReturnType<typeof createPds>['saveProfile']>[0];
+type Edits = { bio: string; avatar: string };
 
 function validAvatar(value: string) {
   if (!value.trim()) return true;

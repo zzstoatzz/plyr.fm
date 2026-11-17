@@ -13,7 +13,13 @@
           "avatar": {
             "type": "string",
             "format": "uri",
-            "description": "URL to avatar image."
+            "description": "URL to the avatar image. When avatarBlob is set, this is that blob's getBlob URL, for readers that only read URLs."
+          },
+          "avatarBlob": {
+            "type": "blob",
+            "accept": ["image/png", "image/jpeg"],
+            "maxSize": 1000000,
+            "description": "Avatar image stored in the artist's repository. Takes precedence over avatar."
           },
           "bio": {
             "type": "string",
