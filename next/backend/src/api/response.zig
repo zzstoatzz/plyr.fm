@@ -53,6 +53,9 @@ pub const CorsPolicy = struct {
     /// Comma-separated exact origins. Empty means browser cross-origin access
     /// is disabled; wildcard origins are never compatible with auth cookies.
     allowed_origins: []const u8,
+    /// Public, credential-free reads (the catalog XRPC queries): any origin,
+    /// never with credentials.
+    public: bool = false,
     captured_origin: ?[]const u8 = null,
     origin_captured: bool = false,
 
@@ -95,7 +98,14 @@ pub fn jsonWithHeaders(
     count += 1;
     headers[count] = .{ .name = "referrer-policy", .value = "strict-origin-when-cross-origin" };
     count += 1;
-    if (origin) |allowed_origin| {
+    if (cors.public) {
+        headers[count] = .{ .name = "access-control-allow-origin", .value = "*" };
+        count += 1;
+        headers[count] = .{ .name = "access-control-allow-methods", .value = "GET, OPTIONS" };
+        count += 1;
+        headers[count] = .{ .name = "access-control-allow-headers", .value = "atproto-accept-labelers, atproto-proxy, content-type" };
+        count += 1;
+    } else if (origin) |allowed_origin| {
         headers[count] = .{ .name = "access-control-allow-origin", .value = allowed_origin };
         count += 1;
         headers[count] = .{ .name = "access-control-allow-credentials", .value = "true" };
