@@ -220,7 +220,7 @@
 	.bio { color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; max-width: 44rem; margin-top: 0.35rem; }
 	.chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.6rem; }
 	.actions { display: flex; align-items: center; gap: 0.6rem; margin-top: 1rem; }
-	.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: 0.6rem; }
+	.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr)); gap: 0.6rem; }
 	.card { display: flex; align-items: center; gap: 0.75rem; min-height: 3.75rem; padding: 0.6rem 0.75rem; border-radius: 0.75rem; background: var(--raised); color: var(--text); text-decoration: none; }
 	.card:hover { background: var(--hover); }
 	.card > :global(svg) { color: var(--faint); flex: none; }
@@ -243,9 +243,9 @@
 		.identity { width: 100%; justify-items: center; }
 		h1 { font-size: 1.85rem; }
 		.chips { justify-content: center; }
-		.actions { display: flex; width: 100%; }
-		.actions .hero-pill { flex: 1; }
-		.cards { grid-template-columns: 1fr; }
+		.actions { display: flex; flex-wrap: wrap; width: 100%; }
+		.actions .hero-pill { flex: 1 1 auto; }
+		.cards { grid-template-columns: minmax(0, 1fr); }
 	}
 	@media (max-width: 520px) {
 		.panel :global(.track) { grid-template-columns: min(3.25rem, 16vw) minmax(0, 1fr) auto; }
