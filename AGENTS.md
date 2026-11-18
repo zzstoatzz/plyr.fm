@@ -13,7 +13,8 @@ Use the root and component justfiles for development commands.
   [agent access](docs/internal/tools/agent-access.md).
 - Project skills live in `.agents/skills/`: `onboard` for setup, `change` for
   project work, and `contribute` for external contributors. Work on the next
-  client (`next/app`) uses `next-write-ui`, `next-unslop` and `next-review`.
+  client (`next/app`) uses `next-write-ui`, `next-unslop` and `next-review`;
+  shipping it to TestFlight or over the air uses `next-ship-ios`.
   Preserve the `.claude/skills/` compatibility links.
 
 ## development and checks
