@@ -27,8 +27,11 @@ with what you're doing about it.
 ## running it on the mac
 
 Builds and uploads run on nate's mac through Remote Control (folder `~/tangled.org`). Never ask
-nate to run a command. If the mac's safety check wants nate's own yes for the upload, ask once
-with a decision card and keep everything else moving (build, validate) while it waits.
+nate to run a command. The mac's safety check accepts only nate's own typed words in the thread
+for an upload or OTA (a decision-card tap or a relayed approval is refused), unless allow rules for
+`testflight.mjs upload` and `eas-cli update` exist in the mac's Claude settings. If it refuses, ask
+nate once, in plain words, to reply with a yes, and keep the rest (build, validate) moving.
+`eas` is not on the mac's PATH: use `npx eas-cli`.
 
 ## 1. pick the path
 
@@ -53,7 +56,8 @@ pass on the shared `plyr-claude` device (see `next-write-ui`).
 ## 2a. OTA (JS and assets only)
 
 ```sh
-eas update --channel production --message "<what changed>" --non-interactive
+EXPO_PUBLIC_SITE_URL=https://next.plyr.fm npx eas-cli update --channel production \
+  --environment production --platform ios --message "<what changed>" --non-interactive
 ```
 
 Check the printed runtime version equals the fingerprint of the newest `next-ios/*` build. It
@@ -67,7 +71,7 @@ Only one build at a time on the mac: check
 coordinate with the thread that owns a running one instead of starting a second.
 
 ```sh
-LANG=en_US.UTF-8 eas build --platform ios --profile production --local --non-interactive \
+LANG=en_US.UTF-8 npx eas-cli build --platform ios --profile production --local --non-interactive \
   --output ./build.ipa                                   # ~6-7 min
 unzip -p build.ipa 'Payload/*.app/Info.plist' | plutil -extract CFBundleVersion raw -   # = n
 node scripts/testflight.mjs upload ./build.ipa           # validate + upload, ~1-3 min
