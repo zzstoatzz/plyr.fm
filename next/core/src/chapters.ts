@@ -25,10 +25,14 @@ export function parseChapters(description: string | null | undefined, duration?:
   return { chapters, prose: rest.join('\n').replace(/\n{3,}/g, '\n\n').trim() };
 }
 
+/** How far before a chapter's start it already counts as playing. A seek to a chapter's start can land a frame or
+ *  two short of it (decoders snap to frames, players report rounded clocks), and that must not light up the chapter above. */
+const LANDING = 0.25;
+
 /** The chapter playing at `position`, or -1 before the first. */
 export function currentChapter(chapters: Chapter[], position: number) {
   let at = -1;
-  for (let index = 0; index < chapters.length && chapters[index].start <= position; index++) at = index;
+  for (let index = 0; index < chapters.length && chapters[index].start <= position + LANDING; index++) at = index;
   return at;
 }
 

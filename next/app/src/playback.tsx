@@ -50,14 +50,19 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
   const sourceEvents = useRef<{ remove(): void } | null>(null);
   const sequence = useRef(0);
   const seekRequest = useRef(0);
-  const [pendingSeek, setPendingSeek] = useState<{ source: number; seconds: number } | null>(null);
+  // A seek shows its target until the audio is heard there. `local` seeks wait for this player to land (`landed` is where
+  // it did); a seek sent to another device's output waits for the queue's echo instead.
+  const [pendingSeek, setPendingSeek] = useState<{ source: number; seconds: number; local: boolean; landed?: number } | null>(null);
   const objectUrl = useRef<string | null>(null);
   const current = queue[index];
   const status = ready ? emittedStatus : { ...emittedStatus, playing: false, isLoaded: false, didJustFinish: false,
     currentTime: 0, duration: current?.metadata.duration_seconds ?? 0, isBuffering: resolving, error: null };
   useEffect(() => {
-    if (pendingSeek && (pendingSeek.source !== sequence.current || status.error ||
-      !status.isBuffering && Math.abs(status.currentTime - pendingSeek.seconds) < 0.5)) setPendingSeek(null);
+    if (!pendingSeek) return;
+    const landed = pendingSeek.landed;
+    // Only a status from after the landing may replace the preview; an earlier one still reads the old position.
+    if (pendingSeek.source !== sequence.current || status.error || landed !== undefined && !status.isBuffering &&
+      status.currentTime >= landed - 0.05 && status.currentTime < landed + 1.5) setPendingSeek(null);
   }, [pendingSeek, status.currentTime, status.isBuffering, status.error, current]);
   const jam = useJamPlayback({
     queue, index, current, ready, buffering: status.isBuffering, observedPosition: status.currentTime,
@@ -82,7 +87,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
   });
 
   useEffect(() => {
-    if (pendingSeek && personal.remote && Math.abs(personal.remote.positionMs / 1000 - pendingSeek.seconds) < 0.5) setPendingSeek(null);
+    if (pendingSeek && !pendingSeek.local && personal.remote && Math.abs(personal.remote.positionMs / 1000 - pendingSeek.seconds) < 0.5) setPendingSeek(null);
   }, [personal.remote, pendingSeek]);
 
   async function waitForMedia() {
@@ -325,6 +330,11 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     setPlaying(!player.playing);
   }
 
+  function landSeek(source: number, target: number) {
+    const landed = player.currentTime;
+    setPendingSeek(pending => pending?.source === source && pending.seconds === target ? { ...pending, landed } : pending);
+  }
+
   function seek(seconds: number) {
     if (!Number.isFinite(seconds)) return;
     const duration = !privateMode.current && !jam.active() && personal.remote ? personal.duration() : player.duration;
@@ -335,10 +345,19 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     }
     if (jam.command({ action: 'seek', positionMs: Math.round(target * 1000) })) return;
     if (personal.remote) {
-      setPendingSeek({ source: sequence.current, seconds: target });
-      if (personal.ownsOutput() && ready) {
-        const source = sequence.current;
-        void accounting.seekTo(target).then(() => { if (source === sequence.current) personal.checkpoint(target); }).catch(() => setError('could not seek audio'));
+      const local = personal.ownsOutput() && ready;
+      const request = ++seekRequest.current;
+      const source = sequence.current;
+      setPendingSeek({ source, seconds: target, local });
+      if (local) {
+        void accounting.seekTo(target).then(() => {
+          if (source !== sequence.current) return;
+          personal.checkpoint(target);
+          if (request === seekRequest.current) landSeek(source, target);
+        }).catch(() => {
+          if (request === seekRequest.current) setPendingSeek(null);
+          setError('could not seek audio');
+        });
       }
       personal.command({ action: 'seek', positionMs: Math.round(target * 1000) });
       return;
@@ -346,8 +365,12 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     if (!ready) { personal.defer(target); return; }
     const request = ++seekRequest.current;
     const source = sequence.current;
-    setPendingSeek({ source, seconds: target });
-    void accounting.seekTo(target).then(() => { if (source === sequence.current && request === seekRequest.current) personal.checkpoint(target); }).catch(cause => {
+    setPendingSeek({ source, seconds: target, local: true });
+    void accounting.seekTo(target).then(() => {
+      if (source !== sequence.current || request !== seekRequest.current) return;
+      personal.checkpoint(target);
+      landSeek(source, target);
+    }).catch(cause => {
       if (request !== seekRequest.current || source !== sequence.current) return;
       setPendingSeek(null);
       setError(cause instanceof Error ? cause.message : 'could not seek audio');

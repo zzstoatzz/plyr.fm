@@ -45,6 +45,12 @@ test('the current chapter follows the playhead', () => {
   assert.equal(currentChapter(parseChapters('0:30 a\n1:00 b\n2:00 c').chapters, 10), -1);
 });
 
+test('a seek that lands a frame short of a chapter still shows that chapter', () => {
+  const { chapters } = parseChapters(mix);
+  for (const landed of [177.98, 177.9, 177.8]) assert.equal(currentChapter(chapters, landed), 2, `landed at ${landed}`);
+  assert.equal(currentChapter(chapters, 177.5), 1);
+});
+
 test('clock drops leading zeros and grows hours', () => {
   assert.deepEqual([clock(0), clock(95), clock(3910), clock(-3)], ['0:00', '1:35', '1:05:10', '0:00']);
 });

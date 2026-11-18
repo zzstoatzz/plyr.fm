@@ -120,3 +120,42 @@ test('closing during queue hydration discards the late result and permits a fres
     assert.equal(first.readyState, 3);
   } finally { controller.close(); }
 });
+
+test('a host seek keeps its preview until the local audio lands, not just until the room echoes it', async () => {
+  const socket = new Socket();
+  let position = 23;
+  let land: (() => void) | undefined;
+  let snapshot: ActiveJam | undefined;
+  const target: JamPlaybackTarget = {
+    queue: [track], index: 0, current: track, ready: true, buffering: false, position: () => position, playing: () => false,
+    load: async () => true, loaded: async () => {},
+    seek: seconds => new Promise<void>(resolve => { land = () => { position = seconds; resolve(); }; }),
+    play: () => {}, pause: () => {}, setQueue: () => {}, clear: () => {},
+  };
+  const controller = createJamPlayback({
+    target: () => target, did: host, socket: () => socket,
+    track: async () => track, changed: value => { snapshot = value; },
+  });
+  const ref = jamTrack(track);
+  assert.ok(ref);
+  const room = (revision: number, positionMs: number): JamState => ({ epoch: 'room', revision, occurrence: 1, queue: [ref],
+    index: 0, playing: false, positionMs, updatedAtMs: Date.now() });
+  controller.join({ host, key: 'room', admit: async () => ({ ticket: 'ticket', websocketUrl: 'wss://fixture.test' }) });
+  try {
+    await new Promise(resolve => setTimeout(resolve, 0));
+    socket.state(room(1, 23000));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    land?.();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(controller.command({ action: 'seek', positionMs: 60000 }), true);
+    assert.equal(snapshot?.pendingSeekMs, 60000);
+    socket.state(room(2, 60000));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(position, 23, 'the local seek is still in flight');
+    assert.equal(snapshot?.pendingSeekMs, 60000, 'the echo alone must not drop the preview back to 23s');
+    land?.();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(position, 60);
+    assert.equal(snapshot?.pendingSeekMs, undefined);
+  } finally { controller.close(); }
+});

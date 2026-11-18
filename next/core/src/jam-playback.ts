@@ -169,6 +169,10 @@ export function createJamPlayback(options: JamPlaybackOptions) {
           const position = (active?.pendingSeekMs ?? jamPosition(state, connection.clock.serverNow())) / 1000;
           if (changed || Math.abs(target().position() - position) > (work.force ? 0.08 : 0.35)) await target().seek(position);
           if (request !== generation || connection !== session || !sameOccurrence()) continue;
+          // The seek preview stays up until the local audio has landed on the room's echo of it, not just until
+          // the echo arrives: dropping it earlier shows the old position (and the old chapter) for a moment.
+          const preview = active?.pendingSeekMs;
+          if (preview !== undefined && Math.abs(state.positionMs - preview) < 100) update({ pendingSeekMs: undefined });
           const desired = optimisticPlaying ?? connection.state!.playing;
           if (desired && !target().playing()) target().play();
           else if (!desired && target().playing()) target().pause();
@@ -226,9 +230,8 @@ export function createJamPlayback(options: JamPlaybackOptions) {
         const before = active?.state;
         if (before?.playing !== state.playing) corrections = 0;
         if (before?.epoch !== state.epoch || before.occurrence !== state.occurrence || optimisticPlaying === state.playing) optimisticPlaying = undefined;
-        const preview = active?.pendingSeekMs;
         const changed = before?.epoch !== state.epoch || before.occurrence !== state.occurrence;
-        update({ state, error: undefined, ...(changed || preview !== undefined && Math.abs(state.positionMs - preview) < 100 ? { pendingSeekMs: undefined } : {}) });
+        update({ state, error: undefined, ...(changed ? { pendingSeekMs: undefined } : {}) });
         synchronize(state, force, connection);
       },
       onResult: (intent, outcome) => {
