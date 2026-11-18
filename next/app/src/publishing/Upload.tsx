@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
 import { OwnerTrackUpload } from './OwnerTrackUpload';
 import { useAuth } from '../auth';
 import { getAuth, type Auth } from '../auth-state';
 import { View } from 'react-native';
+import { useAppearance } from '../appearance';
 import { Action, Copy, Field, Page } from '../controls';
 import { pickMedia, retype } from '../media-picker';
 import type { MediaFile } from '../pds';
@@ -17,7 +18,8 @@ import { UploadSignIn } from './UploadSignIn';
 import { TagsField } from './TagsField';
 import { normalizeTrackTags } from '@plyr/next-core/publishing/track-tags';
 import { CreateRecovery, EarlierCreates, useCreateRecovery } from './CreateRecovery';
-import { AudienceToggle, CheckRow, FieldError, FormCard, PickTile, type TrackDraftFields } from './UploadPieces';
+import { AudienceToggle, CheckRow, ChooseTrack, FieldError, FormCard, SwitchRow, TrackHero, UploadBar, type TrackDraftFields } from './UploadPieces';
+import { UploadSimple } from '../icons';
 import { pickArtwork } from './artwork';
 import { useArtistName } from './artist-name';
 import { QueuedUpload } from './QueuedUpload';
@@ -69,27 +71,24 @@ function TrackUpload({ auth, onlyYou }: { auth: Auth; onlyYou: boolean }) {
   const [ownerVisited, setOwnerVisited] = useState(onlyYou);
   useEffect(() => { if (onlyYou) setOwnerVisited(true); }, [onlyYou]);
   const draft = { file, setFile, title, setTitle, description, setDescription, tags, setTags };
+  const audience = <AudienceToggle onlyYou={onlyYou} disabled={ownerBusy || openBusy} select={value => router.setParams({ visibility: value ? 'only-you' : undefined })} />;
   return <>
-    <Copy>who can listen?</Copy>
-    <AudienceToggle onlyYou={onlyYou} disabled={ownerBusy || openBusy} select={value => router.setParams({ visibility: value ? 'only-you' : undefined })} />
-    <View style={onlyYou ? { display: 'none' } : { gap: 14 }}>
-      <AccountUpload {...draft} auth={auth} restored={restored} onBusy={setOpenBusy} />
+    <View style={onlyYou ? { display: 'none' } : { gap: 16 }}>
+      <AccountUpload {...draft} auth={auth} restored={restored} onBusy={setOpenBusy} audience={audience} />
     </View>
     {(onlyYou || ownerVisited) && <View style={onlyYou ? { gap: 14 } : { display: 'none' }}>
-      <OwnerTrackUpload {...draft} auth={auth} selected={onlyYou} onBusy={setOwnerBusy} />
+      <OwnerTrackUpload {...draft} auth={auth} selected={onlyYou} onBusy={setOwnerBusy} audience={audience} />
     </View>}
   </>;
 }
 
-function AccountUpload({ auth, restored, onBusy, file, setFile, title, setTitle, description, setDescription, tags, setTags }: TrackDraftFields & { auth: Auth; restored?: Draft; onBusy: (value: boolean) => void }) {
+function AccountUpload({ auth, restored, onBusy, audience, file, setFile, title, setTitle, description, setDescription, tags, setTags }: TrackDraftFields & { auth: Auth; restored?: Draft; onBusy: (value: boolean) => void; audience: ReactNode }) {
   const live = useRef(true);
   const draftKey = `plyr-upload-draft:${auth.did}`;
   const [artwork, setArtwork] = useState<MediaFile | null>(null);
   // The title the last audio file gave, so a later pick may replace it; a typed title is never replaced.
   const autoTitle = useRef<string | undefined>(restored?.named ? restored.title : undefined);
   const [album, setAlbum] = useState(restored?.album ?? '');
-  const [details, setDetails] = useState(!!(restored?.album || restored?.description || restored?.tags));
-  useEffect(() => { if (description || tags) setDetails(true); }, [description, tags]);
   const consentKey = `plyr-storage-consent:${auth.did}`;
   const [serviceConsent, setServiceConsent] = useState(() => readLocal(consentKey) === 'yes');
   const autoTagKey = `plyr-auto-tag:${auth.did}`;
@@ -138,6 +137,8 @@ function AccountUpload({ auth, restored, onBusy, file, setFile, title, setTitle,
   const artist = useArtistName(auth);
   const current = () => live.current && getAuth().did === auth.did && getAuth().rpc === auth.rpc;
   const tagError = tagProblem(tags);
+  const theme = useAppearance();
+  const editing = !!file || !!artwork || reattach || !!(title || album || description || tags);
 
   function takeAudio(picked: MediaFile) {
     const item = retype(picked, canonicalAudioType(picked));
@@ -194,7 +195,7 @@ function AccountUpload({ auth, restored, onBusy, file, setFile, title, setTitle,
     if (!input || !current()) return;
     setFile(input.file); setArtwork(input.artwork ?? null); setTitle(input.title); setAlbum(input.album ?? '');
     setDescription(input.description ?? ''); setTags(input.tags?.join('\n') ?? '');
-    setDetails(!!(input.album || input.description || input.tags?.length)); setAutoTag(!!input.autoTag); setReattach(false);
+    setAutoTag(!!input.autoTag); setReattach(false);
     setProblems({});
   }
 
@@ -213,7 +214,7 @@ function AccountUpload({ auth, restored, onBusy, file, setFile, title, setTitle,
       }
       if (!current() || latestDraft.current.file !== file || latestDraft.current.artwork !== artwork || latestDraft.current.editorDraft !== editorDraft) return;
       autoTitle.current = undefined;
-      setFile(null); setArtwork(null); setTitle(''); setAlbum(''); setDetails(false); setDescription(''); setTags(''); setProblems({});
+      setFile(null); setArtwork(null); setTitle(''); setAlbum(''); setDescription(''); setTags(''); setProblems({});
     } catch (failure) {
       if (current()) setProblems(previous => ({ ...previous, form: failure instanceof Error ? failure.message : 'could not start the upload.' }));
     } finally {
@@ -231,39 +232,35 @@ function AccountUpload({ auth, restored, onBusy, file, setFile, title, setTitle,
     <LargeUploads uploads={uploads} skip={busy.uploadIds} />
     <EarlierCreates auth={auth} recovery={creationRecovery} kind="track" />
     {creationRecovery.loading || creationRecovery.error || creationRecovery.operations.length ? <CreateRecovery auth={auth} recovery={creationRecovery} kind="track" onDismiss={() => {}} /> : <>
-      <FormCard>
-        <View style={{ gap: 8 }}>
-          <PickTile kind="audio" file={file} onPress={() => void chooseAudio()} hint="mp3, wav, flac, aiff, ogg, opus, m4a or aac · up to 1.5 GiB" />
-          {problems.audio ? <FieldError>{problems.audio}</FieldError> : reattach && !file ? <Copy>your draft is still here. choose the audio file again.</Copy> : null}
-        </View>
-        {service && <>
-          <Copy>plyr stores this file and makes an mp3 for playback when needed. playback and downloads are public.</Copy>
-          {!serviceConsent && <Action label="Use plyr storage" onPress={consent} />}
+      {editing ? <TrackHero artwork={artwork} onArtwork={() => void chooseArtwork()} onRemoveArtwork={() => setArtwork(null)} title={title} setTitle={setTitle}
+        artist={artist} file={file} reattach={reattach} onAudio={() => void chooseAudio()}>
+        {problems.audio && <FieldError>{problems.audio}</FieldError>}
+        {problems.artwork && <FieldError>{problems.artwork}</FieldError>}
+        {service && <View style={{ alignSelf: 'stretch', gap: 4, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: theme.glassBorder, backgroundColor: theme.glass }}>
+          <CheckRow label="use plyr storage" checked={serviceConsent} onChange={consent} />
+          <Copy>plyr keeps the original file and makes an mp3 so it plays everywhere. playback and downloads are public.</Copy>
           {!auth.uploadStorage && <><Copy>sign in again to allow plyr storage. what you typed stays here; you will choose the file again.</Copy><Action label="Sign in again" href={{ pathname: '/login', params: { return_to: '/upload' } }} /></>}
-        </>}
-        <Field label="Title" value={title} onChangeText={setTitle} maxLength={256} placeholder="track title" />
+        </View>}
+      </TrackHero> : <ChooseTrack onPress={() => void chooseAudio()} artist={artist}>
+        {problems.audio && <FieldError>{problems.audio}</FieldError>}
+      </ChooseTrack>}
+      {editing && <FormCard>
+        <Field label="Album" value={album} onChangeText={setAlbum} maxLength={256} placeholder="optional" />
         <View style={{ gap: 8 }}>
-          <PickTile kind="artwork" file={artwork} onPress={() => void chooseArtwork()} hint="optional · any photo or image" />
-          {problems.artwork && <FieldError>{problems.artwork}</FieldError>}
-          {artwork && <Action label="Remove cover" onPress={() => setArtwork(null)} />}
+          <TagsField value={tags} onChange={setTags} disabled={false} />
+          {tagError && <FieldError>{tagError}</FieldError>}
         </View>
-        {details ? <>
-          <Field label="Album" value={album} onChangeText={setAlbum} maxLength={256} placeholder="optional" />
-          <Field label="Description" value={description} onChangeText={setDescription} maxLength={5000} multiline placeholder="liner notes, credits…" style={{ minHeight: 88 }} />
-          {description.length > 4500 && <Copy>{description.length} / 5000</Copy>}
-          <View style={{ gap: 8 }}>
-            <TagsField value={tags} onChange={setTags} disabled={false} />
-            {tagError && <FieldError>{tagError}</FieldError>}
-          </View>
-        </> : <Action label="add album, description or tags" onPress={() => setDetails(true)} />}
-        <CheckRow label="auto-tag with recommended genres" checked={autoTag} onChange={value => { setAutoTag(value); if (value) writeLocal(autoTagKey, 'yes'); else removeLocal(autoTagKey); }} />
-        <View style={{ gap: 8 }}>
-          {draftProblem && <FieldError>{draftProblem}</FieldError>}
-          {problems.form && <FieldError>{problems.form}</FieldError>}
-          <Action primary label="Upload" onPress={() => void upload()} disabled={saving || !file || !title.trim() || !artist || !!tagError || (service && (!serviceConsent || !auth.uploadStorage))} />
-          {!!artist && <Copy>posts to your profile as {artist}. you can keep browsing while it uploads.</Copy>}
-        </View>
-      </FormCard>
+        <SwitchRow label="auto-tag with recommended genres" detail="we listen once it's up and add a few genre tags. you can remove them later." value={autoTag}
+          onChange={value => { setAutoTag(value); if (value) writeLocal(autoTagKey, 'yes'); else removeLocal(autoTagKey); }} />
+        <Field label="Description" value={description} onChangeText={setDescription} maxLength={5000} multiline placeholder="liner notes, credits, lyrics…" style={{ minHeight: 110 }} />
+        {description.length > 4500 && <Copy>{description.length} / 5000</Copy>}
+      </FormCard>}
+      {draftProblem && <FieldError>{draftProblem}</FieldError>}
+      {problems.form && <FieldError>{problems.form}</FieldError>}
+      <UploadBar audience={audience}>
+        <Action primary icon={UploadSimple} label="Upload" onPress={() => void upload()} disabled={saving || !file || !title.trim() || !artist || !!tagError || (service && (!serviceConsent || !auth.uploadStorage))} />
+      </UploadBar>
+      {!!file && <Copy>you can keep browsing while it uploads.</Copy>}
     </>}
   </>;
 }
