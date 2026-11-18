@@ -20,7 +20,7 @@ import { PullDetector, PullRoot, usePlayerPull } from './player-pull';
 import { PlayerFlight } from './PlayerFlight';
 import { AlbumLink, NowPlayingDetails } from './NowPlayingDetails';
 import { currentChapter, parseChapters } from '@plyr/next-core/chapters';
-import { ChapterWheel } from './ChapterWheel';
+import { ChapterWheel, type WheelOutside } from './ChapterWheel';
 import { Coachmark } from './Coachmark';
 import { markHintSeen, useHintPending } from './hints';
 import { measure, playerSheet, setFlying, type Rect } from './player-sheet';
@@ -160,6 +160,9 @@ export function NowPlaying({ track, close: leave, navigate: go }: {
   const [wheelPreview, setWheelPreview] = useState<number>();
   const [wheelActive, setWheelActive] = useState(false);
   const wheelBlocks = useMemo(() => [pull.pan, pull.scroll], [pull.pan, pull.scroll]);
+  const wheelOutside = useRef<WheelOutside>({ inside: false });
+  // A touch anywhere else on the page closes an open chapter wheel; touches inside it mark themselves first as they bubble.
+  const closeWheelOutside = () => { const wheel = wheelOutside.current; if (!wheel.inside) wheel.close?.(); wheel.inside = false; };
 
   dismiss.scrolled.current = event => {
     if (event.nativeEvent.contentOffset.y > 24) markHintSeen('now-playing.more-below');
@@ -167,7 +170,7 @@ export function NowPlaying({ track, close: leave, navigate: go }: {
     if (past !== condensed) setCondensed(past);
   };
   const sheet = <View ref={backdrop} style={styles.backdrop}>
-      <PullDetector gesture={pull.pan}><AnimatedSafeAreaView {...dismiss.panelStartHandlers} accessibilityViewIsModal edges={[]}
+      <PullDetector gesture={pull.pan}><AnimatedSafeAreaView {...dismiss.panelStartHandlers} onTouchStart={closeWheelOutside} accessibilityViewIsModal edges={[]}
         style={[{ transform: [{ translateY: dismiss.translation }] }, styles.panel, styles.full, inset]}>
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: theme.background, opacity: motion.backdrop }]} />
         <Animated.View style={[styles.full, { opacity: motion.content }]}>
@@ -228,7 +231,7 @@ export function NowPlaying({ track, close: leave, navigate: go }: {
                   {wheelPreview !== undefined && duration > 0 && <View pointerEvents="none" style={[styles.ghost, { left: `${Math.min(100, wheelPreview / duration * 100)}%`, backgroundColor: theme.text }]} />}</View>}
                 <View testID="now-playing-time" style={styles.time}>
                   <Text style={[caption, styles.numeric]}>{time(position)}</Text>
-                  {!error && chapterIndex >= 0 ? <ChapterWheel chapters={chapters} current={chapterIndex} seek={seek} onPreview={setWheelPreview} onActive={setWheelActive} guard={dismiss.protectSlider} blocks={wheelBlocks} />
+                  {!error && chapterIndex >= 0 ? <ChapterWheel chapters={chapters} current={chapterIndex} seek={seek} onPreview={setWheelPreview} onActive={setWheelActive} guard={dismiss.protectSlider} blocks={wheelBlocks} outside={wheelOutside} />
                     : <Text accessibilityLiveRegion="polite" style={[caption, styles.status]}>{error ? 'couldn’t play this track' : ''}</Text>}
                   <Text style={[caption, styles.numeric]}>{time(duration)}</Text>
                 </View>

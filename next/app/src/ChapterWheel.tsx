@@ -12,14 +12,19 @@ const CANCEL_DX = 90;
 
 type Mode = 'closed' | 'drag' | 'browse';
 
+/** Shared with the page: the wheel marks touches that start inside it, and the page calls `close` for any other touch. */
+export type WheelOutside = { inside: boolean; close?: () => void };
+
 /** The "now: <chapter>" line under the scrubber, which opens a picker wheel of the tracklist.
  *  Hold and drag: each chapter is a detent with a selection haptic, and letting go jumps there. Letting go on the chapter
  *  that was playing when the wheel opened, or sliding sideways off the wheel, closes it with playback untouched. A plain
  *  tap opens the same wheel to browse: flick through it, tap a chapter to jump, tap outside to close.
- *  `onActive` reports a touch on the line so the page can stop scrolling under it. */
-export function ChapterWheel({ chapters, current, seek, onPreview, onActive, guard, blocks }: {
+ *  `onActive` is true from a touch on the line until the wheel closes, so the page holds still under it. `outside` lets the
+ *  page close an open wheel on any touch that didn't start in it, wherever that touch lands. */
+export function ChapterWheel({ chapters, current, seek, onPreview, onActive, guard, blocks, outside }: {
   chapters: Chapter[]; current: number; seek?: (seconds: number) => void;
   onPreview?: (seconds: number | undefined) => void; onActive?: (active: boolean) => void; guard?: object; blocks?: (PanGesture | NativeGesture)[];
+  outside?: { current: WheelOutside };
 }) {
   const { width: windowWidth } = useWindowDimensions();
   const theme = useAppearance();
@@ -66,11 +71,18 @@ export function ChapterWheel({ chapters, current, seek, onPreview, onActive, gua
   }), [chapters, row, offset, bloom, dim]);
 
   useEffect(() => { onPreview?.(mode !== 'closed' && selected !== origin ? chapters[selected]?.start : undefined); }, [mode, selected, origin, chapters, onPreview]);
+  // Browsing holds the page still too, so the first flick on a fresh wheel can't scroll the page instead.
+  useEffect(() => { if (mode === 'browse') onActive?.(true); }, [mode, onActive]);
+  useEffect(() => {
+    if (!outside) return;
+    outside.current.close = mode === 'browse' ? () => handlers.current.close() : undefined;
+    return () => { outside.current.close = undefined; };
+  }, [mode, outside]);
   useEffect(() => () => { onPreview?.(undefined); onActive?.(false); if (gesture.current?.hold) clearTimeout(gesture.current.hold); }, [onPreview, onActive]);
   // A new track leaves an open wheel pointing at the old tracklist.
   useEffect(() => { if (modeRef.current !== 'closed') close(); }, [chapters]);
 
-  const handlers = useRef({ lineBegin() {}, lineMove(_dx: number, _dy: number) {}, lineEnd(_canceled: boolean) {}, wheelBegin() {}, wheelMove(_dy: number) {}, wheelEnd(_y: number) {} });
+  const handlers = useRef({ close() {}, lineBegin() {}, lineMove(_dx: number, _dy: number) {}, lineEnd(_canceled: boolean) {}, wheelBegin() {}, wheelMove(_dy: number) {}, wheelEnd(_y: number) {} });
   const lineActive = useRef(false);
   const linePan = usePanGesture({
     runOnJS: true, enabled: !!seek, block: blocks, minDistance: 4,
@@ -157,13 +169,11 @@ export function ChapterWheel({ chapters, current, seek, onPreview, onActive, gua
     clearTimeout(drag.hold);
     if (modeRef.current === 'drag' && (drag.moved || canceledBySystem)) { close(drag.moved && !canceledBySystem && !cancelRef.current); return; }
     gesture.current = null;
-    onActive?.(false);
     if (modeRef.current === 'closed') open('browse');
     else setMode('browse');
   }
   function wheelBegin() {
     if (modeRef.current !== 'browse') return;
-    onActive?.(true);
     flick.current = { y: 0, from: at.current, moved: false };
   }
   function wheelMove(dy: number) {
@@ -175,14 +185,13 @@ export function ChapterWheel({ chapters, current, seek, onPreview, onActive, gua
   function wheelEnd(y: number) {
     const state = flick.current;
     flick.current = null;
-    onActive?.(false);
     if (!state) return;
     if (state.moved) { scrollTo(Math.round(at.current / row) * row, true); return; }
     // A tap: the row under the finger, counted from the band in the middle of the wheel.
     const index = Math.round((at.current + y - wheelHeight / 2) / row);
     if (index >= 0 && index < chapters.length) pick(index);
   }
-  handlers.current = { lineBegin, lineMove, lineEnd, wheelBegin, wheelMove, wheelEnd };
+  handlers.current = { close: () => close(), lineBegin, lineMove, lineEnd, wheelBegin, wheelMove, wheelEnd };
 
   const hint = cancel ? 'let go to cancel' : selected === origin
     ? mode === 'browse' ? 'tap outside to close' : 'let go to keep playing'
@@ -191,7 +200,7 @@ export function ChapterWheel({ chapters, current, seek, onPreview, onActive, gua
   const wheelWidth = Math.min(420, windowWidth - 32);
   const surface = theme.dark ? '#1c2029' : '#ffffff';
 
-  return <View style={styles.anchor} {...guard}>
+  return <View style={styles.anchor} {...guard} onTouchStart={() => { if (outside) outside.current.inside = true; }}>
     <GestureDetector gesture={linePan}><View accessible accessibilityRole="button"
       accessibilityLabel={`now: ${chapter.title}${chapter.artist ? ` by ${chapter.artist}` : ''}`}
       accessibilityHint={seek ? 'Opens the tracklist wheel' : undefined}
