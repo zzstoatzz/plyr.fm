@@ -24,6 +24,8 @@
 		return () => request.abort();
 	});
 	const recentKey = 'plyr:recent-searches';
+	const filters = [[undefined, 'all'], ['track', 'tracks'], ['artist', 'artists'], ['album', 'albums'], ['playlist', 'playlists']] as const;
+	const type = $derived(data.type);
 	const resultIcons = { track: 'music', artist: 'user', album: 'library', playlist: 'queue' } as const;
 
 	onMount(() => {
@@ -48,26 +50,27 @@
 		saveRecent([query, ...recent.filter(value => value.toLowerCase() !== query.toLowerCase())].slice(0, 6));
 	}
 
-	function searchHref(query: string) {
-		return resolve('/search') + (query ? '?' + new URLSearchParams({ q: query }) : '');
+	function searchHref(query: string, kind?: SearchHit['type']) {
+		return resolve('/search') + (query ? '?' + new URLSearchParams({ q: query, ...(kind ? { type: kind } : {}) }) : '');
 	}
-	type Preview = { query: string; results: SearchHit[] } | { query: string; error: true };
+	type Preview = { query: string; type?: SearchHit['type'] } & ({ results: SearchHit[] } | { error: true });
 	let preview = $state.raw<Preview>();
 	const term = $derived(query.trim());
 	const length = $derived([...term].length);
 	const matchingTags = $derived(length >= 2 ? browseTags.filter(tag => tag.name.toLocaleLowerCase().includes(term.toLocaleLowerCase())).slice(0, 8) : []);
-	const matching = $derived(preview?.query === term ? preview : undefined);
+	const matching = $derived(preview?.query === term && preview.type === type ? preview : undefined);
 	const suggestionCount = $derived(matching && 'results' in matching ? matching.results.length : 0);
 
 	$effect(() => {
 		const value = term;
+		const kind = type;
 		preview = undefined;
 		if (length < 2 || value === data.query) return;
 		const request = new AbortController();
 		const timer = setTimeout(() => {
-			void api.search(value, { limit: 8, signal: request.signal }).then(
-				({ data: results }) => { if (!request.signal.aborted) preview = { query: value, results }; },
-				() => { if (!request.signal.aborted) preview = { query: value, error: true }; }
+			void api.search(value, { limit: 8, types: kind, signal: request.signal }).then(
+				({ data: results }) => { if (!request.signal.aborted) preview = { query: value, type: kind, results }; },
+				() => { if (!request.signal.aborted) preview = { query: value, type: kind, error: true }; }
 			);
 		}, 180);
 		return () => { clearTimeout(timer); request.abort(); };
@@ -96,7 +99,7 @@
 	function submitSearch(value: string) {
 		if ([...value].length === 1) { input.focus(); return; }
 		rememberQuery(value);
-		const url = new URL(searchHref(value), page.url);
+		const url = new URL(searchHref(value, type), page.url);
 		const shortcutSearch = page.state.shortcutSearch;
 		const retry = !!value && url.href === page.url.href;
 		void goto(url, {
@@ -146,6 +149,19 @@
 			onkeydown={event => moveFocus(event, -1)} />
 		<button class="icon-button" type="submit" aria-label="Search"><Icon name="search" /></button>
 	</form>
+	{#if length >= 2}
+		<nav class="result-types" aria-label="Result types">
+			{#each filters as [kind, label] (label)}
+				<a href={searchHref(term, kind)} aria-current={type === kind ? 'page' : undefined}
+					onclick={event => {
+						if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+						event.preventDefault();
+						rememberQuery(term);
+						void goto(searchHref(term, kind), { replaceState: true, keepFocus: true, noScroll: true, state: { shortcutSearch: page.state.shortcutSearch } });
+					}}>{label}</a>
+			{/each}
+		</nav>
+	{/if}
 	<p class="announcer" role="status">{#if suggestionCount}{suggestionCount} {suggestionCount === 1 ? 'suggestion' : 'suggestions'}{/if}</p>
 	{#if length < 2}
 		{#if length === 1}<p class="subtle" role="status">type at least two characters to search.</p>{/if}
@@ -176,6 +192,11 @@
 </section>
 
 <style>
+	.result-types { display: flex; gap: 0.25rem; overflow-x: auto; scrollbar-width: none; margin-block-end: 0.5rem; max-width: 40rem; }
+	.result-types a { flex: none; display: inline-grid; place-items: center; min-width: 2.75rem; min-height: 2.75rem; padding-inline: 0.75rem; border-radius: 2rem; color: var(--muted); font-size: 0.875rem; }
+	.result-types a:hover { background: var(--hover); text-decoration: none; }
+	.result-types a[aria-current] { text-decoration: none; }
+	.result-types a[aria-current='page'] { background: var(--surface); color: var(--text); font-weight: 700; border: 1px solid var(--line); }
 	.search-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-block-start: 1rem; }
 	.search-tags h2 { flex-basis: 100%; font-size: 1rem; }
 	.search-tags a { display: inline-flex; align-items: center; gap: 0.3rem; min-height: 2.75rem; border: 1px solid var(--line); border-radius: 2rem; padding-inline: 0.7rem; }
