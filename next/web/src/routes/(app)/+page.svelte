@@ -8,6 +8,7 @@
 	import type { Track } from '@plyr/next-core/api';
 	import { api } from '$lib/api';
 	import { player } from '$lib/player.svelte';
+	import { prefs } from '$lib/prefs.svelte';
 	import { artistName } from '$lib/tracks';
 	import Artwork from '$lib/ui/Artwork.svelte';
 	import AtlasTile from '$lib/atlas/AtlasTile.svelte';
@@ -98,7 +99,7 @@
 		pending = controller;
 		loading = true;
 		try {
-			const [page, first] = await Promise.all([api.tracks({ cursor, tag: data.tags, limit: 24 }, controller.signal), request]);
+			const [page, first] = await Promise.all([api.tracks({ cursor, tag: data.tags, hidden_tag: data.hidden, limit: 24 }, controller.signal), request]);
 			if (controller.signal.aborted || request !== data.latest) return;
 			const known = new Set([...first.data, ...extra].map(track => track.id));
 			const added = page.data.filter(track => {
@@ -193,7 +194,7 @@
 		{#await data.discovery then tags}
 			{#if tags.length}
 				<nav class="tag-shelf" aria-label="Browse by tag">
-					{#each tags as tag (tag.name)}
+					{#each tags.filter(tag => data.tags.includes(tag.name) || !prefs.hiddenTags.includes(tag.name)) as tag (tag.name)}
 						{@const selected = data.tags.includes(tag.name)}
 						{@const light = tagColors(tag.name, palettes.light.background, selected)}
 						{@const dark = tagColors(tag.name, palettes.dark.background, selected)}

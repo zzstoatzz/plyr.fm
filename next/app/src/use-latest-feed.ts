@@ -2,7 +2,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { api } from './api-client';
 import { useAuth } from './auth';
 import { usePages } from './CatalogPieces';
-import { discoveryFilter } from './discovery/preferences';
+import { discoveryFilter } from '@plyr/next-core/hidden-tags';
 import { HOME_PAGE_SIZE, parseSelectedTags, selectedTagsKey } from './home-state';
 import { readLocal, writeLocal } from './storage';
 import { useHomeTags } from './use-home-tags';

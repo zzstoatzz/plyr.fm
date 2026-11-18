@@ -1,7 +1,7 @@
 import { preferenceTransport } from '@plyr/next-core/preference-transport';
 import type { Agent } from './auth-state';
 import { JAM_COORDINATOR_URL, JAM_JOIN_METHOD, JAM_SERVICE_AUDIENCE } from './auth-config';
-import { hiddenTags } from './discovery/preferences';
+import { hiddenTags } from '@plyr/next-core/hidden-tags';
 
 export interface PersonalPreferences {
 	theme: 'system' | 'light' | 'dark';
