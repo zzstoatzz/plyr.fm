@@ -14,8 +14,8 @@ on:
       - "next/backend/**"
       - "backend/src/backend/upload_contract.json"
       - ".github/workflows/test-zig.yml"
-  # nightly: the mutants job proves the property harnesses still catch every
-  # planted bug in src/fuzz/mutants.zon
+  # nightly: the calibration campaign proves the property harnesses still
+  # catch every planted bug in src/fuzz/mutants.zon
   schedule:
     - cron: "17 9 * * *"
   workflow_dispatch:
@@ -182,16 +182,19 @@ jobs:
           path: next/backend/zig-pkg
           key: zig-pkg-${{ hashFiles('next/backend/build.zig.zon') }}
 
+      # the campaign manifest names the database; the runner passes no ambient env
       - name: property harnesses
-        env:
-          PLYR_ZIG_TEST_DATABASE_URL: postgresql://zig_test:zig_test@127.0.0.1:5435/zig_test
-        run: scripts/fetch-interop-fixtures && zig build fuzz -Dhegel -Dfuzz-cases=500
+        run: |
+          scripts/fetch-interop-fixtures
+          for name in parsers stores; do
+            scripts/campaign run "$name" --out "/tmp/plyr-$name" || { tail -n 40 /tmp/plyr-$name/*.stderr.log; exit 1; }
+          done
 
   mutants:
     name: zig property harnesses catch every mutant
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 180
 
     services:
       postgres:
@@ -230,8 +233,6 @@ jobs:
           key: zig-pkg-${{ hashFiles('next/backend/build.zig.zon') }}
 
       - name: plant each mutant
-        env:
-          PLYR_ZIG_TEST_DATABASE_URL: postgresql://zig_test:zig_test@127.0.0.1:5435/zig_test
-          # the PR job's case count; at the default 100 some mutants slip a seed
-          HEGEL_TEST_CASES: "500"
-        run: scripts/fetch-interop-fixtures && zig build mutants -Dhegel
+        run: |
+          scripts/fetch-interop-fixtures
+          scripts/campaign calibrate calibration --out /tmp/plyr-calibration || { grep -h '"outcome"' /tmp/plyr-calibration/run.json | sort | uniq -c; exit 1; }
