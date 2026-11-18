@@ -27,8 +27,8 @@
             .hash = "metrics-0.0.0-W7G4eFWgAQC0Mi5mL4KefHjyCUc5lN0QL8YAk4QH7_XN",
         },
         .hegel = .{
-            .url = "https://tangled.org/zzstoatzz.io/hegel-zig/archive/68403020be7d52166d1e1d206514a73f4bec24ec.tar.gz",
-            .hash = "hegel-0.0.0-1OMgSV7DmwDZMplDpzzqACc932DHTj2JbmvaCzA2jP3F",
+            .url = "https://tangled.org/zzstoatzz.io/hegel-zig/archive/619a904f55fdfafc7b31fee763f732ce60c6cb73.tar.gz",
+            .hash = "hegel-0.0.0-1OMgSbDLmwDlvaT4eqcrRtiYuV06ftNfj09JEMYtVKmo",
             .lazy = true,
         },
     },
