@@ -8,6 +8,12 @@ on:
       - "next/backend/**"
       - "backend/src/backend/upload_contract.json"
       - ".github/workflows/test-zig.yml"
+  push:
+    branches: [main]
+    paths:
+      - "next/backend/**"
+      - "backend/src/backend/upload_contract.json"
+      - ".github/workflows/test-zig.yml"
   # nightly: the mutants job proves the property harnesses still catch every
   # planted bug in src/fuzz/mutants.zon
   schedule:
@@ -50,11 +56,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: install zig 0.17.0
-        run: |
-          python3 -m pip install --user ziglang==0.17.0
-          ln -s "$(python3 -c 'import ziglang, os; print(os.path.dirname(ziglang.__file__))')/zig" /usr/local/bin/zig || sudo ln -s "$(python3 -c 'import ziglang, os; print(os.path.dirname(ziglang.__file__))')/zig" /usr/local/bin/zig
-          zig version
+      # the official tarball, with zig's global cache saved between runs, so
+      # unchanged dependencies are not recompiled
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
 
       # every dependency is a tangled.org archive; keep the fetched packages
       # so a tangled outage cannot fail a build whose deps have not changed
@@ -82,12 +88,10 @@ jobs:
           PLYR_ZIG_TEST_REDIS_URL: redis://127.0.0.1:6380/0
         run: zig build test
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
       - name: install uv
         uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.12"
 
       - name: http contract smoke
         run: uv run --no-project python scripts/test_http.py
@@ -162,11 +166,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: install zig 0.17.0
-        run: |
-          python3 -m pip install --user ziglang==0.17.0
-          ln -s "$(python3 -c 'import ziglang, os; print(os.path.dirname(ziglang.__file__))')/zig" /usr/local/bin/zig || sudo ln -s "$(python3 -c 'import ziglang, os; print(os.path.dirname(ziglang.__file__))')/zig" /usr/local/bin/zig
-          zig version
+      # the official tarball, with zig's global cache saved between runs, so
+      # unchanged dependencies are not recompiled
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
 
       - name: install openssl headers
         run: sudo apt-get update && sudo apt-get install -y libssl-dev
@@ -177,12 +181,6 @@ jobs:
         with:
           path: next/backend/zig-pkg
           key: zig-pkg-${{ hashFiles('next/backend/build.zig.zon') }}
-
-      # libhegel is a cargo build of one pinned hegel-rust revision
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/hegel-zig
-          key: hegel-zig-${{ hashFiles('next/backend/build.zig.zon') }}
 
       - name: property harnesses
         env:
@@ -215,11 +213,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: install zig 0.17.0
-        run: |
-          python3 -m pip install --user ziglang==0.17.0
-          ln -s "$(python3 -c 'import ziglang, os; print(os.path.dirname(ziglang.__file__))')/zig" /usr/local/bin/zig || sudo ln -s "$(python3 -c 'import ziglang, os; print(os.path.dirname(ziglang.__file__))')/zig" /usr/local/bin/zig
-          zig version
+      # the official tarball, with zig's global cache saved between runs, so
+      # unchanged dependencies are not recompiled
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
 
       - name: install openssl headers
         run: sudo apt-get update && sudo apt-get install -y libssl-dev
@@ -230,11 +228,6 @@ jobs:
         with:
           path: next/backend/zig-pkg
           key: zig-pkg-${{ hashFiles('next/backend/build.zig.zon') }}
-
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/hegel-zig
-          key: hegel-zig-${{ hashFiles('next/backend/build.zig.zon') }}
 
       - name: plant each mutant
         env:

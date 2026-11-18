@@ -105,9 +105,11 @@ fn ticketToken(_: void, case: *hegel.TestCase) !void {
     var arena_state = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
     defer arena_state.deinit();
     const a = arena_state.allocator();
-    const length = try gen.pick(case, usize, &.{ 0, 1, 63, 64, 64, 64, 65, 128 });
-    // mostly hex, so 64-byte tokens that pass the gate are common
-    const alphabet = try gen.pick(case, []const u8, &.{ "0123456789abcdefABCDEF", "0123456789abcdef-g\x00 " });
+    // aim for a token that passes the gate half the time; hegel's bias toward
+    // early picks alone left it at one case in a hundred
+    const aim_valid = try case.boolean();
+    const length = if (aim_valid) 64 else try gen.pick(case, usize, &.{ 0, 1, 63, 64, 65, 128 });
+    const alphabet = if (aim_valid) "0123456789abcdefABCDEF" else try gen.pick(case, []const u8, &.{ "0123456789abcdefABCDEF", "0123456789abcdef-g\x00 " });
     const token = try gen.string(case, a, alphabet, length, length);
     case.note("token {s} ({d} bytes)", .{ token, token.len });
     var well_formed = token.len == 64;
