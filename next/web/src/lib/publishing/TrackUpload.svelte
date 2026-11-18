@@ -1,6 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { auth } from '$lib/auth';
+  import Icon from '$lib/ui/Icon.svelte';
   import OwnerTrackUpload from './OwnerTrackUpload.svelte';
   import UploadForm from './UploadForm.svelte';
 
@@ -16,24 +17,27 @@
   $effect(() => { if (onlyYou) ownerVisited = true; });
 </script>
 
-<div class="visibility">
-  <span>who can listen?</span>
-  <nav aria-label="Who can listen">
+{#snippet visibility()}
+  <nav class="who" aria-label="Who can listen">
     {#if onlyYou}
-      <a class="text-button" href={resolve('/(app)/upload')} aria-disabled={ownerBusy} onclick={event => { if (ownerBusy) event.preventDefault(); }}>everyone</a><span aria-current="page">only you</span>
+      <a href={resolve('/(app)/upload')} aria-disabled={ownerBusy} onclick={event => { if (ownerBusy) event.preventDefault(); }}><Icon name="globe" size={16} />everyone</a>
+      <span aria-current="page"><Icon name="lock" size={16} />only you</span>
     {:else}
-      <span aria-current="page">everyone</span><a class="text-button" href={resolve('/upload?visibility=only-you')} aria-disabled={openBusy} onclick={event => { if (openBusy) event.preventDefault(); }}>only you</a>
+      <span aria-current="page"><Icon name="globe" size={16} />everyone</span>
+      <a href={resolve('/upload?visibility=only-you')} aria-disabled={openBusy} onclick={event => { if (openBusy) event.preventDefault(); }}><Icon name="lock" size={16} />only you</a>
     {/if}
   </nav>
-</div>
+{/snippet}
 
-<div hidden={onlyYou}><UploadForm {account} bind:submitting={openBusy} bind:audio bind:title bind:description bind:tags /></div>
+<div hidden={onlyYou}><UploadForm {account} {visibility} bind:submitting={openBusy} bind:audio bind:title bind:description bind:tags /></div>
 {#if onlyYou || ownerVisited}
-  <div hidden={!onlyYou}><OwnerTrackUpload {account} selected={onlyYou} bind:busy={ownerBusy} bind:audio bind:title bind:description bind:tags /></div>
+  <div hidden={!onlyYou}><OwnerTrackUpload {account} {visibility} selected={onlyYou} bind:busy={ownerBusy} bind:audio bind:title bind:description bind:tags /></div>
 {/if}
 
 <style>
-  .visibility { display: grid; gap: 0.35rem; }
-  nav { display: flex; align-items: center; gap: 0.65rem; }
-  nav span { background: var(--hover); border-radius: 0.55rem; padding: 0.65rem 0.8rem; }
+  .who { display: inline-flex; flex: none; gap: 0.15rem; padding: 0.25rem; border-radius: 999px; background: var(--raised); border: 1px solid var(--line); }
+  .who :is(a, span) { display: inline-flex; align-items: center; gap: 0.4rem; min-height: 2.5rem; padding: 0 0.95rem; border-radius: 999px; color: var(--muted); font-size: 0.9rem; font-weight: 600; white-space: nowrap; }
+  .who a:hover { text-decoration: none; color: var(--text); }
+  .who span { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgb(0 0 0 / 0.14); }
+  @media (max-width: 720px) { .who :is(a, span) { padding: 0 0.7rem; font-size: 0.85rem; } }
 </style>
