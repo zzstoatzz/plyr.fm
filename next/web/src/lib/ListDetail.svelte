@@ -12,6 +12,8 @@
 	import Icon from './ui/Icon.svelte';
 	import Loading from './ui/Loading.svelte';
 	import TrackRow from './TrackRow.svelte';
+	import { catalogRuntime } from '@plyr/next-core/catalog/runtime';
+	import { compactCount } from './listening/format';
 
 	let { list: indexed }: { list: ListDetail } = $props();
 	let account = $state.raw(auth.getAuth());
@@ -51,10 +53,14 @@
 		track.record.uri === player.current?.record.uri && track.record.cid === player.current.record.cid
 	));
 	const playing = $derived(active && player.playing && !player.outputElsewhere);
+	const seconds = $derived(tracks.reduce((total, track) => total + (track.metadata.duration_seconds ?? 0), 0));
+	const year = $derived(list.object === 'album' ? new Date(list.metadata.created_at).getFullYear() : NaN);
+	const owner = $derived(list.owner.profile);
 	const covers = $derived([...new Set(tracks.flatMap(track => {
 		const artwork = trackArtwork(track);
 		return artwork ? [artwork] : [];
 	}))].slice(0, 4));
+	const collage = $derived(list.object === 'playlist' && !list.metadata.cover_blob_cid && covers.length === 4);
 	async function share() {
 		try {
 			if (navigator.share) await navigator.share({ title, url: location.href });
@@ -64,6 +70,14 @@
 	function playAll() {
 		if (active) player.toggle();
 		else if (tracks[0]) player.play(tracks[0], tracks, title);
+	}
+	function shuffle() {
+		const order = [...tracks];
+		for (let i = order.length - 1; i > 0; i--) {
+			const j = Math.floor(Math.random() * (i + 1));
+			[order[i], order[j]] = [order[j], order[i]];
+		}
+		if (order[0]) player.play(order[0], order, title);
 	}
 	function addToQueue() {
 		queueRequest = list.record.uri;
@@ -75,26 +89,34 @@
 
 <article class="page-content" class:playlist={list.object === 'playlist'} class:album={list.object === 'album'}>
 	<header>
-		<div class="cover" class:collage={list.object === 'playlist' && !list.metadata.cover_blob_cid && covers.length === 4}>
-			{#if list.object === 'playlist' && !list.metadata.cover_blob_cid && covers.length === 4}
+		{#if covers[0] || list.media?.artwork}
+			<div class="backdrop" aria-hidden="true"><img src={list.media?.artwork?.url ?? covers[0]} alt="" /></div>
+		{/if}
+		<div class="cover" class:collage>
+			{#if collage}
 				{#each covers as cover (cover)}<Artwork src={cover} size={112} eager />{/each}
 			{:else}
 				<CollectionArtwork {list} size={230} eager />
 			{/if}
 		</div>
 		<div class="copy">
+			<p class="kind">{list.object}</p>
 			<h1>{title}</h1>
-			<div class="subtle meta">
-				{#if list.owner.profile}<a href={`/u/${list.owner.did}`}>{list.owner.profile.display_name}</a><span aria-hidden="true">·</span>{/if}
-				<span>{list.metrics.member_count} {list.metrics.member_count === 1 ? 'track' : 'tracks'}</span>
-				{#if list.metrics.member_count > tracks.length}<span aria-hidden="true">·</span><span>{tracks.length} playable</span>{/if}
+			<div class="meta">
+				{#if owner}<a class="owner" href={`/u/${list.owner.did}`}><Artwork src={owner.avatar_url ?? undefined} size={22} />{owner.display_name || owner.handle}</a>{/if}
+				<span class="chip"><b>{tracks.length.toLocaleString()}</b> {tracks.length === 1 ? 'track' : 'tracks'}</span>
+				{#if seconds > 0}<span class="chip"><b>{catalogRuntime(seconds)}</b></span>{/if}
+				{#if list.metrics.total_plays > 0}<span class="chip"><b>{compactCount(list.metrics.total_plays)}</b> {list.metrics.total_plays === 1 ? 'play' : 'plays'}</span>{/if}
+				{#if Number.isFinite(year)}<span class="chip"><b>{year}</b></span>{/if}
+				{#if list.metrics.member_count > tracks.length}<span class="chip">{list.metrics.member_count - tracks.length} unavailable</span>{/if}
 			</div>
 			<div class="actions">
-				<button type="button" class="primary-button play" aria-label={`${playing ? 'Pause' : 'Play'} ${title}`} disabled={!tracks.length || active && !playing && player.snapshot.waiting} onclick={playAll}><Icon name={playing ? 'pause' : 'play'} /> {playing ? 'pause' : 'play'}</button>
-				<button type="button" class="text-button enqueue" disabled={!tracks.length || !player.canEditPublicQueue} title={!player.canEditPublicQueue ? "play a public track to change queues" : undefined} onclick={addToQueue}><Icon name="queue" /> add to queue</button>
-				<button type="button" class="icon-button share" aria-label={`Share ${list.object}`} onclick={share}><Icon name="share" /></button>
-				{#if owned && !editing}<button type="button" class="text-button" onclick={() => { editing = true; }}>edit {list.object}</button>{/if}
+				<button type="button" class="pill primary" aria-label={`${playing ? 'Pause' : 'Play'} ${title}`} disabled={!tracks.length || active && !playing && player.snapshot.waiting} onclick={playAll}><Icon name={playing ? 'pause' : 'play'} /> {playing ? 'Pause' : 'Play'}</button>
+				<button type="button" class="pill" aria-label={`Add ${title} to queue`} disabled={!tracks.length || !player.canEditPublicQueue} title={!player.canEditPublicQueue ? "play a public track to change queues" : undefined} onclick={addToQueue}><Icon name="queue" /> <span class="long">Add to queue</span><span class="short">Queue</span></button>
+				{#if tracks.length > 1}<button type="button" class="round" aria-label={`Shuffle ${title}`} onclick={shuffle}><Icon name="shuffle" /></button>{/if}
+				<button type="button" class="round" aria-label={`Share ${title}`} onclick={share}><Icon name="share" /></button>
 			</div>
+			{#if owned && !editing}<button type="button" class="text-button edit" onclick={() => { editing = true; }}>edit {list.object}</button>{/if}
 			{#if copied}<p role="status" class="subtle">link copied</p>{/if}
 			{#if queueRequest === list.record.uri && player.snapshot.queueError}<p role="status" class="state">{player.snapshot.queueError}</p>{/if}
 		</div>
@@ -114,11 +136,10 @@
 			{/await}
 		{/key}
 	{:else}
-		<section class="members" aria-labelledby="member-title">
-			<h2 id="member-title">tracks</h2>
-			{#each list.members as member (member.position)}
-				{#if member.track}<TrackRow track={member.track} collection={tracks} label={title} />
-				{:else}<p class="state unavailable">track unavailable</p>{/if}
+		<section class="members" aria-label={`${title} tracks`}>
+			{#each list.members as member, index (member.position)}
+				{#if member.track}<TrackRow track={member.track} collection={tracks} label={title} number={list.object === 'album' ? index + 1 : undefined} />
+				{:else}<p class="state unavailable">{#if list.object === 'album'}<span class="number">{index + 1}</span>{/if}<span>track unavailable</span></p>{/if}
 			{:else}
 				<p class="state">no tracks yet.</p>
 			{/each}
@@ -127,25 +148,50 @@
 </article>
 
 <style>
-	header { display: flex; align-items: flex-end; gap: 1.5rem; padding-block: 1.25rem 2rem; }
-	.cover { width: min(14rem, 38vw); flex: none; border-radius: 0.65rem; overflow: hidden; }
+	header { position: relative; isolation: isolate; display: flex; align-items: flex-end; gap: 2rem; padding-block: 1.25rem 2rem; }
+	.backdrop { position: absolute; z-index: -1; inset: calc(-1 * clamp(1rem, 3vw, 2.25rem)) calc(-1 * clamp(1rem, 3vw, 2.25rem)) -2rem; overflow: hidden; pointer-events: none;
+		mask-image: linear-gradient(to bottom, transparent, black 25%, black 45%, transparent); }
+	.backdrop img { width: 100%; height: 100%; object-fit: cover; filter: blur(48px) saturate(1.2); transform: scale(1.3); opacity: 0.55; }
+	.cover { width: min(14.5rem, 38vw); flex: none; border-radius: 0.75rem; overflow: hidden; box-shadow: 0 1.1rem 2.5rem rgb(0 0 0 / 0.3); }
 	.collage { display: grid; grid-template-columns: 1fr 1fr; aspect-ratio: 1; }
 	.collage :global(.artwork) { border-radius: 0; }
-	.meta { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-top: 0.25rem; }
-	.members h2 { font-size: 1.15rem; margin-bottom: 0.6rem; }
-	.playlist .members :global(.track), .playlist .unavailable { background: var(--surface); border: 1px solid var(--line); padding: 0.55rem; border-radius: 0.65rem; margin: 0 0 0.5rem; }
-	.play { width: auto; padding: 0 1rem; border-radius: 2rem; }
-	.enqueue { border: 1px solid var(--line); border-radius: 2rem; padding-inline: 0.85rem; }
-	.copy { min-width: 0; }
-	h1 { overflow-wrap: anywhere; line-height: 1.14; font-size: clamp(1.45rem, 4vw, 3rem); }
-	.actions { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-top: 0.85rem; }
+	.copy { min-width: 0; display: grid; justify-items: start; }
+	.kind { color: var(--faint); font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+	h1 { overflow-wrap: anywhere; line-height: 1.08; font-size: clamp(1.6rem, 4.5vw, 3.25rem); letter-spacing: -0.03em; margin-top: 0.3rem; }
+	.meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.85rem; color: var(--muted); font-size: 0.875rem; }
+	.owner { display: inline-flex; align-items: center; gap: 0.45rem; min-height: 2rem; margin-right: 0.25rem; color: var(--text); font-weight: 600; font-size: 1rem; }
+	.owner :global(.artwork) { width: 1.375rem; border-radius: 50%; }
+	.chip { padding: 0.3rem 0.75rem; border-radius: 999px; background: color-mix(in srgb, var(--raised) 85%, transparent); font-variant-numeric: tabular-nums; }
+	.chip b { color: var(--text); font-weight: 700; }
+	.actions { display: flex; align-items: center; gap: 0.6rem; margin-top: 1.25rem; }
+	.pill, .round { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; height: 2.75rem; border: 0; border-radius: 999px; background: var(--raised); color: var(--text); font-weight: 700; }
+	.pill { padding: 0 1.25rem; }
+	.pill.primary { background: var(--accent); color: var(--on-accent); }
+	.round { width: 2.75rem; flex: none; }
+	.pill:hover:not(:disabled), .round:hover { filter: brightness(0.96); }
+	.pill:disabled { opacity: 0.5; }
+	.short { display: none; }
+	.edit { margin-top: 0.5rem; margin-left: -0.5rem; color: var(--accent); }
+	.members { display: grid; }
+	.playlist .members { gap: 0.5rem; }
+	.playlist .members :global(.track), .playlist .unavailable { background: var(--surface); border: 1px solid var(--line); padding: 0.55rem; border-radius: 0.65rem; margin: 0; }
+	.album .members :global(.track) { border-bottom: 1px solid var(--line); padding-inline: 0.5rem; margin-inline: -0.5rem; border-radius: 0.5rem; }
+	.album .members :global(.track:last-child) { border-bottom: 0; }
+	.album .unavailable { display: flex; align-items: center; gap: 0.75rem; min-height: 3.5rem; margin: 0 -0.5rem; padding-inline: 0.5rem; border-bottom: 1px solid var(--line); }
+	.album .number { width: 2.25rem; text-align: center; color: var(--faint); font-variant-numeric: tabular-nums; }
 	@media (max-width: 720px) {
-		header { align-items: start; flex-direction: column; gap: 1rem; }
-		.copy { width: 100%; }
-		.playlist .cover { width: min(9rem, 45vw); }
-		.playlist .actions { display: grid; grid-template-columns: 1fr; }
-		.playlist .share { justify-self: center; }
-		.album header { align-items: center; text-align: center; }
-		.album .meta, .album .actions { justify-content: center; }
+		header { flex-direction: column; align-items: center; text-align: center; gap: 1.1rem; padding-top: 0.5rem; }
+		.cover { width: min(13rem, 56vw); }
+		.copy { width: 100%; justify-items: center; }
+		.kind { display: none; }
+		h1 { font-size: 1.65rem; margin-top: 0; }
+		.meta { justify-content: center; }
+		.owner { flex-basis: 100%; justify-content: center; margin: 0 0 0.25rem; }
+		.actions { display: grid; grid-template-columns: 1fr 1fr auto auto; width: 100%; }
+		.pill, .round { height: 3rem; font-size: 1.05rem; }
+		.round { width: 3rem; }
+		.long { display: none; }
+		.short { display: inline; }
+		.edit { margin-left: 0; }
 	}
 </style>

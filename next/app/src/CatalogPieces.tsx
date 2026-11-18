@@ -10,7 +10,7 @@ import { useTrackPlayback } from './playback-context';
 import type { ListSummary, Page, Track } from '@plyr/next-core/api';
 import { Action, Copy } from './controls';
 import { WaveLoading } from './WaveLoading';
-import { compactCount } from './home-state';
+import { compactCount, formatDuration } from './home-state';
 import { useAppearance } from './appearance';
 import { CompactRows } from './ActionRow';
 import { artworkShadow, cardSurface } from './materials';
@@ -217,6 +217,27 @@ export function TrackRows({ tracks, onPlay }: { tracks: Track[]; onPlay: Play })
   />)}</View>;
 }
 
+/** An album's tracks share its cover, so rows lead with the track number instead. */
+export function AlbumRows({ tracks, onPlay }: { tracks: Track[]; onPlay: Play }) {
+  return <View>{tracks.map((track, index) => <AlbumRow key={`${track.id}:${index}`} track={track} number={index + 1}
+    onPlay={() => onPlay(track, tracks)} last={index === tracks.length - 1} />)}</View>;
+}
+
+function AlbumRow({ track, number, onPlay, last }: { track: Track; number: number; onPlay: () => void; last: boolean }) {
+  const colors = useAppearance();
+  const { current } = useTrackPlayback(track);
+  return <View style={[styles.albumRow, !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.hairline }]}>
+    <Link href={{ pathname: '/track/[id]', params: { id: track.id } }} asChild>
+      <Pressable accessibilityRole="link" style={styles.rowLink}>
+        <Text style={[styles.number, { color: current ? colors.accent : colors.faint, fontFamily: colors.fontFamily, fontSize: 15 * colors.scale }]}>{number}</Text>
+        <Text numberOfLines={2} style={[styles.rowTitle, { flex: 1, color: current ? colors.accent : colors.text, fontFamily: colors.fontFamily, fontSize: 16 * colors.scale }]}>{track.metadata.title}</Text>
+        <Text style={{ color: colors.faint, fontFamily: colors.fontFamily, fontSize: 14 * colors.scale, fontVariant: ['tabular-nums'] }}>{formatDuration(track.metadata.duration_seconds)}</Text>
+      </Pressable>
+    </Link>
+    <RowPlay track={track} onPress={onPlay} />
+  </View>;
+}
+
 function RowPlay({ track, onPress }: { track: Track; onPress: () => void }) {
   const colors = useAppearance();
   const { playing, toggle } = useTrackPlayback(track);
@@ -269,4 +290,6 @@ const styles = StyleSheet.create({
   rowLink: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 4 },
   rowText: { flex: 1, minWidth: 0, gap: 3 },
   rowTitle: { fontWeight: '600' },
+  albumRow: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 56, paddingLeft: 2 },
+  number: { width: 24, textAlign: 'right', fontVariant: ['tabular-nums'] },
 });

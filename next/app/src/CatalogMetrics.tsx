@@ -2,15 +2,6 @@ import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useAppearance } from './appearance';
 import { Text } from './Text';
 
-export function catalogRuntime(seconds: number) {
-  const minutes = Math.floor(seconds / 60);
-  const hours = Math.floor(minutes / 60);
-  if (hours >= 24) return `${Math.floor(hours / 24)}d ${hours % 24}h`;
-  if (hours) return `${hours}h ${minutes % 60}m`;
-  if (minutes) return `${minutes}m`;
-  return `${Math.floor(seconds)}s`;
-}
-
 export function CatalogMetrics({ metrics, lead }: {
   metrics: readonly { label: string; value: string }[];
   lead?: { label: string; value: string };

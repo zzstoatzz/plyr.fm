@@ -36,6 +36,7 @@ import { MagnifyingGlassIcon } from 'phosphor-react-native/src/icons/MagnifyingG
 import { MusicNoteIcon } from 'phosphor-react-native/src/icons/MusicNote';
 import { PaletteIcon } from 'phosphor-react-native/src/icons/Palette';
 import { PencilSimpleIcon } from 'phosphor-react-native/src/icons/PencilSimple';
+import { PauseIcon } from 'phosphor-react-native/src/icons/Pause';
 import { PlayIcon } from 'phosphor-react-native/src/icons/Play';
 import { PlaylistIcon } from 'phosphor-react-native/src/icons/Playlist';
 import { PlusCircleIcon } from 'phosphor-react-native/src/icons/PlusCircle';
@@ -103,6 +104,7 @@ export const MagnifyingGlass = icon(MagnifyingGlassIcon);
 export const MusicNote = icon(MusicNoteIcon);
 export const Palette = icon(PaletteIcon);
 export const PencilSimple = icon(PencilSimpleIcon);
+export const Pause = icon(PauseIcon);
 export const Play = icon(PlayIcon);
 export const Playlist = icon(PlaylistIcon);
 export const PlusCircle = icon(PlusCircleIcon);

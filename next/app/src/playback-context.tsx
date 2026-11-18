@@ -42,6 +42,8 @@ export interface Playback {
   skip(seconds: number): void;
   jump(index: number): void;
   enqueue(track: Track): void;
+  /** Adds every public track, in order, under one toast that names the collection. */
+  enqueueAll(tracks: Track[], label: string): void;
   /** Puts the track right after the one playing, ahead of other picks. */
   playNext(track: Track): void;
   remove(index: number): void;
