@@ -183,7 +183,6 @@ async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'reg
     await audioInput.setInputFiles({ name: 'direct.mp3', mimeType: 'audio/mpeg', buffer: mp3 });
     const title = page.getByRole('textbox', { name: 'title', exact: true });
     await title.fill('direct from Svelte');
-    await page.getByRole('button', { name: 'add album, description or tags' }).click();
     await page.getByRole('textbox', { name: 'tags', exact: true }).fill('ambient\nfield recording');
     await page.reload();
     await page.getByText('your draft is still here. choose the audio file again.').waitFor();
@@ -199,7 +198,7 @@ async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'reg
       ]);
       await chooser.setFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('notes') });
       await page.getByRole('alert').filter({ hasText: /choose an MP3.*WebM/ }).waitFor({ timeout: 5000 });
-      await page.getByText('selected: direct.mp3').waitFor();
+      await page.getByText(/^direct\.mp3 · /).waitFor();
       assert.ok(await submit.isEnabled(), 'an invalid replacement leaves the valid audio attached');
       assert.equal(await title.inputValue(), 'direct from Svelte');
       assert.equal(await tags.inputValue(), 'ambient\nfield recording');
@@ -239,7 +238,7 @@ async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'reg
     } else await coverInput.setInputFiles({ name: 'cover.png', mimeType: 'image/png', buffer: cover });
     if (scenario === 'regular') await page.screenshot({ path: path.join(output, width + '-' + theme + '.png'), fullPage: true });
     if (scenario === 'after-create') await interruptDraftCleanup(page);
-    if (scenario === 'after-create') await page.getByRole('checkbox', { name: 'auto-tag with recommended genres' }).check();
+    if (scenario === 'after-create') await page.getByRole('switch', { name: /auto-tag with recommended genres/ }).check();
     if (scenario === 'submit-navigation') await holdDraftCompletion(page);
     await submit.click();
     if (scenario === 'submit-navigation' || scenario === 'edit-navigation') {
@@ -343,7 +342,7 @@ async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'reg
     await consent.waitFor();
     assert.ok(await submit.isDisabled());
     await consent.check();
-    if (manualConfirmation) await page.getByRole('checkbox', { name: 'auto-tag with recommended genres' }).check();
+    if (manualConfirmation) await page.getByRole('switch', { name: /auto-tag with recommended genres/ }).check();
     if (scenario === 'after-transfer') {
       await interruptDraftCleanup(page);
       await submit.click();
@@ -370,10 +369,9 @@ async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'reg
     await partStarted.promise;
     if (scenario === 'waiting') {
       const waitingTitle = 'queued through reload';
-      const uploadForm = page.locator('form').filter({ has: title });
+      const uploadForm = page.locator('form:has(input[aria-label="audio file"])');
       await uploadForm.locator('input[type=file][accept^="audio"]').setInputFiles({ name: 'waiting.mp3', mimeType: 'audio/mpeg', buffer: mp3 });
       await title.fill(waitingTitle);
-      await uploadForm.getByRole('button', { name: 'add album, description or tags' }).click();
       await uploadForm.getByRole('textbox', { name: 'description', exact: true }).fill('liner notes that survive a reload');
       await page.evaluate(() => {
         const add = IDBObjectStore.prototype.add;

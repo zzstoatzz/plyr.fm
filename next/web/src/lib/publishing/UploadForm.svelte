@@ -13,7 +13,7 @@
 </script>
 
 <script lang="ts">
-  import { onMount, untrack } from 'svelte';
+  import { onMount, untrack, type Snippet } from 'svelte';
   import { trackIdFromUri } from '@plyr/next-core/api';
   import type { CreateOperation } from '@plyr/next-core/publishing/create-operation';
   import { PUBLIC_AUDIO_FORMATS, type UploadOperation } from '@plyr/next-core/publishing/upload-model';
@@ -28,13 +28,16 @@
   import { createPds } from '$lib/pds';
   import { queuedDrafts, uploadStorage } from '$lib/storage/upload-storage';
   import { uploadQueue } from '$lib/upload';
+  import Artwork from '$lib/ui/Artwork.svelte';
+  import Icon from '$lib/ui/Icon.svelte';
   import Loading from '$lib/ui/Loading.svelte';
+  import AudioPreview from './AudioPreview.svelte';
   import CreateRecovery from './CreateRecovery.svelte';
   import LargeUpload from './LargeUpload.svelte';
   import QueuedUpload from './QueuedUpload.svelte';
 
-  let { account, submitting = $bindable(false), audio = $bindable(), title = $bindable(''), description = $bindable(''), tags = $bindable('') }: {
-    account: ReturnType<typeof auth.getAuth>; submitting: boolean; audio: File | undefined; title: string; description: string; tags: string;
+  let { account, submitting = $bindable(false), audio = $bindable(), title = $bindable(''), description = $bindable(''), tags = $bindable(''), visibility }: {
+    account: ReturnType<typeof auth.getAuth>; submitting: boolean; audio: File | undefined; title: string; description: string; tags: string; visibility?: Snippet;
   } = $props();
 
   const owner = untrack(() => account.did);
@@ -45,6 +48,9 @@
   let live = false;
   let hydrated = $state(false);
   let profileName = $state<string>();
+  let profileAvatar = $state<string>();
+  let duration = $state<number>();
+  let dragging = $state(false);
   let artist = $derived(profileName || account.handle || account.did || '');
   let cover = $state<File>();
   let coverPreview = $state<string>();
@@ -52,7 +58,6 @@
   let coverInput = $state<HTMLInputElement>();
   let autoTitle = $state('');
   let album = $state('');
-  let details = $state(false);
   let consent = $state(false);
   let autoTag = $state(false);
   let editorDraft = $derived(JSON.stringify({ title, album, description, tags, autoTag, named: !!title && title === autoTitle }));
@@ -76,12 +81,44 @@
   let draftsToRecover = $derived(drafts.filter(draft => !draftInRecovery(draft, pending, transfers) && !jobs.some(job => job.id === draft.id && !(draft.reservedRkey && job.phase === 'failed'))));
   let creationsToRecover = $derived(pending.filter(operation => !active.rkeys.has(operation.rkey) && !transfers.some(transfer => transfer.rkey === operation.rkey)));
   let creationBlocksUpload = $derived(creationsToRecover.some(operation => !operation.archived));
-  $effect(() => { if (description || tags) details = true; });
   let service = $derived(!!audio && needsPlyrStorage(audio));
   let tagProblem = $derived.by(() => {
     try { if (tags.trim()) normalizeTrackTags(tags.split('\n')); return ''; }
     catch (failure) { return message(failure, 'check the tags.'); }
   });
+
+  let editing = $derived(!!audio || !!cover || reattach || !!(title || album || description || tags));
+  let blocked = $derived(submitting || !audio || !title.trim() || !artist || !!tagProblem || imageBusy || loading || !!recoveryProblem || creationBlocksUpload || (service && (!consent || !account.uploadStorage)));
+
+  function size(bytes: number) {
+    const units = ['KB', 'MB', 'GB'];
+    let value = bytes / 1024;
+    let unit = 0;
+    while (value >= 1000 && unit < units.length - 1) { value /= 1024; unit++; }
+    return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${units[unit]}`;
+  }
+
+  function clock(seconds: number) {
+    const whole = Math.round(seconds);
+    const hours = Math.floor(whole / 3600);
+    const rest = `${Math.floor(whole / 60) % 60}:${String(whole % 60).padStart(2, '0')}`;
+    return hours ? `${hours}:${rest.padStart(5, '0')}` : rest;
+  }
+
+  function isImage(file: File) {
+    return file.type.startsWith('image/') || /\.(heic|heif|jpe?g|png|webp|gif|avif)$/i.test(file.name);
+  }
+
+  function drop(event: DragEvent) {
+    event.preventDefault();
+    dragging = false;
+    if (!hydrated || submitting) return;
+    const files = [...(event.dataTransfer?.files ?? [])];
+    const image = files.find(isImage);
+    const sound = files.find(file => file !== image);
+    if (sound) pickAudio(sound);
+    if (image) void pickCover(image);
+  }
 
   function message(failure: unknown, fallback: string) {
     return failure instanceof Error ? failure.message : fallback;
@@ -106,8 +143,7 @@
       album = draftField(draft, 'album');
       description = draftField(draft, 'description');
       tags = draftField(draft, 'tags');
-      details = !!(album || description || tags);
-      reattach = !!(title || details);
+      reattach = !!(title || album || description || tags);
       consent = localStorage.getItem(consentKey) === 'yes';
       autoTag = draft && typeof draft === 'object' && 'autoTag' in draft && typeof draft.autoTag === 'boolean'
         ? draft.autoTag
@@ -120,7 +156,11 @@
     live = true;
     if (owner && navigator.locks) void navigator.locks.request(editorLock(owner), restoreEditor).catch(restoreEditor);
     else restoreEditor();
-    if (owner) void api.artist(owner).then(profile => { if (current()) profileName = creditName(profile.display_name); }, () => {});
+    if (owner) void api.artist(owner).then(profile => {
+      if (!current()) return;
+      profileName = creditName(profile.display_name);
+      profileAvatar = profile.avatar_url ?? undefined;
+    }, () => {});
 
     let finished = '';
     const unsubscribe = uploadQueue.subscribe(() => {
@@ -245,7 +285,6 @@
     description = input.description ?? '';
     tags = input.tags?.join('\n') ?? '';
     autoTag = !!input.autoTag;
-    details = !!(album || description || tags);
     reattach = false;
     formProblem = '';
     audioProblem = '';
@@ -273,7 +312,6 @@
       if (audioInput) audioInput.value = '';
       if (coverInput) coverInput.value = '';
       title = autoTitle = album = description = tags = formProblem = audioProblem = coverProblem = '';
-      details = false;
     } catch (failure) {
       formProblem = message(failure, 'could not start the upload.');
     } finally { submitting = false; }
@@ -281,15 +319,22 @@
 </script>
 
 {#if jobs.some(job => job.owner === owner)}
-  <ul class="jobs" aria-label="Upload queue" aria-live="polite">
-    {#each jobs.filter(job => job.owner === owner) as job (job.id)}
-      <li>
-        {jobLine(job)}
-        {#if job.phase === 'done' && job.uri}<a class="text-button" href={`/track/${trackIdFromUri(job.uri)}`}>view track</a>{/if}
-        {#if job.phase === 'failed' && uploadQueue.editable(job.id)}<button class="text-button" onclick={() => editAgain(job.id)} disabled={!hydrated || imageBusy || submitting}>edit and try again</button>{/if}
-      </li>
-    {/each}
-  </ul>
+  <section class="jobs" aria-label="Upload queue" aria-live="polite">
+    <h2>your uploads</h2>
+    <ul>
+      {#each jobs.filter(job => job.owner === owner) as job (job.id)}
+        <li class:failed={job.phase === 'failed'}>
+          <span class="job-icon"><Icon name={job.phase === 'done' ? 'check' : job.phase === 'failed' ? 'info' : 'upload'} size={18} /></span>
+          <span class="job-line">
+            {jobLine(job)}
+            {#if job.phase === 'uploading' && job.progress !== undefined}<span class="meter"><i style:width="{Math.min(100, job.progress * 100)}%"></i></span>{/if}
+          </span>
+          {#if job.phase === 'done' && job.uri}<a class="text-button" href={`/track/${trackIdFromUri(job.uri)}`}>view track</a>{/if}
+          {#if job.phase === 'failed' && uploadQueue.editable(job.id)}<button class="text-button" onclick={() => editAgain(job.id)} disabled={!hydrated || imageBusy || submitting}>edit and try again</button>{/if}
+        </li>
+      {/each}
+    </ul>
+  </section>
 {/if}
 {#if queuedProblem}
   <p role="alert">{queuedProblem}</p>
@@ -319,72 +364,205 @@
   </details>
 {/if}
 
-<form onsubmit={upload} inert={!hydrated || submitting}>
-  <div class="file-field">
-    <strong>audio</strong>
-    <span class="subtle">{PUBLIC_AUDIO_FORMATS.toLowerCase()} · up to 1.5 GiB</span>
-    <div class="audio-selection">
-      <button type="button" class="text-button" onclick={() => audioInput?.click()}>{audio ? 'change audio' : 'choose audio'}</button>
-      {#if audio}<span>selected: {audio.name}</span>{/if}
-    </div>
-    <input type="file" aria-label="audio file" hidden accept="audio/*,.aif,.aiff,.m4a,.mp3,.aac,.ogg,.opus,.wav,.flac,.webm" bind:this={audioInput} onchange={event => pickAudio(event.currentTarget.files?.[0])} />
-  </div>
-  {#if audioProblem}<p role="alert">{audioProblem}</p>
-  {:else if reattach && !audio}<p class="subtle">your draft is still here. choose the audio file again.</p>{/if}
-  {#if service}
-    <p class="subtle">plyr stores this file and makes an mp3 for playback when needed. playback and downloads are public.</p>
-    <label class="check"><input type="checkbox" bind:checked={consent} /> use plyr storage</label>
-    {#if !account.uploadStorage}
-      <p>sign in again to allow plyr storage. what you typed stays here.</p>
-      <a class="text-button" href="/login?return_to=%2Fupload">sign in again</a>
-    {/if}
-  {/if}
+<form
+  onsubmit={upload}
+  inert={!hydrated || submitting}
+  class:dragging
+  ondragover={event => { if (event.dataTransfer?.types.includes('Files')) { event.preventDefault(); dragging = true; } }}
+  ondragleave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) dragging = false; }}
+  ondrop={drop}
+>
+  <input type="file" aria-label="audio file" hidden accept="audio/*,.aif,.aiff,.m4a,.mp3,.aac,.ogg,.opus,.wav,.flac,.webm" bind:this={audioInput} onchange={event => pickAudio(event.currentTarget.files?.[0])} />
+  <input type="file" aria-label="cover image" hidden accept="image/*,.heic,.heif" bind:this={coverInput} onchange={event => pickCover(event.currentTarget.files?.[0])} />
 
-  <label>title <input bind:value={title} maxlength="256" required placeholder="track title" /></label>
-  <label class="file-field">
-    <strong>cover</strong>
-    <span class="subtle">optional · any photo or image</span>
-    <input type="file" accept="image/*,.heic,.heif" bind:this={coverInput} onchange={event => pickCover(event.currentTarget.files?.[0])} />
-    {#if cover && !coverInput?.files?.length}<span>{cover.name}</span>{/if}
-  </label>
-  {#if imageBusy}<p role="status">preparing your cover…</p>{/if}
-  {#if coverProblem}<p role="alert">{coverProblem}</p>{/if}
-  {#if coverPreview}
-    <div class="cover-preview">
-      <img src={coverPreview} alt="selected cover preview" width="64" height="64" />
-      <button type="button" class="text-button" disabled={imageBusy} onclick={() => { cover = undefined; if (coverInput) { coverInput.value = ''; coverInput.focus(); } }}>remove cover</button>
+  {#if !editing}
+    <div class="drop">
+      <span class="drop-icon"><Icon name="wave" size={34} /></span>
+      <h2><span class="wide">drop a track here</span><span class="narrow">choose a track</span></h2>
+      <p class="subtle">the title comes from the file name. everything else is optional.</p>
+      <button type="button" class="pill primary" onclick={() => audioInput?.click()}><Icon name="plus" size={18} />choose audio</button>
+      <p class="formats">{PUBLIC_AUDIO_FORMATS.toLowerCase()} · up to 1.5 GB</p>
+      {#if audioProblem}<p class="problem" role="alert">{audioProblem}</p>{/if}
+      {#if artist}<p class="formats">posts to your profile as {artist}</p>{/if}
     </div>
-  {/if}
-
-  {#if details}
-    <label>album <input bind:value={album} maxlength="256" placeholder="optional" /></label>
-    <label>description <textarea bind:value={description} maxlength="5000" rows="3" placeholder="liner notes, credits…"></textarea></label>
-    <label>tags <textarea bind:value={tags} rows="2" placeholder="one tag per line"></textarea></label>
-    {#if tagProblem}<p role="alert">{tagProblem}</p>{/if}
   {:else}
-    <button type="button" class="text-button" onclick={() => { details = true; }}>add album, description or tags</button>
+    <header class="hero">
+      <div class="backdrop" aria-hidden="true">{#if coverPreview}<img src={coverPreview} alt="" />{/if}</div>
+      <div class="cover-slot">
+        <button type="button" class="cover" class:empty={!coverPreview} disabled={imageBusy} onclick={() => coverInput?.click()} aria-label={cover ? 'change cover' : 'choose cover'}>
+          {#if coverPreview}
+            <img src={coverPreview} alt="selected cover preview" width="240" height="240" />
+            <span class="cover-chip"><Icon name="image" size={15} />change cover</span>
+          {:else}
+            <span class="cover-empty">
+              <Icon name="image" size={30} stroke={1.6} />
+              <b>{imageBusy ? 'preparing your cover…' : 'add a cover'}</b>
+              <small>optional · any photo or image</small>
+            </span>
+          {/if}
+        </button>
+        {#if cover}
+          <button type="button" class="remove" disabled={imageBusy} aria-label="remove cover" onclick={() => { cover = undefined; if (coverInput) coverInput.value = ''; }}><Icon name="x" size={16} /></button>
+        {/if}
+        {#if imageBusy && coverPreview}<p class="cover-note" role="status">preparing your cover…</p>{/if}
+        {#if coverProblem}<p class="problem cover-note" role="alert">{coverProblem}</p>{/if}
+      </div>
+      <div class="copy">
+        <span class="kind">new track</span>
+        <label class="title">
+          <input bind:value={title} aria-label="title" maxlength="256" required placeholder="name this track" />
+          <Icon name="edit" size={18} />
+        </label>
+        {#if artist}
+          <p class="owner"><span class="avatar"><Artwork src={profileAvatar} size={24} fallbackIcon="user" /></span>posts to your profile as {artist}</p>
+        {/if}
+        <div class="meta">
+          {#if audio}
+            {#if duration}<span class="chip strong">{clock(duration)}</span>{/if}
+            <span class="chip file" title={audio.name}>{audio.name} · {size(audio.size)}</span>
+            <button type="button" class="chip action" onclick={() => audioInput?.click()}><Icon name="wave" size={15} />change audio</button>
+          {:else}
+            <span class="chip">your draft is still here. choose the audio file again.</span>
+            <button type="button" class="chip action" onclick={() => audioInput?.click()}><Icon name="wave" size={15} />choose audio</button>
+          {/if}
+        </div>
+        {#if audioProblem}<p class="problem" role="alert">{audioProblem}</p>{/if}
+        {#if audio}<AudioPreview file={audio} bind:duration />{/if}
+        {#if service}
+          <label class="consent">
+            <input type="checkbox" bind:checked={consent} />
+            <span><b>use plyr storage</b> plyr keeps the original file and makes an mp3 so it plays everywhere. playback and downloads are public.</span>
+          </label>
+          {#if !account.uploadStorage}
+            <p class="problem">sign in again to allow plyr storage. what you typed stays here. <a href="/login?return_to=%2Fupload">sign in again</a></p>
+          {/if}
+        {/if}
+      </div>
+    </header>
+
+    <div class="details">
+      <div class="card">
+        <label class="field"><span>album</span><input bind:value={album} maxlength="256" placeholder="optional" /></label>
+        <label class="field"><span>tags</span><textarea bind:value={tags} rows="2" placeholder="one tag per line"></textarea></label>
+        {#if tagProblem}<p class="problem" role="alert">{tagProblem}</p>{/if}
+        <label class="switch">
+          <span><b>auto-tag with recommended genres</b><small>we listen once it's up and add a few genre tags. you can remove them later.</small></span>
+          <input type="checkbox" role="switch" bind:checked={autoTag} />
+        </label>
+      </div>
+      <div class="card">
+        <label class="field"><span>description</span><textarea bind:value={description} maxlength="5000" rows="5" placeholder="liner notes, credits, lyrics…"></textarea></label>
+        {#if description.length > 4500}<p class="subtle count">{description.length} / 5000</p>{/if}
+      </div>
+    </div>
   {/if}
-  <label class="check"><input type="checkbox" bind:checked={autoTag} /> auto-tag with recommended genres</label>
-  {#if draftProblem}<p role="alert">{draftProblem}</p>{/if}
-  {#if formProblem}<p role="alert">{formProblem}</p>{/if}
-  <button class="text-button submit" type="submit" disabled={submitting || !audio || !title.trim() || !artist || !!tagProblem || imageBusy || loading || !!recoveryProblem || creationBlocksUpload || (service && (!consent || !account.uploadStorage))}>upload</button>
-  {#if artist}<p class="subtle">posts to your profile as {artist}. you can keep browsing while it uploads.</p>{/if}
+
+  {#if draftProblem}<p class="problem" role="alert">{draftProblem}</p>{/if}
+  {#if formProblem}<p class="problem" role="alert">{formProblem}</p>{/if}
+  <div class="bar">
+    {@render visibility?.()}
+    <span class="hint">{audio ? 'you can keep browsing while it uploads' : ''}</span>
+    <button class="pill primary submit" type="submit" disabled={blocked}><Icon name="upload" size={18} />upload</button>
+  </div>
 </form>
 
 <style>
-  form { display: grid; gap: 1rem; padding: 1rem; background: var(--surface); border: 1px solid var(--line); border-radius: 0.8rem; }
-  label { display: grid; gap: 0.45rem; }
-  .check { display: flex; align-items: center; gap: 0.65rem; min-height: 2.75rem; }
-  .check input { width: 1.15rem; height: 1.15rem; accent-color: var(--accent); }
-  .cover-preview { display: flex; align-items: center; gap: 0.65rem; }
-  .cover-preview img { border-radius: 0.45rem; object-fit: cover; }
-  .audio-selection { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
-  .file-field { display: grid; gap: 0.45rem; padding: 0.9rem; border: 1px dashed var(--line); border-radius: 0.55rem; overflow-wrap: anywhere; }
-  input:not([type='checkbox']), textarea { width: 100%; min-width: 0; border: 1px solid var(--line); padding: 0.6rem; border-radius: 0.5rem; background: var(--bg); color: inherit; }
-  .text-button { justify-self: start; }
-  .submit { background: var(--accent); color: var(--on-accent); padding-inline: 1rem; }
-  .submit:hover { background: var(--accent); filter: brightness(1.12); }
-  .jobs { margin: 0; padding: 0; list-style: none; }
-  .jobs li { border-bottom: 1px solid var(--line); padding: 0.35rem 0; }
+  form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; border-radius: 1.25rem; }
+  form.dragging .drop, form.dragging .hero .cover { outline: 3px solid var(--accent); outline-offset: 4px; }
+  .problem { color: light-dark(#a3271f, #ff8f87); font-size: 0.9rem; }
+  .problem a { color: inherit; text-decoration: underline; }
+  .pill { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; min-height: 2.75rem; padding: 0 1.35rem; border: 0; border-radius: 999px; background: var(--raised); font-weight: 700; }
+  .pill.primary { background: var(--accent); color: var(--on-accent); }
+  .pill.primary:hover:not(:disabled) { filter: brightness(1.08); }
+
+  .drop { display: grid; justify-items: center; align-content: center; gap: 0.8rem; min-height: 22rem; padding: 2rem 1.25rem; text-align: center; border-radius: 1.25rem; border: 2px dashed color-mix(in srgb, var(--accent) 45%, var(--line)); background: radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%), var(--surface); }
+  .drop-icon { width: 4.5rem; height: 4.5rem; display: grid; place-items: center; border-radius: 1.2rem; background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+  .drop h2 { font-size: clamp(1.5rem, 3vw, 2rem); letter-spacing: -0.02em; }
+  .drop .narrow { display: none; }
+  .formats { color: var(--faint); font-size: 0.85rem; }
+
+  .hero { position: relative; isolation: isolate; display: flex; align-items: flex-end; gap: 2rem; padding-block: 0.5rem 1.5rem; }
+  .backdrop { position: absolute; z-index: -1; inset: -3rem calc(-1 * clamp(1rem, 3vw, 2.25rem)) -2rem; overflow: hidden; pointer-events: none; mask-image: linear-gradient(to bottom, transparent, black 25%, black 45%, transparent); }
+  .backdrop img { width: 100%; height: 100%; object-fit: cover; filter: blur(48px) saturate(1.2); transform: scale(1.3); opacity: 0.55; }
+  .cover-slot { position: relative; flex: none; width: min(15rem, 38vw); display: grid; gap: 0.5rem; }
+  .cover { position: relative; display: block; width: 100%; aspect-ratio: 1; padding: 0; overflow: hidden; border-radius: 0.75rem; border: 0; background: var(--raised); box-shadow: 0 1.1rem 2.5rem rgb(0 0 0 / 0.3); }
+  .cover.empty { box-shadow: none; border: 2px dashed var(--line); background: var(--surface); }
+  .cover.empty:hover { border-color: var(--accent); }
+  .cover img { width: 100%; height: 100%; object-fit: cover; }
+  .cover-chip { position: absolute; left: 0.6rem; bottom: 0.6rem; display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.7rem; border-radius: 999px; background: rgb(0 0 0 / 0.55); color: white; font-size: 0.8rem; font-weight: 700; backdrop-filter: blur(8px); }
+  .cover-empty { height: 100%; display: grid; place-items: center; align-content: center; gap: 0.4rem; padding: 1rem; color: var(--faint); }
+  .cover-empty b { color: var(--text); }
+  .cover-empty small { font-size: 0.8rem; }
+  .remove { position: absolute; top: 0.5rem; right: 0.5rem; width: 2rem; height: 2rem; display: grid; place-items: center; border: 0; border-radius: 50%; background: rgb(0 0 0 / 0.55); color: white; backdrop-filter: blur(8px); }
+  .cover-note { font-size: 0.85rem; }
+  .copy { flex: 1; min-width: 0; display: grid; gap: 0.6rem; }
+  .copy > * { max-width: 100%; min-width: 0; }
+  .kind { color: var(--faint); font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+  .title { display: flex; align-items: center; gap: 0.5rem; border-bottom: 2px dashed color-mix(in srgb, var(--text) 25%, transparent); color: var(--faint); }
+  .title:focus-within { border-bottom-color: var(--accent); border-bottom-style: solid; }
+  .title input { flex: 1; min-width: 0; padding: 0.1rem 0; border: 0; outline: 0; background: none; color: var(--text); font-size: clamp(1.75rem, 4.5vw, 3.1rem); font-weight: 700; letter-spacing: -0.03em; line-height: 1.15; }
+  .title input::placeholder { color: var(--faint); opacity: 0.7; }
+  .owner { display: flex; align-items: center; gap: 0.5rem; color: var(--muted); }
+  .avatar { width: 1.5rem; flex: none; border-radius: 50%; overflow: hidden; }
+  .meta { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+  .chip { display: inline-flex; align-items: center; gap: 0.35rem; min-height: 2rem; max-width: 100%; padding: 0.3rem 0.8rem; border: 0; border-radius: 999px; background: color-mix(in srgb, var(--raised) 85%, transparent); color: var(--muted); font-size: 0.85rem; }
+  .chip.strong { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .chip.file { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; line-height: 1.4rem; }
+  .chip.action { color: var(--text); font-weight: 700; }
+  .chip.action:hover { background: var(--hover); }
+  .consent { display: flex; align-items: flex-start; gap: 0.7rem; padding: 0.75rem 0.9rem; border-radius: 0.75rem; background: var(--glass); border: 1px solid var(--line); backdrop-filter: blur(16px); color: var(--muted); font-size: 0.9rem; line-height: 1.4; cursor: pointer; }
+  .consent b { color: var(--text); margin-right: 0.25rem; }
+  .consent input, .switch input { accent-color: var(--accent); }
+  .consent input { width: 1.2rem; height: 1.2rem; flex: none; margin: 0.1rem 0 0; }
+
+  .details { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .card { display: grid; gap: 1rem; align-content: start; padding: 1.1rem; background: var(--surface); border: 1px solid var(--line); border-radius: 0.9rem; }
+  .field { display: grid; gap: 0.4rem; }
+  .field > span { font-size: 0.8rem; font-weight: 700; color: var(--faint); letter-spacing: 0.04em; }
+  .field :is(input, textarea) { width: 100%; min-width: 0; padding: 0.65rem 0.8rem; border: 1px solid var(--line); border-radius: 0.65rem; background: var(--bg); color: inherit; line-height: 1.4; }
+  .field textarea { resize: vertical; }
+  .field :is(input, textarea):focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .count { font-size: 0.8rem; text-align: right; }
+  .switch { display: flex; align-items: center; justify-content: space-between; gap: 1rem; cursor: pointer; }
+  .switch span { display: grid; gap: 0.15rem; }
+  .switch small { color: var(--muted); font-size: 0.85rem; line-height: 1.35; }
+  .switch input { appearance: none; flex: none; position: relative; width: 2.6rem; height: 1.5rem; margin: 0; border-radius: 999px; background: var(--hover); cursor: pointer; transition: background 0.15s; }
+  .switch input::after { content: ''; position: absolute; left: 0.2rem; top: 0.2rem; width: 1.1rem; height: 1.1rem; border-radius: 50%; background: var(--faint); transition: transform 0.15s; }
+  .switch input:checked { background: var(--accent); }
+  .switch input:checked::after { transform: translateX(1.1rem); background: var(--on-accent); }
+
+  .bar { position: sticky; bottom: calc(1rem + var(--bar-offset, 0px)); z-index: 3; display: flex; align-items: center; gap: 1rem; padding: 0.5rem 0.5rem 0.5rem 0.75rem; border-radius: 999px; background: var(--glass); border: 1px solid var(--line); backdrop-filter: blur(18px); box-shadow: 0 0.6rem 2rem rgb(0 0 0 / 0.14); }
+  .hint { flex: 1; text-align: right; color: var(--faint); font-size: 0.85rem; }
+  .submit { min-height: 3rem; padding: 0 1.75rem; font-size: 1.02rem; }
+
+  .jobs { display: grid; gap: 0.35rem; }
+  .jobs h2 { font-size: 0.95rem; color: var(--muted); }
+  .jobs ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 0.25rem; }
+  .jobs li { display: flex; align-items: center; gap: 0.75rem; min-height: 3rem; padding: 0.35rem 0.5rem; border-radius: 0.7rem; background: var(--surface); border: 1px solid var(--line); }
+  .jobs li.failed .job-icon { color: light-dark(#a3271f, #ff8f87); }
+  .job-icon { width: 2.25rem; height: 2.25rem; flex: none; display: grid; place-items: center; border-radius: 0.5rem; background: var(--raised); color: var(--accent); }
+  .job-line { flex: 1; min-width: 0; display: grid; gap: 0.3rem; overflow-wrap: anywhere; }
+  .meter { height: 0.3rem; border-radius: 999px; background: var(--hover); overflow: hidden; }
+  .meter i { display: block; height: 100%; background: var(--accent); transition: width 0.3s; }
   summary { cursor: pointer; padding: 0.6rem 0; }
+
+  @media (max-width: 720px) {
+    .drop { min-height: 18rem; }
+    .drop .wide { display: none; }
+    .drop .narrow { display: inline; }
+    .hero { flex-direction: column; align-items: center; text-align: center; gap: 1rem; padding-top: 0; }
+    .backdrop { inset: -2rem -1rem -2rem; }
+    .cover-slot { width: min(15rem, 56vw); }
+    .copy { width: 100%; justify-items: center; }
+    .title { width: 100%; }
+    .title input { text-align: center; }
+    .owner, .meta { justify-content: center; }
+    .meta { width: 100%; }
+    .copy :global(.preview) { width: 100%; }
+    .consent { text-align: left; }
+    .details { grid-template-columns: 1fr; }
+    .bar { gap: 0.5rem; padding: 0.4rem; }
+    .hint { display: none; }
+    .submit { flex: 1; min-width: 0; padding: 0 1rem; }
+  }
 </style>
