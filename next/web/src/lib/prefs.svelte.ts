@@ -5,6 +5,8 @@ import { invalidate } from '$app/navigation';
 import { authConfig } from './auth-config';
 
 const key = 'plyr-next:prefs';
+/** what is on screen now, for any account: read before first paint (app.html) and before the first load */
+const activeKey = 'plyr-next:prefs:active';
 export const themes = ['system', 'light', 'dark'] as const;
 export const accents = [
 	{ name: 'blue', color: '#6a9fff' },
@@ -50,7 +52,7 @@ type Account = {
 	busy: boolean;
 };
 
-export const prefs = $state({ ...defaults });
+export const prefs = $state({ ...defaults, ...(typeof localStorage === 'undefined' ? {} : decode(read(activeKey))) });
 let account: Account | undefined;
 let tealVerified = false;
 export function scrobblingEnabled() { return prefs.tealScrobbling && !!account && (!account.request || tealVerified); }
@@ -110,6 +112,7 @@ function apply(value: Partial<Preferences>) {
 	else delete root.dataset.font;
 	root.style.setProperty('--custom-accent', prefs.accent);
 	root.style.fontSize = prefs.scale === 1 ? '' : `${prefs.scale * 100}%`;
+	write(activeKey, prefs);
 }
 
 async function sync() {

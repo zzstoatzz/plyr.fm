@@ -76,7 +76,7 @@
 						</label>
 					{/each}
 					<label class="option swatch custom" class:selected={custom} title="custom accent">
-						<input type="color" aria-label="custom accent" value={prefs.accent} onchange={event => setPrefs({ accent: event.currentTarget.value.toLowerCase() })} />
+						<input type="color" aria-label={custom ? `custom accent, ${prefs.accent}, selected` : 'custom accent'} value={prefs.accent} onchange={event => setPrefs({ accent: event.currentTarget.value.toLowerCase() })} />
 						<span aria-hidden="true"><i style:background={custom ? prefs.accent : undefined}></i></span>
 					</label>
 				</div>
