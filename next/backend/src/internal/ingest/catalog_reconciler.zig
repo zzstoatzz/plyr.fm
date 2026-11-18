@@ -43,6 +43,11 @@ pub const Report = struct {
     }
 };
 
+const Rejection = struct {
+    did: []const u8,
+    outcome: projector.RepairOutcome,
+};
+
 pub fn reconcile(
     allocator: std.mem.Allocator,
     source: candidates.Source,
@@ -51,6 +56,8 @@ pub fn reconcile(
     var found = try source.list(allocator);
     defer found.deinit(allocator);
     var report: Report = .{ .candidates = found.items.len };
+    var rejections: std.ArrayList(Rejection) = .empty;
+    defer rejections.deinit(allocator);
     for (found.items) |did| {
         var arena = std.heap.ArenaAllocator.init(allocator);
         defer arena.deinit();
@@ -62,9 +69,16 @@ pub fn reconcile(
             .applied, .idempotent, .stale => report.verified += 1,
             .not_found => report.absent += 1,
             .rate_limited, .unavailable => report.retryable += 1,
-            else => report.rejected += 1,
+            else => {
+                report.rejected += 1;
+                try rejections.append(allocator, .{ .did = did, .outcome = outcome });
+            },
         }
         std.log.info("catalog repository {s}: {s}", .{ did, @tagName(outcome) });
+    }
+    // Repeated after the loop so they survive a truncated log tail.
+    for (rejections.items) |rejection| {
+        std.log.info("catalog repository {s} rejected: {s}", .{ rejection.did, @tagName(rejection.outcome) });
     }
     return report;
 }
