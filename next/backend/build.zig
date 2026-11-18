@@ -140,7 +140,13 @@ pub fn build(b: *std.Build) void {
     const cases = b.option(u64, "fuzz-cases", "cases per property (default: HEGEL_TEST_CASES, else 100)");
     const only = b.option([]const u8, "fuzz-only", "run the property groups whose name contains this");
     if (b.option(bool, "hegel", "build the property harnesses with the native Hegel engine") orelse false) {
-        if (b.lazyDependency("hegel", .{ .target = target, .optimize = optimize })) |hegel| {
+        // the engine runs every case: a debug build of it took twice as long
+        // as the harness code it drives, so it is always optimized
+        const hegel_dep = if (optimize == .debug)
+            b.lazyDependency("hegel", .{ .target = target, .optimize = .ReleaseSafe })
+        else
+            b.lazyDependency("hegel", .{ .target = target, .optimize = optimize });
+        if (hegel_dep) |hegel| {
             const fuzz_module = b.createModule(.{
                 .root_source_file = b.path("src/fuzz.zig"),
                 .target = target,
