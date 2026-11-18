@@ -9,7 +9,7 @@
 const std = @import("std");
 const zat = @import("zat");
 const lexicon_value = @import("lexicon_value.zig");
-const managed_space = @import("../space/managed_space.zig");
+const space_uri = @import("space_uri.zig");
 
 pub const max_features: usize = 10;
 pub const max_labels: usize = 10;
@@ -37,7 +37,7 @@ pub const Record = struct {
     support_gate_type: ?[]const u8,
     download_policy: []const u8,
     /// gated audio: the artist's space record holding the audio blob
-    audio_space: ?managed_space.SpaceRecordUri = null,
+    audio_space: ?space_uri.SpaceRecordUri = null,
     description: ?[]const u8,
     self_labels: []const []const u8,
     tags: []const []const u8 = &.{},
@@ -206,14 +206,14 @@ fn parseSupportGate(value: zat.cbor.Value) Error!?[]const u8 {
     return gate_type;
 }
 
-fn parseAudioSpace(value: zat.cbor.Value) Error!?managed_space.SpaceRecordUri {
+fn parseAudioSpace(value: zat.cbor.Value) Error!?space_uri.SpaceRecordUri {
     const field = value.get("audioSpace") orelse return null;
     const text = switch (field) {
         .text => |text| text,
         else => return error.InvalidAudioSpace,
     };
     if (text.len > 2048) return error.InvalidAudioSpace;
-    return managed_space.SpaceRecordUri.parse(text) orelse error.InvalidAudioSpace;
+    return space_uri.SpaceRecordUri.parse(text) orelse error.InvalidAudioSpace;
 }
 
 fn parseLabels(allocator: std.mem.Allocator, value: zat.cbor.Value) Error![]const []const u8 {

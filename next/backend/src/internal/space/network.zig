@@ -8,8 +8,8 @@ const managed_space = @import("managed_space.zig");
 const access = @import("access.zig");
 const policy = @import("policy.zig");
 const attested = @import("attested.zig");
-const safe_endpoint = @import("../ingest/safe_endpoint.zig");
-const pinned_tls = @import("../ingest/pinned_tls.zig");
+const safe_endpoint = @import("../net/safe_endpoint.zig");
+const pinned_tls = @import("../net/pinned_tls.zig");
 
 /// listRecords pages read per payment or policy collection
 const max_pages = 5;

@@ -1,6 +1,6 @@
 const std = @import("std");
 const zat = @import("zat");
-const auth = @import("../jams/auth.zig");
+const service_auth = @import("../atproto/service_auth.zig");
 
 pub const max_bytes = 1_610_612_736;
 pub const Processing = struct { recipe: []const u8, outputBudget: u64 };
@@ -32,7 +32,7 @@ pub const Settings = struct {
     base_url: []const u8,
     secret: []const u8,
     track_collection: []const u8,
-    auth_config: auth.Config,
+    identity: service_auth.Resolved,
     processing_enabled: bool = false,
 };
 
@@ -97,12 +97,12 @@ pub fn sign(a: std.mem.Allocator, claim: Claim, secret: []const u8) ![]const u8 
 pub fn authorize(a: std.mem.Allocator, io: std.Io, settings: Settings, body: []const u8) ![]const u8 {
     const request = std.json.parseFromSliceLeaky(Request, a, body, .{}) catch return error.InvalidUpload;
     if (request.processing != null and !settings.processing_enabled) return error.UploadUnavailable;
-    const owner = try auth.admitOwner(a, io, settings.auth_config, request.serviceToken);
-    try requireAllowed(a, owner.actor);
-    try validate(request, owner.actor, settings.track_collection);
+    const owner = (try service_auth.verifyResolved(a, io, request.serviceToken, settings.identity)).issuer;
+    try requireAllowed(a, owner);
+    try validate(request, owner, settings.track_collection);
     const expiry = (std.Io.Timestamp.now(io, .real).toSeconds() + 300) * 1000;
     const claim: Claim = .{
-        .owner = owner.actor,
+        .owner = owner,
         .uploadId = request.uploadId,
         .recordUri = request.recordUri,
         .sizeBytes = request.sizeBytes,
@@ -113,7 +113,7 @@ pub fn authorize(a: std.mem.Allocator, io: std.Io, settings: Settings, body: []c
         .expiresAt = expiry,
         .processing = request.processing,
     };
-    const hash = ownerHash(owner.actor);
+    const hash = ownerHash(owner);
     return std.json.Stringify.valueAlloc(a, .{
         .uploadUrl = try std.fmt.allocPrint(a, "{s}/v1/uploads/{s}/{s}", .{ settings.base_url, hash, request.uploadId }),
         .capability = try sign(a, claim, settings.secret),
@@ -171,14 +171,14 @@ test "operator upload pause remains enforced independently of record replay" {
     try requireAllowed(arena.allocator(), "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa");
 }
 
-pub fn fromEnvironment(a: std.mem.Allocator, track_collection: []const u8, identity: auth.Config) !?Settings {
+pub fn fromEnvironment(a: std.mem.Allocator, track_collection: []const u8, identity: service_auth.Resolved) !?Settings {
     const base = env("UPLOAD_BASE_URL") orelse return null;
     const secret = env("UPLOAD_CAPABILITY_SECRET") orelse return null;
     const parsed = std.Uri.parse(base) catch return error.InvalidUploadSettings;
     if (!std.mem.eql(u8, parsed.scheme, "https") or parsed.host == null or secret.len < 32 or !std.mem.endsWith(u8, track_collection, ".track")) return error.InvalidUploadSettings;
     var upload_auth = identity;
     upload_auth.method = try std.fmt.allocPrint(a, "{s}.upload.authorize", .{track_collection[0 .. track_collection.len - ".track".len]});
-    return .{ .base_url = std.mem.trimEnd(u8, base, "/"), .secret = secret, .track_collection = track_collection, .auth_config = upload_auth, .processing_enabled = std.mem.eql(u8, env("UPLOAD_PROCESSING_ENABLED") orelse "", "true") };
+    return .{ .base_url = std.mem.trimEnd(u8, base, "/"), .secret = secret, .track_collection = track_collection, .identity = upload_auth, .processing_enabled = std.mem.eql(u8, env("UPLOAD_PROCESSING_ENABLED") orelse "", "true") };
 }
 
 pub fn authorizedInternal(header: []const u8, secret: []const u8) bool {

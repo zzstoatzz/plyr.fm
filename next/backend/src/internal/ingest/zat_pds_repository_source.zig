@@ -7,8 +7,8 @@
 const std = @import("std");
 const zat = @import("zat");
 const repository_source = @import("repository_source.zig");
-const safe_endpoint = @import("safe_endpoint.zig");
-const pinned_tls = @import("pinned_tls.zig");
+const safe_endpoint = @import("../net/safe_endpoint.zig");
+const pinned_tls = @import("../net/pinned_tls.zig");
 const snapshot_verifier = @import("../projection/snapshot_verifier.zig");
 const collection_repository = @import("collection_repository.zig");
 

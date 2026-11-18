@@ -1,15 +1,15 @@
 const std = @import("std");
 const websocket = @import("websocket");
-const auth = @import("auth.zig");
-const model = @import("model.zig");
-const protocol = @import("protocol.zig");
-const room_store = @import("store.zig");
-const queue_record = @import("queue_record.zig");
-const account_preferences = @import("account_preferences.zig");
+const auth = @import("../jams/auth.zig");
+const model = @import("../jams/model.zig");
+const protocol = @import("../jams/protocol.zig");
+const room_store = @import("../jams/store.zig");
+const queue_record = @import("../jams/queue_record.zig");
+const account_preferences = @import("preferences.zig");
 const upload_admission = @import("../uploads/admission.zig");
 const download_authorization = @import("../downloads/authorization.zig");
 const upload_inspection = @import("../uploads/inspection.zig");
-const tickets = @import("tickets.zig");
+const tickets = @import("../jams/tickets.zig");
 const config = @import("../../config.zig");
 
 const allocator = std.heap.smp_allocator;
@@ -41,8 +41,8 @@ pub fn run(a: std.mem.Allocator, io: std.Io, settings: config.Config) !void {
     download_auth.method = try std.fmt.allocPrint(a, "{s}.download.authorize", .{settings.track_collection[0 .. settings.track_collection.len - ".track".len]});
     const budget_ms = if (env("DOWNLOAD_AUTH_BUDGET_MS")) |text| try std.fmt.parseInt(u64, text, 10) else 15_000;
     if (budget_ms == 0 or budget_ms > 15_000) return error.InvalidDownloadSettings;
-    context.download_settings = .{ .auth_config = download_auth, .track_collection = settings.track_collection, .audio_space_type = env("SPACE_TYPE_NSID"), .budget_ns = budget_ms * std.time.ns_per_ms };
-    context.upload_settings = try upload_admission.fromEnvironment(a, settings.track_collection, context.auth_config);
+    context.download_settings = .{ .identity = download_auth.identity(), .track_collection = settings.track_collection, .audio_space_type = env("SPACE_TYPE_NSID"), .budget_ns = budget_ms * std.time.ns_per_ms };
+    context.upload_settings = try upload_admission.fromEnvironment(a, settings.track_collection, context.auth_config.identity());
     defer context.store.deinit();
     defer context.tickets.deinit();
     defer if (context.records) |*records| records.deinit();

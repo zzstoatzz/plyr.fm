@@ -8,7 +8,8 @@
   Wire dependencies at startup rather than opening stores from handlers.
 - Keep domain and protocol decisions independent of HTTP and database clients.
   For coordinator changes, preserve the separation between
-  `src/internal/jams/server.zig`, its model/protocol and its persistence modules;
+  `src/internal/coordinator/server.zig` (sockets and HTTP), the room
+  model/protocol in `src/internal/jams/` and its persistence modules;
   do not put queue transition
   rules in socket handlers or implement them again in a store.
 - Keep discovery, verification and projection distinct. Ingestion transports
@@ -16,6 +17,9 @@
   before a store applies changes. Preserve atomic commit/snapshot application.
   A failed or partial fetch must never authorize deletion; see
   [collection proofs](docs/collection-proofs.md).
+- Verify service JWTs only through `src/internal/atproto/service_auth.zig`.
+  Fetch from PDS or DID hosts only through `src/internal/net/`. Each table has
+  one writing module; see [structure](docs/structure.md).
 - Extend the owning subsystem and its interface before adding another service
   or shared utility. Extract a responsibility when it has an independent
   contract; do not scatter one operation across forwarding-only modules.
