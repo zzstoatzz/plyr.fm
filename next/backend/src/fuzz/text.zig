@@ -116,7 +116,7 @@ fn graphemeModel(_: void, case: *hegel.TestCase) !void {
     var text: std.ArrayList(u8) = .empty;
     const palettes = [_][]const Symbol{
         std.enums.values(Symbol),
-        &.{ .flag, .flag, .letter, .mark },
+        &.{ .flag, .flag, .flag, .letter, .mark },
         &.{ .pict, .zwj, .mark, .letter },
         &.{ .cr, .lf, .mark, .letter },
         &.{ .pict, .zwj },
