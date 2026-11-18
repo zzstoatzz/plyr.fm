@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Fetch the build.zig.zon dependency tree with backoff. zig gives up on the
+# first failed download, and a cold cache reaches codeberg for pg's
+# translate-c, whose DNS has failed CI runs outright.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+delay=5
+for attempt in 1 2 3 4 5 6; do
+  if zig build --fetch -Dhegel; then exit 0; fi
+  echo "dependency fetch failed (attempt $attempt); retrying in ${delay}s" >&2
+  sleep "$delay"
+  delay=$((delay * 2))
+done
+exit 1

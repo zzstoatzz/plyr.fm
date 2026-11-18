@@ -80,7 +80,7 @@ jobs:
         run: zig fmt --check build.zig src
 
       - name: build
-        run: scripts/fetch-interop-fixtures && zig build
+        run: scripts/fetch-interop-fixtures && scripts/fetch-deps && zig build
 
       - name: test (with postgres + redis)
         env:
@@ -185,7 +185,7 @@ jobs:
       # the campaign manifest names the database; the runner passes no ambient env
       - name: property harnesses
         run: |
-          scripts/fetch-interop-fixtures
+          scripts/fetch-interop-fixtures && scripts/fetch-deps
           for name in parsers stores; do
             scripts/campaign run "$name" --out "/tmp/plyr-$name" || { tail -n 40 /tmp/plyr-$name/*.stderr.log; exit 1; }
           done
@@ -234,5 +234,5 @@ jobs:
 
       - name: plant each mutant
         run: |
-          scripts/fetch-interop-fixtures
+          scripts/fetch-interop-fixtures && scripts/fetch-deps
           scripts/campaign calibrate calibration --out /tmp/plyr-calibration || { grep -h '"outcome"' /tmp/plyr-calibration/run.json | sort | uniq -c; exit 1; }
