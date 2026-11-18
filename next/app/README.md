@@ -14,6 +14,24 @@ bun run android
 Use Bun and Node 22 or newer. The native OAuth redirect is
 `fm.plyr.next:/oauth/callback`. The API URL defaults to `https://api.next.plyr.fm`.
 
+## Shipping
+
+TestFlight builds come from `eas build --platform ios --profile production`
+(local or cloud) and `eas submit`. Builds carry `expo-updates` on the
+`production` channel with a fingerprint runtime version, so a change that only
+touches JavaScript or assets ships to installed builds without TestFlight:
+
+```sh
+cd next/app
+eas update --channel production --message "<what changed>"
+```
+
+The app checks on cold launch and waits up to 3 seconds for a new bundle, so
+closing and reopening the app picks it up. Anything that changes native code,
+config plugins or native dependencies changes the fingerprint; `eas update`
+then publishes for a runtime no installed build has, so ship a new build
+instead (`npx expo-updates fingerprint:generate` shows the current one).
+
 ## Account sync
 
 Every sign-in except an explicit device-only one requests one service-auth
