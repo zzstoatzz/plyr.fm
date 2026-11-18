@@ -15,7 +15,7 @@ pub const PostgresCommentQueryStore = struct {
     pool: *pg.Pool,
 
     pub fn store(self: *PostgresCommentQueryStore) CommentQueryStore {
-        return .{ .context = self, .list_by_subject_fn = listBySubjectOpaque };
+        return .{ .context = self, .list_by_subject_fn = listBySubjectOpaque, .comments_enabled_fn = commentsEnabledOpaque };
     }
 
     fn listBySubjectOpaque(
@@ -51,7 +51,24 @@ pub const PostgresCommentQueryStore = struct {
         }
         return items.toOwnedSlice(allocator) catch return error.OutOfMemory;
     }
+
+    fn commentsEnabledOpaque(context: *anyopaque, artist_did: []const u8) CommentQueryStore.Error!bool {
+        const self: *PostgresCommentQueryStore = @ptrCast(@alignCast(context));
+        var row = (self.pool.row(comments_enabled_query, .{artist_did}) catch |err| {
+            std.log.err("comment setting query failed: {}", .{err});
+            return error.IndexUnavailable;
+        }) orelse return false;
+        defer row.deinit() catch {};
+        return row.get(bool, 0) catch return error.CorruptProjection;
+    }
 };
+
+// The artist's own setting, kept with their other account settings. Prod's
+// default is off, so a missing row or key means no comments.
+const comments_enabled_query =
+    \\SELECT COALESCE(value->'allowComments' = 'true'::jsonb, false)
+    \\FROM plyr_account.preferences WHERE owner_did = $1
+;
 
 fn decodeRow(
     allocator: std.mem.Allocator,
@@ -204,4 +221,36 @@ test "PostgreSQL comments come back in playback order across track versions, fro
     try std.testing.expectEqual(@as(i64, 250_000), found[1].timestamp_ms);
     try std.testing.expectEqualStrings("one.example", found[1].author.handle.?);
     try std.testing.expectEqualStrings("https://cdn.example/one.jpg", found[1].author.avatar_url.?);
+}
+
+test "PostgreSQL comment setting is off unless the artist turned it on" {
+    const url_z = std.c.getenv("PLYR_ZIG_TEST_DATABASE_URL") orelse return error.SkipZigTest;
+    const allocator = std.testing.allocator;
+    var threaded = std.Io.Threaded.init(allocator, .{});
+    const io = threaded.io();
+    postgres_test_lock.lock(io);
+    defer postgres_test_lock.unlock(io);
+    var pool = try pg.Pool.initUri(io, allocator, try std.Uri.parse(std.mem.span(url_z)), .{ .size = 1 });
+    defer pool.deinit();
+    {
+        var row = (try pool.row("SELECT current_database()", .{})).?;
+        defer row.deinit() catch {};
+        if (!std.mem.eql(u8, try row.get([]const u8, 0), "zig_test")) return error.UnsafeTestDatabase;
+    }
+    _ = try pool.exec("DROP SCHEMA IF EXISTS plyr_account CASCADE", .{});
+    defer _ = pool.exec("DROP SCHEMA IF EXISTS plyr_account CASCADE", .{}) catch null;
+    _ = try pool.exec("CREATE SCHEMA plyr_account", .{});
+    _ = try pool.exec("CREATE TABLE plyr_account.preferences (owner_did TEXT PRIMARY KEY, value JSONB NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp())", .{});
+    _ = try pool.exec(
+        \\INSERT INTO plyr_account.preferences (owner_did, value) VALUES
+        \\  ('did:plc:on', '{"allowComments": true}'),
+        \\  ('did:plc:off', '{"allowComments": false}'),
+        \\  ('did:plc:themed', '{"theme": "dark"}')
+    , .{});
+    var implementation: PostgresCommentQueryStore = .{ .pool = pool };
+    const store = implementation.store();
+    try std.testing.expect(try store.commentsEnabled("did:plc:on"));
+    try std.testing.expect(!try store.commentsEnabled("did:plc:off"));
+    try std.testing.expect(!try store.commentsEnabled("did:plc:themed"));
+    try std.testing.expect(!try store.commentsEnabled("did:plc:nobody"));
 }

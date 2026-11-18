@@ -52,6 +52,11 @@ pub fn execute(
     if (current.projection.verification != .verified_repo) return .not_found;
 
     const comments = comment_store orelse return .unavailable;
+    const enabled = comments.commentsEnabled(current.artist.did) catch |err| return switch (err) {
+        error.CorruptProjection => .internal_error,
+        error.IndexUnavailable, error.OutOfMemory => .unavailable,
+    };
+    if (!enabled) return .{ .found = .{ .data = &.{}, .has_more = false, .comments_enabled = false } };
     const items = comments.listBySubject(allocator, .{
         .subject_uri = uri,
         .comment_collection = comment_collection,
@@ -119,9 +124,15 @@ const FakeTracks = struct {
 const FakeComments = struct {
     items: []const comment.Comment,
     asked: ?comment_store_module.SubjectRequest = null,
+    enabled: bool = true,
 
     fn store(self: *FakeComments) CommentQueryStore {
-        return .{ .context = self, .list_by_subject_fn = list };
+        return .{ .context = self, .list_by_subject_fn = list, .comments_enabled_fn = commentsEnabled };
+    }
+
+    fn commentsEnabled(context: *anyopaque, _: []const u8) CommentQueryStore.Error!bool {
+        const self: *FakeComments = @ptrCast(@alignCast(context));
+        return self.enabled;
     }
 
     fn list(
@@ -205,4 +216,23 @@ test "track comments reject legacy tracks and unknown query parameters" {
     try std.testing.expectEqual(Result.not_found, execute(a, tracks.store(), comments.store(), "fm.plyr.dev.track", "fm.plyr.dev.comment", "fm.plyr.dev.actor.profile", id, "/v1/tracks/x/comments"));
     try std.testing.expectEqual(Result.invalid_request, execute(a, tracks.store(), comments.store(), "fm.plyr.dev.track", "fm.plyr.dev.comment", "fm.plyr.dev.actor.profile", id, "/v1/tracks/x/comments?cursor=a"));
     try std.testing.expectEqual(Result.invalid_request, execute(a, tracks.store(), comments.store(), "fm.plyr.dev.track", "fm.plyr.dev.comment", "fm.plyr.dev.actor.profile", id, "/v1/tracks/x/comments?limit=0"));
+}
+
+test "track comments stay hidden until the artist opts in" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tracks = FakeTracks{ .value = exampleTrack("bafyreihdcss27ihlhmjofustbdvksrwyxnjj3hhk7azqs2626paka66c2a", .verified_repo) };
+    const items = [_]comment.Comment{exampleComment(42_000)};
+    var comments = FakeComments{ .items = &items, .enabled = false };
+    var id_buffer: [256]u8 = undefined;
+    const id = try track_id.encode(&id_buffer, tracks.value.?.record.uri);
+    const off = execute(a, tracks.store(), comments.store(), "fm.plyr.dev.track", "fm.plyr.dev.comment", "fm.plyr.dev.actor.profile", id, "/v1/tracks/x/comments");
+    try std.testing.expectEqual(@as(usize, 0), off.found.data.len);
+    try std.testing.expect(!off.found.comments_enabled);
+    try std.testing.expect(comments.asked == null);
+    comments.enabled = true;
+    const on = execute(a, tracks.store(), comments.store(), "fm.plyr.dev.track", "fm.plyr.dev.comment", "fm.plyr.dev.actor.profile", id, "/v1/tracks/x/comments");
+    try std.testing.expectEqual(@as(usize, 1), on.found.data.len);
+    try std.testing.expect(on.found.comments_enabled);
 }

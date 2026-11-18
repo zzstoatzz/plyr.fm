@@ -14,6 +14,8 @@ pub const SubjectRequest = struct {
 pub const CommentQueryStore = struct {
     context: *anyopaque,
     list_by_subject_fn: *const fn (*anyopaque, std.mem.Allocator, SubjectRequest) Error![]comment.Comment,
+    /// Whether the artist opted in to comments on their tracks. Off unless they did.
+    comments_enabled_fn: *const fn (*anyopaque, artist_did: []const u8) Error!bool,
 
     pub const Error = error{
         IndexUnavailable,
@@ -27,5 +29,9 @@ pub const CommentQueryStore = struct {
         request: SubjectRequest,
     ) Error![]comment.Comment {
         return self.list_by_subject_fn(self.context, allocator, request);
+    }
+
+    pub fn commentsEnabled(self: CommentQueryStore, artist_did: []const u8) Error!bool {
+        return self.comments_enabled_fn(self.context, artist_did);
     }
 };
