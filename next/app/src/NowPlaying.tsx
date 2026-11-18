@@ -162,7 +162,11 @@ export function NowPlaying({ track, close: leave, navigate: go }: {
   const wheelBlocks = useMemo(() => [pull.pan, pull.scroll], [pull.pan, pull.scroll]);
   const wheelOutside = useRef<WheelOutside>({ inside: false });
   // A touch anywhere else on the page closes an open chapter wheel; touches inside it mark themselves first as they bubble.
-  const closeWheelOutside = () => { const wheel = wheelOutside.current; if (!wheel.inside) wheel.close?.(); wheel.inside = false; };
+  const closeWheelOutside = () => {
+    const wheel = wheelOutside.current;
+    if (!wheel.inside && Date.now() - (wheel.openedAt ?? 0) > 400) wheel.close?.();
+    wheel.inside = false;
+  };
 
   dismiss.scrolled.current = event => {
     if (event.nativeEvent.contentOffset.y > 24) markHintSeen('now-playing.more-below');

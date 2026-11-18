@@ -13,7 +13,7 @@ const CANCEL_DX = 90;
 type Mode = 'closed' | 'drag' | 'browse';
 
 /** Shared with the page: the wheel marks touches that start inside it, and the page calls `close` for any other touch. */
-export type WheelOutside = { inside: boolean; close?: () => void };
+export type WheelOutside = { inside: boolean; openedAt?: number; close?: () => void };
 
 /** The "now: <chapter>" line under the scrubber, which opens a picker wheel of the tracklist.
  *  Hold and drag: each chapter is a detent with a selection haptic, and letting go jumps there. Letting go on the chapter
@@ -76,6 +76,8 @@ export function ChapterWheel({ chapters, current, seek, onPreview, onActive, gua
   useEffect(() => {
     if (!outside) return;
     outside.current.close = mode === 'browse' ? () => handlers.current.close() : undefined;
+    // While the wheel is still blooming open it's smaller than it will be, so a quick flick can land past its edge.
+    if (mode === 'browse') outside.current.openedAt = Date.now();
     return () => { outside.current.close = undefined; };
   }, [mode, outside]);
   useEffect(() => () => { onPreview?.(undefined); onActive?.(false); if (gesture.current?.hold) clearTimeout(gesture.current.hold); }, [onPreview, onActive]);
