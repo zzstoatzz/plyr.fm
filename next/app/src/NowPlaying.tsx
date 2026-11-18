@@ -186,7 +186,7 @@ export function NowPlaying({ track, close: leave, navigate: go }: {
           </Animated.View> : <View><PlayerControl icon={ChevronDown} label="Close" onPress={close} /></View>}
         </View>
         <Animated.View {...dismiss.contentStartHandlers} onLayout={event => setViewport(event.nativeEvent.layout.height)} style={[styles.scrollRegion, { transform: [{ translateY: motion.lift }] }]}>
-          <PullDetector gesture={pull.scroll}><Animated.ScrollView testID="now-playing-scroll" {...dismiss.scrollProps} scrollEventThrottle={16} scrollEnabled={!dismiss.dragging}
+          <PullDetector gesture={pull.scroll}><Animated.ScrollView testID="now-playing-scroll" {...dismiss.scrollProps} scrollEventThrottle={16} scrollEnabled={!dismiss.dragging} showsVerticalScrollIndicator={!dismiss.dragging}
             contentContainerStyle={styles.content}>
             <View testID="now-playing-hero" onLayout={event => { titleEnd.current.hero = event.nativeEvent.layout.y; }}
               style={[styles.hero, viewport > 0 && { minHeight: viewport - 36 }]}>
