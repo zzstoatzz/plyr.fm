@@ -49,10 +49,10 @@ function ChartTrack({ track, onPlay, card, lines }: { track: Track; onPlay: Play
       {playing && <PlayingArtworkOverlay />}
     </View>
     <View pointerEvents="box-none" style={styles.text}>
-      <Link href={`/track/${track.id}`} asChild><Pressable accessibilityRole="link" accessibilityLabel={`Track details: ${track.metadata.title}`} style={styles.link}>
+      <Link href={`/track/${track.id}`} asChild><Pressable accessibilityRole="link" accessibilityLabel={`Track details: ${track.metadata.title}`} hitSlop={{ top: 6, bottom: 2, right: 8 }} style={styles.link}>
         <Text numberOfLines={1} style={{ color: colors.text, fontSize: 14 * colors.scale, lineHeight: lines[0], fontWeight: '600' }}>{track.metadata.title}</Text>
       </Pressable></Link>
-      <Link href={`/u/${encodeURIComponent(track.artist.profile.handle || track.artist.did)}`} asChild><Pressable accessibilityRole="link" style={styles.link}>
+      <Link href={`/u/${encodeURIComponent(track.artist.profile.handle || track.artist.did)}`} asChild><Pressable accessibilityRole="link" hitSlop={{ top: 2, bottom: 6, right: 8 }} style={styles.link}>
         <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 12 * colors.scale, lineHeight: lines[1] }}>{artistName(track)}</Text>
       </Pressable></Link>
       <View pointerEvents="none"><Text numberOfLines={1} style={{ color: colors.faint, fontSize: 11 * colors.scale, lineHeight: lines[2] }}>{track.metrics.like_count} {track.metrics.like_count === 1 ? 'like' : 'likes'}</Text></View>
