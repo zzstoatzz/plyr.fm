@@ -1,4 +1,4 @@
-//! fm.plyr.getTopTracks and fm.plyr.getLatestTracks: the public charts as
+//! fm.plyr.unspecced.getTopTracks and getLatestTracks: the public charts as
 //! XRPC queries, so other atproto apps can show and play them. Each track is
 //! its verified record as the artist wrote it, plus the counts plyr derives.
 
@@ -229,26 +229,26 @@ test "catalog parameters follow the lexicon and ignore unknown ones" {
     defer arena_state.deinit();
     const a = arena_state.allocator();
 
-    const top = try parseTop(a, "/xrpc/fm.plyr.getTopTracks");
+    const top = try parseTop(a, "/xrpc/fm.plyr.unspecced.getTopTracks");
     try std.testing.expectEqual(top_default_limit, top.limit);
     try std.testing.expectEqual(track_chart.Period.all_time, top.period);
-    try std.testing.expectEqual(track_chart.Period.all_time, (try parseTop(a, "/xrpc/fm.plyr.getTopTracks?period=all")).period);
-    try std.testing.expectError(error.InvalidQuery, parseTop(a, "/xrpc/fm.plyr.getTopTracks?period=all_time"));
-    const week = try parseTop(a, "/xrpc/fm.plyr.getTopTracks?period=week&limit=50&extra=1");
+    try std.testing.expectEqual(track_chart.Period.all_time, (try parseTop(a, "/xrpc/fm.plyr.unspecced.getTopTracks?period=all")).period);
+    try std.testing.expectError(error.InvalidQuery, parseTop(a, "/xrpc/fm.plyr.unspecced.getTopTracks?period=all_time"));
+    const week = try parseTop(a, "/xrpc/fm.plyr.unspecced.getTopTracks?period=week&limit=50&extra=1");
     try std.testing.expectEqual(track_chart.Period.week, week.period);
     try std.testing.expectEqual(@as(usize, 50), week.limit);
-    try std.testing.expectError(error.InvalidQuery, parseTop(a, "/xrpc/fm.plyr.getTopTracks?period=year"));
-    try std.testing.expectError(error.InvalidQuery, parseTop(a, "/xrpc/fm.plyr.getTopTracks?limit=51"));
-    try std.testing.expectError(error.InvalidQuery, parseTop(a, "/xrpc/fm.plyr.getTopTracks?limit=0"));
+    try std.testing.expectError(error.InvalidQuery, parseTop(a, "/xrpc/fm.plyr.unspecced.getTopTracks?period=year"));
+    try std.testing.expectError(error.InvalidQuery, parseTop(a, "/xrpc/fm.plyr.unspecced.getTopTracks?limit=51"));
+    try std.testing.expectError(error.InvalidQuery, parseTop(a, "/xrpc/fm.plyr.unspecced.getTopTracks?limit=0"));
 
-    const latest = try parseLatest(a, "/xrpc/fm.plyr.getLatestTracks");
+    const latest = try parseLatest(a, "/xrpc/fm.plyr.unspecced.getLatestTracks");
     try std.testing.expectEqual(latest_default_limit, latest.limit);
     try std.testing.expect(latest.cursor == null);
-    const paged = try parseLatest(a, "/xrpc/fm.plyr.getLatestTracks?limit=5&cursor=abc");
+    const paged = try parseLatest(a, "/xrpc/fm.plyr.unspecced.getLatestTracks?limit=5&cursor=abc");
     try std.testing.expectEqual(@as(usize, 5), paged.limit);
     try std.testing.expectEqualStrings("abc", paged.cursor.?);
-    try std.testing.expectError(error.InvalidQuery, parseLatest(a, "/xrpc/fm.plyr.getLatestTracks?cursor="));
-    try std.testing.expectError(error.InvalidQuery, parseLatest(a, "/xrpc/fm.plyr.getLatestTracks?limit=100"));
+    try std.testing.expectError(error.InvalidQuery, parseLatest(a, "/xrpc/fm.plyr.unspecced.getLatestTracks?cursor="));
+    try std.testing.expectError(error.InvalidQuery, parseLatest(a, "/xrpc/fm.plyr.unspecced.getLatestTracks?limit=100"));
 }
 
 test "track views carry the stored record and leave out tracks without one" {

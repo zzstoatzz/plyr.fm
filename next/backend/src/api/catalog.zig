@@ -17,15 +17,19 @@ pub const Stores = struct {
     records: ?RecordJsonStore,
 };
 
-/// Which catalog method `path` names, if any. Method names share the track
-/// collection's namespace (`fm.plyr.track` -> `fm.plyr.getTopTracks`).
+/// Which catalog method `path` names, if any. Methods live in the track
+/// collection's namespace, marked experimental
+/// (`fm.plyr.track` -> `fm.plyr.unspecced.getTopTracks`).
 pub fn match(track_collection: []const u8, path: []const u8) ?Method {
     const xrpc = "/xrpc/";
     if (!std.mem.startsWith(u8, path, xrpc)) return null;
     const nsid = path[xrpc.len..];
     const namespace = namespaceOf(track_collection) orelse return null;
     if (!std.mem.startsWith(u8, nsid, namespace) or nsid.len <= namespace.len or nsid[namespace.len] != '.') return null;
-    const name = nsid[namespace.len + 1 ..];
+    const group = "unspecced.";
+    const rest = nsid[namespace.len + 1 ..];
+    if (!std.mem.startsWith(u8, rest, group)) return null;
+    const name = rest[group.len..];
     if (std.mem.eql(u8, name, "getTopTracks")) return .top_tracks;
     if (std.mem.eql(u8, name, "getLatestTracks")) return .latest_tracks;
     return null;
@@ -82,11 +86,13 @@ fn xrpcError(
 }
 
 test "catalog routes follow the track collection's namespace" {
-    try std.testing.expectEqual(Method.top_tracks, match("fm.plyr.track", "/xrpc/fm.plyr.getTopTracks").?);
-    try std.testing.expectEqual(Method.latest_tracks, match("fm.plyr.track", "/xrpc/fm.plyr.getLatestTracks").?);
-    try std.testing.expectEqual(Method.top_tracks, match("fm.plyr.dev.track", "/xrpc/fm.plyr.dev.getTopTracks").?);
-    try std.testing.expect(match("fm.plyr.track", "/xrpc/fm.plyr.dev.getTopTracks") == null);
-    try std.testing.expect(match("fm.plyr.dev.track", "/xrpc/fm.plyr.getTopTracks") == null);
+    try std.testing.expectEqual(Method.top_tracks, match("fm.plyr.track", "/xrpc/fm.plyr.unspecced.getTopTracks").?);
+    try std.testing.expectEqual(Method.latest_tracks, match("fm.plyr.track", "/xrpc/fm.plyr.unspecced.getLatestTracks").?);
+    try std.testing.expectEqual(Method.top_tracks, match("fm.plyr.dev.track", "/xrpc/fm.plyr.dev.unspecced.getTopTracks").?);
+    try std.testing.expect(match("fm.plyr.track", "/xrpc/fm.plyr.dev.unspecced.getTopTracks") == null);
+    try std.testing.expect(match("fm.plyr.dev.track", "/xrpc/fm.plyr.unspecced.getTopTracks") == null);
     try std.testing.expect(match("fm.plyr.track", "/xrpc/fm.plyrgetTopTracks") == null);
     try std.testing.expect(match("fm.plyr.track", "/v1/charts/tracks") == null);
+    try std.testing.expect(match("fm.plyr.track", "/xrpc/fm.plyr.getTopTracks") == null);
+    try std.testing.expect(match("fm.plyr.track", "/xrpc/fm.plyr.unspecced.getTopTrack") == null);
 }

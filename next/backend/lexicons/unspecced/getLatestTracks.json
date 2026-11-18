@@ -1,6 +1,6 @@
 {
   "lexicon": 1,
-  "id": "fm.plyr.getLatestTracks",
+  "id": "fm.plyr.unspecced.getLatestTracks",
   "defs": {
     "main": {
       "type": "query",
@@ -34,7 +34,7 @@
               "type": "array",
               "items": {
                 "type": "ref",
-                "ref": "fm.plyr.defs#trackView"
+                "ref": "fm.plyr.unspecced.defs#trackView"
               }
             }
           }

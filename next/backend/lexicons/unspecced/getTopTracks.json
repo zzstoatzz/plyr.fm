@@ -1,6 +1,6 @@
 {
   "lexicon": 1,
-  "id": "fm.plyr.getTopTracks",
+  "id": "fm.plyr.unspecced.getTopTracks",
   "defs": {
     "main": {
       "type": "query",
@@ -56,7 +56,7 @@
       "properties": {
         "track": {
           "type": "ref",
-          "ref": "fm.plyr.defs#trackView"
+          "ref": "fm.plyr.unspecced.defs#trackView"
         },
         "likeCount": {
           "type": "integer",
