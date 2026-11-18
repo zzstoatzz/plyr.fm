@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { PencilSimple as Pencil, ListPlus, SignIn as LogIn, ArrowLeft, Lock } from './icons';
+import { PencilSimple as Pencil, ListPlus, SignIn as LogIn, ArrowLeft, Lock, SkipForward, UserCircle } from './icons';
 import { useState } from 'react';
 import { Platform, View } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
@@ -11,11 +11,11 @@ import { TrackPlaylistPicker } from './AccountCatalog';
 import { ShareLink } from './ShareLink';
 import { TrackLikes } from './TrackLikes';
 import { usePlayback } from './playback';
-import { Sheet, type Anchor } from './Sheet';
+import { Sheet, type Anchor, type Lift } from './Sheet';
 import { DownloadAction } from './downloads/DownloadAction';
 import { AccessSheet } from './access/AccessSheet';
 
-export function TrackMenu({ track, close, actions, returnTo, anchor }: { track: Track; close: () => void; actions?: ReactNode; returnTo?: string; anchor?: Anchor }) {
+export function TrackMenu({ track, close, actions, returnTo, anchor, lift }: { track: Track; close: () => void; actions?: ReactNode; returnTo?: string; anchor?: Anchor; lift?: Lift }) {
   const { did } = useAuth();
   const player = usePlayback();
   const router = useRouter();
@@ -33,18 +33,23 @@ export function TrackMenu({ track, close, actions, returnTo, anchor }: { track: 
     else { close(); router.push(login); }
   }
   if (access) return <AccessSheet subject={{ noun: 'track', tracks: [track], skey: track.record.rkey, returnTo: `/track/${track.id}` }} close={close} />;
-  if (isPrivateTrack(track)) return <Sheet title="private track" close={close} anchor={anchor}>
+  function go(href: Href) {
+    if (Platform.OS === 'ios') setDestination(href);
+    else { close(); router.push(href); }
+  }
+  if (isPrivateTrack(track)) return <Sheet title="private track" close={close} anchor={anchor} lift={lift}>
     <ActionRow icon={ListPlus} label="add to private queue" onPress={() => { player.enqueue(track); close(); }} />
   </Sheet>;
-  return <Sheet title={playlists && did ? 'add to playlist' : 'track options'} close={close} visible={!destination} onDismiss={finishNavigation} anchor={anchor}>
+  return <Sheet title={playlists && did ? 'add to playlist' : 'track options'} close={close} visible={!destination} onDismiss={finishNavigation} anchor={anchor} lift={lift}>
 
     <View style={{ gap: 0 }}>
       {playlists && did ? <>
         <ActionRow icon={ArrowLeft} label="back" onPress={() => setPlaylists(false)} />
         <TrackPlaylistPicker key={did} track={track} />
       </> : <>
-        <TrackLikes track={track} menu returnTo={returnTo} onNavigate={close} />
+        <ActionRow icon={SkipForward} label="play next" onPress={() => { player.playNext(track); close(); }} />
         <ActionRow icon={ListPlus} label="add to queue" onPress={() => { player.enqueue(track); close(); }} />
+        <TrackLikes track={track} menu returnTo={returnTo} onNavigate={close} />
         {did === track.artist.did && <ActionRow icon={Pencil} label="edit track"
           href={Platform.OS === 'ios' ? undefined : `/edit-track/${track.id}`}
           onPress={Platform.OS === 'ios' ? () => setDestination(`/edit-track/${track.id}`) : close} />}
@@ -53,6 +58,7 @@ export function TrackMenu({ track, close, actions, returnTo, anchor }: { track: 
         <ShareLink menu path={`/track/${encodeURIComponent(track.id)}`} />
         {did ? <ActionRow icon={ListPlus} label="add to playlist" onPress={() => setPlaylists(true)} /> :
           <ActionRow icon={LogIn} label="sign in to save" href={{ pathname: '/login', params: { return_to: `/track/${track.id}` } }} onPress={close} />}
+        <ActionRow icon={UserCircle} label="go to artist" onPress={() => go({ pathname: '/u/[handle]', params: { handle: track.artist.profile.handle || track.artist.did } })} />
         {actions}
       </>}
     </View>

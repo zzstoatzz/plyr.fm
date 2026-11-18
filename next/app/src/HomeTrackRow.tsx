@@ -13,11 +13,14 @@ import type { Anchor } from './Sheet';
 import { PlayerControl } from './PlayerControl';
 import { PlayingArtworkOverlay } from './PlayingWave';
 import { useTrackPlayback } from './playback-context';
+import { GestureDetector } from 'react-native-gesture-handler';
+import { useTrackPress } from './TrackPress';
 
 export function HomeTrackRow({ track, tracks, onPlay, returnTo = '/', height }: { height?: number; track: Track; tracks: Track[]; onPlay: Play; returnTo?: string }) {
   const theme = useAppearance();
   const { playing, toggle } = useTrackPlayback(track);
-  return <View testID="home-track-row" style={{ height, paddingBottom: 8 }}><View style={[styles.row, cardSurface(theme)]}>
+  const { row, hold, menu } = useTrackPress(track, returnTo);
+  return <View testID="home-track-row" style={{ height, paddingBottom: 8 }}><GestureDetector gesture={hold}><View ref={row} style={[styles.row, cardSurface(theme)]}>
     <Pressable testID="track-play-control" accessibilityRole="button" accessibilityLabel={`${playing ? 'Pause' : 'Play'} ${track.metadata.title}`} onPress={() => toggle(() => onPlay(track, tracks))}
       style={({ pressed }) => [StyleSheet.absoluteFill, { borderRadius: 8, backgroundColor: pressed ? theme.hover : 'transparent' }]} />
     <View pointerEvents="none">
@@ -30,7 +33,8 @@ export function HomeTrackRow({ track, tracks, onPlay, returnTo = '/', height }: 
       <View pointerEvents="none"><Text numberOfLines={1} style={{ color: theme.faint, fontSize: 12 * theme.scale }}>{trackMeta(track)}</Text></View>
     </View>
     <HomeTrackActions track={track} returnTo={returnTo} />
-  </View></View>;
+    {menu}
+  </View></GestureDetector></View>;
 }
 
 export function HomeTrackActions({ track, returnTo = '/' }: { track: Track; returnTo?: string }) {

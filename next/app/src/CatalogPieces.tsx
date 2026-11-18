@@ -1,12 +1,9 @@
-import { trackArtwork, collectionArtwork, displayUrl } from '@plyr/next-core/artwork';
+import { collectionArtwork, displayUrl } from '@plyr/next-core/artwork';
 import { MusicNote as Music2, UserCircle as UserRound } from './icons';
 import { Text } from './Text';
 import { Link, type Href } from 'expo-router';
-import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Animated, PixelRatio, Pressable, StyleSheet, View } from 'react-native';
-import { PlayGlyph as PlayIcon } from './PlayerGlyph';
-import { PlayingWave } from './PlayingWave';
-import { useTrackPlayback } from './playback-context';
+import { useCallback, useContext, useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
+import { Animated, PixelRatio, Pressable, StyleSheet, View, type ViewInstance } from 'react-native';
 import type { ListSummary, Page, Track } from '@plyr/next-core/api';
 import { Action, Copy } from './controls';
 import { WaveLoading } from './WaveLoading';
@@ -176,9 +173,10 @@ export function Cover({ uri, size = 48, round = false, radius = 8, instant = fal
 }
 
 export function Row({
-  title, subtitle, meta, image, href, onPress, action, round = false, onNavigate,
+  title, subtitle, meta, image, href, onPress, action, round = false, onNavigate, rowRef,
 }: {
   title: string; subtitle?: string | null; meta?: string; image?: string | null; action?: ReactNode; round?: boolean; onNavigate?: () => void;
+  rowRef?: Ref<ViewInstance>;
 } & ({ href: Href; onPress?: never } | { href?: never; onPress: () => void })) {
   const colors = useAppearance();
   const compact = useContext(CompactRows);
@@ -190,7 +188,7 @@ export function Row({
       {meta ? <Text numberOfLines={1} style={{ color: colors.faint, fontFamily: colors.fontFamily, fontSize: 12 * colors.scale }}>{meta}</Text> : null}
     </View>
   </Pressable>;
-  return <View style={compact ? styles.compactRow : [styles.row, cardSurface(colors)]}>
+  return <View ref={rowRef} style={compact ? styles.compactRow : [styles.row, cardSurface(colors)]}>
     {href ? <Link href={href} asChild>{body}</Link> : body}
     {action}
   </View>;
@@ -203,48 +201,6 @@ export function artistName(track: Track) {
 export function trackMeta(track: Track) {
   const { play_count: plays, like_count: likes } = track.metrics;
   return `${compactCount(plays)} ${plays === 1 ? 'play' : 'plays'}` + (likes > 0 ? ` · ${compactCount(likes)} ${likes === 1 ? 'like' : 'likes'}` : '');
-}
-
-export function TrackRows({ tracks, onPlay }: { tracks: Track[]; onPlay: Play }) {
-  return <View style={styles.rows}>{tracks.map((track, index) => <Row
-    key={`${track.id}:${index}`}
-    href={{ pathname: '/track/[id]', params: { id: track.id } }}
-    title={track.metadata.title}
-    subtitle={artistName(track)}
-    meta={trackMeta(track)}
-    image={trackArtwork(track)}
-    action={<RowPlay track={track} onPress={() => onPlay(track, tracks)} />}
-  />)}</View>;
-}
-
-/** An album's tracks share its cover, so rows lead with the track number instead. */
-export function AlbumRows({ tracks, onPlay }: { tracks: Track[]; onPlay: Play }) {
-  return <View>{tracks.map((track, index) => <AlbumRow key={`${track.id}:${index}`} track={track} number={index + 1}
-    onPlay={() => onPlay(track, tracks)} last={index === tracks.length - 1} />)}</View>;
-}
-
-function AlbumRow({ track, number, onPlay, last }: { track: Track; number: number; onPlay: () => void; last: boolean }) {
-  const colors = useAppearance();
-  const { current } = useTrackPlayback(track);
-  return <View style={[styles.albumRow, !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.hairline }]}>
-    <Link href={{ pathname: '/track/[id]', params: { id: track.id } }} asChild>
-      <Pressable accessibilityRole="link" style={styles.rowLink}>
-        <Text style={[styles.number, { color: current ? colors.accent : colors.faint, fontFamily: colors.fontFamily, fontSize: 15 * colors.scale }]}>{number}</Text>
-        <Text numberOfLines={2} style={[styles.rowTitle, { flex: 1, color: current ? colors.accent : colors.text, fontFamily: colors.fontFamily, fontSize: 16 * colors.scale }]}>{track.metadata.title}</Text>
-        <Text style={{ color: colors.faint, fontFamily: colors.fontFamily, fontSize: 14 * colors.scale, fontVariant: ['tabular-nums'] }}>{formatDuration(track.metadata.duration_seconds)}</Text>
-      </Pressable>
-    </Link>
-    <RowPlay track={track} onPress={onPlay} />
-  </View>;
-}
-
-function RowPlay({ track, onPress }: { track: Track; onPress: () => void }) {
-  const colors = useAppearance();
-  const { playing, toggle } = useTrackPlayback(track);
-  return <Pressable accessibilityRole="button" accessibilityLabel={`${playing ? 'Pause' : 'Play'} ${track.metadata.title}`} onPress={() => toggle(onPress)}
-    style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
-    {playing ? <PlayingWave color={colors.accent} /> : <PlayIcon size={20} color={colors.text} fill={colors.text} />}
-  </Pressable>;
 }
 
 export function trackCount(count: number) {
@@ -290,6 +246,4 @@ const styles = StyleSheet.create({
   rowLink: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 4 },
   rowText: { flex: 1, minWidth: 0, gap: 3 },
   rowTitle: { fontWeight: '600' },
-  albumRow: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 56, paddingLeft: 2 },
-  number: { width: 24, textAlign: 'right', fontVariant: ['tabular-nums'] },
 });

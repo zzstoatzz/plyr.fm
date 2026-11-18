@@ -10,6 +10,8 @@ import { useTopTracks } from './use-top-tracks';
 import { Text } from './Text';
 import { PlayingArtworkOverlay } from './PlayingWave';
 import { useTrackPlayback } from './playback-context';
+import { GestureDetector } from 'react-native-gesture-handler';
+import { useTrackPress } from './TrackPress';
 import type { Track } from '@plyr/next-core/api';
 import type { StyleProp, ViewStyle } from 'react-native';
 
@@ -41,7 +43,8 @@ export function HomeChart({ onPlay }: { onPlay: Play }) {
 function ChartTrack({ track, onPlay, card, lines }: { track: Track; onPlay: Play; card: StyleProp<ViewStyle>; lines: number[] }) {
   const colors = useAppearance();
   const { playing, toggle } = useTrackPlayback(track);
-  return <View testID="home-chart-track" style={card}>
+  const { row, hold, menu } = useTrackPress(track);
+  return <GestureDetector gesture={hold}><View ref={row} testID="home-chart-track" style={card}>
     <Pressable testID="track-play-control" accessibilityRole="button" accessibilityLabel={`${playing ? 'Pause' : 'Play'} ${track.metadata.title}`} onPress={() => toggle(() => onPlay(track))}
       style={({ pressed }) => [StyleSheet.absoluteFill, { borderRadius: 8, backgroundColor: pressed ? colors.hover : 'transparent' }]} />
     <View pointerEvents="none">
@@ -57,7 +60,8 @@ function ChartTrack({ track, onPlay, card, lines }: { track: Track; onPlay: Play
       </Pressable></Link>
       <View pointerEvents="none"><Text numberOfLines={1} style={{ color: colors.faint, fontSize: 11 * colors.scale, lineHeight: lines[2] }}>{track.metrics.like_count} {track.metrics.like_count === 1 ? 'like' : 'likes'}</Text></View>
     </View>
-  </View>;
+    {menu}
+  </View></GestureDetector>;
 }
 
 const styles = StyleSheet.create({

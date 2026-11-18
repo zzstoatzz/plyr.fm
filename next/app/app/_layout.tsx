@@ -12,6 +12,7 @@ import { PlaybackProvider } from '../src/playback';
 import { RadioPlayback, RadioProvider } from '../src/radio-session';
 import { PlayerBar } from '../src/PlayerBar';
 import { Toasts } from '../src/Toasts';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { PreferencesProvider } from '../src/preference-context';
 import { pageFrame } from '../src/controls';
 import { Cover } from '../src/CatalogPieces';
@@ -30,7 +31,7 @@ export default function RootLayout() {
   const prefs = usePreferences(auth);
   useEffect(() => { void restoreAuth(); }, []);
   if (!fontsLoaded && !fontError) return null;
-  return <PreferencesProvider value={prefs}>
+  return <GestureHandlerRootView style={{ flex: 1 }}><PreferencesProvider value={prefs}>
     <AppearanceProvider preferences={prefs.preferences}>
       <PlaybackProvider playThrough={prefs.preferences.playThrough} keepPlaying={prefs.preferences.keepPlaying} volume={prefs.preferences.volume}>
         <RadioProvider>
@@ -39,7 +40,7 @@ export default function RootLayout() {
         </RadioProvider>
       </PlaybackProvider>
     </AppearanceProvider>
-  </PreferencesProvider>;
+  </PreferencesProvider></GestureHandlerRootView>;
 }
 
 function Shell() {

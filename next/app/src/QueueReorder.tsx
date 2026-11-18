@@ -1,7 +1,9 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { DotsSix as GripHorizontal } from './icons';
-import { PanResponder, StyleSheet, useWindowDimensions, View, type ScrollViewInstance, type ViewInstance } from 'react-native';
+import { Animated, PanResponder, StyleSheet, useWindowDimensions, View, type ScrollViewInstance, type ViewInstance } from 'react-native';
 import type { Track } from '@plyr/next-core/api';
+import * as Haptics from 'expo-haptics';
+import { GestureDetector, useCompetingGestures, usePanGesture } from 'react-native-gesture-handler';
 import { useAppearance } from './appearance';
 import { autoscrollVelocity, dragTarget, landingTop, rowShift, type Row } from '@plyr/next-core/behaviors/reorder';
 import { useCancelOnLeave } from './behaviors/use-cancel-on-leave';
@@ -14,8 +16,8 @@ interface Drag {
   top: number; bottom: number; rows: Row[];
 }
 
-export function QueueReorder({ queue, start, move, renderTrack, renderHeader, scrollRef, scrollMetrics, onDragging }: {
-  queue: Track[]; start: number; move(from: number, to: number): void;
+export function QueueReorder({ queue, start, move, remove, renderTrack, renderHeader, scrollRef, scrollMetrics, onDragging }: {
+  queue: Track[]; start: number; move(from: number, to: number): void; remove?(index: number): void;
   renderTrack(track: Track, index: number): ReactNode;
   /** Content above a row that stays put while that row is dragged, such as a section label. */
   renderHeader?(index: number): ReactNode;
@@ -64,6 +66,7 @@ export function QueueReorder({ queue, start, move, renderTrack, renderHeader, sc
     if (current.queue !== latest.current.queue || current.start !== latest.current.start) { cancel(); return; }
     const rawOffset = pointerY - current.initialY + scrollMetrics.current.offset - current.initialScroll;
     const { offset, to } = dragTarget(current.rows, current.from, rawOffset);
+    if (to !== current.to) void Haptics.selectionAsync().catch(() => {});
     active.current = { ...current, pointerY, offset, to };
     setDrag(active.current);
   }
@@ -120,7 +123,10 @@ export function QueueReorder({ queue, start, move, renderTrack, renderHeader, sc
         shadowColor: '#000', shadowOpacity: lifted ? (theme.dark ? 0.3 : 0.12) : 0,
         shadowRadius: 10, shadowOffset: { width: 0, height: 5 }, elevation: lifted ? 5 : 0
       }]}>
-        <View pointerEvents={drag ? 'none' : 'auto'} style={{ flex: 1, minWidth: 0 }}>{renderTrack(track, start + offset)}</View>
+        <RowHold begin={pointerY => begin(offset, pointerY)} update={update} finish={finish} cancel={cancel}
+          remove={remove && !drag ? () => remove(start + offset) : undefined}>
+          <View pointerEvents={drag ? 'none' : 'auto'} style={{ flex: 1, minWidth: 0 }}>{renderTrack(track, start + offset)}</View>
+        </RowHold>
         <DragHandle register={node => { if (node) handles.current.set(offset, node); else handles.current.delete(offset); }}
           position={offset + 1} total={queue.length - start} label={track.metadata.title} active={!!lifted}
           begin={pointerY => begin(offset, pointerY)} update={update} finish={finish} cancel={cancel}
@@ -128,6 +134,51 @@ export function QueueReorder({ queue, start, move, renderTrack, renderHeader, sc
       </View></Fragment>;
     })}
   </View>;
+}
+
+/** Hold anywhere on a row, then drag: a quick tap still plays it and a quick swipe still scrolls. */
+function RowHold({ begin, update, finish, cancel, remove, children }: {
+  begin(y: number): void; update(y: number): void; finish(): void; cancel(): void; remove?: () => void; children: ReactNode;
+}) {
+  const theme = useAppearance();
+  const latest = useRef({ begin, update, finish, cancel, remove });
+  latest.current = { begin, update, finish, cancel, remove };
+  const held = useRef(false);
+  const slide = useRef(new Animated.Value(0)).current;
+  const swiped = useRef(0);
+  const hold = usePanGesture({
+    runOnJS: true, activateAfterLongPress: 320,
+    onActivate: event => {
+      held.current = true;
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      latest.current.begin(event.absoluteY);
+    },
+    onUpdate: event => { if (held.current) latest.current.update(event.absoluteY); },
+    onFinalize: event => {
+      if (!held.current) return;
+      held.current = false;
+      if (event.canceled) latest.current.cancel(); else latest.current.finish();
+    },
+  });
+  const swipe = usePanGesture({
+    runOnJS: true, enabled: !!remove, activeOffsetX: -16, failOffsetY: [-12, 12],
+    onBegin: () => { swiped.current = 0; },
+    onUpdate: event => { swiped.current = Math.min(0, event.translationX); slide.setValue(swiped.current); },
+    onFinalize: event => {
+      if (!event.canceled && swiped.current < -96 && latest.current.remove) {
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+        latest.current.remove();
+        slide.setValue(0);
+      } else Animated.spring(slide, { toValue: 0, useNativeDriver: true }).start();
+    },
+  });
+  const gesture = useCompetingGestures(hold, swipe);
+  return <GestureDetector gesture={gesture}><View style={{ flex: 1, minWidth: 0, borderRadius: 10, overflow: 'hidden' }}>
+    {remove && <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: theme.danger, alignItems: 'flex-end', justifyContent: 'center', paddingRight: 16 }]}>
+      <Animated.Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 * theme.scale, opacity: slide.interpolate({ inputRange: [-96, -24, 0], outputRange: [1, 0.4, 0] }) }}>remove</Animated.Text>
+    </View>}
+    <Animated.View style={{ backgroundColor: theme.background, transform: [{ translateX: slide }] }}>{children}</Animated.View>
+  </View></GestureDetector>;
 }
 
 function DragHandle({ register, position, total, label, active, begin, update, finish, cancel, move }: {
