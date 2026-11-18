@@ -1,9 +1,9 @@
 import { Link, type Href } from 'expo-router';
-import type { ReactNode } from 'react';
-import { Image, Linking, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { useState, type ReactNode } from 'react';
+import { Image, Linking, PixelRatio, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import type { Artist, ArtistMetrics, Track } from '@plyr/next-core/api';
-import { trackArtwork } from '@plyr/next-core/artwork';
+import { displayUrl, trackArtwork } from '@plyr/next-core/artwork';
 import { useAppearance } from './appearance';
 import { Cover } from './CatalogPieces';
 import { catalogRuntime } from './CatalogMetrics';
@@ -37,7 +37,8 @@ export function ArtistHero({ artist, tracks, metrics, owner, onPlay, onShare, fo
   onPlay: (track: Track, queue: Track[]) => void; onShare: () => void; footer?: ReactNode;
 }) {
   const theme = useAppearance();
-  const { width } = useWindowDimensions();
+  const { width, fontScale } = useWindowDimensions();
+  const icon = (size: number) => Math.round(size * Math.min(fontScale * theme.scale, 1.6));
   const name = artist.display_name || artist.handle;
   const support = /^https?:\/\//i.test(artist.support_url ?? '') ? artist.support_url! : null;
   const top = metrics?.top_track ?? null;
@@ -46,12 +47,11 @@ export function ArtistHero({ artist, tracks, metrics, owner, onPlay, onShare, fo
   const backdrop = Math.round(TOP + 28 + AVATAR * 1.6);
   return <View style={{ marginHorizontal: -BLEED, marginTop: -TOP, paddingHorizontal: BLEED, paddingTop: TOP + 28 }}>
     {artist.avatar_url ? <View aria-hidden pointerEvents="none" style={[styles.backdrop, { height: backdrop }]}>
-      <Image source={{ uri: artist.avatar_url }} blurRadius={40} resizeMode="cover"
-        style={[StyleSheet.absoluteFill, { opacity: theme.dark ? 0.6 : 0.7, transform: [{ scale: 1.3 }] }]} />
+      <Backdrop uri={artist.avatar_url} opacity={theme.dark ? 0.6 : 0.7} />
       <Svg style={StyleSheet.absoluteFill} width={width} height={backdrop}>
         <Defs><LinearGradient id="artist-hero-fade" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset={0} stopColor={theme.background} stopOpacity={0.35} />
-          <Stop offset={0.3} stopColor={theme.background} stopOpacity={0} />
+          <Stop offset={0} stopColor={theme.background} stopOpacity={1} />
+          <Stop offset={0.28} stopColor={theme.background} stopOpacity={0} />
           <Stop offset={0.72} stopColor={theme.background} stopOpacity={0.8} />
           <Stop offset={1} stopColor={theme.background} stopOpacity={1} />
         </LinearGradient></Defs>
@@ -76,12 +76,12 @@ export function ArtistHero({ artist, tracks, metrics, owner, onPlay, onShare, fo
     </View> : null}
 
     <View style={styles.controls}>
-      {tracks[0] ? <Pill primary icon={<PlayIcon size={18} color={theme.onAccent} fill={theme.onAccent} />} label="Play"
+      {tracks[0] ? <Pill primary icon={<PlayIcon size={icon(18)} color={theme.onAccent} fill={theme.onAccent} />} label="Play"
         accessibilityLabel={`Play ${name}`} onPress={() => onPlay(tracks[0], tracks)} /> : null}
-      {tracks.length > 1 ? <Pill icon={<Shuffle size={19} color={theme.text} />} label="Shuffle"
+      {tracks.length > 1 ? <Pill icon={<Shuffle size={icon(19)} color={theme.text} />} label="Shuffle"
         accessibilityLabel={`Shuffle ${name}`} onPress={() => { const order = shuffled(tracks); onPlay(order[0], order); }} /> : null}
-      {owner ? <Round label="Edit profile" href="/edit-profile"><PencilSimple size={20} color={theme.text} /></Round> : null}
-      <Round label="Share" onPress={onShare}><ShareNetwork size={20} color={theme.text} /></Round>
+      {owner ? <Round label="Edit profile" href="/edit-profile"><PencilSimple size={icon(20)} color={theme.text} /></Round> : null}
+      <Round label="Share" onPress={onShare}><ShareNetwork size={icon(20)} color={theme.text} /></Round>
     </View>
 
     {support || top ? <View style={styles.cards}>
@@ -95,6 +95,15 @@ export function ArtistHero({ artist, tracks, metrics, owner, onPlay, onShare, fo
     </View> : null}
     {footer}
   </View>;
+}
+
+/** A small rendition is plenty under a heavy blur; the original is the fallback. */
+function Backdrop({ uri, opacity }: { uri: string; opacity: number }) {
+  const sources = [...new Set([displayUrl(uri, 160, PixelRatio.get()), uri])];
+  const [index, setIndex] = useState(0);
+  if (index >= sources.length) return null;
+  return <Image aria-hidden source={{ uri: sources[index] }} blurRadius={40} resizeMode="cover" onError={() => setIndex(index + 1)}
+    style={[StyleSheet.absoluteFill, { opacity, transform: [{ scale: 1.3 }] }]} />;
 }
 
 function Chip({ value, label }: { value: string; label: string }) {
@@ -113,14 +122,16 @@ function Pill({ icon, label, accessibilityLabel, onPress, primary }: {
   return <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel} onPress={onPress}
     style={({ pressed }) => [styles.pill, { backgroundColor: primary ? theme.accent : theme.raised, opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] }]}>
     {icon}
-    <Text numberOfLines={1} style={{ color: primary ? theme.onAccent : theme.text, fontFamily: theme.fontFamily, fontSize: 17 * theme.scale, fontWeight: '700' }}>{label}</Text>
+    <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={{ flexShrink: 1, color: primary ? theme.onAccent : theme.text, fontFamily: theme.fontFamily, fontSize: 17 * theme.scale, fontWeight: '700' }}>{label}</Text>
   </Pressable>;
 }
 
 function Round({ label, onPress, href, children }: { label: string; onPress?: () => void; href?: Href; children: ReactNode }) {
   const theme = useAppearance();
+  const [pressed, setPressed] = useState(false);
   const control = <Pressable accessibilityRole={href ? 'link' : 'button'} accessibilityLabel={label} onPress={onPress}
-    style={({ pressed }) => [styles.round, { backgroundColor: theme.raised, opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.94 : 1 }] }]}>
+    onPressIn={() => setPressed(true)} onPressOut={() => setPressed(false)}
+    style={[styles.round, { backgroundColor: theme.raised, opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.94 : 1 }] }]}>
     {children}
   </Pressable>;
   return href ? <Link href={href} asChild>{control}</Link> : control;
@@ -130,8 +141,11 @@ function InfoCard({ eyebrow, title, meta, lead, href, onPress, accessibilityLabe
   eyebrow: string; title: string; meta?: string; lead: ReactNode; accessibilityLabel: string; href?: Href; onPress?: () => void;
 }) {
   const theme = useAppearance();
+  const [pressed, setPressed] = useState(false);
+  // Static style: `<Link asChild>` flattens its child's style, which drops a style function.
   const card = <Pressable accessibilityRole="link" accessibilityLabel={accessibilityLabel} onPress={onPress}
-    style={({ pressed }) => [styles.card, { backgroundColor: pressed ? theme.hover : theme.raised }]}>
+    onPressIn={() => setPressed(true)} onPressOut={() => setPressed(false)}
+    style={[styles.card, { backgroundColor: pressed ? theme.hover : theme.raised }]}>
     {lead}
     <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
       <Text numberOfLines={1} style={{ color: theme.faint, fontFamily: theme.fontFamily, fontSize: 12 * theme.scale, fontWeight: '600', letterSpacing: 0.6, textTransform: 'uppercase' }}>{eyebrow}</Text>
