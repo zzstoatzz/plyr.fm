@@ -10,6 +10,7 @@
 	import { canToggleTrack } from '@plyr/next-core/track-revision';
 	import { trackArtwork } from '@plyr/next-core/artwork';
 	import { api } from '$lib/api';
+	import { comments as trackComments } from '$lib/listening/comments';
 	import { parseChapters, clock } from '@plyr/next-core/chapters';
 	import { player } from '$lib/player.svelte';
 	import { artistName, trackHref } from '$lib/tracks';
@@ -22,6 +23,17 @@
 	let sharedTrack = $state<string>();
 	let comments = $state<HTMLDialogElement>();
 	let openedTrack = $state<string>();
+	let commentsEnabled = $state(false);
+	// Only artists who turned comments on get a comments button. A failed read keeps it, so the panel can retry.
+	$effect(() => {
+		if (!canDiscuss) return;
+		const id = track.id;
+		const update = () => { const { enabled, error } = trackComments.snapshot(id); commentsEnabled = enabled || error; };
+		const unsubscribe = trackComments.subscribe(id, update);
+		update();
+		if (!trackComments.hasLoaded(id)) trackComments.loadComments(id);
+		return unsubscribe;
+	});
 	let openedAt: string | undefined;
 	let album = $state.raw<{ trackId: string; id: string }>();
 	const chapterList = $derived(parseChapters(track.metadata.description ?? '', track.metadata.duration_seconds ?? undefined));
@@ -127,7 +139,7 @@
 			<div class="actions">
 				<button class="icon-button" type="button" aria-label="Share track" onclick={() => share()}><Icon name="share" size={20} /></button>
 				{#if active && player.position >= 1}<button class="text-button" type="button" onclick={() => share(player.position)}>share at {clock(player.position)}</button>{/if}
-				<button class="text-button" type="button" aria-haspopup="dialog" onclick={openComments}>comments</button>
+				{#if commentsEnabled}<button class="text-button" type="button" aria-haspopup="dialog" onclick={openComments}>comments</button>{/if}
 			</div>
 		{:else if ownerActions}
 			{@render ownerActions()}

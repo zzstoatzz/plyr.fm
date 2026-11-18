@@ -1,24 +1,25 @@
-import type { Artist, Page, Track, TrackComment } from './api.ts';
+import type { Artist, Track, TrackComment, TrackCommentPage } from './api.ts';
 import type { createPublicPds } from './pds.ts';
 
 export const MAX_COMMENT_BYTES = 1000;
-export interface Snapshot { comments: TrackComment[]; loading: boolean; error: boolean }
+/** `enabled` stays false until the server says the artist opted in, so nothing invites a comment the artist didn't ask for. */
+export interface Snapshot { comments: TrackComment[]; loading: boolean; error: boolean; enabled: boolean }
 
-const empty: Snapshot = { comments: [], loading: true, error: false };
+const empty: Snapshot = { comments: [], loading: true, error: false, enabled: false };
 type CommentAccount = { did: string | null; handle: string | null; rpc: unknown };
 type CommentWriter = Pick<ReturnType<typeof createPublicPds>, 'newCommentAttempt' | 'comment' | 'deleteComment'>;
 
 interface Options<Account extends CommentAccount> {
   api: {
     artist(did: string): Promise<Artist>;
-    trackComments(id: string): Promise<Page<TrackComment>>;
+    trackComments(id: string): Promise<TrackCommentPage>;
   };
   getAuth(): Account;
   createPds(account: NoInfer<Account>): CommentWriter;
 }
 
 export function createTrackComments<Account extends CommentAccount>({ api, getAuth, createPds }: Options<Account>) {
-  interface Entry { server?: TrackComment[]; error: boolean; loading: boolean; mine: TrackComment[]; removed: Set<string>; snapshot: Snapshot }
+  interface Entry { server?: TrackComment[]; enabled: boolean; error: boolean; loading: boolean; mine: TrackComment[]; removed: Set<string>; snapshot: Snapshot }
   const entries = new Map<string, Entry>();
   const listeners = new Map<string, Set<() => void>>();
   const profiles = new Map<string, Promise<Artist | undefined>>();
@@ -28,7 +29,7 @@ export function createTrackComments<Account extends CommentAccount>({ api, getAu
 
   function entry(id: string) {
     let found = entries.get(id);
-    if (!found) { found = { error: false, loading: false, mine: [], removed: new Set(), snapshot: empty }; entries.set(id, found); }
+    if (!found) { found = { enabled: false, error: false, loading: false, mine: [], removed: new Set(), snapshot: empty }; entries.set(id, found); }
     return found;
   }
 
@@ -37,7 +38,7 @@ export function createTrackComments<Account extends CommentAccount>({ api, getAu
     const indexed = new Set(current.server?.map(comment => comment.record.uri));
     current.mine = current.mine.filter(comment => !indexed.has(comment.record.uri));
     const comments = [...(current.server ?? []), ...current.mine].filter(comment => !current.removed.has(comment.record.uri)).sort(byTime);
-    current.snapshot = { comments, loading: current.loading && !current.server, error: current.error && !current.server };
+    current.snapshot = { comments: current.enabled ? comments : [], loading: current.loading && !current.server, error: current.error && !current.server, enabled: current.enabled };
     for (const listener of listeners.get(id) ?? []) listener();
   }
 
@@ -47,7 +48,7 @@ export function createTrackComments<Account extends CommentAccount>({ api, getAu
     current.loading = true;
     current.error = false;
     publish(id);
-    api.trackComments(id).then(page => { current.server = page.data; }, () => { current.error = true; }).finally(() => {
+    api.trackComments(id).then(page => { current.server = page.data; current.enabled = page.comments_enabled === true; }, () => { current.error = true; }).finally(() => {
       current.loading = false;
       publish(id);
     });
@@ -65,6 +66,7 @@ export function createTrackComments<Account extends CommentAccount>({ api, getAu
   async function addComment(track: Track, text: string, timestampMs: number): Promise<void> {
     const auth = getAuth();
     if (!auth.did || !auth.rpc) throw new Error('sign in to comment');
+    if (!entry(track.id).enabled) throw new Error('comments are off for this track');
     const writer = createPds(auth);
     const moment = Math.max(0, Math.round(timestampMs));
     const key = JSON.stringify([auth.did, track.record.uri, track.record.cid, text, moment]);

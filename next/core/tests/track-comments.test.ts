@@ -27,7 +27,7 @@ test('a pending comment survives indexing lag and failed deletion', async () => 
   const store = createTrackComments({
     api: {
       async artist() { return listener; },
-      async trackComments() { return { object: 'list', data: projected, has_more: false }; }
+      async trackComments() { return { object: 'list', data: projected, has_more: false, comments_enabled: true }; }
     },
     getAuth: () => ({ did: listener.did, handle: listener.handle, rpc: {} }),
     createPds: () => ({
@@ -64,4 +64,34 @@ test('a pending comment survives indexing lag and failed deletion', async () => 
   await store.removeComment(track.id, projected[0]);
   await refresh();
   assert.deepEqual(comments(), []);
+});
+
+test('comments stay hidden and uninvited until the artist has opted in', async () => {
+  let enabled: boolean | undefined;
+  const store = createTrackComments({
+    api: {
+      async artist() { return listener; },
+      async trackComments() { return { object: 'list', data: [], has_more: false, comments_enabled: enabled }; }
+    },
+    getAuth: () => ({ did: listener.did, handle: listener.handle, rpc: {} }),
+    createPds: () => ({
+      newCommentAttempt() { return { rkey: '1', createdAt: '2026-11-18T00:00:00Z' }; },
+      async comment() { throw new Error('should not write'); },
+      async deleteComment() {}
+    })
+  });
+  assert.equal(store.snapshot(track.id).enabled, false);
+  store.loadComments(track.id);
+  assert.equal(store.snapshot(track.id).enabled, false, 'unknown while loading');
+  await setImmediate();
+  assert.equal(store.snapshot(track.id).enabled, false, 'an older server without the field reads as off');
+  await assert.rejects(store.addComment(track, 'hi', 0), /comments are off/);
+  enabled = false;
+  store.loadComments(track.id);
+  await setImmediate();
+  assert.equal(store.snapshot(track.id).enabled, false);
+  enabled = true;
+  store.loadComments(track.id);
+  await setImmediate();
+  assert.equal(store.snapshot(track.id).enabled, true);
 });

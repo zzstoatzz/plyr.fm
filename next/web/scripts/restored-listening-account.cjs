@@ -33,8 +33,8 @@ module.exports = async function restoredListening({ page, context, origin, coord
     } });
     const found = catalog.find(item => url.pathname === '/v1/tracks/' + item.id);
     if (found) return route.fulfill({ json: found });
-    if (url.pathname.startsWith('/v1/tracks/') && url.pathname.endsWith('/comments')) return route.fulfill({ json: { object: 'list', data: [], has_more: false } });
-    if (url.pathname.startsWith('/v1/tracks/') && url.pathname.endsWith('/likes')) return route.fulfill({ json: { object: 'list', data: [], has_more: false } });
+    if (url.pathname.startsWith('/v1/tracks/') && url.pathname.endsWith('/comments')) return route.fulfill({ json: { object: 'list', data: [], has_more: false, comments_enabled: true } });
+    if (url.pathname.startsWith('/v1/tracks/') && url.pathname.endsWith('/likes')) return route.fulfill({ json: { object: 'list', data: [], has_more: false, comments_enabled: true } });
     return route.fallback();
   });
   await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'home', exact: true }).click();

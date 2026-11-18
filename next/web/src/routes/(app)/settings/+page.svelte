@@ -88,6 +88,15 @@
 	</section>
 
 	{#if account.did}
+		<section aria-labelledby="your-tracks">
+			<h2 id="your-tracks">your tracks</h2>
+			<div class="card">
+				<label class="toggle">
+					<span><strong>timed comments</strong><small id="comments-detail">let listeners leave comments on your tracks</small></span>
+					<input type="checkbox" role="switch" aria-label="timed comments" aria-describedby="comments-detail" checked={prefs.allowComments} onchange={event => setPrefs({ allowComments: event.currentTarget.checked })} />
+				</label>
+			</div>
+		</section>
 		<section aria-labelledby="integrations">
 			<h2 id="integrations">integrations</h2>
 			<div class="card">

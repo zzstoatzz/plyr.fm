@@ -31,7 +31,8 @@ const coordinator = 'https://jams.next.plyr.fm';
     await context.route('https://typeahead.waow.tech/**', route => route.fulfill({ json: { actors: [] } }));
     await page.route('https://api.next.plyr.fm/**', route => {
       const pathname = new URL(route.request().url()).pathname;
-      if (pathname.endsWith('/comments') && failCommentsRead) return route.fulfill({ status: 503, json: {} });
+      if (pathname.endsWith('/comments')) return failCommentsRead ? route.fulfill({ status: 503, json: {} })
+        : route.fulfill({ json: { object: 'list', data: [], has_more: false, comments_enabled: true } });
       if (pathname === '/v1/artists/' + encodeURIComponent(accounts[handle].did)) {
         return route.fulfill({ json: { avatar_url: 'https://panel-fixture.invalid/avatar.svg' } });
       }
@@ -135,6 +136,10 @@ const coordinator = 'https://jams.next.plyr.fm';
     await page.getByRole('button', { name: 'comments', exact: true }).click();
     const panel = page.getByRole('dialog', { name: 'comments' });
     const draft = panel.getByRole('textbox', { name: 'add a comment' });
+    await panel.getByText('could not load comments.', { exact: false }).waitFor();
+    assert.equal(await draft.count(), 0, 'no composer until the artist is known to allow comments');
+    failCommentsRead = false;
+    await panel.getByRole('button', { name: 'try again', exact: true }).click();
     await draft.fill('fixture comment at the restored position');
     let failComment = true;
     await context.route('https://pds.fixture.test/xrpc/com.atproto.repo.createRecord', route => {
@@ -149,7 +154,6 @@ const coordinator = 'https://jams.next.plyr.fm';
     await panel.getByRole('button', { name: 'post comment' }).click();
     await panel.getByText('fixture comment at the restored position', { exact: true }).waitFor();
     assert.equal(discardCommentReceipt, false, 'the accepted PDS response was discarded');
-    await panel.getByText('could not load comments.', { exact: false }).waitFor();
 
     const pds = 'http://127.0.0.1:5197/xrpc/';
     const records = pds + 'com.atproto.repo.listRecords?' + new URLSearchParams({
@@ -163,8 +167,6 @@ const coordinator = 'https://jams.next.plyr.fm';
     await panel.getByRole('button', { name: 'Delete comment', exact: true }).click();
     await panel.getByRole('button', { name: 'delete', exact: true }).click();
     await deleted;
-    failCommentsRead = false;
-    await panel.getByRole('button', { name: 'try again', exact: true }).click();
     await panel.getByText('no comments yet.').waitFor();
     assert.deepEqual((await fetch(records).then(response => response.json())).records, []);
     await panel.getByRole('button', { name: 'Close comments' }).click();

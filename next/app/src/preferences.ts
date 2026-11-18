@@ -10,7 +10,7 @@ export type PreferenceStatus = 'local' | 'syncing' | 'synced' | 'error';
 
 const KEY = 'plyr-next:prefs';
 const DEFAULTS: Preferences = {
-	theme: 'system', accent: '#6a9fff', font: 'comic-sans', keepPlaying: false, playThrough: true, tealScrobbling: false, volume: 1, scale: 1, hiddenTags: DEFAULT_HIDDEN_TAGS
+	theme: 'system', accent: '#6a9fff', font: 'comic-sans', keepPlaying: false, playThrough: true, tealScrobbling: false, allowComments: false, volume: 1, scale: 1, hiddenTags: DEFAULT_HIDDEN_TAGS
 };
 type Account = {
 	did: string;
@@ -24,7 +24,7 @@ type Account = {
 function loadLocal(): Preferences {
 	try {
 		const local = JSON.parse(readLocal(KEY) ?? '{}');
-		return { ...DEFAULTS, ...local, tealScrobbling: false, hiddenTags: hiddenTags(local?.hiddenTags) ?? DEFAULT_HIDDEN_TAGS };
+		return { ...DEFAULTS, ...local, tealScrobbling: false, allowComments: false, hiddenTags: hiddenTags(local?.hiddenTags) ?? DEFAULT_HIDDEN_TAGS };
 	} catch {
 		return DEFAULTS;
 	}

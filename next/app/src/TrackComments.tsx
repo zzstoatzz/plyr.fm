@@ -26,12 +26,13 @@ export function TrackComments({ track }: { track: Track }) {
   const passing = current && player.status.playing
     ? passingComment(comments.comments, comment => comment.timestamp_ms, positionMs) : undefined;
   const count = comments.comments.length;
+  // Comments are the artist's choice: no section at all until they've turned them on.
+  if (!comments.enabled && !comments.error) return null;
   return <View style={styles.section}>
     <Text accessibilityRole="header" aria-level={2} style={{ color: theme.text, fontSize: 17 * theme.scale, fontWeight: '700' }}>
       comments{count ? <Text style={{ color: theme.faint, fontWeight: '400' }}> {count}</Text> : null}
     </Text>
-    {comments.loading ? <Text style={{ color: theme.muted, fontSize: 14 * theme.scale }}>loading comments…</Text>
-      : comments.error ? <View style={styles.status}>
+    {comments.error ? <View style={styles.status}>
         <Text style={{ color: theme.muted, fontSize: 14 * theme.scale }}>couldn’t load comments.</Text>
         <Pressable accessibilityRole="button" accessibilityLabel="Retry loading comments" onPress={comments.retry} style={styles.retry}>
           <Text style={{ color: theme.accent, fontSize: 14 * theme.scale, fontWeight: '600' }}>try again</Text>

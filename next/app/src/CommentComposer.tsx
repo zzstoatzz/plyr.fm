@@ -10,7 +10,7 @@ import { inputFontSize } from './controls';
 import { ArrowUp } from './icons';
 import { Text } from './Text';
 import { toast } from './toast';
-import { addComment } from './track-comments';
+import { addComment, useTrackComments } from './track-comments';
 
 const bytes = (text: string) => new TextEncoder().encode(text).length;
 
@@ -24,11 +24,14 @@ export function CommentComposer({ track, positionMs, returnTo }: { track: Track;
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string>();
   const [focused, setFocused] = useState(false);
+  const { enabled } = useTrackComments(track.id);
   const moment = pinned ?? positionMs;
   const size = bytes(text.trim());
   const tooLong = size > MAX_COMMENT_BYTES;
   const ready = !!text.trim() && !tooLong && !sending;
   const frame = { borderColor: focused ? theme.accent : theme.border, backgroundColor: theme.background };
+  // Only artists who turned comments on get a composer.
+  if (!enabled) return null;
   if (!auth.did || !auth.commenting) {
     return <Link href={{ pathname: '/login', params: { return_to: returnTo } }} asChild>
       <Pressable accessibilityRole="link" accessibilityLabel={auth.did ? 'Reconnect to comment' : 'Sign in to comment'} style={StyleSheet.flatten([styles.frame, frame])}>

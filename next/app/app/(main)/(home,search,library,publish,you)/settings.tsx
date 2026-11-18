@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, Palette, Headphones, UserCircle as UserRound } from '../../../src/icons';
+import { ChatCircle, Check, Palette, Headphones, UserCircle as UserRound } from '../../../src/icons';
 import { Pressable, Switch, View } from 'react-native';
 import { useAuth, logout } from '../../../src/auth';
 import { useAppearance } from '../../../src/appearance';
@@ -48,6 +48,11 @@ export default function Settings() {
       </SettingsRow>)}
       <SettingsRow label="share playback log" detail="recent play attempts on this device, to send when tracks won’t play" disclosure={false} onPress={() => void sharePlaybackLog(!!auth.did, auth.ready)} />
     </SettingsSection>
+    {auth.did && <SettingsSection title="your tracks" icon={ChatCircle}>
+      <SettingsRow label="timed comments" detail="let listeners leave comments on your tracks">
+        <Switch accessibilityLabel="timed comments" value={preferences.allowComments} thumbColor={theme.background} trackColor={{ false: theme.border, true: theme.accent }} ios_backgroundColor={theme.border} onValueChange={value => setPreferences({ allowComments: value })} />
+      </SettingsRow>
+    </SettingsSection>}
     <TealSettings key={auth.did ?? 'anonymous'} />
     <DiscoverySettings key={auth.did ?? 'anonymous'} />
     <SettingsSection title="account" icon={UserRound}>
