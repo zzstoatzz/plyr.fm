@@ -1,4 +1,4 @@
-//! PostgreSQL record of each personal queue. Redis holds the live copy.
+//! PostgreSQL record of each personal queue and shared Jam room. Redis holds the live copy.
 
 const std = @import("std");
 const pg = @import("pg");
@@ -32,6 +32,19 @@ pub const Records = struct {
         defer allocator.free(json);
         _ = try self.pool.exec(save_sql, .{ owner, state.epoch, @as(i64, @intCast(state.revision)), json });
     }
+
+    /// A Jam room's stored state as JSON, owned by `allocator`. `room` is its space uri.
+    pub fn loadRoom(self: *Records, allocator: std.mem.Allocator, room: []const u8) !?[]const u8 {
+        var row = try self.pool.row(load_room_sql, .{room}) orelse return null;
+        defer row.deinit() catch {};
+        return try allocator.dupe(u8, try row.get([]const u8, 0));
+    }
+
+    pub fn saveRoom(self: *Records, allocator: std.mem.Allocator, room: []const u8, state: model.State, now_ms: i64) !void {
+        const json = try std.json.Stringify.valueAlloc(allocator, resting(state, now_ms), .{});
+        defer allocator.free(json);
+        _ = try self.pool.exec(save_room_sql, .{ room, state.epoch, @as(i64, @intCast(state.revision)), json });
+    }
 };
 
 /// What a later session starts from: paused at the current position, owned by no device.
@@ -60,6 +73,22 @@ const save_sql =
     \\  updated_at = clock_timestamp()
     \\WHERE plyr_playback.queue_records.epoch <> EXCLUDED.epoch
     \\   OR plyr_playback.queue_records.revision <= EXCLUDED.revision
+;
+
+const load_room_sql =
+    \\SELECT state::text FROM plyr_playback.jam_room_records WHERE room = $1
+;
+
+const save_room_sql =
+    \\INSERT INTO plyr_playback.jam_room_records (room, epoch, revision, state)
+    \\VALUES ($1, $2, $3, $4::jsonb)
+    \\ON CONFLICT (room) DO UPDATE SET
+    \\  epoch = EXCLUDED.epoch,
+    \\  revision = EXCLUDED.revision,
+    \\  state = EXCLUDED.state,
+    \\  updated_at = clock_timestamp()
+    \\WHERE plyr_playback.jam_room_records.epoch <> EXCLUDED.epoch
+    \\   OR plyr_playback.jam_room_records.revision <= EXCLUDED.revision
 ;
 
 test "a queue record keeps the newest revision of an epoch and rests paused" {
@@ -108,4 +137,50 @@ test "a queue record keeps the newest revision of an epoch and rests paused" {
     const replaced = (try records.load(allocator, owner)).?;
     defer allocator.free(replaced);
     try std.testing.expect(std.mem.indexOf(u8, replaced, "\"second\"") != null);
+}
+
+test "a Jam room record keeps its whole queue, paused where it was" {
+    const url_z = std.c.getenv("PLYR_ZIG_TEST_DATABASE_URL") orelse return error.SkipZigTest;
+    const allocator = std.testing.allocator;
+    var threaded = std.Io.Threaded.init(allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    postgres_test_lock.lock(io);
+    defer postgres_test_lock.unlock(io);
+    const uri = try std.Uri.parse(std.mem.span(url_z));
+    var pool = try pg.Pool.initUri(io, allocator, uri, .{ .size = 1 });
+    defer pool.deinit();
+    var name = try pool.row("SELECT current_database()", .{}) orelse return error.MissingDatabase;
+    const disposable = std.mem.eql(u8, try name.get([]const u8, 0), "zig_test");
+    try name.deinit();
+    if (!disposable) return error.UnsafeTestDatabase;
+    _ = try pool.exec("DROP SCHEMA IF EXISTS plyr_playback CASCADE", .{});
+    defer _ = pool.exec("DROP SCHEMA IF EXISTS plyr_playback CASCADE", .{}) catch null;
+    _ = try pool.exec(@embedFile("migration_0035_queue_records"), .{});
+    _ = try pool.exec(@embedFile("migration_0046_jam_room_records"), .{});
+
+    var records: Records = .{ .pool = pool };
+    const room = "at://did:plc:aaaaaaaaaaaaaaaaaaaaaaaa/space/fm.plyr.next.jam/room1";
+    try std.testing.expect(try records.loadRoom(allocator, room) == null);
+    const first: model.Track = .{ .id = "trk_first", .uri = "at://did:plc:aaaaaaaaaaaaaaaaaaaaaaaa/fm.plyr.track/3k2", .cid = "bafyreib2rxk3rybk3aobmv5cjuql3bm2twh4jo5uxgf5kpqcsgz7soitae", .durationMs = 60_000, .key = "a" };
+    const second: model.Track = .{ .id = "trk_second", .uri = "at://did:plc:aaaaaaaaaaaaaaaaaaaaaaaa/fm.plyr.track/3k3", .cid = "bafyreib2rxk3rybk3aobmv5cjuql3bm2twh4jo5uxgf5kpqcsgz7soitae", .durationMs = 90_000, .key = "b" };
+    const playing: model.State = .{ .epoch = "room-epoch", .revision = 7, .queue = &.{ first, second }, .index = 1, .occurrence = 2, .playing = true, .positionMs = 1_000, .updatedAtMs = 10_000 };
+    try records.saveRoom(allocator, room, playing, 15_000);
+    var older = playing;
+    older.revision = 6;
+    older.queue = &.{first};
+    older.index = 0;
+    try records.saveRoom(allocator, room, older, 15_000);
+
+    const stored = (try records.loadRoom(allocator, room)).?;
+    defer allocator.free(stored);
+    const parsed = try std.json.parseFromSlice(model.State, allocator, stored, .{});
+    defer parsed.deinit();
+    try std.testing.expectEqual(@as(usize, 2), parsed.value.queue.len);
+    try std.testing.expectEqual(@as(u32, 1), parsed.value.index);
+    try std.testing.expectEqual(@as(u64, 7), parsed.value.revision);
+    try std.testing.expectEqual(@as(u64, 6_000), parsed.value.positionMs);
+    try std.testing.expect(!parsed.value.playing);
+    try std.testing.expect(parsed.value.personal == null);
+    try std.testing.expect(try records.load(allocator, "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa") == null);
 }
