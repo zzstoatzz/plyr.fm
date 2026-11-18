@@ -8,6 +8,7 @@
 	import { artistName, clock, trackHref } from './tracks';
 	import { trackArtwork } from '@plyr/next-core/artwork';
 	import { explicitEnd } from '@plyr/next-core/queue-state';
+	import { autoscrollVelocity, dragTarget, rowShift, type Row } from '@plyr/next-core/behaviors/reorder';
 	import Artwork from './ui/Artwork.svelte';
 	import Icon from './ui/Icon.svelte';
 	import PlayingWave from './ui/PlayingWave.svelte';
@@ -40,41 +41,113 @@
 		return !!tail && index > start && (index === end || index === end + 1);
 	}
 
-	let dragging = $state<number>();
-	let dropIndex = $state<number>();
-	let dragQueue: typeof player.queue | undefined;
+	interface Drag { index: number; pointer: number; queue: typeof player.queue; y: number; scroll: number; offset: number; to: number; rows: Row[]; nodes: HTMLElement[]; from: number; scroller: HTMLElement; frame?: number; clientY: number }
+	interface Press { index: number; pointer: number; x: number; y: number; touch: boolean; node: HTMLElement; timer?: ReturnType<typeof setTimeout> }
+	let drag = $state.raw<Drag>();
+	let press: Press | undefined;
 	let suppressClickUntil = 0;
 	let swipe: { index: number; pointer: number; queue: typeof player.queue; x: number; y: number } | undefined;
 
-	function dragStart(event: PointerEvent, index: number) {
-		if (event.button !== 0) return;
-		(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
-		dragging = index;
-		dragQueue = player.queue;
-		dropIndex = index;
+	function scrollerOf(node: HTMLElement) {
+		return node.closest<HTMLElement>('aside') ?? document.scrollingElement as HTMLElement;
 	}
 
-	function dragMove(event: PointerEvent) {
-		if (dragging === undefined) return;
-		const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-queue-index]');
-		dropIndex = target ? Number(target.dataset.queueIndex) : undefined;
+	function pressStart(event: PointerEvent, index: number, handle = false) {
+		if (event.button !== 0 || index < start || drag) return;
+		const target = event.target as Element;
+		if (!handle && target.closest('button, a')) return;
+		const node = event.currentTarget as HTMLElement;
+		press = { index, pointer: event.pointerId, x: event.clientX, y: event.clientY, touch: event.pointerType === 'touch', node: node.closest('li') ?? node };
+		if (handle) begin(event);
+		else if (press.touch) press.timer = setTimeout(() => { if (press) { navigator.vibrate?.(10); begin(event); } }, 320);
+	}
+
+	function begin(event: PointerEvent) {
+		const current = press;
+		if (!current) return;
+		clearTimeout(current.timer);
+		const nodes = [...document.querySelectorAll<HTMLElement>('li.upcoming')];
+		const from = nodes.findIndex(node => node === current.node);
+		if (from < 0) return;
+		const scroller = scrollerOf(current.node);
+		const rects = nodes.map(node => node.getBoundingClientRect());
+		const gap = rects.length > 1 ? Math.max(0, rects[1].top - rects[0].bottom) : 0;
+		try { current.node.setPointerCapture(current.pointer); } catch { /* the pointer already ended */ }
+		swipe = undefined;
+		drag = { index: current.index, from, to: from, pointer: current.pointer, queue: player.queue, y: current.y, clientY: event.clientY, scroll: scroller.scrollTop, offset: 0,
+			rows: rects.map(rect => ({ top: rect.top, height: rect.height + gap })), nodes, scroller };
+		press = undefined;
+		drag.frame = requestAnimationFrame(autoscroll);
+		track(event.clientY);
+	}
+
+	function pressMove(event: PointerEvent) {
+		if (drag?.pointer === event.pointerId) { event.preventDefault(); track(event.clientY); return; }
+		if (press?.pointer !== event.pointerId) return;
+		const dx = event.clientX - press.x, dy = event.clientY - press.y;
+		if (press.touch) { if (Math.hypot(dx, dy) > 8) { clearTimeout(press.timer); press = undefined; } return; }
+		if (Math.abs(dy) > 6 && Math.abs(dy) > Math.abs(dx)) begin(event);
+	}
+
+	function track(clientY: number) {
+		const current = drag;
+		if (!current) return;
+		if (current.queue !== player.queue) { endDrag(false); return; }
+		const raw = clientY - current.y + current.scroller.scrollTop - current.scroll;
+		const { offset, to } = dragTarget(current.rows, current.from, raw);
+		if (to !== current.to) navigator.vibrate?.(5);
+		drag = { ...current, offset, to, clientY };
+	}
+
+	function autoscroll() {
+		const current = drag;
+		if (!current) return;
+		const bounds = current.scroller === document.scrollingElement ? { top: 0, bottom: innerHeight } : current.scroller.getBoundingClientRect();
+		const velocity = autoscrollVelocity(current.clientY, bounds.top, bounds.bottom);
+		if (velocity) { current.scroller.scrollTop += velocity; track(current.clientY); }
+		if (drag) drag.frame = requestAnimationFrame(autoscroll);
+	}
+
+	function pressEnd(event: PointerEvent, apply: boolean) {
+		if (press?.pointer === event.pointerId) { clearTimeout(press.timer); press = undefined; }
+		if (drag?.pointer === event.pointerId) endDrag(apply);
 	}
 
 	function endDrag(apply: boolean) {
-		if (apply && dragging !== undefined && dropIndex !== undefined && dragging !== dropIndex && dragging >= start && player.queue === dragQueue) player.move(dragging, dropIndex);
-		dragging = undefined;
-		dragQueue = undefined;
-		dropIndex = undefined;
+		const current = drag;
+		drag = undefined;
+		if (!current) return;
+		if (current.frame !== undefined) cancelAnimationFrame(current.frame);
+		suppressClickUntil = performance.now() + 350;
+		if (apply && current.to !== current.from && player.queue === current.queue) {
+			const target = Number(current.nodes[current.to]?.dataset.queueIndex);
+			if (Number.isInteger(target)) player.move(current.index, target);
+		}
+	}
+
+	function shift(index: number) {
+		const current = drag;
+		if (!current) return '';
+		const at = current.nodes.findIndex(node => Number(node.dataset.queueIndex) === index);
+		if (at < 0) return '';
+		const y = at === current.from ? current.offset : rowShift(current.rows, current.from, current.to, at);
+		return y ? `transform: translateY(${y}px)${at === current.from ? ' scale(1.02)' : ''}` : at === current.from ? 'transform: scale(1.02)' : '';
+	}
+
+	function holdScroll(node: HTMLElement) {
+		const stop = (event: TouchEvent) => { if (drag) event.preventDefault(); };
+		node.addEventListener('touchmove', stop, { passive: false });
+		return { destroy: () => node.removeEventListener('touchmove', stop) };
 	}
 
 	function swipeStart(event: PointerEvent, index: number) {
-		if (event.pointerType !== 'touch' || (event.target as Element)?.closest('button, .drag-handle')) return;
+		if (event.pointerType !== 'touch' || drag || (event.target as Element)?.closest('button, .drag-handle')) return;
 		swipe = { index, pointer: event.pointerId, queue: player.queue, x: event.clientX, y: event.clientY };
 	}
 
 	function swipeEnd(event: PointerEvent, index: number) {
 		const before = swipe;
-		if (before?.pointer !== event.pointerId) return;
+		if (before?.pointer !== event.pointerId || drag) { swipe = undefined; return; }
 		swipe = undefined;
 		if (before.index !== index || index < start || before.queue !== player.queue) return;
 		const distance = before.x - event.clientX;
@@ -139,8 +212,9 @@
 				<h2 id="queue-picks">up next</h2>
 				<span class="count">{picks.length}</span>
 			</div>
+			{#if picks.length + continuation.length > 1}<p class="hint"><span class="touch">hold a track to move it</span><span class="mouse">drag a track to move it</span></p>{/if}
 			{#if picks.length}
-				<ol role="list" bind:this={pickList}>
+				<ol role="list" bind:this={pickList} use:holdScroll>
 					{#each picks as track, offset (key(start + offset))}
 						{@render upcoming(track, start + offset)}
 					{/each}
@@ -152,7 +226,7 @@
 		{#if tail && continuation.length}
 			<section aria-labelledby="queue-continuation">
 				<h2 id="queue-continuation">next from {tail.label}</h2>
-				<ol role="list">
+				<ol role="list" use:holdScroll>
 					{#each continuation as track, offset (key(end + offset))}
 						{@render upcoming(track, end + offset)}
 					{/each}
@@ -171,8 +245,10 @@
 </section>
 
 {#snippet upcoming(track: NonNullable<typeof player.current>, index: number)}
-	<li class="row upcoming" class:landing={dragging !== undefined && dropIndex === index} data-queue-key={key(index)} data-queue-index={index}
-		onclickcapture={suppressSwipeClick} onpointerdown={event => swipeStart(event, index)} onpointerup={event => swipeEnd(event, index)} onpointercancel={() => { swipe = undefined; }}>
+	<li class="row upcoming" class:lifted={drag?.index === index} class:dragging={!!drag} style={shift(index)} data-queue-key={key(index)} data-queue-index={index}
+		onclickcapture={suppressSwipeClick} oncontextmenu={event => { if (press?.touch || drag) event.preventDefault(); }}
+		onpointerdown={event => { swipeStart(event, index); pressStart(event, index); }} onpointermove={pressMove}
+		onpointerup={event => { pressEnd(event, true); swipeEnd(event, index); }} onpointercancel={event => { swipe = undefined; pressEnd(event, false); }}>
 		{@render row(track, index, false)}
 	</li>
 {/snippet}
@@ -192,7 +268,7 @@
 		<span class="subtle time">{clock(track.metadata.duration_seconds)}</span>
 		{#if !current}
 			<div class="actions">
-				<span class="drag-handle" aria-hidden="true" onpointerdown={event => dragStart(event, index)} onpointermove={dragMove} onpointerup={() => endDrag(true)} onpointercancel={() => endDrag(false)}>⠿</span>
+				<span class="drag-handle" aria-hidden="true" onpointerdown={event => { event.stopPropagation(); pressStart(event, index, true); }}>⠿</span>
 				<button class="icon-button move" type="button" aria-label={promote ? `Move ${track.metadata.title} into up next` : `Move ${track.metadata.title} up`} title={promote ? 'move into up next' : 'move up'} disabled={index === start} onclick={event => moveUp(index, event.currentTarget)}><Icon name="down" size={16} /></button>
 				<button class="icon-button" type="button" aria-label={`Remove ${track.metadata.title}`} onclick={() => player.remove(index)}><Icon name="x" size={16} /></button>
 			</div>
@@ -211,7 +287,10 @@
 	ol { display: grid; gap: 0.38rem; margin: 0; padding: 0; list-style: none; }
 	.row { display: flex; align-items: center; gap: 0.6rem; padding: 0.45rem; min-width: 0; border: 1px solid var(--line); border-radius: 0.7rem; background: var(--raised); }
 	.upcoming { touch-action: pan-y pinch-zoom; }
-	.upcoming.landing { border-color: var(--accent); }
+	.upcoming { -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; cursor: grab; }
+	.upcoming.dragging { transition: transform 160ms ease; cursor: grabbing; }
+	.upcoming.lifted { position: relative; z-index: 2; transition: none; border-color: var(--accent); box-shadow: 0 0.6rem 1.4rem rgb(0 0 0 / 0.25); }
+	@media (prefers-reduced-motion: reduce) { .upcoming.dragging { transition: none; } }
 	.drag-handle { display: grid; place-items: center; min-width: 2.25rem; height: 2.75rem; touch-action: none; cursor: grab; color: var(--muted); user-select: none; }
 	.drag-handle:active { cursor: grabbing; }
 	.current { border-color: color-mix(in srgb, var(--accent), var(--line) 55%); background: color-mix(in srgb, var(--accent) 9%, var(--raised)); }
@@ -224,6 +303,9 @@
 	.time { font-variant-numeric: tabular-nums; }
 	.move :global(svg) { transform: rotate(180deg); }
 	.queue-signin { color: var(--accent); text-decoration: underline; text-underline-offset: 0.2em; }
+	.hint { margin: -0.3rem 0 0.5rem; color: var(--faint); font-size: 0.8rem; }
+	.hint .touch { display: none; }
+	@media (pointer: coarse) { .hint .touch { display: inline; } .hint .mouse { display: none; } }
 	.empty { color: var(--muted); margin: 0; font-size: 0.88rem; }
 	@container (max-width: 24rem) { .time { display: none; } }
 </style>

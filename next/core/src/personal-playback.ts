@@ -486,6 +486,16 @@ export function createPersonalPlayback(options: Options) {
     remember([track]);
     edit({ action: 'enqueue', entry: queueReference(track, options.id()) });
   }
+  function playNext(track: Track) {
+    const current = session;
+    const owner = options.account().did ?? 'anonymous';
+    if (!current?.initialized || source !== owner || early.hasCollection(owner) || current.state.index < 0) { enqueue(track); return; }
+    remember([track]);
+    const key = options.id();
+    const before = current.state.entries[current.state.index + 1]?.key;
+    void current.editMany([{ action: 'enqueue', entry: queueReference(track, key) },
+      ...(before ? [{ action: 'moveEntry' as const, entryKey: key, beforeKey: before }] : [])]);
+  }
   function enqueueCollection(tracks: Track[]) {
     if (!tracks.length) return;
     update('queueError', undefined);
@@ -546,7 +556,7 @@ export function createPersonalPlayback(options: Options) {
   return { subscribe, getSnapshot: () => snapshot, start, save, tick, prepareLogin, refresh, configureContinuation,
     ensureContinuation, hasRemoteClock, keepPlaying,
     diagnose: () => ({ waiting: snapshot.waiting, pendingPlay: pendingPlay !== undefined, session: !!session, synchronized: !!session?.synchronized, online: !!session?.online, owned: owned, early: early.length }), unstick: () => { playRequest++; pendingPlay = undefined; early.drain(); update('waiting', false); }, position, duration, setKeepPlaying: (value: boolean) => edit({ action: 'setContinuation', keepPlaying: value }), checkpoint, ownsOutput: () => owned, next, resume, defer, command, play, select, local, remember,
-    enqueue, enqueueCollection,
+    enqueue, enqueueCollection, playNext,
     remove: (at: number) => { const entry = session?.state.entries[at]; if (entry) edit({ action: 'removeEntry', entryKey: entry.key }); },
     move: (from: number, to: number) => {
       const entries = session?.state.entries;

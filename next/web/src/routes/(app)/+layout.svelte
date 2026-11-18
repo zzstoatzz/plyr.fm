@@ -6,6 +6,7 @@
 	import { auth, restoreAuth } from '$lib/auth';
 	import { player } from '$lib/player.svelte';
 	import Icon from '$lib/ui/Icon.svelte';
+	import Toasts from '$lib/ui/Toasts.svelte';
 	import LinksMenu from '$lib/LinksMenu.svelte';
 	import { accountAvatar } from '$lib/api';
 	import { mountPrefs, restorePrefs } from '$lib/prefs.svelte';
@@ -168,6 +169,13 @@
 		document.getElementById('search-query')?.focus();
 	}
 
+	let queueRequest = player.queueRequest;
+	$effect(() => {
+		if (player.queueRequest === queueRequest) return;
+		queueRequest = player.queueRequest;
+		untrack(() => { if (!queuePage && !player.queueOpen) toggleQueue(); });
+	});
+
 	function toggleQueue(fromShortcut = false) {
 		if (queuePage) {
 			if (!fromShortcut) return;
@@ -264,6 +272,7 @@
 	<AccountMenu bind:this={accountMenu} identity={account.handle ? '@' + account.handle : account.did} uploads={uploading} />
 {/if}
 
+<Toasts />
 {#if player.current}
 	{#await import('$lib/PlayerDock.svelte') then { default: Dock }}<Dock onQueue={toggleQueue} {queuePage} {pull} />{/await}
 {/if}
@@ -285,6 +294,7 @@
 <style>
 	.frame { min-height: 100dvh; display: grid; grid-template-columns: var(--sidebar) minmax(0, 1fr); }
 	.frame.hasPlayer { padding-bottom: var(--dock); }
+	:global(body:has(.frame.hasPlayer)) { --toast-dock: var(--dock); }
 	.frame.docked { grid-template-columns: var(--sidebar) minmax(0, 1fr) var(--queue); }
 	nav { position: sticky; top: 0; align-self: start; min-height: 100dvh; display: flex; flex-direction: column; gap: 0.3rem; padding: 0.9rem; background: var(--surface); border-right: 1px solid var(--line); }
 	nav a { display: flex; align-items: center; gap: 0.7rem; padding: 0.65rem 0.8rem; border-radius: 0.7rem; min-height: 2.75rem; color: var(--muted); }

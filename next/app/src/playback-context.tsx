@@ -42,6 +42,8 @@ export interface Playback {
   skip(seconds: number): void;
   jump(index: number): void;
   enqueue(track: Track): void;
+  /** Puts the track right after the one playing, ahead of other picks. */
+  playNext(track: Track): void;
   remove(index: number): void;
   move(from: number, to: number): void;
   clear(): void;

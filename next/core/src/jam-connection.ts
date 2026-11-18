@@ -250,6 +250,10 @@ export class JamConnection {
     return this.queueEdit((queue, index) => ({ queue: [...queue, ...tracks], index }), false);
   }
 
+  insertNext(tracks: JamTrack[]): boolean {
+    return this.queueEdit((queue, index) => ({ queue: [...queue.slice(0, index + 1), ...tracks, ...queue.slice(index + 1)], index }), false);
+  }
+
   private queueEdit(apply: JamQueueEdit, requireSameQueue: boolean): boolean {
     const state = this.state;
     if (!state || state.personal) { this.options.onError('waiting for the jam to connect'); return false; }
