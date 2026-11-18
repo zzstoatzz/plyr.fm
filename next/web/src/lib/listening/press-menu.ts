@@ -6,18 +6,22 @@ export function pressMenu(node: HTMLElement, open: (x: number, y: number) => voi
 	const cancel = () => { clearTimeout(timer); timer = undefined; start = undefined; };
 	const linked = (target: EventTarget | null) => target instanceof Element && !!target.closest('a[href]');
 
+	let opened = -Infinity;
 	function contextmenu(event: MouseEvent) {
 		if (linked(event.target) || event.defaultPrevented) return;
 		event.preventDefault();
+		if (performance.now() - opened < 800) return;
 		cancel();
 		open(event.clientX, event.clientY);
 	}
 	function down(event: PointerEvent) {
 		if (event.pointerType !== 'touch' || !event.isPrimary) return;
+		swallowClick = false;
 		start = { x: event.clientX, y: event.clientY, pointer: event.pointerId };
 		timer = setTimeout(() => {
 			if (!start) return;
 			swallowClick = true;
+			opened = performance.now();
 			navigator.vibrate?.(10);
 			open(start.x, start.y);
 			start = undefined;

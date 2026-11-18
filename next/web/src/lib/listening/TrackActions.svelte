@@ -1,6 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { onMount } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import type { Track } from '@plyr/next-core/api';
   import { auth } from '$lib/auth';
   import { player } from '$lib/player.svelte';
@@ -25,23 +25,25 @@
     place();
     panel.querySelector<HTMLElement>('button:not(:disabled), a')?.focus();
   }
-  /** Opens the menu at a point, for right-click and long press on the row. */
   // Opened mid-gesture, so light dismiss would close it on the same pointerup; dismiss by hand instead.
-  let release: (() => void) | undefined;
+  let release: AbortController | undefined;
+  function letGo() {
+    release?.abort();
+    release = undefined;
+    panel.popover = 'auto';
+  }
+  onDestroy(() => release?.abort());
+  /** Opens the menu at a point, for right-click and long press on the row. */
   export function openAt(x: number, y: number) {
+    letGo();
     if (panel.matches(':popover-open')) panel.hidePopover();
     panel.popover = 'manual';
     show(() => placePopoverAt(panel, x, y));
+    const controller = release = new AbortController();
     const outside = (event: PointerEvent) => { if (!panel.contains(event.target as Node)) panel.hidePopover(); };
-    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.preventDefault(); panel.hidePopover(); } };
-    const timer = setTimeout(() => { document.addEventListener('pointerdown', outside, true); document.addEventListener('keydown', escape, true); });
-    release = () => {
-      clearTimeout(timer);
-      document.removeEventListener('pointerdown', outside, true);
-      document.removeEventListener('keydown', escape, true);
-      panel.popover = 'auto';
-      release = undefined;
-    };
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape' && panel.matches(':popover-open')) { event.preventDefault(); panel.hidePopover(); } };
+    document.addEventListener('keydown', escape, { capture: true, signal: controller.signal });
+    setTimeout(() => { if (!controller.signal.aborted) document.addEventListener('pointerdown', outside, { capture: true, signal: controller.signal }); });
   }
   function pick(action: () => void) {
     action();
@@ -66,9 +68,9 @@
   }
 </script>
 
-<button bind:this={trigger} class="icon-button" aria-label={`More actions for ${track.metadata.title}`} aria-controls={id} aria-expanded={open} onclick={() => { if (open) panel.hidePopover(); else { release?.(); show(() => placePopover(panel, trigger)); } }}><Icon name="more" size={20} /></button>
+<button bind:this={trigger} class="icon-button" aria-label={`More actions for ${track.metadata.title}`} aria-controls={id} aria-expanded={open} onclick={() => { if (open) panel.hidePopover(); else { letGo(); show(() => placePopover(panel, trigger)); } }}><Icon name="more" size={20} /></button>
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-<div bind:this={panel} {id} popover="auto" data-player-no-pull role="group" aria-label={`Actions for ${track.metadata.title}`} ontoggle={() => { open = panel.matches(':popover-open'); if (!open) release?.(); }} onkeydown={step} onclick={event => { if ((event.target as Element).closest('a')) panel.hidePopover(); }} class="menu">
+<div bind:this={panel} {id} popover="auto" data-player-no-pull role="group" aria-label={`Actions for ${track.metadata.title}`} ontoggle={() => { open = panel.matches(':popover-open'); if (!open) letGo(); }} onkeydown={step} onclick={event => { if ((event.target as Element).closest('a')) panel.hidePopover(); }} class="menu">
   <button class="text-button" type="button" disabled={!queueable} onclick={() => pick(() => player.playNext(track))}><Icon name="next" size={18} />play next</button>
   <button class="text-button" type="button" disabled={!queueable} onclick={() => pick(() => player.enqueue(track))}><Icon name="queue" size={18} />add to queue</button>
   <hr>

@@ -11,7 +11,7 @@
 
 <div class="toasts" role="region" aria-live="polite" aria-label="notifications">
 	{#each toast.items as item (item.id)}
-		<div class="toast" data-testid="toast" role={item.type === 'error' ? 'alert' : 'status'} in:fly={{ y: 8, duration: 200 }} out:fade={{ duration: 400 }}>
+		<div class="toast" data-testid="toast" role={item.type === 'error' ? 'alert' : undefined} in:fly={{ y: 8, duration: 200 }} out:fade={{ duration: 400 }}>
 			{#if item.action}
 				<button type="button" onclick={() => run(item)}>
 					<span class="icon {item.type}"><Icon name={item.type === 'error' ? 'x' : 'check'} size={16} /></span>
