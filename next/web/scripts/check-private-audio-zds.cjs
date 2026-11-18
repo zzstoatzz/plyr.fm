@@ -213,7 +213,7 @@ async function checkOwnerTrack(page, audio, previousSource, origin, appView, coo
     await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
     async function settings() {
       const nav = page.getByRole('navigation', { name: 'Main navigation' });
-      await nav.getByRole('button', { name: 'you', exact: true }).click();
+      await nav.getByRole('button', { name: /^you\b/ }).click();
       await page.getByRole('dialog', { name: 'account', exact: true }).getByRole('link', { name: /^settings/ }).click();
     }
     await settings();

@@ -13,9 +13,9 @@
 	const uploadDetail = $derived(uploads === 0 ? 'add a track or album'
 		: uploads === 1 ? '1 upload in progress' : `${uploads} uploads in progress`);
 	const entries = $derived([
-		{ label: 'portal', detail: identity, icon: 'portal', href: resolve('/(app)/portal') },
-		{ label: 'upload', detail: uploadDetail, icon: 'upload', href: resolve('/(app)/upload') },
-		{ label: 'settings', detail: 'appearance and playback', icon: 'settings', href: resolve('/(app)/settings') }
+		{ label: 'portal', detail: identity, icon: 'ph_portal', href: resolve('/(app)/portal') },
+		{ label: 'upload', detail: uploadDetail, icon: 'ph_upload', href: resolve('/(app)/upload') },
+		{ label: 'settings', detail: 'appearance and playback', icon: 'ph_settings', href: resolve('/(app)/settings') }
 	] as const);
 
 	afterNavigate(({ from }) => {
@@ -57,16 +57,16 @@
 				<a href={entry.href} onclick={() => dialog.close()}>
 					<Icon name={entry.icon} size={22} />
 					<span class="row-label"><strong>{entry.label}</strong><small>{entry.detail}</small></span>
-					{#if entry.icon === 'settings'}<Icon name="chevron" size={17} />{/if}
+					{#if entry.icon === 'ph_settings'}<Icon name="chevron" size={17} />{/if}
 				</a>
 			{/each}
-			<button type="button" class="keys" onclick={() => { dialog.close(); onShortcuts(); }}><Icon name="ph_keys" size={22} /><span class="row-label">keyboard shortcuts<small>press ?</small></span></button>
+			<button type="button" class="keys" onclick={() => { dialog.close(); onShortcuts(); }}><Icon name="ph_keys" size={22} /><span class="row-label"><strong>keyboard shortcuts</strong><small>press ?</small></span></button>
 			{#each others as account (account.did)}
 				<button type="button" disabled={switching} onclick={() => selectAccount(account.did)}><Icon name="user" size={22} /><span class="row-label">switch to {account.handle ? '@' + account.handle : account.did}</span></button>
 			{/each}
 			{#if !switching}<a href={resolve('/login?addAccount=1&return_to=%2Fsettings')} onclick={() => dialog.close()}><Icon name="users" size={22} /><span class="row-label">add account</span></a>{/if}
 			{#if error}<p class="switch-error" role="alert">couldn’t switch accounts. sign in again to reconnect.</p>{/if}
-			<button type="button" disabled={switching} onclick={signOut}><Icon name="logout" size={22} /><span class="row-label">sign out</span></button>
+			<button type="button" disabled={switching} onclick={signOut}><Icon name="ph_logout" size={22} /><span class="row-label">sign out</span></button>
 		</nav>
 	</div>
 </dialog>

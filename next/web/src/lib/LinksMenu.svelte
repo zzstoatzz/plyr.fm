@@ -30,13 +30,13 @@
 		<form method="dialog"><button class="icon-button" aria-label="Close links"><Icon name="x" size={19} /></button></form>
 	</header>
 	<nav aria-label="Explore">
-		<a href={resolve('/(app)/radio')} onclick={() => dialog.close()}>
+		<a class="in-nav" href={resolve('/(app)/radio')} onclick={() => dialog.close()}>
 			<Icon name="ph_radio" size={21} /><span>radio<small>live station</small></span>
 		</a>
-		<a href={resolve('/(app)/stats')} onclick={() => dialog.close()}>
+		<a class="in-nav" href={resolve('/(app)/stats')} onclick={() => dialog.close()}>
 			<Icon name="ph_stats" size={21} /><span>stats</span>
 		</a>
-		<a href={resolve('/(app)/atlas')} onclick={() => dialog.close()}>
+		<a class="in-nav" href={resolve('/(app)/atlas')} onclick={() => dialog.close()}>
 			<Icon name="ph_atlas" size={21} /><span>atlas</span>
 		</a>
 		{#if onShortcuts}
@@ -66,4 +66,6 @@
 	small { display: block; color: var(--muted); }
 	.totals { padding: 0.7rem 0.65rem 0.3rem; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.86rem; }
 	@media (max-width: 720px), (hover: none) { .keys { display: none !important; } }
+	/* the desktop sidebar lists these itself */
+	@media (min-width: 721px) { .in-nav { display: none !important; } }
 </style>

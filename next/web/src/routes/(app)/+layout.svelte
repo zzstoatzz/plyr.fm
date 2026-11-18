@@ -239,9 +239,12 @@
 <div data-testid="app-frame" class="frame" class:hasPlayer={!!player.current} class:docked={queuePanelOpen}>
 	<nav aria-label="Main navigation">
 		<div class="brand-row"><LinksMenu onShortcuts={openShortcuts} /><a class="brand" aria-label="plyr.fm home" href="/">plyr.fm</a></div>
+		<a class="search-field desktop-only" href="/search" class:active={page.url.pathname === '/search'} aria-current={page.url.pathname === '/search' ? 'page' : undefined}>
+			<Icon name="ph_search" size={18} /><span>search</span><kbd aria-hidden="true">{searchKey}</kbd>
+		</a>
 		{#each links as link (link.path)}
 			{@const active = page.url.pathname === link.path}
-			<a href={link.path} class={link.icon} class:active data-key={link.icon === 'ph_search' ? searchKey : undefined} aria-label={link.icon === 'ph_search' ? 'search' : undefined} aria-current={active ? 'page' : undefined}>
+			<a href={link.path} class:phone-only={link.path === '/search'} class:active aria-current={active ? 'page' : undefined}>
 				<Icon name={active ? link.filled : link.icon} size={22} /> <span>{link.label}</span>
 			</a>
 		{/each}
@@ -259,10 +262,10 @@
 		{/each}
 		<div class="nav-spacer" aria-hidden="true"></div>
 		{#if account.did}
-			<button type="button" class="account" aria-label="you" aria-haspopup="dialog" class:active={accountPaths.includes(page.url.pathname)} onclick={event => accountMenu?.open(event.currentTarget)}>
+			<button type="button" class="account" aria-haspopup="dialog" class:active={accountPaths.includes(page.url.pathname)} aria-current={accountPaths.includes(page.url.pathname) ? 'page' : undefined} onclick={event => accountMenu?.open(event.currentTarget)}>
 				<span class="profile-avatar"><Artwork src={identity?.did === did ? identity?.avatar : undefined} size={24} fallbackIcon="user" eager /></span>
-				<span class="tab-label" aria-hidden="true">you</span>
-				<span class="who" aria-hidden="true"><strong>{(identity?.did === did && identity?.name) || (account.handle ? '@' + account.handle : 'your account')}</strong>{#if account.handle && identity?.did === did && identity?.name}<small>@{account.handle}</small>{/if}</span>
+				<span class="tab-label">you</span>
+				<span class="who"><strong>{(identity?.did === did && identity?.name) || (account.handle ? '@' + account.handle : 'your account')}</strong>{#if account.handle && identity?.did === did && identity?.name}<small>@{account.handle}</small>{/if}</span>
 				<span class="who-chevron" aria-hidden="true"><Icon name="ph_updown" size={16} /></span>
 			</button>
 		{:else}
@@ -328,18 +331,16 @@
 		nav { height: calc(100dvh - var(--nav-dock, 0px)); min-height: 0; overflow-y: auto; padding: 0.875rem; }
 		.frame.hasPlayer { --nav-dock: var(--dock); }
 		nav :is(a, button) { font-size: 0.96875rem; font-weight: 500; }
-		nav > * { order: 2; }
-		nav > .brand-row { order: 0; }
-		nav a.ph_search { order: 1; gap: 0.625rem; margin: 0 0 0.75rem; height: 2.5rem; padding: 0 0.625rem 0 0.75rem; background: var(--raised); border: 1px solid color-mix(in srgb, var(--line) 80%, transparent); color: var(--faint); font-size: 0.875rem; }
-		nav a.ph_search :global(svg) { width: 1.125rem; height: 1.125rem; }
-		nav a.ph_search::after { content: attr(data-key); margin-left: auto; padding: 0.2rem 0.375rem; border: 1px solid var(--line); border-radius: 0.375rem; font: 500 0.6875rem/1 system-ui, sans-serif; }
-		nav a.ph_search:hover { background: var(--hover); }
-		nav a.ph_search.active { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); font-weight: 500; }
+		nav .phone-only { display: none; }
+		nav .search-field { gap: 0.625rem; margin: 0 0 0.75rem; height: 2.5rem; padding: 0 0.625rem 0 0.75rem; background: var(--raised); border: 1px solid color-mix(in srgb, var(--line) 80%, transparent); color: var(--muted); font-size: 0.875rem; }
+		nav .search-field kbd { margin-left: auto; padding: 0.2rem 0.375rem; border: 1px solid var(--line); border-radius: 0.375rem; color: var(--muted); font: 500 0.6875rem/1 system-ui, sans-serif; }
+		nav .search-field:hover { background: var(--hover); }
+		nav .search-field.active { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); font-weight: 500; }
 		.nav-spacer { flex: 1; min-height: 1.5rem; }
 		nav .account { gap: 0.625rem; min-height: 3.25rem; padding: 0.5rem 0.625rem; border: 1px solid color-mix(in srgb, var(--line) 80%, transparent); border-radius: 0.875rem; background: var(--surface); }
 		nav .account.active { border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
 		nav .account .profile-avatar, nav .account .profile-avatar :global(svg) { width: 2.125rem; height: 2.125rem; }
-		nav .account .tab-label { display: none; }
+		nav .account .tab-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 		.who { display: grid; min-width: 0; flex: 1; line-height: 1.2; }
 		.who strong { color: var(--text); font-size: 0.875rem; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 		.who small { color: var(--faint); font: 0.75rem system-ui, sans-serif; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

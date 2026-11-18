@@ -31,7 +31,7 @@ const second = 'svelteswitchtwo.test';
       if (route.request().method() !== 'GET') return route.abort();
       return route.fulfill({ json: { data: [], has_more: false } });
     });
-    const you = page.getByRole('navigation', { name: 'Main navigation' }).getByRole('button', { name: 'you', exact: true });
+    const you = page.getByRole('navigation', { name: 'Main navigation' }).getByRole('button', { name: /^you\b/ });
     const menu = page.getByRole('dialog', { name: 'account', exact: true });
     await page.goto(origin + '/login?deviceOnly=true&return_to=%2Fportal');
     await authorizeFixture(page, accounts, first);
