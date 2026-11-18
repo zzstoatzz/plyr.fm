@@ -67,7 +67,7 @@ export function CheckRow({ label, checked, onChange }: { label: string; checked:
   const theme = useAppearance();
   return <Pressable accessibilityRole="checkbox" accessibilityState={{ checked }} aria-checked={checked} onPress={() => onChange(!checked)}
     style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44, alignSelf: 'flex-start', opacity: pressed ? 0.7 : 1 })}>
-    <View style={{ width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, borderColor: checked ? theme.accent : theme.hairline, backgroundColor: checked ? theme.accent : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
+    <View style={{ width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, borderColor: checked ? theme.accent : theme.border, backgroundColor: checked ? theme.accent : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
       {checked && <Check size={15} color={theme.onAccent} strokeWidth={3} />}
     </View>
     <Text style={{ color: theme.text, fontFamily: theme.fontFamily, fontSize: 15 * theme.scale }}>{label}</Text>
@@ -135,7 +135,7 @@ export function TrackHero({ artwork, onArtwork, onRemoveArtwork, title, setTitle
     if (file) measureAudioDuration(file).then(value => { if (live) setDuration(value); }, () => {});
     return () => { live = false; };
   }, [file]);
-  return <View style={{ alignItems: 'center', gap: 12, padding: cover ? 16 : 0, paddingTop: cover ? 20 : 4, borderRadius: 24, overflow: 'hidden' }}>
+  return <View style={{ alignItems: 'center', gap: 12, padding: cover ? 16 : 0, paddingTop: cover ? 20 : 4, marginBottom: cover ? 8 : 0, borderRadius: 24, overflow: 'hidden' }}>
     {cover && <>
       <Image source={{ uri: cover }} blurRadius={60} accessibilityIgnoresInvertColors style={{ position: 'absolute', top: -60, left: -60, right: -60, bottom: -60 }} />
       <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: theme.background, opacity: theme.dark ? 0.55 : 0.45 }} />

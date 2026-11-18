@@ -236,7 +236,7 @@ function AccountUpload({ auth, restored, onBusy, audience, file, setFile, title,
         artist={artist} file={file} reattach={reattach} onAudio={() => void chooseAudio()}>
         {problems.audio && <FieldError>{problems.audio}</FieldError>}
         {problems.artwork && <FieldError>{problems.artwork}</FieldError>}
-        {service && <View style={{ alignSelf: 'stretch', gap: 4, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: theme.glassBorder, backgroundColor: theme.glass }}>
+        {service && <View style={{ alignSelf: 'stretch', gap: 4, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: theme.hairline, backgroundColor: theme.surface }}>
           <CheckRow label="use plyr storage" checked={serviceConsent} onChange={consent} />
           <Copy>plyr keeps the original file and makes an mp3 so it plays everywhere. playback and downloads are public.</Copy>
           {!auth.uploadStorage && <><Copy>sign in again to allow plyr storage. what you typed stays here; you will choose the file again.</Copy><Action label="Sign in again" href={{ pathname: '/login', params: { return_to: '/upload' } }} /></>}
