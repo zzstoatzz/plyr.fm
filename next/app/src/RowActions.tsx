@@ -26,7 +26,7 @@ export function QueueButton({ track, shown }: { track: Track; shown: boolean }) 
   const theme = useAppearance();
   const [focused, setFocused] = useState(false);
   const visible = shown || focused;
-  return <Pressable onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} accessibilityRole="button" accessibilityLabel={`Add ${track.metadata.title} to queue`} onPress={() => { player.enqueue(track); toast.success(`queued ${track.metadata.title}`); }}
+  return <Pressable onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} accessibilityRole="button" accessibilityLabel={`Add ${track.metadata.title} to queue`} onPress={() => player.enqueue(track)}
       style={({ hovered }: { pressed: boolean; hovered?: boolean }) => [styles.button, { opacity: visible ? 1 : 0, backgroundColor: hovered ? theme.raised : 'transparent' }]}>
       <ListPlus size={18} color={theme.muted} />
     </Pressable>;

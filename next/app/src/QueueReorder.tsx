@@ -3,7 +3,7 @@ import { DotsSix as GripHorizontal } from './icons';
 import { PanResponder, StyleSheet, useWindowDimensions, View, type ScrollViewInstance, type ViewInstance } from 'react-native';
 import type { Track } from '@plyr/next-core/api';
 import { useAppearance } from './appearance';
-import { autoscrollVelocity, dragTarget, landingTop, rowShift, type Row } from './behaviors/reorder';
+import { autoscrollVelocity, dragTarget, landingTop, rowShift, type Row } from '@plyr/next-core/behaviors/reorder';
 import { useCancelOnLeave } from './behaviors/use-cancel-on-leave';
 import { useReorderHandle } from './behaviors/use-reorder-handle';
 

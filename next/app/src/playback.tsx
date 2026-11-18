@@ -23,6 +23,8 @@ import { toast } from './toast';
 import { playbackFor, warm } from './playback-lookup';
 import { PlaybackScope, type Playback } from './playback-context';
 
+const viewQueue = { label: 'view queue', href: '/queue' } as const;
+
 export function PlaybackProvider({ children, playThrough, keepPlaying, volume }: {
   children: ReactNode; playThrough: boolean; keepPlaying: boolean; volume: number;
 }) {
@@ -436,8 +438,14 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     enqueue: (track) => {
       if (isPrivateTrack(track)) { if (privateMode.current && track.artist.did === auth.did) setQueue(items => [...items, track]); else play(track); return; }
       if (privateMode.current) { toast.info('play a public track to change queues'); return; }
-      toast.success(`queued ${track.metadata.title}`, 1800);
+      toast.success(`queued ${track.metadata.title}`, 3000, viewQueue);
       if (!jam.enqueue([track])) personal.enqueue(track);
+    },
+    playNext: (track) => {
+      if (isPrivateTrack(track)) { if (privateMode.current && track.artist.did === auth.did) setQueue(items => [...items.slice(0, index + 1), track, ...items.slice(index + 1)]); else play(track); return; }
+      if (privateMode.current) { toast.info('play a public track to change queues'); return; }
+      toast.success(`playing ${track.metadata.title} next`, 3000, viewQueue);
+      if (!jam.playNext([track])) personal.playNext(track);
     },
     remove: (at) => { if (privateMode.current) { setQueue(items => editPrivateQueue(items, index, { action: 'remove', at })); return; } if (jam.editQueue((items, current) => ({ queue: at > current ? items.filter((_, position) => position !== at) : items, index: current }))) return; if (at > index) personal.remove(at); },
     move: (from, to) => {

@@ -290,6 +290,13 @@ export function createJamPlayback(options: JamPlaybackOptions) {
     return true;
   }
 
+  function playNext(tracks: Track[]) {
+    if (!active) return false;
+    const refs = references(tracks);
+    if (refs?.length) session?.insertNext(refs);
+    return true;
+  }
+
   function editQueue(edit: JamQueueEdit) {
     if (!active) return false;
     session?.editQueue(edit);
@@ -351,6 +358,6 @@ export function createJamPlayback(options: JamPlaybackOptions) {
     fetching.clear();
   }
 
-  return { join, leave, command, replaceQueue, editQueue, enqueue, toggle, setPlaying, active: () => !!active,
+  return { join, leave, command, replaceQueue, editQueue, enqueue, playNext, toggle, setPlaying, active: () => !!active,
     state: () => active?.state, observe, setAccount, close };
 }
