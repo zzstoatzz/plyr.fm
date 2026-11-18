@@ -1,6 +1,6 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { X } from './icons';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Animated, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppearance } from './appearance';
 import { Heading } from './CatalogPieces';
@@ -11,10 +11,14 @@ import { CompactRows } from './ActionRow';
 export type Anchor = { x: number; y: number; width: number; height: number };
 const MENU_WIDTH = 248;
 
-export function Sheet({ title, close, children, notice, visible = true, onDismiss, anchor }: {
+/** A long-pressed row, shown lifted above the page with the menu beside it. */
+export type Lift = { anchor: Anchor; preview: ReactNode };
+
+export function Sheet({ title, close, children, notice, visible = true, onDismiss, anchor, lift }: {
   title: string; close: () => void; children: ReactNode; notice?: ReactNode; visible?: boolean; onDismiss?: () => void;
   /** On a wide window, open as a dropdown beside this control instead of a centered sheet. */
   anchor?: Anchor;
+  lift?: Lift;
 }) {
   const theme = useAppearance();
   const { width, height } = useWindowDimensions();
@@ -22,6 +26,7 @@ export function Sheet({ title, close, children, notice, visible = true, onDismis
   const [panel, setPanel] = useState(0);
   const wide = width >= 800;
   useLayer(visible);
+  if (lift) return <LiftedMenu title={title} close={close} visible={visible} onDismiss={onDismiss} lift={lift} notice={notice}>{children}</LiftedMenu>;
   if (anchor && wide) {
     const left = anchor.x - MENU_WIDTH - 6 >= 8 ? anchor.x - MENU_WIDTH - 6 : Math.min(anchor.x + anchor.width + 6, width - MENU_WIDTH - 8);
     const top = Math.max(8, Math.min(anchor.y + anchor.height / 2 - panel / 2, height - panel - 8));
@@ -59,5 +64,47 @@ export function Sheet({ title, close, children, notice, visible = true, onDismis
         </ScrollView>
       </View>
     </KeyboardAvoidingView>
+  </Modal>;
+}
+
+function LiftedMenu({ title, close, visible, onDismiss, lift: { anchor, preview }, notice, children }: {
+  title: string; close: () => void; visible: boolean; onDismiss?: () => void; lift: Lift; notice?: ReactNode; children: ReactNode;
+}) {
+  const theme = useAppearance();
+  const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const [panel, setPanel] = useState(0);
+  const shown = useRef(new Animated.Value(theme.reduceMotion ? 1 : 0)).current;
+  useEffect(() => {
+    if (!panel || theme.reduceMotion) return;
+    Animated.spring(shown, { toValue: 1, useNativeDriver: true, speed: 22, bounciness: 6 }).start();
+  }, [panel, shown, theme.reduceMotion]);
+  const top = insets.top + 8, bottom = height - insets.bottom - 8;
+  const gap = 8;
+  // Keep the row where it was when the menu fits below or above it; otherwise slide the row up just enough.
+  const below = anchor.y + anchor.height + gap + panel <= bottom;
+  const above = !below && anchor.y - gap - panel >= top;
+  const rowTop = below || above ? anchor.y : Math.max(top, bottom - panel - gap - anchor.height);
+  const menuTop = above ? anchor.y - gap - panel : rowTop + anchor.height + gap;
+  const menuWidth = Math.min(MENU_WIDTH + 24, width - 16);
+  const left = Math.max(8, Math.min(anchor.x + 8, width - menuWidth - 8));
+  const scale = shown.interpolate({ inputRange: [0, 1], outputRange: [1, 1.03] });
+  return <Modal transparent accessibilityLabel={title} animationType={theme.reduceMotion ? 'none' : 'fade'} visible={visible} onDismiss={onDismiss} onRequestClose={close}>
+    <Pressable accessibilityRole="button" accessibilityLabel="Close menu" onPress={close} style={[StyleSheet.absoluteFill, { backgroundColor: theme.dark ? '#000000b8' : '#00000066' }]} />
+    <Animated.View pointerEvents="none" style={{ position: 'absolute', left: anchor.x, top: rowTop, width: anchor.width, opacity: panel ? 1 : 0,
+      transform: [{ scale }], boxShadow: theme.dark ? '0px 14px 30px #000000b0' : '0px 14px 30px #00000038', borderRadius: 12 }}>
+      {preview}
+    </Animated.View>
+    <Animated.View accessibilityViewIsModal aria-label={title} onLayout={event => setPanel(event.nativeEvent.layout.height)} style={{
+      position: 'absolute', left, top: menuTop, width: menuWidth, maxHeight: bottom - top, opacity: panel ? shown : 0,
+      transform: [{ translateY: shown.interpolate({ inputRange: [0, 1], outputRange: [above ? 6 : -6, 0] }) }],
+      backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.line, borderRadius: 14, padding: 6,
+      boxShadow: theme.dark ? '0px 16px 40px #000000c0' : '0px 16px 40px #00000033'
+    }}>
+      <CompactRows.Provider value>
+        {notice && <View style={{ padding: 8, gap: 8 }}>{notice}</View>}
+        <ScrollView keyboardShouldPersistTaps="handled" bounces={false}>{children}</ScrollView>
+      </CompactRows.Provider>
+    </Animated.View>
   </Modal>;
 }

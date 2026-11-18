@@ -2,8 +2,9 @@ import { trackArtwork, collectionArtwork, displayUrl } from '@plyr/next-core/art
 import { MusicNote as Music2, UserCircle as UserRound } from './icons';
 import { Text } from './Text';
 import { Link, type Href } from 'expo-router';
-import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Animated, PixelRatio, Pressable, StyleSheet, View } from 'react-native';
+import { useCallback, useContext, useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
+import { Animated, PixelRatio, Pressable, StyleSheet, View, type ViewInstance } from 'react-native';
+import { useTrackPress, type LongPress } from './TrackPress';
 import { PlayGlyph as PlayIcon } from './PlayerGlyph';
 import { PlayingWave } from './PlayingWave';
 import { useTrackPlayback } from './playback-context';
@@ -176,13 +177,14 @@ export function Cover({ uri, size = 48, round = false, radius = 8, instant = fal
 }
 
 export function Row({
-  title, subtitle, meta, image, href, onPress, action, round = false, onNavigate,
+  title, subtitle, meta, image, href, onPress, action, round = false, onNavigate, rowRef, longPress,
 }: {
   title: string; subtitle?: string | null; meta?: string; image?: string | null; action?: ReactNode; round?: boolean; onNavigate?: () => void;
+  rowRef?: Ref<ViewInstance>; longPress?: LongPress;
 } & ({ href: Href; onPress?: never } | { href?: never; onPress: () => void })) {
   const colors = useAppearance();
   const compact = useContext(CompactRows);
-  const body = <Pressable accessibilityRole={href ? 'link' : 'button'} onPress={href ? onNavigate : onPress} style={styles.rowLink}>
+  const body = <Pressable accessibilityRole={href ? 'link' : 'button'} onPress={href ? onNavigate : onPress} {...longPress} style={styles.rowLink}>
     <Cover uri={image} round={round} size={compact ? 32 : 48} />
     <View style={styles.rowText}>
       <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text, fontFamily: colors.fontFamily, fontSize: (compact ? 14 : 16) * colors.scale }]}>{title}</Text>
@@ -190,7 +192,7 @@ export function Row({
       {meta ? <Text numberOfLines={1} style={{ color: colors.faint, fontFamily: colors.fontFamily, fontSize: 12 * colors.scale }}>{meta}</Text> : null}
     </View>
   </Pressable>;
-  return <View style={compact ? styles.compactRow : [styles.row, cardSurface(colors)]}>
+  return <View ref={rowRef} style={compact ? styles.compactRow : [styles.row, cardSurface(colors)]}>
     {href ? <Link href={href} asChild>{body}</Link> : body}
     {action}
   </View>;
@@ -206,21 +208,28 @@ export function trackMeta(track: Track) {
 }
 
 export function TrackRows({ tracks, onPlay }: { tracks: Track[]; onPlay: Play }) {
-  return <View style={styles.rows}>{tracks.map((track, index) => <Row
-    key={`${track.id}:${index}`}
-    href={{ pathname: '/track/[id]', params: { id: track.id } }}
-    title={track.metadata.title}
-    subtitle={artistName(track)}
-    meta={trackMeta(track)}
-    image={trackArtwork(track)}
-    action={<RowPlay track={track} onPress={() => onPlay(track, tracks)} />}
-  />)}</View>;
+  return <View style={styles.rows}>{tracks.map((track, index) => <TrackRow key={`${track.id}:${index}`} track={track} onPlay={() => onPlay(track, tracks)} />)}</View>;
 }
 
-function RowPlay({ track, onPress }: { track: Track; onPress: () => void }) {
+function TrackRow({ track, onPlay }: { track: Track; onPlay: () => void }) {
+  const { row, press, menu } = useTrackPress(track);
+  return <>
+    <Row rowRef={row} longPress={press}
+      href={{ pathname: '/track/[id]', params: { id: track.id } }}
+      title={track.metadata.title}
+      subtitle={artistName(track)}
+      meta={trackMeta(track)}
+      image={trackArtwork(track)}
+      action={<RowPlay track={track} onPress={onPlay} longPress={press} />}
+    />
+    {menu}
+  </>;
+}
+
+function RowPlay({ track, onPress, longPress }: { track: Track; onPress: () => void; longPress?: LongPress }) {
   const colors = useAppearance();
   const { playing, toggle } = useTrackPlayback(track);
-  return <Pressable accessibilityRole="button" accessibilityLabel={`${playing ? 'Pause' : 'Play'} ${track.metadata.title}`} onPress={() => toggle(onPress)}
+  return <Pressable accessibilityRole="button" accessibilityLabel={`${playing ? 'Pause' : 'Play'} ${track.metadata.title}`} {...longPress} onPress={() => toggle(onPress)}
     style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
     {playing ? <PlayingWave color={colors.accent} /> : <PlayIcon size={20} color={colors.text} fill={colors.text} />}
   </Pressable>;

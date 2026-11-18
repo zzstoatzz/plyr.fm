@@ -10,6 +10,7 @@ import { useTopTracks } from './use-top-tracks';
 import { Text } from './Text';
 import { PlayingArtworkOverlay } from './PlayingWave';
 import { useTrackPlayback } from './playback-context';
+import { useTrackPress } from './TrackPress';
 import type { Track } from '@plyr/next-core/api';
 import type { StyleProp, ViewStyle } from 'react-native';
 
@@ -41,22 +42,24 @@ export function HomeChart({ onPlay }: { onPlay: Play }) {
 function ChartTrack({ track, onPlay, card, lines }: { track: Track; onPlay: Play; card: StyleProp<ViewStyle>; lines: number[] }) {
   const colors = useAppearance();
   const { playing, toggle } = useTrackPlayback(track);
-  return <View testID="home-chart-track" style={card}>
-    <Pressable testID="track-play-control" accessibilityRole="button" accessibilityLabel={`${playing ? 'Pause' : 'Play'} ${track.metadata.title}`} onPress={() => toggle(() => onPlay(track))}
+  const { row, press, menu } = useTrackPress(track);
+  return <View ref={row} testID="home-chart-track" style={card}>
+    <Pressable testID="track-play-control" accessibilityRole="button" accessibilityLabel={`${playing ? 'Pause' : 'Play'} ${track.metadata.title}`} {...press} onPress={() => toggle(() => onPlay(track))}
       style={({ pressed }) => [StyleSheet.absoluteFill, { borderRadius: 8, backgroundColor: pressed ? colors.hover : 'transparent' }]} />
     <View pointerEvents="none">
       <Cover uri={trackArtwork(track)} size={48} radius={6} />
       {playing && <PlayingArtworkOverlay />}
     </View>
     <View pointerEvents="box-none" style={styles.text}>
-      <Link href={`/track/${track.id}`} asChild><Pressable accessibilityRole="link" accessibilityLabel={`Track details: ${track.metadata.title}`} hitSlop={{ top: 6, bottom: 2, right: 8 }} style={styles.link}>
+      <Link href={`/track/${track.id}`} asChild><Pressable accessibilityRole="link" accessibilityLabel={`Track details: ${track.metadata.title}`} {...press} hitSlop={{ top: 6, bottom: 2, right: 8 }} style={styles.link}>
         <Text numberOfLines={1} style={{ color: colors.text, fontSize: 14 * colors.scale, lineHeight: lines[0], fontWeight: '600' }}>{track.metadata.title}</Text>
       </Pressable></Link>
-      <Link href={`/u/${encodeURIComponent(track.artist.profile.handle || track.artist.did)}`} asChild><Pressable accessibilityRole="link" hitSlop={{ top: 2, bottom: 6, right: 8 }} style={styles.link}>
+      <Link href={`/u/${encodeURIComponent(track.artist.profile.handle || track.artist.did)}`} asChild><Pressable accessibilityRole="link" {...press} hitSlop={{ top: 2, bottom: 6, right: 8 }} style={styles.link}>
         <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 12 * colors.scale, lineHeight: lines[1] }}>{artistName(track)}</Text>
       </Pressable></Link>
       <View pointerEvents="none"><Text numberOfLines={1} style={{ color: colors.faint, fontSize: 11 * colors.scale, lineHeight: lines[2] }}>{track.metrics.like_count} {track.metrics.like_count === 1 ? 'like' : 'likes'}</Text></View>
     </View>
+    {menu}
   </View>;
 }
 
