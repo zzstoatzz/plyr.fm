@@ -1,31 +1,18 @@
 import { Link, type Href } from 'expo-router';
 import { useState, type ReactNode } from 'react';
-import { Image, Linking, PixelRatio, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
-import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
+import { Linking, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import type { Artist, ArtistMetrics, Track } from '@plyr/next-core/api';
-import { displayUrl, trackArtwork } from '@plyr/next-core/artwork';
+import { trackArtwork } from '@plyr/next-core/artwork';
 import { useAppearance } from './appearance';
+import { BLEED, Chip, HeroBackdrop, Pill, Round, TOP, shuffled } from './HeroPieces';
 import { Cover } from './CatalogPieces';
-import { catalogRuntime } from './CatalogMetrics';
+import { catalogRuntime } from '@plyr/next-core/catalog/runtime';
 import { compactCount } from './home-state';
 import { CaretRight, Heart, PencilSimple, Play as PlayIcon, ShareNetwork, Shuffle } from './icons';
 import { Text } from './Text';
 import { toast } from './toast';
 
-/** The page column pads 20 on each side and 16 on top; the hero bleeds past that. */
-const BLEED = 20;
-const TOP = 16;
 const AVATAR = 116;
-const CONTROL = 48;
-
-function shuffled<T>(items: T[]): T[] {
-  const copy = [...items];
-  for (let i = copy.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
-  }
-  return copy;
-}
 
 /** "ko-fi.com/name" rather than "https://www.ko-fi.com/name/". */
 export function supportLabel(url: string): string {
@@ -37,7 +24,7 @@ export function ArtistHero({ artist, tracks, metrics, owner, onPlay, onShare, fo
   onPlay: (track: Track, queue: Track[]) => void; onShare: () => void; footer?: ReactNode;
 }) {
   const theme = useAppearance();
-  const { width, fontScale } = useWindowDimensions();
+  const { fontScale } = useWindowDimensions();
   const icon = (size: number) => Math.round(size * Math.min(fontScale * theme.scale, 1.6));
   const name = artist.display_name || artist.handle;
   const support = /^https?:\/\//i.test(artist.support_url ?? '') ? artist.support_url! : null;
@@ -46,18 +33,7 @@ export function ArtistHero({ artist, tracks, metrics, owner, onPlay, onShare, fo
   const totals = metrics?.totals;
   const backdrop = Math.round(TOP + 28 + AVATAR * 1.6);
   return <View style={{ marginHorizontal: -BLEED, marginTop: -TOP, paddingHorizontal: BLEED, paddingTop: TOP + 28 }}>
-    {artist.avatar_url ? <View aria-hidden pointerEvents="none" style={[styles.backdrop, { height: backdrop }]}>
-      <Backdrop uri={artist.avatar_url} opacity={theme.dark ? 0.6 : 0.7} />
-      <Svg style={StyleSheet.absoluteFill} width={width} height={backdrop}>
-        <Defs><LinearGradient id="artist-hero-fade" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset={0} stopColor={theme.background} stopOpacity={1} />
-          <Stop offset={0.28} stopColor={theme.background} stopOpacity={0} />
-          <Stop offset={0.72} stopColor={theme.background} stopOpacity={0.8} />
-          <Stop offset={1} stopColor={theme.background} stopOpacity={1} />
-        </LinearGradient></Defs>
-        <Rect width="100%" height="100%" fill="url(#artist-hero-fade)" />
-      </Svg>
-    </View> : null}
+    {artist.avatar_url ? <HeroBackdrop uri={artist.avatar_url} height={backdrop} /> : null}
 
     <View style={styles.identity}>
       <View style={{ borderRadius: AVATAR / 2, boxShadow: theme.dark ? '0px 10px 30px #0000008c' : '0px 10px 30px #00000038' }}>
@@ -97,48 +73,6 @@ export function ArtistHero({ artist, tracks, metrics, owner, onPlay, onShare, fo
   </View>;
 }
 
-/** A small rendition is plenty under a heavy blur; the original is the fallback. */
-function Backdrop({ uri, opacity }: { uri: string; opacity: number }) {
-  // iOS can't blur bsky's transparent WebP avatars (the blur fails silently), so ask its CDN for a JPEG.
-  const opaque = /^https:\/\/cdn\.bsky\.app\//.test(uri) ? uri.replace(/@(webp|png|jpeg)$/i, '') + '@jpeg' : null;
-  const sources = [...new Set([opaque ?? displayUrl(uri, 160, PixelRatio.get()), uri])];
-  const [index, setIndex] = useState(0);
-  if (index >= sources.length) return null;
-  return <Image aria-hidden source={{ uri: sources[index] }} blurRadius={40} resizeMode="cover" onError={() => setIndex(index + 1)}
-    style={[StyleSheet.absoluteFill, { opacity, transform: [{ scale: 1.3 }] }]} />;
-}
-
-function Chip({ value, label }: { value: string; label: string }) {
-  const theme = useAppearance();
-  return <View accessible accessibilityLabel={`${value} ${label}`} style={[styles.chip, { backgroundColor: theme.raised }]}>
-    <Text style={{ color: theme.muted, fontFamily: theme.fontFamily, fontSize: 13.5 * theme.scale, fontVariant: ['tabular-nums'] }}>
-      <Text style={{ color: theme.text, fontWeight: '700' }}>{value}</Text> {label}
-    </Text>
-  </View>;
-}
-
-function Pill({ icon, label, accessibilityLabel, onPress, primary }: {
-  icon: ReactNode; label: string; accessibilityLabel: string; onPress: () => void; primary?: boolean;
-}) {
-  const theme = useAppearance();
-  return <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel} onPress={onPress}
-    style={({ pressed }) => [styles.pill, { backgroundColor: primary ? theme.accent : theme.raised, opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] }]}>
-    {icon}
-    <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={{ flexShrink: 1, color: primary ? theme.onAccent : theme.text, fontFamily: theme.fontFamily, fontSize: 17 * theme.scale, fontWeight: '700' }}>{label}</Text>
-  </Pressable>;
-}
-
-function Round({ label, onPress, href, children }: { label: string; onPress?: () => void; href?: Href; children: ReactNode }) {
-  const theme = useAppearance();
-  const [pressed, setPressed] = useState(false);
-  const control = <Pressable accessibilityRole={href ? 'link' : 'button'} accessibilityLabel={label} onPress={onPress}
-    onPressIn={() => setPressed(true)} onPressOut={() => setPressed(false)}
-    style={StyleSheet.flatten([styles.round, { backgroundColor: theme.raised, opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.94 : 1 }] }])}>
-    {children}
-  </Pressable>;
-  return href ? <Link href={href} asChild>{control}</Link> : control;
-}
-
 function InfoCard({ eyebrow, title, meta, lead, href, onPress, accessibilityLabel }: {
   eyebrow: string; title: string; meta?: string; lead: ReactNode; accessibilityLabel: string; href?: Href; onPress?: () => void;
 }) {
@@ -160,13 +94,9 @@ function InfoCard({ eyebrow, title, meta, lead, href, onPress, accessibilityLabe
 }
 
 const styles = StyleSheet.create({
-  backdrop: { position: 'absolute', top: 0, left: 0, right: 0, overflow: 'hidden' },
   identity: { alignItems: 'center', gap: 2 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginTop: 16 },
-  chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
   controls: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 18 },
-  pill: { flex: 1, minHeight: CONTROL, paddingHorizontal: 14, borderRadius: CONTROL / 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  round: { width: CONTROL, height: CONTROL, borderRadius: CONTROL / 2, alignItems: 'center', justifyContent: 'center' },
   cards: { gap: 8, marginTop: 16 },
   card: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 60, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12 },
   lead: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },

@@ -350,7 +350,7 @@ async function collectionControls(browser, phone, scheme) {
     await page.goto(origin + collectionPath);
     await page.getByRole('heading', { name: title, exact: true }).waitFor();
     await page.getByText('track unavailable', { exact: true }).waitFor();
-    await page.getByRole('button', { name: 'add to queue', exact: true }).click();
+    await page.getByRole('button', { name: `Add ${title} to queue`, exact: true }).click();
     const navigation = page.getByRole('navigation', { name: 'Main navigation' });
     if (phone) {
       await navigation.getByRole('link', { name: 'library', exact: true }).click();

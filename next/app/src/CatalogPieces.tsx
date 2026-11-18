@@ -7,7 +7,7 @@ import { Animated, PixelRatio, Pressable, StyleSheet, View, type ViewInstance } 
 import type { ListSummary, Page, Track } from '@plyr/next-core/api';
 import { Action, Copy } from './controls';
 import { WaveLoading } from './WaveLoading';
-import { compactCount } from './home-state';
+import { compactCount, formatDuration } from './home-state';
 import { useAppearance } from './appearance';
 import { CompactRows } from './ActionRow';
 import { artworkShadow, cardSurface } from './materials';

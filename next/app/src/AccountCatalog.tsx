@@ -1,4 +1,4 @@
-import { TrackRows } from './TrackRows';
+import { AlbumRows, TrackRows } from './TrackRows';
 import { trackArtwork } from '@plyr/next-core/artwork';
 import { X, ListPlus, MusicNote as Music2, ArrowsClockwise as RefreshCw } from './icons';
 import { PlayerControl } from './PlayerControl';
@@ -174,14 +174,13 @@ export function TrackPlaylistPicker({ track }: { track: Track }) {
 interface CollectionControlsProps {
   list: ListDetail;
   refresh: () => void;
-  actions: ReactNode;
   onPlay: Play;
   onOrderSaved: (revision: CollectionRevision, tracks?: Track[]) => void;
 }
 
 function CollectionBar({ children }: { children: ReactNode }) {
   const { width } = useWindowDimensions();
-  return <View style={[styles.actions, width < 520 && { justifyContent: 'center' }]}>{children}</View>;
+  return <View style={[styles.actions, { justifyContent: 'center' }]}>{children}</View>;
 }
 
 export function CollectionActions(props: CollectionControlsProps) {
@@ -190,14 +189,15 @@ export function CollectionActions(props: CollectionControlsProps) {
   if (session.rpc !== rpc) setSession({ rpc, version: session.version + 1 });
   if (did && did === props.list.owner.did) return <EditCollection key={`${did}:${session.version}:${props.list.record.uri}`} {...props} />;
   const tracks = props.list.members.flatMap(({ track }) => track ? [track] : []);
-  return <>
-    <CollectionBar>{props.actions}</CollectionBar>
-    <Heading>tracks</Heading>
-    <TrackRows tracks={tracks} onPlay={(track, tracks) => props.onPlay(track, tracks, props.list.metadata.name ?? 'collection')} />
-  </>;
+  return <CollectionRows list={props.list} tracks={tracks} onPlay={props.onPlay} />;
 }
 
-function EditCollection({ list, refresh, actions, onPlay, onOrderSaved }: CollectionControlsProps) {
+function CollectionRows({ list, tracks, onPlay }: { list: ListDetail; tracks: Track[]; onPlay: Play }) {
+  const play: Play = (track, queue) => onPlay(track, queue, list.metadata.name ?? 'collection');
+  return list.object === 'album' ? <AlbumRows tracks={tracks} onPlay={play} /> : <TrackRows tracks={tracks} onPlay={play} />;
+}
+
+function EditCollection({ list, refresh, onPlay, onOrderSaved }: CollectionControlsProps) {
   const auth = useAuth();
   const pds = usePds();
   const router = useRouter();
@@ -244,7 +244,6 @@ function EditCollection({ list, refresh, actions, onPlay, onOrderSaved }: Collec
     saved={revision => { if (getAuth().did === auth.did && getAuth().rpc === auth.rpc) onOrderSaved(revision); }} />;
   return <>
     <CollectionBar>
-      {actions}
       <Button label={editing ? 'Done editing' : album ? 'Edit album' : 'Edit playlist'}
         onPress={() => {
           if (mutation.busy) return;
@@ -264,7 +263,6 @@ function EditCollection({ list, refresh, actions, onPlay, onOrderSaved }: Collec
         <Button label="Save name" onPress={rename} />}
       {!mutation.busy && <Action label={album ? "Organize tracks" : "Reorder tracks"} onPress={() => setReordering(true)} />}
     </View>}
-    <Heading>tracks</Heading>
     {editing && !album ? list.members.map(({ track, position, subject }) => {
       const removeAction = !mutation.busy && <PlayerControl icon={X} destructive
         label={'Remove ' + (track?.metadata.title ?? 'unavailable track')}
@@ -272,7 +270,7 @@ function EditCollection({ list, refresh, actions, onPlay, onOrderSaved }: Collec
       return track ? <Row key={position} href={{ pathname: '/track/[id]', params: { id: track.id } }}
         title={track.metadata.title} subtitle={artistName(track)} image={trackArtwork(track)} action={removeAction} />
         : <View key={position} style={styles.actions}><Copy>unavailable track</Copy>{removeAction}</View>;
-    }) : <TrackRows tracks={tracks} onPlay={(track, tracks) => onPlay(track, tracks, list.metadata.name ?? 'collection')} />}
+    }) : <CollectionRows list={list} tracks={tracks} onPlay={onPlay} />}
     {editing && !album && !mutation.busy && <View style={styles.actions}>
       <Button destructive label={confirmDelete ? 'Confirm delete playlist' : 'Delete playlist'}
         onPress={confirmDelete ? deletePlaylist : () => setConfirmDelete(true)} />
