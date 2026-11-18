@@ -6,16 +6,16 @@ import { PlayerControl } from './PlayerControl';
 import { ActionRow } from './ActionRow';
 import { toast } from './toast';
 
-export function ShareLink({ path, compact = false, menu = false }: { path: string; compact?: boolean; menu?: boolean }) {
-  async function share() {
-    try {
-      const url = SITE_URL + path;
-
-      await Share.share({ message: url });
-    } catch (error) {
-      if (!(error instanceof Error && error.name === 'AbortError')) toast.error('failed to share link');
-    }
+export async function shareLink(path: string) {
+  try {
+    await Share.share({ message: SITE_URL + path });
+  } catch (error) {
+    if (!(error instanceof Error && error.name === 'AbortError')) toast.error('failed to share link');
   }
+}
+
+export function ShareLink({ path, compact = false, menu = false }: { path: string; compact?: boolean; menu?: boolean }) {
+  const share = () => shareLink(path);
   return <View style={{ gap: 8 }}>
     {menu ? <ActionRow icon={ShareIcon} label="share" onPress={() => void share()} /> : compact ? <PlayerControl icon={ShareIcon} label="Share" onPress={() => void share()} /> : <Button label="Share" onPress={() => void share()} />}
   </View>;

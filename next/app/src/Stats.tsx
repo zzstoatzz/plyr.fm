@@ -32,7 +32,7 @@ export default function Stats() {
         autoCapitalize="none" autoCorrect={false} returnKeyType="search" maxLength={100} />
       {[...term].length >= 2 && <ArtistMatches key={term} term={term} />}
     </View>
-    {stats ? <CatalogMetrics lead={{ label: 'plays on Next', value: stats.plays.toLocaleString() }} metrics={[
+    {stats ? <CatalogMetrics lead={{ label: 'total plays', value: stats.plays.toLocaleString() }} metrics={[
       { label: 'tracks', value: stats.tracks.toLocaleString() },
       { label: 'artists', value: stats.artists.toLocaleString() },
       { label: 'catalog runtime', value: catalogRuntime(stats.duration_seconds) },

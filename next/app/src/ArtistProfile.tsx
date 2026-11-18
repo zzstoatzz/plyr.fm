@@ -1,18 +1,15 @@
 import { useAppearance } from './appearance';
-import { useFocusEffect, type Href } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { api } from './api-client';
 import { type Artist } from '@plyr/next-core/api';
 import { useAuth } from './auth';
-import { Action, InlineLink, Copy } from './controls';
+import { Action, Copy } from './controls';
 import { ListRows, Status, TrackRows, usePages, useResource, type Play } from './CatalogPieces';
 import { Choice } from './AccountPieces';
-import { CatalogMetrics, catalogRuntime } from './CatalogMetrics';
-import { DetailHeader } from './DetailHeader';
-import { PlayerControl } from './PlayerControl';
-import { PlayGlyph } from './PlayerGlyph';
-import { ShareLink } from './ShareLink';
+import { shareLink } from './ShareLink';
+import { ArtistHero } from './ArtistHero';
 import { useTabs } from './behaviors/use-tabs';
 
 const sections = ['tracks', 'albums', 'playlists', 'likes'] as const;
@@ -50,29 +47,16 @@ function ArtistCatalog({ artist, onPlay }: { artist: Artist; onPlay: Play }) {
   const theme = useAppearance();
   const auth = useAuth();
   const name = artist.display_name || artist.handle;
-  const support = /^https?:\/\//i.test(artist.support_url ?? '') ? artist.support_url : null;
   return <>
-    <DetailHeader title={name} artwork={artist.avatar_url} round actions={<>
-      {tracks.data[0] && <PlayerControl primary large icon={PlayGlyph} label="Play tracks"
-        onPress={() => onPlay(tracks.data[0], tracks.data, name)} />}
-      <ShareLink compact path={`/u/${encodeURIComponent(artist.handle || artist.did)}`} />
-      {auth.did === artist.did && <Action label="Edit profile" href="/edit-profile" />}
-    </>}>
-      <Copy>@{artist.handle}</Copy>
-    </DetailHeader>
-    {artist.bio && <Copy>{artist.bio}</Copy>}
-    {support && <InlineLink standalone href={support as Href}>support artist</InlineLink>}
-    {metrics.data && <CatalogMetrics metrics={[
-      { label: 'plays on Next', value: metrics.data.totals.plays.toLocaleString() },
-      { label: 'tracks', value: metrics.data.totals.tracks.toLocaleString() },
-      { label: 'catalog runtime', value: catalogRuntime(metrics.data.totals.duration_seconds) },
-    ]} />}
-    {metrics.error && <View style={styles.actions}><Copy>couldn’t load totals.</Copy><Action label="Retry totals" onPress={metrics.retry} /></View>}
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }}>
-      <View {...catalogTabs.list} style={[styles.tabs, { borderColor: theme.hairline }]}>
+    <ArtistHero artist={artist} tracks={tracks.data} metrics={metrics.data ?? null} owner={auth.did === artist.did}
+      onPlay={(track, queue) => onPlay(track, queue, name)}
+      onShare={() => void shareLink(`/u/${encodeURIComponent(artist.handle || artist.did)}`)}
+      footer={metrics.error ? <View style={[styles.actions, { marginTop: 12 }]}><Copy>couldn’t load totals.</Copy><Action label="Retry totals" onPress={metrics.retry} /></View> : null} />
+    <View style={[styles.tabsRule, { borderColor: theme.hairline }]}><ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }}>
+      <View {...catalogTabs.list} style={styles.tabs}>
         {sections.map(value => <Choice key={value} {...catalogTabs.tab(value)} />)}
       </View>
-    </ScrollView>
+    </ScrollView></View>
     <View {...catalogTabs.panel(section)} style={styles.panel}>
       {section === 'tracks' && <>
         <TrackRows tracks={tracks.data} onPlay={(track, queue) => onPlay(track, queue, name)} />
@@ -97,6 +81,7 @@ function PageStatus<T>({ page, label }: { page: ReturnType<typeof usePages<T>>; 
 
 const styles = StyleSheet.create({
   actions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12 },
-  tabs: { flexDirection: 'row', gap: 6, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  tabsRule: { borderBottomWidth: StyleSheet.hairlineWidth },
+  tabs: { flexDirection: 'row', gap: 6 },
   panel: { gap: 12 },
 });
