@@ -65,11 +65,30 @@ async function desktop(browser, origin) {
     await menu.waitFor({ state: 'hidden' });
   }
   await page.getByTestId('toast').filter({ hasText: `playing ${tracks[2].metadata.title} next` }).getByRole('button').click();
+
+  // opening the menu twice in a row must not leave Escape swallowed afterwards
+  const again = await rows.nth(3).locator('.metrics').boundingBox();
+  for (let time = 0; time < 2; time++) await page.mouse.click(again.x + again.width - 4, again.y + again.height / 2, { button: 'right' });
+  await page.keyboard.press('Escape');
+  await page.getByRole('group', { name: `Actions for ${tracks[3].metadata.title}` }).waitFor({ state: 'hidden' });
+  assert.equal(await page.evaluate(() => { const event = new KeyboardEvent('keydown', { key: 'Escape', cancelable: true, bubbles: true }); document.body.dispatchEvent(event); return event.defaultPrevented; }), false, 'Escape is free once the menu is closed');
   const panel = page.getByTestId('queue-panel');
   await panel.waitFor();
   const queued = panel.locator('li.upcoming');
   await queued.nth(1).waitFor();
   assert.deepEqual(await titles(queued), [tracks[2].metadata.title, tracks[1].metadata.title], 'play next puts the newest pick first');
+
+  // a press released outside the row must not leave a drag armed for the next hover and click
+  const stray = await queued.nth(0).locator('.labels .subtle').boundingBox();
+  await page.mouse.move(stray.x + 4, stray.y + stray.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(stray.x - 400, stray.y + stray.height / 2, { steps: 4 });
+  await page.mouse.up();
+  const next = await queued.nth(1).locator('.labels .subtle').boundingBox();
+  await page.mouse.move(next.x + 4, next.y + next.height / 2, { steps: 6 });
+  assert.equal(await panel.locator('li.upcoming.lifted').count(), 0, 'no ghost drag after a stray press');
+  await page.mouse.click(next.x + 4, next.y + next.height / 2);
+  assert.deepEqual(await titles(queued), [tracks[2].metadata.title, tracks[1].metadata.title], 'a plain click does not reorder');
 
   const from = await queued.nth(0).locator('.labels .subtle').boundingBox();
   const to = await queued.nth(1).boundingBox();

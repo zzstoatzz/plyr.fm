@@ -41,7 +41,7 @@
 		return !!tail && index > start && (index === end || index === end + 1);
 	}
 
-	interface Drag { index: number; pointer: number; queue: typeof player.queue; y: number; scroll: number; offset: number; to: number; rows: Row[]; nodes: HTMLElement[]; from: number; scroller: HTMLElement; frame?: number; clientY: number }
+	interface Drag { last: number; index: number; pointer: number; queue: typeof player.queue; y: number; scroll: number; offset: number; to: number; rows: Row[]; nodes: HTMLElement[]; from: number; scroller: HTMLElement; frame?: number; clientY: number }
 	interface Press { index: number; pointer: number; x: number; y: number; touch: boolean; node: HTMLElement; timer?: ReturnType<typeof setTimeout> }
 	let drag = $state.raw<Drag>();
 	let press: Press | undefined;
@@ -53,9 +53,10 @@
 	}
 
 	function pressStart(event: PointerEvent, index: number, handle = false) {
-		if (event.button !== 0 || index < start || drag) return;
+		if (event.button !== 0 || !event.isPrimary || index < start || drag || press) return;
 		const target = event.target as Element;
-		if (!handle && target.closest('button, a')) return;
+		// A held touch may start on the cover or title too; a mouse drag starting there would fight the link and button.
+		if (!handle && event.pointerType !== 'touch' && target.closest('button, a')) return;
 		const node = event.currentTarget as HTMLElement;
 		press = { index, pointer: event.pointerId, x: event.clientX, y: event.clientY, touch: event.pointerType === 'touch', node: node.closest('li') ?? node };
 		if (handle) begin(event);
@@ -74,7 +75,10 @@
 		const gap = rects.length > 1 ? Math.max(0, rects[1].top - rects[0].bottom) : 0;
 		try { current.node.setPointerCapture(current.pointer); } catch { /* the pointer already ended */ }
 		swipe = undefined;
-		drag = { index: current.index, from, to: from, pointer: current.pointer, queue: player.queue, y: current.y, clientY: event.clientY, scroll: scroller.scrollTop, offset: 0,
+		// A pick stays among the picks; the queue would put it at the end of them anyway.
+		const picksEnd = nodes.findLastIndex(node => Number(node.dataset.queueIndex) < end);
+		const last = current.index < end && picksEnd >= 0 ? picksEnd : nodes.length - 1;
+		drag = { last, index: current.index, from, to: from, pointer: current.pointer, queue: player.queue, y: current.y, clientY: event.clientY, scroll: scroller.scrollTop, offset: 0,
 			rows: rects.map(rect => ({ top: rect.top, height: rect.height + gap })), nodes, scroller };
 		press = undefined;
 		drag.frame = requestAnimationFrame(autoscroll);
@@ -84,6 +88,7 @@
 	function pressMove(event: PointerEvent) {
 		if (drag?.pointer === event.pointerId) { event.preventDefault(); track(event.clientY); return; }
 		if (press?.pointer !== event.pointerId) return;
+		if (!press.touch && !(event.buttons & 1)) { press = undefined; return; }
 		const dx = event.clientX - press.x, dy = event.clientY - press.y;
 		if (press.touch) { if (Math.hypot(dx, dy) > 8) { clearTimeout(press.timer); press = undefined; } return; }
 		if (Math.abs(dy) > 6 && Math.abs(dy) > Math.abs(dx)) begin(event);
@@ -94,7 +99,9 @@
 		if (!current) return;
 		if (current.queue !== player.queue) { endDrag(false); return; }
 		const raw = clientY - current.y + current.scroller.scrollTop - current.scroll;
-		const { offset, to } = dragTarget(current.rows, current.from, raw);
+		const target = dragTarget(current.rows, current.from, raw);
+		const offset = target.offset;
+		const to = Math.min(target.to, current.last);
 		if (to !== current.to) navigator.vibrate?.(5);
 		drag = { ...current, offset, to, clientY };
 	}

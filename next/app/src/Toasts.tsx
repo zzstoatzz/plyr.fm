@@ -38,7 +38,7 @@ function ToastCard({ item }: { item: Toast }) {
     style={[glassSurface(theme), styles.card, { boxShadow: theme.dark ? '0px 8px 24px #0000004d' : '0px 8px 24px #00000024',
       opacity: shown, transform: [{ translateY: shown.interpolate({ inputRange: [0, 1], outputRange: [-8, 0] }) }] }]}>
     {item.action ? <Link href={item.action.href} asChild>
-      <Pressable accessibilityRole="link" accessibilityLabel={`${item.message}. ${item.action.label}`} onPress={() => toast.dismiss(item.id)}
+      <Pressable accessibilityRole="link" accessibilityLabel={[item.message, item.action.label].filter(Boolean).join('. ')} onPress={() => toast.dismiss(item.id)}
         style={styles.content}>{body}</Pressable>
     </Link> : <View style={styles.content}>{body}</View>}
   </Animated.View>;
