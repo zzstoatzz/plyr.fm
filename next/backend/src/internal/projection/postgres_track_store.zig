@@ -104,7 +104,7 @@ pub const PostgresTrackStore = struct {
         });
         if (result != .stale) {
             _ = conn.exec(
-                "UPDATE plyr_index.track_records SET download_policy = $3, record_json = COALESCE($4::jsonb, record_json) WHERE record_uri = $1 AND record_cid = $2",
+                "UPDATE plyr_index.track_records SET download_policy = $3, record_json = COALESCE($4::json, record_json) WHERE record_uri = $1 AND record_cid = $2",
                 .{ change.record_uri, change.record_cid, change.download_policy, change.record_json },
             ) catch return error.ProjectionUnavailable;
             _ = conn.exec(upsert_tags_sql, .{ change.record_uri, change.record_cid, change.tags, change.tags_present }) catch |err| {
@@ -416,11 +416,11 @@ test "PostgreSQL track projection replaces complete records and keeps tombstones
     try std.testing.expectEqual(ApplyResult.applied, try store.apply(a, upsert_1));
     upsert_1.upsert.record_json = "{\"title\":\"One\"}";
     try std.testing.expectEqual(ApplyResult.idempotent, try store.apply(a, upsert_1));
-    try expectRecordJson(pool, "{\"title\": \"One\"}");
+    try expectRecordJson(pool, "{\"title\":\"One\"}");
     // rows projected before the column existed fill in on the next replay
     _ = try pool.exec("UPDATE plyr_index.track_records SET record_json = NULL", .{});
     try std.testing.expectEqual(ApplyResult.idempotent, try store.apply(a, upsert_1));
-    try expectRecordJson(pool, "{\"title\": \"One\"}");
+    try expectRecordJson(pool, "{\"title\":\"One\"}");
     var tags_row = (try pool.row("SELECT array_to_json(tags)::text,tags_present FROM plyr_index.track_tag_records", .{})).?;
     try std.testing.expectEqualStrings("[\"ambient\",\"hip-hop\"]", try tags_row.get([]const u8, 0));
     try std.testing.expect(try tags_row.get(bool, 1));

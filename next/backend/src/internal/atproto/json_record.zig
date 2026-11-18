@@ -72,20 +72,27 @@ pub fn verified(arena: std.mem.Allocator, value: std.json.Value, cid_text: []con
 
 /// Render a record as atproto JSON, the inverse of `toCbor`: CID links become
 /// `{"$link": cid}` and bytes become `{"$bytes": base64}`.
-pub fn toJson(arena: std.mem.Allocator, value: cbor.Value) error{OutOfMemory}![]const u8 {
+/// Null when a string is not valid UTF-8, which JSON cannot carry.
+pub fn toJson(arena: std.mem.Allocator, value: cbor.Value) error{OutOfMemory}!?[]const u8 {
     var out: std.Io.Writer.Allocating = .init(arena);
-    writeJson(arena, &out.writer, value) catch return error.OutOfMemory;
+    writeJson(arena, &out.writer, value) catch |err| return switch (err) {
+        error.InvalidUtf8 => null,
+        else => error.OutOfMemory,
+    };
     return out.written();
 }
 
-fn writeJson(arena: std.mem.Allocator, writer: *std.Io.Writer, value: cbor.Value) error{ OutOfMemory, WriteFailed }!void {
+fn writeJson(arena: std.mem.Allocator, writer: *std.Io.Writer, value: cbor.Value) error{ OutOfMemory, WriteFailed, InvalidUtf8 }!void {
     switch (value) {
         .unsigned => |number| try writer.print("{d}", .{number}),
         .negative => |number| try writer.print("{d}", .{number}),
         .float => |number| try std.json.Stringify.value(number, .{}, writer),
         .boolean => |flag| try writer.writeAll(if (flag) "true" else "false"),
         .null => try writer.writeAll("null"),
-        .text => |text| try std.json.Stringify.value(text, .{}, writer),
+        .text => |text| {
+            if (!std.unicode.utf8ValidateSlice(text)) return error.InvalidUtf8;
+            try std.json.Stringify.value(text, .{}, writer);
+        },
         .bytes => |bytes| {
             const encoder = std.base64.standard_no_pad.Encoder;
             const encoded = try arena.alloc(u8, encoder.calcSize(bytes.len));
@@ -110,6 +117,7 @@ fn writeJson(arena: std.mem.Allocator, writer: *std.Io.Writer, value: cbor.Value
             try writer.writeByte('{');
             for (entries, 0..) |entry, index| {
                 if (index != 0) try writer.writeByte(',');
+                if (!std.unicode.utf8ValidateSlice(entry.key)) return error.InvalidUtf8;
                 try std.json.Stringify.value(entry.key, .{}, writer);
                 try writer.writeByte(':');
                 try writeJson(arena, writer, entry.value);
@@ -175,5 +183,10 @@ test "records render back to the atproto JSON they came from" {
     , .{link});
     const parsed = try std.json.parseFromSliceLeaky(std.json.Value, arena, json_text, .{});
     const rendered = try toJson(arena, try toCbor(arena, parsed));
-    try std.testing.expectEqualStrings(json_text, rendered);
+    try std.testing.expectEqualStrings(json_text, rendered.?);
+
+    const nul: cbor.Value = .{ .map = &.{.{ .key = "note", .value = .{ .text = "a\x00b" } }} };
+    try std.testing.expectEqualStrings("{\"note\":\"a\\u0000b\"}", (try toJson(arena, nul)).?);
+    const invalid: cbor.Value = .{ .map = &.{.{ .key = "note", .value = .{ .text = "\xff" } }} };
+    try std.testing.expect((try toJson(arena, invalid)) == null);
 }

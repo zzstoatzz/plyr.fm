@@ -130,6 +130,12 @@ fn parseLimit(text: []const u8) !usize {
     return limit;
 }
 
+/// artistView caps displayName at 640 bytes; past that, leave it out.
+fn displayName(value: []const u8) ?[]const u8 {
+    if (value.len == 0 or value.len > 640) return null;
+    return value;
+}
+
 const ArtistView = struct {
     did: []const u8,
     handle: []const u8,
@@ -185,7 +191,7 @@ fn write(
         try std.json.Stringify.value(ArtistView{
             .did = item.artist.did,
             .handle = item.artist.profile.handle,
-            .displayName = if (item.artist.profile.display_name.len == 0) null else item.artist.profile.display_name,
+            .displayName = displayName(item.artist.profile.display_name),
             .avatar = item.artist.profile.avatar_url,
         }, options, w);
         try w.writeAll(",\"record\":");
