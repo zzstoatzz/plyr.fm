@@ -5,6 +5,7 @@ const server = @import("server.zig");
 const postgres = @import("internal/index/postgres_track_store.zig");
 const postgres_composed_tracks = @import("internal/index/postgres_composed_track_store.zig");
 const postgres_track_charts = @import("internal/index/postgres_track_chart_store.zig");
+const track_record_json = @import("internal/index/track_record_json_store.zig");
 const postgres_likes = @import("internal/index/postgres_like_query_store.zig");
 const postgres_comments = @import("internal/index/postgres_comment_query_store.zig");
 const postgres_notifications = @import("internal/notification/postgres_store.zig");
@@ -70,6 +71,11 @@ pub fn main() !void {
     else
         null;
     const track_chart_store = if (postgres_track_chart_store) |*store| store.store() else null;
+    var postgres_track_record_json_store: ?track_record_json.PostgresStore = if (postgres_store) |*store|
+        .{ .pool = store.pool }
+    else
+        null;
+    const track_record_json_store = if (postgres_track_record_json_store) |*store| store.store() else null;
     var postgres_like_store: ?postgres_likes.PostgresLikeQueryStore = if (postgres_store) |*store|
         .{ .pool = store.pool }
     else
@@ -158,6 +164,7 @@ pub fn main() !void {
                 .io = io,
                 .track_store = track_store,
                 .track_chart_store = track_chart_store,
+                .track_record_json_store = track_record_json_store,
                 .like_store = like_store,
                 .comment_store = comment_store,
                 .viewer_like_store = viewer_like_store,
@@ -266,6 +273,9 @@ test {
     _ = @import("api/router.zig");
     _ = @import("api/managed_space.zig");
     _ = @import("api/notifications.zig");
+    _ = @import("api/catalog.zig");
+    _ = @import("internal/application/public_catalog.zig");
+    _ = @import("internal/index/track_record_json_store.zig");
     _ = @import("internal/application/notifications.zig");
     _ = @import("internal/atproto/service_auth.zig");
     _ = @import("internal/atproto/space_uri.zig");

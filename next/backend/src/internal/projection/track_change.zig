@@ -4,6 +4,7 @@ const std = @import("std");
 const zat = @import("zat");
 const track_record = @import("../atproto/track_record.zig");
 const list_change = @import("list_change.zig");
+const json_record = @import("../atproto/json_record.zig");
 
 pub const Proof = list_change.Proof;
 
@@ -37,6 +38,8 @@ pub const Upsert = struct {
     self_labels: []const []const u8,
     tags: []const []const u8 = &.{},
     tags_present: bool = false,
+    /// the verified record as atproto JSON, served as-is by the public catalog
+    record_json: ?[]const u8 = null,
     proof: Proof,
 };
 
@@ -137,6 +140,7 @@ pub fn fromVerifiedOperation(
         .self_labels = parsed.self_labels,
         .tags = parsed.tags,
         .tags_present = parsed.tags_present,
+        .record_json = try json_record.toJson(allocator, value),
         .proof = proof,
     } };
 }
