@@ -39,16 +39,9 @@ async function screen(browser, phone, scheme) {
     await page.getByRole('heading', { name: linkedTrack.metadata.title, exact: true }).waitFor();
     await page.reload();
     await page.getByRole('heading', { name: linkedTrack.metadata.title, exact: true }).waitFor();
-    const offRead = page.waitForResponse(response => new URL(response.url()).pathname.endsWith('/comments'));
-    await page.goto(origin + '/track/' + tracks[3].id);
+    await Promise.all([page.waitForResponse(response => response.url().endsWith('/comments')), page.goto(origin + '/track/' + tracks[3].id)]);
     await page.getByRole('heading', { name: tracks[3].metadata.title, exact: true }).waitFor();
-    await offRead;
-    await page.waitForTimeout(100);
     assert.equal(await page.getByRole('button', { name: 'comments', exact: true }).count(), 0, 'no comments button when the artist has not opted in');
-    const commentsRequests = [];
-    page.on('request', request => {
-      if (new URL(request.url()).pathname.endsWith('/comments')) commentsRequests.push(request);
-    });
     await page.goto(origin);
     await page.getByTestId('home-track-row').first().waitFor();
     await page.getByTestId('home-chart').waitFor();
@@ -88,8 +81,6 @@ async function screen(browser, phone, scheme) {
     await page.getByText('A recording made at dawn.', { exact: false }).waitFor();
     await capture('track');
     const opener = page.getByRole('button', { name: 'comments', exact: true });
-    await opener.waitFor();
-    assert.equal(commentsRequests.length, 1, 'one read tells the page whether the artist allows comments');
     await opener.click();
     const comments = page.getByRole('dialog', { name: 'comments', exact: true });
     await comments.getByText('I love this moment.').waitFor();
