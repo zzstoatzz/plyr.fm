@@ -7,7 +7,7 @@ import { createGatedAudio, isSpaceCredentialRequest, type GatedAudioSource } fro
 import { auth } from '$lib/auth';
 import { privateAudioUrl, releasePrivateAudio } from './private-audio';
 
-const { resolveGatedAudio } = createGatedAudio<P256Keypair, LexMap>({
+export const { resolveGatedAudio } = createGatedAudio<P256Keypair, LexMap>({
 	isSpaceAtUriString, createSpaceSigHeaders, encapsulate, formatMacRequest, parseSpaceToken,
 	RECORD_MAC_PROFILE, verifyRecord, isCid, isLexMap, lexParse
 });
