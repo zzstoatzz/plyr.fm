@@ -16,6 +16,8 @@
 	let offset = $state(0);
 	let cancel = $state(false);
 	let touch = $state(false);
+	// The chapter playing when the wheel opened: letting go there escapes even if playback has since moved on.
+	let origin = $state(0);
 	let gesture: { x: number; y: number; from: number; moved: boolean; hold?: ReturnType<typeof setTimeout> } | undefined;
 	let flick: { y: number; from: number; moved: boolean } | undefined;
 	let wheel: HTMLDivElement | undefined = $state();
@@ -24,10 +26,19 @@
 	const max = $derived((chapters.length - 1) * ROW);
 	const chapter = $derived(chapters[current]);
 
-	$effect(() => { preview = mode !== 'closed' && selected !== current ? chapters[selected]?.start : undefined; });
+	$effect(() => { preview = mode !== 'closed' && selected !== origin ? chapters[selected]?.start : undefined; });
+	$effect(() => () => { preview = undefined; });
 	$effect(() => {
 		if (mode !== 'browse') return;
-		const outside = (event: PointerEvent) => { if (!wheel?.contains(event.target as Node) && !line?.contains(event.target as Node)) close(); };
+		// A tap outside only closes the wheel; it must not also press whatever it landed on.
+		const swallow = (event: Event) => { event.preventDefault(); event.stopPropagation(); };
+		const outside = (event: PointerEvent) => {
+			if (wheel?.contains(event.target as Node) || line?.contains(event.target as Node)) return;
+			swallow(event);
+			close();
+			document.addEventListener('click', swallow, { capture: true, once: true });
+			setTimeout(() => document.removeEventListener('click', swallow, true), 400);
+		};
 		document.addEventListener('pointerdown', outside, true);
 		return () => document.removeEventListener('pointerdown', outside, true);
 	});
@@ -37,13 +48,14 @@
 		selected = Math.round(offset / ROW);
 	}
 	function open(next: 'drag' | 'browse') {
+		origin = current;
 		selected = current;
 		offset = current * ROW;
 		cancel = false;
 		mode = next;
 	}
 	function close(commit = false) {
-		if (commit && seek && selected !== current && chapters[selected]) seek(chapters[selected].start);
+		if (commit && seek && selected !== origin && chapters[selected]) seek(chapters[selected].start);
 		if (gesture?.hold) clearTimeout(gesture.hold);
 		gesture = undefined;
 		cancel = false;
@@ -105,6 +117,7 @@
 	}
 	function flickDown(event: PointerEvent) {
 		if (mode !== 'browse') return;
+		event.preventDefault();
 		wheel?.setPointerCapture(event.pointerId);
 		flick = { y: event.clientY, from: offset, moved: false };
 	}
@@ -118,6 +131,7 @@
 		const state = flick;
 		flick = undefined;
 		if (!state) return;
+		line?.focus();
 		if (state.moved) { offset = selected * ROW; return; }
 		const rect = wheel?.getBoundingClientRect();
 		if (!rect) return;
@@ -125,7 +139,7 @@
 		if (index >= 0 && index < chapters.length) choose(index);
 	}
 
-	const hint = $derived(cancel ? 'let go to cancel' : selected === current
+	const hint = $derived(cancel ? 'let go to cancel' : selected === origin
 		? mode === 'browse' ? `${touch ? 'tap' : 'click'} outside to close` : 'let go to keep playing'
 		: `${mode === 'browse' ? touch ? 'tap' : 'click' : 'let go'} to jump to ${clock(chapters[selected]?.start ?? 0)}`);
 </script>

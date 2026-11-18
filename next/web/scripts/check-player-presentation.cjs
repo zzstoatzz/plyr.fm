@@ -193,6 +193,7 @@ async function verify(browser, origin, width, scheme) {
     await wheel.waitFor({ state: 'hidden' });
     await page.waitForFunction(() => window.playingAudio.currentTime >= 59.9);
     await dialog.getByText('now: porch', { exact: true }).waitFor();
+    await setScroll(0);
     const box = await dialog.getByRole('combobox', { name: /^now: porch/ }).boundingBox();
     const [lx, ly] = [box.x + box.width / 2, box.y + box.height / 2];
     await touch('touchStart', [[lx, ly]]);

@@ -158,6 +158,7 @@ export function NowPlaying({ track, close: leave, navigate: go }: {
   const chapters = useMemo(() => parseChapters(track.metadata.description, track.metadata.duration_seconds ?? undefined).chapters, [track.metadata.description, track.metadata.duration_seconds]);
   const chapterIndex = player.live ? -1 : currentChapter(chapters, position);
   const [wheelPreview, setWheelPreview] = useState<number>();
+  const [wheelActive, setWheelActive] = useState(false);
 
   dismiss.scrolled.current = event => {
     if (event.nativeEvent.contentOffset.y > 24) markHintSeen('now-playing.more-below');
@@ -188,7 +189,7 @@ export function NowPlaying({ track, close: leave, navigate: go }: {
           </Animated.View> : <View><PlayerControl icon={ChevronDown} label="Close" onPress={close} /></View>}
         </View>
         <Animated.View {...dismiss.contentStartHandlers} onLayout={event => setViewport(event.nativeEvent.layout.height)} style={[styles.scrollRegion, { transform: [{ translateY: motion.lift }] }]}>
-          <PullDetector gesture={pull.scroll}><Animated.ScrollView testID="now-playing-scroll" {...dismiss.scrollProps} scrollEventThrottle={16} scrollEnabled={!dismiss.dragging} showsVerticalScrollIndicator={!dismiss.dragging}
+          <PullDetector gesture={pull.scroll}><Animated.ScrollView testID="now-playing-scroll" {...dismiss.scrollProps} scrollEventThrottle={16} scrollEnabled={!dismiss.dragging && !wheelActive} showsVerticalScrollIndicator={!dismiss.dragging}
             contentContainerStyle={styles.content}>
             <View testID="now-playing-hero" onLayout={event => { titleEnd.current.hero = event.nativeEvent.layout.y; }}
               style={[styles.hero, viewport > 0 && { minHeight: viewport - 36 }]}>
@@ -226,7 +227,7 @@ export function NowPlaying({ track, close: leave, navigate: go }: {
                   {wheelPreview !== undefined && duration > 0 && <View pointerEvents="none" style={[styles.ghost, { left: `${Math.min(100, wheelPreview / duration * 100)}%`, backgroundColor: theme.text }]} />}</View>}
                 <View testID="now-playing-time" style={styles.time}>
                   <Text style={[caption, styles.numeric]}>{time(position)}</Text>
-                  {!error && chapterIndex >= 0 ? <ChapterWheel chapters={chapters} current={chapterIndex} seek={seek} onPreview={setWheelPreview} guard={dismiss.protectSlider} />
+                  {!error && chapterIndex >= 0 ? <ChapterWheel chapters={chapters} current={chapterIndex} seek={seek} onPreview={setWheelPreview} onActive={setWheelActive} guard={dismiss.protectSlider} />
                     : <Text accessibilityLiveRegion="polite" style={[caption, styles.status]}>{error ? 'couldn’t play this track' : ''}</Text>}
                   <Text style={[caption, styles.numeric]}>{time(duration)}</Text>
                 </View>
