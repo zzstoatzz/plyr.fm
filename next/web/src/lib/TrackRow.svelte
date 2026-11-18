@@ -69,7 +69,7 @@
 	.metrics { position: relative; z-index: 2; display: flex; align-items: center; gap: 0.8rem; color: var(--faint); font-size: 0.75rem; min-height: 1.4rem; }
 	.metrics time { white-space: nowrap; }
 	.metrics > span { display: flex; align-items: center; gap: 0.3rem; }
-	.row-actions { position: relative; z-index: 2; display: flex; align-items: center; }
+	.row-actions { position: relative; z-index: 2; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
 	.track:hover, .track:focus-within { background: var(--hover); }
 	.duration { text-align: end; font-variant-numeric: tabular-nums; }
 	.add { position: relative; z-index: 2; color: var(--muted); }
