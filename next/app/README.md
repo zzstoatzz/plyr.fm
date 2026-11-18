@@ -16,8 +16,10 @@ Use Bun and Node 22 or newer. The native OAuth redirect is
 
 ## Shipping
 
-TestFlight builds come from `eas build --platform ios --profile production`
-(local or cloud) and `eas submit`. Builds carry `expo-updates` on the
+TestFlight builds are built locally with `eas build --platform ios --profile
+production --local`, uploaded with `node scripts/testflight.mjs upload`, and
+count as shipped only once `node scripts/testflight.mjs wait <build>` passes.
+The `next-ship-ios` skill has the whole procedure. Builds carry `expo-updates` on the
 `production` channel with a fingerprint runtime version, so a change that only
 touches JavaScript or assets ships to installed builds without TestFlight:
 
