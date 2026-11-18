@@ -118,7 +118,7 @@
 				<h1 data-testid="now-playing-title">{player.current.metadata.title}</h1>
 				<a class="subtle" href={resolve('/(app)/u/[actor]', { actor: player.current.artist.profile.handle || player.current.artist.did })}>{artistName(player.current)}</a>
 				{#if player.current.metadata.album}<p class="subtle">{player.current.metadata.album}</p>{/if}
-				<div class="position">{#if player.liveStation}<LiveProgress />{:else}<Scrub stacked comments chapter={chapters.chapters[chapter]?.title} />{/if}</div>
+				<div class="position">{#if player.liveStation}<LiveProgress />{:else}<Scrub stacked comments chapters={chapters.chapters} {chapter} />{/if}</div>
 				<div class="commands" class:live={!!player.liveStation}>
 					<Transport />
 				</div>
@@ -195,7 +195,7 @@
 	.mini-copy { display: grid; min-width: 0; }
 	.mini-copy strong { color: var(--text); }
 	.hint-slot, .volume { display: none; }
-	.position { margin-top: 1.65rem; }
+	.position { position: relative; z-index: 2; margin-top: 1.65rem; }
 	.commands, .options { display: flex; justify-content: space-between; gap: 0.4rem; align-items: center; margin-block: 0.85rem; }
 	.commands :global(.transport) { width: 100%; justify-content: space-evenly; }
 	.commands :global(.toggle) { width: 4.5rem; height: 4.5rem; box-shadow: 0 0.45rem 1.4rem color-mix(in srgb, var(--accent) 24%, transparent); }
