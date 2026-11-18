@@ -159,6 +159,7 @@ export function NowPlaying({ track, close: leave, navigate: go }: {
   const chapterIndex = player.live ? -1 : currentChapter(chapters, position);
   const [wheelPreview, setWheelPreview] = useState<number>();
   const [wheelActive, setWheelActive] = useState(false);
+  const wheelBlocks = useMemo(() => [pull.pan, pull.scroll], [pull.pan, pull.scroll]);
 
   dismiss.scrolled.current = event => {
     if (event.nativeEvent.contentOffset.y > 24) markHintSeen('now-playing.more-below');
@@ -227,7 +228,7 @@ export function NowPlaying({ track, close: leave, navigate: go }: {
                   {wheelPreview !== undefined && duration > 0 && <View pointerEvents="none" style={[styles.ghost, { left: `${Math.min(100, wheelPreview / duration * 100)}%`, backgroundColor: theme.text }]} />}</View>}
                 <View testID="now-playing-time" style={styles.time}>
                   <Text style={[caption, styles.numeric]}>{time(position)}</Text>
-                  {!error && chapterIndex >= 0 ? <ChapterWheel chapters={chapters} current={chapterIndex} seek={seek} onPreview={setWheelPreview} onActive={setWheelActive} guard={dismiss.protectSlider} />
+                  {!error && chapterIndex >= 0 ? <ChapterWheel chapters={chapters} current={chapterIndex} seek={seek} onPreview={setWheelPreview} onActive={setWheelActive} guard={dismiss.protectSlider} blocks={wheelBlocks} />
                     : <Text accessibilityLiveRegion="polite" style={[caption, styles.status]}>{error ? 'couldn’t play this track' : ''}</Text>}
                   <Text style={[caption, styles.numeric]}>{time(duration)}</Text>
                 </View>

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Pressable, StyleSheet, View, type GestureResponderEvent, type ViewInstance } from 'react-native';
+import { Animated, Pressable, StyleSheet, View, useWindowDimensions, type ViewInstance } from 'react-native';
+import { GestureDetector, usePanGesture, type NativeGesture, type PanGesture } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import { clock, type Chapter } from '@plyr/next-core/chapters';
 import { useAppearance } from './appearance';
@@ -16,10 +17,11 @@ type Mode = 'closed' | 'drag' | 'browse';
  *  that was playing when the wheel opened, or sliding sideways off the wheel, closes it with playback untouched. A plain
  *  tap opens the same wheel to browse: flick through it, tap a chapter to jump, tap outside to close.
  *  `onActive` reports a touch on the line so the page can stop scrolling under it. */
-export function ChapterWheel({ chapters, current, seek, onPreview, onActive, guard }: {
+export function ChapterWheel({ chapters, current, seek, onPreview, onActive, guard, blocks }: {
   chapters: Chapter[]; current: number; seek?: (seconds: number) => void;
-  onPreview?: (seconds: number | undefined) => void; onActive?: (active: boolean) => void; guard?: object;
+  onPreview?: (seconds: number | undefined) => void; onActive?: (active: boolean) => void; guard?: object; blocks?: (PanGesture | NativeGesture)[];
 }) {
+  const { width: windowWidth } = useWindowDimensions();
   const theme = useAppearance();
   const row = 38 * theme.scale;
   const wheelHeight = row * VISIBLE;
@@ -34,7 +36,6 @@ export function ChapterWheel({ chapters, current, seek, onPreview, onActive, gua
   const originRef = useRef(current);
   const selection = useRef(current);
   const at = useRef(0);
-  const wheelTop = useRef(0);
   const wheelRef = useRef<ViewInstance>(null);
   const gesture = useRef<{ x: number; y: number; from: number; moved: boolean; hold?: ReturnType<typeof setTimeout> } | null>(null);
   const flick = useRef<{ y: number; from: number; moved: boolean } | null>(null);
@@ -68,6 +69,21 @@ export function ChapterWheel({ chapters, current, seek, onPreview, onActive, gua
   useEffect(() => () => { onPreview?.(undefined); onActive?.(false); if (gesture.current?.hold) clearTimeout(gesture.current.hold); }, [onPreview, onActive]);
   // A new track leaves an open wheel pointing at the old tracklist.
   useEffect(() => { if (modeRef.current !== 'closed') close(); }, [chapters]);
+
+  const handlers = useRef({ lineBegin() {}, lineMove(_dx: number, _dy: number) {}, lineEnd(_canceled: boolean) {}, wheelBegin() {}, wheelMove(_dy: number) {}, wheelEnd(_y: number) {} });
+  const lineActive = useRef(false);
+  const linePan = usePanGesture({
+    runOnJS: true, enabled: !!seek, block: blocks, minDistance: 4,
+    onBegin: () => { lineActive.current = false; handlers.current.lineBegin(); },
+    onUpdate: event => { lineActive.current = true; handlers.current.lineMove(event.translationX, event.translationY); },
+    onFinalize: event => handlers.current.lineEnd(event.canceled && lineActive.current),
+  });
+  const wheelPan = usePanGesture({
+    runOnJS: true, enabled: mode === 'browse', block: blocks, minDistance: 4,
+    onBegin: () => handlers.current.wheelBegin(),
+    onUpdate: event => handlers.current.wheelMove(event.translationY),
+    onFinalize: event => handlers.current.wheelEnd(event.y),
+  });
 
   const chapter = chapters[current];
   if (!chapter) return null;
@@ -117,90 +133,78 @@ export function ChapterWheel({ chapters, current, seek, onPreview, onActive, gua
     close(true);
   }
 
-  const lineHandlers = seek ? {
-    onStartShouldSetResponder: () => true,
-    onResponderTerminationRequest: () => false,
-    onResponderGrant: (event: GestureResponderEvent) => {
-      const { pageX, pageY } = event.nativeEvent;
-      if (modeRef.current === 'browse') { close(); return; }
-      onActive?.(true);
-      gesture.current = { x: pageX, y: pageY, from: current * row, moved: false,
-        hold: setTimeout(() => { if (gesture.current && modeRef.current === 'closed') open('drag'); }, HOLD_MS) };
-    },
-    onResponderMove: (event: GestureResponderEvent) => {
-      const drag = gesture.current;
-      if (!drag) return;
-      const dy = event.nativeEvent.pageY - drag.y;
-      const dx = event.nativeEvent.pageX - drag.x;
-      if (modeRef.current === 'closed' && Math.abs(dy) > 4) { clearTimeout(drag.hold); open('drag'); }
-      if (modeRef.current !== 'drag') return;
-      if (Math.abs(dy) > 4) drag.moved = true;
-      if (!drag.moved && Math.abs(dx) <= CANCEL_DX) return;
-      setCancel(Math.abs(dx) > CANCEL_DX);
-      scrollTo(drag.from - dy);
-    },
-    onResponderRelease: () => {
-      const drag = gesture.current;
-      if (!drag) return;
-      clearTimeout(drag.hold);
-      if (modeRef.current === 'drag' && (drag.moved || cancelRef.current)) { close(!cancelRef.current); return; }
-      gesture.current = null;
-      onActive?.(false);
-      if (modeRef.current === 'closed') open('browse');
-      else setMode('browse');
-    },
-    onResponderTerminate: () => { if (modeRef.current === 'drag' || !gesture.current) close(); else { clearTimeout(gesture.current.hold); gesture.current = null; onActive?.(false); } },
-  } : {};
-
-  const wheelHandlers = {
-    onStartShouldSetResponder: () => modeRef.current === 'browse',
-    onResponderTerminationRequest: () => false,
-    onResponderGrant: (event: GestureResponderEvent) => {
-      onActive?.(true);
-      wheelRef.current?.measureInWindow((_x: number, y: number) => { wheelTop.current = y; });
-      flick.current = { y: event.nativeEvent.pageY, from: at.current, moved: false };
-    },
-    onResponderMove: (event: GestureResponderEvent) => {
-      const state = flick.current;
-      if (!state) return;
-      const dy = event.nativeEvent.pageY - state.y;
-      if (Math.abs(dy) > 4) state.moved = true;
-      if (state.moved) scrollTo(state.from - dy);
-    },
-    onResponderRelease: (event: GestureResponderEvent) => {
-      const state = flick.current;
-      flick.current = null;
-      onActive?.(false);
-      if (!state) return;
-      if (state.moved) { scrollTo(Math.round(at.current / row) * row, true); return; }
-      // A tap: the row under the finger, counted in page coordinates from the band in the middle of the wheel.
-      const index = Math.round((at.current + event.nativeEvent.pageY - wheelTop.current - wheelHeight / 2) / row);
-      if (index >= 0 && index < chapters.length) pick(index);
-    },
-    onResponderTerminate: () => { flick.current = null; onActive?.(false); },
-  };
+  // Native gestures, not JS responders: the sheet's pull and the page's scroll are native too, and a native recognizer
+  // takes a touch from a JS responder whatever it answers. These block both, so a drag that starts here stays here.
+  function lineBegin() {
+    if (!seek) return;
+    if (modeRef.current === 'browse') { close(); return; }
+    onActive?.(true);
+    gesture.current = { x: 0, y: 0, from: current * row, moved: false,
+      hold: setTimeout(() => { if (gesture.current && modeRef.current === 'closed') open('drag'); }, HOLD_MS) };
+  }
+  function lineMove(dx: number, dy: number) {
+    const drag = gesture.current;
+    if (!drag) return;
+    if (modeRef.current === 'closed') { clearTimeout(drag.hold); open('drag'); }
+    if (modeRef.current !== 'drag') return;
+    drag.moved = true;
+    setCancel(Math.abs(dx) > CANCEL_DX);
+    scrollTo(drag.from - dy);
+  }
+  function lineEnd(canceledBySystem: boolean) {
+    const drag = gesture.current;
+    if (!drag) return;
+    clearTimeout(drag.hold);
+    if (modeRef.current === 'drag' && (drag.moved || canceledBySystem)) { close(drag.moved && !canceledBySystem && !cancelRef.current); return; }
+    gesture.current = null;
+    onActive?.(false);
+    if (modeRef.current === 'closed') open('browse');
+    else setMode('browse');
+  }
+  function wheelBegin() {
+    if (modeRef.current !== 'browse') return;
+    onActive?.(true);
+    flick.current = { y: 0, from: at.current, moved: false };
+  }
+  function wheelMove(dy: number) {
+    const state = flick.current;
+    if (!state) return;
+    state.moved = true;
+    scrollTo(state.from - dy);
+  }
+  function wheelEnd(y: number) {
+    const state = flick.current;
+    flick.current = null;
+    onActive?.(false);
+    if (!state) return;
+    if (state.moved) { scrollTo(Math.round(at.current / row) * row, true); return; }
+    // A tap: the row under the finger, counted from the band in the middle of the wheel.
+    const index = Math.round((at.current + y - wheelHeight / 2) / row);
+    if (index >= 0 && index < chapters.length) pick(index);
+  }
+  handlers.current = { lineBegin, lineMove, lineEnd, wheelBegin, wheelMove, wheelEnd };
 
   const hint = cancel ? 'let go to cancel' : selected === origin
     ? mode === 'browse' ? 'tap outside to close' : 'let go to keep playing'
     : `${mode === 'browse' ? 'tap' : 'let go'} to jump to ${clock(chapters[selected]?.start ?? 0)}`;
   const caption = { fontFamily: theme.fontFamily, fontSize: 13 * theme.scale };
+  const wheelWidth = Math.min(420, windowWidth - 32);
   const surface = theme.dark ? '#1c2029' : '#ffffff';
 
   return <View style={styles.anchor} {...guard}>
-    <View {...lineHandlers} accessible accessibilityRole="button"
+    <GestureDetector gesture={linePan}><View accessible accessibilityRole="button"
       accessibilityLabel={`now: ${chapter.title}${chapter.artist ? ` by ${chapter.artist}` : ''}`}
       accessibilityHint={seek ? 'Opens the tracklist wheel' : undefined}
       accessibilityState={{ expanded: mode !== 'closed', disabled: !seek }}
       onAccessibilityTap={seek ? () => modeRef.current === 'closed' ? open('browse') : close() : undefined}
       style={[styles.line, mode !== 'closed' && { backgroundColor: theme.accent + '1f' }]}>
       <Text numberOfLines={1} style={{ ...caption, color: theme.accent }}>now: {chapter.title}</Text>
-    </View>
+    </View></GestureDetector>
     {mode === 'browse' && <Pressable accessible={false} onPress={() => close()} style={styles.outside} />}
-    {mode !== 'closed' && <Animated.View ref={wheelRef} {...wheelHandlers} accessibilityViewIsModal={mode === 'browse'}
+    {mode !== 'closed' && <GestureDetector gesture={wheelPan}><Animated.View ref={wheelRef} accessibilityViewIsModal={mode === 'browse'}
       onAccessibilityEscape={() => close()}
-      onLayout={() => wheelRef.current?.measureInWindow((_x: number, y: number) => { wheelTop.current = y; })}
       style={[styles.wheel, {
-        height: wheelHeight, top: -wheelHeight / 2 + 10, backgroundColor: surface, borderColor: theme.border,
+        height: wheelHeight, top: -wheelHeight / 2 + 10, width: wheelWidth, marginLeft: -wheelWidth / 2, backgroundColor: surface, borderColor: theme.border,
         opacity: animated.wheel.opacity, transform: [{ scaleX: animated.wheel.scaleX }, { scaleY: animated.wheel.scaleY }],
       }]}>
       <View pointerEvents="none" style={[styles.band, { height: row, marginTop: -row / 2, backgroundColor: theme.accent + '1f' }]} />
@@ -223,7 +227,7 @@ export function ChapterWheel({ chapters, current, seek, onPreview, onActive, gua
         })}
       </Animated.View>
       <Text pointerEvents="none" accessibilityLiveRegion="polite" style={[styles.hint, { ...caption, fontSize: 12 * theme.scale, color: theme.muted, backgroundColor: surface }]}>{hint}</Text>
-    </Animated.View>}
+    </Animated.View></GestureDetector>}
   </View>;
 }
 
@@ -231,7 +235,7 @@ const styles = StyleSheet.create({
   anchor: { flex: 1, alignItems: 'center', zIndex: 10 },
   line: { maxWidth: '100%', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 99 },
   outside: { position: 'absolute', top: -2000, bottom: -2000, left: -2000, right: -2000 },
-  wheel: { position: 'absolute', left: -60, right: -60, borderRadius: 22, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden',
+  wheel: { position: 'absolute', left: '50%', borderRadius: 22, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden',
     shadowColor: '#000', shadowOpacity: 0.22, shadowRadius: 24, shadowOffset: { width: 0, height: 12 }, elevation: 12 },
   band: { position: 'absolute', left: 10, right: 10, top: '50%', borderRadius: 12 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 20 },
