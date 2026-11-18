@@ -22,10 +22,10 @@ export function usePlayerDismiss(enabled: boolean, width: number, height: number
   const fromContent = useRef(false);
   const pulled = useRef(0);
   const scrolled = useRef((_event: ScrollEvent) => {});
-  // JS-driven on every platform: React commits write Animated props from the JS value, which a native-driven spring leaves
-  // stale, so a re-render mid-animation (a playback tick) snapped the sheet's content to its closed state.
+  // Native-driven, so JS work (a playback tick) can't drop frames. Every node that reads `translation` keeps its identity
+  // across renders (NowPlaying, PlayerFlight); a node recreated mid-spring would reattach and draw a frame from a stale value.
   const spring = (toValue: number, velocity: number) => Animated.spring(translation, { toValue, velocity, stiffness: 1000, damping: 62, mass: 1,
-    overshootClamping: true, restDisplacementThreshold: toValue ? 4 : 1.5, restSpeedThreshold: toValue ? 40 : 1.5, useNativeDriver: false });
+    overshootClamping: true, restDisplacementThreshold: 0.5, restSpeedThreshold: 1.5, useNativeDriver: true });
   const exit = (then: () => void, velocity = 0) => {
     if (closing.current) return;
     closing.current = true;
@@ -63,7 +63,7 @@ export function usePlayerDismiss(enabled: boolean, width: number, height: number
     active.current = null;
     setDragging(false);
     const request = generation.current;
-    Animated.spring(translation, { toValue: 0, stiffness: 280, damping: 24, mass: 1, useNativeDriver: false }).start(({ finished }) => {
+    Animated.spring(translation, { toValue: 0, stiffness: 280, damping: 24, mass: 1, useNativeDriver: true }).start(({ finished }) => {
       if (finished && request === generation.current && !closing.current) { translation.setValue(0); markResting(true); }
     });
   };

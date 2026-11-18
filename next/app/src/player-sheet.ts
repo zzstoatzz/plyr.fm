@@ -1,7 +1,8 @@
 import { useSyncExternalStore } from 'react';
 import { Animated } from 'react-native';
+import type { Rect } from './player-flight-path';
 
-export interface Rect { x: number; y: number; width: number; height: number }
+export type { Rect };
 export type Measurable = { measureInWindow(callback: (x: number, y: number, width: number, height: number) => void): void };
 
 const translation = new Animated.Value(0);

@@ -23,11 +23,14 @@ import { currentChapter, parseChapters } from '@plyr/next-core/chapters';
 import { Coachmark } from './Coachmark';
 import { markHintSeen, useHintPending } from './hints';
 import { measure, playerSheet, setFlying, type Rect } from './player-sheet';
+import { artLeft, flightSteps, titleLeft } from './player-flight-path';
 import { ScrubberFaces } from './ScrubberFaces';
 import { CommentComposer } from './CommentComposer';
 import { useTrackComments } from './track-comments';
 
 const AnimatedSafeAreaView = Animated.createAnimatedComponent(SafeAreaView);
+const titleOriginFade = [0.05, 0.25] as const;
+const titleFade = [0.6, 0.8] as const;
 
 function time(value: number) {
   const seconds = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
@@ -113,9 +116,19 @@ export function NowPlaying({ track, close: leave, navigate: go }: {
   // Once open and still, the open state is plain styles: the flight hides and the resting art and title show in one commit,
   // instead of crossfading through the spring's last point of travel. Motion resumes in the same commit.
   const still = dismiss.resting;
-  const departed = (open: number, away: number) => still ? open
-    : playerSheet.translation.interpolate({ inputRange: [0, 1], outputRange: [open, away], extrapolate: 'clamp' });
-  const carried = flights ? { opacity: departed(1, 0) } : undefined;
+  // Every node reading the sheet's translation is built once per shape, so a playback tick re-rendering mid-spring keeps them attached.
+  const motion = useMemo(() => {
+    const translation = playerSheet.translation;
+    const departed = (open: number, away: number) => still ? open
+      : translation.interpolate({ inputRange: [0, 1], outputRange: [open, away], extrapolate: 'clamp' });
+    const swap = (open: number, away: number) => translation.interpolate({ inputRange: [0, 0.02], outputRange: [open, away], extrapolate: 'clamp' });
+    const fade = (open: number, docked: number, from: number, to: number) => morph && !still
+      ? translation.interpolate({ inputRange: [rest * from, rest * to], outputRange: [open, docked], extrapolate: 'clamp' }) : open;
+    return { titleRests: departed(1, 0), titleFlies: departed(0, 1), artRests: swap(1, 0), artFlies: swap(0, 1),
+      backdrop: fade(1, 0, 0.85, 1), content: fade(1, 0, 0, 0.5), lift: morph ? fade(0, -0.6 * rest, 0, 1) : 0 };
+  }, [still, morph, rest]);
+  const headerTitle = useMemo(() => condense.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }), [condense]);
+  const carried = flights ? { opacity: motion.titleRests } : undefined;
   // The resting art loads its own large rendition and fades in. The art flight draws the same image above it and stays opaque
   // until that art has settled and the sheet is still, then swaps in one commit: a crossfade of two copies dims for a few frames.
   // If the large cover never reports in (a stalled or cached load), hand over anyway so the flying copy can't stay on screen.
@@ -127,23 +140,11 @@ export function NowPlaying({ track, close: leave, navigate: go }: {
   const artShown = !art || settledArt === art;
   // The art flight and the resting art swap hard right at the open position, so at rest only the resting art can show,
   // even if the page moved after the flight was measured (Safari's toolbar, comments arriving).
-  const swap = (open: number, away: number) => playerSheet.translation.interpolate({ inputRange: [0, 0.02], outputRange: [open, away], extrapolate: 'clamp' });
-  const artCarried = flights ? { opacity: artShown ? swap(1, 0) : 0 } : undefined;
-  const fade = (open: number, docked: number, from: number, to: number) => morph && !still
-    ? playerSheet.translation.interpolate({ inputRange: [rest * from, rest * to], outputRange: [open, docked], extrapolate: 'clamp' }) : open;
-  const settle = (progress: number) => { const k = Math.min(1, progress / 0.4); return k * k * (3 - 2 * k); };
-  const artLeft = (progress: number) => {
-    if (!flights) return 0;
-    const { from, to } = flights.art;
-    const small = from.height / to.height;
-    const centered = (width - to.width * (small + (1 - small) * progress)) / 2;
-    return from.x + (centered - from.x) * settle(progress);
-  };
-  const titleLeft = (progress: number) => {
-    if (!flights) return 0;
-    const { from, to } = flights.title;
-    return from.x + (artLeft(progress) + to.x - flights.art.to.x - from.x) * settle(progress);
-  };
+  const artCarried = flights ? { opacity: artShown ? motion.artRests : 0 } : undefined;
+  const paths = useMemo(() => flights && {
+    art: flightSteps.map(progress => artLeft(flights.art, width, progress)),
+    title: flightSteps.map(progress => titleLeft(flights.title, flights.art, width, progress)),
+  }, [flights, width]);
   const titleStyle = { lineHeight: 30 * theme.scale, color: theme.text, fontFamily: theme.fontFamily, fontSize: 25 * theme.scale, fontWeight: '800', letterSpacing: -0.4 } as const;
   const error = player.error || player.status.error;
   const caption = { color: theme.muted, fontFamily: theme.fontFamily, fontSize: 13 * theme.scale };
@@ -164,12 +165,12 @@ export function NowPlaying({ track, close: leave, navigate: go }: {
   const sheet = <View ref={backdrop} style={styles.backdrop}>
       <PullDetector gesture={pull.pan}><AnimatedSafeAreaView {...dismiss.panelStartHandlers} accessibilityViewIsModal edges={[]}
         style={[{ transform: [{ translateY: dismiss.translation }] }, styles.panel, styles.full, inset]}>
-        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: theme.background, opacity: fade(1, 0, 0.85, 1) }]} />
-        <Animated.View style={[styles.full, { opacity: fade(1, 0, 0, 0.5) }]}>
+        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: theme.background, opacity: motion.backdrop }]} />
+        <Animated.View style={[styles.full, { opacity: motion.content }]}>
         <View style={[styles.header, condensed && { borderBottomWidth: StyleSheet.hairlineWidth, borderColor: theme.line }]}>
           {compact && <View><PlayerControl icon={ChevronDown} label="Close" onPress={close} /></View>}
           <View testID="now-playing-dismiss-region" style={styles.dismissRegion}>
-          <Animated.View style={{ opacity: condense.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }}><Text accessibilityRole="header"
+          <Animated.View style={{ opacity: headerTitle }}><Text accessibilityRole="header"
             style={[styles.headerTitle, compact && styles.centerTitle,
               { color: theme.muted, fontSize: 14 * theme.scale, fontFamily: theme.fontFamily }]}>{player.live ? `${player.live.station.label} radio · live` : 'now playing'}</Text></Animated.View>
           <Animated.View testID="now-playing-condensed" pointerEvents="none" aria-hidden={!condensed} style={[StyleSheet.absoluteFill, styles.condensed, { opacity: condense }]}>
@@ -184,7 +185,7 @@ export function NowPlaying({ track, close: leave, navigate: go }: {
             <PlayerControl primary icon={playing ? Pause : Play} label={playing ? 'Pause' : 'Play'} onPress={() => player.setPlaying(!playing)} busy={player.loading} />
           </Animated.View> : <View><PlayerControl icon={ChevronDown} label="Close" onPress={close} /></View>}
         </View>
-        <Animated.View {...dismiss.contentStartHandlers} onLayout={event => setViewport(event.nativeEvent.layout.height)} style={[styles.scrollRegion, { transform: [{ translateY: morph ? fade(0, -0.6 * rest, 0, 1) : 0 }] }]}>
+        <Animated.View {...dismiss.contentStartHandlers} onLayout={event => setViewport(event.nativeEvent.layout.height)} style={[styles.scrollRegion, { transform: [{ translateY: motion.lift }] }]}>
           <PullDetector gesture={pull.scroll}><Animated.ScrollView testID="now-playing-scroll" {...dismiss.scrollProps} scrollEventThrottle={16} scrollEnabled={!dismiss.dragging}
             contentContainerStyle={styles.content}>
             <View testID="now-playing-hero" onLayout={event => { titleEnd.current.hero = event.nativeEvent.layout.y; }}
@@ -257,12 +258,12 @@ export function NowPlaying({ track, close: leave, navigate: go }: {
         </Animated.View>
         <View ref={panelRef} pointerEvents="none" aria-hidden importantForAccessibility="no-hide-descendants" style={StyleSheet.absoluteFill}>
           {flights && <View testID="now-playing-flights" style={StyleSheet.absoluteFill}>
-            <Animated.View style={[StyleSheet.absoluteFill, { opacity: artShown ? swap(0, 1) : 1 }]}>
-              <PlayerFlight testID="now-playing-flight-art" {...flights.art} rest={rest} left={artLeft} origin={<Cover instant uri={art} size={flights.art.from.width} radius={6} />}>
+            <Animated.View style={[StyleSheet.absoluteFill, { opacity: artShown ? motion.artFlies : 1 }]}>
+              <PlayerFlight testID="now-playing-flight-art" {...flights.art} rest={rest} left={paths?.art} origin={<Cover instant uri={art} size={flights.art.from.width} radius={6} />}>
                 <Cover instant uri={art} size={flights.art.to.width} radius={16} />
               </PlayerFlight>
             </Animated.View>
-            <Animated.View style={[StyleSheet.absoluteFill, { opacity: departed(0, 1) }]}><PlayerFlight testID="now-playing-flight-title" {...flights.title} rest={rest} left={titleLeft} originFade={[0.05, 0.25]} fade={[0.6, 0.8]}
+            <Animated.View style={[StyleSheet.absoluteFill, { opacity: motion.titleFlies }]}><PlayerFlight testID="now-playing-flight-title" {...flights.title} rest={rest} left={paths?.title} originFade={titleOriginFade} fade={titleFade}
               origin={<Text numberOfLines={1} style={{ color: theme.text, fontSize: 14 * theme.scale, fontWeight: '700' }}>{track.metadata.title}</Text>}>
               <Text style={titleStyle}>{track.metadata.title}</Text>
             </PlayerFlight></Animated.View>
