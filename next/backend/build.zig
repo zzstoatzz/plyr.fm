@@ -139,7 +139,7 @@ pub fn build(b: *std.Build) void {
     // declared before the lazy fetch, which reruns configure without it
     const cases = b.option(u64, "fuzz-cases", "cases per property (default: HEGEL_TEST_CASES, else 100)");
     const only = b.option([]const u8, "fuzz-only", "run the property groups whose name contains this");
-    if (b.option(bool, "hegel", "build the property harnesses (builds libhegel once)") orelse false) {
+    if (b.option(bool, "hegel", "build the property harnesses with the native Hegel engine") orelse false) {
         if (b.lazyDependency("hegel", .{ .target = target, .optimize = optimize })) |hegel| {
             const fuzz_module = b.createModule(.{
                 .root_source_file = b.path("src/fuzz.zig"),
@@ -157,8 +157,6 @@ pub fn build(b: *std.Build) void {
             for (root_module.import_table.keys(), root_module.import_table.values()) |name, module| {
                 if (std.mem.startsWith(u8, name, "migration_")) fuzz_module.addImport(name, module);
             }
-            // libhegel is a rust staticlib: off darwin, _Unwind_* come from zig's libunwind
-            if (!target.result.os.tag.isDarwin()) fuzz_module.link_libcpp = true;
             const fuzz = b.addExecutable(.{ .name = "fuzz", .root_module = fuzz_module });
             const run_fuzz = b.addRunArtifact(fuzz);
             run_fuzz.has_side_effects = true;
