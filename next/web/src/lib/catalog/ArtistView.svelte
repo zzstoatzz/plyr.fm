@@ -221,12 +221,12 @@
 	.chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.6rem; }
 	.actions { display: flex; align-items: center; gap: 0.6rem; margin-top: 1rem; }
 	.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr)); gap: 0.6rem; }
-	.card { display: flex; align-items: center; gap: 0.75rem; min-height: 3.75rem; padding: 0.6rem 0.75rem; border-radius: 0.75rem; background: var(--raised); color: var(--text); text-decoration: none; }
+	.card { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; min-height: 3.75rem; padding: 0.6rem 0.75rem; border-radius: 0.75rem; background: var(--raised); color: var(--text); text-decoration: none; }
 	.card:hover { background: var(--hover); }
 	.card > :global(svg) { color: var(--faint); flex: none; }
 	.lead { width: 2.5rem; height: 2.5rem; flex: none; border-radius: 0.4rem; overflow: hidden; display: grid; place-items: center; }
 	.lead.heart { border-radius: 50%; background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
-	.card-copy { flex: 1; min-width: 0; display: grid; }
+	.card-copy { flex: 1 1 8rem; min-width: 0; display: grid; overflow-wrap: anywhere; }
 	.card-copy small { color: var(--faint); font-size: 0.72rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
 	.card-copy strong { font-weight: 600; }
 	.card .meta { color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
