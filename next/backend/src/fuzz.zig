@@ -1,6 +1,6 @@
 //! Property harnesses for the code that reads untrusted input, run by
-//! `zig build fuzz -Dhegel`. `-Dfuzz-only=<name>` runs the groups whose name
-//! contains it; `-Dfuzz-cases` or `HEGEL_TEST_CASES` sets the cases per
+//! `zig build fuzz -Dhegel`. `-Dfuzz-only=<name>[,<name>...]` runs the groups
+//! whose name contains one of them; `-Dfuzz-cases` or `HEGEL_TEST_CASES` sets the cases per
 //! property.
 
 const std = @import("std");
@@ -26,7 +26,7 @@ pub fn main() !void {
     const filter: ?[]const u8 = if (std.c.getenv("FUZZ_ONLY")) |only| std.mem.span(only) else null;
     var failed = false;
     inline for (groups) |group| {
-        if (filter == null or std.mem.indexOf(u8, group[0], filter.?) != null) {
+        if (selected(filter, group[0])) {
             std.debug.print("== {s}\n", .{group[0]});
             group[1].run() catch {
                 failed = true;
@@ -34,4 +34,10 @@ pub fn main() !void {
         }
     }
     if (failed) std.process.exit(1);
+}
+
+fn selected(filter: ?[]const u8, name: []const u8) bool {
+    var parts = std.mem.splitScalar(u8, filter orelse return true, ',');
+    while (parts.next()) |part| if (std.mem.indexOf(u8, name, part) != null) return true;
+    return false;
 }

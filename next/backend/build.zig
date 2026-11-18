@@ -165,16 +165,8 @@ pub fn build(b: *std.Build) void {
             // graph with the environment it was built under
             if (only) |name| run_fuzz.setEnvironmentVariable("FUZZ_ONLY", name);
             b.step("fuzz", "run the property harnesses over untrusted-input parsers").dependOn(&run_fuzz.step);
-
-            const mutants = b.addRunArtifact(hegel.artifact("hegel-mutants"));
-            mutants.setCwd(b.path("."));
-            mutants.addArgs(&.{ "src/fuzz/mutants.zon", "--seeds", "3", "--", b.graph.zig_exe, "build", "fuzz", "-Dhegel" });
-            if (openssl_include_path) |include_path| {
-                mutants.addPrefixedDirectoryArg("-Dopenssl_include_path=", include_path);
-                mutants.addPrefixedDirectoryArg("-Dopenssl_lib_path=", openssl_lib_path.?);
-            }
-            mutants.has_side_effects = true;
-            b.step("mutants", "plant each mutant; the harnesses must catch every one").dependOn(&mutants.step);
+            b.step("install-fuzz", "build the property harnesses for hegel-campaign").dependOn(&b.addInstallArtifact(fuzz, .{}).step);
+            b.step("install-campaign", "install the pinned Hegel campaign runner").dependOn(&b.addInstallArtifact(hegel.artifact("hegel-campaign"), .{}).step);
         }
     }
 
