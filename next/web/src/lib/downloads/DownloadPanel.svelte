@@ -85,7 +85,9 @@
 </script>
 
 <div class="download">
-  {#if needsGrant || (track.access.download_policy === 'supporters' && !account.supporterDownloads)}
+  {#if !account.ready}
+    <p class="muted" role="status">checking your account…</p>
+  {:else if needsGrant || (track.access.download_policy === 'supporters' && !account.supporterDownloads)}
     <p>{account.did ? 'reconnect to allow supporter download checks.' : 'sign in to check access to this download.'}</p>
     <a class="text-button strong" href={signIn}>{account.did ? 'reconnect for supporter downloads' : 'sign in for supporter downloads'}</a>
   {:else}
@@ -101,7 +103,7 @@
       {:else}
         <button class="text-button chip strong" type="button" disabled={busy} onclick={() => download('playback')}>continue download</button>
       {/if}
-      <button class="text-button" type="button" disabled={busy} onclick={() => { choice = undefined; }}>cancel</button>
+      {#if !busy}<button class="text-button" type="button" onclick={() => { choice = undefined; }}>cancel</button>{/if}
     {:else}
       <button class="text-button chip strong" type="button" disabled={busy} onclick={() => download()}>{busy ? 'preparing download…' : 'download audio'}</button>
     {/if}
@@ -113,8 +115,8 @@
 <style>
   .download { display: grid; gap: 0.6rem; justify-items: start; }
   p { margin: 0; }
-  .status:empty { display: none; }
-  .status { color: var(--muted); }
+  .status, .muted { color: var(--muted); }
+  .status:empty { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .chip { border: 1px solid var(--line); border-radius: 2rem; }
   .strong { color: var(--accent); font-weight: 620; }
 </style>
