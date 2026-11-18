@@ -95,3 +95,28 @@ test('comments stay hidden and uninvited until the artist has opted in', async (
   await setImmediate();
   assert.equal(store.snapshot(track.id).enabled, true);
 });
+
+test('changing the setting rereads tracks on screen and forgets the rest', async () => {
+  let enabled = false;
+  let reads = 0;
+  const store = createTrackComments({
+    api: {
+      async artist() { return listener; },
+      async trackComments() { reads++; return { object: 'list', data: [], has_more: false, comments_enabled: enabled }; }
+    },
+    getAuth: () => ({ did: listener.did, handle: listener.handle, rpc: {} }),
+    createPds: () => ({ newCommentAttempt() { return { rkey: '1', createdAt: '' }; }, async comment() { throw new Error('unused'); }, async deleteComment() {} })
+  });
+  const stop = store.subscribe(track.id, () => {});
+  store.loadComments(track.id);
+  store.loadComments('elsewhere');
+  await setImmediate();
+  assert.equal(store.snapshot(track.id).enabled, false);
+  enabled = true;
+  store.refresh();
+  await setImmediate();
+  assert.equal(store.snapshot(track.id).enabled, true);
+  assert.equal(store.hasLoaded('elsewhere'), false);
+  assert.equal(reads, 3);
+  stop();
+});

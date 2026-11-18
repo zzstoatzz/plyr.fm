@@ -97,6 +97,15 @@ export function createTrackComments<Account extends CommentAccount>({ api, getAu
     }
   }
 
+  /** An artist changed their comment setting: reread what's on screen, and everything else on its next view. */
+  function refresh() {
+    for (const [id, current] of entries) {
+      current.server = undefined;
+      current.enabled = false;
+      if (listeners.has(id)) loadComments(id); else publish(id);
+    }
+  }
+
   function subscribe(id: string, listener: () => void) {
     let set = listeners.get(id);
     if (!set) { set = new Set(); listeners.set(id, set); }
@@ -105,5 +114,5 @@ export function createTrackComments<Account extends CommentAccount>({ api, getAu
   }
 
   return { subscribe, snapshot: (id?: string) => id ? entry(id).snapshot : empty,
-    hasLoaded: (id: string) => !!entry(id).server, loadComments, addComment, removeComment };
+    hasLoaded: (id: string) => !!entry(id).server, loadComments, addComment, removeComment, refresh };
 }

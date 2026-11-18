@@ -251,7 +251,7 @@ export function NowPlaying({ track, close: leave, navigate: go }: {
               <Coachmark hint="now-playing.more-below" ready={measured && dismiss.atTop && !dismiss.dragging} />
             </View>}
             </View>
-            <View style={{ width: artwork, gap: 20 }}>{commentable && composer}{details}</View>
+            <View style={{ width: artwork, gap: 20 }}>{commentable && comments.enabled && composer}{details}</View>
           </Animated.ScrollView></PullDetector>
         </Animated.View>
         </Animated.View>

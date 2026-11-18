@@ -39,8 +39,9 @@ async function screen(browser, phone, scheme) {
     await page.getByRole('heading', { name: linkedTrack.metadata.title, exact: true }).waitFor();
     await page.reload();
     await page.getByRole('heading', { name: linkedTrack.metadata.title, exact: true }).waitFor();
-    await Promise.all([page.waitForResponse(response => response.url().endsWith('/comments')), page.goto(origin + '/track/' + tracks[3].id)]);
+    await Promise.all([page.waitForResponse(response => response.url().endsWith(tracks[3].id + '/comments')), page.goto(origin + '/track/' + tracks[3].id)]);
     await page.getByRole('heading', { name: tracks[3].metadata.title, exact: true }).waitFor();
+    await page.waitForTimeout(250);
     assert.equal(await page.getByRole('button', { name: 'comments', exact: true }).count(), 0, 'no comments button when the artist has not opted in');
     await page.goto(origin);
     await page.getByTestId('home-track-row').first().waitFor();
