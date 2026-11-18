@@ -90,7 +90,7 @@
 <article class="page-content" class:playlist={list.object === 'playlist'} class:album={list.object === 'album'}>
 	<header>
 		{#if covers[0] || list.media?.artwork}
-			<div class="backdrop" aria-hidden="true"><img src={list.media?.artwork?.url ?? covers[0]} alt="" /></div>
+			<div class="hero-backdrop" aria-hidden="true"><img src={list.media?.artwork?.url ?? covers[0]} alt="" /></div>
 		{/if}
 		<div class="cover" class:collage>
 			{#if collage}
@@ -104,17 +104,17 @@
 			<h1>{title}</h1>
 			<div class="meta">
 				{#if owner}<a class="owner" href={`/u/${list.owner.did}`}><Artwork src={owner.avatar_url ?? undefined} size={22} />{owner.display_name || owner.handle}</a>{/if}
-				<span class="chip"><b>{tracks.length.toLocaleString()}</b> {tracks.length === 1 ? 'track' : 'tracks'}</span>
-				{#if seconds > 0}<span class="chip"><b>{catalogRuntime(seconds)}</b></span>{/if}
-				{#if list.metrics.total_plays > 0}<span class="chip"><b>{compactCount(list.metrics.total_plays)}</b> {list.metrics.total_plays === 1 ? 'play' : 'plays'}</span>{/if}
-				{#if Number.isFinite(year)}<span class="chip"><b>{year}</b></span>{/if}
-				{#if list.metrics.member_count > tracks.length}<span class="chip">{list.metrics.member_count - tracks.length} unavailable</span>{/if}
+				<span class="hero-chip"><b>{tracks.length.toLocaleString()}</b> {tracks.length === 1 ? 'track' : 'tracks'}</span>
+				{#if seconds > 0}<span class="hero-chip"><b>{catalogRuntime(seconds)}</b></span>{/if}
+				{#if list.metrics.total_plays > 0}<span class="hero-chip"><b>{compactCount(list.metrics.total_plays)}</b> {list.metrics.total_plays === 1 ? 'play' : 'plays'}</span>{/if}
+				{#if Number.isFinite(year)}<span class="hero-chip"><b>{year}</b></span>{/if}
+				{#if list.metrics.member_count > tracks.length}<span class="hero-chip">{list.metrics.member_count - tracks.length} unavailable</span>{/if}
 			</div>
 			<div class="actions">
-				<button type="button" class="pill primary" aria-label={`${playing ? 'Pause' : 'Play'} ${title}`} disabled={!tracks.length || active && !playing && player.snapshot.waiting} onclick={playAll}><Icon name={playing ? 'pause' : 'play'} /> {playing ? 'Pause' : 'Play'}</button>
-				<button type="button" class="pill" aria-label={`Add ${title} to queue`} disabled={!tracks.length || !player.canEditPublicQueue} title={!player.canEditPublicQueue ? "play a public track to change queues" : undefined} onclick={addToQueue}><Icon name="queue" /> <span class="long">Add to queue</span><span class="short">Queue</span></button>
-				{#if tracks.length > 1}<button type="button" class="round" aria-label={`Shuffle ${title}`} onclick={shuffle}><Icon name="shuffle" /></button>{/if}
-				<button type="button" class="round" aria-label={`Share ${title}`} onclick={share}><Icon name="share" /></button>
+				<button type="button" class="hero-pill primary" aria-label={`${playing ? 'Pause' : 'Play'} ${title}`} disabled={!tracks.length || active && !playing && player.snapshot.waiting} onclick={playAll}><Icon name={playing ? 'pause' : 'play'} /> {playing ? 'Pause' : 'Play'}</button>
+				<button type="button" class="hero-pill" aria-label={`Add ${title} to queue`} disabled={!tracks.length || !player.canEditPublicQueue} title={!player.canEditPublicQueue ? "play a public track to change queues" : undefined} onclick={addToQueue}><Icon name="queue" /> <span class="long">Add to queue</span><span class="short">Queue</span></button>
+				{#if tracks.length > 1}<button type="button" class="hero-round" aria-label={`Shuffle ${title}`} onclick={shuffle}><Icon name="shuffle" /></button>{/if}
+				<button type="button" class="hero-round" aria-label={`Share ${title}`} onclick={share}><Icon name="share" /></button>
 			</div>
 			{#if owned && !editing}<button type="button" class="text-button edit" onclick={() => { editing = true; }}>edit {list.object}</button>{/if}
 			{#if copied}<p role="status" class="subtle">link copied</p>{/if}
@@ -149,9 +149,6 @@
 
 <style>
 	header { position: relative; isolation: isolate; display: flex; align-items: flex-end; gap: 2rem; padding-block: 1.25rem 2rem; }
-	.backdrop { position: absolute; z-index: -1; inset: calc(-1 * clamp(1rem, 3vw, 2.25rem)) calc(-1 * clamp(1rem, 3vw, 2.25rem)) -2rem; overflow: hidden; pointer-events: none;
-		mask-image: linear-gradient(to bottom, transparent, black 25%, black 45%, transparent); }
-	.backdrop img { width: 100%; height: 100%; object-fit: cover; filter: blur(48px) saturate(1.2); transform: scale(1.3); opacity: 0.55; }
 	.cover { width: min(14.5rem, 38vw); flex: none; border-radius: 0.75rem; overflow: hidden; box-shadow: 0 1.1rem 2.5rem rgb(0 0 0 / 0.3); }
 	.collage { display: grid; grid-template-columns: 1fr 1fr; aspect-ratio: 1; }
 	.collage :global(.artwork) { border-radius: 0; }
@@ -161,15 +158,7 @@
 	.meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.85rem; color: var(--muted); font-size: 0.875rem; }
 	.owner { display: inline-flex; align-items: center; gap: 0.45rem; min-height: 2rem; margin-right: 0.25rem; color: var(--text); font-weight: 600; font-size: 1rem; }
 	.owner :global(.artwork) { width: 1.375rem; border-radius: 50%; }
-	.chip { padding: 0.3rem 0.75rem; border-radius: 999px; background: color-mix(in srgb, var(--raised) 85%, transparent); font-variant-numeric: tabular-nums; }
-	.chip b { color: var(--text); font-weight: 700; }
 	.actions { display: flex; align-items: center; gap: 0.6rem; margin-top: 1.25rem; }
-	.pill, .round { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; height: 2.75rem; border: 0; border-radius: 999px; background: var(--raised); color: var(--text); font-weight: 700; }
-	.pill { padding: 0 1.25rem; }
-	.pill.primary { background: var(--accent); color: var(--on-accent); }
-	.round { width: 2.75rem; flex: none; }
-	.pill:hover:not(:disabled), .round:hover { filter: brightness(0.96); }
-	.pill:disabled { opacity: 0.5; }
 	.short { display: none; }
 	.edit { margin-top: 0.5rem; margin-left: -0.5rem; color: var(--accent); }
 	.members { display: grid; }
@@ -188,8 +177,6 @@
 		.meta { justify-content: center; }
 		.owner { flex-basis: 100%; justify-content: center; margin: 0 0 0.25rem; }
 		.actions { display: grid; grid-template-columns: 1fr 1fr auto auto; width: 100%; }
-		.pill, .round { height: 3rem; font-size: 1.05rem; }
-		.round { width: 3rem; }
 		.long { display: none; }
 		.short { display: inline; }
 		.edit { margin-left: 0; }

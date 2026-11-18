@@ -68,12 +68,13 @@ async function verify(browser, origin, width, scheme) {
 
     await page.goto(origin + artistPath);
     await page.getByRole('heading', { name: artistName, exact: true }).waitFor();
-    const support = page.getByRole('link', { name: 'support artist' });
+    const support = page.getByRole('link', { name: /^Support .+ at example\.test\/support$/ });
     assert.equal(await support.getAttribute('href'), 'https://example.test/support');
     assert.equal(await page.getByRole('link', { name: 'edit profile' }).count(), 0);
     await page.getByText('couldn’t load totals.', { exact: false }).waitFor();
     await page.getByRole('button', { name: 'retry totals' }).click();
-    await page.getByText('2 tracks · 1 play').waitFor();
+    await page.getByText('of music', { exact: false }).waitFor();
+    assert.equal(await page.locator('.hero-chip').allTextContents().then(chips => chips.join(' | ')), '1 play | 2 tracks | 3m of music');
     const tabs = page.getByRole('tablist', { name: 'Artist catalog' });
     const tab = name => tabs.getByRole('tab', { name, exact: true });
     const panel = name => page.getByRole('tabpanel', { name, exact: true });
@@ -85,7 +86,7 @@ async function verify(browser, origin, width, scheme) {
     await page.getByRole('button', { name: 'more tracks', exact: true }).click();
     const secondTrack = panel('tracks').getByRole('link', { name: tracks[1].metadata.title, exact: true });
     await secondTrack.waitFor();
-    await page.getByRole('button', { name: `Play tracks by ${artistName}` }).click();
+    await page.getByRole('button', { name: `Play ${artistName}`, exact: true }).click();
     await page.waitForFunction(() => window.createdAudio.some(audio => audio.currentTime > 0 && !audio.paused));
     await page.evaluate(() => { window.catalogAudio = window.createdAudio.find(audio => !audio.paused); });
     const continuity = async () => {
