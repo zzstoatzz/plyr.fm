@@ -13,27 +13,28 @@ import type { Anchor } from './Sheet';
 import { PlayerControl } from './PlayerControl';
 import { PlayingArtworkOverlay } from './PlayingWave';
 import { useTrackPlayback } from './playback-context';
+import { GestureDetector } from 'react-native-gesture-handler';
 import { useTrackPress } from './TrackPress';
 
 export function HomeTrackRow({ track, tracks, onPlay, returnTo = '/', height }: { height?: number; track: Track; tracks: Track[]; onPlay: Play; returnTo?: string }) {
   const theme = useAppearance();
   const { playing, toggle } = useTrackPlayback(track);
-  const { row, press, menu } = useTrackPress(track, returnTo);
-  return <View testID="home-track-row" style={{ height, paddingBottom: 8 }}><View ref={row} style={[styles.row, cardSurface(theme)]}>
-    <Pressable testID="track-play-control" accessibilityRole="button" accessibilityLabel={`${playing ? 'Pause' : 'Play'} ${track.metadata.title}`} {...press} onPress={() => toggle(() => onPlay(track, tracks))}
+  const { row, hold, menu } = useTrackPress(track, returnTo);
+  return <View testID="home-track-row" style={{ height, paddingBottom: 8 }}><GestureDetector gesture={hold}><View ref={row} style={[styles.row, cardSurface(theme)]}>
+    <Pressable testID="track-play-control" accessibilityRole="button" accessibilityLabel={`${playing ? 'Pause' : 'Play'} ${track.metadata.title}`} onPress={() => toggle(() => onPlay(track, tracks))}
       style={({ pressed }) => [StyleSheet.absoluteFill, { borderRadius: 8, backgroundColor: pressed ? theme.hover : 'transparent' }]} />
     <View pointerEvents="none">
       <Cover uri={trackArtwork(track)} size={44} />
       {playing && <PlayingArtworkOverlay />}
     </View>
     <View pointerEvents="box-none" style={styles.meta}>
-      <Link href={`/track/${track.id}`} asChild><Pressable accessibilityRole="link" accessibilityLabel={`Track details: ${track.metadata.title}`} {...press} style={styles.link}><Text numberOfLines={1} style={{ color: theme.text, fontSize: 15 * theme.scale, fontWeight: '600' }}>{track.metadata.title}</Text></Pressable></Link>
-      <Link href={`/u/${encodeURIComponent(track.artist.profile.handle || track.artist.did)}`} asChild><Pressable accessibilityRole="link" {...press} style={styles.link}><Text numberOfLines={1} style={{ color: theme.muted, fontSize: 13 * theme.scale }}>{artistName(track)}</Text></Pressable></Link>
+      <Link href={`/track/${track.id}`} asChild><Pressable accessibilityRole="link" accessibilityLabel={`Track details: ${track.metadata.title}`} style={styles.link}><Text numberOfLines={1} style={{ color: theme.text, fontSize: 15 * theme.scale, fontWeight: '600' }}>{track.metadata.title}</Text></Pressable></Link>
+      <Link href={`/u/${encodeURIComponent(track.artist.profile.handle || track.artist.did)}`} asChild><Pressable accessibilityRole="link" style={styles.link}><Text numberOfLines={1} style={{ color: theme.muted, fontSize: 13 * theme.scale }}>{artistName(track)}</Text></Pressable></Link>
       <View pointerEvents="none"><Text numberOfLines={1} style={{ color: theme.faint, fontSize: 12 * theme.scale }}>{trackMeta(track)}</Text></View>
     </View>
     <HomeTrackActions track={track} returnTo={returnTo} />
     {menu}
-  </View></View>;
+  </View></GestureDetector></View>;
 }
 
 export function HomeTrackActions({ track, returnTo = '/' }: { track: Track; returnTo?: string }) {

@@ -1,13 +1,9 @@
-import { trackArtwork, collectionArtwork, displayUrl } from '@plyr/next-core/artwork';
+import { collectionArtwork, displayUrl } from '@plyr/next-core/artwork';
 import { MusicNote as Music2, UserCircle as UserRound } from './icons';
 import { Text } from './Text';
 import { Link, type Href } from 'expo-router';
 import { useCallback, useContext, useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
 import { Animated, PixelRatio, Pressable, StyleSheet, View, type ViewInstance } from 'react-native';
-import { useTrackPress, type LongPress } from './TrackPress';
-import { PlayGlyph as PlayIcon } from './PlayerGlyph';
-import { PlayingWave } from './PlayingWave';
-import { useTrackPlayback } from './playback-context';
 import type { ListSummary, Page, Track } from '@plyr/next-core/api';
 import { Action, Copy } from './controls';
 import { WaveLoading } from './WaveLoading';
@@ -177,14 +173,14 @@ export function Cover({ uri, size = 48, round = false, radius = 8, instant = fal
 }
 
 export function Row({
-  title, subtitle, meta, image, href, onPress, action, round = false, onNavigate, rowRef, longPress,
+  title, subtitle, meta, image, href, onPress, action, round = false, onNavigate, rowRef,
 }: {
   title: string; subtitle?: string | null; meta?: string; image?: string | null; action?: ReactNode; round?: boolean; onNavigate?: () => void;
-  rowRef?: Ref<ViewInstance>; longPress?: LongPress;
+  rowRef?: Ref<ViewInstance>;
 } & ({ href: Href; onPress?: never } | { href?: never; onPress: () => void })) {
   const colors = useAppearance();
   const compact = useContext(CompactRows);
-  const body = <Pressable accessibilityRole={href ? 'link' : 'button'} onPress={href ? onNavigate : onPress} {...longPress} style={styles.rowLink}>
+  const body = <Pressable accessibilityRole={href ? 'link' : 'button'} onPress={href ? onNavigate : onPress} style={styles.rowLink}>
     <Cover uri={image} round={round} size={compact ? 32 : 48} />
     <View style={styles.rowText}>
       <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text, fontFamily: colors.fontFamily, fontSize: (compact ? 14 : 16) * colors.scale }]}>{title}</Text>
@@ -205,34 +201,6 @@ export function artistName(track: Track) {
 export function trackMeta(track: Track) {
   const { play_count: plays, like_count: likes } = track.metrics;
   return `${compactCount(plays)} ${plays === 1 ? 'play' : 'plays'}` + (likes > 0 ? ` · ${compactCount(likes)} ${likes === 1 ? 'like' : 'likes'}` : '');
-}
-
-export function TrackRows({ tracks, onPlay }: { tracks: Track[]; onPlay: Play }) {
-  return <View style={styles.rows}>{tracks.map((track, index) => <TrackRow key={`${track.id}:${index}`} track={track} onPlay={() => onPlay(track, tracks)} />)}</View>;
-}
-
-function TrackRow({ track, onPlay }: { track: Track; onPlay: () => void }) {
-  const { row, press, menu } = useTrackPress(track);
-  return <>
-    <Row rowRef={row} longPress={press}
-      href={{ pathname: '/track/[id]', params: { id: track.id } }}
-      title={track.metadata.title}
-      subtitle={artistName(track)}
-      meta={trackMeta(track)}
-      image={trackArtwork(track)}
-      action={<RowPlay track={track} onPress={onPlay} longPress={press} />}
-    />
-    {menu}
-  </>;
-}
-
-function RowPlay({ track, onPress, longPress }: { track: Track; onPress: () => void; longPress?: LongPress }) {
-  const colors = useAppearance();
-  const { playing, toggle } = useTrackPlayback(track);
-  return <Pressable accessibilityRole="button" accessibilityLabel={`${playing ? 'Pause' : 'Play'} ${track.metadata.title}`} {...longPress} onPress={() => toggle(onPress)}
-    style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
-    {playing ? <PlayingWave color={colors.accent} /> : <PlayIcon size={20} color={colors.text} fill={colors.text} />}
-  </Pressable>;
 }
 
 export function trackCount(count: number) {

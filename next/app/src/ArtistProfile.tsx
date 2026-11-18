@@ -1,3 +1,4 @@
+import { TrackRows } from './TrackRows';
 import { useAppearance } from './appearance';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
@@ -6,7 +7,7 @@ import { api } from './api-client';
 import { type Artist } from '@plyr/next-core/api';
 import { useAuth } from './auth';
 import { Action, Copy } from './controls';
-import { ListRows, Status, TrackRows, usePages, useResource, type Play } from './CatalogPieces';
+import { ListRows, Status, usePages, useResource, type Play } from './CatalogPieces';
 import { Choice } from './AccountPieces';
 import { shareLink } from './ShareLink';
 import { ArtistHero } from './ArtistHero';

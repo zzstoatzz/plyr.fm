@@ -1,5 +1,6 @@
 import * as Haptics from 'expo-haptics';
 import { useRef, useState } from 'react';
+import { useLongPressGesture } from 'react-native-gesture-handler';
 import { StyleSheet, View, type ViewInstance } from 'react-native';
 import type { Track } from '@plyr/next-core/api';
 import { trackArtwork } from '@plyr/next-core/artwork';
@@ -10,13 +11,14 @@ import { Text } from './Text';
 import { TrackMenu } from './TrackMenu';
 import type { Anchor } from './Sheet';
 
-export type LongPress = { onLongPress: () => void; delayLongPress: number };
-
-/** Long press on any track row: a haptic tick, then the row lifts with its menu beside it. */
+/**
+ * Long press on any track row: a haptic tick, then the row lifts with its menu beside it.
+ * A native recognizer, so a row that re-renders on every playback tick still sees the hold.
+ */
 export function useTrackPress(track: Track, returnTo?: string) {
   const row = useRef<ViewInstance>(null);
   const [anchor, setAnchor] = useState<Anchor>();
-  function onLongPress() {
+  function open() {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     const node = row.current;
     if (!node) return;
@@ -24,8 +26,8 @@ export function useTrackPress(track: Track, returnTo?: string) {
   }
   const menu = anchor && <TrackMenu track={track} returnTo={returnTo} close={() => setAnchor(undefined)}
     lift={{ anchor, preview: <TrackPreview track={track} height={anchor.height} /> }} />;
-  const press: LongPress = { onLongPress, delayLongPress: 350 };
-  return { row, press, menu };
+  const hold = useLongPressGesture({ runOnJS: true, minDuration: 350, onActivate: open });
+  return { row, hold, menu };
 }
 
 function TrackPreview({ track, height }: { track: Track; height: number }) {

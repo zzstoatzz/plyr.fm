@@ -1,3 +1,4 @@
+import { TrackRows } from './TrackRows';
 import { trackArtwork } from '@plyr/next-core/artwork';
 import { X, ListPlus, MusicNote as Music2, ArrowsClockwise as RefreshCw } from './icons';
 import { PlayerControl } from './PlayerControl';
@@ -13,7 +14,7 @@ import { playlistIdFromUri, type AwaitStatus, type ListDetail, type Track } from
 import { useAuth } from './auth';
 import { getAuth } from './auth-state';
 import {
-  Button, Heading, ListRows, Row, Status, TrackRows, artistName, errorMessage, usePages, useResource, type Play,
+  Button, Heading, ListRows, Row, Status, artistName, errorMessage, usePages, useResource, type Play,
 } from './CatalogPieces';
 import { Action, Field, InlineLink, Copy } from './controls';
 import { Sheet } from './Sheet';

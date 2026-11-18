@@ -1,4 +1,4 @@
-import { Link } from 'expo-router';
+import { router } from 'expo-router';
 import { Check, Info, Warning as TriangleAlert, X } from './icons';
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
@@ -37,10 +37,9 @@ function ToastCard({ item }: { item: Toast }) {
   return <Animated.View testID="toast" role={item.type === 'error' ? 'alert' : 'status'} pointerEvents={item.action ? 'box-none' : 'none'}
     style={[glassSurface(theme), styles.card, { boxShadow: theme.dark ? '0px 8px 24px #0000004d' : '0px 8px 24px #00000024',
       opacity: shown, transform: [{ translateY: shown.interpolate({ inputRange: [0, 1], outputRange: [-8, 0] }) }] }]}>
-    {item.action ? <Link href={item.action.href} asChild>
-      <Pressable accessibilityRole="link" accessibilityLabel={[item.message, item.action.label].filter(Boolean).join('. ')} onPress={() => toast.dismiss(item.id)}
-        style={styles.content}>{body}</Pressable>
-    </Link> : <View style={styles.content}>{body}</View>}
+    {item.action ? <Pressable accessibilityRole="link" accessibilityLabel={[item.message, item.action.label].filter(Boolean).join('. ')}
+      onPress={() => { const href = item.action!.href; toast.dismiss(item.id); router.navigate(href); }}
+      style={({ pressed }) => [styles.content, { opacity: pressed ? 0.7 : 1 }]}>{body}</Pressable> : <View style={styles.content}>{body}</View>}
   </Animated.View>;
 }
 
