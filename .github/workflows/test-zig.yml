@@ -68,6 +68,8 @@ jobs:
         with:
           path: next/backend/zig-pkg
           key: zig-pkg-${{ hashFiles('next/backend/build.zig.zon') }}
+          # a pin bump still restores every unchanged package
+          restore-keys: zig-pkg-
 
       - uses: actions/setup-node@v4
         with:
@@ -181,14 +183,14 @@ jobs:
         with:
           path: next/backend/zig-pkg
           key: zig-pkg-${{ hashFiles('next/backend/build.zig.zon') }}
+          # a pin bump still restores every unchanged package
+          restore-keys: zig-pkg-
 
       # the campaign manifest names the database; the runner passes no ambient env
       - name: property harnesses
         run: |
           scripts/fetch-interop-fixtures && scripts/fetch-deps
-          for name in parsers stores; do
-            scripts/campaign run "$name" --out "/tmp/plyr-$name" || { tail -n 40 /tmp/plyr-$name/*.stderr.log; exit 1; }
-          done
+          scripts/campaign run properties --out /tmp/plyr-properties || { tail -n 40 /tmp/plyr-properties/*.stderr.log; exit 1; }
 
   mutants:
     name: zig property harnesses catch every mutant
@@ -231,6 +233,8 @@ jobs:
         with:
           path: next/backend/zig-pkg
           key: zig-pkg-${{ hashFiles('next/backend/build.zig.zon') }}
+          # a pin bump still restores every unchanged package
+          restore-keys: zig-pkg-
 
       - name: plant each mutant
         run: |

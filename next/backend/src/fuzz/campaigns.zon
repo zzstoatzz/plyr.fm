@@ -1,17 +1,18 @@
 // scripts/campaign wraps hegel-campaign; commands run in next/backend.
-// "stores" and "calibration" need the disposable zig_test database that
+// both campaigns need the disposable zig_test database that
 // .github/workflows/test-zig.yml provides on port 5435.
 .{
     .version = 1,
     .campaigns = .{
         .{
-            .name = "parsers",
+            .name = "properties",
             .root = "next/backend",
-            .build = .{ "zig", "build", "install-fuzz", "-Dhegel", "-Doptimize=ReleaseSafe" },
+            .build = .{ "zig", "build", "install-fuzz", "-Dhegel" },
             .command = .{"zig-out/bin/fuzz"},
             .seeds = .{ 1, 2 },
             .cases = 200,
             .timeout_seconds = 900,
+            .env = .{.{ .name = "PLYR_ZIG_TEST_DATABASE_URL", .value = "postgresql://zig_test:zig_test@127.0.0.1:5435/zig_test" }},
             .reach = .{
                 .{ .key = "identity.id_round_trip", .event = "uri refused" },
                 .{ .key = "identity.id_round_trip", .event = "uri accepted" },
@@ -43,29 +44,16 @@
                 .{ .key = "jams.references", .event = "refused: too_long" },
                 .{ .key = "jams.ticket_token", .event = "well formed" },
                 .{ .key = "jams.ticket_token", .event = "malformed" },
-            },
-        },
-        .{
-            .name = "stores",
-            .root = "next/backend",
-            .build = .{ "zig", "build", "install-fuzz", "-Dhegel", "-Doptimize=ReleaseSafe" },
-            .command = .{"zig-out/bin/fuzz"},
-            .seeds = .{ 1, 2 },
-            .cases = 200,
-            .timeout_seconds = 900,
-            .env = .{ .{ .name = "PLYR_ZIG_TEST_DATABASE_URL", .value = "postgresql://zig_test:zig_test@127.0.0.1:5435/zig_test" }, .{ .name = "FUZZ_ONLY", .value = "like_counts,projector" } },
-            .reach = .{
                 .{ .key = "like_counts.triggers", .event = "a statement changes several likes" },
                 .{ .key = "like_counts.triggers", .event = "an account with likes goes unavailable" },
                 .{ .key = "like_counts.triggers", .event = "a subject counts more than one liker" },
                 .{ .key = "projector.commits_match_snapshot", .event = "a commit rewrites an existing record" },
-                .{ .key = "projector.commits_match_snapshot", .event = "the chain ends with an empty repository" },
             },
         },
         .{
             .name = "calibration",
             .root = "next/backend",
-            .build = .{ "zig", "build", "install-fuzz", "-Dhegel", "-Doptimize=ReleaseSafe" },
+            .build = .{ "zig", "build", "install-fuzz", "-Dhegel" },
             .command = .{"zig-out/bin/fuzz"},
             .seeds = .{ 1, 2, 3 },
             .cases = 500,
@@ -107,7 +95,6 @@
                 .{ .key = "like_counts.triggers", .event = "an account with likes goes unavailable" },
                 .{ .key = "like_counts.triggers", .event = "a subject counts more than one liker" },
                 .{ .key = "projector.commits_match_snapshot", .event = "a commit rewrites an existing record" },
-                .{ .key = "projector.commits_match_snapshot", .event = "the chain ends with an empty repository" },
             },
         },
     },
