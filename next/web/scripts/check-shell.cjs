@@ -448,11 +448,13 @@ async function keyboard(browser, phone, scheme) {
     assert.ok(await opener.evaluate(node => document.activeElement === node));
 
     if (!phone) {
-      const help = page.getByRole('button', { name: 'keyboard shortcuts', exact: true });
-      await help.click();
+      const links = page.getByRole('navigation', { name: 'Main navigation' }).getByRole('button', { name: 'Open links menu' });
+      await links.click();
+      await page.getByRole('navigation', { name: 'Explore' }).getByRole('button', { name: /^keyboard shortcuts/ }).click();
       await guide.waitFor();
       await press('Escape');
-      assert.equal(await help.evaluate(node => document.activeElement === node), true);
+      await guide.waitFor({ state: 'hidden' });
+      assert.equal(await links.evaluate(node => document.activeElement === node), true, 'closing shortcuts returns focus to the links menu');
       await opener.focus();
     }
 

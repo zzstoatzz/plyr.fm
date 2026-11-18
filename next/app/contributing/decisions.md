@@ -38,6 +38,14 @@ nate first. Add an entry when a PR settles something.
   order; `after` chains them into a tour) and draw it with `<Coachmark>` beside
   its target. One shows at a time, and seen state is kept per account on each
   device. Mark it seen when the person does the thing it teaches.
+- **Web navigation (nate, 2026-11-18, #2785).** Desktop: a sidebar with
+  search as a field first, then home, library and upload, an "explore" group
+  (radio, atlas, stats), and an account card at the bottom whose menu holds
+  portal, settings, keyboard shortcuts and sign out. Settings and shortcuts
+  are not nav items; `?` opens shortcuts. Phones: a floating glass tab bar
+  (home, search, library, upload, you) like the iOS app, with the player
+  floating above it. Nav icons are Phosphor (regular, fill when current) and
+  the current item gets an accent tint.
 
 ## known and open
 

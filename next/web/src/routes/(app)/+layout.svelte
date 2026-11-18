@@ -8,7 +8,7 @@
 	import Icon from '$lib/ui/Icon.svelte';
 	import Toasts from '$lib/ui/Toasts.svelte';
 	import LinksMenu from '$lib/LinksMenu.svelte';
-	import { accountAvatar } from '$lib/api';
+	import { accountIdentity } from '$lib/api';
 	import { mountPrefs, restorePrefs } from '$lib/prefs.svelte';
 	import Artwork from '$lib/ui/Artwork.svelte';
 	import AccountMenu from '$lib/account/AccountMenu.svelte';
@@ -22,7 +22,6 @@
 	let accountMenu = $state<{ open: (trigger: HTMLButtonElement) => void }>();
 	let searchReturn: { url: URL; restoreFocus: () => void } | undefined;
 	let cancelFocusRestore: (() => void) | undefined;
-	const settingsPath = resolve('/(app)/settings');
 	const queuePage = $derived(page.url.pathname === resolve('/queue'));
 	const queuePanelOpen = $derived(player.queueOpen && !queuePage);
 	let NowPlaying = $state<typeof import('$lib/NowPlaying.svelte').default>();
@@ -38,23 +37,31 @@
 	}
 	const pull = createDockPull(() => player.openNowPlaying(), preloadNowPlaying);
 	let account = $state.raw(auth.getAuth());
-	let avatar = $state.raw<{ did: string; url: string }>();
+	let identity = $state.raw<{ did: string; avatar?: string; name?: string }>();
 	const did = $derived(account.did);
 	$effect(() => {
 		if (!did) return;
 		const owner = did;
 		const controller = new AbortController();
-		void accountAvatar(owner, controller.signal).catch(() => undefined).then(url => {
-			if (!controller.signal.aborted) avatar = url ? { did: owner, url } : undefined;
+		void accountIdentity(owner, controller.signal).catch(() => undefined).then(found => {
+			if (!controller.signal.aborted) identity = found ? { did: owner, ...found } : undefined;
 		});
 		return () => controller.abort();
 	});
 	let uploading = $derived(activeUploadCount(account.did));
 	const links = [
-		{ path: '/', label: 'home', icon: 'home' },
-		{ path: '/search', label: 'search', icon: 'search' },
-		{ path: '/library', label: 'library', icon: 'library' }
+		{ path: '/', label: 'home', icon: 'ph_home', filled: 'ph_home_f' },
+		{ path: '/search', label: 'search', icon: 'ph_search', filled: 'ph_search_f' },
+		{ path: '/library', label: 'library', icon: 'ph_library', filled: 'ph_library_f' }
 	] as const;
+	const explore = [
+		{ path: '/radio', label: 'radio', icon: 'ph_radio', filled: 'ph_radio_f' },
+		{ path: '/atlas', label: 'atlas', icon: 'ph_atlas', filled: 'ph_atlas_f' },
+		{ path: '/stats', label: 'stats', icon: 'ph_stats', filled: 'ph_stats_f' }
+	] as const;
+	const accountPaths = [resolve('/(app)/settings'), resolve('/(app)/portal')] as string[];
+	let searchKey = $state('Ctrl K');
+	function openShortcuts() { shortcutsDialog.showModal(); }
 	const keyboardGuide = [
 		{ action: 'search', keys: ['⌘ or Ctrl', 'K'] },
 		{ action: 'settings', keys: ['⌘ or Ctrl', ','] },
@@ -76,6 +83,7 @@
 	});
 
 	onMount(() => {
+		if (/Mac|iPhone|iPad/.test(navigator.platform)) searchKey = '⌘K';
 		restorePrefs(account.did, account.agent, account.accountSync);
 		const stopPrefs = mountPrefs();
 		let resumed = account.rpc;
@@ -207,7 +215,7 @@
 		// The browser can dispatch a key from a just-closed dialog before restoring focus.
 		const focused = target instanceof Element && !target.closest('dialog:not([open])') ? target : undefined;
 		if (focused?.closest('input, select, textarea, [role="slider"], [contenteditable]:not([contenteditable=false])')) return;
-		if (key === '?') { event.preventDefault(); shortcutsDialog.showModal(); return; }
+		if (key === '?') { event.preventDefault(); openShortcuts(); return; }
 		if (key === 'q') { event.preventDefault(); toggleQueue(true); return; }
 		if (!player.current && !player.liveStation) return;
 		if (event.code === 'Space' || key === ' ') {
@@ -230,33 +238,39 @@
 
 <div data-testid="app-frame" class="frame" class:hasPlayer={!!player.current} class:docked={queuePanelOpen}>
 	<nav aria-label="Main navigation">
-		<div class="brand-row"><LinksMenu /><a class="brand" aria-label="plyr.fm home" href="/">plyr.fm</a></div>
+		<div class="brand-row"><LinksMenu onShortcuts={openShortcuts} /><a class="brand" aria-label="plyr.fm home" href="/">plyr.fm</a></div>
+		<a class="search-field desktop-only" href="/search" class:active={page.url.pathname === '/search'} aria-current={page.url.pathname === '/search' ? 'page' : undefined}>
+			<Icon name="ph_search" size={18} /><span>search</span><kbd aria-hidden="true">{searchKey}</kbd>
+		</a>
 		{#each links as link (link.path)}
-			<a href={link.path} class:active={page.url.pathname === link.path} aria-current={page.url.pathname === link.path ? 'page' : undefined}>
-				<Icon name={link.icon === 'home' && page.url.pathname === '/' ? 'home_f' : link.icon} size={21} /> <span>{link.label}</span>
+			{@const active = page.url.pathname === link.path}
+			<a href={link.path} class:phone-only={link.path === '/search'} class:active aria-current={active ? 'page' : undefined}>
+				<Icon name={active ? link.filled : link.icon} size={22} /> <span>{link.label}</span>
 			</a>
 		{/each}
 		{#if account.did}
-			<a href="/upload" class="desktop-only" class:active={page.url.pathname === '/upload'} aria-current={page.url.pathname === '/upload' ? 'page' : undefined}>
-				<Icon name="upload" size={21} /><span>{uploading ? `uploading ${uploading}` : 'upload'}</span>
+			<a href="/upload" class:active={page.url.pathname === '/upload'} aria-current={page.url.pathname === '/upload' ? 'page' : undefined}>
+				<Icon name={page.url.pathname === '/upload' ? 'ph_upload_f' : 'ph_upload'} size={22} /><span>{uploading ? `uploading ${uploading}` : 'upload'}</span>
 			</a>
 		{/if}
-		{#if account.did}
-			<a href={resolve('/(app)/portal')} class="desktop-only" class:active={page.url.pathname === '/portal'} aria-current={page.url.pathname === '/portal' ? 'page' : undefined}>
-				<span class="profile-avatar"><Artwork src={avatar?.did === did ? avatar?.url : undefined} size={24} fallbackIcon="user" eager /></span><span>you</span>
+		<p class="group-label desktop-only" aria-hidden="true">explore</p>
+		{#each explore as link (link.path)}
+			{@const active = page.url.pathname === link.path}
+			<a class="desktop-only" href={link.path} class:active aria-current={active ? 'page' : undefined}>
+				<Icon name={active ? link.filled : link.icon} size={22} /><span>{link.label}</span>
 			</a>
-			<button type="button" class="mobile-account" aria-haspopup="dialog" class:active={page.url.pathname === settingsPath} onclick={event => accountMenu?.open(event.currentTarget)}>
-				<span class="profile-avatar"><Artwork src={avatar?.did === did ? avatar?.url : undefined} size={24} fallbackIcon="user" eager /></span><span>you</span>
+		{/each}
+		<div class="nav-spacer" aria-hidden="true"></div>
+		{#if account.did}
+			<button type="button" class="account" aria-haspopup="dialog" class:active={accountPaths.includes(page.url.pathname)} aria-current={accountPaths.includes(page.url.pathname) ? 'page' : undefined} onclick={event => accountMenu?.open(event.currentTarget)}>
+				<span class="profile-avatar"><Artwork src={identity?.did === did ? identity?.avatar : undefined} size={24} fallbackIcon="user" eager /></span>
+				<span class="tab-label">you</span>
+				<span class="who"><strong>{(identity?.did === did && identity?.name) || (account.handle ? '@' + account.handle : 'your account')}</strong>{#if account.handle && identity?.did === did && identity?.name}<small>@{account.handle}</small>{/if}</span>
+				<span class="who-chevron" aria-hidden="true"><Icon name="ph_updown" size={16} /></span>
 			</button>
 		{:else}
-			<a href={resolve('/(app)/login') + '?' + new URLSearchParams({ return_to: page.url.pathname + page.url.search })} class:active={page.url.pathname === '/login'}><Icon name="user" size={21} /><span>sign in</span></a>
+			<a class="sign-in" href={resolve('/(app)/login') + '?' + new URLSearchParams({ return_to: page.url.pathname + page.url.search })} class:active={page.url.pathname === '/login'}><Icon name="ph_user" size={22} /><span>sign in</span></a>
 		{/if}
-		<div class="nav-spacer" aria-hidden="true"></div>
-		<a class="desktop-radio" href="/radio" class:active={page.url.pathname === '/radio'}><Icon name="radio" size={21} /><span>radio</span></a>
-		<a class="desktop-only" href={resolve('/(app)/atlas')} class:active={page.url.pathname === '/atlas'} aria-current={page.url.pathname === '/atlas' ? 'page' : undefined}><Icon name="music" size={21} /><span>atlas</span></a>
-		<a class="desktop-stats" href={resolve('/(app)/stats')} class:active={page.url.pathname === '/stats'} aria-current={page.url.pathname === '/stats' ? 'page' : undefined}><Icon name="stats" size={21} /><span>stats</span></a>
-		<a href={settingsPath} class="desktop-only" class:active={page.url.pathname === settingsPath} aria-current={page.url.pathname === settingsPath ? 'page' : undefined}><Icon name="settings" size={21} /><span>settings</span></a>
-		<button class="desktop-help" type="button" onclick={() => shortcutsDialog.showModal()}><span aria-hidden="true">?</span> keyboard shortcuts</button>
 	</nav>
 	<main id="main" tabindex="-1">{@render children()}</main>
 	{#if queuePanelOpen}
@@ -269,7 +283,7 @@
 </div>
 
 {#if account.did}
-	<AccountMenu bind:this={accountMenu} identity={account.handle ? '@' + account.handle : account.did} uploads={uploading} />
+	<AccountMenu bind:this={accountMenu} identity={account.handle ? '@' + account.handle : account.did} uploads={uploading} onShortcuts={openShortcuts} />
 {/if}
 
 <Toasts />
@@ -296,35 +310,41 @@
 	.frame.hasPlayer { padding-bottom: var(--dock); }
 	:global(body:has(.frame.hasPlayer)) { --toast-dock: var(--dock); }
 	.frame.docked { grid-template-columns: var(--sidebar) minmax(0, 1fr) var(--queue); }
-	nav { position: sticky; top: 0; align-self: start; min-height: 100dvh; display: flex; flex-direction: column; gap: 0.3rem; padding: 0.9rem; background: var(--surface); border-right: 1px solid var(--line); }
-	nav a { display: flex; align-items: center; gap: 0.7rem; padding: 0.65rem 0.8rem; border-radius: 0.7rem; min-height: 2.75rem; color: var(--muted); }
-	nav a:hover { text-decoration: none; background: var(--raised); }
-	nav a.active { background: var(--hover); color: var(--text); font-weight: 650; }
-	.brand-row { display: flex; align-items: center; min-height: 4rem; gap: 0.1rem; }
-	nav .brand { font-weight: 750; font-size: 1.4rem; letter-spacing: -0.04em; color: var(--text); margin-bottom: 0.7rem; }
-	.mobile-account { display: flex; align-items: center; gap: 0.7rem; min-height: 2.75rem; border: 0; border-radius: 0.7rem; background: none; padding: 0.65rem 0.8rem; text-align: start; color: var(--muted); }
-	.mobile-account:hover { background: var(--raised); }
-	.profile-avatar { width: 1.3125rem; border-radius: 50%; }
-	.profile-avatar :global(svg) { width: 1.3125rem; height: 1.3125rem; }
-	.desktop-help { display: flex; align-items: center; gap: 0.7rem; min-height: 2.75rem; border: 0; background: none; border-radius: 0.7rem; padding: 0.65rem 0.8rem; color: var(--muted); text-align: start; font-size: 0.875rem; }
-	.desktop-help:hover { background: var(--raised); }
-	.desktop-help span { width: 21px; text-align: center; font-size: 1.15rem; }
+	nav { position: sticky; top: 0; align-self: start; min-height: 100dvh; display: flex; flex-direction: column; gap: 0.125rem; padding: 0.9rem; background: var(--bg); border-right: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
+	nav :is(a, button) { display: flex; align-items: center; gap: 0.75rem; min-height: 2.5rem; padding: 0 0.75rem; border: 0; border-radius: 0.75rem; background: none; color: var(--muted); text-align: start; }
+	nav :is(a, button):hover { text-decoration: none; background: var(--raised); }
+	nav :is(a, button).active { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); font-weight: 700; }
+	nav :global(svg) { flex: none; }
+	.brand-row { display: flex; align-items: center; min-height: 3.5rem; gap: 0.1rem; margin-bottom: 0.25rem; }
+	nav .brand { padding: 0; min-height: 0; font-weight: 900; font-size: 1.7rem; letter-spacing: -1px; color: var(--text); }
+	nav .brand:hover { background: none; }
+	.profile-avatar { width: 1.375rem; flex: none; border-radius: 50%; overflow: hidden; }
+	.profile-avatar :global(svg) { width: 1.375rem; height: 1.375rem; }
+	.group-label { padding: 1.1rem 0.75rem 0.35rem; color: var(--faint); font: 600 0.8125rem/1 system-ui, sans-serif; }
+	.who, .who-chevron { display: none; }
 	main { min-width: 0; }
 	aside { position: sticky; top: 0; align-self: start; min-width: 0; height: calc(100dvh - var(--dock)); overflow-y: auto; border-left: 1px solid var(--line); background: var(--surface); }
 	dialog { width: min(36rem, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 1.2rem; padding: 0; }
 	dialog::backdrop { background: rgb(0 0 0 / 0.65); }
 	dialog.now-sheet { width: 100%; max-width: 100%; height: 100dvh; max-height: 100dvh; margin: 0; border: 0; border-radius: 0; }
 	@media (min-width: 721px) {
-		nav { height: calc(100dvh - var(--nav-dock, 0px)); min-height: 0; overflow-y: auto; padding: 0.875rem; gap: 0.25rem; }
+		nav { height: calc(100dvh - var(--nav-dock, 0px)); min-height: 0; overflow-y: auto; padding: 0.875rem; }
 		.frame.hasPlayer { --nav-dock: var(--dock); }
-		nav a.brand { min-height: 4rem; margin: 0; padding-inline: 0; font-size: 1.8125rem; font-weight: 900; letter-spacing: -1px; }
-		nav :is(a, .mobile-account) { min-height: 3rem; gap: 0.75rem; padding: 0 0.75rem; border-radius: 0.75rem; font-size: 0.96875rem; font-weight: 500; }
-		nav a.active { font-weight: 700; }
-		nav .mobile-account { display: none; }
+		nav :is(a, button) { font-size: 0.96875rem; font-weight: 500; }
+		nav .phone-only { display: none; }
+		nav .search-field { gap: 0.625rem; margin: 0 0 0.75rem; height: 2.5rem; padding: 0 0.625rem 0 0.75rem; background: var(--raised); border: 1px solid color-mix(in srgb, var(--line) 80%, transparent); color: var(--muted); font-size: 0.875rem; }
+		nav .search-field kbd { margin-left: auto; padding: 0.2rem 0.375rem; border: 1px solid var(--line); border-radius: 0.375rem; color: var(--muted); font: 500 0.6875rem/1 system-ui, sans-serif; }
+		nav .search-field:hover { background: var(--hover); }
+		nav .search-field.active { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); font-weight: 500; }
 		.nav-spacer { flex: 1; min-height: 1.5rem; }
-		nav :is(.desktop-radio, .desktop-stats, a[href='/atlas'], a[href='/settings']) { min-height: 2.75rem; color: var(--faint); font-size: 0.875rem; font-weight: 400; }
-		nav :is(.desktop-radio, .desktop-stats, a[href='/atlas'], a[href='/settings']).active { color: var(--text); font-weight: 600; }
-		.desktop-help { min-height: 2.25rem; font-size: 0.75rem; color: var(--faint); }
+		nav .account { gap: 0.625rem; min-height: 3.25rem; padding: 0.5rem 0.625rem; border: 1px solid color-mix(in srgb, var(--line) 80%, transparent); border-radius: 0.875rem; background: var(--surface); }
+		nav .account.active { border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+		nav .account .profile-avatar, nav .account .profile-avatar :global(svg) { width: 2.125rem; height: 2.125rem; }
+		nav .account .tab-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+		.who { display: grid; min-width: 0; flex: 1; line-height: 1.2; }
+		.who strong { color: var(--text); font-size: 0.875rem; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+		.who small { color: var(--faint); font: 0.75rem system-ui, sans-serif; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+		.who-chevron { display: flex; color: var(--faint); }
 	}
 	.shortcuts { width: min(30rem, calc(100% - 2rem)); height: fit-content; max-height: calc(100dvh - 2rem); margin: auto; padding: 1rem 1.25rem; border: 1px solid var(--line); border-radius: 1rem; background: var(--surface); }
 	.shortcuts header, .shortcuts dl div { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
@@ -340,12 +360,15 @@
 	@media (max-width: 720px) {
 		.frame, .frame.docked { display: block; padding-bottom: calc(var(--tabs) + env(safe-area-inset-bottom)); }
 		.frame.hasPlayer { padding-bottom: calc(var(--tabs) + var(--dock) + env(safe-area-inset-bottom)); }
-		.brand-row, .nav-spacer, aside, nav .brand, nav .desktop-only, nav .desktop-radio, nav .desktop-stats, nav .desktop-help { display: none; }
-		nav { z-index: 9; position: fixed; inset: auto 0 0; min-height: var(--tabs); flex-direction: row; padding: 0 0 env(safe-area-inset-bottom); border: 0; border-top: 1px solid var(--line); }
-		nav :is(a, .mobile-account) { gap: 0.2rem; flex-direction: column; justify-content: center; flex: 1; min-height: var(--tabs); padding: 0.15rem; border-radius: 0; font-size: 0.75rem; }
-		nav .mobile-account { display: flex; align-items: center; border: 0; background: none; color: var(--muted); -webkit-tap-highlight-color: transparent; }
-		nav .mobile-account:focus-visible { outline-offset: -3px; }
-		nav .mobile-account.active { background: var(--hover); color: var(--text); font-weight: 650; }
+		.brand-row, .nav-spacer, aside, nav .desktop-only { display: none; }
+		nav { z-index: 9; position: fixed; inset: auto 0.75rem calc(0.625rem + env(safe-area-inset-bottom)); min-height: 0; height: 4rem; flex-direction: row; align-items: center; gap: 0; padding: 0 0.375rem; border: 1px solid color-mix(in srgb, var(--line) 80%, transparent); border-radius: 2rem; background: color-mix(in srgb, var(--surface) 72%, transparent); -webkit-backdrop-filter: blur(22px) saturate(1.7); backdrop-filter: blur(22px) saturate(1.7); box-shadow: 0 0.625rem 1.875rem rgb(0 0 0 / 0.18); }
+		nav :is(a, button) { flex: 1; min-width: 0; flex-direction: column; justify-content: center; gap: 0.125rem; height: 3.375rem; min-height: 0; padding: 0.125rem; border-radius: 1.6875rem; font: 600 0.65625rem/1.2 system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
+		nav :is(a, button) :global(svg) { width: 1.5rem; height: 1.5rem; }
+		nav :is(a, button) span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+		nav :is(a, button):hover { background: none; }
+		nav :is(a, button).active, nav :is(a, button).active:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); font-weight: 700; }
+		nav :is(a, button):focus-visible { outline-offset: -3px; }
+		nav .account .profile-avatar, nav .account .profile-avatar :global(svg) { width: 1.5rem; height: 1.5rem; }
 		dialog:not(.shortcuts) { width: 100%; max-width: 100%; height: 100dvh; max-height: 100dvh; margin: 0; border: 0; border-radius: 0; }
 		dialog.now-sheet { background: transparent; overscroll-behavior: contain; }
 		.now-sheet::backdrop { background: rgb(0 0 0 / var(--player-backdrop, 0.18)); }

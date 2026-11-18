@@ -3,6 +3,7 @@
 	import { api } from './api';
 	import Icon from './ui/Icon.svelte';
 
+	let { onShortcuts }: { onShortcuts?: () => void } = $props();
 	let dialog: HTMLDialogElement;
 	let totals = $state<Awaited<ReturnType<typeof api.stats>>>();
 	let requested = false;
@@ -29,15 +30,20 @@
 		<form method="dialog"><button class="icon-button" aria-label="Close links"><Icon name="x" size={19} /></button></form>
 	</header>
 	<nav aria-label="Explore">
-		<a href={resolve('/(app)/radio')} onclick={() => dialog.close()}>
-			<Icon name="radio" size={21} /><span>radio<small>live station</small></span>
+		<a class="in-nav" href={resolve('/(app)/radio')} onclick={() => dialog.close()}>
+			<Icon name="ph_radio" size={21} /><span>radio<small>live station</small></span>
 		</a>
-		<a href={resolve('/(app)/stats')} onclick={() => dialog.close()}>
-			<Icon name="stats" size={21} /><span>stats</span>
+		<a class="in-nav" href={resolve('/(app)/stats')} onclick={() => dialog.close()}>
+			<Icon name="ph_stats" size={21} /><span>stats</span>
 		</a>
-		<a href={resolve('/(app)/atlas')} onclick={() => dialog.close()}>
-			<Icon name="music" size={21} /><span>atlas</span>
+		<a class="in-nav" href={resolve('/(app)/atlas')} onclick={() => dialog.close()}>
+			<Icon name="ph_atlas" size={21} /><span>atlas</span>
 		</a>
+		{#if onShortcuts}
+			<button type="button" class="keys" onclick={() => { dialog.close(); onShortcuts(); }}>
+				<Icon name="ph_keys" size={21} /><span>keyboard shortcuts<small>press ?</small></span>
+			</button>
+		{/if}
 		{#each links as link (link.href)}
 			<a href={link.href} target="_blank" rel="noopener noreferrer">
 				<Icon name={link.icon} size={21} /><span>{link.title}{#if link.detail}<small>{link.detail}</small>{/if}</span>
@@ -54,8 +60,12 @@
 	header, nav a { display: flex; align-items: center; }
 	header { justify-content: space-between; padding-left: 0.65rem; }
 	h2 { font-size: 1rem; }
-	nav a { min-height: 2.75rem; gap: 0.85rem; padding: 0.55rem 0.65rem; border-radius: 0.65rem; }
-	nav a:hover { background: var(--raised); text-decoration: none; }
+	nav :is(a, button) { display: flex; align-items: center; width: 100%; border: 0; background: none; text-align: start; font: inherit; color: inherit; cursor: pointer; }
+	nav a, nav button { min-height: 2.75rem; gap: 0.85rem; padding: 0.55rem 0.65rem; border-radius: 0.65rem; }
+	nav :is(a, button):hover { background: var(--raised); text-decoration: none; }
 	small { display: block; color: var(--muted); }
 	.totals { padding: 0.7rem 0.65rem 0.3rem; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.86rem; }
+	@media (max-width: 720px), (hover: none) { .keys { display: none !important; } }
+	/* the desktop sidebar lists these itself */
+	@media (min-width: 721px) { .in-nav { display: none !important; } }
 </style>
