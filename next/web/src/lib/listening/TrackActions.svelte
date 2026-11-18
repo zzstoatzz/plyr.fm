@@ -1,5 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
+  import { downloadAllowed } from '@plyr/next-core/downloads/model';
   import { invalidateAll } from '$app/navigation';
   import { isPrivateTrack } from '@plyr/next-core/track-access';
   import { onDestroy, onMount } from 'svelte';
@@ -15,6 +16,8 @@
   let picking = $state(false);
   let open = $state(false);
   let picker: HTMLDialogElement;
+  let downloadDialog: HTMLDialogElement;
+  let downloading = $state(false);
   let accessDialog: HTMLDialogElement;
   let access = $state(false);
   let accessChanged = false;
@@ -22,7 +25,7 @@
   let error = $state(false);
   let account = $state.raw(auth.getAuth());
   const id = $props.id();
-  onMount(() => auth.subscribe(() => { const next = auth.getAuth(); if (next.rpc !== account.rpc) { picker?.close(); picking = false; accessDialog?.close(); } account = next; }));
+  onMount(() => auth.subscribe(() => { const next = auth.getAuth(); if (next.rpc !== account.rpc) { picker?.close(); picking = false; downloadDialog?.close(); accessDialog?.close(); } account = next; }));
   const owner = $derived(!!account.did && account.did === track.artist.did && !isPrivateTrack(track));
   const queueable = $derived(player.canEditPublicQueue && !player.liveStation);
   function show(place: () => void) {
@@ -80,6 +83,9 @@
   <button class="text-button" type="button" disabled={!queueable} onclick={() => pick(() => player.playNext(track))}><Icon name="next" size={18} />play next</button>
   <button class="text-button" type="button" disabled={!queueable} onclick={() => pick(() => player.enqueue(track))}><Icon name="queue" size={18} />add to queue</button>
   <hr>
+  {#if downloadAllowed(track)}
+    <button class="text-button" type="button" onclick={() => { downloading = true; panel.hidePopover(); downloadDialog.showModal(); }}><Icon name="download" size={18} />download</button>
+  {/if}
   <button class="text-button" type="button" onclick={share}><Icon name="share" size={18} />{copied ? 'link copied' : 'share track'}</button>
   {#if account.rpc}
     <button class="text-button" type="button" onclick={() => { picking = true; panel.hidePopover(); picker.showModal(); }}><Icon name="plus" size={18} />add to playlist</button>
@@ -101,6 +107,12 @@
 {/if}
 </dialog>
 
+<dialog bind:this={downloadDialog} class="picker" onclose={() => { downloading = false; trigger.focus(); }}>
+  <header><strong>download</strong><form method="dialog"><button class="icon-button" type="submit" aria-label="Close download"><Icon name="x" size={18} /></button></form></header>
+{#if downloading}
+  {#await import('$lib/downloads/DownloadPanel.svelte') then { default: Download }}<Download {track} />{:catch}<p role="alert">could not open this. reload the page and try again.</p>{/await}
+{/if}
+</dialog>
 <dialog bind:this={accessDialog} class="picker" onclose={() => { access = false; trigger.focus(); if (accessChanged) void invalidateAll(); }}>
   <header><strong>who can listen</strong><form method="dialog"><button class="icon-button" type="submit" aria-label="Close who can listen"><Icon name="x" size={18} /></button></form></header>
 {#if access}
