@@ -43,6 +43,10 @@
 @media (min-width: 721px) {
 	:root { font-family: 'Plyr Comic', system-ui, sans-serif; }
 }
+:root[data-font='comic-sans'] { font-family: 'Plyr Comic', system-ui, sans-serif; }
+:root[data-font='system'] { font-family: system-ui, -apple-system, sans-serif; }
+:root[data-font='mono'] { font-family: ui-monospace, Menlo, Consolas, monospace; }
+:root[data-font='serif'] { font-family: Georgia, 'Times New Roman', serif; }
 
 :root[data-theme='light'] { color-scheme: light; }
 :root[data-theme='dark'] { color-scheme: dark; }

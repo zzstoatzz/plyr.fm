@@ -1,11 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { MediaQuery } from 'svelte/reactivity';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { auth, authorizeScrobbling, canScrobble, logout } from '$lib/auth';
 	import { player } from '$lib/player.svelte';
-	import { accents, prefs, scales, setPrefs, themes } from '$lib/prefs.svelte';
+	import { DEFAULT_HIDDEN_TAGS, hiddenTags } from '@plyr/next-core/hidden-tags';
+	import { accents, fonts, prefs, scales, setPrefs, themes } from '$lib/prefs.svelte';
 	import { comments } from '$lib/listening/comments';
 	import Icon from '$lib/ui/Icon.svelte';
 
@@ -22,6 +24,21 @@
 		try { await authorizeScrobbling(); }
 		catch { scrobbleError = true; input.checked = false; }
 		finally { authorizing = false; }
+	}
+
+	// with no saved choice, phones use the system face and wider screens comic sans (app.css)
+	const wide = new MediaQuery('min-width: 721px');
+	const defaultFont = $derived(wide.current ? 'comic-sans' : 'system');
+	const custom = $derived(!accents.some(accent => accent.color === prefs.accent));
+	let tagDraft = $state<string>();
+	let tagError = $state('');
+	const tagValue = $derived(tagDraft ?? prefs.hiddenTags.join(', '));
+
+	function saveTags(tags: string[] | undefined) {
+		if (!tags) { tagError = 'use up to 10 tags, each under 200 characters.'; return; }
+		setPrefs({ hiddenTags: tags });
+		tagDraft = undefined;
+		tagError = '';
 	}
 
 	async function signOut() {
@@ -58,6 +75,21 @@
 							<span aria-hidden="true"><i></i></span>
 						</label>
 					{/each}
+					<label class="option swatch custom" class:selected={custom} title="custom accent">
+						<input type="color" aria-label={custom ? `custom accent, ${prefs.accent}, selected` : 'custom accent'} value={prefs.accent} onchange={event => setPrefs({ accent: event.currentTarget.value.toLowerCase() })} />
+						<span aria-hidden="true"><i style:background={custom ? prefs.accent : undefined}></i></span>
+					</label>
+				</div>
+			</fieldset>
+			<fieldset>
+				<legend>font</legend>
+				<div class="options">
+					{#each fonts as font (font.value)}
+						<label class="option">
+							<input type="radio" name="font" value={font.value} checked={(prefs.font ?? defaultFont) === font.value} onchange={() => setPrefs({ font: font.value })} />
+							<span data-font={font.value}>{font.name}</span>
+						</label>
+					{/each}
 				</div>
 			</fieldset>
 			<fieldset>
@@ -85,6 +117,22 @@
 				<span><strong>keep playing</strong><small id="continuation-detail">play more tracks when your queue ends</small></span>
 				<input type="checkbox" role="switch" aria-label="keep playing" aria-describedby="continuation-detail" checked={player.continuesPlaying} onchange={event => player.setKeepPlaying(event.currentTarget.checked)} />
 			</label>
+		</div>
+	</section>
+
+	<section aria-labelledby="discovery">
+		<h2 id="discovery">discovery</h2>
+		<div class="card tags">
+			<label for="hidden-tags"><strong>hidden tags</strong><small id="hidden-detail">keep these tags out of latest tracks. artist pages and search still show them. hiding ai also hides accounts labeled for AI-generated audio.</small></label>
+			<input id="hidden-tags" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="none" aria-describedby="hidden-detail{tagError ? ' hidden-error' : ''}" aria-invalid={!!tagError}
+				value={tagValue} oninput={event => { tagDraft = event.currentTarget.value; tagError = ''; }}
+				onkeydown={event => { if (event.key === 'Enter') saveTags(hiddenTags(tagValue.split(',').filter(tag => tag.trim()))); }} />
+			{#if tagError}<p id="hidden-error" class="tag-error" role="alert">{tagError}</p>{/if}
+			<div class="tag-actions">
+				<button class="text-button save" type="button" disabled={tagDraft === undefined} onclick={() => saveTags(hiddenTags(tagValue.split(',').filter(tag => tag.trim())))}>save</button>
+				<button class="text-button" type="button" onclick={() => saveTags([])}>show all tags</button>
+				<button class="text-button" type="button" onclick={() => saveTags([...DEFAULT_HIDDEN_TAGS])}>restore defaults</button>
+			</div>
 		</div>
 	</section>
 
@@ -133,6 +181,24 @@
 	.option > span { display: grid; place-items: center; min-height: 2.75rem; min-width: 2.75rem; padding: 0 0.75rem; border: 1px solid var(--line); border-radius: 0.55rem; color: var(--muted); background: var(--raised); }
 	.option input:checked + span { border-color: var(--accent); color: var(--text); font-weight: 620; }
 	.option input:focus-visible + span, .toggle input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+	.custom input { opacity: 0; }
+	.custom > span { background: conic-gradient(#f894b8, #c2a2ff, #6a9fff, #66cd9d, #f2c66d, #f894b8); }
+	.custom.selected > span { border-color: var(--accent); }
+	.swatch.custom i { background: var(--raised); }
+	.swatch.custom.selected i { border: 2px solid var(--raised); }
+	[data-font='comic-sans'] { font-family: 'Plyr Comic', system-ui, sans-serif; }
+	[data-font='system'] { font-family: system-ui, -apple-system, sans-serif; }
+	[data-font='mono'] { font-family: ui-monospace, Menlo, Consolas, monospace; }
+	[data-font='serif'] { font-family: Georgia, 'Times New Roman', serif; }
+	.tags { display: grid; gap: 0.6rem; padding-block: 0.85rem; }
+	.tags label { display: grid; gap: 0.15rem; }
+	.tags small { color: var(--muted); }
+	.tags input[type='text'] { min-height: 2.75rem; padding: 0 0.75rem; border: 1px solid var(--line); border-radius: 0.55rem; background: var(--raised); }
+	.tags input[type='text']:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+	.tags input[aria-invalid='true'] { border-color: #ef4444; }
+	.tag-error { margin: 0; color: #ef4444; }
+	.tag-actions .save { color: var(--accent); font-weight: 620; }
+	.tag-actions { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; }
 	.swatch i { width: 1.1rem; height: 1.1rem; background: var(--palette-accent); border-radius: 50%; }
 	.toggle, .account { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; min-height: 3.5rem; padding-block: 0.65rem; }
 	.toggle { cursor: pointer; }

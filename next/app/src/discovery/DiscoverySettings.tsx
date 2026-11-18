@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Compass } from '../icons';
 import { View } from 'react-native';
 import { Action, Copy, Field, row } from '../controls';
-import { DEFAULT_HIDDEN_TAGS, hiddenTags } from './preferences';
+import { DEFAULT_HIDDEN_TAGS, hiddenTags } from '@plyr/next-core/hidden-tags';
 import { useAppPreferences } from '../preference-context';
 import { SettingsRow, SettingsSection } from '../SettingsPieces';
 import { Sheet } from '../Sheet';

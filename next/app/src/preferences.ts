@@ -3,7 +3,7 @@ import { AppState } from 'react-native';
 import type { Auth, Did } from './auth-state';
 import { accountPreferences, type PersonalPreferences } from './preference-sync';
 import { readLocal, writeLocal } from './storage';
-import { DEFAULT_HIDDEN_TAGS, hiddenTags } from './discovery/preferences';
+import { DEFAULT_HIDDEN_TAGS, hiddenTags } from '@plyr/next-core/hidden-tags';
 
 export type Preferences = PersonalPreferences & { volume: number };
 export type PreferenceStatus = 'local' | 'syncing' | 'synced' | 'error';
