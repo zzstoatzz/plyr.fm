@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { DEFAULT_HIDDEN_TAGS, discoveryFilter, hiddenTags } from '../src/discovery/preferences.ts';
+import { DEFAULT_HIDDEN_TAGS, discoveryFilter, hiddenTags } from '../src/hidden-tags.ts';
 
 test('discovery preferences normalize and deduplicate with the API tag rules', () => {
   assert.deepEqual(hiddenTags([' -- AI ', 'AI', '  field\trecording ', 'Suno', 'Ä']), ['ai', 'field recording', 'suno', 'Ä']);
