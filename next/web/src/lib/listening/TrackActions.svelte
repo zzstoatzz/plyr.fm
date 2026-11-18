@@ -1,5 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
+  import { invalidateAll } from '$app/navigation';
+  import { isPrivateTrack } from '@plyr/next-core/track-access';
   import { onDestroy, onMount } from 'svelte';
   import type { Track } from '@plyr/next-core/api';
   import { auth } from '$lib/auth';
@@ -13,11 +15,15 @@
   let picking = $state(false);
   let open = $state(false);
   let picker: HTMLDialogElement;
+  let accessDialog: HTMLDialogElement;
+  let access = $state(false);
+  let accessChanged = false;
   let copied = $state(false);
   let error = $state(false);
   let account = $state.raw(auth.getAuth());
   const id = $props.id();
-  onMount(() => auth.subscribe(() => { const next = auth.getAuth(); if (next.rpc !== account.rpc) { picker?.close(); picking = false; } account = next; }));
+  onMount(() => auth.subscribe(() => { const next = auth.getAuth(); if (next.rpc !== account.rpc) { picker?.close(); picking = false; accessDialog?.close(); } account = next; }));
+  const owner = $derived(!!account.did && account.did === track.artist.did && !isPrivateTrack(track));
   const queueable = $derived(player.canEditPublicQueue && !player.liveStation);
   function show(place: () => void) {
     copied = error = false;
@@ -78,6 +84,11 @@
   {#if account.rpc}
     <button class="text-button" type="button" onclick={() => { picking = true; panel.hidePopover(); picker.showModal(); }}><Icon name="plus" size={18} />add to playlist</button>
   {:else}<a class="text-button" href={resolve('/(app)/login') + '?' + new URLSearchParams({ return_to: trackHref(track) })}><Icon name="plus" size={18} />sign in to save</a>{/if}
+  {#if owner}
+    <hr>
+    <a class="text-button" href={resolve('/(app)/edit-track/[id]', { id: track.id })}><Icon name="edit" size={18} />edit track</a>
+    <button class="text-button" type="button" onclick={() => { access = true; accessChanged = false; panel.hidePopover(); accessDialog.showModal(); }}><Icon name="lock" size={18} />who can listen</button>
+  {/if}
   <hr>
   <a class="text-button" href={resolve('/(app)/u/[actor]', { actor: track.artist.did })}><Icon name="user" size={18} />go to artist</a>
   <a class="text-button" href={trackHref(track)}><Icon name="info" size={18} />about this track</a>
@@ -87,6 +98,13 @@
   <header><strong>add to playlist</strong><form method="dialog"><button class="icon-button" type="submit" aria-label="Close playlists"><Icon name="x" size={18} /></button></form></header>
 {#if picking && account.rpc && account.did}
   {#key account.rpc}{#await import('$lib/collections/PlaylistPicker.svelte') then { default: Picker }}<Picker {account} {track} />{/await}{/key}
+{/if}
+</dialog>
+
+<dialog bind:this={accessDialog} class="picker" onclose={() => { access = false; trigger.focus(); if (accessChanged) void invalidateAll(); }}>
+  <header><strong>who can listen</strong><form method="dialog"><button class="icon-button" type="submit" aria-label="Close who can listen"><Icon name="x" size={18} /></button></form></header>
+{#if access}
+  {#await import('$lib/access/AccessDialog.svelte') then { default: Access }}<Access subject={{ noun: 'track', tracks: [track], skey: track.record.rkey }} returnTo={trackHref(track)} onchange={() => { accessChanged = true; }} />{:catch}<p role="alert">could not open this. reload the page and try again.</p>{/await}
 {/if}
 </dialog>
 
