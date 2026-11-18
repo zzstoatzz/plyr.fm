@@ -44,3 +44,10 @@ test('autoscroll speeds up toward the edges and caps', () => {
   assert.equal(autoscrollVelocity(584, 0, 600), 10);
   assert.equal(autoscrollVelocity(-200, 0, 600), -14);
 });
+
+test('the last slot is reachable without dragging to the exact edge', () => {
+  const gapped = [0, 66].map(top => ({ top, height: 66 }));
+  assert.equal(dragTarget(gapped, 0, 70).to, 1);
+  assert.equal(dragTarget(gapped, 0, 200).offset, 66);
+  assert.equal(dragTarget(gapped, 1, -70).to, 0);
+});

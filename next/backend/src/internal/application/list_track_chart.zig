@@ -7,7 +7,7 @@ const TrackChartStore = store_module.TrackChartStore;
 pub const default_limit: usize = 10;
 pub const max_limit: usize = 50;
 
-const Options = struct {
+pub const Options = struct {
     limit: usize = default_limit,
     period: track_chart.Period = .all_time,
 };
@@ -28,11 +28,23 @@ pub fn execute(
     target: []const u8,
     now_us: i64,
 ) Result {
-    if (now_us < 0) return .unavailable;
     const options = parseOptions(allocator, target) catch |err| return switch (err) {
         error.OutOfMemory => .unavailable,
         else => .invalid_request,
     };
+    return executeOptions(allocator, store, track_collection, profile_collection, like_collection, options, now_us);
+}
+
+pub fn executeOptions(
+    allocator: std.mem.Allocator,
+    store: ?TrackChartStore,
+    track_collection: []const u8,
+    profile_collection: []const u8,
+    like_collection: []const u8,
+    options: Options,
+    now_us: i64,
+) Result {
+    if (now_us < 0) return .unavailable;
     const configured_store = store orelse return .unavailable;
     const entries = configured_store.list(allocator, .{
         .track_collection = track_collection,

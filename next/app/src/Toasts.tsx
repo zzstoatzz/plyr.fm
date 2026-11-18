@@ -28,21 +28,25 @@ function ToastCard({ item }: { item: Toast }) {
   }, [item.leaving, shown, theme.reduceMotion]);
   const Icon = icons[item.type];
   const tint = item.type === 'error' || item.type === 'warning' ? theme.danger : item.type === 'success' ? theme.accent : theme.muted;
+  const label = { color: theme.text, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale, fontWeight: '500' as const };
+  const body = <>
+    <Icon size={16} color={tint} strokeWidth={2.5} />
+    {item.message ? <Text style={[label, { flexShrink: 1 }]}>{item.message}</Text> : null}
+    {item.action && <Text style={[label, { color: theme.accent, fontWeight: '600' }]}>{item.action.label} ›</Text>}
+  </>;
   return <Animated.View testID="toast" role={item.type === 'error' ? 'alert' : 'status'} pointerEvents={item.action ? 'box-none' : 'none'}
     style={[glassSurface(theme), styles.card, { boxShadow: theme.dark ? '0px 8px 24px #0000004d' : '0px 8px 24px #00000024',
       opacity: shown, transform: [{ translateY: shown.interpolate({ inputRange: [0, 1], outputRange: [-8, 0] }) }] }]}>
-    <Icon size={16} color={tint} strokeWidth={2.5} />
-    {item.message ? <Text style={{ flexShrink: 1, color: theme.text, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale, fontWeight: '500' }}>{item.message}</Text> : null}
-    {item.action && <Link href={item.action.href} asChild>
-      <Pressable accessibilityRole="link" onPress={() => toast.dismiss(item.id)} hitSlop={12}>
-        <Text style={{ color: theme.accent, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale, fontWeight: '600', textDecorationLine: 'underline' }}>{item.action.label}</Text>
-      </Pressable>
-    </Link>}
+    {item.action ? <Link href={item.action.href} asChild>
+      <Pressable accessibilityRole="link" accessibilityLabel={[item.message, item.action.label].filter(Boolean).join('. ')} onPress={() => toast.dismiss(item.id)}
+        style={styles.content}>{body}</Pressable>
+    </Link> : <View style={styles.content}>{body}</View>}
   </Animated.View>;
 }
 
 const styles = StyleSheet.create({
   anchor: { height: 0, overflow: 'visible', zIndex: 10 },
   stack: { position: 'absolute', top: 8, left: 12, right: 12, gap: 8, alignItems: 'center', zIndex: 10000 },
-  card: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, maxWidth: '100%' },
+  card: { borderRadius: 10, maxWidth: '100%' },
+  content: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 14, minHeight: 44 },
 });

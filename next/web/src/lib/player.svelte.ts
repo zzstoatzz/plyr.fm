@@ -23,6 +23,7 @@ import type { AudioSource } from './media/gated-audio';
 import { consumeQueueLogin, registerQueueLogin } from './storage/queue-login';
 import { playOutboxStorage } from './storage/play-outbox-storage';
 import { queueStorage } from './storage/queue-storage';
+import { toast } from './toast.svelte';
 
 const admit = createQueueAdmission(authConfig);
 
@@ -52,6 +53,8 @@ class Player {
 		this.nowPlaying = true;
 	}
 	queueOpen = $state(false);
+	/** Bumped to ask the layout to show the queue (panel on desktop, page on phones). */
+	queueRequest = $state(0);
 	privateMode = $state(false);
 	liveStation = $state.raw<RadioStation>();
 	liveListening = $state(false);
@@ -532,16 +535,26 @@ class Player {
 		else if (this.queue[index]) this.#startLocal(this.queue, index);
 	}
 	enqueue(track: Track) {
+		this.#add(track, false);
+	}
+	/** Puts the track right after the one playing, ahead of other picks. */
+	playNext(track: Track) {
+		this.#add(track, true);
+	}
+	#add(track: Track, next: boolean) {
 		if (this.liveStation) return;
+		const title = track.metadata.title || 'untitled';
 		if (isPrivateTrack(track)) {
 			if (!privateLibrary.ownsPrivateTrack(track, auth.getAuth().did)) return;
-			if (this.privateMode) this.queue = [...this.queue, track];
-			else this.play(track);
-		} else if (!this.privateMode) {
-			if (this.#jam?.enqueue([track])) return;
-			if (this.current) this.#model.enqueue(track);
-			else this.play(track);
+			if (!this.privateMode) { this.play(track); return; }
+			this.queue = next ? [...this.queue.slice(0, this.index + 1), track, ...this.queue.slice(this.index + 1)] : [...this.queue, track];
+		} else if (this.privateMode) {
+			return;
+		} else if (!(next ? this.#jam?.playNext([track]) : this.#jam?.enqueue([track]))) {
+			if (!this.current) { this.play(track); return; }
+			if (next) this.#model.playNext(track); else this.#model.enqueue(track);
 		}
+		toast.add(next ? `playing ${title} next` : `queued ${title}`, 'success', 3000, { label: 'view queue', run: () => { this.queueRequest++; } });
 	}
 	enqueueCollection(tracks: Track[]) {
 		if (!this.canEditPublicQueue) return;

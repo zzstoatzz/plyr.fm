@@ -12,7 +12,7 @@ pub const default_limit: usize = 50;
 pub const max_limit: usize = 100;
 pub const max_tag_filter_bytes: usize = 200;
 
-const Options = struct {
+pub const Options = struct {
     limit: usize = default_limit,
     cursor: ?[]const u8 = null,
     artist_did: ?[]const u8 = null,
@@ -37,6 +37,15 @@ pub fn execute(
         error.OutOfMemory => .unavailable,
         else => .invalid_request,
     };
+    return executeOptions(allocator, store, expected_collection, options);
+}
+
+pub fn executeOptions(
+    allocator: std.mem.Allocator,
+    store: ?TrackStore,
+    expected_collection: []const u8,
+    options: Options,
+) Result {
     const cursor_prefix = filterPrefix(allocator, options, expected_collection) catch return .unavailable;
     const after: ?track_cursor.Cursor = if (options.cursor) |token| blk: {
         if (!std.mem.startsWith(u8, token, cursor_prefix)) return .invalid_request;

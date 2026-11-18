@@ -13,6 +13,7 @@ const tracks = @import("tracks.zig");
 const actors = @import("actors.zig");
 const managed_space = @import("managed_space.zig");
 const notifications = @import("notifications.zig");
+const catalog = @import("catalog.zig");
 const NotificationService = @import("../internal/notification/service.zig").Config;
 const NotificationStore = @import("../internal/notification/store.zig").NotificationStore;
 const ManagedSpaceConfig = @import("../internal/space/managed_space.zig").Config;
@@ -28,6 +29,7 @@ const SearchStore = @import("../internal/index/search_store.zig").SearchStore;
 const PlayMetricStore = @import("../internal/metrics/play_metric_store.zig").PlayMetricStore;
 const TrackStore = @import("../internal/index/track_store.zig").TrackStore;
 const TrackChartStore = @import("../internal/index/track_chart_store.zig").TrackChartStore;
+const TrackRecordJsonStore = @import("../internal/index/track_record_json_store.zig").Store;
 const VerifiedListStore = @import("../internal/index/verified_list_store.zig").VerifiedListStore;
 const RecordStatusStore = @import("../internal/index/record_status_store.zig").RecordStatusStore;
 const IngestStatusStore = @import("../internal/index/ingest_status_store.zig").IngestStatusStore;
@@ -41,6 +43,7 @@ pub const App = struct {
     stats_store: ?@import("../internal/metrics/platform_stats_store.zig").Store = null,
     track_store: ?TrackStore,
     track_chart_store: ?TrackChartStore = null,
+    track_record_json_store: ?TrackRecordJsonStore = null,
     like_store: ?LikeQueryStore = null,
     comment_store: ?CommentQueryStore = null,
     viewer_like_store: ?ViewerLikeStore = null,
@@ -75,7 +78,9 @@ pub fn handle(
     const path = pathFromTarget(target);
 
     if (request.method == .OPTIONS) {
-        try response.empty(request, .no_content, request_id, app.cors);
+        var cors = app.cors;
+        if (catalog.match(app.track_collection, path) != null) cors.public = true;
+        try response.empty(request, .no_content, request_id, cors);
     } else if (mem.eql(u8, path, "/health")) {
         if (request.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
@@ -116,6 +121,16 @@ pub fn handle(
             return;
         }
         try managed_space.checkUserAccess(request, allocator, app.io, config, app.cors, request_id);
+    } else if (catalog.match(app.track_collection, path)) |method| {
+        try catalog.handle(request, allocator, app.io, method, .{
+            .chart = app.track_chart_store,
+            .tracks = app.track_store,
+            .records = app.track_record_json_store,
+        }, .{
+            .track = app.track_collection,
+            .profile = app.profile_collection,
+            .like = app.like_collection,
+        }, publicCors(app.cors), request_id);
     } else if (if (app.notifications) |config| notifications.match(config, path) else null) |method| {
         try notifications.handle(
             request,
@@ -524,6 +539,12 @@ fn artistMetricsIdentifier(path: []const u8) ?[]const u8 {
     const identifier = path[artists_prefix.len .. path.len - metrics_suffix.len];
     if (identifier.len == 0 or mem.indexOfScalar(u8, identifier, '/') != null) return null;
     return identifier;
+}
+
+fn publicCors(cors: response.CorsPolicy) response.CorsPolicy {
+    var public = cors;
+    public.public = true;
+    return public;
 }
 
 fn pathFromTarget(target: []const u8) []const u8 {

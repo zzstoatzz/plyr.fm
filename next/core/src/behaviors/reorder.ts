@@ -12,7 +12,7 @@ export function dragTarget(rows: Row[], from: number, rawOffset: number) {
   const last = rows[rows.length - 1];
   const origin = rows[from];
   const offset = Math.max(first.top - origin.top, Math.min(last.top + last.height - origin.top - origin.height, rawOffset));
-  const center = origin.top + origin.height / 2 + offset;
+  const center = origin.top + origin.height / 2 + rawOffset;
   let to = from;
   for (let index = 0; index < rows.length; index++) {
     const middle = rows[index].top + rows[index].height / 2;

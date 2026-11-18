@@ -12,6 +12,7 @@
 	import LikeButton from './listening/LikeButton.svelte';
 	import Likers from './listening/Likers.svelte';
 	import TrackActions from './listening/TrackActions.svelte';
+	import { pressMenu } from './listening/press-menu';
 	import { compactCount, postedAt } from './listening/format';
 
 	let { track, collection, label, testid, number }: {
@@ -22,6 +23,7 @@
 	const currentTrack = $derived(!player.liveStation && canToggleTrack(player.current, track, !!player.jam));
 	const playing = $derived(currentTrack && player.playing && !player.outputElsewhere);
 	const title = $derived(track.metadata.title || 'untitled');
+	let actions: ReturnType<typeof TrackActions> | undefined = $state();
 	function toggle() {
 		if (currentTrack) player.toggle();
 		else if (prefs.playThrough) player.play(track, collection, label);
@@ -29,7 +31,7 @@
 	}
 </script>
 
-<div class="track" class:numbered={number !== undefined} class:current={currentTrack} data-testid={testid} data-track-id={track.id}>
+<div class="track" class:numbered={number !== undefined} class:current={currentTrack} data-testid={testid} data-track-id={track.id} use:pressMenu={(x, y) => actions?.openAt(x, y)}>
 	<button class="playback" type="button" data-testid="track-play-control" aria-label={`${playing ? 'Pause' : 'Play'} ${title}`} onclick={toggle}>
 		<span class="cover">
 			{#if number === undefined}<Artwork src={trackArtwork(track)} />{:else}<span class="number">{number}</span>{/if}
@@ -43,13 +45,13 @@
 	</div>
 	<div class="row-actions">
 	<button class="icon-button add" type="button" aria-label={`Add ${title} to queue`} disabled={!player.canEditPublicQueue} title={!player.canEditPublicQueue ? "play a public track to change queues" : undefined} onclick={() => player.enqueue(track)}><Icon name="queue" size={20} /></button>
-	<LikeButton {track} count={false} named /><TrackActions {track} />
+	<LikeButton {track} count={false} named /><TrackActions bind:this={actions} {track} />
 	</div>
 	<span class="duration">{clock(track.metadata.duration_seconds)}</span>
 </div>
 
 <style>
-	.track { position: relative; display: grid; grid-template-columns: 3.25rem minmax(0, 1fr) auto 3rem; align-items: center; gap: 0.75rem; min-height: 4.65rem; }
+	.track { -webkit-touch-callout: none; position: relative; display: grid; grid-template-columns: 3.25rem minmax(0, 1fr) auto 3rem; align-items: center; gap: 0.75rem; min-height: 4.65rem; }
 	.playback { display: block; border: 0; border-radius: 0.42rem; padding: 0; background: transparent; }
 	.playback::after { content: ''; position: absolute; inset: 0; z-index: 1; }
 	.cover { position: relative; display: block; border-radius: inherit; overflow: hidden; }
