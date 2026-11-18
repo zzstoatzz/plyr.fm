@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { player } from '$lib/player.svelte';
+	import { clock } from '$lib/media/format';
 	import { waveformPeaks } from '$lib/media/waveform';
 	import Icon from '$lib/ui/Icon.svelte';
 
@@ -24,13 +25,6 @@
 		waveformPeaks(file, BARS).then(found => { if (live) peaks = found; }, () => {});
 		return () => { live = false; URL.revokeObjectURL(next); };
 	});
-
-	function clock(seconds = 0) {
-		const whole = Math.floor(seconds);
-		const hours = Math.floor(whole / 3600);
-		const rest = `${Math.floor(whole / 60) % 60}:${String(whole % 60).padStart(2, '0')}`;
-		return hours ? `${hours}:${rest.padStart(5, '0')}` : rest;
-	}
 
 	function toggle() {
 		if (!element) return;

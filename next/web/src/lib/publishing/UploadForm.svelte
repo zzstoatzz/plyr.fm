@@ -14,17 +14,17 @@
 
 <script lang="ts">
   import { onMount, untrack, type Snippet } from 'svelte';
-  import { trackIdFromUri } from '@plyr/next-core/api';
   import type { CreateOperation } from '@plyr/next-core/publishing/create-operation';
   import { PUBLIC_AUDIO_FORMATS, type UploadOperation } from '@plyr/next-core/publishing/upload-model';
   import { draftInRecovery, type QueuedUploadDraft } from '@plyr/next-core/publishing/queued-upload-draft';
-  import { jobLine, needsPlyrStorage, uploadInProgress } from '@plyr/next-core/publishing/upload-queue-model';
+  import { needsPlyrStorage, uploadInProgress } from '@plyr/next-core/publishing/upload-queue-model';
   import { normalizeTrackTags } from '@plyr/next-core/publishing/track-tags';
   import { creditName } from '@plyr/next-core/publishing/credit-name';
   import { api } from '$lib/api';
   import { auth } from '$lib/auth';
   import { coverImage } from '$lib/media/cover-image';
   import { canonicalAudioFile } from '$lib/media/audio-file';
+  import { clock, fileSize } from '$lib/media/format';
   import { createPds } from '$lib/pds';
   import { queuedDrafts, uploadStorage } from '$lib/storage/upload-storage';
   import { uploadQueue } from '$lib/upload';
@@ -32,6 +32,8 @@
   import Icon from '$lib/ui/Icon.svelte';
   import Loading from '$lib/ui/Loading.svelte';
   import AudioPreview from './AudioPreview.svelte';
+  import UploadDetails from './UploadDetails.svelte';
+  import UploadJobs from './UploadJobs.svelte';
   import CreateRecovery from './CreateRecovery.svelte';
   import LargeUpload from './LargeUpload.svelte';
   import QueuedUpload from './QueuedUpload.svelte';
@@ -89,21 +91,6 @@
 
   let editing = $derived(!!audio || !!cover || reattach || !!(title || album || description || tags));
   let blocked = $derived(submitting || !audio || !title.trim() || !artist || !!tagProblem || imageBusy || loading || !!recoveryProblem || creationBlocksUpload || (service && (!consent || !account.uploadStorage)));
-
-  function size(bytes: number) {
-    const units = ['KB', 'MB', 'GB'];
-    let value = bytes / 1024;
-    let unit = 0;
-    while (value >= 1000 && unit < units.length - 1) { value /= 1024; unit++; }
-    return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${units[unit]}`;
-  }
-
-  function clock(seconds: number) {
-    const whole = Math.round(seconds);
-    const hours = Math.floor(whole / 3600);
-    const rest = `${Math.floor(whole / 60) % 60}:${String(whole % 60).padStart(2, '0')}`;
-    return hours ? `${hours}:${rest.padStart(5, '0')}` : rest;
-  }
 
   function isImage(file: File) {
     return file.type.startsWith('image/') || /\.(heic|heif|jpe?g|png|webp|gif|avif)$/i.test(file.name);
@@ -318,24 +305,7 @@
   }
 </script>
 
-{#if jobs.some(job => job.owner === owner)}
-  <section class="jobs" aria-label="Upload queue" aria-live="polite">
-    <h2>your uploads</h2>
-    <ul>
-      {#each jobs.filter(job => job.owner === owner) as job (job.id)}
-        <li class:failed={job.phase === 'failed'}>
-          <span class="job-icon"><Icon name={job.phase === 'done' ? 'check' : job.phase === 'failed' ? 'info' : 'upload'} size={18} /></span>
-          <span class="job-line">
-            {jobLine(job)}
-            {#if job.phase === 'uploading' && job.progress !== undefined}<span class="meter"><i style:width="{Math.min(100, job.progress * 100)}%"></i></span>{/if}
-          </span>
-          {#if job.phase === 'done' && job.uri}<a class="text-button" href={`/track/${trackIdFromUri(job.uri)}`}>view track</a>{/if}
-          {#if job.phase === 'failed' && uploadQueue.editable(job.id)}<button class="text-button" onclick={() => editAgain(job.id)} disabled={!hydrated || imageBusy || submitting}>edit and try again</button>{/if}
-        </li>
-      {/each}
-    </ul>
-  </section>
-{/if}
+<UploadJobs jobs={jobs.filter(job => job.owner === owner)} disabled={!hydrated || imageBusy || submitting} edit={editAgain} />
 {#if queuedProblem}
   <p role="alert">{queuedProblem}</p>
   <button class="text-button" onclick={refreshDrafts}>retry queued uploads</button>
@@ -419,7 +389,7 @@
         <div class="meta">
           {#if audio}
             {#if duration}<span class="chip strong">{clock(duration)}</span>{/if}
-            <span class="chip file" title={audio.name}>{audio.name} · {size(audio.size)}</span>
+            <span class="chip file" title={audio.name}>{audio.name} · {fileSize(audio.size)}</span>
             <button type="button" class="chip action" onclick={() => audioInput?.click()}><Icon name="wave" size={15} />change audio</button>
           {:else}
             <span class="chip">your draft is still here. choose the audio file again.</span>
@@ -440,21 +410,7 @@
       </div>
     </header>
 
-    <div class="details">
-      <div class="card">
-        <label class="field"><span>album</span><input bind:value={album} maxlength="256" placeholder="optional" /></label>
-        <label class="field"><span>tags</span><textarea bind:value={tags} rows="2" placeholder="one tag per line"></textarea></label>
-        {#if tagProblem}<p class="problem" role="alert">{tagProblem}</p>{/if}
-        <label class="switch">
-          <span><b>auto-tag with recommended genres</b><small>we listen once it's up and add a few genre tags. you can remove them later.</small></span>
-          <input type="checkbox" role="switch" bind:checked={autoTag} />
-        </label>
-      </div>
-      <div class="card">
-        <label class="field"><span>description</span><textarea bind:value={description} maxlength="5000" rows="5" placeholder="liner notes, credits, lyrics…"></textarea></label>
-        {#if description.length > 4500}<p class="subtle count">{description.length} / 5000</p>{/if}
-      </div>
-    </div>
+    <UploadDetails bind:album bind:tags bind:description bind:autoTag {tagProblem} />
   {/if}
 
   {#if draftProblem}<p class="problem" role="alert">{draftProblem}</p>{/if}
@@ -512,38 +468,14 @@
   .chip.action:hover { background: var(--hover); }
   .consent { display: flex; align-items: flex-start; gap: 0.7rem; padding: 0.75rem 0.9rem; border-radius: 0.75rem; background: var(--glass); border: 1px solid var(--line); backdrop-filter: blur(16px); color: var(--muted); font-size: 0.9rem; line-height: 1.4; cursor: pointer; }
   .consent b { color: var(--text); margin-right: 0.25rem; }
-  .consent input, .switch input { accent-color: var(--accent); }
+  .consent input { accent-color: var(--accent); }
   .consent input { width: 1.2rem; height: 1.2rem; flex: none; margin: 0.1rem 0 0; }
 
-  .details { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-  .card { display: grid; gap: 1rem; align-content: start; padding: 1.1rem; background: var(--surface); border: 1px solid var(--line); border-radius: 0.9rem; }
-  .field { display: grid; gap: 0.4rem; }
-  .field > span { font-size: 0.8rem; font-weight: 700; color: var(--faint); letter-spacing: 0.04em; }
-  .field :is(input, textarea) { width: 100%; min-width: 0; padding: 0.65rem 0.8rem; border: 1px solid var(--line); border-radius: 0.65rem; background: var(--bg); color: inherit; line-height: 1.4; }
-  .field textarea { resize: vertical; }
-  .field :is(input, textarea):focus { outline: 2px solid var(--accent); outline-offset: 1px; }
-  .count { font-size: 0.8rem; text-align: right; }
-  .switch { display: flex; align-items: center; justify-content: space-between; gap: 1rem; cursor: pointer; }
-  .switch span { display: grid; gap: 0.15rem; }
-  .switch small { color: var(--muted); font-size: 0.85rem; line-height: 1.35; }
-  .switch input { appearance: none; flex: none; position: relative; width: 2.6rem; height: 1.5rem; margin: 0; border-radius: 999px; background: var(--hover); cursor: pointer; transition: background 0.15s; }
-  .switch input::after { content: ''; position: absolute; left: 0.2rem; top: 0.2rem; width: 1.1rem; height: 1.1rem; border-radius: 50%; background: var(--faint); transition: transform 0.15s; }
-  .switch input:checked { background: var(--accent); }
-  .switch input:checked::after { transform: translateX(1.1rem); background: var(--on-accent); }
 
   .bar { position: sticky; bottom: calc(1rem + var(--bar-offset, 0px)); z-index: 3; display: flex; align-items: center; gap: 1rem; padding: 0.5rem 0.5rem 0.5rem 0.75rem; border-radius: 999px; background: var(--glass); border: 1px solid var(--line); backdrop-filter: blur(18px); box-shadow: 0 0.6rem 2rem rgb(0 0 0 / 0.14); }
   .hint { flex: 1; text-align: right; color: var(--faint); font-size: 0.85rem; }
   .submit { min-height: 3rem; padding: 0 1.75rem; font-size: 1.02rem; }
 
-  .jobs { display: grid; gap: 0.35rem; }
-  .jobs h2 { font-size: 0.95rem; color: var(--muted); }
-  .jobs ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 0.25rem; }
-  .jobs li { display: flex; align-items: center; gap: 0.75rem; min-height: 3rem; padding: 0.35rem 0.5rem; border-radius: 0.7rem; background: var(--surface); border: 1px solid var(--line); }
-  .jobs li.failed .job-icon { color: light-dark(#a3271f, #ff8f87); }
-  .job-icon { width: 2.25rem; height: 2.25rem; flex: none; display: grid; place-items: center; border-radius: 0.5rem; background: var(--raised); color: var(--accent); }
-  .job-line { flex: 1; min-width: 0; display: grid; gap: 0.3rem; overflow-wrap: anywhere; }
-  .meter { height: 0.3rem; border-radius: 999px; background: var(--hover); overflow: hidden; }
-  .meter i { display: block; height: 100%; background: var(--accent); transition: width 0.3s; }
   summary { cursor: pointer; padding: 0.6rem 0; }
 
   @media (max-width: 720px) {
@@ -560,7 +492,6 @@
     .meta { width: 100%; }
     .copy :global(.preview) { width: 100%; }
     .consent { text-align: left; }
-    .details { grid-template-columns: 1fr; }
     .bar { gap: 0.5rem; padding: 0.4rem; }
     .hint { display: none; }
     .submit { flex: 1; min-width: 0; padding: 0 1rem; }
