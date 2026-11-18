@@ -14,6 +14,8 @@ pub const Patch = struct {
     tealScrobbling: ?bool = null,
     scale: ?u16 = null,
     hiddenTags: ?[]const []const u8 = null,
+    /// artist setting: let listeners leave timed comments on your tracks
+    allowComments: ?bool = null,
 
     pub fn valid(self: Patch) bool {
         if (self.theme) |value| if (!oneOf(value, &.{ "system", "light", "dark" })) return false;
@@ -30,7 +32,7 @@ pub const Patch = struct {
     }
 
     pub fn empty(self: Patch) bool {
-        return self.theme == null and self.accent == null and self.font == null and self.keepPlaying == null and self.playThrough == null and self.tealScrobbling == null and self.scale == null and self.hiddenTags == null;
+        return self.theme == null and self.accent == null and self.font == null and self.keepPlaying == null and self.playThrough == null and self.tealScrobbling == null and self.scale == null and self.hiddenTags == null and self.allowComments == null;
     }
 };
 
