@@ -19,7 +19,7 @@ import {
 } from './CatalogPieces';
 import { Search } from './Search';
 import { Home } from './Home';
-import { DetailHeader } from './DetailHeader';
+import { CollectionHero } from './CollectionHero';
 import { TrackPresentation } from './TrackPresentation';
 import { TrackComments } from './TrackComments';
 import { PlayerControl } from './PlayerControl';
@@ -27,7 +27,7 @@ import { usePlayback } from './playback';
 import { TrackLikes } from './TrackLikes';
 import { InlineLink, pageFrame, Copy } from './controls';
 import { ArtistProfile } from './ArtistProfile';
-import { ShareLink } from './ShareLink';
+import { ShareLink, shareLink } from './ShareLink';
 import { TrackMenu } from './TrackMenu';
 import { usePlayCount } from './use-play-count';
 import { CollectionActions, Library } from './AccountCatalog';
@@ -109,6 +109,7 @@ function Collection({ id, album, onPlay }: { id: string; album: boolean; onPlay:
   const load = useCallback(() => album ? api.album(id) : api.playlist(id), [id, album]);
   const result = useResource(load, 0, true);
   const { list, saved } = useCollectionOrder(result.data);
+  const player = usePlayback();
   const focus = useRef({ visited: false, retry: result.retry });
   focus.current.retry = result.retry;
   useFocusEffect(useCallback(() => {
@@ -117,20 +118,19 @@ function Collection({ id, album, onPlay }: { id: string; album: boolean; onPlay:
   }, []));
   if (!list) return <Status loading={!result.error} error={result.error} retry={result.retry} />;
   const tracks = list.members.flatMap((member) => member.track ? [member.track] : []);
+  const title = list.metadata.name ?? (album ? 'album' : 'playlist');
+  const active = tracks.some(track => canToggleTrack(player.current, track, !!player.jam));
+  const missing = list.metrics.member_count - tracks.length;
   return <>
-    <DetailHeader title={list.metadata.name ?? (album ? 'album' : 'playlist')} artwork={collectionArtwork(list)}>
-    {list.owner.profile && <InlineLink href={{ pathname: '/u/[handle]', params: { handle: list.owner.profile.handle || list.owner.did } }}>
-      {list.owner.profile.display_name || list.owner.profile.handle}
-    </InlineLink>}
-    <Copy>{tracks.length ? trackCount(tracks.length) : 'no playable tracks'}{tracks.length && tracks.length < list.metrics.member_count ? ` · ${list.metrics.member_count - tracks.length} no longer available` : ''}</Copy>
-    </DetailHeader>
-    {!tracks.length && list.metrics.member_count > 0 && <Copy>
-      {list.metrics.member_count === 1 ? 'the track in this ' : 'the tracks in this '}{album ? 'album' : 'playlist'} {list.metrics.member_count === 1 ? 'was' : 'were'} deleted or can't be loaded right now.
-    </Copy>}
-    <CollectionActions list={list} refresh={result.retry} onPlay={onPlay} onOrderSaved={saved} actions={<>
-      {tracks[0] && <PlayerControl primary large icon={PlayIcon} label={album ? 'Play album' : 'Play playlist'} onPress={() => onPlay(tracks[0], tracks, list.metadata.name ?? (album ? 'album' : 'playlist'))} />}
-      <ShareLink compact path={`/${album ? 'album' : 'playlist'}/${encodeURIComponent(id)}`} />
-    </>} />
+    <CollectionHero list={list} tracks={tracks} title={title} playing={active && player.status.playing}
+      onPlay={(track, queue) => active && queue === tracks ? player.setPlaying(true) : onPlay(track, queue, title)}
+      onPause={() => player.setPlaying(false)}
+      onEnqueue={() => player.enqueueAll(tracks, title)}
+      onShare={() => void shareLink(`/${album ? 'album' : 'playlist'}/${encodeURIComponent(id)}`)} />
+    {missing > 0 && <Copy>{!tracks.length
+      ? `${missing === 1 ? 'the track in this ' : 'the tracks in this '}${album ? 'album' : 'playlist'} ${missing === 1 ? 'was' : 'were'} deleted or can't be loaded right now.`
+      : `${missing} no longer available.`}</Copy>}
+    <CollectionActions list={list} refresh={result.retry} onPlay={onPlay} onOrderSaved={saved} />
   </>;
 }
 

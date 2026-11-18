@@ -14,8 +14,10 @@
 	import TrackActions from './listening/TrackActions.svelte';
 	import { compactCount, postedAt } from './listening/format';
 
-	let { track, collection, label, testid }: {
+	let { track, collection, label, testid, number }: {
 		track: Track; collection?: Track[]; label?: string; testid?: string;
+		/** an album's position, shown in place of the cover its tracks all share */
+		number?: number;
 	} = $props();
 	const currentTrack = $derived(!player.liveStation && canToggleTrack(player.current, track, !!player.jam));
 	const playing = $derived(currentTrack && player.playing && !player.outputElsewhere);
@@ -27,10 +29,10 @@
 	}
 </script>
 
-<div class="track" data-testid={testid} data-track-id={track.id}>
+<div class="track" class:numbered={number !== undefined} class:current={currentTrack} data-testid={testid} data-track-id={track.id}>
 	<button class="playback" type="button" data-testid="track-play-control" aria-label={`${playing ? 'Pause' : 'Play'} ${title}`} onclick={toggle}>
 		<span class="cover">
-			<Artwork src={trackArtwork(track)} />
+			{#if number === undefined}<Artwork src={trackArtwork(track)} />{:else}<span class="number">{number}</span>{/if}
 			<span class="play" class:playing>{#if playing}<PlayingWave />{:else}<Icon name="play" size={20} />{/if}</span>
 		</span>
 	</button>
@@ -53,6 +55,11 @@
 	.cover { position: relative; display: block; border-radius: inherit; overflow: hidden; }
 	.play { position: absolute; inset: 0; display: grid; place-items: center; background: rgb(0 0 0 / 0.5); color: white; opacity: 0; }
 	.play.playing, .track:hover .play, .playback:focus-visible .play { opacity: 1; }
+	.numbered { grid-template-columns: 2.25rem minmax(0, 1fr) auto 3rem; min-height: 3.5rem; }
+	.number { display: grid; place-items: center; height: 2.25rem; color: var(--faint); font-variant-numeric: tabular-nums; }
+	.numbered .play { background: var(--hover); color: var(--text); }
+	.numbered.current .number, .numbered.current .title { color: var(--accent); }
+	.numbered .artist { display: none; }
 	.name { display: grid; justify-items: start; min-width: 0; }
 	.name a { position: relative; z-index: 2; max-width: 100%; }
 	.title { font-weight: 650; }
@@ -65,5 +72,5 @@
 	.duration { text-align: end; font-variant-numeric: tabular-nums; }
 	.add { position: relative; z-index: 2; color: var(--muted); }
 	@media (hover: hover) { .track:not(:hover, :focus-within) .row-actions > :global(:not(.liked)) { opacity: 0; } }
-	@media (max-width: 520px) { .track { grid-template-columns: 3.25rem minmax(0, 1fr) auto; } .duration, .metrics time { display: none; } }
+	@media (max-width: 520px) { .track { grid-template-columns: 3.25rem minmax(0, 1fr) auto; } .numbered { grid-template-columns: 2.25rem minmax(0, 1fr) auto 2.75rem; } .numbered .metrics, .numbered .row-actions > :global(:nth-child(-n+2)) { display: none; } .numbered .duration { display: block; } .duration, .metrics time { display: none; } }
 </style>

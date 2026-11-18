@@ -439,6 +439,13 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
       toast.success(`queued ${track.metadata.title}`, 1800);
       if (!jam.enqueue([track])) personal.enqueue(track);
     },
+    enqueueAll: (tracks, label) => {
+      const available = tracks.filter(track => track.record.cid && !isPrivateTrack(track));
+      if (!available.length) return;
+      if (privateMode.current) { toast.info('play a public track to change queues'); return; }
+      toast.success(`queued ${label}`, 1800);
+      if (!jam.enqueue(available)) personal.enqueueCollection(available);
+    },
     remove: (at) => { if (privateMode.current) { setQueue(items => editPrivateQueue(items, index, { action: 'remove', at })); return; } if (jam.editQueue((items, current) => ({ queue: at > current ? items.filter((_, position) => position !== at) : items, index: current }))) return; if (at > index) personal.remove(at); },
     move: (from, to) => {
       if (privateMode.current) { setQueue(items => editPrivateQueue(items, index, { action: 'move', from, to })); return; }
