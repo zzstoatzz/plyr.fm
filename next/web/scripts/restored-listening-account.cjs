@@ -92,5 +92,6 @@ module.exports = async function restoredListening({ page, context, origin, coord
   await comments.getByRole('button', { name: 'delete', exact: true }).click();
   await comments.getByText('no comments yet.').waitFor();
   await comments.getByRole('button', { name: 'Close comments', exact: true }).click();
-  await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'settings', exact: true }).click();
+  await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('button', { name: 'you', exact: true }).click();
+  await page.getByRole('dialog', { name: 'account', exact: true }).getByRole('link', { name: /^settings/ }).click();
 };

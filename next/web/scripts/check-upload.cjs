@@ -52,13 +52,8 @@ async function holdDraftCompletion(page) {
 
 async function openSettings(page) {
   const nav = page.getByRole('navigation', { name: 'Main navigation' });
-  const account = nav.getByRole('button', { name: 'you', exact: true });
-  if (await account.isVisible()) {
-    await account.click();
-    await page.getByRole('dialog', { name: 'account', exact: true }).getByRole('link', { name: /^settings/ }).click();
-  } else {
-    await nav.getByRole('link', { name: /^settings/ }).click();
-  }
+  await nav.getByRole('button', { name: 'you', exact: true }).click();
+  await page.getByRole('dialog', { name: 'account', exact: true }).getByRole('link', { name: /^settings/ }).click();
 }
 
 async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'regular') {

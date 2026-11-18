@@ -30,8 +30,13 @@ async function verify(browser, origin, width, scheme) {
       && [...document.fonts].some(face => face.family.includes('Plyr Comic') && face.status === 'loaded')), 'the reference desktop typeface loads');
     assert.equal(await home.getAttribute('aria-current'), 'page');
     assert.equal(await nav.getByRole('link', { name: 'upload', exact: true }).count(), 0, 'signed-out navigation matches the reference');
-    const [homeBox, radioBox] = await Promise.all([home.boundingBox(), radio.boundingBox()]);
-    assert.ok(radioBox.y - homeBox.y > height / 2, 'secondary navigation sits below the primary group');
+    const search = nav.getByRole('link', { name: 'search', exact: true });
+    const library = nav.getByRole('link', { name: 'library', exact: true });
+    const [searchBox, homeBox, libraryBox, radioBox] = await Promise.all([search, home, library, radio].map(link => link.boundingBox()));
+    assert.ok(searchBox.y < homeBox.y, 'search sits first, as a field');
+    assert.ok(radioBox.y > libraryBox.y + libraryBox.height, 'explore sits below the primary group');
+    assert.equal(await nav.getByRole('link', { name: 'settings', exact: true }).count(), 0, 'settings is not a nav item');
+    assert.equal(await nav.getByRole('button', { name: /keyboard shortcuts/ }).count(), 0, 'keyboard shortcuts is not a nav item');
     const tags = page.getByRole('navigation', { name: 'Browse by tag' }).getByRole('link');
     await tags.first().waitFor();
     const colors = await tags.evaluateAll(nodes => nodes.map(node => {

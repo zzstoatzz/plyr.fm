@@ -4,7 +4,7 @@
 	import { logout, otherAccounts, switchAccount } from '$lib/auth';
 	import Icon from '$lib/ui/Icon.svelte';
 
-	let { identity, uploads }: { identity: string; uploads: number } = $props();
+	let { identity, uploads, onShortcuts }: { identity: string; uploads: number; onShortcuts: () => void } = $props();
 	let dialog: HTMLDialogElement;
 	let startedOutside = false;
 	let others = $state.raw<ReturnType<typeof otherAccounts>>([]);
@@ -60,6 +60,7 @@
 					{#if entry.icon === 'settings'}<Icon name="chevron" size={17} />{/if}
 				</a>
 			{/each}
+			<button type="button" class="keys" onclick={() => { dialog.close(); onShortcuts(); }}><Icon name="ph_keys" size={22} /><span class="row-label">keyboard shortcuts<small>press ?</small></span></button>
 			{#each others as account (account.did)}
 				<button type="button" disabled={switching} onclick={() => selectAccount(account.did)}><Icon name="user" size={22} /><span class="row-label">switch to {account.handle ? '@' + account.handle : account.did}</span></button>
 			{/each}
@@ -83,4 +84,9 @@
 	strong { font-weight: 620; }
 	.switch-error { color: var(--muted); padding-inline: 0.9rem; }
 	small { color: var(--muted); }
+	@media (max-width: 720px), (hover: none) { .keys { display: none; } }
+	@media (min-width: 721px) {
+		dialog { margin: auto auto calc(var(--toast-dock, 0px) + 4.75rem) 0.875rem; }
+		dialog::backdrop { background: transparent; }
+	}
 </style>

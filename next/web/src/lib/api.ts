@@ -19,13 +19,16 @@ function listenerId(): string {
 
 export const api = createApi(apiOrigin, listenerId);
 
-export async function accountAvatar(did: string, signal: AbortSignal): Promise<string | undefined> {
+export async function accountIdentity(did: string, signal: AbortSignal): Promise<{ avatar?: string; name?: string }> {
 	const artist = await api.artist(did, signal).catch(() => undefined);
-	if (artist?.avatar_url) return artist.avatar_url;
-	if (signal.aborted) return;
+	const name = artist?.display_name?.trim() || undefined;
+	if (artist?.avatar_url || signal.aborted) return { avatar: artist?.avatar_url ?? undefined, name };
 	const request = new URL('https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile');
 	request.searchParams.set('actor', did);
 	const response = await fetch(request, { signal });
-	const profile: { avatar?: unknown } | undefined = response.ok ? await response.json() : undefined;
-	return typeof profile?.avatar === 'string' ? profile.avatar : undefined;
+	const profile: { avatar?: unknown; displayName?: unknown } | undefined = response.ok ? await response.json() : undefined;
+	return {
+		avatar: typeof profile?.avatar === 'string' ? profile.avatar : undefined,
+		name: name ?? (typeof profile?.displayName === 'string' && profile.displayName.trim() ? profile.displayName.trim() : undefined)
+	};
 }
