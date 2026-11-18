@@ -9,6 +9,10 @@
 	import Artwork from './ui/Artwork.svelte';
 	import Icon from './ui/Icon.svelte';
 	import PlayingWave from './ui/PlayingWave.svelte';
+	import LikeButton from './listening/LikeButton.svelte';
+	import Likers from './listening/Likers.svelte';
+	import TrackActions from './listening/TrackActions.svelte';
+	import { compactCount, postedAt } from './listening/format';
 
 	let { track, collection, label, testid }: {
 		track: Track; collection?: Track[]; label?: string; testid?: string;
@@ -33,9 +37,12 @@
 	<div class="name">
 		<a class="truncate title" href={trackHref(track)}>{title}</a>
 		<a class="truncate artist" href={resolve('/(app)/u/[actor]', { actor: track.artist.did })}>{artistName(track)}</a>
-		<span class="metrics">{track.metrics.play_count} {track.metrics.play_count === 1 ? 'play' : 'plays'}</span>
+		<div class="metrics"><span aria-label={`${track.metrics.play_count} ${track.metrics.play_count === 1 ? 'play' : 'plays'}`}><Icon name="play" size={10} />{compactCount(track.metrics.play_count)}</span><Likers {track} /><time datetime={track.metadata.created_at}>{postedAt(track.metadata.created_at)}</time></div>
 	</div>
+	<div class="row-actions">
 	<button class="icon-button add" type="button" aria-label={`Add ${title} to queue`} disabled={!player.canEditPublicQueue} title={!player.canEditPublicQueue ? "play a public track to change queues" : undefined} onclick={() => player.enqueue(track)}><Icon name="queue" size={20} /></button>
+	<LikeButton {track} count={false} named /><TrackActions {track} />
+	</div>
 	<span class="duration">{clock(track.metadata.duration_seconds)}</span>
 </div>
 
@@ -50,9 +57,13 @@
 	.name a { position: relative; z-index: 2; max-width: 100%; }
 	.title { font-weight: 650; }
 	.artist, .duration { color: var(--muted); font-size: 0.875rem; }
-	.metrics { color: var(--faint); font-size: 0.75rem; }
+	.metrics { position: relative; z-index: 2; display: flex; align-items: center; gap: 0.8rem; color: var(--faint); font-size: 0.75rem; min-height: 1.4rem; }
+	.metrics time { white-space: nowrap; }
+	.metrics > span { display: flex; align-items: center; gap: 0.3rem; }
+	.row-actions { position: relative; z-index: 2; display: flex; align-items: center; }
+	.track:hover, .track:focus-within { background: var(--hover); }
 	.duration { text-align: end; font-variant-numeric: tabular-nums; }
 	.add { position: relative; z-index: 2; color: var(--muted); }
-	@media (hover: hover) { .track:not(:hover, :focus-within) .add { opacity: 0; } }
-	@media (max-width: 520px) { .track { grid-template-columns: 3.25rem minmax(0, 1fr) auto; } .duration { display: none; } }
+	@media (hover: hover) { .track:not(:hover, :focus-within) .row-actions > :global(:not(.liked)) { opacity: 0; } }
+	@media (max-width: 520px) { .track { grid-template-columns: 3.25rem minmax(0, 1fr) auto; } .duration, .metrics time { display: none; } }
 </style>

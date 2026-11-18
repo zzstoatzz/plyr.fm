@@ -12,12 +12,16 @@ export interface EmbedSnapshot {
 	rate: number;
 	visible: boolean;
 }
+export type EmbedAnalysisStatus = 'disabled' | 'unsupported-browser' | 'unsubscribed' | 'awaiting-playback' | 'background'
+	| 'paused' | 'buffering' | 'gesture-required' | 'cors-unavailable' | 'capture-unavailable' | 'available';
+
 export interface EmbedEvent extends EmbedSnapshot {
 	protocol: typeof embedProtocol;
 	type: 'snapshot';
 	subscription: string;
 	sequence: number;
 	clock: { epochMs: number; monotonicMs: number };
+	analysisStatus?: EmbedAnalysisStatus;
 	analysis: { source: 'live'; rms: number; bands: number[]; sampleRate: number; windowSamples: number } | null;
 }
 export type EmbedRequest = {
@@ -68,6 +72,7 @@ export function parseEmbedEvent(value: unknown): EmbedEvent | undefined {
 	if (!('clock' in value) || !value.clock || typeof value.clock !== 'object'
 		|| !('epochMs' in value.clock) || typeof value.clock.epochMs !== 'number' || !Number.isFinite(value.clock.epochMs)
 		|| !('monotonicMs' in value.clock) || typeof value.clock.monotonicMs !== 'number' || !Number.isFinite(value.clock.monotonicMs)) return;
+	if ('analysisStatus' in value && (typeof value.analysisStatus !== 'string' || !['disabled', 'unsupported-browser', 'unsubscribed', 'awaiting-playback', 'background', 'paused', 'buffering', 'gesture-required', 'cors-unavailable', 'capture-unavailable', 'available'].includes(value.analysisStatus))) return;
 	if (!('analysis' in value)) return;
 	const analysis = value.analysis;
 	if (analysis !== null && (!analysis || typeof analysis !== 'object'

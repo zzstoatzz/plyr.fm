@@ -6,6 +6,7 @@
 	import { auth, authorizeScrobbling, canScrobble, logout } from '$lib/auth';
 	import { player } from '$lib/player.svelte';
 	import { accents, prefs, scales, setPrefs, themes } from '$lib/prefs.svelte';
+	import { comments } from '$lib/listening/comments';
 	import Icon from '$lib/ui/Icon.svelte';
 
 	let account = $state.raw(auth.getAuth());
@@ -88,6 +89,15 @@
 	</section>
 
 	{#if account.did}
+		<section aria-labelledby="your-tracks">
+			<h2 id="your-tracks">your tracks</h2>
+			<div class="card">
+				<label class="toggle">
+					<span><strong>timed comments</strong><small id="comments-detail">{account.accountSync ? 'let listeners leave comments on your tracks' : 'sign in again to change this for your tracks'}</small></span>
+					<input type="checkbox" role="switch" aria-label="timed comments" aria-describedby="comments-detail" checked={prefs.allowComments} disabled={!account.accountSync} onchange={event => { setPrefs({ allowComments: event.currentTarget.checked }); comments.refresh(); }} />
+				</label>
+			</div>
+		</section>
 		<section aria-labelledby="integrations">
 			<h2 id="integrations">integrations</h2>
 			<div class="card">

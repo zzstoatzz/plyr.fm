@@ -1,4 +1,5 @@
 import { useAppearance } from './appearance';
+import { Link } from 'expo-router';
 import { trackArtwork } from '@plyr/next-core/artwork';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Cover, Heading, Status, artistName, type Play } from './CatalogPieces';
@@ -40,18 +41,23 @@ export function HomeChart({ onPlay }: { onPlay: Play }) {
 function ChartTrack({ track, onPlay, card, lines }: { track: Track; onPlay: Play; card: StyleProp<ViewStyle>; lines: number[] }) {
   const colors = useAppearance();
   const { playing, toggle } = useTrackPlayback(track);
-  return <Pressable testID="track-play-control" accessibilityRole="button" accessibilityLabel={`${playing ? 'Pause' : 'Play'} ${track.metadata.title}`} onPress={() => toggle(() => onPlay(track))}
-    style={({ pressed }) => StyleSheet.flatten([card, pressed && { backgroundColor: colors.hover }])}>
+  return <View testID="home-chart-track" style={card}>
+    <Pressable testID="track-play-control" accessibilityRole="button" accessibilityLabel={`${playing ? 'Pause' : 'Play'} ${track.metadata.title}`} onPress={() => toggle(() => onPlay(track))}
+      style={({ pressed }) => [StyleSheet.absoluteFill, { borderRadius: 8, backgroundColor: pressed ? colors.hover : 'transparent' }]} />
     <View pointerEvents="none">
       <Cover uri={trackArtwork(track)} size={48} radius={6} />
       {playing && <PlayingArtworkOverlay />}
     </View>
-    <View style={styles.text}>
-      <Text numberOfLines={1} style={{ color: colors.text, fontSize: 14 * colors.scale, lineHeight: lines[0], fontWeight: '600' }}>{track.metadata.title}</Text>
-      <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 12 * colors.scale, lineHeight: lines[1] }}>{artistName(track)}</Text>
-      <Text numberOfLines={1} style={{ color: colors.faint, fontSize: 11 * colors.scale, lineHeight: lines[2] }}>{track.metrics.like_count} {track.metrics.like_count === 1 ? 'like' : 'likes'}</Text>
+    <View pointerEvents="box-none" style={styles.text}>
+      <Link href={`/track/${track.id}`} asChild><Pressable accessibilityRole="link" accessibilityLabel={`Track details: ${track.metadata.title}`} hitSlop={{ top: 6, bottom: 2, right: 8 }} style={styles.link}>
+        <Text numberOfLines={1} style={{ color: colors.text, fontSize: 14 * colors.scale, lineHeight: lines[0], fontWeight: '600' }}>{track.metadata.title}</Text>
+      </Pressable></Link>
+      <Link href={`/u/${encodeURIComponent(track.artist.profile.handle || track.artist.did)}`} asChild><Pressable accessibilityRole="link" hitSlop={{ top: 2, bottom: 6, right: 8 }} style={styles.link}>
+        <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 12 * colors.scale, lineHeight: lines[1] }}>{artistName(track)}</Text>
+      </Pressable></Link>
+      <View pointerEvents="none"><Text numberOfLines={1} style={{ color: colors.faint, fontSize: 11 * colors.scale, lineHeight: lines[2] }}>{track.metrics.like_count} {track.metrics.like_count === 1 ? 'like' : 'likes'}</Text></View>
     </View>
-  </Pressable>;
+  </View>;
 }
 
 const styles = StyleSheet.create({
@@ -59,4 +65,5 @@ const styles = StyleSheet.create({
   period: { minHeight: 44, minWidth: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 },
   card: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 8 },
   text: { flex: 1, minWidth: 0, gap: 1 },
+  link: { justifyContent: 'center', alignSelf: 'flex-start', maxWidth: '100%' },
 });

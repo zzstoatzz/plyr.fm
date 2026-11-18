@@ -34,7 +34,8 @@ test('received snapshots reject malformed analysis and timing fields', () => {
 		state: 'playing', position: 5, duration: 10, rate: 1, visible: true,
 		clock: { epochMs: 1000, monotonicMs: 500 }, analysis: null };
 	assert.deepEqual(parseEmbedEvent(sample), sample);
-	for (const change of [{ position: NaN }, { state: 'invented' }, { state: ['playing'] }, { clock: {} }, { track: {} }, { analysis: {} }, { sequence: 0.5 }]) {
+	assert.equal(parseEmbedEvent({ ...sample, analysisStatus: 'cors-unavailable' })?.analysisStatus, 'cors-unavailable');
+	for (const change of [{ position: NaN }, { state: 'invented' }, { state: ['playing'] }, { clock: {} }, { track: {} }, { analysis: {} }, { sequence: 0.5 }, { analysisStatus: 'invented' }, { analysisStatus: {} }]) {
 		assert.equal(parseEmbedEvent({ ...sample, ...change }), undefined);
 	}
 });

@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+export ZIG_LOCAL_PKG_DIR="${ZIG_LOCAL_PKG_DIR:-$PWD/zig-pkg}"
+zig build install-campaign -Dhegel
+case "${1:---help}" in
+    list|run|calibrate)
+        action="$1"
+        shift
+        exec zig-out/bin/hegel-campaign "$action" src/fuzz/campaigns.zon "$@"
+        ;;
+    *) exec zig-out/bin/hegel-campaign "$@" ;;
+esac

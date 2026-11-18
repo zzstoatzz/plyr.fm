@@ -9,6 +9,9 @@ export interface PersonalPreferences {
 	font: 'comic-sans' | 'system' | 'mono' | 'serif';
 	keepPlaying: boolean;
 	playThrough: boolean;
+	tealScrobbling: boolean;
+	/** artist setting: listeners may leave timed comments on your tracks */
+	allowComments: boolean;
 	scale: number;
 	hiddenTags: string[];
 }
@@ -22,6 +25,8 @@ export function decodePreferences(value: unknown): Partial<PersonalPreferences> 
 	if (v.font === 'comic-sans' || v.font === 'system' || v.font === 'mono' || v.font === 'serif') prefs.font = v.font;
 	if (typeof v.keepPlaying === 'boolean') prefs.keepPlaying = v.keepPlaying;
 	if (typeof v.playThrough === 'boolean') prefs.playThrough = v.playThrough;
+	if (typeof v.tealScrobbling === 'boolean') prefs.tealScrobbling = v.tealScrobbling;
+	if (typeof v.allowComments === 'boolean') prefs.allowComments = v.allowComments;
 	const hidden = hiddenTags(v.hiddenTags);
 	if (hidden) prefs.hiddenTags = hidden;
 	if (v.scale === 90 || v.scale === 100 || v.scale === 115 || v.scale === 130) prefs.scale = v.scale / 100;

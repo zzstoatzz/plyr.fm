@@ -20,6 +20,8 @@ const tracks = Array.from({ length: 9 }, (_, index) => {
 });
 const audio = Buffer.alloc(44 + 8000 * 240 * 2);
 const collectionTracks = [tracks[2], tracks[0], tracks[1]];
+// an artist who never turned comments on
+const commentsOff = tracks[3].id;
 audio.write('RIFF', 0); audio.writeUInt32LE(audio.length - 8, 4); audio.write('WAVEfmt ', 8);
 audio.writeUInt32LE(16, 16); audio.writeUInt16LE(1, 20); audio.writeUInt16LE(1, 22);
 audio.writeUInt32LE(8000, 24); audio.writeUInt32LE(16000, 28); audio.writeUInt16LE(2, 32);
@@ -79,11 +81,11 @@ async function setup(browser, width, height = 900, options = {}) {
     if (byId && url.pathname.endsWith('/playback')) body = { object: 'playback', track_id: byId.id, record: byId.record,
       availability: { status: 'available', delivery: { url: 'https://panel-fixture.invalid/audio.wav', media_type: 'audio/wav' } } };
     else if (byId && url.pathname === '/v1/tracks/' + byId.id) body = { ...byId, metadata: { ...byId.metadata, tags: ['ambient', 'home recordings', 'field & nature'] } };
-    else if (byId && url.pathname.endsWith('/comments')) body.data = [{
+    else if (byId && url.pathname.endsWith('/comments')) body = { ...body, comments_enabled: byId.id !== commentsOff, data: byId.id === commentsOff ? [] : [{
       record: { uri: 'at://did:plc:listener/fm.plyr.comment/123', cid: 'bafycomment', rkey: '123' },
       author: { did: 'did:plc:listener', handle: 'listener.example', display_name: 'A Listener', avatar_url: null },
       subject: byId.record, text: 'I love this moment.', timestamp_ms: 14_000, created_at: '2026-11-03T20:00:00Z', updated_at: null
-    }];
+    }] };
     else if (url.pathname === '/v1/tracks/missing-track') {
       await route.fulfill({ status: 400, json: { error: { code: 'invalid_request' } } });
       return;

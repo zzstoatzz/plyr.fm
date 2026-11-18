@@ -33,4 +33,6 @@ pub const Page = struct {
     object: []const u8 = "list",
     data: []const Comment,
     has_more: bool,
+    /// false when the artist has not opted in: no comments shown, none invited
+    comments_enabled: bool = true,
 };

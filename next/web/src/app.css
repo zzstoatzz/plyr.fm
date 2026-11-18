@@ -1,3 +1,17 @@
+@font-face {
+	font-family: 'Plyr Comic';
+	src: url('/fonts/ComicNeue-Regular.ttf') format('truetype');
+	font-weight: 400 500;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: 'Plyr Comic';
+	src: url('/fonts/ComicNeue-Bold.ttf') format('truetype');
+	font-weight: 600 900;
+	font-display: swap;
+}
+
 :root {
 	color-scheme: light dark;
 	--bg: light-dark(#fafafa, #0a0a0a);
@@ -24,6 +38,10 @@
 	background: var(--bg);
 	color: var(--text);
 	font: 100%/1.45 system-ui, -apple-system, sans-serif;
+}
+
+@media (min-width: 721px) {
+	:root { font-family: 'Plyr Comic', system-ui, sans-serif; }
 }
 
 :root[data-theme='light'] { color-scheme: light; }

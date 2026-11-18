@@ -56,6 +56,8 @@ export interface Artist {
 	support_url: string | null;
 }
 
+export interface NetworkArtist { did: string; handle: string; display_name: string; avatar_url: string | null; track_count: number }
+
 export interface ArtistMetrics {
 	object: 'artist_metrics';
 	artist_did: string;
@@ -137,6 +139,11 @@ interface TrackLike {
 	actor: { did: string; profile?: { handle?: string; display_name?: string; avatar_url?: string | null } | null };
 }
 
+/** A track's comments; `comments_enabled` is false when the artist hasn't opted in, and then `data` is empty. */
+export interface TrackCommentPage extends Page<TrackComment> {
+	comments_enabled?: boolean;
+}
+
 export interface TrackComment {
 	record: { uri: string; cid: string; rkey: string };
 	author: { did: string; handle: string | null; display_name: string | null; avatar_url: string | null };
@@ -168,6 +175,8 @@ export function createApi(origin: string, playListenerId: () => string) {
 	}
 
 	return {
+		resolveArtists: (dids: string[], signal?: AbortSignal) => request<{ object: 'list'; data: NetworkArtist[] }>(origin + '/v1/artists/resolve', 15_000, signal,
+			{ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dids }) }).then(page => page.data),
 		resolveTracks: (ids: string[], signal?: AbortSignal) => request<{ object: 'list'; data: Track[]; missing: string[] }>(origin + '/v1/tracks/resolve', 15_000, signal,
 			{ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ids }) }),
 		stats: (signal?: AbortSignal) => get<{ object: 'platform_stats'; tracks: number; artists: number; duration_seconds: number; plays: number; updated_at_ms: number }>('/v1/stats', undefined, signal),
@@ -190,7 +199,7 @@ export function createApi(origin: string, playListenerId: () => string) {
 		trackLikes: (id: string, cursor?: string) =>
 			get<Page<TrackLike>>(`/v1/tracks/${encodeURIComponent(id)}/likes`, { limit: 30, cursor }),
 		trackComments: (id: string, signal?: AbortSignal) =>
-			get<Page<TrackComment>>(`/v1/tracks/${encodeURIComponent(id)}/comments`, {}, signal),
+			get<TrackCommentPage>(`/v1/tracks/${encodeURIComponent(id)}/comments`, {}, signal),
 		tracks: (p: { limit?: number; cursor?: string; artist_did?: string; tag?: string[]; hidden_tag?: string[] } = {}, signal?: AbortSignal) => get<Page<Track>>('/v1/tracks', p, signal),
 		tags: (limit = 24, signal?: AbortSignal) => get<Page<{ name: string; track_count: number }>>('/v1/tags', { limit }, signal),
 		track: (id: string, options?: { fresh?: boolean }) => options?.fresh

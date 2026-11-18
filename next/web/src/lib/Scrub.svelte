@@ -1,11 +1,16 @@
 <script lang="ts">
 	import { player } from './player.svelte';
 	import { clock } from './tracks';
+	import TimedComments from './listening/TimedComments.svelte';
 
 	let scrub: number | undefined = $state();
-	let { clockLabels = true, stacked = false, chapter }: { clockLabels?: boolean; stacked?: boolean; chapter?: string } = $props();
+	let { clockLabels = true, stacked = false, chapter, comments = false }: { clockLabels?: boolean; stacked?: boolean; chapter?: string; comments?: boolean } = $props();
 	const position = $derived(scrub ?? player.position);
 </script>
+
+{#if comments && player.current && !player.privateMode && !player.liveStation}
+	{#key player.current.id}<TimedComments track={player.current} {position} duration={player.duration} seek={seconds => player.seek(seconds)} />{/key}
+{/if}
 
 <div class="scrub" class:clockLabels class:stacked>
 	{#if clockLabels}<span>{clock(position)}</span>{/if}

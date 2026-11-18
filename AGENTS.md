@@ -40,5 +40,10 @@ Use `just loq-relax <file>` for justified file-size limit changes; do not edit
 - Keep event-loop work nonblocking. Python and TypeScript require type hints;
   imports stay at the top except to resolve circular dependencies.
 - Keep code comments short and specific; design rationale belongs in docs or commits.
+- Focusing a text field must never zoom the page on a phone. Every input,
+  textarea, select and contenteditable renders at 16px or larger; iOS Safari
+  zooms on anything smaller. Do not override the shared floor in
+  `next/web/src/app.css` per field, and do not disable viewport scaling to
+  hide the zoom. Verify new fields on a phone-sized screen.
 - `MODERATION_AUTH_TOKEN` authorizes labeler writes. `MODERATION_BSKY_PASSWORD`
   declares the AT Protocol service and cannot emit labels. Never print either.

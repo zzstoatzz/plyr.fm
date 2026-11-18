@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { onDestroy, tick } from 'svelte';
+	import { tagColors } from '@plyr/next-core/tag-colors';
+	import { palettes } from '@plyr/next-core/colors';
 	import { resolve } from '$app/paths';
 	import { invalidateAll } from '$app/navigation';
 	import type { Snapshot } from '@sveltejs/kit';
@@ -13,6 +15,7 @@
 	import LinksMenu from '$lib/LinksMenu.svelte';
 	import Loading from '$lib/ui/Loading.svelte';
 	import TrackRow from '$lib/TrackRow.svelte';
+	import FollowingLatest from '$lib/listening/FollowingLatest.svelte';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -152,6 +155,7 @@
 		{/if}
 	{/await}
 	{#if !data.tags.length}
+	<FollowingLatest />
 	<AtlasTile />
 	<section class="chart" data-testid="home-chart" aria-labelledby="home-top-tracks">
 		<header>
@@ -190,7 +194,10 @@
 			{#if tags.length}
 				<nav class="tag-shelf" aria-label="Browse by tag">
 					{#each tags as tag (tag.name)}
-						<a href={resolve('/(app)/tag/[name]', { name: tag.name })} aria-current={data.tags.includes(tag.name) ? 'page' : undefined}>{tag.name} <small>{tag.track_count}</small></a>
+						{@const selected = data.tags.includes(tag.name)}
+						{@const light = tagColors(tag.name, palettes.light.background, selected)}
+						{@const dark = tagColors(tag.name, palettes.dark.background, selected)}
+						<a style:color="light-dark({light.color}, {dark.color})" style:background-color="light-dark({light.backgroundColor}, {dark.backgroundColor})" style:border-color="light-dark({light.borderColor}, {dark.borderColor})" href={resolve('/(app)/tag/[name]', { name: tag.name })} aria-current={data.tags.includes(tag.name) ? 'page' : undefined}>{tag.name} <small>{tag.track_count}</small></a>
 					{/each}
 				</nav>
 			{/if}
@@ -226,9 +233,10 @@
 </div>
 
 <style>
-	.home { display: grid; grid-template-columns: minmax(0, 2.6fr) minmax(12rem, 1fr); grid-template-areas: "brand brand" "featured featured" "latest chart"; gap: 2.2rem; }
+	.home { display: grid; grid-template-columns: minmax(0, 2.6fr) minmax(12rem, 1fr); grid-template-areas: "featured featured" "latest chart"; gap: 2.2rem; }
+	.home:has(:global(.following)) { grid-template-areas: "featured featured" "following following" "latest chart"; }
 	.mobile-brand { grid-area: brand; display: flex; align-items: center; gap: 0.5rem; margin-bottom: -1rem; }
-	@media (min-width: 721px) { .mobile-brand h1 { display: none; } }
+	@media (min-width: 721px) { .mobile-brand { display: none; } }
 	.featured { grid-area: featured; position: relative; isolation: isolate; display: grid; align-items: center; min-height: 17rem; overflow: hidden; border: 1px solid var(--line); border-radius: 1.15rem; background: var(--surface); }
 	.wall { position: absolute; inset: -15% -5% -15% 32%; z-index: -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.4rem; align-content: center; transform: rotate(-4deg); mask-image: linear-gradient(90deg, transparent 0%, #000 55%); }
 	.wall.pair { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -240,7 +248,7 @@
 	.feature-content h1 { font-size: clamp(1.75rem, 4vw, 3.25rem); margin-block: 0.5rem 1.2rem; }
 	.more { min-height: 2.75rem; color: var(--muted); }
 	.latest { grid-area: latest; min-width: 0; }
-	.home.filtered { grid-template-columns: minmax(0, 1fr); grid-template-areas: "brand" "latest"; }
+	.home.filtered { grid-template-columns: minmax(0, 1fr); grid-template-areas: "latest"; }
 	.tag-shelf { display: flex; gap: 0.45rem; overflow-x: auto; padding: 0.2rem 0.15rem 0.75rem; scrollbar-width: none; }
 	.tag-shelf a { display: inline-flex; align-items: center; gap: 0.3rem; min-height: 2.75rem; padding-inline: 0.65rem; border: 1px solid var(--line); border-radius: 1.5rem; white-space: nowrap; color: var(--muted); }
 	.tag-shelf a[aria-current=page] { border-color: var(--accent); color: var(--accent); }
@@ -256,19 +264,26 @@
 	ol { margin: 0; padding-left: 1.6rem; }
 	li::marker { color: var(--faint); font-size: 0.75rem; }
 	@media (min-width: 1240px) {
-		.home { grid-template-columns: minmax(0, 1fr) minmax(16rem, 29%); grid-template-areas: "brand brand" "featured atlas" "latest chart"; }
-		.home:not(.filtered):not(:has(.featured)) { grid-template-areas: "brand brand" "atlas atlas" "latest chart"; }
+		.home { grid-template-columns: minmax(0, 1fr) minmax(16rem, 29%); grid-template-areas: "featured atlas" "latest chart"; }
+		.home:has(:global(.following)) { grid-template-areas: "featured atlas" "following following" "latest chart"; }
+		.home:not(.filtered):not(:has(.featured)):has(:global(.following)) { grid-template-areas: "atlas atlas" "following following" "latest chart"; }
+		.home:not(.filtered):not(:has(.featured)) { grid-template-areas: "atlas atlas" "latest chart"; }
+		.home:not(.filtered):not(:has(.featured)) :global(.tile) { min-height: 4rem; }
+		.home:not(.filtered):not(:has(.featured)) :global(.tile canvas) { display: none; }
 	}
 	.chart :global(.track) { grid-template-columns: 2.5rem minmax(0, 1fr); min-height: 3.6rem; }
-	.chart :global(.duration), .chart :global(.add), .chart :global(.metrics) { display: none; }
+	.chart :global(.duration), .chart :global(.row-actions), .chart :global(.metrics) { display: none; }
 	@media (max-width: 900px) {
-		.home { grid-template-columns: minmax(0, 1fr); grid-template-areas: "brand" "featured" "chart" "latest"; gap: 1.5rem; }
+		.home { grid-template-columns: minmax(0, 1fr); grid-template-areas: "featured" "chart" "latest"; gap: 1.5rem; }
+		.home:has(:global(.following)) { grid-template-areas: "featured" "following" "chart" "latest"; }
 		.chart ol { display: grid; grid-auto-flow: column; grid-auto-columns: min(14rem, 78vw); gap: 0.65rem; min-height: 4.75rem; padding: 0; overflow-x: auto; scrollbar-width: none; }
 		.chart li { display: grid; align-items: center; min-width: 0; padding-inline: 0.7rem; border: 1px solid var(--line); border-radius: 0.6rem; background: var(--surface); }
 		.chart li::marker { content: ''; }
 	}
 	@media (max-width: 720px) {
 		.home { grid-template-areas: "brand" "featured" "chart" "latest"; }
+		.home:has(:global(.following)) { grid-template-areas: "brand" "featured" "following" "chart" "latest"; }
+		.home.filtered { grid-template-areas: "brand" "latest"; }
 		.mobile-brand { display: flex; align-items: center; gap: 0.5rem; }
 		.featured { min-height: 11.5rem; }
 	}

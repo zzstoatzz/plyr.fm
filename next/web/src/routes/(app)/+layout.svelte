@@ -6,6 +6,7 @@
 	import { auth, restoreAuth } from '$lib/auth';
 	import { player } from '$lib/player.svelte';
 	import Icon from '$lib/ui/Icon.svelte';
+	import LinksMenu from '$lib/LinksMenu.svelte';
 	import { accountAvatar } from '$lib/api';
 	import { mountPrefs, restorePrefs } from '$lib/prefs.svelte';
 	import Artwork from '$lib/ui/Artwork.svelte';
@@ -51,8 +52,7 @@
 	const links = [
 		{ path: '/', label: 'home', icon: 'home' },
 		{ path: '/search', label: 'search', icon: 'search' },
-		{ path: '/library', label: 'library', icon: 'library' },
-		{ path: '/queue', label: 'queue', icon: 'queue' }
+		{ path: '/library', label: 'library', icon: 'library' }
 	] as const;
 	const keyboardGuide = [
 		{ action: 'search', keys: ['⌘ or Ctrl', 'K'] },
@@ -132,7 +132,7 @@
 			}
 			if (!selector) return;
 			const restore = (preventScroll: boolean) => {
-				const matches = document.querySelectorAll<HTMLElement>(selector);
+				const matches = [...document.querySelectorAll<HTMLElement>(selector)].filter(node => node.getClientRects().length > 0);
 				const target = matches.length === 1 ? matches[0] : undefined;
 				target?.focus({ preventScroll });
 				return document.activeElement === target;
@@ -182,7 +182,7 @@
 	}
 
 	function shortcuts(event: KeyboardEvent) {
-		if (event.defaultPrevented || event.isComposing || event.altKey || document.querySelector('dialog[open]')) return;
+		if (event.defaultPrevented || event.isComposing || event.altKey || document.querySelector('dialog[open], :popover-open')) return;
 		const key = event.key.toLowerCase();
 		if (event.repeat && key !== 'arrowleft' && key !== 'arrowright') return;
 		if (event.ctrlKey || event.metaKey) {
@@ -222,26 +222,32 @@
 
 <div data-testid="app-frame" class="frame" class:hasPlayer={!!player.current} class:docked={queuePanelOpen}>
 	<nav aria-label="Main navigation">
-		<a class="brand" aria-label="plyr.fm home" href="/"><span aria-hidden="true">✻</span> plyr.fm</a>
+		<div class="brand-row"><LinksMenu /><a class="brand" aria-label="plyr.fm home" href="/">plyr.fm</a></div>
 		{#each links as link (link.path)}
-			<a href={link.path} class:desktop-only={link.path === '/queue'} class:active={page.url.pathname === link.path} aria-current={page.url.pathname === link.path ? 'page' : undefined}>
-				<Icon name={link.icon} size={21} /> <span>{link.label}</span>
+			<a href={link.path} class:active={page.url.pathname === link.path} aria-current={page.url.pathname === link.path ? 'page' : undefined}>
+				<Icon name={link.icon === 'home' && page.url.pathname === '/' ? 'home_f' : link.icon} size={21} /> <span>{link.label}</span>
 			</a>
 		{/each}
-		<a href="/upload" class="desktop-only" class:active={page.url.pathname === '/upload'} aria-current={page.url.pathname === '/upload' ? 'page' : undefined}>
-			<Icon name="upload" size={21} /><span>{uploading ? `uploading ${uploading}` : 'upload'}</span>
-		</a>
 		{#if account.did}
+			<a href="/upload" class="desktop-only" class:active={page.url.pathname === '/upload'} aria-current={page.url.pathname === '/upload' ? 'page' : undefined}>
+				<Icon name="upload" size={21} /><span>{uploading ? `uploading ${uploading}` : 'upload'}</span>
+			</a>
+		{/if}
+		{#if account.did}
+			<a href={resolve('/(app)/portal')} class="desktop-only" class:active={page.url.pathname === '/portal'} aria-current={page.url.pathname === '/portal' ? 'page' : undefined}>
+				<span class="profile-avatar"><Artwork src={avatar?.did === did ? avatar?.url : undefined} size={24} fallbackIcon="user" eager /></span><span>you</span>
+			</a>
 			<button type="button" class="mobile-account" aria-haspopup="dialog" class:active={page.url.pathname === settingsPath} onclick={event => accountMenu?.open(event.currentTarget)}>
 				<span class="profile-avatar"><Artwork src={avatar?.did === did ? avatar?.url : undefined} size={24} fallbackIcon="user" eager /></span><span>you</span>
 			</button>
 		{:else}
 			<a href={resolve('/(app)/login') + '?' + new URLSearchParams({ return_to: page.url.pathname + page.url.search })} class:active={page.url.pathname === '/login'}><Icon name="user" size={21} /><span>sign in</span></a>
 		{/if}
-		<a href={settingsPath} class="desktop-only" class:active={page.url.pathname === settingsPath} aria-current={page.url.pathname === settingsPath ? 'page' : undefined}><Icon name="settings" size={21} /><span>settings</span></a>
+		<div class="nav-spacer" aria-hidden="true"></div>
 		<a class="desktop-radio" href="/radio" class:active={page.url.pathname === '/radio'}><Icon name="radio" size={21} /><span>radio</span></a>
-		<a class="desktop-stats" href={resolve('/(app)/stats')} class:active={page.url.pathname === '/stats'} aria-current={page.url.pathname === '/stats' ? 'page' : undefined}><Icon name="stats" size={21} /><span>stats</span></a>
 		<a class="desktop-only" href={resolve('/(app)/atlas')} class:active={page.url.pathname === '/atlas'} aria-current={page.url.pathname === '/atlas' ? 'page' : undefined}><Icon name="music" size={21} /><span>atlas</span></a>
+		<a class="desktop-stats" href={resolve('/(app)/stats')} class:active={page.url.pathname === '/stats'} aria-current={page.url.pathname === '/stats' ? 'page' : undefined}><Icon name="stats" size={21} /><span>stats</span></a>
+		<a href={settingsPath} class="desktop-only" class:active={page.url.pathname === settingsPath} aria-current={page.url.pathname === settingsPath ? 'page' : undefined}><Icon name="settings" size={21} /><span>settings</span></a>
 		<button class="desktop-help" type="button" onclick={() => shortcutsDialog.showModal()}><span aria-hidden="true">?</span> keyboard shortcuts</button>
 	</nav>
 	<main id="main" tabindex="-1">{@render children()}</main>
@@ -284,8 +290,8 @@
 	nav a { display: flex; align-items: center; gap: 0.7rem; padding: 0.65rem 0.8rem; border-radius: 0.7rem; min-height: 2.75rem; color: var(--muted); }
 	nav a:hover { text-decoration: none; background: var(--raised); }
 	nav a.active { background: var(--hover); color: var(--text); font-weight: 650; }
+	.brand-row { display: flex; align-items: center; min-height: 4rem; gap: 0.1rem; }
 	nav .brand { font-weight: 750; font-size: 1.4rem; letter-spacing: -0.04em; color: var(--text); margin-bottom: 0.7rem; }
-	.brand span { color: var(--accent); }
 	.mobile-account { display: flex; align-items: center; gap: 0.7rem; min-height: 2.75rem; border: 0; border-radius: 0.7rem; background: none; padding: 0.65rem 0.8rem; text-align: start; color: var(--muted); }
 	.mobile-account:hover { background: var(--raised); }
 	.profile-avatar { width: 1.3125rem; border-radius: 50%; }
@@ -297,7 +303,19 @@
 	aside { position: sticky; top: 0; align-self: start; min-width: 0; height: calc(100dvh - var(--dock)); overflow-y: auto; border-left: 1px solid var(--line); background: var(--surface); }
 	dialog { width: min(36rem, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 1.2rem; padding: 0; }
 	dialog::backdrop { background: rgb(0 0 0 / 0.65); }
-	@media (min-width: 800px) { dialog.now-sheet { width: min(64rem, calc(100% - 2rem)); } }
+	dialog.now-sheet { width: 100%; max-width: 100%; height: 100dvh; max-height: 100dvh; margin: 0; border: 0; border-radius: 0; }
+	@media (min-width: 721px) {
+		nav { height: calc(100dvh - var(--nav-dock, 0px)); min-height: 0; overflow-y: auto; padding: 0.875rem; gap: 0.25rem; }
+		.frame.hasPlayer { --nav-dock: var(--dock); }
+		nav a.brand { min-height: 4rem; margin: 0; padding-inline: 0; font-size: 1.8125rem; font-weight: 900; letter-spacing: -1px; }
+		nav :is(a, .mobile-account) { min-height: 3rem; gap: 0.75rem; padding: 0 0.75rem; border-radius: 0.75rem; font-size: 0.96875rem; font-weight: 500; }
+		nav a.active { font-weight: 700; }
+		nav .mobile-account { display: none; }
+		.nav-spacer { flex: 1; min-height: 1.5rem; }
+		nav :is(.desktop-radio, .desktop-stats, a[href='/atlas'], a[href='/settings']) { min-height: 2.75rem; color: var(--faint); font-size: 0.875rem; font-weight: 400; }
+		nav :is(.desktop-radio, .desktop-stats, a[href='/atlas'], a[href='/settings']).active { color: var(--text); font-weight: 600; }
+		.desktop-help { min-height: 2.25rem; font-size: 0.75rem; color: var(--faint); }
+	}
 	.shortcuts { width: min(30rem, calc(100% - 2rem)); height: fit-content; max-height: calc(100dvh - 2rem); margin: auto; padding: 1rem 1.25rem; border: 1px solid var(--line); border-radius: 1rem; background: var(--surface); }
 	.shortcuts header, .shortcuts dl div { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
 	.shortcuts h2 { font-size: 1.2rem; }
@@ -312,7 +330,7 @@
 	@media (max-width: 720px) {
 		.frame, .frame.docked { display: block; padding-bottom: calc(var(--tabs) + env(safe-area-inset-bottom)); }
 		.frame.hasPlayer { padding-bottom: calc(var(--tabs) + var(--dock) + env(safe-area-inset-bottom)); }
-		aside, nav .brand, nav .desktop-only, nav .desktop-radio, nav .desktop-stats, nav .desktop-help { display: none; }
+		.brand-row, .nav-spacer, aside, nav .brand, nav .desktop-only, nav .desktop-radio, nav .desktop-stats, nav .desktop-help { display: none; }
 		nav { z-index: 9; position: fixed; inset: auto 0 0; min-height: var(--tabs); flex-direction: row; padding: 0 0 env(safe-area-inset-bottom); border: 0; border-top: 1px solid var(--line); }
 		nav :is(a, .mobile-account) { gap: 0.2rem; flex-direction: column; justify-content: center; flex: 1; min-height: var(--tabs); padding: 0.15rem; border-radius: 0; font-size: 0.75rem; }
 		nav .mobile-account { display: flex; align-items: center; border: 0; background: none; color: var(--muted); -webkit-tap-highlight-color: transparent; }

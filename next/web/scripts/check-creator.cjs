@@ -13,6 +13,7 @@ const profileCollection = 'fm.plyr.actor.profile';
 const output = process.env.SCREENS_OUTPUT || '/tmp/plyr-svelte-creator';
 const author = 'A musician with a long display name';
 const fixtureTime = '2026-11-05T18:00:00Z';
+const fixturePng = 'iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAEklEQVR4nGM4EVDxHxkzkC4AAGoHKPGS1TlEAAAAAElFTkSuQmCC';
 
 async function call(method, token, params, input) {
   const response = await fetch(pds + method + (params ? '?' + new URLSearchParams(params) : ''), {
@@ -246,25 +247,29 @@ async function run(browser, accounts, width, theme, mp3) {
     await main.getByRole('link', { name: 'edit profile' }).click();
     const bio = main.getByRole('textbox', { name: 'bio', exact: true });
     await bio.fill('bio saved in Svelte');
-    const avatar = main.getByRole('textbox', { name: 'avatar URL', exact: true });
-    await avatar.fill('http://example.com/cover.png');
-    await main.getByRole('button', { name: 'save profile' }).click();
-    await main.getByText('use an HTTPS avatar URL.').waitFor();
-    assert.equal(profileWrites, 0);
+    assert.ok(await bio.evaluate(node => parseFloat(getComputedStyle(node).fontSize)) >= 16, 'the bio field must not zoom iOS Safari');
+    await main.getByRole('link', { name: 'Close' }).click();
+    await main.getByText('discard your unsaved profile changes?').waitFor();
+    await main.getByRole('button', { name: 'keep editing' }).click();
     assert.equal(await bio.inputValue(), 'bio saved in Svelte');
-    await avatar.fill('https://fixture.invalid/new.png');
+    await main.getByLabel('choose avatar image').setInputFiles({ name: 'me.png', mimeType: 'image/png', buffer: Buffer.from(fixturePng, 'base64') });
+    await main.getByRole('button', { name: 'change avatar' }).waitFor();
+    assert.equal(profileWrites, 0, 'choosing an avatar uploads nothing before save');
     await main.getByRole('button', { name: 'save profile' }).click();
     await main.getByText('your changes are saved, but the latest profile could not be loaded.').waitFor();
     assert.equal(profileWrites, 1);
     await main.getByRole('button', { name: 'retry loading profile' }).click();
     await main.getByRole('button', { name: 'edit again' }).waitFor();
     assert.equal(await bio.inputValue(), 'bio saved in Svelte');
-    assert.equal((await pdsRecord(profileCollection, 'self')).value.favoriteTrack, uri);
+    const savedProfile = (await pdsRecord(profileCollection, 'self')).value;
+    assert.equal(savedProfile.favoriteTrack, uri);
+    assert.equal(savedProfile.avatarBlob?.mimeType, 'image/png');
+    assert.ok(savedProfile.avatar.includes('com.atproto.sync.getBlob') && savedProfile.avatar.includes(savedProfile.avatarBlob.ref.$link), 'avatar is the getBlob url of avatarBlob');
+    await main.getByRole('button', { name: 'change avatar' }).waitFor();
     assert.equal(profileWrites, 1);
     await capture('profile-saved');
 
-    await main.getByRole('link', { name: 'back to your music' }).click();
-    await main.getByRole('link', { name: /view your public profile/ }).click();
+    await main.getByRole('link', { name: 'view your profile' }).click();
     await page.waitForURL(origin + '/u/' + handle);
     await main.getByRole('link', { name: 'edit profile', exact: true }).waitFor();
     await main.getByRole('tab', { name: 'albums' }).click();

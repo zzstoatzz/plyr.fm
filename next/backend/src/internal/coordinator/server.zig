@@ -103,9 +103,9 @@ const Context = struct {
         defer self.mutex.unlock(self.io);
         for (self.peers.items) |peer| if (std.mem.eql(u8, peer.ticket.admission.room, room)) peer.enqueue(body);
     }
-    /// Notes that a personal queue changed, for the recorder to copy to PostgreSQL.
+    /// Notes that a personal queue or Jam room changed, for the recorder to copy to PostgreSQL.
     fn changed(self: *Context, room: []const u8) void {
-        if (self.records == null or auth.queueOwner(room) == null) return;
+        if (self.records == null) return;
         self.unrecorded_mutex.lockUncancelable(self.io);
         defer self.unrecorded_mutex.unlock(self.io);
         if (self.unrecorded.contains(room)) return;
@@ -136,11 +136,11 @@ const Context = struct {
         }
     }
     fn recordRoom(self: *Context, room: []const u8) !void {
-        const owner = auth.queueOwner(room) orelse return;
         var snapshot = (try self.store.read(allocator, room)) orelse return;
         defer snapshot.deinit();
-        if (snapshot.state.personal == null) return;
-        try self.records.?.save(allocator, owner, snapshot.state, snapshot.serverTimeMs);
+        const owner = auth.queueOwner(room);
+        if ((owner != null) != (snapshot.state.personal != null)) return;
+        if (owner) |did| try self.records.?.save(allocator, did, snapshot.state, snapshot.serverTimeMs) else try self.records.?.saveRoom(allocator, room, snapshot.state, snapshot.serverTimeMs);
     }
     fn expire(self: *Context) void {
         const now = self.store.nowMs() catch return;
@@ -492,6 +492,8 @@ fn join(conn: *websocket.Conn, a: std.mem.Allocator, body: []const u8, origin: [
                 };
             }
         }
+    } else if (snapshot == null) {
+        if (context.records) |*records| snapshot = restoreRoom(a, context, records, admission.room);
     }
     if (snapshot == null) {
         if (!std.mem.eql(u8, admission.actor, admission.host)) return error.RoomNotStarted;
@@ -519,6 +521,21 @@ fn join(conn: *websocket.Conn, a: std.mem.Allocator, body: []const u8, origin: [
     if ((snapshot.?.state.personal != null) != personal_join) return error.AccessDenied;
     const token = try context.tickets.issueForClient(a, admission, origin, client);
     http(conn, a, 200, try std.json.Stringify.valueAlloc(a, .{ .ticket = token, .connectionId = if (client) |value| value.connection else null }, .{}), origin);
+}
+
+/// A Jam room that left Redis comes back from its last saved state. A missing
+/// table or a bad row falls back to the host's one-track seed, never a failed join.
+fn restoreRoom(a: std.mem.Allocator, context: *Context, records: *queue_record.Records, room: []const u8) ?room_store.Snapshot {
+    const json = records.loadRoom(a, room) catch |err| {
+        std.log.warn("Jam room record read failed: {s}", .{@errorName(err)});
+        return null;
+    } orelse return null;
+    const state = std.json.parseFromSliceLeaky(model.State, a, json, .{ .ignore_unknown_fields = true, .allocate = .alloc_always }) catch return null;
+    if (state.personal != null) return null;
+    return context.store.restore(a, room, state) catch |err| {
+        std.log.warn("Jam room restore failed: {s}", .{@errorName(err)});
+        return null;
+    };
 }
 
 fn http(conn: *websocket.Conn, a: std.mem.Allocator, status: u16, body: []const u8, origin: []const u8) void {

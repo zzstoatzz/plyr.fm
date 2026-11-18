@@ -19,11 +19,13 @@
     },
     "device": {
       "extends": "base",
-      "distribution": "internal"
+      "distribution": "internal",
+      "channel": "device"
     },
     "production": {
       "extends": "base",
-      "autoIncrement": true
+      "autoIncrement": true,
+      "channel": "production"
     }
   },
   "submit": {

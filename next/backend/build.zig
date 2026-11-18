@@ -42,6 +42,9 @@ pub fn build(b: *std.Build) void {
     root_module.addAnonymousImport("migration_0035_queue_records", .{
         .root_source_file = b.path("migrations/0035_add_queue_records.sql"),
     });
+    root_module.addAnonymousImport("migration_0046_jam_room_records", .{
+        .root_source_file = b.path("migrations/0046_add_jam_room_records.sql"),
+    });
     root_module.addAnonymousImport("migration_0036_account_preferences", .{
         .root_source_file = b.path("migrations/0036_add_account_preferences.sql"),
     });
@@ -136,8 +139,14 @@ pub fn build(b: *std.Build) void {
     // declared before the lazy fetch, which reruns configure without it
     const cases = b.option(u64, "fuzz-cases", "cases per property (default: HEGEL_TEST_CASES, else 100)");
     const only = b.option([]const u8, "fuzz-only", "run the property groups whose name contains this");
-    if (b.option(bool, "hegel", "build the property harnesses (builds libhegel once)") orelse false) {
-        if (b.lazyDependency("hegel", .{ .target = target, .optimize = optimize })) |hegel| {
+    if (b.option(bool, "hegel", "build the property harnesses with the native Hegel engine") orelse false) {
+        // the engine runs every case: a debug build of it took twice as long
+        // as the harness code it drives, so it is always optimized
+        const hegel_dep = if (optimize == .debug)
+            b.lazyDependency("hegel", .{ .target = target, .optimize = .ReleaseSafe })
+        else
+            b.lazyDependency("hegel", .{ .target = target, .optimize = optimize });
+        if (hegel_dep) |hegel| {
             const fuzz_module = b.createModule(.{
                 .root_source_file = b.path("src/fuzz.zig"),
                 .target = target,
@@ -154,8 +163,6 @@ pub fn build(b: *std.Build) void {
             for (root_module.import_table.keys(), root_module.import_table.values()) |name, module| {
                 if (std.mem.startsWith(u8, name, "migration_")) fuzz_module.addImport(name, module);
             }
-            // libhegel is a rust staticlib: off darwin, _Unwind_* come from zig's libunwind
-            if (!target.result.os.tag.isDarwin()) fuzz_module.link_libcpp = true;
             const fuzz = b.addExecutable(.{ .name = "fuzz", .root_module = fuzz_module });
             const run_fuzz = b.addRunArtifact(fuzz);
             run_fuzz.has_side_effects = true;
@@ -164,16 +171,8 @@ pub fn build(b: *std.Build) void {
             // graph with the environment it was built under
             if (only) |name| run_fuzz.setEnvironmentVariable("FUZZ_ONLY", name);
             b.step("fuzz", "run the property harnesses over untrusted-input parsers").dependOn(&run_fuzz.step);
-
-            const mutants = b.addRunArtifact(hegel.artifact("hegel-mutants"));
-            mutants.setCwd(b.path("."));
-            mutants.addArgs(&.{ "src/fuzz/mutants.zon", "--seeds", "3", "--", b.graph.zig_exe, "build", "fuzz", "-Dhegel" });
-            if (openssl_include_path) |include_path| {
-                mutants.addPrefixedDirectoryArg("-Dopenssl_include_path=", include_path);
-                mutants.addPrefixedDirectoryArg("-Dopenssl_lib_path=", openssl_lib_path.?);
-            }
-            mutants.has_side_effects = true;
-            b.step("mutants", "plant each mutant; the harnesses must catch every one").dependOn(&mutants.step);
+            b.step("install-fuzz", "build the property harnesses for hegel-campaign").dependOn(&b.addInstallArtifact(fuzz, .{}).step);
+            b.step("install-campaign", "install the pinned Hegel campaign runner").dependOn(&b.addInstallArtifact(hegel.artifact("hegel-campaign"), .{}).step);
         }
     }
 

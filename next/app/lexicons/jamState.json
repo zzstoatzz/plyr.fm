@@ -4,6 +4,7 @@
   "defs": {
     "main": {
       "type": "record",
+      "description": "Where a Jam started: the host's current track, written once when the Jam starts. This is not the Jam's queue. The live room, with the whole shared queue, lives on the Jam coordinator, which also saves it; this record is only read when the coordinator has no saved room.",
       "key": "literal:self",
       "record": {
         "type": "object",

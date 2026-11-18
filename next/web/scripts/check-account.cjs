@@ -1,3 +1,4 @@
+const restoredListening = require('./restored-listening-account.cjs');
 const { EventEmitter, once } = require('node:events');
 const assert = require('node:assert/strict');
 const { mkdir } = require('node:fs/promises');
@@ -30,7 +31,8 @@ const coordinator = 'https://jams.next.plyr.fm';
     await context.route('https://typeahead.waow.tech/**', route => route.fulfill({ json: { actors: [] } }));
     await page.route('https://api.next.plyr.fm/**', route => {
       const pathname = new URL(route.request().url()).pathname;
-      if (pathname.endsWith('/comments') && failCommentsRead) return route.fulfill({ status: 503, json: {} });
+      if (pathname.endsWith('/comments')) return failCommentsRead ? route.fulfill({ status: 503, json: {} })
+        : route.fulfill({ json: { object: 'list', data: [], has_more: false, comments_enabled: true } });
       if (pathname === '/v1/artists/' + encodeURIComponent(accounts[handle].did)) {
         return route.fulfill({ json: { avatar_url: 'https://panel-fixture.invalid/avatar.svg' } });
       }
@@ -82,7 +84,11 @@ const coordinator = 'https://jams.next.plyr.fm';
             state: { ...state, revision: 3, personal: { ...personal, keepPlaying: continuation } } }));
           return;
         }
-        if (command.action !== 'play') return;
+        if (command.action === 'playContext') {
+          coordinatorEvents.emit('playContext', command);
+          Object.assign(state, { queue: command.queue, index: command.index, playing: command.playing, revision: state.revision + 1 });
+        }
+        if (command.action !== 'play' && command.action !== 'playContext') return;
         const playing = { ...state, playing: true, revision: 2, updatedAtMs: Date.now(),
           personal: { ...personal, output: { clientId: client, connectionId: 'fixture-socket' } } };
         socket.send(JSON.stringify({ type: 'result', id: command.id, outcome: 'applied', state: playing }));
@@ -130,6 +136,10 @@ const coordinator = 'https://jams.next.plyr.fm';
     await page.getByRole('button', { name: 'comments', exact: true }).click();
     const panel = page.getByRole('dialog', { name: 'comments' });
     const draft = panel.getByRole('textbox', { name: 'add a comment' });
+    await panel.getByText('could not load comments.', { exact: false }).waitFor();
+    assert.equal(await draft.count(), 0, 'no composer until the artist is known to allow comments');
+    failCommentsRead = false;
+    await panel.getByRole('button', { name: 'try again', exact: true }).click();
     await draft.fill('fixture comment at the restored position');
     let failComment = true;
     await context.route('https://pds.fixture.test/xrpc/com.atproto.repo.createRecord', route => {
@@ -144,7 +154,6 @@ const coordinator = 'https://jams.next.plyr.fm';
     await panel.getByRole('button', { name: 'post comment' }).click();
     await panel.getByText('fixture comment at the restored position', { exact: true }).waitFor();
     assert.equal(discardCommentReceipt, false, 'the accepted PDS response was discarded');
-    await panel.getByText('could not load comments.', { exact: false }).waitFor();
 
     const pds = 'http://127.0.0.1:5197/xrpc/';
     const records = pds + 'com.atproto.repo.listRecords?' + new URLSearchParams({
@@ -158,12 +167,21 @@ const coordinator = 'https://jams.next.plyr.fm';
     await panel.getByRole('button', { name: 'Delete comment', exact: true }).click();
     await panel.getByRole('button', { name: 'delete', exact: true }).click();
     await deleted;
-    failCommentsRead = false;
-    await panel.getByRole('button', { name: 'try again', exact: true }).click();
     await panel.getByText('no comments yet.').waitFor();
     assert.deepEqual((await fetch(records).then(response => response.json())).records, []);
     await panel.getByRole('button', { name: 'Close comments' }).click();
 
+    const desktopNav = page.getByRole('navigation', { name: 'Main navigation' });
+    const you = desktopNav.getByRole('link', { name: 'you', exact: true });
+    assert.equal(await you.getAttribute('href'), '/portal');
+    await you.click();
+    await page.waitForURL('**/portal');
+    assert.equal(await desktopNav.locator('[aria-current="page"]:visible').count(), 1);
+    await desktopNav.getByRole('link', { name: 'settings', exact: true }).click();
+    await page.waitForURL('**/settings');
+    assert.equal(await desktopNav.locator('[aria-current="page"]:visible').count(), 1);
+    await mkdir('/tmp/plyr-desktop-restoration', { recursive: true });
+    await page.screenshot({ path: '/tmp/plyr-desktop-restoration/signed-in-settings.png' });
     await page.setViewportSize({ width: 390, height: 844 });
     const nav = page.getByRole('navigation', { name: 'Main navigation' });
     const account = nav.getByRole('button', { name: 'you', exact: true });
@@ -233,6 +251,7 @@ const coordinator = 'https://jams.next.plyr.fm';
     }
     await page.setViewportSize({ width: 1280, height: 900 });
     await nav.getByRole('link', { name: 'settings', exact: true }).waitFor();
+    await restoredListening({ page, context, origin, coordinatorEvents, track, did: accounts[handle].did });
     const revoked = page.waitForResponse(response => response.url() === 'https://pds.fixture.test/oauth/revoke' && response.ok());
     await page.getByRole('button', { name: 'sign out' }).click();
     await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'sign in' }).waitFor();

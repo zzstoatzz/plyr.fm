@@ -154,9 +154,17 @@ async function verify(browser, origin, width, scheme) {
     } else {
       const [art, controls] = await Promise.all([artwork.boundingBox(), slider.boundingBox()]);
       assert.ok(art.x + art.width < controls.x, 'desktop artwork and controls sit side by side');
+      assert.ok(art.y >= 50 && art.y + art.height <= height, 'long descriptions keep the artwork visible on open');
+      assert.deepEqual(await dialog.boundingBox(), { x: 0, y: 0, width, height }, 'desktop player fills the viewport');
       await dialog.getByRole('slider', { name: 'Volume', exact: true }).fill('0.35');
       await page.waitForFunction(() => window.playingAudio.volume === 0.35);
       await capture('wide');
+      await setScroll(500);
+      await condensed.waitFor();
+      const closeBox = await dialog.getByRole('button', { name: 'Close', exact: true }).boundingBox();
+      assert.ok(closeBox.x > width - 80, 'Close stays at the top right after scrolling');
+      await setScroll(0);
+      await condensed.waitFor({ state: 'hidden' });
       const x = art.x + art.width / 2, y = art.y + 20;
       await touch('touchStart', [[x, y]]);
       await touch('touchMove', [[x, y + 180]]);

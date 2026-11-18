@@ -24,10 +24,11 @@ type Preferences = {
 	playThrough: boolean;
 	keepPlaying: boolean;
 	tealScrobbling: boolean;
+	allowComments: boolean;
 };
 
 const defaults: Preferences = {
-	theme: 'system', accent: accents[0].color, scale: 1, playThrough: true, keepPlaying: false, tealScrobbling: false
+	theme: 'system', accent: accents[0].color, scale: 1, playThrough: true, keepPlaying: false, tealScrobbling: false, allowComments: false
 };
 type Account = {
 	key: string;
@@ -55,7 +56,7 @@ export async function confirmScrobblingConsent(): Promise<boolean> {
 
 function decode(value: unknown, remote = false): Partial<Preferences> {
 	if (!value || typeof value !== 'object') return {};
-	const { theme, accent, scale, playThrough, keepPlaying, tealScrobbling } = value as Record<string, unknown>;
+	const { theme, accent, scale, playThrough, keepPlaying, tealScrobbling, allowComments } = value as Record<string, unknown>;
 	const result: Partial<Preferences> = {};
 	if (theme === 'system' || theme === 'light' || theme === 'dark') result.theme = theme;
 	if (typeof accent === 'string' && /^#[0-9a-f]{6}$/i.test(accent)) result.accent = accent.toLowerCase();
@@ -66,6 +67,7 @@ function decode(value: unknown, remote = false): Partial<Preferences> {
 	if (typeof playThrough === 'boolean') result.playThrough = playThrough;
 	if (typeof keepPlaying === 'boolean') result.keepPlaying = keepPlaying;
 	if (typeof tealScrobbling === 'boolean') result.tealScrobbling = tealScrobbling;
+	if (typeof allowComments === 'boolean') result.allowComments = allowComments;
 	return result;
 }
 

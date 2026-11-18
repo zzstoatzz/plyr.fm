@@ -35,6 +35,25 @@ export function jamTrack(track: Track, mediaDuration?: number): JamTrack | null 
     durationMs: Math.max(0, Math.round(duration * 1000)) } : null;
 }
 
+export function initialJam(track: Track, capture?: {
+  tracks: readonly Track[];
+  index: number;
+  duration: number;
+  position: number;
+  playing: boolean;
+}) {
+  const ref = jamTrack(track, capture?.duration);
+  if (!ref) return null;
+
+  const shareable = (item: Track) =>
+    jamTrack(item, item.record.uri === ref.uri && item.record.cid === ref.cid ? capture?.duration : undefined) ?? [];
+  const before = capture?.tracks.slice(0, capture.index).flatMap(shareable) ?? [];
+  const after = capture?.tracks.slice(capture.index + 1).flatMap(shareable) ?? [];
+  const seconds = capture?.position ?? 0;
+  const positionMs = Number.isFinite(seconds) ? Math.min(ref.durationMs, Math.max(0, Math.round(seconds * 1000))) : 0;
+  return { queue: [...before, ref, ...after], index: before.length, playing: capture?.playing ?? false, positionMs };
+}
+
 interface JamPlaybackOptions {
   target(): JamPlaybackTarget;
   did: string | null;
@@ -128,7 +147,7 @@ export function createJamPlayback(options: JamPlaybackOptions) {
         const request = generation;
         const connection = work.connection;
         const ref = work.state.queue[work.state.index];
-        if (!ref) { target().clear(); continue; }
+        if (!ref) { target().clear(); update({ pendingSeekMs: undefined }); continue; }
         try {
           const track = await trackFor(ref);
           if (request !== generation || connection !== session) continue;
@@ -137,7 +156,7 @@ export function createJamPlayback(options: JamPlaybackOptions) {
           const changed = occurrence !== `${work.state.epoch}/${work.state.occurrence}` || target().current?.id !== track.id;
           if (changed || !target().ready) {
             occurrence = `${work.state.epoch}/${work.state.occurrence}`;
-            if (!await target().load([track], 0)) continue;
+            if (!await target().load([track], 0)) { if (request === generation && connection === session) update({ pendingSeekMs: undefined }); continue; }
             await target().loaded();
           }
           if (request !== generation || connection !== session || !sameOccurrence()) continue;
@@ -150,12 +169,16 @@ export function createJamPlayback(options: JamPlaybackOptions) {
           const position = (active?.pendingSeekMs ?? jamPosition(state, connection.clock.serverNow())) / 1000;
           if (changed || Math.abs(target().position() - position) > (work.force ? 0.08 : 0.35)) await target().seek(position);
           if (request !== generation || connection !== session || !sameOccurrence()) continue;
+          // The seek preview stays up until the local audio has landed on the room's echo of it, not just until
+          // the echo arrives: dropping it earlier shows the old position (and the old chapter) for a moment.
+          const preview = active?.pendingSeekMs;
+          if (preview !== undefined && Math.abs(state.positionMs - preview) < 100) update({ pendingSeekMs: undefined });
           const desired = optimisticPlaying ?? connection.state!.playing;
           if (desired && !target().playing()) target().play();
           else if (!desired && target().playing()) target().pause();
           void hydrateQueue(connection.state!, work.version, connection);
         } catch (failure) {
-          if (request === generation && connection === session) update({ error: failure instanceof Error ? failure.message : 'could not play this jam' });
+          if (request === generation && connection === session) update({ error: failure instanceof Error ? failure.message : 'could not play this jam', pendingSeekMs: undefined });
         }
       }
     } finally { if (synchronizationId === synchronization) synchronizing = false; }
@@ -207,9 +230,8 @@ export function createJamPlayback(options: JamPlaybackOptions) {
         const before = active?.state;
         if (before?.playing !== state.playing) corrections = 0;
         if (before?.epoch !== state.epoch || before.occurrence !== state.occurrence || optimisticPlaying === state.playing) optimisticPlaying = undefined;
-        const preview = active?.pendingSeekMs;
         const changed = before?.epoch !== state.epoch || before.occurrence !== state.occurrence;
-        update({ state, error: undefined, ...(changed || preview !== undefined && Math.abs(state.positionMs - preview) < 100 ? { pendingSeekMs: undefined } : {}) });
+        update({ state, error: undefined, ...(changed ? { pendingSeekMs: undefined } : {}) });
         synchronize(state, force, connection);
       },
       onResult: (intent, outcome) => {

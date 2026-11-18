@@ -536,7 +536,7 @@ max_lines = 948
 
 [[rules]]
 path = "next/backend/src/internal/coordinator/server.zig"
-max_lines = 563
+max_lines = 580
 
 [[rules]]
 path = "next/backend/src/internal/projection/postgres_track_store.zig"
@@ -557,7 +557,7 @@ max_lines = 561
 
 [[rules]]
 path = "next/web/src/lib/player.svelte.ts"
-max_lines = 807
+max_lines = 821
 
 [[rules]]
 path = "next/web/src/lib/atlas/renderer.ts"
@@ -565,7 +565,7 @@ max_lines = 1140
 
 [[rules]]
 path = "next/web/scripts/check-shell.cjs"
-max_lines = 677
+max_lines = 681
 
 [[rules]]
 path = "next/backend/src/internal/projection/postgres_list_store.zig"

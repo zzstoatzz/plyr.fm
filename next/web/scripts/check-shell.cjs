@@ -39,10 +39,10 @@ async function screen(browser, phone, scheme) {
     await page.getByRole('heading', { name: linkedTrack.metadata.title, exact: true }).waitFor();
     await page.reload();
     await page.getByRole('heading', { name: linkedTrack.metadata.title, exact: true }).waitFor();
-    const commentsRequests = [];
-    page.on('request', request => {
-      if (new URL(request.url()).pathname.endsWith('/comments')) commentsRequests.push(request);
-    });
+    await Promise.all([page.waitForResponse(response => response.url().endsWith(tracks[3].id + '/comments')), page.goto(origin + '/track/' + tracks[3].id)]);
+    await page.getByRole('heading', { name: tracks[3].metadata.title, exact: true }).waitFor();
+    await page.waitForTimeout(250);
+    assert.equal(await page.getByRole('button', { name: 'comments', exact: true }).count(), 0, 'no comments button when the artist has not opted in');
     await page.goto(origin);
     await page.getByTestId('home-track-row').first().waitFor();
     await page.getByTestId('home-chart').waitFor();
@@ -81,12 +81,10 @@ async function screen(browser, phone, scheme) {
     await page.getByText('details', { exact: true }).click();
     await page.getByText('A recording made at dawn.', { exact: false }).waitFor();
     await capture('track');
-    assert.equal(commentsRequests.length, 0, 'track render leaves comment fetch deferred');
     const opener = page.getByRole('button', { name: 'comments', exact: true });
     await opener.click();
     const comments = page.getByRole('dialog', { name: 'comments', exact: true });
     await comments.getByText('I love this moment.').waitFor();
-    assert.equal(commentsRequests.length, 1);
     await comments.getByRole('link', { name: 'A Listener' }).waitFor();
     await capture('track-comments');
     await page.keyboard.press('Escape');
@@ -357,7 +355,10 @@ async function collectionControls(browser, phone, scheme) {
     if (phone) {
       await navigation.getByRole('link', { name: 'library', exact: true }).click();
       await page.getByRole('link', { name: 'open queue', exact: true }).click();
-    } else await navigation.getByRole('link', { name: 'queue', exact: true }).click();
+    } else {
+      await page.getByTestId('player-dock').getByRole('button', { name: 'Open now playing' }).click();
+      await page.getByRole('dialog', { name: 'Now playing' }).getByRole('link', { name: 'Open queue' }).click();
+    }
     const queue = page.getByRole('region', { name: 'Queue', exact: true });
     const current = queue.getByRole('region', { name: 'now playing', exact: true });
     const picks = queue.getByRole('region', { name: 'up next', exact: true });
@@ -586,8 +587,8 @@ async function keyboard(browser, phone, scheme) {
     await row.scrollIntoViewIfNeeded();
     const artistLink = row.getByRole('link', { name: 'replyomatic', exact: true });
     const artistBounds = await artistLink.boundingBox();
-    const rowBounds = await row.boundingBox();
-    const x = rowBounds.x + rowBounds.width - (phone ? 66 : 120);
+    const nameBounds = await row.locator('.name').boundingBox();
+    const x = artistBounds.x + artistBounds.width + Math.min(10, (nameBounds.x + nameBounds.width - artistBounds.x - artistBounds.width) / 2);
     const y = artistBounds.y + artistBounds.height / 2;
     assert.ok(x > artistBounds.x + artistBounds.width, 'artist link ends before the blank part of the row');
     if (phone) await page.touchscreen.tap(x, y);
@@ -627,7 +628,8 @@ async function keyboard(browser, phone, scheme) {
     await press('j');
     await dock.getByText(tracks[0].metadata.title, { exact: true }).waitFor();
     if (!phone) {
-      await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'queue', exact: true }).click();
+      await dock.getByRole('button', { name: 'Open now playing' }).click();
+      await page.getByRole('dialog', { name: 'Now playing' }).getByRole('link', { name: 'Open queue' }).click();
       await page.waitForURL('**/queue');
       const dockQueue = dock.getByRole('button', { name: 'Queue', exact: true, pressed: true });
       await dockQueue.waitFor({ timeout: 3000 });

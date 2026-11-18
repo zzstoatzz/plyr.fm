@@ -1,3 +1,4 @@
+import { EmbedCaptureAnalysis } from './embed/capture-analysis';
 import type { EmbedSnapshot } from '@plyr/next-core/embed-events';
 import type { RadioStation } from '@plyr/next-core/radio';
 import type { Track } from '@plyr/next-core/api';
@@ -67,6 +68,11 @@ class Player {
 	get outputElsewhere() { return !this.localMode && this.snapshot.outputElsewhere; }
 	#publicRepeat: PersonalPlaybackTarget['repeat'] = 'off';
 	#embedInstance = '';
+	#embedAnalysis: EmbedCaptureAnalysis | undefined;
+	get embedLiveAvailable() { return this.#embedAnalysis?.available ?? false; }
+	get embedAnalysisStatus() { return this.#embedAnalysis?.status ?? 'disabled'; }
+	readEmbedAnalysis() { return this.#embedAnalysis?.read() ?? null; }
+	subscribeEmbedAnalysis(value: boolean) { this.#embedAnalysis?.subscribe(value); }
 	#embedDiscontinuity = 0;
 	embedSnapshot(): EmbedSnapshot {
 		const audio = this.#audio;
@@ -129,6 +135,7 @@ class Player {
 
 	mount(embedded = false) {
 		this.#embedded = embedded;
+		this.#embedAnalysis = embedded ? new EmbedCaptureAnalysis(new URL(location.href).searchParams.get('analysis') === 'live') : undefined;
 		this.#outbox = new PlayOutbox({
 			storage: playOutboxStorage,
 			send: api.recordPlay,
@@ -166,6 +173,8 @@ class Player {
 		const clearMediaSession = this.#setMediaSession();
 		return () => {
 			progress();
+			this.#embedAnalysis?.close();
+			this.#embedAnalysis = undefined;
 			unsubscribe();
 			unsubscribeAuth?.();
 			unregisterLogin?.();
@@ -584,6 +593,7 @@ class Player {
 	}
 
 	#audioElement() {
+		this.#embedAnalysis?.activate();
 		if (this.#audio) return this.#audio;
 		const audio = new Audio();
 		audio.preload = 'auto';
@@ -615,7 +625,7 @@ class Player {
 		audio.addEventListener('waiting', () => { if (!audio.paused) this.loading = true; });
 		audio.addEventListener('timeupdate', () => this.#setMediaPosition(audio));
 		audio.addEventListener('seeked', () => { this.#listening.settle(this.#token); this.#setMediaPosition(audio); });
-		audio.addEventListener('error', () => { if (audio.src) this.error = 'could not load this audio'; this.loading = false; });
+		audio.addEventListener('error', () => { if (this.#embedAnalysis?.corsLoading) return; if (audio.src) this.error = 'could not load this audio'; this.loading = false; });
 		audio.addEventListener('ended', () => {
 			if (this.liveStation) { this.loading = this.liveListening; return; }
 			if (this.jam) { if (this.jam.canSeek) void this.next(); return; }
@@ -636,6 +646,7 @@ class Player {
 	}
 
 	#detachMedia() {
+		this.#embedAnalysis?.reset();
 		this.#audioSource?.abort();
 		if (this.#audio?.hasAttribute('src')) {
 			this.#audio.pause();
@@ -672,7 +683,9 @@ class Player {
 			media = await resolve(source.signal);
 			source.signal.throwIfAborted();
 			this.#releaseMedia = media.release;
-			audio.src = media.url;
+			if (this.#embedAnalysis) await this.#embedAnalysis.load(audio, media.url, source.signal);
+			else audio.src = media.url;
+			source.signal.throwIfAborted();
 			this.#mediaTrack = track;
 			if (count) this.#token = this.#listening.begin(track.id, crypto.randomUUID(), track.metadata.duration_seconds);
 			this.#describeMedia(track);
@@ -710,6 +723,7 @@ class Player {
 	}
 
 	#playMedia() {
+		this.#embedAnalysis?.activate();
 		const audio = this.#audio;
 		if (!audio?.src || !this.#mediaTrack) return;
 		const source = this.#audioSource;

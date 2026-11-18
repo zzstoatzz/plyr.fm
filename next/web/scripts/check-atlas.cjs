@@ -27,9 +27,10 @@ async function verify(browser, origin, width) {
       }
       return route.fulfill({ json: { atproto_record_uri: track.record.uri } });
     });
-    if (!phone) await page.setViewportSize({ width, height: 50 });
+    if (!phone) await page.setViewportSize({ width, height: 1 });
     await page.goto(origin);
     await page.getByTestId('home-track-row').first().waitFor();
+    if (!phone) assert.ok((await page.getByTestId('home-atlas').boundingBox()).y > 33, 'the tile starts outside the viewport and its 32px lazy-load margin');
     assert.equal(reads, 0, 'Home leaves the atlas unloaded until its desktop tile approaches the viewport');
     const canvas = page.getByLabel('Catalog atlas');
     if (phone) {

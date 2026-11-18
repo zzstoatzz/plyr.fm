@@ -50,79 +50,61 @@ async def upsert_profile_record(
 ) -> tuple[str, str] | None:
     """Create or update the user's plyr.fm profile record.
 
-    uses putRecord with rkey="self" for upsert semantics - creates if
-    doesn't exist, updates if it does. skips write if record already
-    exists with the same bio and avatar (no-op for unchanged data).
-
-    args:
-        auth_session: authenticated user session
-        bio: artist bio/description
-        avatar: URL to avatar image
+    the write starts from the existing record, so fields other clients wrote
+    (`displayName`, `avatarBlob`, ...) survive. an uploaded avatar
+    (`avatarBlob`) is the user's choice and `avatar` never replaces it.
+    `avatar=None` leaves the current avatar as it is.
 
     returns:
         tuple of (record_uri, record_cid) or None if skipped (unchanged)
     """
-    # check if profile already exists to preserve createdAt and skip if unchanged
-    existing_created_at = None
-    existing_bio = None
-    existing_avatar = None
-    existing_uri = None
-    existing_cid = None
+    existing: dict[str, Any] | None = None
+    existing_cid: str | None = None
 
     try:
-        # try to get existing record
         oauth_data = auth_session.oauth_session
         if oauth_data and "pds_url" in oauth_data:
             oauth_session = await reconstruct_oauth_session(oauth_data)
-            url = f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.getRecord"
-            params = {
-                "repo": auth_session.did,
-                "collection": settings.atproto.profile_collection,
-                "rkey": "self",
-            }
             response = await get_oauth_client().make_authenticated_request(
                 session=oauth_session,
                 method="GET",
-                url=url,
-                params=params,
+                url=f"{oauth_data['pds_url']}/xrpc/com.atproto.repo.getRecord",
+                params={
+                    "repo": auth_session.did,
+                    "collection": settings.atproto.profile_collection,
+                    "rkey": "self",
+                },
             )
             if response.status_code == 200:
-                existing = response.json()
-                existing_uri = existing.get("uri")
-                existing_cid = existing.get("cid")
-                if "value" in existing:
-                    existing_bio = existing["value"].get("bio")
-                    existing_avatar = existing["value"].get("avatar")
-                    if "createdAt" in existing["value"]:
-                        existing_created_at = datetime.fromisoformat(
-                            existing["value"]["createdAt"].replace("Z", "+00:00")
-                        )
+                body = response.json()
+                if isinstance(value := body.get("value"), dict):
+                    existing = value
+                    existing_cid = body.get("cid")
     except Exception:
-        # record doesn't exist yet, that's fine
         pass
 
-    # skip write if record exists with same bio and avatar (no changes needed)
-    if (
-        existing_uri
-        and existing_cid
-        and existing_bio == bio
-        and existing_avatar == avatar
-    ):
-        return None
+    if existing is None:
+        record = build_profile_record(bio=bio, avatar=avatar)
+    else:
+        record = {**existing, "$type": settings.atproto.profile_collection}
+        if bio:
+            record["bio"] = bio
+        else:
+            record.pop("bio", None)
+        if avatar and "avatarBlob" not in existing:
+            record["avatar"] = avatar
+        if record == existing:
+            return None
+        record["updatedAt"] = datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
-    record = build_profile_record(
-        bio=bio,
-        avatar=avatar,
-        created_at=existing_created_at,
-        updated_at=datetime.now(UTC) if existing_created_at else None,
-    )
-
-    payload = {
+    payload: dict[str, Any] = {
         "repo": auth_session.did,
         "collection": settings.atproto.profile_collection,
         "rkey": "self",
         "record": record,
     }
+    if existing_cid:
+        payload["swapRecord"] = existing_cid
 
     result = await make_pds_request(
         auth_session, "POST", "com.atproto.repo.putRecord", payload

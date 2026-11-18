@@ -130,7 +130,7 @@ async function transition(browser, origin, width, reducedMotion) {
     await page.waitForFunction(sheet => !sheet.style.transform, await panel.elementHandle());
     const destinations = [
       ['replyomatic', `/u/${tracks[0].artist.profile.handle}`],
-      ['Queue', '/queue'],
+      ['Open queue', '/queue'],
       ['about this track', `/track/${tracks[0].id}`]
     ];
     for (const [name, destination] of destinations) {

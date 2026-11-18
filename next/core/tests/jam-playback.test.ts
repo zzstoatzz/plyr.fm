@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { Track } from '../src/api.ts';
 import type { JamSocket, JamState } from '../src/jam-connection.ts';
-import { createJamPlayback, jamTrack, type ActiveJam, type JamPlaybackTarget } from '../src/jam-playback.ts';
+import { createJamPlayback, initialJam, jamTrack, type ActiveJam, type JamPlaybackTarget } from '../src/jam-playback.ts';
 
 const host = 'did:plc:aaaaaaaaaaaaaaaaaaaaaaaa';
 const track: Track = {
@@ -12,6 +12,22 @@ const track: Track = {
   artist: { did: host, profile: { handle: 'host.test', display_name: 'Host', avatar_url: null } },
   media: {}, access: { visibility: 'public' }, metrics: { play_count: 0, like_count: 0 },
 };
+
+test('starting from a queue keeps the active occurrence and playback position', () => {
+  const unknown = { ...track, id: 'active_without_duration', metadata: { ...track.metadata, duration_seconds: null } };
+  const unavailable = { ...unknown, id: 'unrelated_without_duration', record: { ...track.record, cid: 'another-cid' } };
+  const next = { ...track, id: 'following_track', record: { ...track.record, uri: track.record.uri + '-next' } };
+  const seed = initialJam(unknown, { tracks: [track, unknown, unavailable, unknown, next], index: 1,
+    duration: 120, position: 21.25, playing: true });
+
+  assert.deepEqual(seed?.queue.map(item => item.id), [track.id, unknown.id, unknown.id, next.id]);
+  assert.equal(seed?.index, 1);
+  assert.equal(seed?.queue[2].durationMs, 120_000);
+  assert.equal(seed?.queue[3].durationMs, 70_000);
+  assert.equal(seed?.positionMs, 21250);
+  assert.equal(seed?.playing, true);
+  assert.equal(initialJam(unknown), null);
+});
 
 class Socket implements JamSocket {
   readyState = 1;
@@ -102,5 +118,44 @@ test('closing during queue hydration discards the late result and permits a fres
     await tick();
     assert.equal(admissions, 2);
     assert.equal(first.readyState, 3);
+  } finally { controller.close(); }
+});
+
+test('a host seek keeps its preview until the local audio lands, not just until the room echoes it', async () => {
+  const socket = new Socket();
+  let position = 23;
+  let land: (() => void) | undefined;
+  let snapshot: ActiveJam | undefined;
+  const target: JamPlaybackTarget = {
+    queue: [track], index: 0, current: track, ready: true, buffering: false, position: () => position, playing: () => false,
+    load: async () => true, loaded: async () => {},
+    seek: seconds => new Promise<void>(resolve => { land = () => { position = seconds; resolve(); }; }),
+    play: () => {}, pause: () => {}, setQueue: () => {}, clear: () => {},
+  };
+  const controller = createJamPlayback({
+    target: () => target, did: host, socket: () => socket,
+    track: async () => track, changed: value => { snapshot = value; },
+  });
+  const ref = jamTrack(track);
+  assert.ok(ref);
+  const room = (revision: number, positionMs: number): JamState => ({ epoch: 'room', revision, occurrence: 1, queue: [ref],
+    index: 0, playing: false, positionMs, updatedAtMs: Date.now() });
+  controller.join({ host, key: 'room', admit: async () => ({ ticket: 'ticket', websocketUrl: 'wss://fixture.test' }) });
+  try {
+    await new Promise(resolve => setTimeout(resolve, 0));
+    socket.state(room(1, 23000));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    land?.();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(controller.command({ action: 'seek', positionMs: 60000 }), true);
+    assert.equal(snapshot?.pendingSeekMs, 60000);
+    socket.state(room(2, 60000));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(position, 23, 'the local seek is still in flight');
+    assert.equal(snapshot?.pendingSeekMs, 60000, 'the echo alone must not drop the preview back to 23s');
+    land?.();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(position, 60);
+    assert.equal(snapshot?.pendingSeekMs, undefined);
   } finally { controller.close(); }
 });

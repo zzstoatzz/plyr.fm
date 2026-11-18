@@ -116,13 +116,16 @@ fn graphemeModel(_: void, case: *hegel.TestCase) !void {
     var text: std.ArrayList(u8) = .empty;
     const palettes = [_][]const Symbol{
         std.enums.values(Symbol),
-        &.{ .flag, .flag, .letter, .mark },
+        &.{ .flag, .flag, .flag, .letter, .mark },
         &.{ .pict, .zwj, .mark, .letter },
         &.{ .cr, .lf, .mark, .letter },
+        &.{ .pict, .zwj },
     };
     const palette = palettes[try case.index(palettes.len)];
-    for (symbols) |*symbol| {
-        symbol.* = palette[try case.index(palette.len)];
+    // hegel favors index 0; offsetting by position walks the palette in
+    // order, so sequences like pict zwj pict are common
+    for (symbols, 0..) |*symbol, i| {
+        symbol.* = palette[(i + try case.index(palette.len)) % palette.len];
         try text.appendSlice(a, encodeSymbol(symbol.*));
         case.note("{s}", .{@tagName(symbol.*)});
     }
