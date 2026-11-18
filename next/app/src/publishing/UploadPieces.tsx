@@ -135,9 +135,11 @@ export function TrackHero({ artwork, onArtwork, onRemoveArtwork, title, setTitle
     if (file) measureAudioDuration(file).then(value => { if (live) setDuration(value); }, () => {});
     return () => { live = false; };
   }, [file]);
-  return <View style={{ alignItems: 'center', gap: 12, paddingTop: 8, paddingBottom: 4 }}>
-    {cover && <Image source={{ uri: cover }} blurRadius={50} accessibilityIgnoresInvertColors
-      style={{ position: 'absolute', top: -40, left: -40, right: -40, height: 420, opacity: theme.dark ? 0.45 : 0.4 }} />}
+  return <View style={{ alignItems: 'center', gap: 12, padding: cover ? 16 : 0, paddingTop: cover ? 20 : 4, borderRadius: 24, overflow: 'hidden' }}>
+    {cover && <>
+      <Image source={{ uri: cover }} blurRadius={60} accessibilityIgnoresInvertColors style={{ position: 'absolute', top: -60, left: -60, right: -60, bottom: -60 }} />
+      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: theme.background, opacity: theme.dark ? 0.55 : 0.45 }} />
+    </>}
     <View style={{ width: '58%', maxWidth: 260, aspectRatio: 1 }}>
       <Pressable accessibilityRole="button" accessibilityLabel={artwork ? 'Change cover' : 'Choose cover'} onPress={onArtwork}
         style={({ pressed }) => ({ flex: 1, borderRadius: 14, overflow: 'hidden', opacity: pressed ? 0.85 : 1,
@@ -161,13 +163,13 @@ export function TrackHero({ artwork, onArtwork, onRemoveArtwork, title, setTitle
       </Pressable>}
     </View>
     <Text style={{ color: theme.faint, fontFamily: theme.fontFamily, fontSize: 12 * theme.scale, fontWeight: '700', letterSpacing: 0.8 }}>NEW TRACK</Text>
-    <View style={{ alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 8, borderBottomWidth: focused ? 2 : 1, borderColor: focused ? theme.accent : theme.line, paddingBottom: 4 }}>
+    <View style={{ alignSelf: 'stretch', justifyContent: 'center', paddingHorizontal: 28, borderBottomWidth: focused ? 2 : 1, borderColor: focused ? theme.accent : theme.line, paddingBottom: 4 }}>
       <TextInput value={title} onChangeText={setTitle} maxLength={256} accessibilityLabel="Title" placeholder="name this track" placeholderTextColor={theme.faint}
         onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} returnKeyType="done"
-        style={{ flex: 1, minWidth: 0, color: theme.text, fontFamily: theme.fontFamily, fontSize: inputFontSize(theme.scale) * 1.75, fontWeight: '700', textAlign: 'center', paddingVertical: 4 }} />
-      <PencilSimple size={18} color={theme.faint} />
+        style={{ minWidth: 0, color: theme.text, fontFamily: theme.fontFamily, fontSize: inputFontSize(theme.scale) * 1.75, fontWeight: '700', textAlign: 'center', paddingVertical: 4 }} />
+      <PencilSimple size={18} color={theme.faint} style={{ position: 'absolute', right: 4, top: '50%', marginTop: -11 }} />
     </View>
-    {!!artist && <Text style={{ color: theme.muted, fontFamily: theme.fontFamily, fontSize: 15 * theme.scale }}>posts to your profile as {artist}</Text>}
+    {!!artist && <Text style={{ alignSelf: 'stretch', textAlign: 'center', color: theme.muted, fontFamily: theme.fontFamily, fontSize: 15 * theme.scale }}>posts to your profile as {artist}</Text>}
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 6, alignSelf: 'stretch' }}>
       {file ? <>
         {!!duration && <Chip strong label={clock(duration)} />}
