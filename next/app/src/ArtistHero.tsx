@@ -99,7 +99,9 @@ export function ArtistHero({ artist, tracks, metrics, owner, onPlay, onShare, fo
 
 /** A small rendition is plenty under a heavy blur; the original is the fallback. */
 function Backdrop({ uri, opacity }: { uri: string; opacity: number }) {
-  const sources = [...new Set([displayUrl(uri, 160, PixelRatio.get()), uri])];
+  // iOS can't blur bsky's transparent WebP avatars (the blur fails silently), so ask its CDN for a JPEG.
+  const opaque = /^https:\/\/cdn\.bsky\.app\//.test(uri) ? uri.replace(/@(webp|png|jpeg)$/i, '') + '@jpeg' : null;
+  const sources = [...new Set([opaque ?? displayUrl(uri, 160, PixelRatio.get()), uri])];
   const [index, setIndex] = useState(0);
   if (index >= sources.length) return null;
   return <Image aria-hidden source={{ uri: sources[index] }} blurRadius={40} resizeMode="cover" onError={() => setIndex(index + 1)}
@@ -131,7 +133,7 @@ function Round({ label, onPress, href, children }: { label: string; onPress?: ()
   const [pressed, setPressed] = useState(false);
   const control = <Pressable accessibilityRole={href ? 'link' : 'button'} accessibilityLabel={label} onPress={onPress}
     onPressIn={() => setPressed(true)} onPressOut={() => setPressed(false)}
-    style={[styles.round, { backgroundColor: theme.raised, opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.94 : 1 }] }]}>
+    style={StyleSheet.flatten([styles.round, { backgroundColor: theme.raised, opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.94 : 1 }] }])}>
     {children}
   </Pressable>;
   return href ? <Link href={href} asChild>{control}</Link> : control;
@@ -142,10 +144,10 @@ function InfoCard({ eyebrow, title, meta, lead, href, onPress, accessibilityLabe
 }) {
   const theme = useAppearance();
   const [pressed, setPressed] = useState(false);
-  // Static style: `<Link asChild>` flattens its child's style, which drops a style function.
+  // `<Link asChild>` drops style functions and throws on style arrays in dev, so pass one flat object.
   const card = <Pressable accessibilityRole="link" accessibilityLabel={accessibilityLabel} onPress={onPress}
     onPressIn={() => setPressed(true)} onPressOut={() => setPressed(false)}
-    style={[styles.card, { backgroundColor: pressed ? theme.hover : theme.raised }]}>
+    style={StyleSheet.flatten([styles.card, { backgroundColor: pressed ? theme.hover : theme.raised }])}>
     {lead}
     <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
       <Text numberOfLines={1} style={{ color: theme.faint, fontFamily: theme.fontFamily, fontSize: 12 * theme.scale, fontWeight: '600', letterSpacing: 0.6, textTransform: 'uppercase' }}>{eyebrow}</Text>
