@@ -203,6 +203,7 @@
 	.stop { display: flex; margin-inline: auto; }
 	.options { justify-content: center; }
 	.composer { margin-top: 0.75rem; }
+	.composer:not(:has(*)) { display: none; }
 	.facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.5rem; padding-block: 1rem; border-block: 1px solid var(--line); font-size: 0.875rem; }
 	.facts strong { font-weight: 650; }
 	.facts small { font-size: 0.7rem; color: var(--faint); }

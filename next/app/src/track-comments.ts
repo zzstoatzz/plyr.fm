@@ -4,8 +4,8 @@ import { api } from './api-client';
 import { getAuth } from './auth-state';
 import { createPds } from './pds';
 
-const { subscribe, snapshot, hasLoaded, loadComments, addComment, removeComment } = createTrackComments({ api, getAuth, createPds });
-export { addComment, removeComment };
+const { subscribe, snapshot, hasLoaded, loadComments, addComment, removeComment, refresh: refreshComments } = createTrackComments({ api, getAuth, createPds });
+export { addComment, removeComment, refreshComments };
 
 export function useTrackComments(id: string | undefined): Snapshot & { retry: () => void } {
   const listen = useCallback((listener: () => void) => id ? subscribe(id, listener) : () => {}, [id]);

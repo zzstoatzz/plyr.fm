@@ -11,6 +11,7 @@
 
   let { track, compact = false }: { track: Track; compact?: boolean } = $props();
   let account = $state.raw(auth.getAuth());
+  let enabled = $state(false);
   let draft = $state('');
   let pinned = $state<number>();
   let busy = $state(false);
@@ -30,6 +31,15 @@
     });
     return () => { live = false; stop(); };
   });
+  // Only artists who turned comments on get a composer.
+  $effect(() => {
+    const id = track.id;
+    const update = () => { enabled = comments.snapshot(id).enabled; };
+    const unsubscribe = comments.subscribe(id, update);
+    update();
+    if (!comments.hasLoaded(id)) comments.loadComments(id);
+    return unsubscribe;
+  });
   async function post() {
     if (!account.commenting || !draft.trim() || busy || tooLong) return;
     const session = account.rpc;
@@ -45,7 +55,7 @@
   }
 </script>
 
-{#if account.commenting && track.record.cid}
+{#if enabled && account.commenting && track.record.cid}
   <form class:compact onsubmit={event => { event.preventDefault(); void post(); }}>
     <label for={id} class:sr-only={compact}>add a comment</label>
     <textarea {id} rows={compact ? 1 : 2} placeholder={compact ? 'say something about this moment…' : undefined} maxlength={MAX_COMMENT_BYTES} bind:value={draft} disabled={busy} oninput={event => { if (event.currentTarget.value.trim()) pinned ??= position; else pinned = undefined; error = ''; }}></textarea>
@@ -54,7 +64,7 @@
       <button type="submit" class="text-button submit" aria-label={compact ? 'Post comment' : undefined} disabled={busy || !draft.trim() || tooLong}>{#if compact}<Icon name={busy ? 'clock' : 'upload'} size={18} />{:else}{busy ? 'posting…' : 'post comment'}{/if}</button>
     </div>
   </form>
-{:else if track.record.cid}
+{:else if enabled && track.record.cid}
   <a class="sign-in" class:compact href={signIn}>{account.did ? 'reconnect' : 'sign in'} to leave a comment</a>
 {/if}
 {#if error || tooLong}<p role="alert" class="state">{tooLong ? 'that comment is too long.' : error}</p>{/if}

@@ -39,10 +39,10 @@ async function screen(browser, phone, scheme) {
     await page.getByRole('heading', { name: linkedTrack.metadata.title, exact: true }).waitFor();
     await page.reload();
     await page.getByRole('heading', { name: linkedTrack.metadata.title, exact: true }).waitFor();
-    const commentsRequests = [];
-    page.on('request', request => {
-      if (new URL(request.url()).pathname.endsWith('/comments')) commentsRequests.push(request);
-    });
+    await Promise.all([page.waitForResponse(response => response.url().endsWith(tracks[3].id + '/comments')), page.goto(origin + '/track/' + tracks[3].id)]);
+    await page.getByRole('heading', { name: tracks[3].metadata.title, exact: true }).waitFor();
+    await page.waitForTimeout(250);
+    assert.equal(await page.getByRole('button', { name: 'comments', exact: true }).count(), 0, 'no comments button when the artist has not opted in');
     await page.goto(origin);
     await page.getByTestId('home-track-row').first().waitFor();
     await page.getByTestId('home-chart').waitFor();
@@ -81,12 +81,10 @@ async function screen(browser, phone, scheme) {
     await page.getByText('details', { exact: true }).click();
     await page.getByText('A recording made at dawn.', { exact: false }).waitFor();
     await capture('track');
-    assert.equal(commentsRequests.length, 0, 'track render leaves comment fetch deferred');
     const opener = page.getByRole('button', { name: 'comments', exact: true });
     await opener.click();
     const comments = page.getByRole('dialog', { name: 'comments', exact: true });
     await comments.getByText('I love this moment.').waitFor();
-    assert.equal(commentsRequests.length, 1);
     await comments.getByRole('link', { name: 'A Listener' }).waitFor();
     await capture('track-comments');
     await page.keyboard.press('Escape');

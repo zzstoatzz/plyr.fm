@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, Palette, Headphones, UserCircle as UserRound } from '../../../src/icons';
+import { ChatCircle, Check, Palette, Headphones, UserCircle as UserRound } from '../../../src/icons';
 import { Pressable, Switch, View } from 'react-native';
 import { useAuth, logout } from '../../../src/auth';
 import { useAppearance } from '../../../src/appearance';
@@ -11,6 +11,7 @@ import { usePlayback } from '../../../src/playback';
 import { useAppPreferences } from '../../../src/preference-context';
 import { DiscoverySettings } from '../../../src/discovery/DiscoverySettings';
 import { TealSettings } from '../../../src/TealSettings';
+import { refreshComments } from '../../../src/track-comments';
 import { sharePlaybackLog } from '../../../src/share-playback-log';
 
 const themes = ['system', 'light', 'dark'] as const;
@@ -48,6 +49,11 @@ export default function Settings() {
       </SettingsRow>)}
       <SettingsRow label="share playback log" detail="recent play attempts on this device, to send when tracks won’t play" disclosure={false} onPress={() => void sharePlaybackLog(!!auth.did, auth.ready)} />
     </SettingsSection>
+    {auth.did && <SettingsSection title="your tracks" icon={ChatCircle}>
+      <SettingsRow label="timed comments" detail={auth.accountSync ? 'let listeners leave comments on your tracks' : 'sign in again to change this for your tracks'}>
+        <Switch accessibilityLabel="timed comments" disabled={!auth.accountSync} value={preferences.allowComments} thumbColor={theme.background} trackColor={{ false: theme.border, true: theme.accent }} ios_backgroundColor={theme.border} onValueChange={value => { setPreferences({ allowComments: value }); refreshComments(); }} />
+      </SettingsRow>
+    </SettingsSection>}
     <TealSettings key={auth.did ?? 'anonymous'} />
     <DiscoverySettings key={auth.did ?? 'anonymous'} />
     <SettingsSection title="account" icon={UserRound}>

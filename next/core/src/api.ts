@@ -139,6 +139,11 @@ interface TrackLike {
 	actor: { did: string; profile?: { handle?: string; display_name?: string; avatar_url?: string | null } | null };
 }
 
+/** A track's comments; `comments_enabled` is false when the artist hasn't opted in, and then `data` is empty. */
+export interface TrackCommentPage extends Page<TrackComment> {
+	comments_enabled?: boolean;
+}
+
 export interface TrackComment {
 	record: { uri: string; cid: string; rkey: string };
 	author: { did: string; handle: string | null; display_name: string | null; avatar_url: string | null };
@@ -194,7 +199,7 @@ export function createApi(origin: string, playListenerId: () => string) {
 		trackLikes: (id: string, cursor?: string) =>
 			get<Page<TrackLike>>(`/v1/tracks/${encodeURIComponent(id)}/likes`, { limit: 30, cursor }),
 		trackComments: (id: string, signal?: AbortSignal) =>
-			get<Page<TrackComment>>(`/v1/tracks/${encodeURIComponent(id)}/comments`, {}, signal),
+			get<TrackCommentPage>(`/v1/tracks/${encodeURIComponent(id)}/comments`, {}, signal),
 		tracks: (p: { limit?: number; cursor?: string; artist_did?: string; tag?: string[]; hidden_tag?: string[] } = {}, signal?: AbortSignal) => get<Page<Track>>('/v1/tracks', p, signal),
 		tags: (limit = 24, signal?: AbortSignal) => get<Page<{ name: string; track_count: number }>>('/v1/tags', { limit }, signal),
 		track: (id: string, options?: { fresh?: boolean }) => options?.fresh

@@ -67,6 +67,8 @@
 			</li>
 		{/each}
 	</ul>
+{:else if !snapshot.loading && !snapshot.error && !snapshot.enabled}
+	<p class="state">the artist hasn’t turned on comments.</p>
 {:else if !snapshot.loading && !snapshot.error}
 	<p class="state">no comments yet.</p>
 {/if}
