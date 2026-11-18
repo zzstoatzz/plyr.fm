@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { router, useFocusEffect, useNavigation } from 'expo-router';
 import { View } from 'react-native';
 import { getAuth, type Auth } from '../auth-state';
-import type { TrackDraftFields } from './UploadPieces';
+import { UploadBar, type TrackDraftFields } from './UploadPieces';
 import { Action, Copy, Field } from '../controls';
 import { Heading } from '../CatalogPieces';
 import { measureAudioDuration, pickMedia } from '../media-picker';
@@ -11,7 +11,7 @@ import { privatePds, type PrivateResult } from './private-pds';
 import type { PrivateCreate } from '@plyr/next-core/publishing/private-music';
 import { useArtistName } from './artist-name';
 
-export function OwnerTrackUpload({ auth, selected, onBusy, file, setFile, title, setTitle, description, setDescription, tags, setTags }: TrackDraftFields & { auth: Auth; selected: boolean; onBusy: (value: boolean) => void }) {
+export function OwnerTrackUpload({ auth, selected, onBusy, audience, file, setFile, title, setTitle, description, setDescription, tags, setTags }: TrackDraftFields & { auth: Auth; selected: boolean; onBusy: (value: boolean) => void; audience: ReactNode }) {
   const navigation = useNavigation();
   const selection = useRef(selected);
   selection.current = selected;
@@ -62,7 +62,7 @@ export function OwnerTrackUpload({ auth, selected, onBusy, file, setFile, title,
       {!operation.archived && results[operation.rkey]?.state !== 'accepted' && <><Copy>this attempt may still appear. starting again could create a duplicate.</Copy>
         <Action label="Set aside upload" disabled={busy} onPress={() => void run(async () => { await pds.archive(operation, true); reset(operation); }, true, operation.rkey)} /></>}
     </View>)}
-    {!auth.privatePublishing ? <Action label="Sign in for uploads" href={{ pathname: '/login', params: { return_to: '/upload?visibility=only-you' } }} /> : <>
+    {!auth.privatePublishing ? <>{audience}<Action label="Sign in for uploads" href={{ pathname: '/login', params: { return_to: '/upload?visibility=only-you' } }} /></> : <>
       <Action label={file?.name ?? 'Choose audio'} disabled={busy || active} onPress={() => { setNoticeArea('upload'); void pickMedia('audio/*').then(next => {
         if (!next || !current()) return;
         if (next.size > 104_857_600) { setNotice('audio for this setting is limited to 100 MiB.'); return; }
@@ -72,19 +72,21 @@ export function OwnerTrackUpload({ auth, selected, onBusy, file, setFile, title,
       <Field label="Description" value={description} onChangeText={setDescription} maxLength={5000} multiline editable={!busy && !active} />
       <TagsField value={tags} onChange={setTags} disabled={busy || active} />
       {notice && noticeArea === 'upload' && <Copy live>{notice}</Copy>}
-      <Action primary label={busy ? 'Saving…' : 'Upload'} disabled={busy || active || loading || !!recoveryError || !file || !title.trim() || !artist} onPress={() => void run(async () => {
-        if (!selected || !file) return;
-        const duration = await measureAudioDuration(file).catch(() => undefined);
-        if (!current()) return;
-        const result = await pds.upload({ file, title, artist, description, tags: tags.split('\n'), duration }, operation => { if (current()) ownAttempt.current = operation.rkey; });
-        if (!current()) return;
-        setResults(values => ({ ...values, [result.operation.rkey]: result.result }));
-        if (result.result.state === 'accepted') {
-          await pds.dismiss(result.operation);
-          if (current() && latestDraft.current.file === file && latestDraft.current.title === title && latestDraft.current.description === description && latestDraft.current.tags === tags) reset(result.operation);
-          if (current() && selection.current && navigation.isFocused()) router.replace('/portal');
-        }
-      }, true, 'upload')} />
+      <UploadBar audience={audience}>
+        <Action primary label={busy ? 'Saving…' : 'Upload'} disabled={busy || active || loading || !!recoveryError || !file || !title.trim() || !artist} onPress={() => void run(async () => {
+          if (!selected || !file) return;
+          const duration = await measureAudioDuration(file).catch(() => undefined);
+          if (!current()) return;
+          const result = await pds.upload({ file, title, artist, description, tags: tags.split('\n'), duration }, operation => { if (current()) ownAttempt.current = operation.rkey; });
+          if (!current()) return;
+          setResults(values => ({ ...values, [result.operation.rkey]: result.result }));
+          if (result.result.state === 'accepted') {
+            await pds.dismiss(result.operation);
+            if (current() && latestDraft.current.file === file && latestDraft.current.title === title && latestDraft.current.description === description && latestDraft.current.tags === tags) reset(result.operation);
+            if (current() && selection.current && navigation.isFocused()) router.replace('/portal');
+          }
+        }, true, 'upload')} />
+      </UploadBar>
     </>}
   </>;
 }
