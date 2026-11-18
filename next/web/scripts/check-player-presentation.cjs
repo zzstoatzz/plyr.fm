@@ -171,12 +171,48 @@ async function verify(browser, origin, width, scheme) {
       await touch('touchEnd');
       await present();
     }
+    // The chapter wheel: browsing and escaping never seek; a pick or a released drag does.
+    await setScroll(0);
+    await page.evaluate(() => { window.playingAudio.currentTime = 2; });
+    const line = dialog.getByRole('combobox', { name: /^now: morning/ });
+    const wheel = dialog.getByRole('listbox', { name: 'Tracklist' });
+    const at = () => page.evaluate(() => window.playingAudio.currentTime);
+    const before = await at();
+    await line.click();
+    await wheel.waitFor();
+    await page.keyboard.press('ArrowDown');
+    await page.waitForTimeout(400);
+    await capture('chapter-wheel');
+    assert.equal(await wheel.getByRole('option', { selected: true }).getAttribute('aria-label'), '0:25, field');
+    await page.keyboard.press('Escape');
+    await wheel.waitFor({ state: 'hidden' });
+    assert.ok(await dialog.isVisible(), 'Escape closes the wheel, not the player');
+    assert.ok(Math.abs(await at() - before) < 3, 'escaping the wheel leaves playback alone');
+    await line.click();
+    await wheel.getByRole('option', { name: '1:00, porch' }).click();
+    await wheel.waitFor({ state: 'hidden' });
+    await page.waitForFunction(() => window.playingAudio.currentTime >= 59.9);
+    await dialog.getByText('now: porch', { exact: true }).waitFor();
+    const box = await dialog.getByRole('combobox', { name: /^now: porch/ }).boundingBox();
+    const [lx, ly] = [box.x + box.width / 2, box.y + box.height / 2];
+    await touch('touchStart', [[lx, ly]]);
+    await touch('touchMove', [[lx, ly + 20]]);
+    await touch('touchMove', [[lx + 140, ly + 40]]);
+    await touch('touchEnd');
+    await wheel.waitFor({ state: 'hidden' });
+    assert.ok(await at() >= 59.9, 'sliding off the wheel sideways cancels');
+    await touch('touchStart', [[lx, ly]]);
+    await touch('touchMove', [[lx, ly + 20]]);
+    await touch('touchMove', [[lx, ly + 38]]);
+    await touch('touchEnd');
+    await page.waitForFunction(() => window.playingAudio.currentTime < 30);
+    await dialog.getByText('now: field', { exact: true }).waitFor();
     await page.keyboard.press('Escape');
     await dialog.waitFor({ state: 'hidden' });
     assert.ok(await opener.evaluate(node => node === document.activeElement), 'Escape returns focus to the dock');
     await continuity();
     assert.deepEqual(errors, []);
-    console.log(`${width}px ${scheme}: player layout, scrub, gesture arbitration, Escape and continued audio passed`);
+    console.log(`${width}px ${scheme}: player layout, scrub, chapter wheel, gesture arbitration, Escape and continued audio passed`);
   } finally {
     await context.close();
   }
