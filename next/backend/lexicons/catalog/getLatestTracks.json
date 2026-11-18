@@ -4,22 +4,39 @@
   "defs": {
     "main": {
       "type": "query",
-      "description": "The newest public tracks in discovery, newest first. Tracks tagged as AI-generated are left out, as on the plyr.fm home feed. No auth required.",
+      "description": "The newest public tracks in discovery, newest first. Tracks tagged as AI-generated are left out, as on the plyr.fm home feed. No auth required; results are not personalized.",
       "parameters": {
         "type": "params",
         "properties": {
-          "limit": { "type": "integer", "minimum": 1, "maximum": 50, "default": 20 },
-          "cursor": { "type": "string", "maxLength": 512 }
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
+            "default": 20
+          },
+          "cursor": {
+            "type": "string"
+          }
         }
       },
       "output": {
         "encoding": "application/json",
         "schema": {
           "type": "object",
-          "required": ["tracks"],
+          "required": [
+            "tracks"
+          ],
           "properties": {
-            "cursor": { "type": "string", "maxLength": 512 },
-            "tracks": { "type": "array", "items": { "type": "ref", "ref": "fm.plyr.defs#trackView" } }
+            "cursor": {
+              "type": "string"
+            },
+            "tracks": {
+              "type": "array",
+              "items": {
+                "type": "ref",
+                "ref": "fm.plyr.defs#trackView"
+              }
+            }
           }
         }
       }

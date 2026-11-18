@@ -15,7 +15,8 @@ const record_json = @import("../index/track_record_json_store.zig");
 pub const top_default_limit: usize = 10;
 pub const latest_default_limit: usize = 20;
 pub const max_limit: usize = 50;
-pub const max_cursor_bytes: usize = 512;
+/// a bound on what we parse, not part of the lexicon: our own cursors stay far below it
+pub const max_cursor_bytes: usize = 4096;
 
 pub const Collections = struct {
     track: []const u8,
@@ -58,8 +59,12 @@ pub fn topTracks(
         .unavailable => return .unavailable,
     };
     const tracks = allocator.alloc(track.Track, chart.data.len) catch return .unavailable;
-    for (chart.data, tracks) |entry, *destination| destination.* = entry.track;
-    return render(allocator, records, tracks, null);
+    const period_likes = allocator.alloc(i64, chart.data.len) catch return .unavailable;
+    for (chart.data, tracks, period_likes) |entry, *destination, *likes| {
+        destination.* = entry.track;
+        likes.* = entry.period_like_count;
+    }
+    return render(allocator, records, tracks, period_likes, null);
 }
 
 pub fn latestTracks(
@@ -79,8 +84,7 @@ pub fn latestTracks(
         .internal_error => return .internal_error,
         .unavailable => return .unavailable,
     };
-    if (page.next_cursor) |cursor| if (cursor.len > max_cursor_bytes) return .internal_error;
-    return render(allocator, records, page.data, page.next_cursor);
+    return render(allocator, records, page.data, null, page.next_cursor);
 }
 
 /// XRPC servers ignore parameters they do not define; defined ones are strict.
@@ -97,8 +101,7 @@ fn parseTop(allocator: std.mem.Allocator, target: []const u8) !list_track_chart.
         } else if (std.mem.eql(u8, pair.name, "period")) {
             if (saw_period) return error.InvalidQuery;
             saw_period = true;
-            options.period = std.meta.stringToEnum(track_chart.Period, pair.value) orelse
-                return error.InvalidQuery;
+            options.period = parsePeriod(pair.value) orelse return error.InvalidQuery;
         }
     }
     return options;
@@ -121,6 +124,15 @@ fn parseLatest(allocator: std.mem.Allocator, target: []const u8) !list_tracks.Op
         }
     }
     return options;
+}
+
+/// lexicon values: day, week, month, all
+fn parsePeriod(text: []const u8) ?track_chart.Period {
+    if (std.mem.eql(u8, text, "day")) return .day;
+    if (std.mem.eql(u8, text, "week")) return .week;
+    if (std.mem.eql(u8, text, "month")) return .month;
+    if (std.mem.eql(u8, text, "all")) return .all_time;
+    return null;
 }
 
 fn parseLimit(text: []const u8) !usize {
@@ -147,13 +159,14 @@ fn render(
     allocator: std.mem.Allocator,
     records: ?record_json.Store,
     tracks: []const track.Track,
+    period_likes: ?[]const i64,
     cursor: ?[]const u8,
 ) Result {
     const store = records orelse return .unavailable;
     const uris = allocator.alloc([]const u8, tracks.len) catch return .unavailable;
     for (tracks, uris) |item, *uri| uri.* = item.record.uri;
     const found = store.lookup(allocator, uris) catch return .unavailable;
-    const body = write(allocator, found, tracks, cursor) catch return .unavailable;
+    const body = write(allocator, found, tracks, period_likes, cursor) catch return .unavailable;
     return .{ .found = body };
 }
 
@@ -161,6 +174,8 @@ fn write(
     allocator: std.mem.Allocator,
     found: []const record_json.Entry,
     tracks: []const track.Track,
+    /// getTopTracks: likes in the period, one per track, wrapping each view
+    period_likes: ?[]const i64,
     cursor: ?[]const u8,
 ) error{ OutOfMemory, WriteFailed }![]const u8 {
     const options: std.json.Stringify.Options = .{ .emit_null_optional_fields = false };
@@ -174,7 +189,7 @@ fn write(
     }
     try w.writeAll("\"tracks\":[");
     var written: usize = 0;
-    for (tracks) |item| {
+    for (tracks, 0..) |item, index| {
         const cid = item.record.cid orelse continue;
         // a track whose record we do not hold at this cid is left out rather
         // than sent with a record that does not match it
@@ -183,6 +198,7 @@ fn write(
         } else continue;
         if (written != 0) try w.writeAll(",");
         written += 1;
+        if (period_likes != null) try w.writeAll("{\"track\":");
         try w.writeAll("{\"uri\":");
         try std.json.Stringify.value(item.record.uri, options, w);
         try w.writeAll(",\"cid\":");
@@ -202,6 +218,7 @@ fn write(
         });
         try std.json.Stringify.value(item.projection.indexed_at orelse item.metadata.created_at, options, w);
         try w.writeAll("}");
+        if (period_likes) |likes| try w.print(",\"likeCount\":{d}}}", .{@max(likes[index], 0)});
     }
     try w.writeAll("]}");
     return out.written();
@@ -215,6 +232,8 @@ test "catalog parameters follow the lexicon and ignore unknown ones" {
     const top = try parseTop(a, "/xrpc/fm.plyr.getTopTracks");
     try std.testing.expectEqual(top_default_limit, top.limit);
     try std.testing.expectEqual(track_chart.Period.all_time, top.period);
+    try std.testing.expectEqual(track_chart.Period.all_time, (try parseTop(a, "/xrpc/fm.plyr.getTopTracks?period=all")).period);
+    try std.testing.expectError(error.InvalidQuery, parseTop(a, "/xrpc/fm.plyr.getTopTracks?period=all_time"));
     const week = try parseTop(a, "/xrpc/fm.plyr.getTopTracks?period=week&limit=50&extra=1");
     try std.testing.expectEqual(track_chart.Period.week, week.period);
     try std.testing.expectEqual(@as(usize, 50), week.limit);
@@ -247,7 +266,7 @@ test "track views carry the stored record and leave out tracks without one" {
         // projected at an older cid than the composed row: not served
         .{ .uri = "at://did:plc:artist/fm.plyr.track/three", .cid = "bafyold", .json = "{\"title\": \"old\"}" },
     };
-    const body = try write(a, &found, &tracks, "next");
+    const body = try write(a, &found, &tracks, null, "next");
     const parsed = try std.json.parseFromSliceLeaky(std.json.Value, a, body, .{});
     try std.testing.expectEqualStrings("next", parsed.object.get("cursor").?.string);
     const items = parsed.object.get("tracks").?.array.items;
@@ -261,8 +280,18 @@ test "track views carry the stored record and leave out tracks without one" {
     try std.testing.expectEqual(@as(i64, 7), items[0].object.get("playCount").?.integer);
     try std.testing.expectEqualStrings("2026-11-18T00:00:00.000000Z", items[0].object.get("indexedAt").?.string);
 
-    const empty = try write(a, &.{}, &.{}, null);
+    const empty = try write(a, &.{}, &.{}, null, null);
     try std.testing.expectEqualStrings("{\"tracks\":[]}", empty);
+
+    // getTopTracks wraps each view with the period's like count
+    const top = try write(a, &found, &tracks, &.{ 9, 8, 7 }, null);
+    const top_parsed = try std.json.parseFromSliceLeaky(std.json.Value, a, top, .{});
+    try std.testing.expect(top_parsed.object.get("cursor") == null);
+    const entries = top_parsed.object.get("tracks").?.array.items;
+    try std.testing.expectEqual(@as(usize, 2), entries.len);
+    try std.testing.expectEqual(@as(i64, 9), entries[0].object.get("likeCount").?.integer);
+    try std.testing.expectEqual(@as(i64, 8), entries[1].object.get("likeCount").?.integer);
+    try std.testing.expectEqualStrings("two", entries[1].object.get("track").?.object.get("record").?.object.get("title").?.string);
 }
 
 fn testTrack(uri: []const u8, cid: []const u8, display_name: []const u8) track.Track {

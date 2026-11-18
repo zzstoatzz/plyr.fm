@@ -78,7 +78,9 @@ pub fn handle(
     const path = pathFromTarget(target);
 
     if (request.method == .OPTIONS) {
-        try response.empty(request, .no_content, request_id, app.cors);
+        var cors = app.cors;
+        if (catalog.match(app.track_collection, path) != null) cors.public = true;
+        try response.empty(request, .no_content, request_id, cors);
     } else if (mem.eql(u8, path, "/health")) {
         if (request.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
@@ -128,7 +130,7 @@ pub fn handle(
             .track = app.track_collection,
             .profile = app.profile_collection,
             .like = app.like_collection,
-        }, app.cors, request_id);
+        }, publicCors(app.cors), request_id);
     } else if (if (app.notifications) |config| notifications.match(config, path) else null) |method| {
         try notifications.handle(
             request,
@@ -537,6 +539,12 @@ fn artistMetricsIdentifier(path: []const u8) ?[]const u8 {
     const identifier = path[artists_prefix.len .. path.len - metrics_suffix.len];
     if (identifier.len == 0 or mem.indexOfScalar(u8, identifier, '/') != null) return null;
     return identifier;
+}
+
+fn publicCors(cors: response.CorsPolicy) response.CorsPolicy {
+    var public = cors;
+    public.public = true;
+    return public;
 }
 
 fn pathFromTarget(target: []const u8) []const u8 {

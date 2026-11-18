@@ -5,25 +5,70 @@
     "trackView": {
       "type": "object",
       "description": "A track as plyr.fm indexes it: the fm.plyr.track record exactly as the artist wrote it, with counts plyr.fm derives.",
-      "required": ["uri", "cid", "artist", "record", "indexedAt"],
+      "required": [
+        "uri",
+        "cid",
+        "artist",
+        "record",
+        "indexedAt"
+      ],
       "properties": {
-        "uri": { "type": "string", "format": "at-uri" },
-        "cid": { "type": "string", "format": "cid" },
-        "artist": { "type": "ref", "ref": "#artistView" },
-        "record": { "type": "unknown", "description": "The fm.plyr.track record at this cid." },
-        "likeCount": { "type": "integer", "minimum": 0 },
-        "playCount": { "type": "integer", "minimum": 0 },
-        "indexedAt": { "type": "string", "format": "datetime" }
+        "uri": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of the fm.plyr.track record."
+        },
+        "cid": {
+          "type": "string",
+          "format": "cid",
+          "description": "CID of that record; record is the record at this CID."
+        },
+        "artist": {
+          "type": "ref",
+          "ref": "#artistView"
+        },
+        "record": {
+          "type": "unknown",
+          "description": "The fm.plyr.track record at this cid."
+        },
+        "likeCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "All-time likes."
+        },
+        "playCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "indexedAt": {
+          "type": "string",
+          "format": "datetime"
+        }
       }
     },
     "artistView": {
       "type": "object",
-      "required": ["did", "handle"],
+      "required": [
+        "did",
+        "handle"
+      ],
       "properties": {
-        "did": { "type": "string", "format": "did" },
-        "handle": { "type": "string", "format": "handle" },
-        "displayName": { "type": "string", "maxLength": 640 },
-        "avatar": { "type": "string", "format": "uri" }
+        "did": {
+          "type": "string",
+          "format": "did"
+        },
+        "handle": {
+          "type": "string",
+          "format": "handle"
+        },
+        "displayName": {
+          "type": "string",
+          "maxLength": 640
+        },
+        "avatar": {
+          "type": "string",
+          "format": "uri"
+        }
       }
     }
   }
