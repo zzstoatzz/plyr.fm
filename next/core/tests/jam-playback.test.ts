@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { Track } from '../src/api.ts';
 import type { JamSocket, JamState } from '../src/jam-connection.ts';
-import { createJamPlayback, jamTrack, type ActiveJam, type JamPlaybackTarget } from '../src/jam-playback.ts';
+import { createJamPlayback, initialJam, jamTrack, type ActiveJam, type JamPlaybackTarget } from '../src/jam-playback.ts';
 
 const host = 'did:plc:aaaaaaaaaaaaaaaaaaaaaaaa';
 const track: Track = {
@@ -12,6 +12,22 @@ const track: Track = {
   artist: { did: host, profile: { handle: 'host.test', display_name: 'Host', avatar_url: null } },
   media: {}, access: { visibility: 'public' }, metrics: { play_count: 0, like_count: 0 },
 };
+
+test('starting from a queue keeps the active occurrence and playback position', () => {
+  const unknown = { ...track, id: 'active_without_duration', metadata: { ...track.metadata, duration_seconds: null } };
+  const unavailable = { ...unknown, id: 'unrelated_without_duration', record: { ...track.record, cid: 'another-cid' } };
+  const next = { ...track, id: 'following_track', record: { ...track.record, uri: track.record.uri + '-next' } };
+  const seed = initialJam(unknown, { tracks: [track, unknown, unavailable, unknown, next], index: 1,
+    duration: 120, position: 21.25, playing: true });
+
+  assert.deepEqual(seed?.queue.map(item => item.id), [track.id, unknown.id, unknown.id, next.id]);
+  assert.equal(seed?.index, 1);
+  assert.equal(seed?.queue[2].durationMs, 120_000);
+  assert.equal(seed?.queue[3].durationMs, 70_000);
+  assert.equal(seed?.positionMs, 21250);
+  assert.equal(seed?.playing, true);
+  assert.equal(initialJam(unknown), null);
+});
 
 class Socket implements JamSocket {
   readyState = 1;

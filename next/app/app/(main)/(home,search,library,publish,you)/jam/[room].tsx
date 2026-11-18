@@ -8,8 +8,8 @@ import { Action, Copy, Field, Page } from '../../../../src/controls';
 import { jamSpace, joinJam, type InitialJam } from '../../../../src/jam-space';
 import { coordinatorHeaders } from '../../../../src/coordinator-origin';
 import { usePlayback } from '../../../../src/playback';
-import { jamTrack } from '@plyr/next-core/jam-playback';
-import { parseJamTrackSnapshot } from '@plyr/next-core/jam-space';
+import { initialJam, jamTrack } from '@plyr/next-core/jam-playback';
+import { JamNotStarted, parseJamTrackSnapshot } from '@plyr/next-core/jam-space';
 import { useResource } from '../../../../src/CatalogPieces';
 import { pdsEndpoint, pdsSupportsSpaces } from '@plyr/next-core/identity';
 
@@ -43,16 +43,45 @@ export default function JamRoom() {
     finally { setBusy(false); }
   }
 
-  async function enter(initial?: InitialJam) {
-    if (isHost && !initial) {
+  function enter(initial?: InitialJam) {
+    const agent = auth.agent;
+    player.joinJam({ host, key, admit: async () => {
+      const account = getAuth();
+      if (account.agent !== agent) throw new Error('account changed');
+      try { return await joinJam(account, host as Did, key, initial, coordinatorHeaders); }
+      catch (failure) { if (!(failure instanceof JamNotStarted) || !isHost || initial) throw failure; }
       const snapshot = parseJamTrackSnapshot(await client().read());
       const track = await api.track(snapshot.trackId);
       const ref = jamTrack(track, player.current?.id === track.id ? player.status.duration : undefined);
-      if (!ref || ref.cid !== snapshot.cid) throw new Error('the jam track has changed');
-      initial = { queue: [ref], index: 0, playing: snapshot.playing, positionMs: Math.min(ref.durationMs, snapshot.positionMs) };
-    }
-    const start = initial;
-    player.joinJam({ host, key, admit: () => joinJam(getAuth(), host as Did, key, start, coordinatorHeaders) });
+      if (!ref || ref.cid !== snapshot.cid) throw new Error('couldn’t restore the jam’s track.');
+      if (getAuth().agent !== agent) throw new Error('account changed');
+      return joinJam(account, host as Did, key, { queue: [ref], index: 0, playing: snapshot.playing,
+        positionMs: Math.min(ref.durationMs, snapshot.positionMs) }, coordinatorHeaders);
+    } });
+  }
+
+  async function start() {
+    if (player.privatePlayback) throw new Error('play a public track before starting a jam.');
+    const current = player.current && (!trackId || player.current.id === trackId) ? player.current : undefined;
+    const capture = current && { tracks: player.queue, index: player.index, duration: player.status.duration,
+      position: player.seekPreview ?? player.status.currentTime, playing: player.status.playing };
+    const track = current ?? (trackId ? await api.track(trackId) : undefined);
+    const seed = track && initialJam(track, capture);
+    if (!seed) throw new Error('couldn’t start a jam with this track.');
+    if (getAuth().agent !== auth.agent) return;
+
+    const space = client();
+    const created = await space.create();
+    if (getAuth().agent !== auth.agent) return;
+    const previous = created ? undefined : await space.read(true);
+    if (getAuth().agent !== auth.agent) return;
+    if (previous !== undefined) { enter(); return; }
+    const ref = seed.queue[seed.index];
+    await space.publish({ revision: 0, trackId: ref.id, cid: ref.cid, playing: seed.playing,
+      positionMs: seed.positionMs, updatedAtMs: Date.now() });
+    if (getAuth().agent !== auth.agent) return;
+    enter(seed);
+    if (capture && seed.queue.length < capture.tracks.length) setNotice('some tracks couldn’t be shared.');
   }
 
   const link = `/jam/${encodeURIComponent(room ?? '')}${trackId ? `?track=${encodeURIComponent(trackId)}` : ''}`;
@@ -70,17 +99,9 @@ export default function JamRoom() {
             if (auth.did) await login(auth.did, false, link);
           })} />
         </>}
-      </> : !joined && <Action label="Join Jam" disabled={busy} onPress={() => void run(() => enter())} />}
-    {isHost && auth.jamSpace && !joined && <Action label="Create Jam with current track" disabled={busy || !player.current?.record.cid && !trackId}
-      onPress={() => void run(async () => {
-        const track = player.current ?? (trackId ? await api.track(trackId) : undefined);
-        const ref = track ? jamTrack(track, player.current?.id === track.id ? player.status.duration : undefined) : undefined;
-        if (!track || !ref) throw new Error('choose a track with audio before starting a jam');
-        const space = client();
-        await space.create();
-        await space.publish({ revision: 0, trackId: track.id, cid: ref.cid, playing: false, positionMs: 0, updatedAtMs: Date.now() });
-        await enter({ queue: [ref], index: 0, playing: false, positionMs: 0 });
-      })} />}
+      </> : !joined && <Action label="Join Jam" disabled={busy} onPress={() => enter()} />}
+    {isHost && auth.jamSpace && !joined && <Action label="start jam" disabled={busy || !player.current?.record.cid && !trackId}
+      onPress={() => void run(start)} />}
     {joined && <>
       <Copy>{player.jam?.phase === 'connected' ? 'connected' : 'connecting to the jam…'}</Copy>
       {state && <>
