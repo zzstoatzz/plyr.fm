@@ -152,7 +152,6 @@
           <textarea rows="6" maxlength="2560" bind:value={bio} disabled={busy || !!saved} placeholder="what you make, where you play"></textarea>
         </label>
       </div>
-      <p class="subtle hint">your avatar is stored on your PDS as a png or jpeg under 1 MB, cropped square.</p>
       {#if leaving}
         <div class="discard" role="alert">
           <p>discard your unsaved profile changes?</p>
@@ -187,7 +186,6 @@
   .avatar:disabled { opacity: 1; }
   label.bio { display: grid; gap: 0.4rem; min-width: 0; }
   textarea { width: 100%; min-width: 0; padding: 0.7rem; border-radius: 0.6rem; background: var(--bg); border: 1px solid var(--line); resize: vertical; }
-  .hint { font-size: 0.875rem; }
   .discard { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; padding: 0.75rem; border: 1px solid var(--line); border-radius: 0.7rem; background: var(--raised); }
   .discard p { flex: 1 1 100%; }
   footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.5rem; }
