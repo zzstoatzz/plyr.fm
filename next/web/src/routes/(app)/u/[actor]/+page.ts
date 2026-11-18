@@ -5,6 +5,6 @@ export const load: PageLoad = async ({ params }) => {
 	const artist = await api.artist(params.actor);
 	return {
 		artist,
-		metrics: api.artistMetrics(artist.did).then(item => item.totals, () => null)
+		metrics: api.artistMetrics(artist.did).catch(() => null)
 	};
 };

@@ -93,3 +93,19 @@ input[type='range'] { accent-color: var(--accent); min-width: 0; width: 100%; cu
 .truncate { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .page-content { max-width: 84rem; margin-inline: auto; padding: clamp(1rem, 3vw, 2.25rem); }
 .state { color: var(--muted); margin: 1rem 0; }
+/* album, playlist and artist heroes: blurred art behind the header, stat chips and an even control row */
+.hero-backdrop { position: absolute; z-index: -1; inset: calc(-1 * clamp(1rem, 3vw, 2.25rem)) calc(-1 * clamp(1rem, 3vw, 2.25rem)) -2rem; overflow: hidden; pointer-events: none;
+	mask-image: linear-gradient(to bottom, transparent, black 25%, black 45%, transparent); }
+.hero-backdrop img { width: 100%; height: 100%; object-fit: cover; filter: blur(48px) saturate(1.2); transform: scale(1.3); opacity: 0.55; }
+.hero-chip { padding: 0.3rem 0.75rem; border-radius: 999px; background: color-mix(in srgb, var(--raised) 85%, transparent); color: var(--muted); font-size: 0.875rem; font-variant-numeric: tabular-nums; }
+.hero-chip b { color: var(--text); font-weight: 700; }
+.hero-pill, .hero-round { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; height: 2.75rem; border: 0; border-radius: 999px; background: var(--raised); color: var(--text); font-weight: 700; }
+.hero-pill { padding: 0 1.25rem; }
+.hero-pill.primary { background: var(--accent); color: var(--on-accent); }
+.hero-round { width: 2.75rem; flex: none; }
+.hero-pill:hover:not(:disabled), .hero-round:hover { filter: brightness(0.96); }
+.hero-pill:disabled { opacity: 0.5; }
+@media (max-width: 720px) {
+	.hero-pill, .hero-round { height: 3rem; font-size: 1.05rem; }
+	.hero-round { width: 3rem; }
+}
