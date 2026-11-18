@@ -11,6 +11,7 @@
 				var p = JSON.parse(localStorage.getItem('plyr-next:prefs') || '{}');
 				var r = document.documentElement;
 				if (p.theme === 'light' || p.theme === 'dark') r.dataset.theme = p.theme;
+				if (/^(comic-sans|system|mono|serif)$/.test(p.font)) r.dataset.font = p.font;
 				if (typeof p.scale === 'number' && p.scale >= 0.9 && p.scale <= 2) r.style.fontSize = p.scale * 100 + '%';
 				if (/^#[0-9a-f]{6}$/i.test(p.accent)) {
 					r.dataset.accent = p.accent.toLowerCase();

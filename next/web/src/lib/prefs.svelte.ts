@@ -1,5 +1,7 @@
 import type { Agent } from '@plyr/next-core/auth-state';
 import { preferenceTransport } from '@plyr/next-core/preference-transport';
+import { DEFAULT_HIDDEN_TAGS, hiddenTags } from '@plyr/next-core/hidden-tags';
+import { invalidate } from '$app/navigation';
 import { authConfig } from './auth-config';
 
 const key = 'plyr-next:prefs';
@@ -16,11 +18,21 @@ export const scales = [
 	{ name: 'large', value: 1.15 },
 	{ name: 'larger', value: 1.3 }
 ] as const;
+export const fonts = [
+	{ name: 'comic sans', value: 'comic-sans' },
+	{ name: 'system', value: 'system' },
+	{ name: 'mono', value: 'mono' },
+	{ name: 'serif', value: 'serif' }
+] as const;
+type Font = typeof fonts[number]['value'];
 
 type Preferences = {
 	theme: typeof themes[number];
 	accent: string;
+	/** unset keeps the default: comic sans on desktop, the system face on phones */
+	font?: Font;
 	scale: number;
+	hiddenTags: string[];
 	playThrough: boolean;
 	keepPlaying: boolean;
 	tealScrobbling: boolean;
@@ -28,7 +40,7 @@ type Preferences = {
 };
 
 const defaults: Preferences = {
-	theme: 'system', accent: accents[0].color, scale: 1, playThrough: true, keepPlaying: false, tealScrobbling: false, allowComments: false
+	theme: 'system', accent: accents[0].color, font: undefined, scale: 1, hiddenTags: DEFAULT_HIDDEN_TAGS, playThrough: true, keepPlaying: false, tealScrobbling: false, allowComments: false
 };
 type Account = {
 	key: string;
@@ -56,10 +68,13 @@ export async function confirmScrobblingConsent(): Promise<boolean> {
 
 function decode(value: unknown, remote = false): Partial<Preferences> {
 	if (!value || typeof value !== 'object') return {};
-	const { theme, accent, scale, playThrough, keepPlaying, tealScrobbling, allowComments } = value as Record<string, unknown>;
+	const { theme, accent, font, scale, playThrough, keepPlaying, tealScrobbling, allowComments } = value as Record<string, unknown>;
 	const result: Partial<Preferences> = {};
 	if (theme === 'system' || theme === 'light' || theme === 'dark') result.theme = theme;
 	if (typeof accent === 'string' && /^#[0-9a-f]{6}$/i.test(accent)) result.accent = accent.toLowerCase();
+	if (fonts.some(option => option.value === font)) result.font = font as Font;
+	const hidden = hiddenTags((value as Record<string, unknown>).hiddenTags);
+	if (hidden) result.hiddenTags = hidden;
 	if (typeof scale === 'number') {
 		const value = remote ? scale / 100 : scale;
 		if (remote ? scales.some(scale => scale.value === value) : value >= 0.9 && value <= 2) result.scale = value;
@@ -84,11 +99,15 @@ function write(key: string, value: object) {
 }
 
 function apply(value: Partial<Preferences>) {
+	const hidden = JSON.stringify(prefs.hiddenTags);
 	Object.assign(prefs, value);
+	if (JSON.stringify(prefs.hiddenTags) !== hidden) void invalidate('app:hidden-tags');
 	const root = document.documentElement;
 	if (prefs.theme === 'system') delete root.dataset.theme;
 	else root.dataset.theme = prefs.theme;
 	root.dataset.accent = prefs.accent;
+	if (prefs.font) root.dataset.font = prefs.font;
+	else delete root.dataset.font;
 	root.style.setProperty('--custom-accent', prefs.accent);
 	root.style.fontSize = prefs.scale === 1 ? '' : `${prefs.scale * 100}%`;
 }
