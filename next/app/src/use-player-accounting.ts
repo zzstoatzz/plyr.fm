@@ -61,7 +61,9 @@ export function usePlayerAccounting(player: AudioPlayer) {
       const request = ++seekGeneration;
       seeking = true;
       try {
-        await player.seekTo(position);
+        // Exact, not the nearest cheap point: AVPlayer's default tolerance can land well short of the target,
+        // which reads as the previous chapter, comment or scrubber spot. Android ignores the tolerances.
+        await player.seekTo(position, 0, 0);
       } finally {
         if (request === seekGeneration) {
           seeking = false;
