@@ -139,7 +139,7 @@
 		<section class="members" aria-label={`${title} tracks`}>
 			{#each list.members as member, index (member.position)}
 				{#if member.track}<TrackRow track={member.track} collection={tracks} label={title} number={list.object === 'album' ? index + 1 : undefined} />
-				{:else}<p class="state unavailable">{#if list.object === 'album'}<span class="number">{index + 1}</span>{/if}track unavailable</p>{/if}
+				{:else}<p class="state unavailable">{#if list.object === 'album'}<span class="number">{index + 1}</span>{/if}<span>track unavailable</span></p>{/if}
 			{:else}
 				<p class="state">no tracks yet.</p>
 			{/each}
