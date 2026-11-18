@@ -177,7 +177,7 @@
 
 <style>
 	.anchor { position: relative; display: flex; justify-content: center; min-width: 0; }
-	.line { max-width: 100%; color: var(--accent); font-size: 0.75rem; padding: 0.1rem 0.55rem; border-radius: 99px; touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; }
+	.line { max-width: 100%; color: var(--accent); font-size: 0.75rem; padding: 0 0.55rem; border-radius: 99px; touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; }
 	.line:hover:not(.disabled), .line.open { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 	.line.disabled { cursor: default; }
 	.wheel { position: absolute; z-index: 20; top: 50%; left: 50%; width: min(24rem, calc(100vw - 2rem)); height: calc(38px * 5); transform: translate(-50%, -50%);
