@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import type { Track } from '@plyr/next-core/api';
   import { describePolicy, describeRule, implicitRule, isOpen, parsePrice, trackSpace, type Policy, type Rule } from '@plyr/next-core/access/policy';
   import { listPolicies, memberDid } from '@plyr/next-core/access/policy-read';
@@ -26,17 +26,18 @@
   });
   const space = $derived(reopened ? undefined : closedInto ?? shared);
   const fallback = $derived(space ? implicitRule(space) : undefined);
+  const author = $derived(account.did);
   let read = $state.raw<{ space: string; policies?: Policy[]; error?: string }>();
   let attempt = $state(0);
   const policies = $derived(space && read?.space === space ? read.policies : undefined);
   const readError = $derived(space && read?.space === space ? read.error : undefined);
   $effect(() => {
     const current = space;
-    const author = account.did;
+    const owner = author;
     void attempt;
-    if (!current || !author) return;
+    if (!current || !owner) return;
     const controller = new AbortController();
-    listPolicies(config, author, current, controller.signal)
+    listPolicies(config, owner, current, controller.signal)
       .then(found => { read = { space: current, policies: found }; })
       .catch((failure: unknown) => { if (!controller.signal.aborted) read = { space: current, error: failure instanceof Error ? failure.message : 'could not read who can listen.' }; });
     return () => controller.abort();
@@ -47,6 +48,7 @@
   let busy = $state(false);
   let error = $state('');
 
+  let root: HTMLDivElement;
   async function run(work: () => Promise<void>, done: string) {
     busy = true;
     error = '';
@@ -57,6 +59,8 @@
       text = '';
       attempt++;
       onchange?.();
+      await tick();
+      if (!root.contains(document.activeElement)) root.querySelector<HTMLElement>('button:not(:disabled), a, p')?.focus();
     } catch (failure) { error = failure instanceof Error ? failure.message : 'could not save that. try again.'; }
     finally { busy = false; }
   }
@@ -90,7 +94,7 @@
   const errorId = $props.id();
 </script>
 
-<div class="access">
+<div class="access" bind:this={root}>
   {#if !account.policyEditing || !account.closing}
     <p>reconnect to choose who can listen to your music.</p>
     <a class="text-button strong" href={`${resolve('/(app)/login')}?${new URLSearchParams({ return_to: returnTo })}`}>reconnect</a>

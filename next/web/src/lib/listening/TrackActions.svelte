@@ -22,7 +22,7 @@
   let error = $state(false);
   let account = $state.raw(auth.getAuth());
   const id = $props.id();
-  onMount(() => auth.subscribe(() => { const next = auth.getAuth(); if (next.rpc !== account.rpc) { picker?.close(); picking = false; } account = next; }));
+  onMount(() => auth.subscribe(() => { const next = auth.getAuth(); if (next.rpc !== account.rpc) { picker?.close(); picking = false; accessDialog?.close(); } account = next; }));
   const owner = $derived(!!account.did && account.did === track.artist.did && !isPrivateTrack(track));
   const queueable = $derived(player.canEditPublicQueue && !player.liveStation);
   function show(place: () => void) {
@@ -104,7 +104,7 @@
 <dialog bind:this={accessDialog} class="picker" onclose={() => { access = false; trigger.focus(); if (accessChanged) void invalidateAll(); }}>
   <header><strong>who can listen</strong><form method="dialog"><button class="icon-button" type="submit" aria-label="Close who can listen"><Icon name="x" size={18} /></button></form></header>
 {#if access}
-  {#await import('$lib/access/AccessDialog.svelte') then { default: Access }}<Access subject={{ noun: 'track', tracks: [track], skey: track.record.rkey }} returnTo={trackHref(track)} onchange={() => { accessChanged = true; }} />{/await}
+  {#await import('$lib/access/AccessDialog.svelte') then { default: Access }}<Access subject={{ noun: 'track', tracks: [track], skey: track.record.rkey }} returnTo={trackHref(track)} onchange={() => { accessChanged = true; }} />{:catch}<p role="alert">could not open this. reload the page and try again.</p>{/await}
 {/if}
 </dialog>
 
