@@ -443,10 +443,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     },
     enqueueAll: (tracks, label) => {
       const available = tracks.filter(track => track.record.cid && !isPrivateTrack(track));
-      if (!available.length) return;
-      if (privateMode.current) { toast.info('play a public track to change queues'); return; }
-      toast.success(`queued ${label}`, 3000, viewQueue);
-      if (!jam.enqueue(available)) personal.enqueueCollection(available);
+      if (privateMode.current) toast.info('play a public track to change queues'); else if (available.length) { toast.success(`queued ${label}`, 3000, viewQueue); if (!jam.enqueue(available)) personal.enqueueCollection(available); }
     },
     playNext: (track) => {
       if (isPrivateTrack(track)) { if (privateMode.current && track.artist.did === auth.did) setQueue(items => [...items.slice(0, index + 1), track, ...items.slice(index + 1)]); else play(track); return; }
