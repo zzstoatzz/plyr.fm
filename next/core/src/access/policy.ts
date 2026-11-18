@@ -1,7 +1,7 @@
 import type { Track } from '../api.ts';
 
 // mirrors next/backend/src/internal/space/policy.zig: strict parse, unknown
-// rules ignored, passing any one policy opens the whole space.
+// rules ignored, passing any one policy opens every space it names.
 
 export type Rule =
   | { kind: 'signedIn' }
@@ -9,7 +9,10 @@ export type Rule =
   | { kind: 'supporter'; brokers?: string[] }
   | { kind: 'purchase'; amount: number; currency: string; brokers?: string[] };
 
-export interface Policy { uri: string; cid: string; rkey: string; space: string; rule: Rule; title?: string }
+/** `spaces` are the spaces this policy opens; `subject` is the release or track it sells or grants, when named */
+export interface Policy { uri: string; cid: string; rkey: string; spaces: string[]; rule: Rule; title?: string; subject?: string }
+
+const MAX_SPACES = 16;
 
 const DID = /^did:[a-z]+:[a-zA-Z0-9._:%-]+$/;
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
@@ -57,18 +60,30 @@ function rule(value: unknown, policyCollection: string): Rule | undefined {
 export function parsePolicy(item: unknown, author: string, { audioSpaceType, policyCollection }: { audioSpaceType: string; policyCollection: string }): Policy | undefined {
   if (!object(item) || typeof item.uri !== 'string' || typeof item.cid !== 'string' || !object(item.value)) return undefined;
   const prefix = `at://${author}/${policyCollection}/`;
-  if (!item.uri.startsWith(prefix) || item.value.$type !== policyCollection || typeof item.value.space !== 'string') return undefined;
-  const parts = spaceParts(item.value.space);
-  if (!parts || parts.authority !== author || parts.type !== audioSpaceType) return undefined;
+  if (!item.uri.startsWith(prefix) || item.value.$type !== policyCollection) return undefined;
+  const spaces = spaceList(item.value);
+  if (!spaces?.every(space => { const parts = spaceParts(space); return parts?.authority === author && parts.type === audioSpaceType; })) return undefined;
   const parsed = rule(item.value.rule, policyCollection);
   if (!parsed) return undefined;
   const title = typeof item.value.title === 'string' && item.value.title.trim() ? item.value.title.trim() : undefined;
-  return { uri: item.uri, cid: item.cid, rkey: item.uri.slice(prefix.length), space: item.value.space, rule: parsed, ...(title ? { title } : {}) };
+  const subject = typeof item.value.subject === 'string' && item.value.subject.startsWith(`at://${author}/`) ? item.value.subject : undefined;
+  return { uri: item.uri, cid: item.cid, rkey: item.uri.slice(prefix.length), spaces, rule: parsed, ...(title ? { title } : {}), ...(subject ? { subject } : {}) };
 }
 
-export function policyRecord(policyCollection: string, space: string, value: Rule, title?: string) {
+/** `spaces`, or the single `space` older records carry; never both */
+function spaceList(value: Record<string, unknown>): string[] | undefined {
+  if (value.space !== undefined && value.spaces !== undefined) return undefined;
+  if (typeof value.space === 'string') return [value.space];
+  const list = value.spaces;
+  return Array.isArray(list) && list.length >= 1 && list.length <= MAX_SPACES && list.every(entry => typeof entry === 'string') ? list as string[] : undefined;
+}
+
+export function policyRecord(policyCollection: string, spaces: string[], value: Rule, title?: string, subject?: string) {
   const { kind, ...fields } = value;
-  return { $type: policyCollection, space, rule: { $type: `${policyCollection}#${kind}`, ...fields }, ...(title?.trim() ? { title: title.trim() } : {}), createdAt: new Date().toISOString() };
+  return {
+    $type: policyCollection, spaces, rule: { $type: `${policyCollection}#${kind}`, ...fields },
+    ...(title?.trim() ? { title: title.trim() } : {}), ...(subject ? { subject } : {}), createdAt: new Date().toISOString(),
+  };
 }
 
 export function formatPrice(amount: number, currency: string): string {

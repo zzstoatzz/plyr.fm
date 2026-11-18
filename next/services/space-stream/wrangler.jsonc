@@ -5,7 +5,7 @@
   "compatibility_date": "2026-08-01",
   "workers_dev": true,
   "observability": { "enabled": true },
-  "vars": { "SPACE_TYPES": "fm.plyr.stg.audio,fm.plyr.next.audio" },
+  "vars": { "SPACE_TYPES": "fm.plyr.next.audio" },
   "durable_objects": { "bindings": [{ "name": "FEED", "class_name": "SpaceFeed" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SpaceFeed"] }]
 }

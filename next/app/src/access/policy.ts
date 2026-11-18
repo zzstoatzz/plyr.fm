@@ -13,6 +13,6 @@ export function parsePolicy(item: unknown, author: string) {
   return parse(item, author, { audioSpaceType: AUDIO_SPACE_TYPE, policyCollection: NSID.policy });
 }
 
-export function policyRecord(space: string, rule: Rule, title?: string) {
-  return record(NSID.policy, space, rule, title);
+export function policyRecord(spaces: string[], rule: Rule, title?: string, subject?: string) {
+  return record(NSID.policy, spaces, rule, title, subject);
 }

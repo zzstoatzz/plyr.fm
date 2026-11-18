@@ -24,7 +24,8 @@ export function createAuthConfig(options: Options = {}) {
     like: `${prefix}.like`,
     comment: `${prefix}.comment`,
     profile: `${prefix}.actor.profile`,
-    policy: `${prefix}.policy`
+    policy: `${prefix}.policy`,
+    release: `${prefix}.release`
   } as const;
 
   const AUDIO_SPACE_TYPE = options.audioSpaceType || 'fm.plyr.next.audio';

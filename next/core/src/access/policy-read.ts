@@ -18,7 +18,7 @@ export async function listPolicies(config: Config, author: string, space: string
     const records = body && typeof body === 'object' && 'records' in body && Array.isArray(body.records) ? body.records : [];
     for (const item of records) {
       const policy = parsePolicy(item, author, config);
-      if (policy?.space === space) found.push(policy);
+      if (policy?.spaces.includes(space)) found.push(policy);
     }
     cursor = body && typeof body === 'object' && 'cursor' in body && typeof body.cursor === 'string' && records.length ? body.cursor : undefined;
     if (!cursor) return found;
