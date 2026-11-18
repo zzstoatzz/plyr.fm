@@ -16,6 +16,8 @@ import { trackEditor } from './publishing/track-pds';
 import { assertPublicUploadRecord } from './publishing/upload-model';
 import type { MediaFile } from './publishing/private-music';
 import type { CatalogScope } from './catalog/changes';
+import { AVATAR_TYPES, MAX_AVATAR_BYTES, editedProfile, type ProfileEdits, type ProfileRecord } from './profile-record';
+export type { ProfileEdits, ProfileRecord } from './profile-record';
 
 export type { MediaFile } from './publishing/private-music';
 
@@ -51,16 +53,6 @@ export interface NewTrack {
 	autoTag?: boolean;
 	/** cover art, stored on your PDS as imageBlob */
 	artwork?: MediaFile | null;
-}
-
-export interface ProfileRecord {
-	$type?: string;
-	displayName?: string;
-	bio?: string;
-	avatar?: string;
-	createdAt?: string;
-	updatedAt?: string;
-	[key: string]: unknown;
 }
 
 async function uploadBlob(rpc: RepoRpc, file: MediaFile, assertSession: () => void) {
@@ -451,21 +443,15 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 	}
 
 	async function saveProfile(
-		edits: { bio: string; avatar: string },
+		edits: ProfileEdits & { avatarFile?: MediaFile | null },
 		current: { value: ProfileRecord | null; cid: string | null }
 	): Promise<AwaitStatus> {
 		assertSession();
 		const { rpc, did } = session();
-		const now = new Date().toISOString();
-		const record: ProfileRecord = { ...(current.value ?? {}), $type: NSID.profile, createdAt: current.value?.createdAt ?? now };
-		// only fields the published fm.plyr.actor.profile lexicon has; display
-		// names come from the bluesky profile (via typeahead).
-		for (const key of ['bio', 'avatar'] as const) {
-			const text = edits[key].trim();
-			if (text) record[key] = text;
-			else delete record[key];
-		}
-		if (current.value) record.updatedAt = now;
+		const { avatarFile, ...rest } = edits;
+		if (avatarFile !== undefined) rest.image = avatarFile && await uploadAvatar(avatarFile);
+		assertSession();
+		const record = editedProfile(current.value, rest, NSID.profile, new Date().toISOString());
 		const res = await ok(
 			putRecord(rpc, {
 				input: {
@@ -478,6 +464,15 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 			})
 		);
 		return await settle(res.uri, res.cid);
+	}
+
+	async function uploadAvatar(file: MediaFile): Promise<{ blob: unknown; url: string }> {
+		const { rpc, did } = session();
+		if (!(AVATAR_TYPES as readonly string[]).includes(file.type)) throw new Error('choose a PNG or JPEG avatar');
+		if (file.size > MAX_AVATAR_BYTES) throw new Error('avatars are limited to 1 MB');
+		const uploaded = await uploadBlob(rpc, file, assertSession);
+		const cid = (uploaded.blob as { ref: { $link: string } }).ref.$link;
+		return { blob: uploaded.blob, url: await blobUrl(did, cid) };
 	}
 
 	/**
