@@ -103,7 +103,10 @@ pub const PostgresTrackStore = struct {
             .indexed_at_us = change.proof.indexed_at_us,
         });
         if (result != .stale) {
-            _ = conn.exec("UPDATE plyr_index.track_records SET download_policy = $3 WHERE record_uri = $1 AND record_cid = $2", .{ change.record_uri, change.record_cid, change.download_policy }) catch return error.ProjectionUnavailable;
+            _ = conn.exec(
+                "UPDATE plyr_index.track_records SET download_policy = $3, record_json = COALESCE($4::jsonb, record_json) WHERE record_uri = $1 AND record_cid = $2",
+                .{ change.record_uri, change.record_cid, change.download_policy, change.record_json },
+            ) catch return error.ProjectionUnavailable;
             _ = conn.exec(upsert_tags_sql, .{ change.record_uri, change.record_cid, change.tags, change.tags_present }) catch |err| {
                 std.log.err("track tag projection upsert failed: {}", .{err});
                 return error.ProjectionUnavailable;
@@ -285,6 +288,7 @@ const upsert_record_sql =
     \\  support_gate_type = EXCLUDED.support_gate_type,
     \\  audio_space = EXCLUDED.audio_space,
     \\  download_policy = NULL,
+    \\  record_json = NULL,
     \\  description = EXCLUDED.description,
     \\  self_labels = EXCLUDED.self_labels,
     \\  deleted = EXCLUDED.deleted,
@@ -355,6 +359,7 @@ pub fn createTestTable(pool: *pg.Pool) !void {
         \\)
     , .{});
     _ = try pool.exec(@embedFile("migration_0038_download_policy"), .{});
+    _ = try pool.exec(@embedFile("migration_0047_track_record_json"), .{});
     try created_at_us.addTestColumn(pool, "track_records");
     var statements = std.mem.splitScalar(u8, @embedFile("migration_0032_track_tags"), ';');
     while (statements.next()) |raw| {
@@ -409,6 +414,13 @@ test "PostgreSQL track projection replaces complete records and keeps tombstones
     upsert_1.upsert.tags_present = true;
     upsert_1.upsert.tags = &.{ "  Hip-Hop  ", "HIP-HOP", "-Ambient-" };
     try std.testing.expectEqual(ApplyResult.applied, try store.apply(a, upsert_1));
+    upsert_1.upsert.record_json = "{\"title\":\"One\"}";
+    try std.testing.expectEqual(ApplyResult.idempotent, try store.apply(a, upsert_1));
+    try expectRecordJson(pool, "{\"title\": \"One\"}");
+    // rows projected before the column existed fill in on the next replay
+    _ = try pool.exec("UPDATE plyr_index.track_records SET record_json = NULL", .{});
+    try std.testing.expectEqual(ApplyResult.idempotent, try store.apply(a, upsert_1));
+    try expectRecordJson(pool, "{\"title\": \"One\"}");
     var tags_row = (try pool.row("SELECT array_to_json(tags)::text,tags_present FROM plyr_index.track_tag_records", .{})).?;
     try std.testing.expectEqualStrings("[\"ambient\",\"hip-hop\"]", try tags_row.get([]const u8, 0));
     try std.testing.expect(try tags_row.get(bool, 1));
@@ -431,6 +443,7 @@ test "PostgreSQL track projection replaces complete records and keeps tombstones
     try std.testing.expectEqual(ApplyResult.applied, try store.apply(a, upsert_2));
     try std.testing.expectEqual(ApplyResult.stale, try store.apply(a, upsert_1));
     try expectTrack(pool, "Two", &rev_2.str(), false);
+    try expectRecordJson(pool, null);
     var unknown_policy = (try pool.row("SELECT download_policy FROM plyr_index.track_records", .{})).?;
     try std.testing.expect((try unknown_policy.get(?[]const u8, 0)) == null);
     try unknown_policy.deinit();
@@ -451,6 +464,7 @@ test "PostgreSQL track projection replaces complete records and keeps tombstones
     } };
     try std.testing.expectEqual(ApplyResult.applied, try store.apply(a, deletion));
     try expectTrack(pool, null, &zat.Tid.fromTimestamp(3_000, 1).str(), true);
+    try expectRecordJson(pool, null);
     var deleted_policy = (try pool.row("SELECT download_policy FROM plyr_index.track_records", .{})).?;
     try std.testing.expect((try deleted_policy.get(?[]const u8, 0)) == null);
     try deleted_policy.deinit();
@@ -490,6 +504,12 @@ fn requireDisposableDatabase(pool: *pg.Pool, allocator: std.mem.Allocator) !void
 
 fn cidString(allocator: std.mem.Allocator, seed: []const u8) ![]const u8 {
     return (try zat.Cid.forDagCbor(allocator, seed)).toString(allocator);
+}
+
+fn expectRecordJson(pool: *pg.Pool, expected: ?[]const u8) !void {
+    var row = (try pool.row("SELECT record_json::text FROM plyr_index.track_records WHERE rkey = '3m123abc'", .{})).?;
+    defer row.deinit() catch {};
+    try std.testing.expect(optionalEql(try row.get(?[]const u8, 0), expected));
 }
 
 fn expectTrack(pool: *pg.Pool, title: ?[]const u8, rev: []const u8, deleted: bool) !void {

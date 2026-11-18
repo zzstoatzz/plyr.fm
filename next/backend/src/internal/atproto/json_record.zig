@@ -70,6 +70,55 @@ pub fn verified(arena: std.mem.Allocator, value: std.json.Value, cid_text: []con
     return .{ .value = record, .cid = claimed };
 }
 
+/// Render a record as atproto JSON, the inverse of `toCbor`: CID links become
+/// `{"$link": cid}` and bytes become `{"$bytes": base64}`.
+pub fn toJson(arena: std.mem.Allocator, value: cbor.Value) error{OutOfMemory}![]const u8 {
+    var out: std.Io.Writer.Allocating = .init(arena);
+    writeJson(arena, &out.writer, value) catch return error.OutOfMemory;
+    return out.written();
+}
+
+fn writeJson(arena: std.mem.Allocator, writer: *std.Io.Writer, value: cbor.Value) error{ OutOfMemory, WriteFailed }!void {
+    switch (value) {
+        .unsigned => |number| try writer.print("{d}", .{number}),
+        .negative => |number| try writer.print("{d}", .{number}),
+        .float => |number| try std.json.Stringify.value(number, .{}, writer),
+        .boolean => |flag| try writer.writeAll(if (flag) "true" else "false"),
+        .null => try writer.writeAll("null"),
+        .text => |text| try std.json.Stringify.value(text, .{}, writer),
+        .bytes => |bytes| {
+            const encoder = std.base64.standard_no_pad.Encoder;
+            const encoded = try arena.alloc(u8, encoder.calcSize(bytes.len));
+            try writer.writeAll("{\"$bytes\":\"");
+            try writer.writeAll(encoder.encode(encoded, bytes));
+            try writer.writeAll("\"}");
+        },
+        .cid => |cid| {
+            try writer.writeAll("{\"$link\":\"");
+            try writer.writeAll(cid.toString(arena) catch return error.OutOfMemory);
+            try writer.writeAll("\"}");
+        },
+        .array => |items| {
+            try writer.writeByte('[');
+            for (items, 0..) |item, index| {
+                if (index != 0) try writer.writeByte(',');
+                try writeJson(arena, writer, item);
+            }
+            try writer.writeByte(']');
+        },
+        .map => |entries| {
+            try writer.writeByte('{');
+            for (entries, 0..) |entry, index| {
+                if (index != 0) try writer.writeByte(',');
+                try std.json.Stringify.value(entry.key, .{}, writer);
+                try writer.writeByte(':');
+                try writeJson(arena, writer, entry.value);
+            }
+            try writer.writeByte('}');
+        },
+    }
+}
+
 fn decodeBase64(arena: std.mem.Allocator, text: []const u8) Error![]const u8 {
     // atproto JSON uses unpadded standard base64; accept padded input too.
     const trimmed = std.mem.trimEnd(u8, text, "=");
@@ -114,4 +163,17 @@ test "jetstream JSON round-trips to the record CID" {
         \\{"title":"another song","$type":"fm.plyr.dev.track"}
     , .{});
     try std.testing.expectError(error.RecordCidMismatch, verified(arena, tampered, cid_text));
+}
+
+test "records render back to the atproto JSON they came from" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const link = try (try zat.Cid.forDagCbor(arena, "audio")).toString(arena);
+    const json_text = try std.fmt.allocPrint(arena,
+        \\{{"$type":"fm.plyr.track","title":"a \"song\"","duration":180,"offset":-3,"explicit":false,"note":null,"sig":{{"$bytes":"AQID"}},"tags":["ambient","ai"],"audioBlob":{{"$type":"blob","ref":{{"$link":"{s}"}},"mimeType":"audio/mpeg","size":1234}}}}
+    , .{link});
+    const parsed = try std.json.parseFromSliceLeaky(std.json.Value, arena, json_text, .{});
+    const rendered = try toJson(arena, try toCbor(arena, parsed));
+    try std.testing.expectEqualStrings(json_text, rendered);
 }
