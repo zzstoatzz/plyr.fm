@@ -147,7 +147,7 @@ export function createJamPlayback(options: JamPlaybackOptions) {
         const request = generation;
         const connection = work.connection;
         const ref = work.state.queue[work.state.index];
-        if (!ref) { target().clear(); continue; }
+        if (!ref) { target().clear(); update({ pendingSeekMs: undefined }); continue; }
         try {
           const track = await trackFor(ref);
           if (request !== generation || connection !== session) continue;
@@ -156,7 +156,7 @@ export function createJamPlayback(options: JamPlaybackOptions) {
           const changed = occurrence !== `${work.state.epoch}/${work.state.occurrence}` || target().current?.id !== track.id;
           if (changed || !target().ready) {
             occurrence = `${work.state.epoch}/${work.state.occurrence}`;
-            if (!await target().load([track], 0)) continue;
+            if (!await target().load([track], 0)) { if (request === generation && connection === session) update({ pendingSeekMs: undefined }); continue; }
             await target().loaded();
           }
           if (request !== generation || connection !== session || !sameOccurrence()) continue;
@@ -178,7 +178,7 @@ export function createJamPlayback(options: JamPlaybackOptions) {
           else if (!desired && target().playing()) target().pause();
           void hydrateQueue(connection.state!, work.version, connection);
         } catch (failure) {
-          if (request === generation && connection === session) update({ error: failure instanceof Error ? failure.message : 'could not play this jam' });
+          if (request === generation && connection === session) update({ error: failure instanceof Error ? failure.message : 'could not play this jam', pendingSeekMs: undefined });
         }
       }
     } finally { if (synchronizationId === synchronization) synchronizing = false; }
