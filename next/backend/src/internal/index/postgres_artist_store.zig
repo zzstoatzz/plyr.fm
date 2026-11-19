@@ -254,6 +254,9 @@ test "artist resolution returns ordered visible music and current profile artwor
     if (!safe) return error.UnsafeTestDatabase;
     _ = try postgres.pool.exec("DROP SCHEMA IF EXISTS plyr_index CASCADE", .{});
     _ = try postgres.pool.exec("CREATE SCHEMA plyr_index", .{});
+    _ = try postgres.pool.exec("DROP SCHEMA IF EXISTS plyr_account CASCADE", .{});
+    defer _ = postgres.pool.exec("DROP SCHEMA IF EXISTS plyr_account CASCADE", .{}) catch null;
+    _ = try postgres.pool.exec(@embedFile("migration_0036_account_preferences"), .{});
     _ = try postgres.pool.exec("CREATE TABLE plyr_index.actor_identities (did text PRIMARY KEY, handle text, display_name text, avatar_url text)", .{});
     _ = try postgres.pool.exec("CREATE TABLE plyr_index.profile_records (owner_did text, collection text, rkey text, deleted boolean, avatar text)", .{});
     _ = try postgres.pool.exec("CREATE TABLE plyr_index.account_availability (repo_did text PRIMARY KEY, available boolean, evidence_source text DEFAULT 'verified_repository')", .{});
@@ -293,6 +296,16 @@ test "artist resolution returns ordered visible music and current profile artwor
     _ = try postgres.pool.exec("UPDATE plyr_index.profile_records SET record_uri='at://' || owner_did || '/' || collection || '/' || rkey", .{});
     const authored = (try implementation.get(arena.allocator(), .{ .did = "did:plc:second" })).?;
     try std.testing.expectEqualStrings("https://example.com/profile", authored.avatar_url.?);
+    try std.testing.expectEqual(@as(?[]const u8, null), authored.support_url);
+    try std.testing.expectEqual(@as(usize, 0), authored.offers.len);
+    _ = try postgres.pool.exec(
+        \\INSERT INTO plyr_account.preferences (owner_did, value) VALUES ('did:plc:second', '{"supportUrl":"https://ko-fi.com/second","buyLinks":[{"subject":"at://did:plc:second/fm.plyr.list/a","url":"https://second.bandcamp.com/album/a","amount":800,"currency":"USD"},{"subject":"at://did:plc:second/fm.plyr.list/b","url":"javascript:alert(1)"}]}')
+    , .{});
+    const selling = (try implementation.get(arena.allocator(), .{ .did = "did:plc:second" })).?;
+    try std.testing.expectEqualStrings("https://ko-fi.com/second", selling.support_url.?);
+    try std.testing.expectEqual(@as(usize, 1), selling.offers.len);
+    try std.testing.expectEqualStrings("https://second.bandcamp.com/album/a", selling.offers[0].url);
+    try std.testing.expectEqual(@as(?i64, 800), selling.offers[0].amount);
     try std.testing.expectEqual(artist.ClaimSource.verified_repo, authored.sources.avatar);
     _ = try postgres.pool.exec("UPDATE plyr_index.profile_records SET avatar='https://cdn.bsky.app/img/avatar/plain/did:plc:second/stale'", .{});
     const copied = (try implementation.get(arena.allocator(), .{ .did = "did:plc:second" })).?;
