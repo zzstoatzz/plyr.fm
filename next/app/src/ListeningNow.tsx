@@ -24,10 +24,12 @@ function useListeningNow(did: string) {
     const controller = new AbortController();
     let refresh: ReturnType<typeof setTimeout> | undefined;
     let current: ListeningNow | null = null;
+    let loading = false;
     async function load() {
       clearTimeout(refresh);
-      if (AppState.currentState !== 'active') return;
-      const next = await readListeningNow(did, { signal: controller.signal });
+      if (loading || AppState.currentState !== 'active') return;
+      loading = true;
+      const next = await readListeningNow(did, { signal: controller.signal }).finally(() => { loading = false; });
       if (controller.signal.aborted) return;
       current = next;
       setStatus(next);

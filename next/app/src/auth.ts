@@ -1,5 +1,5 @@
 import { ExpoOAuthClient, TokenInvalidError, TokenRefreshError, TokenRevokedError, type OAuthSession } from '@atproto/oauth-client-expo';
-import { hasTealGrant, TEAL_SCOPE_PARTS } from '@plyr/next-core/teal-scrobble';
+import { hasTealGrant, hasTealPlayGrant, TEAL_SCOPE_PARTS } from '@plyr/next-core/teal-scrobble';
 import { NATIVE_REDIRECT_URI, BASE_SCOPE_PARTS, SCOPE_PARTS, SITE_URL } from './auth-config';
 import { restoreWithin, type RestoreOutcome } from './auth-restore';
 import { clearAuth, getAuth, scopeFor, setAuth } from './auth-state';
@@ -97,6 +97,10 @@ export async function createAccount(provider: string, _intent?: string) {
 
 export function canScrobble() {
 	return !!getAuth().did && hasTealGrant(grantedScope);
+}
+
+export function canLogPlays() {
+	return !!getAuth().did && hasTealPlayGrant(grantedScope);
 }
 
 export async function authorizeScrobbling() {

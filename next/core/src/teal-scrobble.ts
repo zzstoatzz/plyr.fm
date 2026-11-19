@@ -17,8 +17,14 @@ function grants(scope: string, collection: string, actions: string[]) {
 	});
 }
 
+/** enough to log plays; sessions from before now-playing hold only this */
+export function hasTealPlayGrant(scope: string): boolean {
+	return grants(scope, TEAL_PLAY, ['create']);
+}
+
+/** everything the teal.fm switch asks for */
 export function hasTealGrant(scope: string): boolean {
-	return grants(scope, TEAL_PLAY, ['create']) && grants(scope, TEAL_STATUS, ['create', 'update']);
+	return hasTealPlayGrant(scope) && grants(scope, TEAL_STATUS, ['create', 'update']);
 }
 
 function tealLabel(value: string) {
@@ -104,7 +110,8 @@ type Observed = { track: Track | null; playing: boolean; positionSeconds: number
  * so skipping through a queue writes once.
  */
 export function tealStatusWriter({ write, origin, settle = 2000, now = Date.now }: {
-	write: (record: TealStatus) => Promise<void>;
+	/** resolves false when it chose not to write (no consent yet, signed out), which is retried later */
+	write: (record: TealStatus) => Promise<boolean>;
 	origin: (track: Track) => string;
 	settle?: number;
 	now?: () => number;
@@ -114,6 +121,8 @@ export function tealStatusWriter({ write, origin, settle = 2000, now = Date.now 
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	let writing = false;
 	let retryAt = 0;
+	let generation = 0;
+	let backingOff = false;
 
 	function wanted(): Shown | null {
 		const { track, playing, positionSeconds } = latest;
@@ -130,29 +139,37 @@ export function tealStatusWriter({ write, origin, settle = 2000, now = Date.now 
 		writing = true;
 		const want = wanted();
 		const previous = shown;
+		const current = generation;
+		let written = true;
 		try {
 			const at = now();
 			const record = want
 				? tealStatus(want.track, want.startedAt, at, origin(want.track))
 				: previous && tealStatus(previous.track, previous.startedAt, at, origin(previous.track), at);
 			shown = want;
-			if (record) await write(record);
+			if (record) written = await write(record);
 		} catch {
-			shown = previous;
-			retryAt = now() + 30_000;
+			written = false;
 		} finally {
 			writing = false;
-			if (stale() && now() >= retryAt) schedule();
+			if (current === generation) {
+				if (!written) {
+					shown = previous;
+					retryAt = now() + 30_000;
+				}
+				if (stale()) schedule(Math.max(settle, retryAt - now()));
+			}
 		}
 	}
-	function schedule() {
+	function schedule(delay = settle) {
 		clearTimeout(timer);
-		timer = setTimeout(() => void flush(), settle);
+		backingOff = delay > settle;
+		timer = setTimeout(() => void flush(), delay);
 	}
 	return {
 		observe(next: Observed) {
 			latest = next;
-			if (stale()) { if (!timer && now() >= retryAt) schedule(); }
+			if (stale()) { if ((!timer || backingOff) && now() >= retryAt) schedule(); }
 			else { clearTimeout(timer); timer = undefined; }
 		},
 		/** forget what was shown, e.g. after the account changes; the old status runs out on its own */
@@ -161,6 +178,7 @@ export function tealStatusWriter({ write, origin, settle = 2000, now = Date.now 
 			timer = undefined;
 			shown = null;
 			retryAt = 0;
+			generation++;
 			latest = { track: null, playing: false, positionSeconds: 0 };
 		}
 	};

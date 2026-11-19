@@ -624,10 +624,8 @@ class Player {
 				monotonicMs: performance.now(),
 				playbackRate: audio.playbackRate
 			});
-			if (play) {
-				this.#outbox?.enqueue(play);
-				if (!this.#embedded && this.#mediaTrack) void scrobble(this.#mediaTrack, play);
-			}
+			if (play) this.#outbox?.enqueue(play);
+			if (play && !this.#embedded && this.#mediaTrack) void scrobble(this.#mediaTrack, play);
 			if (!this.#embedded) showNowPlaying(this.#mediaTrack, this.playing, audio.currentTime);
 			this.#jam?.observe();
 		};

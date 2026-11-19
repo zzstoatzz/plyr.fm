@@ -40,6 +40,10 @@ test('malformed records show nothing and unsafe links are dropped', () => {
 	assert.equal(shown?.duration, undefined);
 	assert.equal(listeningNow(status({ originUri: 'https://open.spotify.com/track/x' }), now)?.link, 'https://open.spotify.com/track/x');
 	assert.equal(listeningNow(status({ originUri: 'https://next.plyr.fm/track/trk_1/' }), now)?.plyrTrack, 'trk_1');
+	for (const odd of ['https://plyr.fm/track/x%2F', 'https://plyr.fm/track/..%2Fsettings']) {
+		const shown = listeningNow(status({ originUri: odd }), now);
+		assert.deepEqual([shown?.plyrTrack, shown?.link], [undefined, undefined], odd);
+	}
 });
 
 test('a play time in the future starts the clock now', () => {

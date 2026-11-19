@@ -2,18 +2,18 @@ import type { Track } from '@plyr/next-core/api';
 import type { QualifiedPlay } from '@plyr/next-core/listening-session';
 import { RepoResponseError } from '@plyr/next-core/publishing/repo-rpc';
 import { tealPlay, tealStatusWriter, writeTealPlay, writeTealStatus } from '@plyr/next-core/teal-scrobble';
-import { canScrobble } from './auth';
+import { canLogPlays, canScrobble } from './auth';
 import { SITE_URL } from './auth-config';
 import { getAuth, type Did } from './auth-state';
 
 export async function scrobble(track: Track, play: QualifiedPlay, expectedDid: Did | null, confirmConsent: (did: Did) => Promise<boolean>) {
   const { did, rpc } = getAuth();
-  if (!did || did !== expectedDid || !rpc || !canScrobble()) return;
+  if (!did || did !== expectedDid || !rpc || !canLogPlays()) return;
   const record = tealPlay(track, play, Date.now(), `${SITE_URL}/track/${encodeURIComponent(String(track.legacy_id ?? track.id))}`);
   if (!record) return;
   for (const delay of [0, 1000, 4000]) {
     if (delay) await new Promise(resolve => setTimeout(resolve, delay));
-    if (!await confirmConsent(did).catch(() => false) || getAuth().rpc !== rpc || !canScrobble()) return;
+    if (!await confirmConsent(did).catch(() => false) || getAuth().rpc !== rpc || !canLogPlays()) return;
     try {
       await writeTealPlay(rpc, did, record);
       return;
@@ -29,8 +29,9 @@ const nowPlaying = tealStatusWriter({
   origin: track => `${SITE_URL}/track/${encodeURIComponent(String(track.legacy_id ?? track.id))}`,
   write: async record => {
     const { did, rpc } = getAuth();
-    if (!did || did !== statusAccount || !rpc || !canScrobble() || !await statusConsent(did).catch(() => false) || getAuth().rpc !== rpc) return;
+    if (!did || did !== statusAccount || !rpc || !canScrobble() || !await statusConsent(did).catch(() => false) || getAuth().rpc !== rpc) return false;
     await writeTealStatus(rpc, did, record);
+    return true;
   },
 });
 

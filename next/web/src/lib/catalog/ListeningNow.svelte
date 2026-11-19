@@ -18,10 +18,12 @@
 	onMount(() => {
 		const controller = new AbortController();
 		let refresh: ReturnType<typeof setTimeout> | undefined;
+		let loading = false;
 		async function load() {
 			clearTimeout(refresh);
-			if (document.visibilityState === 'hidden') return;
-			const next = await readListeningNow(did, { signal: controller.signal });
+			if (loading || document.visibilityState === 'hidden') return;
+			loading = true;
+			const next = await readListeningNow(did, { signal: controller.signal }).finally(() => { loading = false; });
 			if (controller.signal.aborted) return;
 			status = next;
 			now = Date.now();

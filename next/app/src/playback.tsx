@@ -197,13 +197,12 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
       }
       objectUrl.current = availability === 'gated' ? url : null;
       if (previousSource) releaseGatedAudioUrl(previousSource);
-      if (!privateTrack) accounting.begin(track.id, track.metadata.duration_seconds, play => {
-        if (availability === 'available') void scrobble(track, play, auth.did, confirmScrobblingConsent);
-      });
+      const scrobbles = availability === 'available';
+      if (!privateTrack) accounting.begin(track.id, track.metadata.duration_seconds, play => { if (scrobbles) void scrobble(track, play, auth.did, confirmScrobblingConsent); });
       let settled = false;
       sourceEvents.current = player.addListener('playbackStatusUpdate', (event) => {
         if (request !== sequence.current) return;
-        if (!privateTrack && availability === 'available') showNowPlaying(track, event.playing, player.currentTime, auth.did, confirmScrobblingConsent);
+        showNowPlaying(scrobbles ? track : null, event.playing, player.currentTime, auth.did, confirmScrobblingConsent);
         if (event.error) {
           recordPlayback("player error", { request, error: String(event.error), elapsedMs: Date.now() - startedAt });
           setStarting((pending) => pending === request ? null : pending);

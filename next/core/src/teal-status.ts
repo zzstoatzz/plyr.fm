@@ -38,7 +38,7 @@ function origin(value: unknown): Pick<ListeningNow, 'plyrTrack' | 'link'> {
 	try { url = new URL(raw); } catch { return {}; }
 	if (url.protocol !== 'https:') return {};
 	const track = PLYR_HOSTS.has(url.hostname) ? /^\/track\/([^/]+)\/?$/.exec(url.pathname)?.[1] : undefined;
-	if (track) return { plyrTrack: decodeURIComponent(track) };
+	if (track) return /^[A-Za-z0-9_-]+$/.test(track) ? { plyrTrack: track } : {};
 	return { link: url.href };
 }
 

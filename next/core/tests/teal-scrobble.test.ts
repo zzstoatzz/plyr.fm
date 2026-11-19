@@ -3,7 +3,7 @@ import test from 'node:test';
 import type { Track } from '../src/api.ts';
 import { createAuthConfig } from '../src/auth-config.ts';
 import { oauthMetadata } from '../src/oauth-metadata.ts';
-import { hasTealGrant, tealPlay, tealStatus, tealStatusWriter, TEAL_SCOPE_PARTS, writeTealPlay, type TealStatus } from '../src/teal-scrobble.ts';
+import { hasTealGrant, hasTealPlayGrant, tealPlay, tealStatus, tealStatusWriter, TEAL_SCOPE_PARTS, writeTealPlay, type TealStatus } from '../src/teal-scrobble.ts';
 import type { RepoRpc } from '../src/publishing/repo-rpc.ts';
 
 const track: Track = {
@@ -24,6 +24,7 @@ test('Teal consent is advertised by both clients and excluded from ordinary logi
 	assert.equal(hasTealGrant(oauthMetadata(config, 'native').scope), true);
 	assert.equal(hasTealGrant(TEAL_SCOPE_PARTS.join(' ')), true);
 	assert.equal(hasTealGrant(TEAL_SCOPE_PARTS[0]), false, 'a play-only grant from before now-playing asks again');
+	assert.equal(hasTealPlayGrant(TEAL_SCOPE_PARTS[0]), true, 'and still logs plays meanwhile');
 	assert.equal(hasTealGrant(`${TEAL_SCOPE_PARTS[0]} repo:fm.teal.actor.status?action=create`), false);
 	assert.equal(hasTealGrant(TEAL_SCOPE_PARTS.join(' ').replace('feed.play?action=create', 'feed.play?action=delete')), false);
 	assert.equal(hasTealGrant('repo:fm.teal.feed.play repo:fm.teal.actor.status'), true);
@@ -80,7 +81,7 @@ test('now playing runs to the end of the track, or the lexicon default when the 
 test('the writer sets now playing once the player settles, re-sets after a seek, and ends it on pause', async () => {
 	let clock = time;
 	const written: TealStatus[] = [];
-	const writer = tealStatusWriter({ write: async record => { written.push(record); }, origin: () => url, settle: 5, now: () => clock });
+	const writer = tealStatusWriter({ write: async record => { written.push(record); return true; }, origin: () => url, settle: 5, now: () => clock });
 	const settle = () => new Promise(resolve => setTimeout(resolve, 20));
 	const other = { ...track, id: 'trk_other' };
 
@@ -119,7 +120,7 @@ test('a failed write waits before trying again', async () => {
 	let fail = true;
 	let clock = time;
 	const written: TealStatus[] = [];
-	const writer = tealStatusWriter({ write: async record => { if (fail) throw new Error('offline'); written.push(record); }, origin: () => url, settle: 5, now: () => clock });
+	const writer = tealStatusWriter({ write: async record => { if (fail) throw new Error('offline'); written.push(record); return true; }, origin: () => url, settle: 5, now: () => clock });
 	writer.observe({ track, playing: true, positionSeconds: 0 });
 	await new Promise(resolve => setTimeout(resolve, 20));
 	assert.equal(written.length, 0);

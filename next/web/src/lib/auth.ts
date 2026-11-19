@@ -1,7 +1,7 @@
 import { Client } from '@atcute/client';
 import type { BrowserOAuthClient, OAuthSession } from '@atproto/oauth-client-browser';
 import { createAuthState, type Did } from '@plyr/next-core/auth-state';
-import { hasTealGrant, TEAL_SCOPE_PARTS } from '@plyr/next-core/teal-scrobble';
+import { hasTealGrant, hasTealPlayGrant, TEAL_SCOPE_PARTS } from '@plyr/next-core/teal-scrobble';
 import { setPrefs } from './prefs.svelte';
 import { returnPath } from '@plyr/next-core/return-path';
 import { authConfig } from './auth-config';
@@ -11,6 +11,7 @@ const { SITE_URL, SCOPE_PARTS } = authConfig;
 const tealUpgradeKey = 'plyr-next:teal-upgrade';
 let grantedScope = '';
 export function canScrobble() { return hasTealGrant(grantedScope); }
+export function canLogPlays() { return hasTealPlayGrant(grantedScope); }
 export const auth = createAuthState(authConfig, handler => new Client({ handler }));
 
 const addAccountKey = 'plyr-next:add-account';
