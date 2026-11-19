@@ -99,6 +99,25 @@ jobs:
           GRANT SELECT, INSERT, UPDATE ON plyr_account.preferences TO :"role";
           SQL
 
+      # The Osprey rules worker (next/services/osprey, next-osprey.yml) also runs
+      # with the writer login: it reads indexed tracks and writes review flags.
+      - name: grant moderation rules state to the rules worker's role
+        env:
+          MIGRATOR_DATABASE_URL: ${{ secrets.ZIG_NEXT_MIGRATOR_DATABASE_URL }}
+          WRITER_DATABASE_URL: ${{ secrets.ZIG_NEXT_WRITER_DATABASE_URL }}
+        run: |
+          plain() { local url="${1/postgresql+psycopg:/postgresql:}"; url="${url/postgresql+psycopg2:/postgresql:}"; echo "${url/postgresql+asyncpg:/postgresql:}"; }
+          role="$(psql "$(plain "$WRITER_DATABASE_URL")" -X -q -At -v ON_ERROR_STOP=1 -c 'SELECT current_user')"
+          psql "$(plain "$MIGRATOR_DATABASE_URL")" -X -q -v ON_ERROR_STOP=1 -v role="$role" <<'SQL'
+          GRANT USAGE ON SCHEMA plyr_index TO :"role";
+          GRANT SELECT ON plyr_index.track_records, plyr_index.actor_identities TO :"role";
+          GRANT USAGE ON SCHEMA plyr_moderation TO :"role";
+          GRANT INSERT ON plyr_moderation.events TO :"role";
+          GRANT USAGE ON SEQUENCE plyr_moderation.events_id_seq TO :"role";
+          GRANT SELECT, INSERT, UPDATE ON plyr_moderation.rule_cursors, plyr_moderation.scans,
+              plyr_moderation.osprey_entity_labels TO :"role";
+          SQL
+
   build:
     name: build next image
     runs-on: ubuntu-latest

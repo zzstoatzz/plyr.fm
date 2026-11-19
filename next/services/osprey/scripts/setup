@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Fetch ROOST's Osprey at the pinned commit, build its environment, and install
+# plyr's plugin into it. Idempotent; prints the Osprey checkout's path.
+set -euo pipefail
+
+OSPREY_REPO="https://github.com/roostorg/osprey"
+OSPREY_REV="fea4733ad9bfb3d32f9fd87e55d14ffcd5ee4dce"
+here="$(cd "$(dirname "$0")/.." && pwd)"
+dest="${OSPREY_HOME:-$here/.osprey}"
+
+if [ "$(git -C "$dest" rev-parse HEAD 2>/dev/null || true)" != "$OSPREY_REV" ]; then
+  rm -rf "$dest"
+  git init -q "$dest"
+  git -C "$dest" fetch -q --depth 1 "$OSPREY_REPO" "$OSPREY_REV"
+  git -C "$dest" checkout -q FETCH_HEAD
+fi
+
+(cd "$dest" && uv sync --locked --no-group dev -q --no-install-package example_plugins --no-install-package example_atproto_plugins --no-install-package osprey_async_worker && uv pip install -q pytest -e "$here")
+echo "$dest"
