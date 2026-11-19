@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { audioAccept } from '$lib/media/accept';
   import { TID } from '@atproto/common-web';
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
@@ -344,7 +345,7 @@
           <div class="subtle">{song.state === 'ready' ? 'uploaded' : song.detail}</div>
           {#if song.state === 'choose'}
             <label>original file for {song.slot.title}
-              <input type="file" disabled={saving} onchange={event => {
+              <input type="file" accept={audioAccept()} disabled={saving} onchange={event => {
                 const file = event.currentTarget.files?.[0];
                 event.currentTarget.value = '';
                 void reattach(song.slot, file);
@@ -396,7 +397,7 @@
       <strong>songs</strong>
       <span class="subtle">{PUBLIC_AUDIO_FORMATS.toLowerCase()}</span>
       <button type="button" class="text-button" onclick={() => songInput?.click()}>{selections.length ? 'add more songs' : 'choose songs'}</button>
-      <input type="file" aria-label="audio files" hidden multiple bind:this={songInput} accept="audio/*,.aif,.aiff,.m4a,.mp3,.aac,.ogg,.opus,.wav,.flac,.webm"
+      <input type="file" aria-label="audio files" hidden multiple bind:this={songInput} accept={audioAccept()}
         onchange={event => chooseFiles(event.currentTarget)} />
     </div>
     {#if selectionProblem}<p role="alert">{selectionProblem}</p>{/if}
