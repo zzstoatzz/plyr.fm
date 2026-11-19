@@ -31,6 +31,7 @@ async function verify(browser, origin, width, scheme) {
   const { context, page, errors } = await setup(browser, width, phone ? 844 : 960, { phone, scheme, scale: phone && scheme === 'dark' ? 2 : 1 });
   const reads = { tracks: 0, albums: 0, metrics: 0, playback: 0 };
   let whitespace = false;
+  let listening = true;
   try {
     await page.addInitScript(() => {
       const NativeAudio = window.Audio;
@@ -65,9 +66,26 @@ async function verify(browser, origin, width, scheme) {
       return route.fulfill({ json: params.has('cursor') ? pageOf(albumPage) : pageOf([album], 'next-album') });
     });
     await page.route(`${api}/v1/albums/${album.id}`, route => route.fulfill({ json: album }));
+    await page.route(`https://plc.directory/${artistDid}`, route => route.fulfill({ json: {
+      id: artistDid, service: [{ id: '#atproto_pds', type: 'AtprotoPersonalDataServer', serviceEndpoint: 'https://pds.fixture.invalid' }]
+    } }));
+    await page.route('https://pds.fixture.invalid/xrpc/com.atproto.repo.getRecord?**', route => {
+      const params = new URL(route.request().url()).searchParams;
+      if (params.get('collection') !== 'fm.teal.actor.status' || params.get('rkey') !== 'self') return route.fulfill({ status: 400, json: { error: 'RecordNotFound' } });
+      const started = Date.now() - 65_000;
+      return route.fulfill({ json: { uri: `at://${artistDid}/fm.teal.actor.status/self`, value: {
+        $type: 'fm.teal.actor.status', time: new Date(started).toISOString(), expiry: new Date(listening ? started + 600_000 : started + 1000).toISOString(),
+        item: { trackName: 'Morning drone', artists: [{ artistName: 'Field Band' }], releaseName: 'Tapes', duration: 200,
+          playedTime: new Date(started).toISOString(), originUri: `https://plyr.fm/track/${tracks[0].id}` }
+      } } });
+    });
 
     await page.goto(origin + artistPath);
     await page.getByRole('heading', { name: artistName, exact: true }).waitFor();
+    const nowListening = page.getByRole('link', { name: `${artistName} is listening to Morning drone by Field Band`, exact: true });
+    await nowListening.waitFor();
+    assert.equal(await nowListening.getAttribute('href'), `/track/${tracks[0].id}`);
+    assert.match(await nowListening.innerText(), /listening now[\s\S]*Field Band · Tapes[\s\S]*1:0\d[\s\S]*3:20/i);
     const support = page.getByRole('link', { name: /^Support .+ at example\.test\/support$/ });
     assert.equal(await support.getAttribute('href'), 'https://example.test/support');
     assert.equal(await page.getByRole('link', { name: 'edit profile' }).count(), 0);
@@ -131,10 +149,12 @@ async function verify(browser, origin, width, scheme) {
     await continuity();
 
     whitespace = true;
+    listening = false;
     await page.reload();
     await page.getByRole('heading', { name: 'sketches.test', exact: true }).waitFor();
     assert.equal(await page.title(), 'sketches.test · plyr.fm');
     assert.equal(await support.count(), 0, 'only a web URL renders as a support link');
+    assert.equal(await page.getByText('listening now').count(), 0, 'an expired status shows nothing');
     await panel('albums').getByRole('link', { name: /Porch recordings/ }).waitFor();
     assert.deepEqual(errors, []);
     console.log(`${width}px ${scheme}: artist paging, retries, keyboard tabs, Back and playback continuity passed`);

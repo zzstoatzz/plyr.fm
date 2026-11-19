@@ -51,6 +51,7 @@ const track = { ...tracks[0], metadata: { ...tracks[0].metadata, duration_second
     await toggle.click();
     const fields = new URLSearchParams((await consent).postData());
     assert.match(fields.get('scope'), /(?:^| )repo:fm\.teal\.feed\.play\?action=create(?: |$)/);
+    assert.match(fields.get('scope'), /(?:^| )repo:fm\.teal\.actor\.status\?action=create&action=update(?: |$)/);
     await page.waitForURL('https://pds.fixture.test/**');
     const password = page.locator('input[name=password]');
     const usePassword = page.getByRole('link', { name: 'Use password' });

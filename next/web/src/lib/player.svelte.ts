@@ -13,7 +13,7 @@ import { trackArtwork } from '@plyr/next-core/artwork';
 import { editPrivateQueue, withoutPrivateTrack } from '@plyr/next-core/publishing/private-music';
 import { isPrivateTrack } from '@plyr/next-core/track-access';
 import { privateLibrary } from './private-library';
-import { scrobble } from './teal';
+import { scrobble, showNowPlaying } from './teal';
 import { prefs, setPrefs } from './prefs.svelte';
 import { api } from './api';
 import { auth } from './auth';
@@ -624,10 +624,9 @@ class Player {
 				monotonicMs: performance.now(),
 				playbackRate: audio.playbackRate
 			});
-			if (play) {
-				this.#outbox?.enqueue(play);
-				if (!this.#embedded && this.#mediaTrack) void scrobble(this.#mediaTrack, play);
-			}
+			if (play) this.#outbox?.enqueue(play);
+			if (play && !this.#embedded && this.#mediaTrack) void scrobble(this.#mediaTrack, play);
+			if (!this.#embedded) showNowPlaying(this.#mediaTrack, this.playing, audio.currentTime);
 			this.#jam?.observe();
 		};
 		for (const event of ['timeupdate', 'durationchange', 'play', 'pause', 'playing', 'waiting', 'ended']) {

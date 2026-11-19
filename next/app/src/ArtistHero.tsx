@@ -6,6 +6,7 @@ import { trackArtwork } from '@plyr/next-core/artwork';
 import { useAppearance } from './appearance';
 import { BLEED, Chip, HeroBackdrop, Pill, Round, TOP, shuffled } from './HeroPieces';
 import { Cover } from './CatalogPieces';
+import { ListeningNowCard } from './ListeningNow';
 import { catalogRuntime } from '@plyr/next-core/catalog/runtime';
 import { compactCount } from './home-state';
 import { CaretRight, Heart, PencilSimple, Play as PlayIcon, ShareNetwork, Shuffle } from './icons';
@@ -59,6 +60,8 @@ export function ArtistHero({ artist, tracks, metrics, owner, onPlay, onShare, fo
       {owner ? <Round label="Edit profile" href="/edit-profile"><PencilSimple size={icon(20)} color={theme.text} /></Round> : null}
       <Round label="Share" onPress={onShare}><ShareNetwork size={icon(20)} color={theme.text} /></Round>
     </View>
+
+    <ListeningNowCard did={artist.did} name={name} />
 
     {support || top ? <View style={styles.cards}>
       {support ? <InfoCard eyebrow={`support ${name}`} title={supportLabel(support)} accessibilityLabel={`Support ${name} at ${supportLabel(support)}`}
