@@ -15,6 +15,7 @@
   import Icon from '$lib/ui/Icon.svelte';
   import Loading from '$lib/ui/Loading.svelte';
   import { portalFor } from './portal';
+  import SellCard from './SellCard.svelte';
 
   type Tab = 'tracks' | 'albums';
   let { account }: { account: ReturnType<typeof auth.getAuth> & { did: NonNullable<ReturnType<typeof auth.getAuth>['did']>; rpc: NonNullable<ReturnType<typeof auth.getAuth>['rpc']> } } = $props();
@@ -48,6 +49,10 @@
   const publicPath = $derived('/u/' + encodeURIComponent(account.handle || did));
   const music = $derived([...tracks.data, ...ownerTracks].sort((a, b) => b.metadata.created_at.localeCompare(a.metadata.created_at)));
   const catalog = $derived(tab === 'tracks' ? tracks : albums);
+  const releases = $derived([
+    ...albums.data.map(album => ({ uri: album.record.uri, title: album.metadata.name || 'untitled album', kind: `album · ${album.metrics.member_count} ${album.metrics.member_count === 1 ? 'track' : 'tracks'}` })),
+    ...music.filter(track => !isPrivateTrack(track)).map(track => ({ uri: track.record.uri, title: track.metadata.title, kind: track.metadata.album ? `track on ${track.metadata.album}` : 'single' })),
+  ]);
   let live = false;
   const current = () => live && auth.getAuth().rpc === account.rpc;
 
@@ -175,6 +180,8 @@
     <p class="state" role="alert">couldn’t load your profile.</p>
     <button class="text-button" onclick={loadProfile} disabled={profileLoading}>retry profile</button>
   {/if}
+
+  <SellCard {releases} />
 
   <div class="tabs" role="tablist" aria-label="Your catalog">
     <button id="creator-tracks-tab" bind:this={tracksTab} role="tab" aria-selected={tab === 'tracks'} aria-controls="creator-tracks" tabindex={tab === 'tracks' ? 0 : -1} onclick={() => selectTab('tracks')} onkeydown={tabKey}>tracks</button>

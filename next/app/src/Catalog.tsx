@@ -32,6 +32,9 @@ import { TrackMenu } from './TrackMenu';
 import { usePlayCount } from './use-play-count';
 import { CollectionActions, Library } from './AccountCatalog';
 import { useCollectionOrder } from './collections/use-collection-order';
+import { offerFor } from '@plyr/next-core/selling';
+import { useSeller } from './selling/use-selling';
+import { TrackSelling } from './selling/TrackSelling';
 
 const loadPlaylists = (cursor?: string) => api.playlists({ limit: 30, cursor });
 
@@ -100,6 +103,7 @@ function TrackDetail({ id, onPlay, onEnqueue, trackActions }: {
         <ShareLink compact path={`/track/${encodeURIComponent(track.id)}`} />
         <PlayerControl icon={Ellipsis} label="More" onPress={() => setActionsOpen(true)} />
       </>}
+      access={<TrackSelling track={track} viewer={account.did} />}
       comments={<TrackComments track={track} />} />
     {actionsOpen && <TrackMenu track={track} close={() => setActionsOpen(false)} actions={trackActions?.(track)} />}
   </>;
@@ -109,6 +113,7 @@ function Collection({ id, album, onPlay }: { id: string; album: boolean; onPlay:
   const load = useCallback(() => album ? api.album(id) : api.playlist(id), [id, album]);
   const result = useResource(load, 0, true);
   const { list, saved } = useCollectionOrder(result.data);
+  const seller = useSeller(list?.owner.did);
   const player = usePlayback();
   const focus = useRef({ visited: false, retry: result.retry });
   focus.current.retry = result.retry;
@@ -123,6 +128,7 @@ function Collection({ id, album, onPlay }: { id: string; album: boolean; onPlay:
   const missing = list.metrics.member_count - tracks.length;
   return <>
     <CollectionHero list={list} tracks={tracks} title={title} playing={active && player.status.playing}
+      offer={offerFor(seller, [list.record.uri])}
       onPlay={(track, queue) => active && queue === tracks ? player.setPlaying(true) : onPlay(track, queue, title)}
       onPause={() => player.setPlaying(false)}
       onEnqueue={() => player.enqueueAll(tracks, title)}

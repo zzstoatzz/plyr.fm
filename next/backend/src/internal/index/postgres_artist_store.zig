@@ -124,6 +124,8 @@ pub const PostgresArtistStore = struct {
         const updated_at = try duplicate(allocator, try row.get([]const u8, 8));
         if (!lexicon_value.validDatetime(updated_at)) return error.CorruptUpdatedAt;
         const availability_source = try parseClaimSource(try row.get([]const u8, 15));
+        const support_url = try duplicateOptional(allocator, try row.get(?[]const u8, 6));
+        const offers = try artist.parseOffers(allocator, try row.get([]const u8, 17));
 
         return .{
             .did = did,
@@ -132,7 +134,8 @@ pub const PostgresArtistStore = struct {
             .bio = bio,
             .avatar_url = avatar_url,
             .show_liked_on_profile = try row.get(bool, 5),
-            .support_url = try duplicateOptional(allocator, try row.get(?[]const u8, 6)),
+            .support_url = if (support_url) |url| (if (artist.validLink(url)) url else null) else null,
+            .offers = offers,
             .created_at = created_at,
             .updated_at = updated_at,
             .record = .{
@@ -167,7 +170,7 @@ const select_fields =
     \\  p.bio,
     \\  CASE WHEN a.avatar_url IS NOT NULL AND p.avatar LIKE 'https://cdn.bsky.app/img/avatar/plain/%' THEN a.avatar_url ELSE COALESCE(NULLIF(p.avatar, ''), a.avatar_url) END,
     \\  false,
-    \\  NULL::text,
+    \\  NULLIF(btrim(pref.value->>'supportUrl'), ''),
     \\  p.record_created_at,
     \\  COALESCE(p.record_updated_at, p.record_created_at),
     \\  p.record_uri,
@@ -180,11 +183,13 @@ const select_fields =
     \\    'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
     \\  ),
     \\  aa.evidence_source,
-    \\  p.avatar IS NOT NULL AND p.avatar <> '' AND (a.avatar_url IS NULL OR p.avatar NOT LIKE 'https://cdn.bsky.app/img/avatar/plain/%')
+    \\  p.avatar IS NOT NULL AND p.avatar <> '' AND (a.avatar_url IS NULL OR p.avatar NOT LIKE 'https://cdn.bsky.app/img/avatar/plain/%'),
+    \\  CASE WHEN jsonb_typeof(pref.value->'buyLinks') = 'array' THEN (pref.value->'buyLinks')::text ELSE '[]' END
     \\FROM plyr_index.profile_records AS p
     \\JOIN plyr_index.account_availability AS aa
     \\  ON aa.repo_did = p.owner_did AND aa.available
     \\JOIN plyr_index.actor_identities AS a ON a.did = p.owner_did
+    \\LEFT JOIN plyr_account.preferences AS pref ON pref.owner_did = p.owner_did
 ;
 
 const detail_by_did_query = select_fields ++ "\n" ++

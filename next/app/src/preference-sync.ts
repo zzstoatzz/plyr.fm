@@ -43,3 +43,8 @@ export function accountPreferences(agent: Agent, signal: AbortSignal) {
 		}
 	};
 }
+
+/** the raw account settings call, for settings that aren't personal preferences (selling) */
+export function accountSettings(agent: Agent, signal: AbortSignal) {
+	return preferenceTransport(agent, { JAM_COORDINATOR_URL, JAM_JOIN_METHOD, JAM_SERVICE_AUDIENCE }, signal);
+}

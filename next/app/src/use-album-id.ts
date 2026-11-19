@@ -11,8 +11,9 @@ export function albumFor(name: string | null, albums: ListSummary[]): ListSummar
   return albums.find(album => album.metadata.name?.trim().toLowerCase() === wanted) ?? null;
 }
 
-export function useAlbumId(track: Track): string | null {
-  const [found, setFound] = useState<{ track: string; id: string | null } | null>(null);
+/** The artist's album record this track names, once looked up. */
+export function useAlbum(track: Track): ListSummary | null {
+  const [found, setFound] = useState<{ track: string; album: ListSummary | null } | null>(null);
   const { album } = track.metadata;
   const did = track.artist.did;
   useEffect(() => {
@@ -24,8 +25,12 @@ export function useAlbumId(track: Track): string | null {
       albums.catch(() => byArtist.delete(did));
       byArtist.set(did, albums);
     }
-    albums.then(list => { if (live) setFound({ track: track.id, id: albumFor(album, list)?.id ?? null }); }, () => {});
+    albums.then(list => { if (live) setFound({ track: track.id, album: albumFor(album, list) }); }, () => {});
     return () => { live = false; };
   }, [album, did, track.id]);
-  return found?.track === track.id ? found.id : null;
+  return found?.track === track.id ? found.album : null;
+}
+
+export function useAlbumId(track: Track): string | null {
+  return useAlbum(track)?.id ?? null;
 }

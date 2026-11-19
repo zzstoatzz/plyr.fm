@@ -3,6 +3,7 @@
 const std = @import("std");
 const pg = @import("pg");
 const tag_filter = @import("../domain/tag_filter.zig");
+const artist = @import("../domain/artist.zig");
 const postgres_test_lock = @import("../testing/postgres_lock.zig");
 
 pub const Patch = struct {
@@ -16,6 +17,10 @@ pub const Patch = struct {
     hiddenTags: ?[]const []const u8 = null,
     /// artist setting: let listeners leave timed comments on your tracks
     allowComments: ?bool = null,
+    /// artist setting: where listeners can support you. "" clears it.
+    supportUrl: ?[]const u8 = null,
+    /// artist setting: where each release is sold. replaces the whole list.
+    buyLinks: ?[]const artist.Offer = null,
 
     pub fn valid(self: Patch) bool {
         if (self.theme) |value| if (!oneOf(value, &.{ "system", "light", "dark" })) return false;
@@ -28,11 +33,19 @@ pub const Patch = struct {
         if (self.hiddenTags) |values| {
             for (values) |value| if (!tag_filter.valid(value)) return false;
         }
+        if (self.supportUrl) |value| if (value.len != 0 and !artist.validLink(value)) return false;
+        if (self.buyLinks) |offers| {
+            if (offers.len > artist.max_offers) return false;
+            for (offers, 0..) |offer, index| {
+                if (!artist.validOffer(offer)) return false;
+                for (offers[0..index]) |earlier| if (std.mem.eql(u8, earlier.subject, offer.subject)) return false;
+            }
+        }
         return true;
     }
 
     pub fn empty(self: Patch) bool {
-        return self.theme == null and self.accent == null and self.font == null and self.keepPlaying == null and self.playThrough == null and self.tealScrobbling == null and self.scale == null and self.hiddenTags == null and self.allowComments == null;
+        return self.theme == null and self.accent == null and self.font == null and self.keepPlaying == null and self.playThrough == null and self.tealScrobbling == null and self.scale == null and self.hiddenTags == null and self.allowComments == null and self.supportUrl == null and self.buyLinks == null;
     }
 };
 
@@ -94,6 +107,14 @@ test "a settings patch accepts only known values" {
     try std.testing.expect((Patch{}).empty());
     try std.testing.expect(!(Patch{ .playThrough = false }).empty());
     try std.testing.expect(!(Patch{ .tealScrobbling = false }).empty());
+    try std.testing.expect((Patch{ .supportUrl = "https://ko-fi.com/dawn" }).valid());
+    try std.testing.expect((Patch{ .supportUrl = "" }).valid());
+    try std.testing.expect(!(Patch{ .supportUrl = "javascript:alert(1)" }).valid());
+    const album: artist.Offer = .{ .subject = "at://did:plc:a/fm.plyr.list/3x", .url = "https://dawn.bandcamp.com/album/tide", .amount = 800, .currency = "USD" };
+    try std.testing.expect((Patch{ .buyLinks = &.{album} }).valid());
+    try std.testing.expect(!(Patch{ .buyLinks = &.{ album, album } }).valid());
+    try std.testing.expect(!(Patch{ .buyLinks = &.{.{ .subject = album.subject, .url = album.url, .amount = 800 }} }).valid());
+    try std.testing.expect(!(Patch{ .buyLinks = &.{} }).empty());
 }
 
 test "account settings merge per owner" {

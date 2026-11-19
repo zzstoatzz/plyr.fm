@@ -58,14 +58,16 @@ export function Chip({ value, label }: { value: string; label?: string }) {
   </View>;
 }
 
-export function Pill({ icon, label, accessibilityLabel, onPress, primary }: {
-  icon: ReactNode; label: string; accessibilityLabel: string; onPress: () => void; primary?: boolean;
+export function Pill({ icon, label, accessibilityLabel, onPress, primary, outline, role = 'button' }: {
+  icon: ReactNode; label: string; accessibilityLabel: string; onPress: () => void; primary?: boolean; outline?: boolean; role?: 'button' | 'link';
 }) {
   const theme = useAppearance();
-  return <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel} onPress={onPress}
-    style={({ pressed }) => [styles.pill, { backgroundColor: primary ? theme.accent : theme.raised, opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] }]}>
+  const color = primary ? theme.onAccent : outline ? theme.accent : theme.text;
+  return <Pressable accessibilityRole={role} accessibilityLabel={accessibilityLabel} onPress={onPress}
+    style={({ pressed }) => [styles.pill, outline ? { borderWidth: 1.5, borderColor: theme.accent, flexShrink: 1 } : null,
+      { backgroundColor: primary ? theme.accent : outline ? 'transparent' : theme.raised, opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] }]}>
     {icon}
-    <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={{ flexShrink: 1, color: primary ? theme.onAccent : theme.text, fontFamily: theme.fontFamily, fontSize: 17 * theme.scale, fontWeight: '700' }}>{label}</Text>
+    <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={{ flexShrink: 1, color, fontFamily: theme.fontFamily, fontSize: 17 * theme.scale, fontWeight: '700' }}>{label}</Text>
   </Pressable>;
 }
 
