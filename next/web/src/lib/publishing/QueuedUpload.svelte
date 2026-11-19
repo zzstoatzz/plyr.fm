@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { audioAccept } from '$lib/media/accept';
   import type { QueuedUploadDraft } from '@plyr/next-core/publishing/queued-upload-draft';
   import { canonicalAudioFile } from '$lib/media/audio-file';
   import { coverImage } from '$lib/media/cover-image';
@@ -49,7 +50,7 @@
 <div class="recovery-card">
   <h3>{draft.title}</h3>
   <p class="subtle">choose {draft.audio.name} to resume this upload.</p>
-  <label>audio <input type="file" accept="audio/*,.aif,.aiff,.m4a,.mp3,.aac,.ogg,.opus,.wav,.flac,.webm" disabled={busy} onchange={event => chooseAudio(event.currentTarget.files?.[0])} /></label>
+  <label>audio <input type="file" accept={audioAccept()} disabled={busy} onchange={event => chooseAudio(event.currentTarget.files?.[0])} /></label>
   {#if draft.coverName}
     <label>cover ({draft.coverName}) <input type="file" accept="image/*,.heic,.heif" disabled={busy} onchange={event => chooseCover(event.currentTarget.files?.[0])} /></label>
   {/if}

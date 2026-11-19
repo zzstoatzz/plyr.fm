@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { audioAccept } from '$lib/media/accept';
 	import { onMount, type Snippet } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -141,7 +142,7 @@
 						<b>{audio ? audio.name : 'a private track'}</b>
 						<small>only you can play it, from your library. up to 100 MB.</small>
 					</span>
-					<label class="pick"><input id="private-audio" type="file" accept="audio/*" bind:this={fileInput} disabled={busy || active} onchange={event => {
+					<label class="pick"><input id="private-audio" type="file" accept={audioAccept()} bind:this={fileInput} disabled={busy || active} onchange={event => {
 						const file = event.currentTarget.files?.[0];
 						audio = file ? canonicalAudioFile(file) : undefined;
 						if (audio && !title) title = audio.name.replace(/\.[^.]+$/, '').slice(0, 256);

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { audioAccept } from '$lib/media/accept';
   import { onDestroy } from 'svelte';
   import { trackIdFromUri } from '@plyr/next-core/api';
   import type { UploadOperation } from '@plyr/next-core/publishing/upload-model';
@@ -96,7 +97,7 @@
     <button class="text-button" disabled={!!controller} onclick={() => run('done')}>done with upload</button>
   {:else}
     {#if !allParts}
-      <label>reselect original audio <input type="file" accept="audio/*" disabled={!!controller} onchange={event => choose(event.currentTarget.files?.[0])} /></label>
+      <label>reselect original audio <input type="file" accept={audioAccept()} disabled={!!controller} onchange={event => choose(event.currentTarget.files?.[0])} /></label>
     {/if}
     <button class="text-button" disabled={!!controller || (!allParts && !file)} onclick={resume}>resume upload</button>
     <button class="text-button" disabled={!!controller} onclick={() => run('cancel')}>cancel transfer</button>

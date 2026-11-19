@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { audioAccept } from '$lib/media/accept';
   import { goto } from '$app/navigation';
   import { onMount, tick, untrack } from 'svelte';
   import { isOpen } from '@plyr/next-core/access/policy';
@@ -157,7 +158,7 @@
     {/if}
     <form onsubmit={event => { event.preventDefault(); void save(false); }}>
       {#if canReplace}
-        <label>replace audio <input type="file" accept="audio/*" bind:this={audioInput} disabled={busy || conflict || confirm} onchange={event => chooseAudio(event.currentTarget.files?.[0])} /></label>
+        <label>replace audio <input type="file" accept={audioAccept()} bind:this={audioInput} disabled={busy || conflict || confirm} onchange={event => chooseAudio(event.currentTarget.files?.[0])} /></label>
         {#if audio}
           <p class="subtle">save replaces the audio at this track’s existing link. up to 100 MiB. your title, likes and playlists stay.</p>
           <div class="editor-actions"><button type="button" class="text-button" disabled={busy || confirm} onclick={() => { audio = undefined; if (audioInput) audioInput.value = ''; }}>keep current audio</button></div>

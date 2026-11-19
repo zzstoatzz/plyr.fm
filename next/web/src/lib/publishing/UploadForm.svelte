@@ -13,6 +13,7 @@
 </script>
 
 <script lang="ts">
+	import { audioAccept } from '$lib/media/accept';
   import { onMount, untrack, type Snippet } from 'svelte';
   import type { CreateOperation } from '@plyr/next-core/publishing/create-operation';
   import { PUBLIC_AUDIO_FORMATS, type UploadOperation } from '@plyr/next-core/publishing/upload-model';
@@ -342,7 +343,7 @@
   ondragleave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) dragging = false; }}
   ondrop={drop}
 >
-  <input type="file" aria-label="audio file" hidden accept="audio/*,.aif,.aiff,.m4a,.mp3,.aac,.ogg,.opus,.wav,.flac,.webm" bind:this={audioInput} onchange={event => pickAudio(event.currentTarget.files?.[0])} />
+  <input type="file" aria-label="audio file" hidden accept={audioAccept()} bind:this={audioInput} onchange={event => pickAudio(event.currentTarget.files?.[0])} />
   <input type="file" aria-label="cover image" hidden accept="image/*,.heic,.heif" bind:this={coverInput} onchange={event => pickCover(event.currentTarget.files?.[0])} />
 
   {#if !editing}
