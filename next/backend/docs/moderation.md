@@ -39,10 +39,13 @@ service and this method, like notifications. `actor` is the verified issuer.
 
 | method | who | does |
 |---|---|---|
-| `fm.plyr.moderation.createReport` (POST) | anyone signed in | `{subject, reasonType, reason?}`; one per reporter per subject per day, later ones dropped silently |
-| `fm.plyr.moderation.getQueue` (GET) | operators | open subjects, oldest first, `?limit=` up to 200 |
+| `fm.plyr.moderation.createReport` (POST) | anyone signed in | `{subject, reasonType, reason?}`; the subject must be a track, comment or account plyr has seen; one per reporter per subject per day (repeats dropped silently), 30 per reporter per hour |
+| `fm.plyr.moderation.getQueue` (GET) | operators | open subjects, oldest first, `?limit=` up to 200, `?cursor=` from the last page |
 | `fm.plyr.moderation.getSubject` (GET) | operators | every entry for `?subject=` |
-| `fm.plyr.moderation.emitEvent` (POST) | operators | `{subject, action, reason?}`; actions limited to decisions |
+| `fm.plyr.moderation.emitEvent` (POST) | operators | `{subject, action, reason?}`; actions limited to decisions, and allow/exclude only on tracks for now |
+
+Writes to one subject (and reports from one reporter) take an advisory lock,
+so the newest log entry is always what listeners see.
 
 Operators are the DIDs in `MODERATION_OPERATOR_DIDS`. With none configured,
 reports are still accepted and nobody can read them.

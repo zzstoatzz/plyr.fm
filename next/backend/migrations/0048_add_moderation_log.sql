@@ -55,7 +55,13 @@ BEGIN
         GRANT USAGE ON SCHEMA plyr_moderation TO plyr_zig_canary;
         GRANT SELECT, INSERT ON plyr_moderation.events TO plyr_zig_canary;
         GRANT USAGE ON SEQUENCE plyr_moderation.events_id_seq TO plyr_zig_canary;
-        GRANT INSERT, UPDATE, DELETE ON plyr_index.track_policies TO plyr_zig_canary;
+        -- only the moderation columns: visibility and access gating stay
+        -- out of the public API's reach (as in 0015/0019)
+        GRANT INSERT (record_uri, moderation_decision, moderation_write_source, moderation_observed_at_us)
+            ON plyr_index.track_policies TO plyr_zig_canary;
+        GRANT UPDATE (moderation_decision, moderation_write_source, moderation_observed_at_us)
+            ON plyr_index.track_policies TO plyr_zig_canary;
+        GRANT DELETE ON plyr_index.track_policies TO plyr_zig_canary;
     END IF;
 END
 $grants$;

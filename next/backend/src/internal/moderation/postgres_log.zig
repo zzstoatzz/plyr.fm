@@ -30,6 +30,8 @@ pub const Recorded = struct {
 };
 
 pub const QueueItem = struct {
+    /// pass back as `after` for the next page
+    cursor: i64,
     subject: []const u8,
     /// the first opening entry since the subject was last closed
     openedAt: i64,
@@ -41,7 +43,11 @@ pub const QueueItem = struct {
     decision: ?[]const u8,
 };
 
-pub const ReportOutcome = enum { recorded, duplicate };
+/// `unknown`: the subject is not a track, comment or account plyr has seen.
+/// `limited`: the reporter sent `max_reports_per_hour` already.
+pub const ReportOutcome = enum { recorded, duplicate, unknown, limited };
+
+pub const max_reports_per_hour = 30;
 
 pub const PostgresModerationLog = struct {
     pool: *pg.Pool,
@@ -56,16 +62,17 @@ pub const PostgresModerationLog = struct {
         try begin(conn);
         var committed = false;
         defer if (!committed) rollback(conn);
-        var existing = (conn.row(recent_report_query, .{ entry.actor, entry.subject }) catch |err| {
-            logQueryError(conn, err);
-            return error.Unavailable;
-        });
-        if (existing) |*row| {
-            row.deinit() catch {};
-            rollback(conn);
-            committed = true;
-            return .duplicate;
-        }
+        // one reporter at a time, so a double submit cannot slip past the checks
+        try exec(conn, "SELECT pg_advisory_xact_lock(hashtext('moderation-report:' || $1))", .{entry.actor});
+        const outcome: ?ReportOutcome = if (!try exists(conn, subject_known_query, .{entry.subject}))
+            .unknown
+        else if (try exists(conn, recent_report_query, .{ entry.actor, entry.subject }))
+            .duplicate
+        else if (try exists(conn, reporter_limit_query, .{ entry.actor, @as(i64, max_reports_per_hour) }))
+            .limited
+        else
+            null;
+        if (outcome) |value| return value;
         _ = try insert(conn, entry);
         try commit(conn);
         committed = true;
@@ -80,6 +87,9 @@ pub const PostgresModerationLog = struct {
         try begin(conn);
         var committed = false;
         defer if (!committed) rollback(conn);
+        // decisions on one subject apply in log order, so the newest entry
+        // is always what listeners see
+        try exec(conn, "SELECT pg_advisory_xact_lock(hashtext('moderation-subject:' || $1))", .{entry.subject});
         const id = try insert(conn, entry);
         if (entry.action.decision()) |decision| {
             if (log.isTrack(entry.subject, self.track_collection)) try project(conn, entry.subject, decision);
@@ -89,10 +99,10 @@ pub const PostgresModerationLog = struct {
         return id;
     }
 
-    pub fn queue(self: *PostgresModerationLog, allocator: std.mem.Allocator, limit: u16) Error![]QueueItem {
+    pub fn queue(self: *PostgresModerationLog, allocator: std.mem.Allocator, limit: u16, after: i64) Error![]QueueItem {
         const conn = self.pool.acquire() catch return error.Unavailable;
         defer self.pool.release(conn);
-        var result = conn.query(queue_query, .{@as(i64, limit)}) catch |err| {
+        var result = conn.query(queue_query, .{ @as(i64, limit), after }) catch |err| {
             logQueryError(conn, err);
             return error.Unavailable;
         };
@@ -101,6 +111,7 @@ pub const PostgresModerationLog = struct {
         while (result.next() catch return error.Unavailable) |row| {
             const reasons = row.get([]const u8, 3) catch return error.Corrupt;
             items.append(allocator, .{
+                .cursor = row.get(i64, 7) catch return error.Corrupt,
                 .subject = try allocator.dupe(u8, row.get([]const u8, 0) catch return error.Corrupt),
                 .openedAt = row.get(i64, 1) catch return error.Corrupt,
                 .openCount = row.get(i64, 2) catch return error.Corrupt,
@@ -164,6 +175,25 @@ fn project(conn: *pg.Conn, record_uri: []const u8, decision: ?[]const u8) Error!
     };
 }
 
+fn exec(conn: *pg.Conn, sql: []const u8, args: anytype) Error!void {
+    _ = conn.exec(sql, args) catch |err| {
+        logQueryError(conn, err);
+        return error.Unavailable;
+    };
+}
+
+fn exists(conn: *pg.Conn, sql: []const u8, args: anytype) Error!bool {
+    var row = conn.row(sql, args) catch |err| {
+        logQueryError(conn, err);
+        return error.Unavailable;
+    };
+    if (row) |*value| {
+        value.deinit() catch {};
+        return true;
+    }
+    return false;
+}
+
 fn begin(conn: *pg.Conn) Error!void {
     // the api's role defaults to read-only transactions
     _ = conn.exec("BEGIN READ WRITE", .{}) catch |err| {
@@ -204,6 +234,19 @@ fn logQueryError(conn: *pg.Conn, err: anyerror) void {
 const insert_query =
     \\INSERT INTO plyr_moderation.events (subject_uri, action, actor, reason_type, reason)
     \\VALUES ($1, $2, $3, $4, $5) RETURNING id
+;
+
+const subject_known_query =
+    \\SELECT 1 WHERE EXISTS (SELECT 1 FROM plyr_index.track_records WHERE record_uri = $1 AND NOT deleted)
+    \\  OR EXISTS (SELECT 1 FROM plyr_index.comment_records WHERE record_uri = $1 AND NOT deleted)
+    \\  OR EXISTS (SELECT 1 FROM plyr_index.actor_identities WHERE did = $1)
+    \\  OR EXISTS (SELECT 1 FROM plyr_index.track_records WHERE owner_did = $1 AND NOT deleted)
+;
+
+const reporter_limit_query =
+    \\SELECT 1 FROM plyr_moderation.events
+    \\WHERE action = 'reported' AND actor = $1 AND created_at > clock_timestamp() - interval '1 hour'
+    \\HAVING count(*) >= $2
 ;
 
 const recent_report_query =
@@ -258,10 +301,11 @@ const queue_query =
     \\  GROUP BY e.subject_uri
     \\)
     \\SELECT o.subject_uri, o.opened_at_ms, o.open_count, o.reasons,
-    \\       t.title, t.owner_did, p.moderation_decision
+    \\       t.title, t.owner_did, p.moderation_decision, o.first_id
     \\FROM open o
     \\LEFT JOIN plyr_index.track_records t ON t.record_uri = o.subject_uri AND NOT t.deleted
     \\LEFT JOIN plyr_index.track_policies p ON p.record_uri = o.subject_uri
+    \\WHERE o.first_id > $2
     \\ORDER BY o.first_id
     \\LIMIT $1
 ;
@@ -300,6 +344,9 @@ test "the log derives the queue and projects decisions onto track policies" {
         \\  moderation_write_source text, moderation_observed_at_us bigint,
         \\  CONSTRAINT ck_track_policies_nonempty CHECK (visibility IS NOT NULL OR jsonb_array_length(operator_labels) > 0 OR moderation_decision IS NOT NULL))
     , .{});
+    _ = try pool.exec("CREATE TABLE plyr_index.comment_records (record_uri text PRIMARY KEY, deleted boolean NOT NULL DEFAULT false)", .{});
+    _ = try pool.exec("CREATE TABLE plyr_index.actor_identities (did text PRIMARY KEY)", .{});
+    _ = try pool.exec("INSERT INTO plyr_index.actor_identities VALUES ('did:plc:listener')", .{});
     _ = try pool.exec(@embedFile("migration_0048"), .{});
 
     const cover = "at://did:plc:artist/fm.plyr.track/cover";
@@ -318,19 +365,31 @@ test "the log derives the queue and projects decisions onto track policies" {
     try std.testing.expectEqual(ReportOutcome.recorded, try moderation.report(.{ .subject = cover, .action = .reported, .actor = "did:plc:one", .reason_type = .copyright, .reason = "this is someone else's song" }));
     try std.testing.expectEqual(ReportOutcome.duplicate, try moderation.report(.{ .subject = cover, .action = .reported, .actor = "did:plc:one", .reason_type = .copyright }));
     try std.testing.expectEqual(ReportOutcome.recorded, try moderation.report(.{ .subject = cover, .action = .reported, .actor = "did:plc:two", .reason_type = .spam }));
+    // reports must name something plyr has seen, and a reporter is rate limited
+    try std.testing.expectEqual(ReportOutcome.unknown, try moderation.report(.{ .subject = "at://did:plc:x/fm.plyr.track/nope", .action = .reported, .actor = "did:plc:one", .reason_type = .spam }));
+    try std.testing.expectEqual(ReportOutcome.recorded, try moderation.report(.{ .subject = "did:plc:artist", .action = .reported, .actor = "did:plc:one", .reason_type = .impersonation }));
+    try std.testing.expectEqual(ReportOutcome.recorded, try moderation.report(.{ .subject = "did:plc:listener", .action = .reported, .actor = "did:plc:one", .reason_type = .harassment }));
+    _ = try pool.exec("INSERT INTO plyr_moderation.events (subject_uri, action, actor) SELECT 'did:plc:listener', 'reported', 'did:plc:spammy' FROM generate_series(1, 30)", .{});
+    try std.testing.expectEqual(ReportOutcome.limited, try moderation.report(.{ .subject = cover, .action = .reported, .actor = "did:plc:spammy", .reason_type = .spam }));
+    _ = try moderation.record(.{ .subject = "did:plc:artist", .action = .acknowledged, .actor = "did:plc:operator" });
+    _ = try moderation.record(.{ .subject = "did:plc:listener", .action = .acknowledged, .actor = "did:plc:operator" });
+
     _ = try moderation.record(.{ .subject = labeled, .action = .flagged_by_scan, .actor = "scan:audd" });
 
-    var open = try moderation.queue(arena, 50);
+    var open = try moderation.queue(arena, 50, 0);
     try std.testing.expectEqual(@as(usize, 2), open.len);
     try std.testing.expectEqualStrings(cover, open[0].subject);
     try std.testing.expectEqual(@as(i64, 2), open[0].openCount);
     try std.testing.expectEqual(@as(usize, 2), open[0].reasonTypes.len);
     try std.testing.expectEqualStrings("a cover", open[0].trackTitle.?);
     try std.testing.expectEqual(@as(?[]const u8, null), open[0].decision);
+    const rest = try moderation.queue(arena, 50, open[0].cursor);
+    try std.testing.expectEqual(@as(usize, 1), rest.len);
+    try std.testing.expectEqualStrings(labeled, rest[0].subject);
 
     // allowing a cover closes it and projects onto a track with no policy row
     _ = try moderation.record(.{ .subject = cover, .action = .override_allow, .actor = "did:plc:operator", .reason = "licensed cover" });
-    open = try moderation.queue(arena, 50);
+    open = try moderation.queue(arena, 50, 0);
     try std.testing.expectEqual(@as(usize, 1), open.len);
     try std.testing.expectEqualStrings(labeled, open[0].subject);
     var policy = (try pool.row("SELECT moderation_decision, moderation_write_source FROM plyr_index.track_policies WHERE record_uri=$1", .{cover})).?;
@@ -340,7 +399,7 @@ test "the log derives the queue and projects decisions onto track policies" {
 
     // a fresh report reopens it; the decision stays until someone changes it
     try std.testing.expectEqual(ReportOutcome.recorded, try moderation.report(.{ .subject = cover, .action = .reported, .actor = "did:plc:three", .reason_type = .other }));
-    open = try moderation.queue(arena, 50);
+    open = try moderation.queue(arena, 50, 0);
     try std.testing.expectEqual(@as(usize, 2), open.len);
     try std.testing.expectEqual(@as(i64, 1), open[1].openCount);
     try std.testing.expectEqualStrings("allow", open[1].decision.?);

@@ -24,6 +24,7 @@ pub const Config = struct {
     audiences: []const []const u8,
     plc_url: []const u8,
     operators: []const []const u8,
+    track_collection: []const u8,
     create_report: []const u8,
     get_queue: []const u8,
     get_subject: []const u8,
@@ -46,6 +47,7 @@ pub const Config = struct {
             .audiences = audiences,
             .plc_url = plc_url,
             .operators = operators,
+            .track_collection = track_collection,
             .create_report = try std.fmt.allocPrint(allocator, "{s}.moderation.createReport", .{prefix}),
             .get_queue = try std.fmt.allocPrint(allocator, "{s}.moderation.getQueue", .{prefix}),
             .get_subject = try std.fmt.allocPrint(allocator, "{s}.moderation.getSubject", .{prefix}),
@@ -132,15 +134,19 @@ pub fn handle(
                 try xrpcError(request, .bad_request, "InvalidRequest", "a report needs a subject and a reasonType", request_id, response_cors);
                 return;
             };
-            _ = moderation.report(.{
+            const outcome = moderation.report(.{
                 .subject = input.subject,
                 .action = .reported,
                 .actor = caller,
                 .reason_type = input.reason_type,
                 .reason = input.reason,
             }) catch |err| return unavailable(request, err, request_id, response_cors);
-            // a duplicate looks the same as a new report to the reporter
-            try response.json(request, .ok, "{}", request_id, response_cors);
+            switch (outcome) {
+                // a duplicate looks the same as a new report to the reporter
+                .recorded, .duplicate => try response.json(request, .ok, "{}", request_id, response_cors),
+                .unknown => try xrpcError(request, .bad_request, "UnknownSubject", "we couldn't find what you're reporting", request_id, response_cors),
+                .limited => try xrpcError(request, .too_many_requests, "RateLimitExceeded", "too many reports for now. try again in a while", request_id, response_cors),
+            }
         },
         .emit_event => {
             const body = request.readBody(maximum_body_bytes) catch {
@@ -151,6 +157,12 @@ pub fn handle(
                 try xrpcError(request, .bad_request, "InvalidRequest", "an event needs a subject and a decision", request_id, response_cors);
                 return;
             };
+            // decisions only project onto tracks so far; refusing them
+            // elsewhere keeps an operator from thinking an account is hidden
+            if (input.action.decision() != null and !log.isTrack(input.subject, config.track_collection)) {
+                try xrpcError(request, .bad_request, "UnsupportedSubject", "allow and exclude only apply to tracks for now", request_id, response_cors);
+                return;
+            }
             const id = moderation.record(.{
                 .subject = input.subject,
                 .action = input.action,
@@ -161,12 +173,13 @@ pub fn handle(
             try response.json(request, .ok, out, request_id, response_cors);
         },
         .get_queue => {
-            const limit = queueLimit(allocator, request.target) orelse {
-                try xrpcError(request, .bad_request, "InvalidRequest", "invalid limit", request_id, response_cors);
+            const page = queuePage(allocator, request.target) orelse {
+                try xrpcError(request, .bad_request, "InvalidRequest", "invalid limit or cursor", request_id, response_cors);
                 return;
             };
-            const items = moderation.queue(allocator, limit) catch |err| return unavailable(request, err, request_id, response_cors);
-            const out = try std.json.Stringify.valueAlloc(allocator, .{ .items = items }, .{});
+            const items = moderation.queue(allocator, page.limit, page.after) catch |err| return unavailable(request, err, request_id, response_cors);
+            const cursor: ?[]const u8 = if (items.len == page.limit) try std.fmt.allocPrint(allocator, "{d}", .{items[items.len - 1].cursor}) else null;
+            const out = try std.json.Stringify.valueAlloc(allocator, .{ .items = items, .cursor = cursor }, .{ .emit_null_optional_fields = false });
             try response.json(request, .ok, out, request_id, response_cors);
         },
         .get_subject => {
@@ -210,15 +223,21 @@ fn optionalReason(reason: ?[]const u8) ??[]const u8 {
     return trimmed;
 }
 
-fn queueLimit(allocator: std.mem.Allocator, target: []const u8) ?u16 {
+const QueuePage = struct { limit: u16, after: i64 };
+
+fn queuePage(allocator: std.mem.Allocator, target: []const u8) ?QueuePage {
     var it = query.Iterator.init(allocator, target);
-    var limit: u16 = default_queue_limit;
+    var page: QueuePage = .{ .limit = default_queue_limit, .after = 0 };
     while (it.next() catch return null) |pair| {
-        if (!std.mem.eql(u8, pair.name, "limit")) return null;
-        limit = query.parseDecimal(u16, pair.value) catch return null;
-        if (limit == 0 or limit > maximum_queue_limit) return null;
+        if (std.mem.eql(u8, pair.name, "limit")) {
+            page.limit = query.parseDecimal(u16, pair.value) catch return null;
+            if (page.limit == 0 or page.limit > maximum_queue_limit) return null;
+        } else if (std.mem.eql(u8, pair.name, "cursor")) {
+            page.after = query.parseDecimal(i64, pair.value) catch return null;
+            if (page.after < 0) return null;
+        } else return null;
     }
-    return limit;
+    return page;
 }
 
 fn subjectParam(allocator: std.mem.Allocator, target: []const u8) ?[]const u8 {
@@ -327,11 +346,13 @@ test "queue and subject parameters are strict" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
-    try std.testing.expectEqual(@as(?u16, 50), queueLimit(arena, "/xrpc/x"));
-    try std.testing.expectEqual(@as(?u16, 10), queueLimit(arena, "/xrpc/x?limit=10"));
-    try std.testing.expectEqual(@as(?u16, null), queueLimit(arena, "/xrpc/x?limit=0"));
-    try std.testing.expectEqual(@as(?u16, null), queueLimit(arena, "/xrpc/x?limit=999"));
-    try std.testing.expectEqual(@as(?u16, null), queueLimit(arena, "/xrpc/x?cursor=1"));
+    try std.testing.expectEqual(@as(u16, 50), queuePage(arena, "/xrpc/x").?.limit);
+    try std.testing.expectEqual(@as(u16, 10), queuePage(arena, "/xrpc/x?limit=10").?.limit);
+    try std.testing.expectEqual(@as(i64, 42), queuePage(arena, "/xrpc/x?limit=10&cursor=42").?.after);
+    try std.testing.expectEqual(@as(?QueuePage, null), queuePage(arena, "/xrpc/x?limit=0"));
+    try std.testing.expectEqual(@as(?QueuePage, null), queuePage(arena, "/xrpc/x?limit=999"));
+    try std.testing.expectEqual(@as(?QueuePage, null), queuePage(arena, "/xrpc/x?cursor=-1"));
+    try std.testing.expectEqual(@as(?QueuePage, null), queuePage(arena, "/xrpc/x?page=2"));
     try std.testing.expectEqualStrings("at://did:plc:a/fm.plyr.track/3k1", subjectParam(arena, "/xrpc/x?subject=at%3A%2F%2Fdid%3Aplc%3Aa%2Ffm.plyr.track%2F3k1").?);
     try std.testing.expectEqual(@as(?[]const u8, null), subjectParam(arena, "/xrpc/x?subject=did:plc:a&subject=did:plc:b"));
     try std.testing.expectEqual(@as(?[]const u8, null), subjectParam(arena, "/xrpc/x"));

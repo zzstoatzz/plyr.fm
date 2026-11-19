@@ -101,7 +101,8 @@ pub fn isTrack(subject: []const u8, track_collection: []const u8) bool {
 
 /// Reasons are free text a person reads in the queue: valid UTF-8, bounded.
 pub fn validReason(reason: []const u8) bool {
-    return reason.len <= max_reason_bytes and std.unicode.utf8ValidateSlice(reason);
+    return reason.len <= max_reason_bytes and std.unicode.utf8ValidateSlice(reason) and
+        std.mem.indexOfScalar(u8, reason, 0) == null;
 }
 
 test "opening and closing entries match prod's event log" {
@@ -145,4 +146,5 @@ test "subjects are record URIs or account DIDs" {
     try std.testing.expect(!isTrack("did:plc:abc", "fm.plyr.track"));
     try std.testing.expect(validReason("covers my band's song"));
     try std.testing.expect(!validReason("\xff"));
+    try std.testing.expect(!validReason("a\x00b"));
 }
