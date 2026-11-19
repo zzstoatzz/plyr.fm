@@ -1,0 +1,68 @@
+"""plyr's plugin for the Osprey worker: input, UDFs and output, all from env.
+
+DATABASE_URL             next's Postgres (the writer login)
+TRACK_COLLECTION_NSID    default fm.plyr.track
+MODERATION_SERVICE_URL   plyr's moderation service, which holds the AuDD key
+MODERATION_AUTH_TOKEN    its X-Moderation-Key
+OSPREY_DRAIN_ONCE        true: stop when caught up (a scheduled run)
+OSPREY_POLL_SECONDS      otherwise, how long to wait when caught up
+OSPREY_START_AT_US       where a first run starts; default now
+"""
+
+from collections.abc import Sequence
+from functools import cache
+from typing import Any
+
+from osprey.engine.executor.execution_context import Action
+from osprey.engine.udf.base import UDFBase
+from osprey.worker.adaptor.plugin_manager import hookimpl_osprey
+from osprey.worker.lib.config import Config
+from osprey.worker.lib.storage.labels import LabelsServiceBase
+from osprey.worker.sinks.sink.input_stream import BaseInputStream
+from osprey.worker.sinks.sink.output_sink import BaseOutputSink
+from osprey.worker.sinks.utils.acking_contexts import BaseAckingContext
+
+from plyr_osprey import udfs
+from plyr_osprey.entity_labels import PostgresEntityLabels
+from plyr_osprey.fingerprint import ModerationServiceFingerprinter
+from plyr_osprey.store import Store
+from plyr_osprey.tracks import ModerationLogSink, TrackInputStream, Walk
+
+
+@cache
+def _shared(config: Config) -> tuple[Store, Walk]:
+    store = Store(config.expect_str('DATABASE_URL'), config.get_str('TRACK_COLLECTION_NSID', 'fm.plyr.track'))
+    return store, Walk()
+
+
+@hookimpl_osprey
+def register_udfs() -> Sequence[type[UDFBase[Any, Any]]]:
+    return [udfs.UrlHost, udfs.RecordingsPlayingThrough, udfs.FlagForReview]
+
+
+@hookimpl_osprey
+def register_input_stream(config: Config) -> BaseInputStream[BaseAckingContext[Action]]:
+    # required: without it every scan would fail and, after a few runs, be passed over
+    udfs.fingerprinter = ModerationServiceFingerprinter(
+        config.expect_str('MODERATION_SERVICE_URL'), config.expect_str('MODERATION_AUTH_TOKEN')
+    )
+    store, walk = _shared(config)
+    start = config.get_optional_str('OSPREY_START_AT_US')
+    return TrackInputStream(
+        store,
+        walk,
+        poll_seconds=float(config.get_int('OSPREY_POLL_SECONDS', 30)),
+        drain_once=config.get_bool('OSPREY_DRAIN_ONCE', False),
+        start_at_us=int(start) if start else None,
+    )
+
+
+@hookimpl_osprey
+def register_output_sinks(config: Config) -> Sequence[BaseOutputSink]:
+    store, walk = _shared(config)
+    return [ModerationLogSink(store, walk)]
+
+
+@hookimpl_osprey
+def register_labels_service_or_provider(config: Config) -> LabelsServiceBase:
+    return PostgresEntityLabels(config.expect_str('DATABASE_URL'))

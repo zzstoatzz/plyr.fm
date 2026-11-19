@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Unit and rules tests, plus the Postgres round trip when TEST_DATABASE_URL is set.
+set -euo pipefail
+here="$(cd "$(dirname "$0")/.." && pwd)"
+osprey="$("$here/scripts/setup")"
+cd "$here"
+OSPREY_RULES_PATH="$here/rules" DD_TRACE_ENABLED=false DD_DOGSTATSD_DISABLE=true \
+  exec "$osprey/.venv/bin/python" -m pytest -q "$@"

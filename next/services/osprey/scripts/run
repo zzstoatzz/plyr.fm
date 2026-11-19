@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Run the rules worker against next's database. With OSPREY_DRAIN_ONCE=true it
+# stops once it has caught up; otherwise it polls. See README.md for the env.
+set -euo pipefail
+here="$(cd "$(dirname "$0")/.." && pwd)"
+osprey="$("$here/scripts/setup")"
+export OSPREY_RULES_PATH="$here/rules"
+export OSPREY_INPUT_STREAM_SOURCE=plugin
+export DD_TRACE_ENABLED=false DD_DOGSTATSD_DISABLE=true
+cd "$osprey"
+exec uv run --no-sync python osprey_worker/src/osprey/worker/cli/sinks.py run-rules-sink --no-pooled

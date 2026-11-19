@@ -1,0 +1,75 @@
+name: next osprey
+
+# Next's moderation rules worker (next/services/osprey): ROOST's Osprey engine
+# running plyr's SML rules over tracks the next appview indexes, writing review
+# flags to next's moderation log. It runs on a schedule and stops once it has
+# caught up; its cursor lives in next's database. Nothing here touches prod
+# except asking prod's moderation service to fingerprint audio (/scan), which
+# holds the AuDD key and writes nothing.
+
+on:
+  pull_request:
+    paths:
+      - "next/services/osprey/**"
+      - "next/backend/migrations/0048_add_moderation_log.sql"
+      - "next/backend/migrations/0050_add_moderation_rules_state.sql"
+      - ".github/workflows/next-osprey.yml"
+  push:
+    branches: [main]
+    paths:
+      - "next/services/osprey/**"
+      - ".github/workflows/next-osprey.yml"
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: osprey_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    defaults:
+      run:
+        working-directory: next/services/osprey
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+      - run: uvx ruff check src tests && uvx ruff format --check src tests
+      - run: scripts/test
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/osprey_test
+
+  run:
+    needs: test
+    # a push runs it once the tests pass; the schedule and a manual run skip the tests
+    if: always() && github.ref == 'refs/heads/main' && (needs.test.result == 'success' || needs.test.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: next-osprey-run
+      cancel-in-progress: false
+    defaults:
+      run:
+        working-directory: next/services/osprey
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+      - name: run the rules until caught up
+        env:
+          DATABASE_URL: ${{ secrets.ZIG_NEXT_WRITER_DATABASE_URL }}
+          MODERATION_SERVICE_URL: ${{ secrets.MODERATION_SERVICE_URL }}
+          MODERATION_AUTH_TOKEN: ${{ secrets.MODERATION_AUTH_TOKEN }}
+          OSPREY_DRAIN_ONCE: "true"
+        run: scripts/run

@@ -77,3 +77,19 @@ DID, the service DID document leaves the key out.
 
 Not yet: `subscribeLabels`, and an `app.bsky.labeler.service` record that
 declares the values to outside apps.
+
+## rules
+
+automated flags come from [next/services/osprey](../../services/osprey/README.md):
+ROOST's [Osprey](https://github.com/roostorg/osprey) engine running plyr's SML
+rules over every track the appview indexes. a rule that matches writes a
+`flagged_by_scan` or `flagged_by_rule` event, which opens a review; rules never
+hide or label anything themselves. the worker runs on a schedule
+(`.github/workflows/next-osprey.yml`) with the writer login, and keeps its
+cursor, its scan records and Osprey's entity labels in `plyr_moderation`
+(migration 0050).
+
+the first rule is prod's copyright rule: someone else's recording plays through
+the upload for about 48 seconds (or fills most of it), and it isn't the
+uploader's own catalog. while prod still fingerprints every upload, only audio
+next stored itself is scanned here.

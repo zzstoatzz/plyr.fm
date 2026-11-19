@@ -1,0 +1,28 @@
+[project]
+name = "plyr-osprey"
+version = "0.1.0"
+description = "plyr's rules, UDFs and plumbing for ROOST's Osprey worker"
+requires-python = ">=3.11"
+# installed into Osprey's own environment (scripts/osprey), which provides
+# osprey-worker, psycopg2, requests and pluggy at the versions it pins
+dependencies = []
+
+[project.entry-points.osprey_plugin]
+plyr = "plyr_osprey.register_plugins"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.format]
+quote-style = "single"
