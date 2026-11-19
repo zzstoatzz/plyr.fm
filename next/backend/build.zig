@@ -54,6 +54,12 @@ pub fn build(b: *std.Build) void {
     root_module.addAnonymousImport("migration_0038_download_policy", .{
         .root_source_file = b.path("migrations/0038_add_track_download_policy.sql"),
     });
+    root_module.addAnonymousImport("migration_0048", .{
+        .root_source_file = b.path("migrations/0048_add_moderation_log.sql"),
+    });
+    root_module.addAnonymousImport("migration_0049", .{
+        .root_source_file = b.path("migrations/0049_add_moderation_labels.sql"),
+    });
     root_module.addAnonymousImport("migration_0047_track_record_json", .{
         .root_source_file = b.path("migrations/0047_add_track_record_json.sql"),
     });

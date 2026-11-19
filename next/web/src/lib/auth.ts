@@ -15,6 +15,7 @@ export function canLogPlays() { return hasTealPlayGrant(grantedScope); }
 export const auth = createAuthState(authConfig, handler => new Client({ handler }));
 
 const addAccountKey = 'plyr-next:add-account';
+const grantUpgradeKey = 'plyr-next:grant-upgrade';
 const accountDirectoryKey = 'plyr-next:recent-accounts';
 type AccountIdentity = { did: Did; handle: string | null };
 
@@ -101,11 +102,15 @@ async function initialize() {
 		history.replaceState(history.state, '', location.pathname);
 		let tealUpgrade: string | null = null;
 		let previousAccount: string | null = null;
+		let grantUpgrade: { did: string; returnTo: string } | null = null;
 		try {
 			tealUpgrade = sessionStorage.getItem(tealUpgradeKey);
 			previousAccount = sessionStorage.getItem(addAccountKey);
+			const upgrade: unknown = JSON.parse(sessionStorage.getItem(grantUpgradeKey) ?? 'null');
+			if (upgrade && typeof upgrade === 'object' && 'did' in upgrade && typeof upgrade.did === 'string' && 'returnTo' in upgrade && typeof upgrade.returnTo === 'string') grantUpgrade = { did: upgrade.did, returnTo: upgrade.returnTo };
 			sessionStorage.removeItem(tealUpgradeKey);
 			sessionStorage.removeItem(addAccountKey);
+			sessionStorage.removeItem(grantUpgradeKey);
 		} catch {}
 		try {
 			const { session, state } = await (await oauthClient()).initCallback(params);
@@ -121,11 +126,12 @@ async function initialize() {
 			}
 		} catch {
 			completeQueueLogin(false);
-			const restoreDid = tealUpgrade ?? previousAccount;
+			// a declined upgrade keeps the session it started from
+			const restoreDid = tealUpgrade ?? grantUpgrade?.did ?? previousAccount;
 			if (restoreDid) {
 				try {
 					await activate(await (await oauthClient()).restore(restoreDid));
-					callbackIntent = tealUpgrade ? '/settings?teal=permission' : '/settings';
+					callbackIntent = tealUpgrade ? '/settings?teal=permission' : grantUpgrade ? returnPath(grantUpgrade.returnTo) ?? '/' : '/settings';
 					return;
 				} catch {}
 			}
@@ -173,6 +179,20 @@ export async function authorizeScrobbling() {
 		await (await oauthClient()).signInRedirect(did, { scope, state: 'teal:' + did });
 	} catch (error) {
 		sessionStorage.removeItem(tealUpgradeKey);
+		throw error;
+	}
+}
+
+/** Adds grants to the signed-in session (reporting, the review queue) and comes back to `returnTo`. */
+export async function addGrants(parts: readonly string[], returnTo: string) {
+	const { did } = auth.getAuth();
+	if (!did) throw new Error('sign in first');
+	const scope = [...new Set([...grantedScope.split(' ').filter(Boolean), ...parts])].join(' ');
+	try { sessionStorage.setItem(grantUpgradeKey, JSON.stringify({ did, returnTo })); } catch {}
+	try {
+		await (await oauthClient()).signInRedirect(did, { scope, state: returnPath(returnTo) });
+	} catch (error) {
+		try { sessionStorage.removeItem(grantUpgradeKey); } catch {}
 		throw error;
 	}
 }

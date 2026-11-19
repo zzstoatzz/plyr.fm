@@ -1,0 +1,56 @@
+# osprey (next's moderation rules)
+
+[Osprey](https://github.com/roostorg/osprey), ROOST's rules engine, running
+plyr's rules over the tracks next indexes. Matches become review flags in next's
+moderation log (`plyr_moderation.events`), where they show up in the queue at
+next.plyr.fm/moderation. A rule only flags; a person decides.
+
+This is option B from the moderation plan: Osprey's real worker and SML, with
+plyr's plugin for input, UDFs and output, and without Osprey's Kafka, Druid and
+UI stack.
+
+## how it fits
+
+```
+plyr_index.track_records ──▶ TrackInputStream ──▶ Osprey RulesSink ──▶ ModerationLogSink ──▶ plyr_moderation.events
+   (indexed tracks)          (cursor in            (rules/*.sml +        (flags, scan record      (the review queue)
+                              rule_cursors)         plyr UDFs)            and cursor, one txn)
+```
+
+- **input** (`src/plyr_osprey/tracks.py`): walks indexed tracks in
+  `(indexed_at_us, record_uri)` order, so edits come round again. A first run
+  starts from now, not the whole catalog.
+- **rules** (`rules/`): `rules/index.sml` decides what applies to a track;
+  `rules/copyright.sml` is prod's "plays through" copyright rule.
+- **UDFs** (`src/plyr_osprey/udfs.py`): `RecordingsPlayingThrough` fingerprints
+  audio through plyr's moderation service (which holds the AuDD key) and applies
+  the evidence bar from prod (`evidence.py`); `FlagForReview` is the effect a
+  matched rule leaves; `UrlHost` is a helper.
+- **output**: the flags for a track, its scan record and the cursor are written
+  in one transaction. A failed scan isn't recorded as clean: the run stops and
+  retries that track next time, and passes over it after 3 failures.
+- **entity labels**: Osprey requires a labels service; `entity_labels.py` keeps
+  them in `plyr_moderation.osprey_entity_labels`. No rule uses them yet.
+
+## running it
+
+`scripts/setup` fetches Osprey at the pinned commit and installs this plugin
+into its environment. `scripts/test` runs the tests (set `TEST_DATABASE_URL`
+for the Postgres round trip). `scripts/run` runs the worker:
+
+| env | |
+| --- | --- |
+| `DATABASE_URL` | next's Postgres (the writer login) |
+| `MODERATION_SERVICE_URL`, `MODERATION_AUTH_TOKEN` | plyr's moderation service, for `/scan` |
+| `OSPREY_DRAIN_ONCE` | `true` stops once caught up |
+| `OSPREY_POLL_SECONDS` | otherwise, the wait when caught up (default 30) |
+| `OSPREY_START_AT_US` | where a first run starts (default now) |
+
+In production it runs every 10 minutes from `.github/workflows/next-osprey.yml`
+with `OSPREY_DRAIN_ONCE=true`.
+
+## scope until cutover
+
+Prod fingerprints every fm.plyr.track upload and next already reads prod's
+verdicts through the labeler, so `rules/index.sml` only scans audio next stored
+itself (`plyr-next-audio`). Scans cost money; at cutover, drop that condition.
