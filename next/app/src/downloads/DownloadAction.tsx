@@ -1,10 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { DownloadSimple as Download } from '../icons';
-import { View } from 'react-native';
-import { api } from '../api-client';
+import { ActivityIndicator, Pressable, View } from 'react-native';
 import { ApiError, type Track } from '@plyr/next-core/api';
+import { formatAudio } from '@plyr/next-core/downloads/format';
+import { ArrowLeft, DownloadSimple as Download } from '../icons';
+import { api } from '../api-client';
 import { ActionRow } from '../ActionRow';
-import { Action, Copy, row } from '../controls';
+import { useAppearance } from '../appearance';
+import { Action, Copy } from '../controls';
+import { Text } from '../Text';
+import { artistName } from '../CatalogPieces';
 import { downloadAllowed, prepareDownload } from './model';
 import { saveDownload } from './delivery';
 import { useAuth } from '../auth';
@@ -12,71 +16,91 @@ import { prepareProtectedDownload } from './protected';
 import { downloadSession } from './session';
 import { authorizeSupporterDownload, DownloadGrantRequired } from './supporter';
 
-function formatAudio(audio: { mime: string; sizeBytes?: number }): string {
-  const type = audio.mime.replace(/^audio\//, '').toUpperCase();
-  if (!audio.sizeBytes) return type;
-  const unit = audio.sizeBytes >= 1_048_576 ? 'MiB' : 'KiB';
-  const size = audio.sizeBytes / (unit === 'MiB' ? 1_048_576 : 1024);
-  return `${type} · ${size.toLocaleString(undefined, { maximumFractionDigits: 1 })} ${unit}`;
-}
+type Prepared = Awaited<ReturnType<typeof prepareDownload>>;
 
-export function DownloadAction({ track, reconnect }: { track: Track; reconnect: () => void }) {
+/**
+ * One tap downloads. The menu turns into a download panel only when there is something to decide:
+ * the artist asks for support, a lossless original exists, or the account needs a grant.
+ */
+export function DownloadAction({ track, reconnect, expanded, onExpand, done }: {
+  track: Track; reconnect: () => void; expanded: boolean; onExpand: (expanded: boolean) => void; done: () => void;
+}) {
   const auth = useAuth();
-  const [busy, setBusy] = useState(false), [message, setMessage] = useState<string>();
-  const [choice, setChoice] = useState<Awaited<ReturnType<typeof prepareDownload>>>();
+  const theme = useAppearance();
+  const [busy, setBusy] = useState(false), [error, setError] = useState<string>();
+  const [picked, setPicked] = useState<'playback' | 'original'>();
+  const [choice, setChoice] = useState<Prepared>();
   const [needsGrant, setNeedsGrant] = useState(false);
   const active = useRef<AbortController | null>(null);
   useEffect(() => () => { active.current?.abort(); }, [track.record.uri]);
   useEffect(() => {
     active.current?.abort(); active.current = null;
-    setBusy(false); setChoice(undefined); setMessage(undefined); setNeedsGrant(false);
+    setBusy(false); setChoice(undefined); setError(undefined); setNeedsGrant(false); onExpand(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only an account change resets the panel
   }, [auth.did, auth.rpc]);
+  function expand(next: Prepared | undefined, grant = false) {
+    setChoice(next); setNeedsGrant(grant); onExpand(!!next || grant);
+  }
   async function download(selection?: 'playback' | 'original') {
     if (active.current) return;
+    if (track.access.download_policy === 'supporters' && !auth.supporterDownloads) { expand(undefined, true); return; }
     const controller = new AbortController(); active.current = controller;
-    setBusy(true); setMessage(undefined);
+    setBusy(true); setError(undefined); setPicked(selection);
     try {
       const prepared = await prepareDownload(track.id, track.record.uri, {
         track: id => api.track(id, { fresh: true }), artist: api.artist,
-        playback: id => api.playback(id, { fresh: true }).catch(error => {
-          if (error instanceof ApiError && error.status === 401) throw new Error('this track has no supported download source.');
-          throw error;
+        playback: id => api.playback(id, { fresh: true }).catch(failure => {
+          if (failure instanceof ApiError && failure.status === 401) throw new Error('this track has no supported download source.');
+          throw failure;
         }),
         authorize: record => authorizeSupporterDownload(auth, record, downloadSession(auth, controller.signal), controller.signal),
         protected: (current, uri, admission) => prepareProtectedDownload(current, uri, auth, controller.signal, admission)
       }, controller.signal);
       controller.signal.throwIfAborted();
-      if (!selection && (prepared.support || prepared.original)) { setChoice(prepared); return; }
-      if (selection === 'original' && !prepared.original) throw new Error('the original download changed. choose a download again.');
+      if (!selection && (prepared.support || prepared.original)) { expand(prepared); return; }
       const selected = selection === 'original' ? prepared.original : prepared;
-      if (!selected) throw new Error('the original download is unavailable.');
-      setChoice(undefined);
+      if (!selected) throw new Error('the original file changed. choose again.');
       await saveDownload(selected, controller.signal);
-      if (!controller.signal.aborted) setMessage('download opened.');
-    } catch (error) {
-      if (!controller.signal.aborted) { setChoice(undefined); setNeedsGrant(error instanceof DownloadGrantRequired); setMessage(error instanceof Error ? error.message : 'could not download audio. try again.'); }
+      if (!controller.signal.aborted) done();
+    } catch (failure) {
+      if (controller.signal.aborted) return;
+      if (failure instanceof DownloadGrantRequired) expand(undefined, true);
+      else setError(failure instanceof Error ? failure.message : 'could not download this track. try again.');
     } finally {
-      if (active.current === controller) active.current = null;
-      if (!controller.signal.aborted) setBusy(false);
+      if (active.current === controller) { active.current = null; setBusy(false); setPicked(undefined); }
     }
   }
   if (!downloadAllowed(track)) return null;
-  if (needsGrant || (track.access.download_policy === 'supporters' && !auth.supporterDownloads)) return <View style={{ gap: 10, paddingVertical: 10 }}>
-    <Copy>{auth.did ? 'reconnect to allow supporter download checks.' : 'sign in to check access to this download.'}</Copy>
-    <Action label={auth.did ? 'Reconnect for supporter downloads' : 'Sign in for supporter downloads'} disabled={!auth.ready} onPress={reconnect} />
+  if (!expanded) return <View>
+    <ActionRow icon={Download} label={busy ? 'preparing download…' : 'download'} disabled={busy} onPress={() => void download()} />
+    {error && <Copy live>{error}</Copy>}
   </View>;
-  return <View style={{ gap: choice || message || busy ? 10 : 0 }}>
-    <ActionRow icon={Download} label={busy ? 'preparing download…' : 'download audio'} disabled={busy} onPress={() => void download()} />
-    {choice && <>
-      {choice.support && <><Copy>consider supporting this artist before downloading. support is optional.</Copy><Action label="Support artist" href={choice.support} /></>}
-      {choice.original ? <>
-        <Copy>choose the listening version or the original uploaded file.</Copy>
-        <Action label={`Playback audio · ${formatAudio(choice)}`} disabled={busy} onPress={() => void download('playback')} />
-        <Action label={`Original upload · ${formatAudio(choice.original)}`} primary disabled={busy} onPress={() => void download('original')} />
-      </> : <Action label="Continue download" primary disabled={busy} onPress={() => void download('playback')} />}
-      {!busy && <View style={row}><Action label="Cancel download" onPress={() => setChoice(undefined)} /></View>}
+  const back = () => { active.current?.abort(); active.current = null; setBusy(false); setError(undefined); expand(undefined); };
+  const artist = artistName(track);
+  const option = (label: string, detail: string, selection: 'playback' | 'original', strong: boolean) =>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${label}, ${detail}`} disabled={busy} onPress={() => void download(selection)}
+      style={({ pressed }) => ({ minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, borderWidth: 1,
+        borderColor: strong ? theme.accent : theme.line, backgroundColor: pressed ? theme.hover : 'transparent', opacity: busy && picked !== selection ? 0.5 : 1 })}>
+      <View style={{ flex: 1 }}>
+        <Text style={{ color: theme.text, fontWeight: '600', fontSize: 16 * theme.scale }}>{label}</Text>
+        <Text style={{ color: theme.faint, fontSize: 13 * theme.scale }}>{detail}</Text>
+      </View>
+      {picked === selection ? <ActivityIndicator color={theme.accent} /> : <Download size={20} color={strong ? theme.accent : theme.muted} />}
+    </Pressable>;
+  return <View style={{ gap: 10, paddingBottom: 6 }}>
+    <ActionRow icon={ArrowLeft} label="back" onPress={back} />
+    {needsGrant ? <>
+      <Copy>{artist} keeps downloads for supporters. {auth.did ? 'reconnect so plyr.fm can check your support.' : 'sign in so plyr.fm can check your support.'}</Copy>
+      <Action primary label={auth.did ? 'reconnect' : 'sign in'} disabled={!auth.ready} onPress={reconnect} />
+    </> : choice && <>
+      {choice.support && <>
+        <Copy>{artist} asks listeners to consider supporting their work.</Copy>
+        <Action primary label={`support ${artist}`} href={choice.support} />
+      </>}
+      {choice.original
+        ? <>{option('original upload', formatAudio(choice.original), 'original', true)}{option('smaller file', formatAudio(choice), 'playback', false)}</>
+        : option('continue to download', formatAudio(choice), 'playback', true)}
     </>}
-    {busy && <Action label="Cancel download" onPress={() => { active.current?.abort(); active.current = null; setBusy(false); setChoice(undefined); setMessage(undefined); }} />}
-    {message && <Copy live>{message}</Copy>}
+    {error && <Copy live>{error}</Copy>}
   </View>;
 }

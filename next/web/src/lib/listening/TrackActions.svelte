@@ -3,21 +3,24 @@
   import { downloadAllowed } from '@plyr/next-core/downloads/model';
   import { invalidateAll } from '$app/navigation';
   import { isPrivateTrack } from '@plyr/next-core/track-access';
-  import { onDestroy, onMount } from 'svelte';
+  import { onDestroy, onMount, tick } from 'svelte';
   import type { Track } from '@plyr/next-core/api';
   import { auth } from '$lib/auth';
   import { player } from '$lib/player.svelte';
   import { trackHref } from '$lib/tracks';
   import Icon from '$lib/ui/Icon.svelte';
   import { placePopover, placePopoverAt } from './popover';
+  import PlaylistSheet from '$lib/collections/PlaylistSheet.svelte';
+  import TrackDownload from '$lib/downloads/TrackDownload.svelte';
   let { track }: { track: Track } = $props();
   let panel: HTMLDivElement;
   let trigger: HTMLButtonElement;
-  let picking = $state(false);
   let open = $state(false);
-  let picker: HTMLDialogElement;
-  let downloadDialog: HTMLDialogElement;
+  // Mounted on first use so a long list of rows does not carry a sheet each.
+  let picking = $state(false);
+  let picker = $state<PlaylistSheet>();
   let downloading = $state(false);
+  let downloader = $state<TrackDownload>();
   let accessDialog: HTMLDialogElement;
   let access = $state(false);
   let accessChanged = false;
@@ -25,7 +28,7 @@
   let error = $state(false);
   let account = $state.raw(auth.getAuth());
   const id = $props.id();
-  onMount(() => auth.subscribe(() => { const next = auth.getAuth(); if (next.rpc !== account.rpc) { picker?.close(); picking = false; downloadDialog?.close(); accessDialog?.close(); } account = next; }));
+  onMount(() => auth.subscribe(() => { const next = auth.getAuth(); if (next.rpc !== account.rpc) { picking = false; accessDialog?.close(); } account = next; }));
   const owner = $derived(!!account.did && account.did === track.artist.did && !isPrivateTrack(track));
   const queueable = $derived(player.canEditPublicQueue && !player.liveStation);
   function show(place: () => void) {
@@ -83,13 +86,13 @@
   <button class="text-button" type="button" disabled={!queueable} onclick={() => pick(() => player.playNext(track))}><Icon name="next" size={18} />play next</button>
   <button class="text-button" type="button" disabled={!queueable} onclick={() => pick(() => player.enqueue(track))}><Icon name="queue" size={18} />add to queue</button>
   <hr>
+  {#if account.rpc}
+    <button class="text-button" type="button" onclick={async () => { picking = true; panel.hidePopover(); await tick(); picker?.show(); }}><Icon name="playlist_add" size={18} />add to playlist</button>
+  {:else}<a class="text-button" href={resolve('/(app)/login') + '?' + new URLSearchParams({ return_to: trackHref(track) })}><Icon name="plus" size={18} />sign in to save</a>{/if}
   {#if downloadAllowed(track)}
-    <button class="text-button" type="button" onclick={() => { downloading = true; panel.hidePopover(); downloadDialog.showModal(); }}><Icon name="download" size={18} />download</button>
+    <button class="text-button" type="button" onclick={async () => { downloading = true; panel.hidePopover(); await tick(); await downloader?.start(); if (!document.querySelector('dialog[open]')) trigger.focus(); }}><Icon name="download" size={18} />download</button>
   {/if}
   <button class="text-button" type="button" onclick={share}><Icon name="share" size={18} />{copied ? 'link copied' : 'share track'}</button>
-  {#if account.rpc}
-    <button class="text-button" type="button" onclick={() => { picking = true; panel.hidePopover(); picker.showModal(); }}><Icon name="plus" size={18} />add to playlist</button>
-  {:else}<a class="text-button" href={resolve('/(app)/login') + '?' + new URLSearchParams({ return_to: trackHref(track) })}><Icon name="plus" size={18} />sign in to save</a>{/if}
   {#if owner}
     <hr>
     <a class="text-button" href={resolve('/(app)/edit-track/[id]', { id: track.id })}><Icon name="edit" size={18} />edit track</a>
@@ -100,19 +103,8 @@
   <a class="text-button" href={trackHref(track)}><Icon name="info" size={18} />about this track</a>
   {#if error}<p role="alert">could not share this track. try again.</p>{/if}
 </div>
-<dialog bind:this={picker} class="picker" onclose={() => { picking = false; trigger.focus(); }}>
-  <header><strong>add to playlist</strong><form method="dialog"><button class="icon-button" type="submit" aria-label="Close playlists"><Icon name="x" size={18} /></button></form></header>
-{#if picking && account.rpc && account.did}
-  {#key account.rpc}{#await import('$lib/collections/PlaylistPicker.svelte') then { default: Picker }}<Picker {account} {track} />{/await}{/key}
-{/if}
-</dialog>
-
-<dialog bind:this={downloadDialog} class="picker" onclose={() => { downloading = false; trigger.focus(); }}>
-  <header><strong>download</strong><form method="dialog"><button class="icon-button" type="submit" aria-label="Close download"><Icon name="x" size={18} /></button></form></header>
-{#if downloading}
-  {#await import('$lib/downloads/DownloadPanel.svelte') then { default: Download }}<Download {track} />{:catch}<p role="alert">could not open this. reload the page and try again.</p>{/await}
-{/if}
-</dialog>
+{#if picking}<PlaylistSheet bind:this={picker} {track} onclose={() => { picking = false; trigger.focus(); }} />{/if}
+{#if downloading}<TrackDownload bind:this={downloader} {track} announce onclose={() => trigger.focus()} />{/if}
 <dialog bind:this={accessDialog} class="picker" onclose={() => { access = false; trigger.focus(); if (accessChanged) void invalidateAll(); }}>
   <header><strong>who can listen</strong><form method="dialog"><button class="icon-button" type="submit" aria-label="Close who can listen"><Icon name="x" size={18} /></button></form></header>
 {#if access}
