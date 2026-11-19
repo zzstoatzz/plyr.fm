@@ -25,6 +25,8 @@ const catalog_reconcile_runner = @import("internal/ingest/catalog_reconcile_runn
 const account_reconciler = @import("internal/account/reconciler.zig");
 const blob_mirror = @import("internal/delivery/blob_mirror.zig");
 const label_sync = @import("internal/moderation/label_sync.zig");
+const moderation_api = @import("api/moderation.zig");
+const postgres_moderation = @import("internal/moderation/postgres_log.zig");
 const actor_identity_refresher = @import("internal/identity/actor_identity_refresher.zig");
 const space_consumer = @import("internal/space/consumer.zig");
 
@@ -141,6 +143,22 @@ pub fn main() !void {
         })
     else
         null;
+    var moderation_log: ?postgres_moderation.PostgresModerationLog = if (postgres_store) |*store|
+        .{ .pool = store.pool, .track_collection = settings.track_collection }
+    else
+        null;
+    // moderation answers to the same service DID; operators come from
+    // MODERATION_OPERATOR_DIDS (none configured = nobody can decide)
+    const moderation_service: ?moderation_api.Config = if (notification_service) |notify|
+        try moderation_api.Config.init(
+            allocator,
+            notify.audiences,
+            notify.plc_url,
+            settings.track_collection,
+            try moderation_api.parseOperators(allocator, if (std.c.getenv("MODERATION_OPERATOR_DIDS")) |raw| std.mem.span(raw) else ""),
+        )
+    else
+        null;
     var platform_stats: ?postgres_platform_stats.PostgresPlatformStatsStore = if (postgres_store) |*store| .{ .pool = store.pool, .io = io, .collection = settings.track_collection } else null;
     switch (settings.role) {
         .jams => unreachable,
@@ -187,6 +205,8 @@ pub fn main() !void {
                 .managed_space = settings.managed_space,
                 .notifications = notification_service,
                 .notification_store = notification_store,
+                .moderation = moderation_service,
+                .moderation_log = if (moderation_log) |*value| value else null,
             });
         },
         .space_consumer => {
@@ -365,6 +385,9 @@ test {
     _ = @import("internal/ingest/catalog_reconciler.zig");
     _ = @import("internal/delivery/blob_mirror.zig");
     _ = @import("internal/moderation/label_sync.zig");
+    _ = @import("internal/moderation/log.zig");
+    _ = @import("internal/moderation/postgres_log.zig");
+    _ = @import("api/moderation.zig");
     _ = @import("internal/delivery/postgres_mirror_store.zig");
     _ = @import("internal/delivery/public_media.zig");
     _ = @import("internal/identity/actor_identity_refresher.zig");

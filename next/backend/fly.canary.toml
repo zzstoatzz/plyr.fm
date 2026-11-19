@@ -34,6 +34,8 @@ primary_region = "sjc"
   SPACE_SERVICE_DID = "did:web:api.next.plyr.fm"
   SPACE_SERVICE_ENDPOINT = "https://api.next.plyr.fm"
   SPACE_TYPE_NSID = "fm.plyr.next.audio"
+  # who may read the moderation queue and record decisions (comma-separated)
+  MODERATION_OPERATOR_DIDS = "did:plc:xbtmt2zjwlrfegqvch7fboei"
   # the plyr.fm account reads plyr spaces through plyr's space-stream
   # (next/services/space-stream); its app password is SPACE_SYNC_APP_PASSWORD
   SPACE_SYNC_DID = "did:plc:vs3hnzq2daqbszxlysywzy54"
