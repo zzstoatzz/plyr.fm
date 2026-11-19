@@ -29,15 +29,19 @@ pub const Report = struct {
     absent: usize = 0,
     retryable: usize = 0,
     rejected: usize = 0,
+    untrusted: usize = 0,
 
     pub fn complete(self: Report) bool {
         return self.candidates > 0 and self.verified > 0 and
-            self.retryable == 0 and self.rejected == 0;
+            self.retryable == 0 and self.rejected == 0 and self.untrusted == 0;
     }
 
     /// The run itself failed: nothing verified, or a repository was rejected.
     /// Retryable repositories (offline or deactivated PDSes) alone don't fail
-    /// it; they're retried by the next run and by live ingestion.
+    /// it; they're retried by the next run and by live ingestion. Neither do
+    /// untrusted ones: a commit that doesn't verify against the DID's current
+    /// key is the PDS's state (e.g. a migration that rotated the key without
+    /// re-signing), and stays unindexed until the PDS signs a new commit.
     pub fn failed(self: Report) bool {
         return self.candidates == 0 or self.verified == 0 or self.rejected > 0;
     }
@@ -69,6 +73,10 @@ pub fn reconcile(
             .applied, .idempotent, .stale => report.verified += 1,
             .not_found => report.absent += 1,
             .rate_limited, .unavailable => report.retryable += 1,
+            .invalid_signature => {
+                report.untrusted += 1;
+                try rejections.append(allocator, .{ .did = did, .outcome = outcome });
+            },
             else => {
                 report.rejected += 1;
                 try rejections.append(allocator, .{ .did = did, .outcome = outcome });
@@ -78,7 +86,7 @@ pub fn reconcile(
     }
     // Repeated after the loop so they survive a truncated log tail.
     for (rejections.items) |rejection| {
-        std.log.info("catalog repository {s} rejected: {s}", .{ rejection.did, @tagName(rejection.outcome) });
+        std.log.info("catalog repository {s} not indexed: {s}", .{ rejection.did, @tagName(rejection.outcome) });
     }
     return report;
 }
@@ -86,7 +94,7 @@ pub fn reconcile(
 test "catalog reconciliation counts every disposition and requires verified work" {
     const SourceFake = struct {
         fn list(_: *anyopaque, allocator: std.mem.Allocator) candidates.Error!candidates.CandidateSet {
-            const values = [_][]const u8{ "did:plc:good", "did:plc:gone", "did:plc:later", "did:plc:bad" };
+            const values = [_][]const u8{ "did:plc:good", "did:plc:gone", "did:plc:later", "did:plc:rotated", "did:plc:bad" };
             const items = allocator.alloc([]u8, values.len) catch return error.OutOfMemory;
             var initialized: usize = 0;
             errdefer {
@@ -109,7 +117,8 @@ test "catalog reconciliation counts every disposition and requires verified work
             if (std.mem.endsWith(u8, did, "good")) return .applied;
             if (std.mem.endsWith(u8, did, "gone")) return .not_found;
             if (std.mem.endsWith(u8, did, "later")) return .rate_limited;
-            return .invalid_signature;
+            if (std.mem.endsWith(u8, did, "rotated")) return .invalid_signature;
+            return .invalid_repository;
         }
     };
     var context: u8 = 0;
@@ -118,12 +127,16 @@ test "catalog reconciliation counts every disposition and requires verified work
         .{ .context = &context, .list_fn = SourceFake.list },
         .{ .context = &context, .repair_fn = RepairFake.repair },
     );
-    try std.testing.expectEqual(@as(usize, 4), report.candidates);
+    try std.testing.expectEqual(@as(usize, 5), report.candidates);
     try std.testing.expectEqual(@as(usize, 1), report.verified);
     try std.testing.expectEqual(@as(usize, 1), report.absent);
     try std.testing.expectEqual(@as(usize, 1), report.retryable);
     try std.testing.expectEqual(@as(usize, 1), report.rejected);
+    try std.testing.expectEqual(@as(usize, 1), report.untrusted);
     try std.testing.expect(!report.complete());
     try std.testing.expect(report.failed());
     try std.testing.expect(!(Report{ .candidates = 3, .verified = 2, .retryable = 1 }).failed());
+    const untrusted_only: Report = .{ .candidates = 3, .verified = 2, .untrusted = 1 };
+    try std.testing.expect(!untrusted_only.failed());
+    try std.testing.expect(!untrusted_only.complete());
 }

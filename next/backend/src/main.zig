@@ -218,8 +218,8 @@ pub fn main() !void {
                 settings.discovery_relay,
             );
             std.log.info(
-                "catalog reconciliation: {d} candidates, {d} verified, {d} absent, {d} retryable, {d} rejected",
-                .{ report.candidates, report.verified, report.absent, report.retryable, report.rejected },
+                "catalog reconciliation: {d} candidates, {d} verified, {d} absent, {d} retryable, {d} untrusted, {d} rejected",
+                .{ report.candidates, report.verified, report.absent, report.retryable, report.untrusted, report.rejected },
             );
             if (report.failed()) return error.CatalogReconciliationFailed;
         },
