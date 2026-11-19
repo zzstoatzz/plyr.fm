@@ -96,7 +96,7 @@ export function TrackPlaylistPicker({ track, done }: { track: Track; done: () =>
     {!recovery.loading && (recovery.error || recovery.operations.length > 0) && <CreateRecovery auth={auth} recovery={recovery} kind="playlist" onDismiss={() => {}} />}
     {error && <Copy live>{error}</Copy>}
     <View style={{ height: 1, backgroundColor: theme.hairline, marginVertical: 4 }} />
-    {lists.data.map(list => <Pressable key={list.record.uri} accessibilityRole="button" accessibilityLabel={playlistName(list)} disabled={busy} onPress={() => void add(list)}
+    {lists.data.map(list => <Pressable key={list.record.uri} accessibilityRole="button" accessibilityLabel={`${playlistName(list)}, ${playlistTrackCount(list)}`} accessibilityState={{ disabled: busy, busy: adding === list.id }} disabled={busy} onPress={() => void add(list)}
       style={({ pressed }) => ({ ...row, opacity: busy && adding !== list.id ? 0.5 : 1, backgroundColor: pressed ? theme.hover : 'transparent', borderRadius: 10 })}>
       <Cover uri={collectionArtwork(list)} size={44} />
       <View style={{ flex: 1, minWidth: 0 }}>

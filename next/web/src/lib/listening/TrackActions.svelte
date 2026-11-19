@@ -90,7 +90,7 @@
     <button class="text-button" type="button" onclick={async () => { picking = true; panel.hidePopover(); await tick(); picker?.show(); }}><Icon name="playlist_add" size={18} />add to playlist</button>
   {:else}<a class="text-button" href={resolve('/(app)/login') + '?' + new URLSearchParams({ return_to: trackHref(track) })}><Icon name="plus" size={18} />sign in to save</a>{/if}
   {#if downloadAllowed(track)}
-    <button class="text-button" type="button" onclick={async () => { downloading = true; panel.hidePopover(); await tick(); downloader?.start(); }}><Icon name="download" size={18} />download</button>
+    <button class="text-button" type="button" onclick={async () => { downloading = true; panel.hidePopover(); await tick(); await downloader?.start(); if (!document.querySelector('dialog[open]')) trigger.focus(); }}><Icon name="download" size={18} />download</button>
   {/if}
   <button class="text-button" type="button" onclick={share}><Icon name="share" size={18} />{copied ? 'link copied' : 'share track'}</button>
   {#if owner}
@@ -104,7 +104,7 @@
   {#if error}<p role="alert">could not share this track. try again.</p>{/if}
 </div>
 {#if picking}<PlaylistSheet bind:this={picker} {track} onclose={() => { picking = false; trigger.focus(); }} />{/if}
-{#if downloading}<TrackDownload bind:this={downloader} {track} onclose={() => trigger.focus()} />{/if}
+{#if downloading}<TrackDownload bind:this={downloader} {track} announce onclose={() => trigger.focus()} />{/if}
 <dialog bind:this={accessDialog} class="picker" onclose={() => { access = false; trigger.focus(); if (accessChanged) void invalidateAll(); }}>
   <header><strong>who can listen</strong><form method="dialog"><button class="icon-button" type="submit" aria-label="Close who can listen"><Icon name="x" size={18} /></button></form></header>
 {#if access}

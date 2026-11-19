@@ -105,10 +105,10 @@
         <ul aria-label="your playlists">
           {#each lists as list (list.id)}
             <li>
-              <button type="button" class="row" disabled={busy} aria-label={playlistName(list)} onclick={() => add(list)}>
+              <button type="button" class="row" disabled={busy} aria-busy={adding === list.id} aria-label={`${playlistName(list)}, ${playlistTrackCount(list)}`} onclick={() => add(list)}>
                 <span class="thumb"><Artwork src={list.media?.artwork?.url} fallbackIcon="music" size={88} /></span>
                 <span class="name"><span class="truncate">{playlistName(list)}</span><small>{playlistTrackCount(list)}</small></span>
-                {#if adding === list.id}<span class="spin" aria-label="adding"></span>{:else}<Icon name="plus" size={18} />{/if}
+                {#if adding === list.id}<span class="spin" aria-hidden="true"></span>{:else}<Icon name="plus" size={18} />{/if}
               </button>
             </li>
           {/each}

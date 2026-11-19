@@ -35,7 +35,8 @@ export function DownloadAction({ track, reconnect, expanded, onExpand, done }: {
   useEffect(() => () => { active.current?.abort(); }, [track.record.uri]);
   useEffect(() => {
     active.current?.abort(); active.current = null;
-    setBusy(false); setChoice(undefined); setError(undefined); setNeedsGrant(false);
+    setBusy(false); setChoice(undefined); setError(undefined); setNeedsGrant(false); onExpand(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only an account change resets the panel
   }, [auth.did, auth.rpc]);
   function expand(next: Prepared | undefined, grant = false) {
     setChoice(next); setNeedsGrant(grant); onExpand(!!next || grant);

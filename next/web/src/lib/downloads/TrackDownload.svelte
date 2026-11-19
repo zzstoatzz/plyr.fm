@@ -11,7 +11,8 @@
 
   // One tap downloads. The sheet opens only when there is something to decide:
   // the artist asks for support, a lossless original exists, or the account needs a grant.
-  let { track, busy = $bindable(false), onclose }: { track: Track; busy?: boolean; onclose?: () => void } = $props();
+  // `announce` shows progress as a toast, for callers with no button of their own to show it on.
+  let { track, busy = $bindable(false), announce = false, onclose }: { track: Track; busy?: boolean; announce?: boolean; onclose?: () => void } = $props();
   type Prepared = Awaited<ReturnType<typeof import('./prepare').prepareTrackDownload>>;
   let sheet: Sheet;
   let choice = $state.raw<Prepared>();
@@ -37,7 +38,7 @@
   const signIn = $derived(`${resolve('/(app)/login')}?${new URLSearchParams({ return_to: trackHref(track) })}`);
 
   /** Starts the download, or opens the sheet when the listener has a choice to make. */
-  export function start() { void run(); }
+  export function start(): Promise<void> { return run(); }
 
   async function run(selection?: 'playback' | 'original') {
     if (active) return;
@@ -51,8 +52,11 @@
     const controller = active = new AbortController();
     busy = true;
     picked = selection;
+    const progress = announce && !selection ? toast.add('preparing download…', 'info', 60_000) : undefined;
+    let flow: typeof import('./prepare') | undefined;
     try {
-      const { prepareTrackDownload, saveDownload } = await import('./prepare');
+      flow = await import('./prepare');
+      const { prepareTrackDownload, saveDownload } = flow;
       const prepared = await prepareTrackDownload(track, current, controller.signal);
       controller.signal.throwIfAborted();
       if (!selection && (prepared.support || prepared.original)) { choice = prepared; needsGrant = false; sheet.show(); return; }
@@ -64,12 +68,13 @@
       toast.add('download started', 'success');
     } catch (failure) {
       if (controller.signal.aborted) return;
-      const { DownloadGrantRequired } = await import('./prepare');
-      if (failure instanceof DownloadGrantRequired) { needsGrant = true; sheet.show(); return; }
+      if (!flow) { toast.add('could not start the download. reload the page and try again.', 'error', 6000); return; }
+      if (failure instanceof flow.DownloadGrantRequired) { needsGrant = true; sheet.show(); return; }
       const message = failure instanceof Error ? failure.message : 'could not download this track. try again.';
       if (choice) error = message;
       else toast.add(message, 'error', 5000);
     } finally {
+      if (progress) toast.dismiss(progress);
       if (active === controller) { active = null; busy = false; picked = undefined; }
     }
   }
