@@ -11,6 +11,7 @@ import { isCreateRkey, sameRecord, type CreateHandoff, type CreateOperation, typ
 import { albumPublishing } from './collections/album-pds';
 import { collectionOrdering } from './collections/collection-order-pds';
 import { CollectionOrderConflict } from './collections/collection-order';
+import type { PlaylistAddStatus } from './collections/playlist-add';
 import { MAX_AUDIO_BYTES } from './publishing/track-audio';
 import { trackEditor } from './publishing/track-pds';
 import { assertPublicUploadRecord } from './publishing/upload-model';
@@ -304,10 +305,11 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 		return publishCreate(reservation, { $type: NSID.list, name: name.trim().slice(0, 64), listType: 'playlist', items, createdAt: new Date().toISOString() });
 	}
 
-	async function addToPlaylist(playlistUri: string, track: Track): Promise<AwaitStatus> {
+	/** 'present' when the playlist already holds this track; nothing is written then. */
+	async function addToPlaylist(playlistUri: string, track: Track): Promise<PlaylistAddStatus> {
 		const subject = publicTrackReference(track);
 		const { value, cid } = await readList(playlistUri);
-		if (value.items.some((i) => i.subject.uri === track.record.uri)) return 'indexed';
+		if (value.items.some((i) => i.subject.uri === track.record.uri)) return 'present';
 		if (value.items.length >= MAX_ITEMS) throw new Error(`playlists hold at most ${MAX_ITEMS} tracks`);
 		value.items = [...value.items, { subject }];
 		return writeList(playlistUri, value, cid);

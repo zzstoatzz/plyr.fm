@@ -196,11 +196,13 @@ async function check(browser, accounts, width, scheme) {
     assert.deepEqual((await read(playlistUri)).value.items, []);
     for (const track of tracks.slice(0, 2)) {
       await page.goto(origin + '/track/' + track.id);
+      const sheet = page.getByRole('dialog', { name: 'add to playlist' });
       await button('add to playlist').click();
-      await button('Ordered playlist').click();
-      await main.getByText('added to playlist.', { exact: true }).waitFor();
-      await button('Ordered playlist').click();
-      await main.getByText('added to playlist.', { exact: true }).waitFor();
+      await sheet.getByRole('button', { name: 'Ordered playlist', exact: true }).click();
+      await page.getByText('added to Ordered playlist', { exact: true }).waitFor();
+      await button('add to playlist').click();
+      await sheet.getByRole('button', { name: 'Ordered playlist', exact: true }).click();
+      await page.getByText('already in Ordered playlist', { exact: true }).waitFor();
     }
     assert.deepEqual((await read(playlistUri)).value.items.map(item => item.subject), tracks.slice(0, 2).map(subject));
 

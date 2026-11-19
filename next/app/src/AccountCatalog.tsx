@@ -1,10 +1,8 @@
 import { AlbumRows, TrackRows } from './TrackRows';
 import { trackArtwork } from '@plyr/next-core/artwork';
-import { X, ListPlus, MusicNote as Music2, ArrowsClockwise as RefreshCw } from './icons';
+import { X, ListPlus } from './icons';
 import { PlayerControl } from './PlayerControl';
 import { AccountSection } from './AccountPieces';
-import { ActionRow } from './ActionRow';
-import { WaveLoading } from './WaveLoading';
 import { ListCards } from './ListCards';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -151,24 +149,6 @@ function AccountLibrary({ did, likesOnly, onPlay }: { did: string; likesOnly: bo
       </View>
     </Sheet>}
   </>;
-}
-
-export function TrackPlaylistPicker({ track }: { track: Track }) {
-  const { did } = useAuth();
-  const pds = usePds();
-  const mutation = useMutation();
-  const load = useCallback((cursor?: string) => api.playlists({ owner_did: did ?? undefined, limit: 30, cursor }), [did]);
-  const lists = usePages(load);
-  return <View style={{ gap: 8 }}>
-    {lists.data.map(list => <ActionRow key={list.record.uri} icon={Music2} label={list.metadata.name ?? 'Untitled'} disabled={mutation.busy}
-      onPress={() => void mutation.run(async () => messageFor(await pds.addToPlaylist(list.record.uri, track), 'added to playlist.'))} />)}
-    {lists.loading && <WaveLoading label="Loading playlists" />}
-    {lists.error && <><Copy>{lists.error}</Copy><ActionRow icon={RefreshCw} label="retry" onPress={lists.more} /></>}
-    {!lists.loading && !lists.error && !lists.data.length && <Copy>create a playlist from your library first.</Copy>}
-    {lists.cursor && !lists.loading && !lists.error && <ActionRow icon={ListPlus} label="more playlists" onPress={lists.more} />}
-    {mutation.busy && <Copy>adding to playlist…</Copy>}
-    {mutation.message && <Copy>{mutation.message}</Copy>}
-  </View>;
 }
 
 interface CollectionControlsProps {
