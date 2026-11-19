@@ -168,7 +168,18 @@ pub fn handle(
                 .action = input.action,
                 .actor = caller,
                 .reason = input.reason,
-            }) catch |err| return unavailable(request, err, request_id, response_cors);
+                .label_value = input.value,
+            }, std.Io.Timestamp.now(io, .real).toMilliseconds()) catch |err| switch (err) {
+                error.LabelNotAllowed => {
+                    try xrpcError(request, .bad_request, "InvalidLabel", "that label does not apply to this subject", request_id, response_cors);
+                    return;
+                },
+                error.LabelerUnavailable => {
+                    try xrpcError(request, .service_unavailable, "LabelerUnavailable", "the labeler is not set up", request_id, response_cors);
+                    return;
+                },
+                else => return unavailable(request, err, request_id, response_cors),
+            };
             const out = try std.fmt.allocPrint(allocator, "{{\"id\":{d}}}", .{id});
             try response.json(request, .ok, out, request_id, response_cors);
         },
@@ -195,7 +206,7 @@ pub fn handle(
 }
 
 const ReportInput = struct { subject: []const u8, reason_type: log.ReasonType, reason: ?[]const u8 };
-const EventInput = struct { subject: []const u8, action: log.Action, reason: ?[]const u8 };
+const EventInput = struct { subject: []const u8, action: log.Action, reason: ?[]const u8, value: ?[]const u8 = null };
 
 fn parseReport(allocator: std.mem.Allocator, body: []const u8) ?ReportInput {
     const Raw = struct { subject: []const u8, reasonType: []const u8, reason: ?[]const u8 = null };
@@ -206,12 +217,14 @@ fn parseReport(allocator: std.mem.Allocator, body: []const u8) ?ReportInput {
 }
 
 fn parseEvent(allocator: std.mem.Allocator, body: []const u8) ?EventInput {
-    const Raw = struct { subject: []const u8, action: []const u8, reason: ?[]const u8 = null };
+    const Raw = struct { subject: []const u8, action: []const u8, reason: ?[]const u8 = null, value: ?[]const u8 = null };
     const raw = std.json.parseFromSliceLeaky(Raw, allocator, body, .{}) catch return null;
     if (!log.validSubject(raw.subject)) return null;
     const action = log.Action.parse(raw.action) orelse return null;
     if (!action.operatorMay()) return null;
-    return .{ .subject = raw.subject, .action = action, .reason = optionalReason(raw.reason) orelse return null };
+    // a label action names its value; nothing else carries one
+    if (action.isLabel() != (raw.value != null)) return null;
+    return .{ .subject = raw.subject, .action = action, .reason = optionalReason(raw.reason) orelse return null, .value = raw.value };
 }
 
 /// Outer null = invalid; inner null = no reason given (blank counts as none).
@@ -336,6 +349,10 @@ test "reports and events reject what the log cannot hold" {
     // operators decide; they cannot forge a report or a scanner flag
     try std.testing.expectEqual(@as(?EventInput, null), parseEvent(arena, "{\"subject\":\"" ++ subject ++ "\",\"action\":\"reported\"}"));
     try std.testing.expectEqual(@as(?EventInput, null), parseEvent(arena, "{\"subject\":\"" ++ subject ++ "\",\"action\":\"flagged_by_scan\"}"));
+    const label = parseEvent(arena, "{\"subject\":\"" ++ subject ++ "\",\"action\":\"label_applied\",\"value\":\"copyright-violation\"}").?;
+    try std.testing.expectEqualStrings("copyright-violation", label.value.?);
+    try std.testing.expectEqual(@as(?EventInput, null), parseEvent(arena, "{\"subject\":\"" ++ subject ++ "\",\"action\":\"label_applied\"}"));
+    try std.testing.expectEqual(@as(?EventInput, null), parseEvent(arena, "{\"subject\":\"" ++ subject ++ "\",\"action\":\"acknowledged\",\"value\":\"porn\"}"));
     const long = try arena.alloc(u8, log.max_reason_bytes + 1);
     @memset(long, 'x');
     const body = try std.fmt.allocPrint(arena, "{{\"subject\":\"{s}\",\"action\":\"acknowledged\",\"reason\":\"{s}\"}}", .{ subject, long });

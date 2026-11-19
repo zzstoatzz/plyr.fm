@@ -52,3 +52,28 @@ reports are still accepted and nobody can read them.
 
 `reasonType` is one of `copyright`, `sexual`, `spam`, `harassment`,
 `impersonation`, `other`.
+
+## labels
+
+An operator decision can also be a label (`label_applied` / `label_negated`,
+with a `value`). Tracks take `copyright-violation`, `sexual` and `porn`;
+accounts take `ai`. The API signs each one as a `com.atproto.label.defs#label`
+with the secp256k1 key in `LABELER_SIGNING_KEY` (64 hex chars) and writes it
+to `plyr_moderation.labels` in the same transaction as the log entry, then
+projects it onto `track_policies.operator_labels` /
+`account_label_policies`, the tables feeds already read.
+
+Labels are public at `com.atproto.label.queryLabels` (seq order, cursor is
+the last seq; `uriPatterns` are exact or end in `*`). A negation is a new
+label with `neg: true`; earlier labels are never rewritten.
+
+Until cutover the labeler signs as the service DID (`did:web:api.next.plyr.fm`),
+and `/.well-known/did.json` carries its `#atproto_label` key and an
+`#atproto_labeler` service whenever a key is set. A DID points at one labeler,
+and `moderation.plyr.fm` still points at prod's, so taking over that identity
+is a cutover step: set `LABELER_DID` and `LABELER_SIGNING_KEY` to its values
+and repoint its DID document here. When `LABELER_DID` differs from the service
+DID, the service DID document leaves the key out.
+
+Not yet: `subscribeLabels`, and an `app.bsky.labeler.service` record that
+declares the values to outside apps.

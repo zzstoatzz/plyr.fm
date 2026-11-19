@@ -1,8 +1,8 @@
 //! The moderation log's vocabulary: what can be recorded about a subject and
 //! what each entry means for review. Ported from prod's event log
 //! (docs/internal/moderation/event-log.md), trimmed to what next enforces
-//! today. Labels, takedowns and indexing exclusions join when something
-//! here acts on them.
+//! today. Takedowns and indexing exclusions join when something here acts
+//! on them.
 //!
 //! Review state is derived, never stored: a subject is open when its newest
 //! opening entry has no closing entry after it, so a fresh report on an
@@ -18,6 +18,10 @@ pub const Action = enum {
     override_allow,
     override_exclude,
     override_clear,
+    /// next's labeler signed a label; neither opens nor closes review
+    /// (labelling states what we assert, not that we're finished)
+    label_applied,
+    label_negated,
 
     pub fn parse(text: []const u8) ?Action {
         return std.meta.stringToEnum(Action, text);
@@ -43,9 +47,13 @@ pub const Action = enum {
     /// their own method, flags from the rules engine.
     pub fn operatorMay(self: Action) bool {
         return switch (self) {
-            .acknowledged, .override_allow, .override_exclude, .override_clear => true,
+            .acknowledged, .override_allow, .override_exclude, .override_clear, .label_applied, .label_negated => true,
             else => false,
         };
+    }
+
+    pub fn isLabel(self: Action) bool {
+        return self == .label_applied or self == .label_negated;
     }
 
     /// The decision this entry projects onto a track, if any. `null` inside
@@ -75,6 +83,22 @@ pub const ReasonType = enum {
         return std.meta.stringToEnum(ReasonType, text);
     }
 };
+
+/// Label values next's labeler may sign, by subject kind. The same values
+/// prod's labeler declares, which is what the policy tables accept.
+pub const track_label_values = [_][]const u8{ "copyright-violation", "sexual", "porn" };
+pub const account_label_values = [_][]const u8{"ai"};
+
+pub fn labelAllowed(subject: []const u8, value: []const u8, track_collection: []const u8) bool {
+    const values: []const []const u8 = if (std.mem.startsWith(u8, subject, "did:"))
+        &account_label_values
+    else if (isTrack(subject, track_collection))
+        &track_label_values
+    else
+        return false;
+    for (values) |allowed| if (std.mem.eql(u8, allowed, value)) return true;
+    return false;
+}
 
 pub const max_reason_bytes = 2000;
 pub const max_subject_bytes = 512;
@@ -115,6 +139,18 @@ test "opening and closing entries match prod's event log" {
     try std.testing.expect(!Action.reported.operatorMay());
     try std.testing.expect(Action.override_clear.operatorMay());
     try std.testing.expectEqual(@as(?Action, null), Action.parse("takedown"));
+    try std.testing.expect(!Action.label_applied.opensReview() and !Action.label_applied.closesReview());
+    try std.testing.expect(Action.label_negated.operatorMay() and Action.label_negated.isLabel());
+}
+
+test "labels match their subject kind" {
+    const track = "at://did:plc:a/fm.plyr.track/3k1";
+    try std.testing.expect(labelAllowed(track, "copyright-violation", "fm.plyr.track"));
+    try std.testing.expect(labelAllowed(track, "porn", "fm.plyr.track"));
+    try std.testing.expect(!labelAllowed(track, "ai", "fm.plyr.track"));
+    try std.testing.expect(labelAllowed("did:plc:a", "ai", "fm.plyr.track"));
+    try std.testing.expect(!labelAllowed("did:plc:a", "porn", "fm.plyr.track"));
+    try std.testing.expect(!labelAllowed("at://did:plc:a/fm.plyr.comment/1", "porn", "fm.plyr.track"));
 }
 
 test "the SQL action sets agree with the enum" {
