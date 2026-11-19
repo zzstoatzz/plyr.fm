@@ -8,3 +8,13 @@ test('download choices name the format and size the way a person reads them', ()
   assert.equal(formatAudio({ mime: 'audio/wav', sizeBytes: 512_000 }), 'WAV · 512 KB');
   assert.equal(formatAudio({ mime: 'audio/wav' }), 'WAV');
 });
+
+test('a legacy record with a bare file type still downloads', async () => {
+  const { audioMime } = await import('../src/downloads/model.ts');
+  assert.equal(audioMime('mp3'), 'audio/mpeg');
+  assert.equal(audioMime('FLAC'), 'audio/flac');
+  assert.equal(audioMime('audio/wav'), 'audio/wav');
+  assert.equal(audioMime('image/png'), null);
+  assert.equal(audioMime('exe'), null);
+  assert.equal(audioMime(undefined), null);
+});
