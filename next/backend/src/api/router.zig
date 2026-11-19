@@ -13,6 +13,8 @@ const tracks = @import("tracks.zig");
 const actors = @import("actors.zig");
 const managed_space = @import("managed_space.zig");
 const notifications = @import("notifications.zig");
+const moderation = @import("moderation.zig");
+const PostgresModerationLog = @import("../internal/moderation/postgres_log.zig").PostgresModerationLog;
 const catalog = @import("catalog.zig");
 const NotificationService = @import("../internal/notification/service.zig").Config;
 const NotificationStore = @import("../internal/notification/store.zig").NotificationStore;
@@ -66,6 +68,9 @@ pub const App = struct {
     /// null when no service DID is configured: callers authenticate to it
     notifications: ?NotificationService = null,
     notification_store: ?NotificationStore = null,
+    /// null when no service DID is configured, like notifications
+    moderation: ?moderation.Config = null,
+    moderation_log: ?*PostgresModerationLog = null,
 };
 
 pub fn handle(
@@ -138,6 +143,17 @@ pub fn handle(
             app.io,
             app.notifications.?,
             app.notification_store,
+            method,
+            app.cors,
+            request_id,
+        );
+    } else if (if (app.moderation) |config| moderation.match(config, path) else null) |method| {
+        try moderation.handle(
+            request,
+            allocator,
+            app.io,
+            app.moderation.?,
+            app.moderation_log,
             method,
             app.cors,
             request_id,
