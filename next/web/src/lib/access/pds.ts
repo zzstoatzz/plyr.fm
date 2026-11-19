@@ -109,7 +109,7 @@ function policySession(auth: Auth<RepoRpc>) {
 export async function addPolicy(auth: Auth<RepoRpc>, space: string, rule: Rule, title?: string): Promise<void> {
   const { did, rpc } = policySession(auth);
   if (!space.startsWith(`at://${did}/space/`)) throw new Error('you can only open your own music.');
-  await ok(createRecord(rpc, { input: { repo: did, collection: collection(), record: policyRecord(NSID.policy, space, rule, title) } }));
+  await ok(createRecord(rpc, { input: { repo: did, collection: collection(), record: policyRecord(NSID.policy, [space], rule, title) } }));
 }
 
 export async function removePolicy(auth: Auth<RepoRpc>, policy: Policy): Promise<void> {

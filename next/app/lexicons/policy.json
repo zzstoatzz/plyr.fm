@@ -5,19 +5,43 @@
     "main": {
       "type": "record",
       "key": "tid",
-      "description": "One way into one of the author's gated spaces on plyr.fm. A space can carry any number of policies of any kinds; a reader who passes one may read the space. Whatever the space holds (a track, an album's tracks, a playlist) is opened as a whole.",
+      "description": "One way into some of the author's gated spaces on plyr.fm. A space can carry any number of policies of any kinds; a reader who passes one may read every space it names. Whatever a space holds (a track, a release's tracks, a playlist) is opened as a whole. One policy over several spaces lets one purchase open an album and the single it shares a track with.",
       "record": {
         "type": "object",
-        "required": ["space", "rule", "createdAt"],
+        "required": [
+          "spaces",
+          "rule",
+          "createdAt"
+        ],
         "properties": {
+          "spaces": {
+            "type": "array",
+            "minLength": 1,
+            "maxLength": 16,
+            "items": {
+              "type": "string",
+              "format": "uri"
+            },
+            "description": "The spaces this policy opens, each at://{author}/space/{type}/{skey}. Only the author's own spaces count. Older records carry a single 'space' string instead; readers accept either, never both."
+          },
           "space": {
             "type": "string",
             "format": "uri",
-            "description": "The space this policy opens, at://{author}/space/{type}/{skey}. Only the author's own spaces count."
+            "description": "Deprecated: one space. Read for older records; write spaces."
+          },
+          "subject": {
+            "type": "string",
+            "format": "at-uri",
+            "description": "What the policy sells or grants, for display: an fm.plyr.release or a single fm.plyr.track."
           },
           "rule": {
             "type": "union",
-            "refs": ["#signedIn", "#members", "#supporter", "#purchase"],
+            "refs": [
+              "#signedIn",
+              "#members",
+              "#supporter",
+              "#purchase"
+            ],
             "description": "What a reader must satisfy. Readers apply only the rules they know; an unknown rule opens nothing."
           },
           "title": {
@@ -26,7 +50,10 @@
             "maxGraphemes": 64,
             "description": "Short name shown to readers, e.g. 'buy the album' or 'friends'."
           },
-          "createdAt": { "type": "string", "format": "datetime" }
+          "createdAt": {
+            "type": "string",
+            "format": "datetime"
+          }
         }
       }
     },
@@ -38,12 +65,17 @@
     "members": {
       "type": "object",
       "description": "The listed accounts. The list is public.",
-      "required": ["members"],
+      "required": [
+        "members"
+      ],
       "properties": {
         "members": {
           "type": "array",
           "maxLength": 512,
-          "items": { "type": "string", "format": "did" }
+          "items": {
+            "type": "string",
+            "format": "did"
+          }
         }
       }
     },
@@ -55,7 +87,10 @@
           "type": "array",
           "minLength": 1,
           "maxLength": 16,
-          "items": { "type": "string", "format": "did" },
+          "items": {
+            "type": "string",
+            "format": "did"
+          },
           "description": "Brokers whose payment proofs count. Absent: the reading app's trusted brokers."
         }
       }
@@ -63,7 +98,10 @@
     "purchase": {
       "type": "object",
       "description": "Anyone holding a broker-verified network.attested.payment record to the author, at or above this price, whose entitlements include this policy record.",
-      "required": ["amount", "currency"],
+      "required": [
+        "amount",
+        "currency"
+      ],
       "properties": {
         "amount": {
           "type": "integer",
@@ -80,7 +118,10 @@
           "type": "array",
           "minLength": 1,
           "maxLength": 16,
-          "items": { "type": "string", "format": "did" },
+          "items": {
+            "type": "string",
+            "format": "did"
+          },
           "description": "Brokers whose payment proofs count. Absent: the reading app's trusted brokers."
         }
       }

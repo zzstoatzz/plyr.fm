@@ -99,7 +99,7 @@ pub fn evaluate(a: std.mem.Allocator, state: verifier.RecordState, cid: []const 
     const allowed = if (track.audio_space) |space|
         try spaces.decide(a, .{ .space = space.space, .user = viewer })
     else
-        try policy.allows(a, &.{.{ .uri = "", .space = "", .rule = .{ .supporter = null } }}, viewer, artist, evidence);
+        try policy.allows(a, &.{.{ .uri = "", .spaces = &.{}, .rule = .{ .supporter = null } }}, viewer, artist, evidence);
     if (!allowed) return error.DownloadDenied;
 }
 

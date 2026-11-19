@@ -1,0 +1,121 @@
+{
+  "lexicon": 1,
+  "id": "fm.plyr.release",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "description": "One edition of something an artist puts out: an album, single, EP, broadcast. It lists track records in play order and carries the edition's own metadata. A track may appear on several releases; tracks do not point back. Editions of the same work (remaster, deluxe) link with editionOf. Price and access are never here: fm.plyr.policy records name a release as their subject.",
+      "record": {
+        "type": "object",
+        "required": ["title", "releaseType", "tracks", "createdAt"],
+        "properties": {
+          "title": { "type": "string", "minLength": 1, "maxLength": 2560, "maxGraphemes": 256 },
+          "releaseType": {
+            "type": "string",
+            "maxLength": 64,
+            "knownValues": ["album", "single", "ep", "broadcast", "other"],
+            "description": "Primary type, as MusicBrainz release groups use it. Readers must accept values they do not know."
+          },
+          "secondaryTypes": {
+            "type": "array",
+            "maxLength": 8,
+            "items": {
+              "type": "string",
+              "maxLength": 64,
+              "knownValues": ["compilation", "live", "remix", "soundtrack", "dj-mix", "mixtape", "demo", "spokenword", "interview", "audiobook", "audio-drama", "field-recording"]
+            }
+          },
+          "tracks": {
+            "type": "array",
+            "maxLength": 500,
+            "items": { "type": "ref", "ref": "#item" },
+            "description": "In play order. Track numbers are positions within each disc, never stored. May be empty for an announced release."
+          },
+          "discs": {
+            "type": "array",
+            "maxLength": 99,
+            "items": { "type": "ref", "ref": "#disc" },
+            "description": "Titles for discs that have one."
+          },
+          "artistCredit": {
+            "type": "array",
+            "maxLength": 20,
+            "items": { "type": "ref", "ref": "#credit" },
+            "description": "Who the release is credited to, in order. Absent: the repo's owner."
+          },
+          "version": {
+            "type": "string",
+            "maxLength": 640,
+            "maxGraphemes": 64,
+            "description": "What sets this edition apart, e.g. 'deluxe' or '2026 remaster'."
+          },
+          "editionOf": {
+            "type": "string",
+            "format": "at-uri",
+            "description": "Another fm.plyr.release this is an edition of. Editions group under the release reached by following editionOf to its end."
+          },
+          "releaseDate": {
+            "type": "string",
+            "maxLength": 10,
+            "description": "YYYY, YYYY-MM or YYYY-MM-DD. A future date means announced."
+          },
+          "originalReleaseDate": {
+            "type": "string",
+            "maxLength": 10,
+            "description": "For a reissue whose original is not on the network: when the original came out, in the same form."
+          },
+          "artwork": {
+            "type": "blob",
+            "accept": ["image/png", "image/jpeg", "image/webp", "image/gif"],
+            "maxSize": 10000000
+          },
+          "description": { "type": "string", "maxLength": 50000, "maxGraphemes": 5000, "description": "Liner notes." },
+          "label": { "type": "ref", "ref": "#label" },
+          "catalogNumber": { "type": "string", "maxLength": 64 },
+          "barcode": { "type": "string", "minLength": 8, "maxLength": 14, "description": "UPC or EAN digits." },
+          "labels": {
+            "type": "union",
+            "refs": ["com.atproto.label.defs#selfLabels"],
+            "description": "Self-applied content warnings."
+          },
+          "createdAt": { "type": "string", "format": "datetime" },
+          "updatedAt": { "type": "string", "format": "datetime" }
+        }
+      }
+    },
+    "item": {
+      "type": "object",
+      "required": ["track"],
+      "properties": {
+        "track": { "type": "string", "format": "at-uri", "description": "An fm.plyr.track record, in any repo." },
+        "disc": { "type": "integer", "minimum": 1, "maximum": 99, "description": "Absent: disc 1." }
+      }
+    },
+    "disc": {
+      "type": "object",
+      "required": ["disc", "title"],
+      "properties": {
+        "disc": { "type": "integer", "minimum": 1, "maximum": 99 },
+        "title": { "type": "string", "maxLength": 2560, "maxGraphemes": 256 }
+      }
+    },
+    "credit": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 2560, "maxGraphemes": 256, "description": "As credited. Readers prefer the DID's current profile name when did is set." },
+        "did": { "type": "string", "format": "did" },
+        "joinPhrase": { "type": "string", "maxLength": 640, "maxGraphemes": 32, "description": "Text after this name, e.g. ' feat. ' or ' & '." }
+      }
+    },
+    "label": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 2560, "maxGraphemes": 256 },
+        "did": { "type": "string", "format": "did" }
+      }
+    }
+  }
+}

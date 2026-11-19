@@ -22,7 +22,7 @@ function session(auth: Auth) {
 export async function addPolicy(auth: Auth, space: string, rule: Rule, title?: string): Promise<void> {
   const { did, rpc } = session(auth);
   if (!space.startsWith(`at://${did}/space/`)) throw new Error('you can only open your own music.');
-  await ok(rpc.post('com.atproto.repo.createRecord', { input: { repo: did, collection: collection(), record: policyRecord(space, rule, title) } }));
+  await ok(rpc.post('com.atproto.repo.createRecord', { input: { repo: did, collection: collection(), record: policyRecord([space], rule, title) } }));
 }
 
 export async function removePolicy(auth: Auth, policy: Policy): Promise<void> {
