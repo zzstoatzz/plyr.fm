@@ -1,7 +1,7 @@
 import { Client } from '@atcute/client';
 import type { BrowserOAuthClient, OAuthSession } from '@atproto/oauth-client-browser';
 import { createAuthState, type Did } from '@plyr/next-core/auth-state';
-import { hasTealGrant, TEAL_SCOPE } from '@plyr/next-core/teal-scrobble';
+import { hasTealGrant, TEAL_SCOPE_PARTS } from '@plyr/next-core/teal-scrobble';
 import { setPrefs } from './prefs.svelte';
 import { returnPath } from '@plyr/next-core/return-path';
 import { authConfig } from './auth-config';
@@ -56,7 +56,7 @@ function oauthClient() {
 	const loopback = location.hostname === '127.0.0.1';
 	const redirect = `${location.origin}/oauth/callback`;
 	const clientId = loopback
-		? `http://localhost?redirect_uri=${encodeURIComponent(redirect)}&scope=${encodeURIComponent([...SCOPE_PARTS, TEAL_SCOPE].join(' '))}`
+		? `http://localhost?redirect_uri=${encodeURIComponent(redirect)}&scope=${encodeURIComponent([...SCOPE_PARTS, ...TEAL_SCOPE_PARTS].join(' '))}`
 		: `${SITE_URL}/oauth-client-metadata.json`;
 	client = import('@atproto/oauth-client-browser').then(({ BrowserOAuthClient }) => BrowserOAuthClient.load({
 		clientId,
@@ -168,7 +168,7 @@ export async function authorizeScrobbling() {
 	}
 	sessionStorage.setItem(tealUpgradeKey, did);
 	try {
-		const scope = [...new Set([...grantedScope.split(' ').filter(Boolean), TEAL_SCOPE])].join(' ');
+		const scope = [...new Set([...grantedScope.split(' ').filter(Boolean), ...TEAL_SCOPE_PARTS])].join(' ');
 		await (await oauthClient()).signInRedirect(did, { scope, state: 'teal:' + did });
 	} catch (error) {
 		sessionStorage.removeItem(tealUpgradeKey);

@@ -1,5 +1,5 @@
 import { ExpoOAuthClient, TokenInvalidError, TokenRefreshError, TokenRevokedError, type OAuthSession } from '@atproto/oauth-client-expo';
-import { hasTealGrant, TEAL_SCOPE } from '@plyr/next-core/teal-scrobble';
+import { hasTealGrant, TEAL_SCOPE_PARTS } from '@plyr/next-core/teal-scrobble';
 import { NATIVE_REDIRECT_URI, BASE_SCOPE_PARTS, SCOPE_PARTS, SITE_URL } from './auth-config';
 import { restoreWithin, type RestoreOutcome } from './auth-restore';
 import { clearAuth, getAuth, scopeFor, setAuth } from './auth-state';
@@ -21,7 +21,7 @@ function oauthClient() {
 			client_name: 'plyr.fm (next)',
 			client_uri: SITE_URL,
 			redirect_uris: [NATIVE_REDIRECT_URI],
-			scope: [...SCOPE_PARTS, TEAL_SCOPE].join(' '),
+			scope: [...SCOPE_PARTS, ...TEAL_SCOPE_PARTS].join(' '),
 			grant_types: ['authorization_code', 'refresh_token'],
 			response_types: ['code'],
 			token_endpoint_auth_method: 'none',
@@ -103,7 +103,7 @@ export async function authorizeScrobbling() {
 	const { did, agent } = getAuth();
 	if (!did) throw new Error('sign in to connect teal.fm');
 	if (canScrobble()) return;
-	const scope = [...new Set([...grantedScope.split(' ').filter(Boolean), TEAL_SCOPE])].join(' ');
+	const scope = [...new Set([...grantedScope.split(' ').filter(Boolean), ...TEAL_SCOPE_PARTS])].join(' ');
 	await prepareQueueLogin();
 	if (getAuth().agent !== agent) throw new Error('account changed');
 	const session = await oauthClient().signIn(did, { scope, redirect_uri: NATIVE_REDIRECT_URI });

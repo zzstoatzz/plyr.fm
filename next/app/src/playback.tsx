@@ -8,7 +8,7 @@ import type { Track } from '@plyr/next-core/api';
 import { useAuth } from './auth';
 import { getAuth } from './auth-state';
 import { useAppPreferences } from './preference-context';
-import { scrobble } from './teal';
+import { scrobble, showNowPlaying } from './teal';
 import { isPrivateTrack } from '@plyr/next-core/track-access';
 import { editPrivateQueue, withoutPrivateTrack } from '@plyr/next-core/publishing/private-music';
 import { privateLibrary } from './publishing/private-config';
@@ -203,6 +203,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
       let settled = false;
       sourceEvents.current = player.addListener('playbackStatusUpdate', (event) => {
         if (request !== sequence.current) return;
+        if (!privateTrack && availability === 'available') showNowPlaying(track, event.playing, player.currentTime, auth.did, confirmScrobblingConsent);
         if (event.error) {
           recordPlayback("player error", { request, error: String(event.error), elapsedMs: Date.now() - startedAt });
           setStarting((pending) => pending === request ? null : pending);

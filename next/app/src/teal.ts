@@ -1,7 +1,7 @@
 import type { Track } from '@plyr/next-core/api';
 import type { QualifiedPlay } from '@plyr/next-core/listening-session';
 import { RepoResponseError } from '@plyr/next-core/publishing/repo-rpc';
-import { tealPlay, writeTealPlay } from '@plyr/next-core/teal-scrobble';
+import { tealPlay, tealStatusWriter, writeTealPlay, writeTealStatus } from '@plyr/next-core/teal-scrobble';
 import { canScrobble } from './auth';
 import { SITE_URL } from './auth-config';
 import { getAuth, type Did } from './auth-state';
@@ -21,4 +21,25 @@ export async function scrobble(track: Track, play: QualifiedPlay, expectedDid: D
       if (error instanceof RepoResponseError && error.status < 500 && error.status !== 429) return;
     }
   }
+}
+
+let statusAccount: Did | null = null;
+let statusConsent: (did: Did) => Promise<boolean> = async () => false;
+const nowPlaying = tealStatusWriter({
+  origin: track => `${SITE_URL}/track/${encodeURIComponent(String(track.legacy_id ?? track.id))}`,
+  write: async record => {
+    const { did, rpc } = getAuth();
+    if (!did || did !== statusAccount || !rpc || !canScrobble() || !await statusConsent(did).catch(() => false) || getAuth().rpc !== rpc) return;
+    await writeTealStatus(rpc, did, record);
+  },
+});
+
+/** keep the listener's teal.fm "now playing" in step with the player */
+export function showNowPlaying(track: Track | null, playing: boolean, positionSeconds: number, expectedDid: Did | null, confirmConsent: (did: Did) => Promise<boolean>) {
+  statusConsent = confirmConsent;
+  if (expectedDid !== statusAccount) {
+    statusAccount = expectedDid;
+    nowPlaying.reset();
+  }
+  nowPlaying.observe({ track, playing, positionSeconds });
 }

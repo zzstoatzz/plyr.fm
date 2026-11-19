@@ -36,7 +36,7 @@ export function TealSettings() {
     <SettingsSection title="integrations" icon={Plugs}>
       {did ? <><SettingsRow label="teal.fm scrobbling" detail={connecting ? 'connecting to teal.fm…'
         : preferences.tealScrobbling && !granted ? 'reconnect to log listens from this device.'
-          : 'log your listens to public tracks on teal.fm'}>
+          : 'log listens and show what you’re playing on teal.fm. public tracks only.'}>
         <Switch accessibilityLabel="teal.fm scrobbling" disabled={connecting} value={preferences.tealScrobbling}
           thumbColor={theme.background} trackColor={{ false: theme.border, true: theme.accent }}
           ios_backgroundColor={theme.border} onValueChange={value => void toggle(value)} />

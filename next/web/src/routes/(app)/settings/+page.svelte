@@ -150,7 +150,7 @@
 			<h2 id="integrations">integrations</h2>
 			<div class="card">
 				<label class="toggle">
-					<span><strong>teal.fm scrobbling</strong><small id="scrobble-detail">log your listens to public tracks on teal.fm</small></span>
+					<span><strong>teal.fm scrobbling</strong><small id="scrobble-detail">log listens and show what you’re playing on teal.fm. public tracks only.</small></span>
 					<input type="checkbox" role="switch" aria-label="teal.fm scrobbling" aria-describedby="scrobble-detail" checked={prefs.tealScrobbling && !!granted} disabled={authorizing} onchange={event => toggleScrobbling(event.currentTarget)} />
 				</label>
 				{#if authorizing}<p class="integration-status" role="status">opening sign-in…</p>
