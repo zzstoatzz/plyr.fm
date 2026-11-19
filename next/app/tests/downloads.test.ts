@@ -67,3 +67,10 @@ test('processed service downloads bind both choices to the published media path'
   assert.equal(manifestReads, 0);
   for (const invalid of [null, [], { ...value, processed: undefined }, { ...value, processed: 'true' }, { ...value, original: { ...value.original, url: 'https://other.test/original' } }, { ...value, playback: { ...value.playback, url: source + '?download=1' } }, { ...value, original: { ...value.original, sizeBytes: 1.5 } }, { ...value, original: { ...value.original, contentType: 'text/html' } }]) assert.throws(() => parseDownloadManifest(invalid, source));
 });
+test('a record from the legacy app with a bare file type downloads with a real MIME type', async () => {
+  const legacy = { ...read, playback: async () => ({ ...playback, availability: { status: 'available' as const, delivery: { url: 'https://media.test/audio.mp3', media_type: 'mp3' } } }) };
+  const prepared = await prepareDownload(track.id, track.record.uri, legacy);
+  assert.equal(prepared.mime, 'audio/mpeg');
+  assert.equal(prepared.filename, 'artist - ab song.mp3');
+  await assert.rejects(prepareDownload(track.id, track.record.uri, { ...read, playback: async () => ({ ...playback, availability: { status: 'available' as const, delivery: { url: 'https://media.test/x', media_type: 'html' } } }) }), /no downloadable audio/);
+});

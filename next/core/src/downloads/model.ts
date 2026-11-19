@@ -16,6 +16,16 @@ export function downloadAllowed(track: Track): boolean {
     && (track.access.download_policy === 'open' || track.access.download_policy === 'ask');
 }
 
+const FILE_TYPES: Record<string, string> = { mp3: 'audio/mpeg', mpeg: 'audio/mpeg', wav: 'audio/wav', wave: 'audio/wav', flac: 'audio/flac', m4a: 'audio/mp4', mp4: 'audio/mp4', aac: 'audio/aac', ogg: 'audio/ogg', opus: 'audio/ogg', webm: 'audio/webm', aiff: 'audio/aiff', aif: 'audio/aiff' };
+
+/** Records uploaded by the legacy app carry a bare file type ("mp3") where a MIME type belongs. */
+export function audioMime(value: string | null | undefined): string | null {
+  const type = value?.trim().toLowerCase();
+  if (!type) return null;
+  if (type.startsWith('audio/')) return type;
+  return FILE_TYPES[type.replace(/^\./, '')] ?? null;
+}
+
 export function safeHttpUrl(value: string | null | undefined): string | null {
   if (!value) return null;
   try {
@@ -77,9 +87,10 @@ export async function prepareDownload(id: string, uri: string, read: {
   if (availability.status !== 'available' || availability.space) throw new Error('this track changed or is unavailable. try again.');
   const support = await supportFor(track.access.download_policy === 'ask');
   const source = safeHttpUrl(availability.delivery?.url);
-  if (!source || !availability.delivery?.media_type.startsWith('audio/')) throw new Error('no downloadable audio is available.');
+  const mime = audioMime(availability.delivery?.media_type);
+  if (!source || !mime) throw new Error('no downloadable audio is available.');
   const manifest = serviceMediaUrl(source) ? await (read.manifest || readDownloadManifest)(source, signal) : undefined;
-  const playbackAudio = manifest?.playback || { source, mime: availability.delivery.media_type, sizeBytes: undefined };
+  const playbackAudio = manifest?.playback || { source, mime, sizeBytes: undefined };
   admission?.begin();
   const playbackDownload: PublicDownload = { kind: 'public', ...playbackAudio, ...admission, attachment: attachmentUrl(source), filename: downloadFilename(track, playbackAudio.mime) };
   const original: PublicDownload | undefined = manifest?.processed ? { kind: 'public', ...manifest.original, ...admission, attachment: manifest.original.source, filename: downloadFilename(track, manifest.original.mime) } : undefined;
