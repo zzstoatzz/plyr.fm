@@ -14,6 +14,7 @@ const actors = @import("actors.zig");
 const managed_space = @import("managed_space.zig");
 const notifications = @import("notifications.zig");
 const moderation = @import("moderation.zig");
+const labels = @import("labels.zig");
 const PostgresModerationLog = @import("../internal/moderation/postgres_log.zig").PostgresModerationLog;
 const catalog = @import("catalog.zig");
 const NotificationService = @import("../internal/notification/service.zig").Config;
@@ -84,7 +85,7 @@ pub fn handle(
 
     if (request.method == .OPTIONS) {
         var cors = app.cors;
-        if (catalog.match(app.track_collection, path) != null) cors.public = true;
+        if (catalog.match(app.track_collection, path) != null or mem.eql(u8, path, labels.path)) cors.public = true;
         try response.empty(request, .no_content, request_id, cors);
     } else if (mem.eql(u8, path, "/health")) {
         if (request.method != .GET) {
@@ -147,6 +148,8 @@ pub fn handle(
             app.cors,
             request_id,
         );
+    } else if (mem.eql(u8, path, labels.path)) {
+        try labels.queryLabels(request, allocator, app.moderation_log, app.cors, request_id);
     } else if (if (app.moderation) |config| moderation.match(config, path) else null) |method| {
         try moderation.handle(
             request,

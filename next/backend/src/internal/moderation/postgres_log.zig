@@ -1,15 +1,20 @@
 //! The moderation log in PostgreSQL (`plyr_moderation.events`, migration
 //! 0048), plus the one projection it owns: an operator's allow/exclude
 //! decision on `plyr_index.track_policies`, which feeds, search, radio and
-//! stats already read.
+//! stats already read. Labels it signs live in postgres_labels.zig.
 
 const std = @import("std");
 const pg = @import("pg");
 const log = @import("log.zig");
+const Labeler = @import("labeler.zig").Labeler;
+const labels = @import("postgres_labels.zig");
+
+pub const StoredLabel = labels.StoredLabel;
+pub const LabelQuery = labels.LabelQuery;
 
 const Action = log.Action;
 
-pub const Error = error{ Unavailable, OutOfMemory, Corrupt };
+pub const Error = error{ Unavailable, OutOfMemory, Corrupt, LabelerUnavailable, LabelNotAllowed };
 
 pub const Entry = struct {
     subject: []const u8,
@@ -17,6 +22,8 @@ pub const Entry = struct {
     actor: []const u8,
     reason_type: ?log.ReasonType = null,
     reason: ?[]const u8 = null,
+    /// the label value, for label_applied / label_negated
+    label_value: ?[]const u8 = null,
 };
 
 pub const Recorded = struct {
@@ -26,6 +33,7 @@ pub const Recorded = struct {
     actor: []const u8,
     reasonType: ?[]const u8,
     reason: ?[]const u8,
+    labelValue: ?[]const u8,
     createdAt: i64,
 };
 
@@ -52,6 +60,8 @@ pub const max_reports_per_hour = 30;
 pub const PostgresModerationLog = struct {
     pool: *pg.Pool,
     track_collection: []const u8,
+    /// null: label actions are refused
+    labeler: ?*const Labeler = null,
 
     /// One report per reporter per subject per day; later ones are accepted
     /// and dropped, so a reporter cannot tell they were deduplicated.
@@ -81,7 +91,20 @@ pub const PostgresModerationLog = struct {
 
     /// Append one entry and, for a decision on a track, project it in the
     /// same transaction so the log and what listeners see cannot disagree.
-    pub fn record(self: *PostgresModerationLog, entry: Entry) Error!i64 {
+    pub fn record(self: *PostgresModerationLog, entry: Entry, now_ms: i64) Error!i64 {
+        var signed: ?@import("zat").Label = null;
+        var arena_state = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+        defer arena_state.deinit();
+        if (entry.action.isLabel()) {
+            const value = entry.label_value orelse return error.LabelNotAllowed;
+            if (!log.labelAllowed(entry.subject, value, self.track_collection)) return error.LabelNotAllowed;
+            const labeler = self.labeler orelse return error.LabelerUnavailable;
+            signed = labeler.sign(arena_state.allocator(), entry.subject, value, entry.action == .label_negated, now_ms) catch |err| switch (err) {
+                error.OutOfMemory => return error.OutOfMemory,
+                else => return error.LabelerUnavailable,
+            };
+        } else if (entry.label_value != null) return error.LabelNotAllowed;
+
         const conn = self.pool.acquire() catch return error.Unavailable;
         defer self.pool.release(conn);
         try begin(conn);
@@ -93,6 +116,10 @@ pub const PostgresModerationLog = struct {
         const id = try insert(conn, entry);
         if (entry.action.decision()) |decision| {
             if (log.isTrack(entry.subject, self.track_collection)) try project(conn, entry.subject, decision);
+        }
+        if (signed) |label| {
+            try labels.insert(conn, label, id);
+            try labels.project(conn, entry.subject, label.val, !label.neg, now_ms * 1000);
         }
         try commit(conn);
         committed = true;
@@ -124,6 +151,10 @@ pub const PostgresModerationLog = struct {
         return items.toOwnedSlice(allocator) catch return error.OutOfMemory;
     }
 
+    pub fn queryLabels(self: *PostgresModerationLog, allocator: std.mem.Allocator, request: LabelQuery) Error![]StoredLabel {
+        return labels.query(self.pool, allocator, request);
+    }
+
     pub fn history(self: *PostgresModerationLog, allocator: std.mem.Allocator, subject: []const u8) Error![]Recorded {
         const conn = self.pool.acquire() catch return error.Unavailable;
         defer self.pool.release(conn);
@@ -141,7 +172,8 @@ pub const PostgresModerationLog = struct {
                 .actor = try allocator.dupe(u8, row.get([]const u8, 3) catch return error.Corrupt),
                 .reasonType = try dupeOptional(allocator, row.get(?[]const u8, 4) catch return error.Corrupt),
                 .reason = try dupeOptional(allocator, row.get(?[]const u8, 5) catch return error.Corrupt),
-                .createdAt = row.get(i64, 6) catch return error.Corrupt,
+                .labelValue = try dupeOptional(allocator, row.get(?[]const u8, 6) catch return error.Corrupt),
+                .createdAt = row.get(i64, 7) catch return error.Corrupt,
             }) catch return error.OutOfMemory;
         }
         return entries.toOwnedSlice(allocator) catch return error.OutOfMemory;
@@ -150,7 +182,7 @@ pub const PostgresModerationLog = struct {
 
 fn insert(conn: *pg.Conn, entry: Entry) Error!i64 {
     const reason_type: ?[]const u8 = if (entry.reason_type) |value| @tagName(value) else null;
-    var row = (conn.row(insert_query, .{ entry.subject, @tagName(entry.action), entry.actor, reason_type, entry.reason }) catch |err| {
+    var row = (conn.row(insert_query, .{ entry.subject, @tagName(entry.action), entry.actor, reason_type, entry.reason, entry.label_value }) catch |err| {
         logQueryError(conn, err);
         return error.Unavailable;
     }) orelse return error.Corrupt;
@@ -232,8 +264,8 @@ fn logQueryError(conn: *pg.Conn, err: anyerror) void {
 }
 
 const insert_query =
-    \\INSERT INTO plyr_moderation.events (subject_uri, action, actor, reason_type, reason)
-    \\VALUES ($1, $2, $3, $4, $5) RETURNING id
+    \\INSERT INTO plyr_moderation.events (subject_uri, action, actor, reason_type, reason, label_value)
+    \\VALUES ($1, $2, $3, $4, $5, $6) RETURNING id
 ;
 
 const subject_known_query =
@@ -311,7 +343,7 @@ const queue_query =
 ;
 
 const history_query =
-    \\SELECT id, subject_uri, action, actor, reason_type, reason,
+    \\SELECT id, subject_uri, action, actor, reason_type, reason, label_value,
     \\       (extract(epoch FROM created_at) * 1000)::bigint
     \\FROM plyr_moderation.events WHERE subject_uri = $1 ORDER BY id
 ;
@@ -333,21 +365,7 @@ test "the log derives the queue and projects decisions onto track policies" {
     try name.deinit();
     if (!safe) return error.UnsafeTestDatabase;
 
-    _ = try pool.exec("DROP SCHEMA IF EXISTS plyr_moderation CASCADE", .{});
-    _ = try pool.exec("DROP SCHEMA IF EXISTS plyr_index CASCADE", .{});
-    _ = try pool.exec("CREATE SCHEMA plyr_index", .{});
-    _ = try pool.exec("CREATE TABLE plyr_index.track_records (record_uri text PRIMARY KEY, owner_did text, title text, deleted boolean NOT NULL DEFAULT false)", .{});
-    _ = try pool.exec(
-        \\CREATE TABLE plyr_index.track_policies (
-        \\  record_uri text PRIMARY KEY, visibility text,
-        \\  operator_labels jsonb NOT NULL DEFAULT '[]', moderation_decision text,
-        \\  moderation_write_source text, moderation_observed_at_us bigint,
-        \\  CONSTRAINT ck_track_policies_nonempty CHECK (visibility IS NOT NULL OR jsonb_array_length(operator_labels) > 0 OR moderation_decision IS NOT NULL))
-    , .{});
-    _ = try pool.exec("CREATE TABLE plyr_index.comment_records (record_uri text PRIMARY KEY, deleted boolean NOT NULL DEFAULT false)", .{});
-    _ = try pool.exec("CREATE TABLE plyr_index.actor_identities (did text PRIMARY KEY)", .{});
-    _ = try pool.exec("INSERT INTO plyr_index.actor_identities VALUES ('did:plc:listener')", .{});
-    _ = try pool.exec(@embedFile("migration_0048"), .{});
+    try resetTestSchema(pool);
 
     const cover = "at://did:plc:artist/fm.plyr.track/cover";
     const labeled = "at://did:plc:artist/fm.plyr.track/labeled";
@@ -371,10 +389,10 @@ test "the log derives the queue and projects decisions onto track policies" {
     try std.testing.expectEqual(ReportOutcome.recorded, try moderation.report(.{ .subject = "did:plc:listener", .action = .reported, .actor = "did:plc:one", .reason_type = .harassment }));
     _ = try pool.exec("INSERT INTO plyr_moderation.events (subject_uri, action, actor) SELECT 'did:plc:listener', 'reported', 'did:plc:spammy' FROM generate_series(1, 30)", .{});
     try std.testing.expectEqual(ReportOutcome.limited, try moderation.report(.{ .subject = cover, .action = .reported, .actor = "did:plc:spammy", .reason_type = .spam }));
-    _ = try moderation.record(.{ .subject = "did:plc:artist", .action = .acknowledged, .actor = "did:plc:operator" });
-    _ = try moderation.record(.{ .subject = "did:plc:listener", .action = .acknowledged, .actor = "did:plc:operator" });
+    _ = try moderation.record(.{ .subject = "did:plc:artist", .action = .acknowledged, .actor = "did:plc:operator" }, 0);
+    _ = try moderation.record(.{ .subject = "did:plc:listener", .action = .acknowledged, .actor = "did:plc:operator" }, 0);
 
-    _ = try moderation.record(.{ .subject = labeled, .action = .flagged_by_scan, .actor = "scan:audd" });
+    _ = try moderation.record(.{ .subject = labeled, .action = .flagged_by_scan, .actor = "scan:audd" }, 0);
 
     var open = try moderation.queue(arena, 50, 0);
     try std.testing.expectEqual(@as(usize, 2), open.len);
@@ -388,7 +406,7 @@ test "the log derives the queue and projects decisions onto track policies" {
     try std.testing.expectEqualStrings(labeled, rest[0].subject);
 
     // allowing a cover closes it and projects onto a track with no policy row
-    _ = try moderation.record(.{ .subject = cover, .action = .override_allow, .actor = "did:plc:operator", .reason = "licensed cover" });
+    _ = try moderation.record(.{ .subject = cover, .action = .override_allow, .actor = "did:plc:operator", .reason = "licensed cover" }, 0);
     open = try moderation.queue(arena, 50, 0);
     try std.testing.expectEqual(@as(usize, 1), open.len);
     try std.testing.expectEqualStrings(labeled, open[0].subject);
@@ -405,29 +423,51 @@ test "the log derives the queue and projects decisions onto track policies" {
     try std.testing.expectEqualStrings("allow", open[1].decision.?);
 
     // clearing removes a decision-only row and keeps rows carrying anything else
-    _ = try moderation.record(.{ .subject = cover, .action = .override_clear, .actor = "did:plc:operator" });
+    _ = try moderation.record(.{ .subject = cover, .action = .override_clear, .actor = "did:plc:operator" }, 0);
     var gone = try pool.row("SELECT 1 FROM plyr_index.track_policies WHERE record_uri=$1", .{cover});
     try std.testing.expect(gone == null);
     if (gone) |*row| try row.deinit();
-    _ = try moderation.record(.{ .subject = labeled, .action = .override_exclude, .actor = "did:plc:operator" });
-    _ = try moderation.record(.{ .subject = labeled, .action = .override_clear, .actor = "did:plc:operator" });
+    _ = try moderation.record(.{ .subject = labeled, .action = .override_exclude, .actor = "did:plc:operator" }, 0);
+    _ = try moderation.record(.{ .subject = labeled, .action = .override_clear, .actor = "did:plc:operator" }, 0);
     var kept = (try pool.row("SELECT operator_labels::text, moderation_decision, moderation_write_source FROM plyr_index.track_policies WHERE record_uri=$1", .{labeled})).?;
     try std.testing.expectEqualStrings("[\"copyright-violation\"]", try kept.get([]const u8, 0));
     try std.testing.expectEqual(@as(?[]const u8, null), try kept.get(?[]const u8, 1));
     try std.testing.expectEqualStrings("moderation_log", try kept.get([]const u8, 2));
     try kept.deinit();
-    _ = try moderation.record(.{ .subject = private, .action = .override_exclude, .actor = "did:plc:operator" });
-    _ = try moderation.record(.{ .subject = private, .action = .override_clear, .actor = "did:plc:operator" });
+    _ = try moderation.record(.{ .subject = private, .action = .override_exclude, .actor = "did:plc:operator" }, 0);
+    _ = try moderation.record(.{ .subject = private, .action = .override_clear, .actor = "did:plc:operator" }, 0);
     var still = (try pool.row("SELECT visibility, moderation_write_source FROM plyr_index.track_policies WHERE record_uri=$1", .{private})).?;
     try std.testing.expectEqualStrings("private", try still.get([]const u8, 0));
     try std.testing.expectEqual(@as(?[]const u8, null), try still.get(?[]const u8, 1));
     try still.deinit();
 
     // non-track subjects are logged without touching track policies
-    _ = try moderation.record(.{ .subject = "did:plc:spammer", .action = .override_exclude, .actor = "did:plc:operator" });
+    _ = try moderation.record(.{ .subject = "did:plc:spammer", .action = .override_exclude, .actor = "did:plc:operator" }, 0);
     const entries = try moderation.history(arena, cover);
     try std.testing.expectEqual(@as(usize, 5), entries.len);
     try std.testing.expectEqualStrings("reported", entries[0].action);
     try std.testing.expectEqualStrings("this is someone else's song", entries[0].reason.?);
     try std.testing.expectEqualStrings("override_clear", entries[4].action);
+}
+
+/// A minimal plyr_index plus migrations 0048-0049, for this file's and
+/// postgres_labels.zig's tests.
+pub fn resetTestSchema(pool: *pg.Pool) !void {
+    _ = try pool.exec("DROP SCHEMA IF EXISTS plyr_moderation CASCADE", .{});
+    _ = try pool.exec("DROP SCHEMA IF EXISTS plyr_index CASCADE", .{});
+    _ = try pool.exec("CREATE SCHEMA plyr_index", .{});
+    _ = try pool.exec("CREATE TABLE plyr_index.track_records (record_uri text PRIMARY KEY, owner_did text, title text, deleted boolean NOT NULL DEFAULT false)", .{});
+    _ = try pool.exec(
+        \\CREATE TABLE plyr_index.track_policies (
+        \\  record_uri text PRIMARY KEY, visibility text,
+        \\  operator_labels jsonb NOT NULL DEFAULT '[]', moderation_decision text,
+        \\  moderation_write_source text, moderation_observed_at_us bigint,
+        \\  CONSTRAINT ck_track_policies_nonempty CHECK (visibility IS NOT NULL OR jsonb_array_length(operator_labels) > 0 OR moderation_decision IS NOT NULL))
+    , .{});
+    _ = try pool.exec("CREATE TABLE plyr_index.comment_records (record_uri text PRIMARY KEY, deleted boolean NOT NULL DEFAULT false)", .{});
+    _ = try pool.exec("CREATE TABLE plyr_index.actor_identities (did text PRIMARY KEY)", .{});
+    _ = try pool.exec("INSERT INTO plyr_index.actor_identities VALUES ('did:plc:listener')", .{});
+    _ = try pool.exec("CREATE TABLE plyr_index.account_label_policies (owner_did text PRIMARY KEY, operator_labels jsonb NOT NULL CHECK (operator_labels = '[\"ai\"]'::jsonb), observed_at_us bigint NOT NULL, expires_at_us bigint)", .{});
+    _ = try pool.exec(@embedFile("migration_0048"), .{});
+    _ = try pool.exec(@embedFile("migration_0049"), .{});
 }

@@ -27,6 +27,7 @@ const blob_mirror = @import("internal/delivery/blob_mirror.zig");
 const label_sync = @import("internal/moderation/label_sync.zig");
 const moderation_api = @import("api/moderation.zig");
 const postgres_moderation = @import("internal/moderation/postgres_log.zig");
+const Labeler = @import("internal/moderation/labeler.zig").Labeler;
 const actor_identity_refresher = @import("internal/identity/actor_identity_refresher.zig");
 const space_consumer = @import("internal/space/consumer.zig");
 
@@ -147,6 +148,21 @@ pub fn main() !void {
         .{ .pool = store.pool, .track_collection = settings.track_collection }
     else
         null;
+    // next's labeler: LABELER_SIGNING_KEY set signs labels as LABELER_DID
+    // (default: the service DID, whose document then carries the key)
+    const labeler: ?Labeler = if (settings.managed_space) |space|
+        try Labeler.fromEnvironment(space.service_did)
+    else
+        null;
+    if (moderation_log) |*log| {
+        if (labeler) |*value| log.labeler = value;
+    }
+    var managed_space = settings.managed_space;
+    if (managed_space) |*space| {
+        if (labeler) |*value| {
+            if (std.mem.eql(u8, value.did, space.service_did)) space.label_key = try value.publicKeyMultibase(allocator);
+        }
+    }
     // moderation answers to the same service DID; operators come from
     // MODERATION_OPERATOR_DIDS (none configured = nobody can decide)
     const moderation_service: ?moderation_api.Config = if (notification_service) |notify|
@@ -202,7 +218,7 @@ pub fn main() !void {
                 .like_collection = settings.like_collection,
                 .comment_collection = settings.comment_collection,
                 .cors = .{ .allowed_origins = settings.cors_allowed_origins },
-                .managed_space = settings.managed_space,
+                .managed_space = managed_space,
                 .notifications = notification_service,
                 .notification_store = notification_store,
                 .moderation = moderation_service,
@@ -387,7 +403,10 @@ test {
     _ = @import("internal/moderation/label_sync.zig");
     _ = @import("internal/moderation/log.zig");
     _ = @import("internal/moderation/postgres_log.zig");
+    _ = @import("internal/moderation/postgres_labels.zig");
     _ = @import("api/moderation.zig");
+    _ = @import("api/labels.zig");
+    _ = @import("internal/moderation/labeler.zig");
     _ = @import("internal/delivery/postgres_mirror_store.zig");
     _ = @import("internal/delivery/public_media.zig");
     _ = @import("internal/identity/actor_identity_refresher.zig");

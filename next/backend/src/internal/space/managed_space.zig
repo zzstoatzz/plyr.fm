@@ -32,6 +32,9 @@ pub const Config = struct {
     sync_reader: ?[]const u8 = null,
     /// where did:plc documents resolve (a local stub in dev/e2e)
     plc_url: []const u8 = "https://plc.directory",
+    /// the labeler's `#atproto_label` key (`z…` multibase), when labels are
+    /// signed as this DID
+    label_key: ?[]const u8 = null,
 
     /// The managingApp value artists put in their space policy, and the aud
     /// every checkUserAccess JWT must carry (fragment included).
@@ -41,24 +44,45 @@ pub const Config = struct {
 
     pub fn didDocument(self: Config, allocator: std.mem.Allocator) ![]const u8 {
         var out: std.Io.Writer.Allocating = .init(allocator);
-        try std.json.Stringify.value(.{
-            .@"@context" = .{"https://www.w3.org/ns/did/v1"},
-            .id = self.service_did,
-            .service = .{
-                .{
-                    .id = try std.fmt.allocPrint(allocator, "#{s}", .{self.service_id}),
-                    .type = "PlyrManagedSpace",
-                    .serviceEndpoint = self.service_endpoint,
-                },
-                // the XRPC appview (notifications): what a PDS proxies to
-                // for `atproto-proxy: {service_did}#plyr_appview`
-                .{
-                    .id = "#" ++ appview_service_id,
-                    .type = "PlyrAppView",
-                    .serviceEndpoint = self.service_endpoint,
-                },
-            },
-        }, .{}, &out.writer);
+        var json: std.json.Stringify = .{ .writer = &out.writer };
+        try json.beginObject();
+        try json.objectField("@context");
+        try json.write(.{ "https://www.w3.org/ns/did/v1", "https://w3id.org/security/multikey/v1" });
+        try json.objectField("id");
+        try json.write(self.service_did);
+        if (self.label_key) |key| {
+            // what a reader checks queryLabels signatures against
+            try json.objectField("verificationMethod");
+            try json.write(.{.{
+                .id = try std.fmt.allocPrint(allocator, "{s}#atproto_label", .{self.service_did}),
+                .type = "Multikey",
+                .controller = self.service_did,
+                .publicKeyMultibase = key,
+            }});
+        }
+        try json.objectField("service");
+        try json.beginArray();
+        try json.write(.{
+            .id = try std.fmt.allocPrint(allocator, "#{s}", .{self.service_id}),
+            .type = "PlyrManagedSpace",
+            .serviceEndpoint = self.service_endpoint,
+        });
+        // the XRPC appview (notifications): what a PDS proxies to for
+        // `atproto-proxy: {service_did}#plyr_appview`
+        try json.write(.{
+            .id = "#" ++ appview_service_id,
+            .type = "PlyrAppView",
+            .serviceEndpoint = self.service_endpoint,
+        });
+        if (self.label_key != null) {
+            try json.write(.{
+                .id = "#atproto_labeler",
+                .type = "AtprotoLabeler",
+                .serviceEndpoint = self.service_endpoint,
+            });
+        }
+        try json.endArray();
+        try json.endObject();
         return out.written();
     }
 };
@@ -142,6 +166,15 @@ test "did document names the managing-app service" {
     try std.testing.expectEqualStrings("https://api.next.plyr.fm", doc.services[0].service_endpoint);
     try std.testing.expectEqualStrings("#plyr_appview", doc.services[1].id);
     try std.testing.expectEqualStrings("https://api.next.plyr.fm", doc.services[1].service_endpoint);
+    try std.testing.expectEqual(@as(usize, 2), doc.services.len);
+
+    var labeling = test_config;
+    labeling.label_key = "zQ3shtest";
+    const labeled = try zat.DidDocument.parse(arena, try labeling.didDocument(arena));
+    try std.testing.expectEqualStrings("#atproto_labeler", labeled.services[2].id);
+    try std.testing.expectEqualStrings("zQ3shtest", labeled.labelerKey().?.public_key_multibase);
+    try std.testing.expectEqualStrings("https://api.next.plyr.fm", labeled.labelerEndpoint().?);
+    try std.testing.expect(doc.labelerKey() == null);
 }
 
 const TestKeys = struct {
