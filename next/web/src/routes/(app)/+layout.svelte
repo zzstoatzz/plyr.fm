@@ -358,10 +358,10 @@
 		aside { position: fixed; z-index: 8; right: 0; bottom: var(--dock); top: auto; height: auto; max-height: calc(100dvh - var(--dock)); width: min(var(--queue), calc(100vw - var(--sidebar))); box-shadow: 0 0 2rem rgb(0 0 0 / 0.15); }
 	}
 	@media (max-width: 720px) {
-		.frame, .frame.docked { display: block; padding-bottom: calc(var(--tabs) + env(safe-area-inset-bottom)); }
-		.frame.hasPlayer { padding-bottom: calc(var(--tabs) + var(--dock) + env(safe-area-inset-bottom)); }
+		.frame, .frame.docked { display: block; padding-bottom: var(--tabs); }
+		.frame.hasPlayer { padding-bottom: calc(var(--tabs) + var(--dock)); }
 		.brand-row, .nav-spacer, aside, nav .desktop-only { display: none; }
-		nav { z-index: 9; position: fixed; inset: auto 0.75rem calc(0.625rem + env(safe-area-inset-bottom)); min-height: 0; height: 4rem; flex-direction: row; align-items: center; gap: 0; padding: 0 0.375rem; border: 1px solid color-mix(in srgb, var(--line) 80%, transparent); border-radius: 2rem; background: color-mix(in srgb, var(--surface) 72%, transparent); -webkit-backdrop-filter: blur(22px) saturate(1.7); backdrop-filter: blur(22px) saturate(1.7); box-shadow: 0 0.625rem 1.875rem rgb(0 0 0 / 0.18); }
+		nav { z-index: 9; position: fixed; inset: auto 0.75rem var(--tab-gap); min-height: 0; height: 4rem; flex-direction: row; align-items: center; gap: 0; padding: 0 0.375rem; border: 1px solid color-mix(in srgb, var(--line) 80%, transparent); border-radius: 2rem; background: color-mix(in srgb, var(--surface) 72%, transparent); -webkit-backdrop-filter: blur(22px) saturate(1.7); backdrop-filter: blur(22px) saturate(1.7); box-shadow: 0 0.625rem 1.875rem rgb(0 0 0 / 0.18); }
 		nav :is(a, button) { flex: 1; min-width: 0; flex-direction: column; justify-content: center; gap: 0.125rem; height: 3.375rem; min-height: 0; padding: 0.125rem; border-radius: 1.6875rem; font: 600 0.65625rem/1.2 system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
 		nav :is(a, button) :global(svg) { width: 1.5rem; height: 1.5rem; }
 		nav :is(a, button) span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -58,7 +58,7 @@
 	@media (max-width: 720px) {
 		.mobile-time { display: inline; }
 		.song { touch-action: pan-x; }
-		.dock { grid-template-columns: minmax(0, 1fr) auto auto; inset: auto 0.75rem calc(var(--tabs) + env(safe-area-inset-bottom)); gap: 0.25rem; padding: 0.3rem 0.75rem; border: 1px solid color-mix(in srgb, var(--line) 80%, transparent); border-radius: 1.25rem; background: color-mix(in srgb, var(--surface) 78%, transparent); -webkit-backdrop-filter: blur(22px) saturate(1.7); backdrop-filter: blur(22px) saturate(1.7); box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 0.14); }
+		.dock { grid-template-columns: minmax(0, 1fr) auto auto; inset: auto 0.75rem var(--tabs); gap: 0.25rem; padding: 0.3rem 0.75rem; border: 1px solid color-mix(in srgb, var(--line) 80%, transparent); border-radius: 1.25rem; background: color-mix(in srgb, var(--surface) 78%, transparent); -webkit-backdrop-filter: blur(22px) saturate(1.7); backdrop-filter: blur(22px) saturate(1.7); box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 0.14); }
 		.volume, .desktop-progress { display: none; }
 		.mobile-progress { position: absolute; inset: -0.42rem 1rem auto; display: block; }
 		.mobile-progress :global(input) { height: 0.65rem; }

@@ -40,6 +40,6 @@
 	.icon.error { color: #ef4444; }
 	.action { flex: none; color: var(--accent); font-weight: 650; white-space: nowrap; }
 	@media (max-width: 720px) {
-		.toasts { left: 0.75rem; right: 0.75rem; max-width: none; justify-items: stretch; bottom: calc(var(--tabs) + var(--toast-dock, 0px) + env(safe-area-inset-bottom) + 0.6rem); }
+		.toasts { left: 0.75rem; right: 0.75rem; max-width: none; justify-items: stretch; bottom: calc(var(--tabs) + var(--toast-dock, 0px) + 0.6rem); }
 	}
 </style>
