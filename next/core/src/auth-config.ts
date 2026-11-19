@@ -106,12 +106,18 @@ export function createAuthConfig(options: Options = {}) {
     getSubject: `${prefix}.moderation.getSubject`,
     emitEvent: `${prefix}.moderation.emitEvent`
   } as const;
-  const MODERATION_SCOPE_PARTS = Object.values(MODERATION_METHODS).map(method => `rpc:${method}?aud=${MODERATION_AUDIENCE}`);
-  function hasReportGrant(scope: string): boolean {
-    return scope.split(' ').some(value => {
-      const [type, query] = value.split('?');
-      return type === `rpc:${MODERATION_METHODS.createReport}` && new URLSearchParams(query).get('aud') === MODERATION_AUDIENCE;
-    });
+  const moderationGrant = (method: string) => `rpc:${method}?aud=${MODERATION_AUDIENCE}`;
+  const hasRpcGrant = (scope: string, method: string) => scope.split(' ').some(value => {
+    const [type, query] = value.split('?');
+    return type === `rpc:${method}` && new URLSearchParams(query).get('aud') === MODERATION_AUDIENCE;
+  });
+  // every listener can report; the queue's grants are asked for only by
+  // moderators, from the queue page, so a listener's consent screen stays short
+  const REPORT_SCOPE = moderationGrant(MODERATION_METHODS.createReport);
+  const MODERATOR_SCOPE_PARTS = [MODERATION_METHODS.getQueue, MODERATION_METHODS.getSubject, MODERATION_METHODS.emitEvent].map(moderationGrant);
+  function hasReportGrant(scope: string): boolean { return hasRpcGrant(scope, MODERATION_METHODS.createReport); }
+  function hasModeratorGrant(scope: string): boolean {
+    return [MODERATION_METHODS.getQueue, MODERATION_METHODS.getSubject, MODERATION_METHODS.emitEvent].every(method => hasRpcGrant(scope, method));
   }
   const SYNC_SCOPE = `rpc:${JAM_JOIN_METHOD}?aud=${JAM_SERVICE_AUDIENCE}`;
   const JAM_SCOPE_PARTS = [
@@ -138,7 +144,7 @@ export function createAuthConfig(options: Options = {}) {
   const protectedAudioScope = prefix === 'fm.plyr'
     ? [`space:${prefix}.privateMedia?authority=*&collection=${NSID.track}&action=read`, `space:${AUDIO_SPACE_TYPE}?authority=*&collection=${NSID.track}&action=read`]
     : [];
-  const SYNC_SCOPE_PARTS = [...BASE_SCOPE_PARTS, SYNC_SCOPE, UPLOAD_SCOPE, DOWNLOAD_SCOPE, ...MODERATION_SCOPE_PARTS];
+  const SYNC_SCOPE_PARTS = [...BASE_SCOPE_PARTS, SYNC_SCOPE, UPLOAD_SCOPE, DOWNLOAD_SCOPE, REPORT_SCOPE];
   const SCOPE_PARTS = [...SYNC_SCOPE_PARTS, ...protectedAudioScope, ...JAM_SCOPE_PARTS, PRIVATE_PUBLISH_SCOPE, PRIVATE_DELETE_SCOPE, CLOSE_SCOPE];
   return {
     SITE_URL,
@@ -176,8 +182,10 @@ export function createAuthConfig(options: Options = {}) {
     SCOPE_PARTS,
     MODERATION_AUDIENCE,
     MODERATION_METHODS,
-    MODERATION_SCOPE_PARTS,
+    REPORT_SCOPE,
+    MODERATOR_SCOPE_PARTS,
     hasReportGrant,
+    hasModeratorGrant,
   };
 }
 

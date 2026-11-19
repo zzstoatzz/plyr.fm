@@ -19,15 +19,16 @@ export type Auth<Rpc> = {
 	commenting: boolean;
 	closing: boolean;
 	reporting: boolean;
+	moderating: boolean;
 	error: string | null;
 	scopeRejected: boolean;
 };
 
 export function createAuthState<Rpc>(config: AuthConfig, createRpc: (agent: Agent) => Rpc) {
-	const { BASE_SCOPE_PARTS, SCOPE_PARTS, SYNC_SCOPE_PARTS, hasJamGrant, hasSyncGrant, hasPrivatePublishGrant, hasPrivateDeleteGrant, hasUploadGrant, hasDownloadGrant, hasPolicyGrant, hasCommentGrant, hasCloseGrant, hasReportGrant } = config;
+	const { BASE_SCOPE_PARTS, SCOPE_PARTS, SYNC_SCOPE_PARTS, hasJamGrant, hasSyncGrant, hasPrivatePublishGrant, hasPrivateDeleteGrant, hasUploadGrant, hasDownloadGrant, hasPolicyGrant, hasCommentGrant, hasCloseGrant, hasReportGrant, hasModeratorGrant } = config;
 	const initial: Auth<Rpc> = {
 		did: null, ready: false, handle: null, agent: null, rpc: null,
-		jamSpace: false, accountSync: false, privatePublishing: false, privateDeleting: false, uploadStorage: false, supporterDownloads: false, policyEditing: false, commenting: false, closing: false, reporting: false, error: null, scopeRejected: false
+		jamSpace: false, accountSync: false, privatePublishing: false, privateDeleting: false, uploadStorage: false, supporterDownloads: false, policyEditing: false, commenting: false, closing: false, reporting: false, moderating: false, error: null, scopeRejected: false
 	};
 
 	let state = initial;
@@ -46,7 +47,7 @@ export function createAuthState<Rpc>(config: AuthConfig, createRpc: (agent: Agen
 	}
 
 	function setAuth(did: Did, agent: Agent, scope: string) {
-		update({ ...initial, ready: true, did, agent, rpc: createRpc(agent), jamSpace: hasJamGrant(scope), accountSync: hasSyncGrant(scope), privatePublishing: hasPrivatePublishGrant(scope, did), privateDeleting: hasPrivateDeleteGrant(scope, did), uploadStorage: hasUploadGrant(scope), supporterDownloads: hasDownloadGrant(scope), policyEditing: hasPolicyGrant(scope), commenting: hasCommentGrant(scope), closing: hasCloseGrant(scope), reporting: hasReportGrant(scope) });
+		update({ ...initial, ready: true, did, agent, rpc: createRpc(agent), jamSpace: hasJamGrant(scope), accountSync: hasSyncGrant(scope), privatePublishing: hasPrivatePublishGrant(scope, did), privateDeleting: hasPrivateDeleteGrant(scope, did), uploadStorage: hasUploadGrant(scope), supporterDownloads: hasDownloadGrant(scope), policyEditing: hasPolicyGrant(scope), commenting: hasCommentGrant(scope), closing: hasCloseGrant(scope), reporting: hasReportGrant(scope), moderating: hasModeratorGrant(scope) });
 		void didDocument(did).then(doc => {
 			if (state.agent !== agent) return;
 			update({ ...state, handle: doc.alsoKnownAs?.find(value => value.startsWith('at://'))?.slice(5) ?? null });

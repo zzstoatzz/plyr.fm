@@ -16,11 +16,14 @@ function harness(answer: (url: string, init: RequestInit) => Response, grant = t
 	return { client: createModerationClient(agent, moderation), asked, sent, restore: () => { globalThis.fetch = original; } };
 }
 
-test('every moderation method is in the signed-in scope and reporting is detected', () => {
-	const scope = oauthMetadata(config, 'web').scope;
-	for (const method of Object.values(config.MODERATION_METHODS)) assert.ok(scope.includes(`rpc:${method}?aud=did:web:api.next.plyr.fm#plyr_appview`), method);
-	assert.equal(config.hasReportGrant(scope), true);
+test('listeners are asked only to report; moderator grants are allowed but added later', () => {
+	const asked = config.SCOPE_PARTS.join(' ');
+	assert.equal(config.hasReportGrant(asked), true);
+	assert.equal(config.hasModeratorGrant(asked), false);
 	assert.equal(config.hasReportGrant(config.BASE_SCOPE_PARTS.join(' ')), false);
+	const allowed = oauthMetadata(config, 'native').scope;
+	for (const method of Object.values(config.MODERATION_METHODS)) assert.ok(allowed.includes(`rpc:${method}?aud=did:web:api.next.plyr.fm#plyr_appview`), method);
+	assert.equal(config.hasModeratorGrant([asked, ...config.MODERATOR_SCOPE_PARTS].join(' ')), true);
 });
 
 test('a report is signed for createReport and sends only what the listener wrote', async () => {

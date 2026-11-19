@@ -11,7 +11,9 @@ export const REPORT_REASONS = [
 ] as const;
 export type ReportReason = (typeof REPORT_REASONS)[number]['value'];
 
+/** The server counts bytes, not characters. */
 export const REPORT_DETAIL_LIMIT = 2000;
+export const noteTooLong = (text: string) => new TextEncoder().encode(text.trim()).length > REPORT_DETAIL_LIMIT;
 
 /** Labels an operator can put on a track or an account. */
 export const TRACK_LABELS = ['copyright-violation', 'sexual', 'porn'] as const;
@@ -61,6 +63,7 @@ const messages: Record<string, string> = {
 	InvalidLabel: "that label doesn't fit here.",
 	LabelerUnavailable: "labels aren't switched on yet.",
 	UnsupportedSubject: 'allow and hide only work on tracks for now.',
+	InvalidRequest: "that didn't go through. shorten the note and try again.",
 	ServiceUnavailable: "moderation isn't reachable right now. try again in a minute."
 };
 

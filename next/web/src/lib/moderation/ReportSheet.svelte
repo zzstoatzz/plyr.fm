@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { resolve } from '$app/paths';
-  import { REPORT_DETAIL_LIMIT, REPORT_REASONS, type ReportReason } from '@plyr/next-core/moderation';
-  import { auth } from '$lib/auth';
+  import { noteTooLong, REPORT_REASONS, type ReportReason } from '@plyr/next-core/moderation';
+  import { addGrants, auth } from '$lib/auth';
+  import { authConfig } from '$lib/auth-config';
   import { toast } from '$lib/toast.svelte';
   import Sheet from '$lib/ui/Sheet.svelte';
   import { moderation } from './client';
@@ -17,8 +17,14 @@
   let active: AbortController | undefined;
   let account = $state.raw(auth.getAuth());
   onMount(() => auth.subscribe(() => { const next = auth.getAuth(); if (next.did !== account.did) sheet?.close(); account = next; }));
-  const signIn = $derived(`${resolve('/(app)/login')}?${new URLSearchParams({ return_to: returnTo })}`);
-  const tooLong = $derived(detail.length > REPORT_DETAIL_LIMIT);
+  const tooLong = $derived(noteTooLong(detail));
+  let granting = $state(false);
+  async function allowReports() {
+    granting = true;
+    error = '';
+    try { await addGrants([authConfig.REPORT_SCOPE], returnTo); }
+    catch { error = "couldn't reach your account host. try again."; granting = false; }
+  }
   export function show() { error = ''; sheet.show(); }
 
   async function send(event: SubmitEvent) {
@@ -47,8 +53,9 @@
 <Sheet bind:this={sheet} title={`report "${name}"`} {busy} onclose={() => { active?.abort(); onclose?.(); }}>
   {#if !account.reporting}
     <div class="grant">
-      <p>to send reports, sign in again so plyr can send them for you.</p>
-      <a class="hero-pill primary" href={signIn}>sign in again</a>
+      <p>to send reports, let plyr send them for you. you'll come right back here.</p>
+      <button class="hero-pill primary" type="button" disabled={granting} onclick={allowReports}>{granting ? 'opening…' : 'allow reports'}</button>
+      {#if error}<p class="error" role="alert">{error}</p>{/if}
     </div>
   {:else}
     <form onsubmit={send}>
@@ -67,7 +74,7 @@
           <span class="sr-only">anything that helps (optional)</span>
           <textarea bind:value={detail} rows="3" placeholder="anything that helps (optional)" disabled={busy} aria-invalid={tooLong}></textarea>
         </label>
-        {#if tooLong}<p class="error" role="alert">keep it under {REPORT_DETAIL_LIMIT.toLocaleString()} characters.</p>{/if}
+        {#if tooLong}<p class="error" role="alert">that note is too long. shorten it a little.</p>{/if}
       {/if}
       {#if error}<p class="error" role="alert">{error}</p>{/if}
       <footer>
