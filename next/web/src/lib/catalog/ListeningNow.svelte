@@ -2,7 +2,6 @@
 	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { readListeningNow, type ListeningNow } from '@plyr/next-core/teal-status';
-	import Artwork from '$lib/ui/Artwork.svelte';
 	import PlayingWave from '$lib/ui/PlayingWave.svelte';
 
 	let { did, name }: { did: string; name: string } = $props();
@@ -40,7 +39,7 @@
 	<svelte:element this={href ? 'a' : 'span'} class="listening" {href}
 		target={external ? '_blank' : undefined} rel={external ? 'noopener noreferrer' : undefined}
 		aria-label={`${name} is listening to ${status.track}${artists ? ` by ${artists}` : ''}`}>
-		{#if status.coverUrl}<span class="cover"><Artwork src={status.coverUrl} size={22} /></span>{:else}<PlayingWave />{/if}
+		<PlayingWave />
 		<span class="truncate">listening to <b>{status.track}</b>{#if artists}<span class="by">&nbsp;· {artists}</span>{/if}</span>
 	</svelte:element>
 {/if}
@@ -50,8 +49,5 @@
 	.listening b { color: var(--text); font-weight: 600; }
 	.listening :global(.playing-wave) { width: 0.8rem; height: 0.8rem; color: var(--accent); }
 	a.listening:hover b { text-decoration: underline; }
-	.listening { padding: 0.25rem 0.75rem 0.25rem 0.3rem; border-radius: 999px; background: color-mix(in srgb, var(--accent) 12%, var(--raised)); }
-	a.listening:hover { background: color-mix(in srgb, var(--accent) 20%, var(--raised)); }
-	.listening > :global(.playing-wave) { margin-left: 0.45rem; }
-	.cover { width: 1.4rem; height: 1.4rem; flex: none; border-radius: 50%; overflow: hidden; }
+	.listening :global(.playing-wave) { flex: none; }
 </style>

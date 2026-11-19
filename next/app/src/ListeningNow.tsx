@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react';
 import { AppState, Linking, Pressable, StyleSheet, View } from 'react-native';
 import { readListeningNow, type ListeningNow } from '@plyr/next-core/teal-status';
 import { useAppearance } from './appearance';
-import { Cover } from './CatalogPieces';
 import { PlayingWave } from './PlayingWave';
 import { Text } from './Text';
 import { toast } from './toast';
@@ -37,8 +36,8 @@ function useListeningNow(did: string) {
   return status;
 }
 
-/** a one-line "listening to" pill under the artist's name */
-export function ListeningNowPill({ did, name }: { did: string; name: string }) {
+/** a one-line "listening to" status under the artist's name */
+export function ListeningNowStatus({ did, name }: { did: string; name: string }) {
   const theme = useAppearance();
   const [pressed, setPressed] = useState(false);
   const status = useListeningNow(did);
@@ -47,23 +46,23 @@ export function ListeningNowPill({ did, name }: { did: string; name: string }) {
   const link = status.plyrTrack ? null : status.link;
   const linked = !!status.plyrTrack || !!link;
   const text = { fontFamily: theme.fontFamily, fontSize: 14 * theme.scale };
-  const pill = <Pressable accessibilityRole={linked ? 'link' : undefined} disabled={!linked}
+  const line = <Pressable accessibilityRole={linked ? 'link' : undefined} disabled={!linked}
     accessibilityLabel={`${name} is listening to ${status.track}${artists ? ` by ${artists}` : ''}`}
     onPress={link ? () => void Linking.openURL(link).catch(() => toast.error('couldn’t open that link')) : undefined}
     onPressIn={() => setPressed(true)} onPressOut={() => setPressed(false)}
-    style={StyleSheet.flatten([styles.pill, { backgroundColor: theme.accent + (pressed ? '33' : '1f'), paddingLeft: status.coverUrl ? 4 : 10 }])}>
-    {status.coverUrl ? <Cover uri={status.coverUrl} size={22} round /> : <PlayingWave size={12} color={theme.accent} />}
+    style={StyleSheet.flatten([styles.line, { opacity: pressed ? 0.6 : 1 }])}>
+    <PlayingWave size={12} color={theme.accent} />
     <Text numberOfLines={1} style={[styles.copy, text, { color: theme.muted }]}>
       listening to <Text style={[text, { color: theme.text, fontWeight: '600' }]}>{status.track}</Text>{artists ? ` · ${artists}` : ''}
     </Text>
   </Pressable>;
   return <View style={styles.row}>
-    {status.plyrTrack ? <Link href={{ pathname: '/track/[id]', params: { id: status.plyrTrack } }} asChild>{pill}</Link> : pill}
+    {status.plyrTrack ? <Link href={{ pathname: '/track/[id]', params: { id: status.plyrTrack } }} asChild>{line}</Link> : line}
   </View>;
 }
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', justifyContent: 'center', marginTop: 8, maxWidth: '100%' },
-  pill: { flexDirection: 'row', alignItems: 'center', gap: 7, maxWidth: '100%', minHeight: 30, paddingRight: 12, paddingVertical: 4, borderRadius: 999 },
+  line: { flexDirection: 'row', alignItems: 'center', gap: 7, maxWidth: '100%', minHeight: 28 },
   copy: { flexShrink: 1 },
 });

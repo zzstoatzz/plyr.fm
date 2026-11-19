@@ -15,8 +15,6 @@ export interface ListeningNow {
 	duration?: number;
 	startedAt: number;
 	endsAt: number;
-	/** cover from the Cover Art Archive when the record names a MusicBrainz release */
-	coverUrl?: string;
 	/** a plyr track id or legacy id when the play came from plyr */
 	plyrTrack?: string;
 	/** any other https page for the play */
@@ -28,7 +26,6 @@ const time = (value: unknown) => {
 	const parsed = typeof value === 'string' ? Date.parse(value) : Number.NaN;
 	return Number.isFinite(parsed) ? parsed : undefined;
 };
-const MBID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PLYR_HOSTS = new Set(['plyr.fm', 'www.plyr.fm', 'next.plyr.fm']);
 
 function origin(value: unknown): Pick<ListeningNow, 'plyrTrack' | 'link'> {
@@ -61,7 +58,6 @@ export function listeningNow(record: unknown, now: number): ListeningNow | null 
 	if (duration) endsAt = Math.min(endsAt, startedAt + duration * 1000 + TRACK_GRACE);
 	if (now >= endsAt) return null;
 	const release = text(play.releaseName);
-	const releaseMbId = text(play.releaseMbId);
 	return {
 		track,
 		artists: artists.length ? artists : legacyArtist,
@@ -69,7 +65,6 @@ export function listeningNow(record: unknown, now: number): ListeningNow | null 
 		endsAt,
 		...(release ? { release } : {}),
 		...(duration ? { duration } : {}),
-		...(releaseMbId && MBID.test(releaseMbId) ? { coverUrl: `https://coverartarchive.org/release/${releaseMbId.toLowerCase()}/front-250` } : {}),
 		...origin(play.originUri)
 	};
 }
