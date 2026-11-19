@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import { ApiError, type Track } from '@plyr/next-core/api';
 import { formatAudio } from '@plyr/next-core/downloads/format';
+import { storeName } from '@plyr/next-core/selling';
 import { ArrowLeft, DownloadSimple as Download } from '../icons';
 import { api } from '../api-client';
 import { ActionRow } from '../ActionRow';
@@ -49,6 +50,7 @@ export function DownloadAction({ track, reconnect, expanded, onExpand, done }: {
     try {
       const prepared = await prepareDownload(track.id, track.record.uri, {
         track: id => api.track(id, { fresh: true }), artist: api.artist,
+        albums: did => api.albums(did, { limit: 100 }).then(page => page.data),
         playback: id => api.playback(id, { fresh: true }).catch(failure => {
           if (failure instanceof ApiError && failure.status === 401) throw new Error('this track has no supported download source.');
           throw failure;
@@ -57,7 +59,7 @@ export function DownloadAction({ track, reconnect, expanded, onExpand, done }: {
         protected: (current, uri, admission) => prepareProtectedDownload(current, uri, auth, controller.signal, admission)
       }, controller.signal);
       controller.signal.throwIfAborted();
-      if (!selection && (prepared.support || prepared.original)) { expand(prepared); return; }
+      if (!selection && (prepared.support || prepared.buy || prepared.original)) { expand(prepared); return; }
       const selected = selection === 'original' ? prepared.original : prepared;
       if (!selected) throw new Error('the original file changed. choose again.');
       await saveDownload(selected, controller.signal);
@@ -93,9 +95,10 @@ export function DownloadAction({ track, reconnect, expanded, onExpand, done }: {
       <Copy>{artist} keeps downloads for supporters. {auth.did ? 'reconnect so plyr.fm can check your support.' : 'sign in so plyr.fm can check your support.'}</Copy>
       <Action primary label={auth.did ? 'reconnect' : 'sign in'} disabled={!auth.ready} onPress={reconnect} />
     </> : choice && <>
-      {choice.support && <>
-        <Copy>{artist} asks listeners to consider supporting their work.</Copy>
-        <Action primary label={`support ${artist}`} href={choice.support} />
+      {(choice.buy || choice.support) && <>
+        <Copy>{choice.buy ? `${artist} asks you to consider buying it if you can.` : `${artist} asks listeners to consider supporting their work.`}</Copy>
+        {choice.buy && <Action primary label={`buy · ${choice.buy.label}`} href={choice.buy.url} />}
+        {choice.support && <Action primary={!choice.buy} label={`support ${artist} on ${storeName(choice.support)}`} href={choice.support} />}
       </>}
       {choice.original
         ? <>{option('original upload', formatAudio(choice.original), 'original', true)}{option('smaller file', formatAudio(choice), 'playback', false)}</>

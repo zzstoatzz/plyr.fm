@@ -93,6 +93,13 @@ export function formatPrice(amount: number, currency: string): string {
   } catch { return `${amount} ${currency}`; }
 }
 
+/** an amount as text parsePrice reads back: "1500", "7.50", no grouping or symbol */
+export function priceText(amount: number, currency: string): string {
+  let digits = 2;
+  try { digits = new Intl.NumberFormat(undefined, { style: 'currency', currency }).resolvedOptions().maximumFractionDigits ?? 2; } catch { return String(amount); }
+  return (amount / 10 ** digits).toFixed(digits).replace(/\.0+$/, '');
+}
+
 /** major-unit text ("5", "4.99") to the currency's smallest unit, or undefined */
 export function parsePrice(text: string, currency: string): number | undefined {
   let digits = 2;

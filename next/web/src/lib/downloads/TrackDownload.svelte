@@ -8,6 +8,7 @@
   import Icon from '$lib/ui/Icon.svelte';
   import Sheet from '$lib/ui/Sheet.svelte';
   import { formatAudio } from '@plyr/next-core/downloads/format';
+  import { storeName } from '@plyr/next-core/selling';
 
   // One tap downloads. The sheet opens only when there is something to decide:
   // the artist asks for support, a lossless original exists, or the account needs a grant.
@@ -59,7 +60,7 @@
       const { prepareTrackDownload, saveDownload } = flow;
       const prepared = await prepareTrackDownload(track, current, controller.signal);
       controller.signal.throwIfAborted();
-      if (!selection && (prepared.support || prepared.original)) { choice = prepared; needsGrant = false; sheet.show(); return; }
+      if (!selection && (prepared.support || prepared.buy || prepared.original)) { choice = prepared; needsGrant = false; sheet.show(); return; }
       const selected = selection === 'original' ? prepared.original : prepared;
       if (!selected) throw new Error('the original file changed. choose again.');
       await saveDownload(selected, controller.signal);
@@ -86,9 +87,10 @@
       <p>{account.did ? `${artistName(track)} keeps downloads for supporters. reconnect so plyr.fm can check your support.` : `${artistName(track)} keeps downloads for supporters. sign in so plyr.fm can check your support.`}</p>
       <a class="primary" href={signIn}>{account.did ? 'reconnect' : 'sign in'}</a>
     {:else if choice}
-      {#if choice.support}
-        <p>{artistName(track)} asks listeners to consider supporting their work.</p>
-        <a class="primary" href={choice.support} target="_blank" rel="noopener noreferrer">support {artistName(track)}</a>
+      {#if choice.buy || choice.support}
+        <p>{choice.buy ? `${artistName(track)} asks you to consider buying it if you can.` : `${artistName(track)} asks listeners to consider supporting their work.`}</p>
+        {#if choice.buy}<a class="primary" href={choice.buy.url} target="_blank" rel="noopener noreferrer">buy · {choice.buy.label}</a>{/if}
+        {#if choice.support}<a class={choice.buy ? 'secondary' : 'primary'} href={choice.support} target="_blank" rel="noopener noreferrer">support {artistName(track)} on {storeName(choice.support)}</a>{/if}
       {/if}
       {#if choice.original}
         <button type="button" class="option pick" disabled={busy} onclick={() => run('original')}>
@@ -115,6 +117,8 @@
   p { margin: 0; color: var(--muted); }
   .primary { display: block; padding: 0.75rem 1rem; border-radius: 0.7rem; background: var(--accent); color: var(--on-accent); font-weight: 650; text-align: center; }
   .primary:hover { text-decoration: none; filter: brightness(1.06); }
+  .secondary { display: block; padding: 0.75rem 1rem; border-radius: 0.7rem; border: 1px solid var(--line); color: var(--text); text-align: center; }
+  .secondary:hover { text-decoration: none; background: var(--hover); }
   .option { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; width: 100%; min-height: 3.6rem; padding: 0.6rem 0.9rem; border: 1px solid var(--line); border-radius: 0.8rem; background: none; color: var(--muted); text-align: start; }
   .option.pick { border-color: var(--accent); color: var(--accent); }
   .option:hover:not(:disabled) { background: var(--hover); }

@@ -1,5 +1,5 @@
 import { Link } from 'expo-router';
-import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Linking, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import type { ListDetail, Track } from '@plyr/next-core/api';
 import { collectionArtwork, trackArtwork } from '@plyr/next-core/artwork';
 import { useAppearance } from './appearance';
@@ -7,7 +7,9 @@ import { BLEED, Chip, HeroBackdrop, Pill, Round, TOP, shuffled } from './HeroPie
 import { Cover } from './CatalogPieces';
 import { catalogRuntime } from '@plyr/next-core/catalog/runtime';
 import { compactCount } from './home-state';
-import { ListPlus, Pause as PauseIcon, Play as PlayIcon, ShareNetwork, Shuffle } from './icons';
+import { ArrowSquareOut, ListPlus, Pause as PauseIcon, Play as PlayIcon, ShareNetwork, Shuffle } from './icons';
+import { offerLabel, type Offer } from '@plyr/next-core/selling';
+import { toast } from './toast';
 import { Text } from './Text';
 
 const COVER = 208;
@@ -19,8 +21,8 @@ function collage(list: ListDetail, tracks: Track[]) {
   return covers.length >= 4 ? covers.slice(0, 4) : null;
 }
 
-export function CollectionHero({ list, tracks, title, playing, onPlay, onPause, onEnqueue, onShare }: {
-  list: ListDetail; tracks: Track[]; title: string; playing: boolean;
+export function CollectionHero({ list, tracks, title, playing, offer, onPlay, onPause, onEnqueue, onShare }: {
+  list: ListDetail; tracks: Track[]; title: string; playing: boolean; offer?: Offer;
   onPlay: (track: Track, queue: Track[]) => void; onPause: () => void; onEnqueue: () => void; onShare: () => void;
 }) {
   const theme = useAppearance();
@@ -73,6 +75,11 @@ export function CollectionHero({ list, tracks, title, playing, onPlay, onPause, 
       </Round> : null}
       <Round label={`Share ${title}`} onPress={onShare}><ShareNetwork size={icon(20)} color={theme.text} /></Round>
     </View> : null}
+    {offer ? <View style={styles.buy}>
+      <Pill outline role="link" icon={<ArrowSquareOut size={icon(18)} color={theme.accent} />} label={`buy · ${offerLabel(offer)}`}
+        accessibilityLabel={`Buy ${title}, ${offerLabel(offer)}, opens your browser`}
+        onPress={() => void Linking.openURL(offer.url).catch(() => toast.error('couldn’t open that link'))} />
+    </View> : null}
   </View>;
 }
 
@@ -82,4 +89,5 @@ const styles = StyleSheet.create({
   owner: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 6, minHeight: 32, maxWidth: '100%' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginTop: 14 },
   controls: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 18 },
+  buy: { flexDirection: 'row', justifyContent: 'center', marginTop: 12 },
 });

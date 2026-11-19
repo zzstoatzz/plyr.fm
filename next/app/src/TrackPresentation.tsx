@@ -8,8 +8,8 @@ import type { Track } from '@plyr/next-core/api';
 import { useAppearance } from './appearance';
 import { Cover, artistName } from './CatalogPieces';
 
-export function TrackPresentation({ track, controls, stats, utilities, comments }: {
-  track: Track; controls: ReactNode; stats: ReactNode; utilities: ReactNode; comments?: ReactNode;
+export function TrackPresentation({ track, controls, stats, utilities, access, comments }: {
+  track: Track; controls: ReactNode; stats: ReactNode; utilities: ReactNode; access?: ReactNode; comments?: ReactNode;
 }) {
   const theme = useAppearance();
   const { width, height } = useWindowDimensions();
@@ -29,6 +29,7 @@ export function TrackPresentation({ track, controls, stats, utilities, comments 
       {track.metadata.album && <Text style={{ color: theme.muted, fontFamily: theme.fontFamily, fontSize: 15 * theme.scale, lineHeight: 22 * theme.scale, textAlign: 'center' }}>{track.metadata.album}</Text>}
     </View>
     <View style={styles.controls}>{controls}</View>
+    {access}
     <View style={styles.stats}>{stats}</View>
     <View style={styles.utilities}>{utilities}</View>
     {track.metadata.description && <View style={styles.description}><Copy>{track.metadata.description}</Copy></View>}

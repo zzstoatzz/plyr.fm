@@ -15,6 +15,7 @@
   import Icon from '$lib/ui/Icon.svelte';
   import Loading from '$lib/ui/Loading.svelte';
   import { portalFor } from './portal';
+  import SellCard from './SellCard.svelte';
 
   type Tab = 'tracks' | 'albums';
   let { account }: { account: ReturnType<typeof auth.getAuth> & { did: NonNullable<ReturnType<typeof auth.getAuth>['did']>; rpc: NonNullable<ReturnType<typeof auth.getAuth>['rpc']> } } = $props();
@@ -175,6 +176,8 @@
     <p class="state" role="alert">couldn’t load your profile.</p>
     <button class="text-button" onclick={loadProfile} disabled={profileLoading}>retry profile</button>
   {/if}
+
+  <SellCard {did} />
 
   <div class="tabs" role="tablist" aria-label="Your catalog">
     <button id="creator-tracks-tab" bind:this={tracksTab} role="tab" aria-selected={tab === 'tracks'} aria-controls="creator-tracks" tabindex={tab === 'tracks' ? 0 : -1} onclick={() => selectTab('tracks')} onkeydown={tabKey}>tracks</button>

@@ -47,6 +47,15 @@ nate first. Add an entry when a PR settles something.
   floating above it. Nav icons are Phosphor (regular, fill when current) and
   the current item gets an accent tint.
 
+- Selling (2026-11-19, nate picked mockup A): an artist's support link and
+  per-release buy links live in account settings (`supportUrl`, `buyLinks`),
+  not a lexicon, and the artist read publishes them as `support_url` and
+  `offers`. Buy is an outlined pill beside play (its own row on phones, web and
+  iOS); a track falls back to its album's link. A link never unlocks closed
+  audio and always says so. `Offer.provider` (`'link'` today) is where a
+  provider plyr can verify, such as Atmosphere Money, plugs in, together with
+  the access decider. atprotofans is not supported.
+
 ## known and open
 
 - The account picker's combobox (the only one, and it passes the APG combobox

@@ -20,6 +20,7 @@ import { usePortalPages } from './use-portal-pages';
 import { ShareLink } from './ShareLink';
 import { catalogRevision } from '@plyr/next-core/catalog/changes';
 import { useTabs } from './behaviors/use-tabs';
+import { SellCard } from './selling/SellCard';
 
 const portalTabs = ['tracks', 'albums'] as const;
 type PortalTab = typeof portalTabs[number];
@@ -106,6 +107,7 @@ function AccountPortal({ did, handle }: { did: string; handle: string | null }) 
       <ShareLink path={'/u/' + (handle || did)} />
     </View>
     {artist.error && <View style={row}><Copy>couldn’t load your profile.</Copy><Action label="retry profile" onPress={artist.retry} /></View>}
+    <SellCard did={did} />
 
     <View {...catalogTabs.panel('tracks')} style={{ display: tab === 'tracks' ? 'flex' : 'none' }} aria-hidden={tab !== 'tracks'}><OwnedTracks did={did} active={tab === 'tracks'} tabs={tab === 'tracks' ? tabs : null} /></View>
     {visited.current.albums && <View {...catalogTabs.panel('albums')} style={{ display: tab === 'albums' ? 'flex' : 'none' }} aria-hidden={tab !== 'albums'}><OwnedAlbums did={did} active={tab === 'albums'} tabs={tab === 'albums' ? tabs : null} /></View>}

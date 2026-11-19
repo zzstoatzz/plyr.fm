@@ -1,12 +1,13 @@
-import type { Artist, Playback, Track } from '../api.ts';
+import type { Artist, ListSummary, Playback, Track } from '../api.ts';
 import { readDownloadManifest, serviceMediaUrl, type DownloadManifest } from './manifest.ts';
+import { albumNamed, offerFor, offerLabel, supportLink } from '../selling.ts';
 
 export const MAX_BUFFERED_DOWNLOAD_BYTES = 104_857_600;
 export type DownloadAdmission = { guard(): void; begin(): void };
 type PublicDownload = { kind: 'public'; source: string; attachment?: string; mime: string; filename: string; sizeBytes?: number; guard?(): void; begin?(): void };
 export type ProtectedDownload = { kind: 'protected'; mime: string; sizeBytes: number; filename: string; guard(): void; begin?(): void; open(): Promise<Response> };
 export type PreparedDownload = PublicDownload | ProtectedDownload;
-type DownloadChoice = PreparedDownload & { original?: PublicDownload; support: string | null; title: string };
+type DownloadChoice = PreparedDownload & { original?: PublicDownload; support: string | null; buy?: { url: string; label: string } | null; title: string };
 
 export function downloadAllowed(track: Track): boolean {
   if (track.access.download_policy === 'supporters') return ['public', 'unlisted', 'supporters'].includes(track.access.visibility)
@@ -58,6 +59,8 @@ export function downloadFilename(track: Track, mime: string): string {
 
 export async function prepareDownload(id: string, uri: string, read: {
   track: (id: string) => Promise<Track>; playback: (id: string) => Promise<Playback>; artist: (did: string) => Promise<Artist>;
+  /** the artist's albums, so a track sold as part of one gets its buy link */
+  albums?: (did: string) => Promise<ListSummary[]>;
   manifest?: (source: string, signal?: AbortSignal) => Promise<DownloadManifest>;
   authorize?: (record: { uri: string; cid: string }) => Promise<DownloadAdmission>;
   protected?: (track: Track, uri: string, admission?: DownloadAdmission) => Promise<Omit<ProtectedDownload, 'filename'> & { policy: 'open' | 'ask' | 'supporters' }>;
@@ -76,16 +79,24 @@ export async function prepareDownload(id: string, uri: string, read: {
   const playback = await read.playback(id);
   const availability = playback.availability;
   if (playback.record.uri !== uri || playback.record.cid !== track.record.cid) throw new Error('this track changed or is unavailable. try again.');
-  const supportFor = async (ask: boolean) => ask ? read.artist(track.artist.did).then(artist => safeHttpUrl(artist.support_url)).catch(() => null) : null;
+  const asks = async (ask: boolean) => {
+    if (!ask) return { support: null, buy: null };
+    const [artist, albums] = await Promise.all([
+      read.artist(track.artist.did).catch(() => undefined),
+      track.metadata.album && read.albums ? read.albums(track.artist.did).catch(() => []) : [],
+    ]);
+    const offer = offerFor(artist, [track.record.uri, albumNamed(track.metadata.album, albums)?.record.uri]);
+    return { support: supportLink(artist) ?? null, buy: offer ? { url: offer.url, label: offerLabel(offer) } : null };
+  };
   if (availability.status === 'gated' && availability.space && read.protected) {
     const protectedAudio = await read.protected(track, availability.space.record, admission);
-    const support = await supportFor(track.access.download_policy === 'ask' || protectedAudio.policy === 'ask');
+    const { support, buy } = await asks(track.access.download_policy === 'ask' || protectedAudio.policy === 'ask');
     protectedAudio.guard();
     admission?.begin();
-    return { ...protectedAudio, begin: admission?.begin, filename: downloadFilename(track, protectedAudio.mime), support, title: track.metadata.title };
+    return { ...protectedAudio, begin: admission?.begin, filename: downloadFilename(track, protectedAudio.mime), support, buy, title: track.metadata.title };
   }
   if (availability.status !== 'available' || availability.space) throw new Error('this track changed or is unavailable. try again.');
-  const support = await supportFor(track.access.download_policy === 'ask');
+  const { support, buy } = await asks(track.access.download_policy === 'ask');
   const source = safeHttpUrl(availability.delivery?.url);
   const mime = audioMime(availability.delivery?.media_type);
   if (!source || !mime) throw new Error('no downloadable audio is available.');
@@ -94,5 +105,5 @@ export async function prepareDownload(id: string, uri: string, read: {
   admission?.begin();
   const playbackDownload: PublicDownload = { kind: 'public', ...playbackAudio, ...admission, attachment: attachmentUrl(source), filename: downloadFilename(track, playbackAudio.mime) };
   const original: PublicDownload | undefined = manifest?.processed ? { kind: 'public', ...manifest.original, ...admission, attachment: manifest.original.source, filename: downloadFilename(track, manifest.original.mime) } : undefined;
-  return { ...playbackDownload, original, support, title: track.metadata.title };
+  return { ...playbackDownload, original, support, buy, title: track.metadata.title };
 }

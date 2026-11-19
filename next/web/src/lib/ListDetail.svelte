@@ -14,6 +14,8 @@
 	import TrackRow from './TrackRow.svelte';
 	import { catalogRuntime } from '@plyr/next-core/catalog/runtime';
 	import { compactCount } from './listening/format';
+	import { api } from './api';
+	import { offerFor, offerLabel, type Offer } from '@plyr/next-core/selling';
 
 	let { list: indexed }: { list: ListDetail } = $props();
 	let account = $state.raw(auth.getAuth());
@@ -24,6 +26,12 @@
 	const owned = $derived(account.did === indexed.owner.did && !!account.rpc);
 	const accepted = $derived(pending?.rpc === account.rpc && pending.revision.uri === indexed.record.uri ? pending : undefined);
 	const list = $derived(accepted ? applyCollectionRevision(indexed, accepted.revision, accepted.tracks) : indexed);
+	let offer = $state.raw<Offer>();
+	onMount(() => {
+		const controller = new AbortController();
+		api.artist(indexed.owner.did, controller.signal).then(artist => { offer = offerFor(artist, [indexed.record.uri]); }).catch(() => {});
+		return () => controller.abort();
+	});
 	onMount(() => auth.subscribe(() => {
 		if (account.rpc !== auth.getAuth().rpc) { editing = false; pending = undefined; }
 		account = auth.getAuth();
@@ -112,6 +120,7 @@
 			</div>
 			<div class="actions">
 				<button type="button" class="hero-pill primary" aria-label={`${playing ? 'Pause' : 'Play'} ${title}`} disabled={!tracks.length || active && !playing && player.snapshot.waiting} onclick={playAll}><Icon name={playing ? 'pause' : 'play'} /> {playing ? 'Pause' : 'Play'}</button>
+				{#if offer}<a class="hero-pill buy" href={offer.url} target="_blank" rel="noopener noreferrer" aria-label={`Buy ${title}, ${offerLabel(offer)} (opens in a new tab)`}><Icon name="external" /> <span>buy · {offerLabel(offer)}</span></a>{/if}
 				<button type="button" class="hero-pill" aria-label={`Add ${title} to queue`} disabled={!tracks.length || !player.canEditPublicQueue} title={!player.canEditPublicQueue ? "play a public track to change queues" : undefined} onclick={addToQueue}><Icon name="queue" /> <span class="long">Add to queue</span><span class="short">Queue</span></button>
 				{#if tracks.length > 1}<button type="button" class="hero-round" aria-label={`Shuffle ${title}`} onclick={shuffle}><Icon name="shuffle" /></button>{/if}
 				<button type="button" class="hero-round" aria-label={`Share ${title}`} onclick={share}><Icon name="share" /></button>
@@ -160,6 +169,9 @@
 	.owner :global(.artwork) { width: 1.375rem; border-radius: 50%; }
 	.actions { display: flex; align-items: center; gap: 0.6rem; margin-top: 1.25rem; }
 	.short { display: none; }
+	.buy { border: 1.5px solid var(--accent); background: transparent; color: var(--accent); min-width: 0; }
+	.buy span { overflow: hidden; text-overflow: ellipsis; }
+	.buy:hover { text-decoration: none; }
 	.edit { margin-top: 0.5rem; margin-left: -0.5rem; color: var(--accent); }
 	.members { display: grid; }
 	.playlist .members { gap: 0.5rem; }
@@ -177,6 +189,7 @@
 		.meta { justify-content: center; }
 		.owner { flex-basis: 100%; justify-content: center; margin: 0 0 0.25rem; }
 		.actions { display: grid; grid-template-columns: 1fr 1fr auto auto; width: 100%; }
+		.actions .buy { grid-column: 1 / -1; order: 1; justify-content: center; }
 		.long { display: none; }
 		.short { display: inline; }
 		.edit { margin-left: 0; }

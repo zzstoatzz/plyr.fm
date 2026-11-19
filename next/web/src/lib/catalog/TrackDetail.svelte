@@ -17,9 +17,13 @@
 	import Artwork from '$lib/ui/Artwork.svelte';
 	import Icon from '$lib/ui/Icon.svelte';
 	import Loading from '$lib/ui/Loading.svelte';
+	import WaysIn from '$lib/access/WaysIn.svelte';
 	import ReportSheet from '$lib/moderation/ReportSheet.svelte';
 	import { auth } from '$lib/auth';
 	import { onMount, tick } from 'svelte';
+	import { isOpen } from '@plyr/next-core/access/policy';
+	import { offerFor, offerLabel, supportLink } from '@plyr/next-core/selling';
+	import type { Artist } from '@plyr/next-core/api';
 	let { track, ownerActions, playTrack = player.play.bind(player) }: { track: Track; ownerActions?: Snippet; playTrack?: (track: Track) => void } = $props();
 	const active = $derived(!player.liveStation && canToggleTrack(player.current, track, !!player.jam));
 	const canDiscuss = $derived(!isPrivateTrack(track));
@@ -44,7 +48,19 @@
 		return unsubscribe;
 	});
 	let openedAt: string | undefined;
-	let album = $state.raw<{ trackId: string; id: string }>();
+	let album = $state.raw<{ trackId: string; id: string; uri: string }>();
+	let seller = $state.raw<{ did: string; artist: Artist }>();
+	$effect(() => {
+		const did = track.artist.did;
+		const request = new AbortController();
+		void api.artist(did, request.signal).then(artist => { seller = { did, artist }; }, () => {});
+		return () => request.abort();
+	});
+	const sellerArtist = $derived(seller?.did === track.artist.did ? seller.artist : undefined);
+	const offer = $derived(offerFor(sellerArtist, [track.record.uri, album?.trackId === track.id ? album.uri : undefined]));
+	const support = $derived(supportLink(sellerArtist));
+	let waysAdmitted = $state(false);
+	const closedToMe = $derived(!isPrivateTrack(track) && !isOpen(track) && !!track.access.space_uri && auth.getAuth().did !== track.artist.did);
 	const chapterList = $derived(parseChapters(track.metadata.description ?? '', track.metadata.duration_seconds ?? undefined));
 	$effect(() => {
 		const title = track.metadata.album;
@@ -53,7 +69,7 @@
 		const request = new AbortController();
 		void api.search(title, { limit: 20, types: 'album', signal: request.signal }).then(({ data }) => {
 			const matches = data.filter(hit => hit.type === 'album' && hit.owner?.did === artist.did && hit.title === title);
-			if (!request.signal.aborted) album = matches.length === 1 ? { trackId: id, id: matches[0].id } : undefined;
+			if (!request.signal.aborted) album = matches.length === 1 ? { trackId: id, id: matches[0].id, uri: matches[0].record.uri } : undefined;
 		}, () => {});
 		return () => request.abort();
 	});
@@ -101,6 +117,7 @@
 
 {#snippet transport()}
 	<button class="primary-button" type="button" aria-label={active && player.playing ? 'Pause' : 'Play'} onclick={play}><Icon name={active && player.playing ? 'pause' : 'play'} size={25} /></button>
+	{#if offer && (!closedToMe || waysAdmitted)}<a class="buy" href={offer.url} target="_blank" rel="noopener noreferrer" aria-label={`Buy ${track.metadata.title}, ${offerLabel(offer)} (opens in a new tab)`}><Icon name="external" size={16} /> <span>buy · {offerLabel(offer)}</span></a>{/if}
 	{#if canDiscuss}<button class="icon-button" type="button" aria-label="Add to queue" disabled={!player.canEditPublicQueue} title={!player.canEditPublicQueue ? "play a public track to change queues" : undefined} onclick={() => player.enqueue(track)}><Icon name="queue" /></button>{/if}
 {/snippet}
 
@@ -117,6 +134,7 @@
 			{/if}
 		</div>
 		{#if canDiscuss}<TrackCollections {track} {transport} />{:else}<div class="actions">{@render transport()}</div>{/if}
+		{#if closedToMe}<WaysIn {track} {offer} {support} bind:admitted={waysAdmitted} />{/if}
 		{#if track.metadata.tags?.length}
 			<nav class="tags" aria-label="Tags">
 				{#each track.metadata.tags as tag (tag)}
@@ -192,6 +210,9 @@
 	.tags a { display: grid; align-items: center; min-height: 2.75rem; padding-inline: 0.65rem; max-width: 100%; overflow-wrap: anywhere; border-radius: 0.6rem; color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); font-size: 0.85rem; font-weight: 650; }
 	.tags a:hover { text-decoration: underline; }
 	.primary-button { width: 3.5rem; height: 3.5rem; }
+	.buy { display: inline-flex; align-items: center; gap: 0.45rem; height: 2.75rem; padding: 0 1.1rem; border: 1.5px solid var(--accent); border-radius: 999px; color: var(--accent); font-weight: 700; max-width: 100%; }
+	.buy span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.buy:hover { text-decoration: none; background: color-mix(in srgb, var(--accent) 10%, transparent); }
 	.info { font-size: 0.9rem; width: 100%; }
 	.info > p, details, summary { display: inline; }
 	summary { display: inline-flex; align-items: center; min-height: 2.75rem; padding-inline: 0.5rem; color: var(--accent); cursor: pointer; font-weight: 650; }
