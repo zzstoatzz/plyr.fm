@@ -28,7 +28,11 @@
 	--on-accent: light-dark(white, #0a0a0a);
 	--sidebar: 13.5rem;
 	--queue: 22.5rem;
-	--tabs: 4.875rem;
+	/* phones: the floating tab bar sits in the home-indicator zone like the iOS
+	   one; --tab-gap is its distance from the bottom edge and --tabs is all the
+	   room it takes (gap, bar, and the space above it), safe area included */
+	--tab-gap: max(0.5rem, calc(env(safe-area-inset-bottom, 0px) - 0.75rem));
+	--tabs: calc(var(--tab-gap) + 4.5rem);
 	--dock: 4rem;
 	--s-md: 0.75rem;
 	--s-lg: 1rem;

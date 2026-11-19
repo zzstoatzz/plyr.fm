@@ -51,7 +51,7 @@
   nav span { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgb(0 0 0 / 0.14); }
   :global(.frame.hasPlayer) .upload { --bar-offset: var(--dock); }
   @media (max-width: 720px) {
-    .upload { --bar-offset: calc(var(--tabs) + env(safe-area-inset-bottom)); }
-    :global(.frame.hasPlayer) .upload { --bar-offset: calc(var(--tabs) + var(--dock) + env(safe-area-inset-bottom)); }
+    .upload { --bar-offset: var(--tabs); }
+    :global(.frame.hasPlayer) .upload { --bar-offset: calc(var(--tabs) + var(--dock)); }
   }
 </style>
