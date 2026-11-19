@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { afterNavigate, goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { logout, otherAccounts, switchAccount } from '$lib/auth';
-	import Icon from '$lib/ui/Icon.svelte';
+	import { auth, logout, otherAccounts, switchAccount } from '$lib/auth';
+	import { isModerator } from '$lib/moderation/client';
+	import Icon, { type IconName } from '$lib/ui/Icon.svelte';
 
 	let { identity, uploads, onShortcuts }: { identity: string; uploads: number; onShortcuts: () => void } = $props();
 	let dialog: HTMLDialogElement;
@@ -10,19 +11,23 @@
 	let others = $state.raw<ReturnType<typeof otherAccounts>>([]);
 	let switching = $state(false);
 	let error = $state(false);
+	let moderator = $state(isModerator(auth.getAuth().did));
 	const uploadDetail = $derived(uploads === 0 ? 'add a track or album'
 		: uploads === 1 ? '1 upload in progress' : `${uploads} uploads in progress`);
-	const entries = $derived([
-		{ label: 'portal', detail: identity, icon: 'ph_portal', href: resolve('/(app)/portal') },
-		{ label: 'upload', detail: uploadDetail, icon: 'ph_upload', href: resolve('/(app)/upload') },
-		{ label: 'settings', detail: 'appearance and playback', icon: 'ph_settings', href: resolve('/(app)/settings') }
-	] as const);
+	type Entry = { label: string; detail: string; icon: IconName; href: string };
+	const entries: Entry[] = $derived([
+		{ label: 'portal', detail: identity, icon: 'ph_portal' as const, href: resolve('/(app)/portal') },
+		{ label: 'upload', detail: uploadDetail, icon: 'ph_upload' as const, href: resolve('/(app)/upload') },
+		{ label: 'settings', detail: 'appearance and playback', icon: 'ph_settings' as const, href: resolve('/(app)/settings') },
+		...(moderator ? [{ label: 'moderation', detail: 'reports waiting for a decision', icon: 'ph_flag' as const, href: resolve('/(app)/moderation') }] : [])
+	]);
 
 	afterNavigate(({ from }) => {
 		if (from && dialog?.open) dialog.close();
 	});
 
 	export function open(trigger: HTMLButtonElement) {
+		moderator = isModerator(auth.getAuth().did);
 		others = otherAccounts();
 		error = false;
 		trigger.focus({ preventScroll: true });

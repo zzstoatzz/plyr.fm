@@ -34,6 +34,10 @@ export const {
   BASE_SCOPE_PARTS,
   SYNC_SCOPE_PARTS,
   SCOPE_PARTS,
+  MODERATION_AUDIENCE,
+  MODERATION_METHODS,
+  MODERATION_SCOPE_PARTS,
+  hasReportGrant,
 } = createAuthConfig({
   siteUrl: process.env.EXPO_PUBLIC_SITE_URL,
   nsidPrefix: process.env.EXPO_PUBLIC_NSID_PREFIX,

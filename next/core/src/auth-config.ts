@@ -11,6 +11,7 @@ interface Options {
   uploadAuthorizeMethod?: string;
   uploadServiceAudience?: string;
   uploadCoordinatorUrl?: string;
+  apiAudience?: string;
 }
 
 export function createAuthConfig(options: Options = {}) {
@@ -97,6 +98,21 @@ export function createAuthConfig(options: Options = {}) {
     });
   }
 
+  // moderation answers at the appview; one grant per method, like the others
+  const MODERATION_AUDIENCE = options.apiAudience || 'did:web:api.next.plyr.fm#plyr_appview';
+  const MODERATION_METHODS = {
+    createReport: `${prefix}.moderation.createReport`,
+    getQueue: `${prefix}.moderation.getQueue`,
+    getSubject: `${prefix}.moderation.getSubject`,
+    emitEvent: `${prefix}.moderation.emitEvent`
+  } as const;
+  const MODERATION_SCOPE_PARTS = Object.values(MODERATION_METHODS).map(method => `rpc:${method}?aud=${MODERATION_AUDIENCE}`);
+  function hasReportGrant(scope: string): boolean {
+    return scope.split(' ').some(value => {
+      const [type, query] = value.split('?');
+      return type === `rpc:${MODERATION_METHODS.createReport}` && new URLSearchParams(query).get('aud') === MODERATION_AUDIENCE;
+    });
+  }
   const SYNC_SCOPE = `rpc:${JAM_JOIN_METHOD}?aud=${JAM_SERVICE_AUDIENCE}`;
   const JAM_SCOPE_PARTS = [
     `space:${JAM_SPACE.type}?authority=self&collection=${JAM_SPACE.collection}&action=create&action=update&manage=create&manage=update`,
@@ -122,7 +138,7 @@ export function createAuthConfig(options: Options = {}) {
   const protectedAudioScope = prefix === 'fm.plyr'
     ? [`space:${prefix}.privateMedia?authority=*&collection=${NSID.track}&action=read`, `space:${AUDIO_SPACE_TYPE}?authority=*&collection=${NSID.track}&action=read`]
     : [];
-  const SYNC_SCOPE_PARTS = [...BASE_SCOPE_PARTS, SYNC_SCOPE, UPLOAD_SCOPE, DOWNLOAD_SCOPE];
+  const SYNC_SCOPE_PARTS = [...BASE_SCOPE_PARTS, SYNC_SCOPE, UPLOAD_SCOPE, DOWNLOAD_SCOPE, ...MODERATION_SCOPE_PARTS];
   const SCOPE_PARTS = [...SYNC_SCOPE_PARTS, ...protectedAudioScope, ...JAM_SCOPE_PARTS, PRIVATE_PUBLISH_SCOPE, PRIVATE_DELETE_SCOPE, CLOSE_SCOPE];
   return {
     SITE_URL,
@@ -158,6 +174,10 @@ export function createAuthConfig(options: Options = {}) {
     BASE_SCOPE_PARTS,
     SYNC_SCOPE_PARTS,
     SCOPE_PARTS,
+    MODERATION_AUDIENCE,
+    MODERATION_METHODS,
+    MODERATION_SCOPE_PARTS,
+    hasReportGrant,
   };
 }
 
