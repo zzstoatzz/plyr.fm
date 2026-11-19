@@ -7,11 +7,12 @@
   import type { Track } from '@plyr/next-core/api';
   import { auth } from '$lib/auth';
   import { player } from '$lib/player.svelte';
-  import { trackHref } from '$lib/tracks';
+  import { artistName, trackHref } from '$lib/tracks';
   import Icon from '$lib/ui/Icon.svelte';
   import { placePopover, placePopoverAt } from './popover';
   import PlaylistSheet from '$lib/collections/PlaylistSheet.svelte';
   import TrackDownload from '$lib/downloads/TrackDownload.svelte';
+  import ReportSheet from '$lib/moderation/ReportSheet.svelte';
   let { track }: { track: Track } = $props();
   let panel: HTMLDivElement;
   let trigger: HTMLButtonElement;
@@ -21,6 +22,8 @@
   let picker = $state<PlaylistSheet>();
   let downloading = $state(false);
   let downloader = $state<TrackDownload>();
+  let reporting = $state(false);
+  let reporter = $state<ReportSheet>();
   let accessDialog: HTMLDialogElement;
   let access = $state(false);
   let accessChanged = false;
@@ -101,9 +104,14 @@
   <hr>
   <a class="text-button" href={resolve('/(app)/u/[actor]', { actor: track.artist.did })}><Icon name="user" size={18} />go to artist</a>
   <a class="text-button" href={trackHref(track)}><Icon name="info" size={18} />about this track</a>
+  {#if account.agent && account.did !== track.artist.did}
+    <hr>
+    <button class="text-button" type="button" onclick={async () => { reporting = true; panel.hidePopover(); await tick(); reporter?.show(); }}><Icon name="ph_flag" size={18} />report this track</button>
+  {/if}
   {#if error}<p role="alert">could not share this track. try again.</p>{/if}
 </div>
 {#if picking}<PlaylistSheet bind:this={picker} {track} onclose={() => { picking = false; trigger.focus(); }} />{/if}
+{#if reporting}<ReportSheet bind:this={reporter} subject={track.record.uri} name={track.metadata.title} owner={artistName(track)} returnTo={trackHref(track)} onclose={() => { reporting = false; trigger.focus(); }} />{/if}
 {#if downloading}<TrackDownload bind:this={downloader} {track} announce onclose={() => trigger.focus()} />{/if}
 <dialog bind:this={accessDialog} class="picker" onclose={() => { access = false; trigger.focus(); if (accessChanged) void invalidateAll(); }}>
   <header><strong>who can listen</strong><form method="dialog"><button class="icon-button" type="submit" aria-label="Close who can listen"><Icon name="x" size={18} /></button></form></header>

@@ -17,10 +17,19 @@
 	import Artwork from '$lib/ui/Artwork.svelte';
 	import Icon from '$lib/ui/Icon.svelte';
 	import Loading from '$lib/ui/Loading.svelte';
+	import ReportSheet from '$lib/moderation/ReportSheet.svelte';
+	import { auth } from '$lib/auth';
+	import { onMount, tick } from 'svelte';
 	let { track, ownerActions, playTrack = player.play.bind(player) }: { track: Track; ownerActions?: Snippet; playTrack?: (track: Track) => void } = $props();
 	const active = $derived(!player.liveStation && canToggleTrack(player.current, track, !!player.jam));
 	const canDiscuss = $derived(!isPrivateTrack(track));
 	let sharedTrack = $state<string>();
+	let account = $state.raw(auth.getAuth());
+	onMount(() => auth.subscribe(() => { account = auth.getAuth(); }));
+	const reportable = $derived(!!account.agent && account.did !== track.artist.did);
+	let reporting = $state(false);
+	let reporter = $state<ReportSheet>();
+	let reportButton = $state<HTMLButtonElement>();
 	let comments = $state<HTMLDialogElement>();
 	let openedTrack = $state<string>();
 	let commentsEnabled = $state(false);
@@ -140,7 +149,9 @@
 				<button class="icon-button" type="button" aria-label="Share track" onclick={() => share()}><Icon name="share" size={20} /></button>
 				{#if active && player.position >= 1}<button class="text-button" type="button" onclick={() => share(player.position)}>share at {clock(player.position)}</button>{/if}
 				{#if commentsEnabled}<button class="text-button" type="button" aria-haspopup="dialog" onclick={openComments}>comments</button>{/if}
+				{#if reportable}<button bind:this={reportButton} class="icon-button" type="button" aria-label="Report this track" aria-haspopup="dialog" onclick={async () => { reporting = true; await tick(); reporter?.show(); }}><Icon name="ph_flag" size={19} /></button>{/if}
 			</div>
+			{#if reporting}<ReportSheet bind:this={reporter} subject={track.record.uri} name={track.metadata.title} owner={artistName(track)} returnTo={trackHref(track)} onclose={() => { reporting = false; reportButton?.focus(); }} />{/if}
 		{:else if ownerActions}
 			{@render ownerActions()}
 		{/if}
