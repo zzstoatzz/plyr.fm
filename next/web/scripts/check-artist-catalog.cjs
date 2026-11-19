@@ -85,7 +85,7 @@ async function verify(browser, origin, width, scheme) {
     const nowListening = page.getByRole('link', { name: `${artistName} is listening to Morning drone by Field Band`, exact: true });
     await nowListening.waitFor();
     assert.equal(await nowListening.getAttribute('href'), `/track/${tracks[0].id}`);
-    assert.match(await nowListening.innerText(), /listening now[\s\S]*Field Band · Tapes[\s\S]*1:0\d[\s\S]*3:20/i);
+    assert.match(await nowListening.innerText(), /^listening to Morning drone\s·\sField Band$/);
     const support = page.getByRole('link', { name: /^Support .+ at example\.test\/support$/ });
     assert.equal(await support.getAttribute('href'), 'https://example.test/support');
     assert.equal(await page.getByRole('link', { name: 'edit profile' }).count(), 0);
@@ -154,7 +154,7 @@ async function verify(browser, origin, width, scheme) {
     await page.getByRole('heading', { name: 'sketches.test', exact: true }).waitFor();
     assert.equal(await page.title(), 'sketches.test · plyr.fm');
     assert.equal(await support.count(), 0, 'only a web URL renders as a support link');
-    assert.equal(await page.getByText('listening now').count(), 0, 'an expired status shows nothing');
+    assert.equal(await page.getByText('listening to').count(), 0, 'an expired status shows nothing');
     await panel('albums').getByRole('link', { name: /Porch recordings/ }).waitFor();
     assert.deepEqual(errors, []);
     console.log(`${width}px ${scheme}: artist paging, retries, keyboard tabs, Back and playback continuity passed`);
