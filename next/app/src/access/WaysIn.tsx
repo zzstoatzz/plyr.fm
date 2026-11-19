@@ -2,6 +2,7 @@ import { Link } from 'expo-router';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
 import type { Track } from '@plyr/next-core/api';
 import { waysIn, type WayIn } from '@plyr/next-core/access/ways-in';
+import type { Policy } from '@plyr/next-core/access/policy';
 import type { Offer } from '@plyr/next-core/selling';
 import { useAppearance } from '../appearance';
 import { useAuth } from '../auth';
@@ -14,16 +15,21 @@ import { trackSpace } from './policy';
 
 const ICONS: Record<WayIn['kind'], Icon> = { buy: Tag, support: Heart, 'sign-in': SignIn, members: Users, supporter: Heart, purchase: Tag };
 
-/** a closed track, seen by someone other than its artist: who can listen and how to get in */
-export function WaysIn({ track, offer, support }: { track: Track; offer?: Offer; support?: string }) {
-  const theme = useAppearance();
+/** how a gated track's listener gets in; `admitted` when its rules already let them listen */
+export function useWaysIn(track: Track, offer?: Offer, support?: string) {
   const auth = useAuth();
   const space = trackSpace(track);
   const read = useSpacePolicies(track.artist.did, space);
-  if (!space) return null;
-  const artist = artistName(track);
   const rules = read.policies?.length ? read.policies : read.fallback ? [{ rule: read.fallback }] : [];
-  const { ways, note } = waysIn({ artist, rules, offer, support, signedIn: !!auth.did });
+  return { space, policies: read.policies, ...waysIn({ artist: artistName(track), rules, offer, support, viewer: auth.did ?? undefined }) };
+}
+
+/** a closed track, seen by someone the rules don't let in: who can listen and how to get in */
+export function WaysIn({ track, view }: { track: Track; view: ReturnType<typeof useWaysIn> & { policies?: Policy[] } }) {
+  const theme = useAppearance();
+  const { space, ways, note, policies, admitted } = view;
+  if (!space || admitted) return null;
+  const artist = artistName(track);
   const size = 15 * theme.scale;
   const small = { color: theme.faint, fontFamily: theme.fontFamily, fontSize: 13 * theme.scale, lineHeight: 18 * theme.scale };
   const go = { color: theme.accent, fontFamily: theme.fontFamily, fontSize: size, fontWeight: '700' } as const;
@@ -50,7 +56,7 @@ export function WaysIn({ track, offer, support }: { track: Track; offer?: Offer;
             </Link> : null}
         </View>;
       })}
-    </View> : read.policies ? <Text style={small}>only {artist} can listen right now.</Text> : null}
+    </View> : policies ? <Text style={small}>only {artist} can listen right now.</Text> : null}
     {note ? <Text style={small}>{note}</Text> : null}
   </View>;
 }

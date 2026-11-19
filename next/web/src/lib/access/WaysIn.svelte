@@ -12,10 +12,11 @@
   import Icon, { type IconName } from '$lib/ui/Icon.svelte';
 
   // a closed track, seen by someone other than its artist: who can listen and how to get in
-  let { track, offer, support }: { track: Track; offer?: Offer; support?: string } = $props();
+  // `admitted`: the rules already let this listener in, so there's nothing to show
+  let { track, offer, support, admitted = $bindable(false) }: { track: Track; offer?: Offer; support?: string; admitted?: boolean } = $props();
   const space = $derived(trackSpace(track, authConfig.AUDIO_SPACE_TYPE));
   let policies = $state.raw<Policy[]>();
-  const signedIn = $derived(!!auth.getAuth().did);
+  const viewer = $derived(auth.getAuth().did ?? undefined);
   $effect(() => {
     const current = space;
     if (!current) return;
@@ -25,12 +26,13 @@
     return () => controller.abort();
   });
   const rules = $derived(policies?.length ? policies : (() => { const rule = space ? implicitRule(space) : undefined; return rule ? [{ rule }] : []; })());
-  const result = $derived(waysIn({ artist: artistName(track), rules, offer, support, signedIn }));
+  const result = $derived(waysIn({ artist: artistName(track), rules, offer, support, viewer }));
+  $effect(() => { admitted = result.admitted; });
   const signIn = $derived(`${resolve('/(app)/login')}?${new URLSearchParams({ return_to: page.url.pathname + page.url.search })}`);
   const icons: Record<string, IconName> = { buy: 'tag', support: 'heart', 'sign-in': 'user', members: 'users', supporter: 'heart', purchase: 'tag' };
 </script>
 
-{#if space}
+{#if space && !result.admitted}
   <section class="ways" aria-label="how to listen">
     <p class="lead"><Icon name="lock" size={16} /> {artistName(track)} shares this one with some people</p>
     {#if result.ways.length}

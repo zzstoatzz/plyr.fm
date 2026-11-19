@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { formatPrice, parsePrice } from '@plyr/next-core/access/policy';
-import { normalizeLink, offerLabel, readSelling, storeName, withBuyLink, type SellingSettings, type StoredOffer } from '@plyr/next-core/selling';
-import { isPrivateTrack } from '@plyr/next-core/track-access';
+import { parsePrice, priceText } from '@plyr/next-core/access/policy';
+import { normalizeLink, offerLabel, readSelling, sellableReleases, storeName, withBuyLink, type Release, type SellingSettings, type StoredOffer } from '@plyr/next-core/selling';
 import { api } from '../api-client';
 import { useAuth } from '../auth';
 import { getAuth } from '../auth-state';
@@ -14,16 +13,7 @@ import { accountSettings } from '../preference-sync';
 import { Text } from '../Text';
 import { toast } from '../toast';
 
-type Release = { uri: string; title: string; kind: string };
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY'];
-
-async function loadReleases(did: string): Promise<Release[]> {
-  const [albums, tracks] = await Promise.all([api.albums(did, { limit: 100 }), api.tracks({ artist_did: did, limit: 100 })]);
-  return [
-    ...albums.data.map(album => ({ uri: album.record.uri, title: album.metadata.name || 'untitled album', kind: 'album' })),
-    ...tracks.data.filter(track => !isPrivateTrack(track)).map(track => ({ uri: track.record.uri, title: track.metadata.title, kind: 'track' })),
-  ];
-}
 
 /** portal: where listeners can support you and buy each release. plyr links out, never takes the payment. */
 export function SellCard({ did }: { did: string }) {
@@ -50,7 +40,10 @@ export function SellCard({ did }: { did: string }) {
   const load = useCallback(async () => {
     setLoadError('');
     try {
-      const [value, list] = await Promise.all([call()(), loadReleases(did)]);
+      const [value, list] = await Promise.all([call()(), sellableReleases({
+        albums: cursor => api.albums(did, { limit: 100, cursor }),
+        tracks: cursor => api.tracks({ artist_did: did, limit: 100, cursor }),
+      })]);
       const next = readSelling(value);
       setSettings(next); setSupport(next.supportUrl); setReleases(list);
     } catch (error) { setLoadError(error instanceof Error ? error.message : 'could not load your selling settings.'); }
@@ -120,7 +113,11 @@ export function SellCard({ did }: { did: string }) {
                   <Text numberOfLines={1} style={{ color: theme.text, fontFamily: theme.fontFamily, fontSize: 15 * theme.scale, fontWeight: '600' }}>{release.title}</Text>
                   <Text style={small}>{release.kind}</Text>
                 </View>
-                {editing !== release.uri && <Choice selected={!!offer} label={offer ? offerLabel(offer) : 'add a buy link'} onPress={() => setEditing(release.uri)} />}
+                {editing !== release.uri && <Pressable accessibilityRole="button" onPress={() => setEditing(release.uri)}
+                  accessibilityLabel={offer ? `edit buy link for ${release.title}: ${offerLabel(offer)}` : `add a buy link for ${release.title}`}
+                  style={({ pressed }) => [styles.pill, { borderColor: offer ? theme.accent : theme.line, opacity: pressed ? 0.7 : 1 }]}>
+                  <Text numberOfLines={1} style={{ color: offer ? theme.accent : theme.muted, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale, fontWeight: offer ? '700' : '400' }}>{offer ? offerLabel(offer) : 'add a buy link'}</Text>
+                </Pressable>}
               </View>
               {editing === release.uri && <BuyEditor release={release} offer={offer} busy={busy} cancel={() => setEditing(undefined)}
                 save={async next => {
@@ -143,7 +140,7 @@ function BuyEditor({ release, offer, busy, save, cancel }: {
   const theme = useAppearance();
   const [url, setUrl] = useState(offer?.url ?? '');
   const [currency, setCurrency] = useState(offer?.currency ?? 'USD');
-  const [price, setPrice] = useState(offer?.amount !== undefined && offer.currency ? formatPrice(offer.amount, offer.currency).replace(/[^\d.,]/g, '') : '');
+  const [price, setPrice] = useState(offer?.amount !== undefined && offer.currency ? priceText(offer.amount, offer.currency) : '');
   const [error, setError] = useState('');
   const submit = () => {
     setError('');
@@ -178,4 +175,5 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 44 },
   release: { borderTopWidth: StyleSheet.hairlineWidth, paddingVertical: 8 },
   releaseRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  pill: { minHeight: 44, maxWidth: '55%', justifyContent: 'center', paddingHorizontal: 14, borderRadius: 22, borderWidth: 1 },
 });

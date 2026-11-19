@@ -29,9 +29,9 @@ export function TrackPresentation({ track, controls, stats, utilities, access, c
       {track.metadata.album && <Text style={{ color: theme.muted, fontFamily: theme.fontFamily, fontSize: 15 * theme.scale, lineHeight: 22 * theme.scale, textAlign: 'center' }}>{track.metadata.album}</Text>}
     </View>
     <View style={styles.controls}>{controls}</View>
+    {access}
     <View style={styles.stats}>{stats}</View>
     <View style={styles.utilities}>{utilities}</View>
-    {access}
     {track.metadata.description && <View style={styles.description}><Copy>{track.metadata.description}</Copy></View>}
     {comments}
   </View>;

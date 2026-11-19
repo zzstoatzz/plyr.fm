@@ -1,19 +1,20 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { preferenceTransport } from '@plyr/next-core/preference-transport';
-  import { formatPrice, parsePrice } from '@plyr/next-core/access/policy';
-  import { normalizeLink, offerLabel, readSelling, storeName, withBuyLink, type SellingSettings } from '@plyr/next-core/selling';
+  import { parsePrice, priceText as priceInput } from '@plyr/next-core/access/policy';
+  import { normalizeLink, offerLabel, readSelling, sellableReleases, storeName, withBuyLink, type Release, type SellingSettings } from '@plyr/next-core/selling';
+  import { api } from '$lib/api';
   import { auth } from '$lib/auth';
   import { authConfig } from '$lib/auth-config';
   import { toast } from '$lib/toast.svelte';
   import { resolve } from '$app/paths';
 
-  type Release = { uri: string; title: string; kind: string };
-  let { releases }: { releases: Release[] } = $props();
+  let { did }: { did: string } = $props();
   const CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY'];
 
   let account = $state.raw(auth.getAuth());
   let settings = $state.raw<SellingSettings>();
+  let releases = $state.raw<Release[]>([]);
   let loadError = $state('');
   let supportText = $state('');
   let supportError = $state('');
@@ -35,7 +36,12 @@
   async function load() {
     loadError = '';
     try {
-      settings = readSelling(await request()());
+      const [value, list] = await Promise.all([request()(), sellableReleases({
+        albums: cursor => api.albums(did, { limit: 100, cursor }),
+        tracks: cursor => api.tracks({ artist_did: did, limit: 100, cursor }),
+      })]);
+      settings = readSelling(value);
+      releases = list;
       supportText = settings.supportUrl;
     } catch (failure) { loadError = failure instanceof Error ? failure.message : 'could not load your selling settings.'; }
   }
@@ -73,7 +79,7 @@
     editError = '';
     urlText = existing?.url ?? '';
     currency = existing?.currency ?? 'USD';
-    priceText = existing?.amount !== undefined && existing.currency ? formatPrice(existing.amount, existing.currency).replace(/[^\d.,]/g, '') : '';
+    priceText = existing?.amount !== undefined && existing.currency ? priceInput(existing.amount, existing.currency) : '';
   }
 
   async function saveBuy(event: SubmitEvent, release: Release) {

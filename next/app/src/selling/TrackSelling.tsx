@@ -7,15 +7,16 @@ import { useAppearance } from '../appearance';
 import { Pill } from '../HeroPieces';
 import { ArrowSquareOut } from '../icons';
 import { toast } from '../toast';
-import { WaysIn } from '../access/WaysIn';
+import { WaysIn, useWaysIn } from '../access/WaysIn';
 import { useTrackSelling } from './use-selling';
 
 /** a track page's way to buy it, or, when it's closed to this listener, every way in */
 export function TrackSelling({ track, viewer }: { track: Track; viewer?: string | null }) {
   const theme = useAppearance();
   const { offer, support } = useTrackSelling(track);
+  const ways = useWaysIn(track, offer, support);
   const closed = !isPrivateTrack(track) && !isOpen(track) && !!track.access.space_uri && viewer !== track.artist.did;
-  if (closed) return <WaysIn track={track} offer={offer} support={support} />;
+  if (closed && !ways.admitted) return <WaysIn track={track} view={ways} />;
   if (!offer) return null;
   return <View style={styles.buy}>
     <Pill outline role="link" icon={<ArrowSquareOut size={18 * theme.scale} color={theme.accent} />} label={`buy · ${offerLabel(offer)}`}

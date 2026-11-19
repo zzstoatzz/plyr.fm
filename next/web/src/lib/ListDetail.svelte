@@ -189,6 +189,7 @@
 		.meta { justify-content: center; }
 		.owner { flex-basis: 100%; justify-content: center; margin: 0 0 0.25rem; }
 		.actions { display: grid; grid-template-columns: 1fr 1fr auto auto; width: 100%; }
+		.actions .buy { grid-column: 1 / -1; order: 1; justify-content: center; }
 		.long { display: none; }
 		.short { display: inline; }
 		.edit { margin-left: 0; }

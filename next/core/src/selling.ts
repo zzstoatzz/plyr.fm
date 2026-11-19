@@ -1,5 +1,6 @@
-import type { Artist } from './api.ts';
+import type { Artist, ListSummary, Page, Track } from './api.ts';
 import { formatPrice } from './access/policy.ts';
+import { isPrivateTrack } from './track-access.ts';
 
 // "sell your music" for now: the artist points listeners at wherever they
 // already sell. plyr never sees the payment, so an offer is a link to open,
@@ -98,6 +99,12 @@ export function offerFor(artist: Pick<Artist, 'offers'> | undefined, subjects: (
   return undefined;
 }
 
+/** a track names its album by title only: the artist's album with that name */
+export function albumNamed<Album extends Pick<ListSummary, 'metadata'>>(name: string | null | undefined, albums: Album[]): Album | undefined {
+  const wanted = name?.trim().toLowerCase();
+  return wanted ? albums.find(album => album.metadata.name?.trim().toLowerCase() === wanted) : undefined;
+}
+
 export function supportLink(artist: Pick<Artist, 'support_url'> | undefined): string | undefined {
   return sellingLink(artist?.support_url ?? undefined);
 }
@@ -113,4 +120,32 @@ export function readSelling(preferences: unknown): SellingSettings {
 export function withBuyLink(links: StoredOffer[], next: StoredOffer | { subject: string; url?: undefined }): StoredOffer[] {
   const rest = links.filter(link => link.subject !== next.subject);
   return next.url ? [...rest, next as StoredOffer].slice(0, MAX_OFFERS) : rest;
+}
+
+export interface Release { uri: string; title: string; kind: string }
+
+const MAX_RELEASE_PAGES = 20;
+
+async function every<T>(load: (cursor?: string) => Promise<Page<T>>): Promise<T[]> {
+  const items: T[] = [];
+  let cursor: string | undefined;
+  for (let page = 0; page < MAX_RELEASE_PAGES; page++) {
+    const next = await load(cursor);
+    items.push(...next.data);
+    if (!next.has_more || !next.next_cursor) break;
+    cursor = next.next_cursor;
+  }
+  return items;
+}
+
+/** everything an artist could sell: albums first, then public tracks, the whole catalog */
+export async function sellableReleases(read: {
+  albums: (cursor?: string) => Promise<Page<ListSummary>>;
+  tracks: (cursor?: string) => Promise<Page<Track>>;
+}): Promise<Release[]> {
+  const [albums, tracks] = await Promise.all([every(read.albums), every(read.tracks)]);
+  return [
+    ...albums.map(album => ({ uri: album.record.uri, title: album.metadata.name || 'untitled album', kind: `album · ${album.metrics.member_count} ${album.metrics.member_count === 1 ? 'track' : 'tracks'}` })),
+    ...tracks.filter(track => !isPrivateTrack(track)).map(track => ({ uri: track.record.uri, title: track.metadata.title, kind: track.metadata.album ? `track on ${track.metadata.album}` : 'single' })),
+  ];
 }

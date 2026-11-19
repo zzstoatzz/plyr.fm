@@ -46,3 +46,30 @@ test('settings round-trip and one link per release', () => {
   assert.deepEqual(withBuyLink(replaced, { subject: album }), []);
   assert.deepEqual(readSelling(null), { supportUrl: '', buyLinks: [] });
 });
+
+test('a saved price reads back into the editor without grouping', async () => {
+  const { priceText, parsePrice } = await import('../src/access/policy.ts');
+  for (const [amount, currency] of [[150000, 'USD'], [1500, 'JPY'], [750, 'EUR'], [800, 'USD']] as const) {
+    assert.equal(parsePrice(priceText(amount, currency), currency), amount);
+  }
+  assert.equal(priceText(800, 'USD'), '8');
+  assert.equal(priceText(750, 'USD'), '7.50');
+});
+
+test('a track finds its album by name', async () => {
+  const { albumNamed } = await import('../src/selling.ts');
+  const albums = [{ metadata: { name: 'Tide ' }, id: 'a' }, { metadata: { name: null }, id: 'b' }];
+  assert.equal(albumNamed('tide', albums)?.id, 'a');
+  assert.equal(albumNamed(null, albums), undefined);
+});
+
+test('the sell card sees the whole catalog, page by page', async () => {
+  const { sellableReleases } = await import('../src/selling.ts');
+  const track = (n: number) => ({ record: { uri: `at://did:plc:a/fm.plyr.track/${n}` }, metadata: { title: `t${n}`, album: null }, access: { visibility: 'public' } });
+  const pages = [[track(1), track(2)], [track(3)]];
+  const releases = await sellableReleases({
+    albums: async () => ({ object: 'list', data: [], has_more: false }),
+    tracks: async cursor => { const index = cursor ? Number(cursor) : 0; return { object: 'list', data: pages[index] as never, has_more: index < 1, next_cursor: String(index + 1) }; },
+  });
+  assert.deepEqual(releases.map(release => release.title), ['t1', 't2', 't3']);
+});

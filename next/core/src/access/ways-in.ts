@@ -21,23 +21,33 @@ export interface WaysInInput {
   rules: (Pick<Policy, 'rule' | 'title'> | { rule: Rule; title?: string })[];
   offer?: Offer;
   support?: string;
-  signedIn: boolean;
+  /** the listener's did, when signed in */
+  viewer?: string;
 }
 
-export function waysIn({ artist, rules, offer, support, signedIn }: WaysInInput): { ways: WayIn[]; note?: string } {
+/** whether a rule already lets this listener in, as far as the rules alone can tell */
+function admits(rule: Rule, viewer: string | undefined): boolean {
+  if (!viewer) return false;
+  return rule.kind === 'signedIn' || (rule.kind === 'members' && rule.members.includes(viewer));
+}
+
+/**
+ * every way in, for a listener the rules don't already admit. `admitted` means the
+ * panel has nothing to say (they can listen); a paid rule can't be known here.
+ */
+export function waysIn({ artist, rules, offer, support, viewer }: WaysInInput): { ways: WayIn[]; note?: string; admitted: boolean } {
+  if (rules.some(({ rule }) => admits(rule, viewer))) return { ways: [], admitted: true };
   const ways: WayIn[] = [];
   if (offer) ways.push({ key: 'buy', kind: 'buy', title: 'buy it', detail: offerLabel(offer), url: offer.url, action: 'buy' });
   if (support) ways.push({ key: 'support', kind: 'support', title: `support ${artist}`, detail: `on ${storeName(support)}`, url: support, action: 'support' });
   rules.forEach(({ rule, title }, index) => {
     const key = `${rule.kind}-${index}`;
-    if (rule.kind === 'signedIn') ways.push(signedIn
-      ? { key, kind: 'sign-in', title: title ?? 'anyone signed in', detail: 'your account should be able to listen' }
-      : { key, kind: 'sign-in', title: title ?? 'anyone signed in', detail: 'sign in to listen', action: 'sign in' });
+    if (rule.kind === 'signedIn') ways.push({ key, kind: 'sign-in', title: title ?? 'anyone signed in', detail: 'sign in to listen', action: 'sign in' });
     else if (rule.kind === 'members') ways.push({ key, kind: 'members', title: title ?? `people ${artist} listed`, detail: `ask ${artist} to add you` });
     else if (rule.kind === 'supporter') ways.push({ key, kind: 'supporter', title: title ?? `supporters of ${artist}`, detail: 'any verified payment to them opens it' });
     else if (rule.kind === 'purchase') ways.push({ key, kind: 'purchase', title: title ?? 'buyers', detail: `a verified purchase of ${formatPrice(rule.amount, rule.currency)} or more opens it` });
   });
-  const verified = rules.some(({ rule }) => rule.kind === 'purchase' || rule.kind === 'supporter');
-  const note = offer && !verified ? `buying ${offerLabel(offer)} gets you the files there. it doesn't unlock this track on plyr yet.` : undefined;
-  return { ways, ...(note ? { note } : {}) };
+  // a plain link is never verified, so buying there never opens the track here, whatever the rules say
+  const note = offer?.provider === 'link' ? `buying ${offerLabel(offer)} gets you the files there. it doesn't unlock this track on plyr.` : undefined;
+  return { ways, ...(note ? { note } : {}), admitted: false };
 }

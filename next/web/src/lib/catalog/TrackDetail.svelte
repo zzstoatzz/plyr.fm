@@ -51,6 +51,7 @@
 	const sellerArtist = $derived(seller?.did === track.artist.did ? seller.artist : undefined);
 	const offer = $derived(offerFor(sellerArtist, [track.record.uri, album?.trackId === track.id ? album.uri : undefined]));
 	const support = $derived(supportLink(sellerArtist));
+	let waysAdmitted = $state(false);
 	const closedToMe = $derived(!isPrivateTrack(track) && !isOpen(track) && !!track.access.space_uri && auth.getAuth().did !== track.artist.did);
 	const chapterList = $derived(parseChapters(track.metadata.description ?? '', track.metadata.duration_seconds ?? undefined));
 	$effect(() => {
@@ -108,7 +109,7 @@
 
 {#snippet transport()}
 	<button class="primary-button" type="button" aria-label={active && player.playing ? 'Pause' : 'Play'} onclick={play}><Icon name={active && player.playing ? 'pause' : 'play'} size={25} /></button>
-	{#if offer && !closedToMe}<a class="buy" href={offer.url} target="_blank" rel="noopener noreferrer" aria-label={`Buy ${track.metadata.title}, ${offerLabel(offer)} (opens in a new tab)`}><Icon name="external" size={16} /> <span>buy · {offerLabel(offer)}</span></a>{/if}
+	{#if offer && (!closedToMe || waysAdmitted)}<a class="buy" href={offer.url} target="_blank" rel="noopener noreferrer" aria-label={`Buy ${track.metadata.title}, ${offerLabel(offer)} (opens in a new tab)`}><Icon name="external" size={16} /> <span>buy · {offerLabel(offer)}</span></a>{/if}
 	{#if canDiscuss}<button class="icon-button" type="button" aria-label="Add to queue" disabled={!player.canEditPublicQueue} title={!player.canEditPublicQueue ? "play a public track to change queues" : undefined} onclick={() => player.enqueue(track)}><Icon name="queue" /></button>{/if}
 {/snippet}
 
@@ -125,7 +126,7 @@
 			{/if}
 		</div>
 		{#if canDiscuss}<TrackCollections {track} {transport} />{:else}<div class="actions">{@render transport()}</div>{/if}
-		{#if closedToMe}<WaysIn {track} {offer} {support} />{/if}
+		{#if closedToMe}<WaysIn {track} {offer} {support} bind:admitted={waysAdmitted} />{/if}
 		{#if track.metadata.tags?.length}
 			<nav class="tags" aria-label="Tags">
 				{#each track.metadata.tags as tag (tag)}

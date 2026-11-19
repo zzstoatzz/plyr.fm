@@ -1,6 +1,6 @@
-import type { Artist, Playback, Track } from '../api.ts';
+import type { Artist, ListSummary, Playback, Track } from '../api.ts';
 import { readDownloadManifest, serviceMediaUrl, type DownloadManifest } from './manifest.ts';
-import { offerFor, offerLabel, supportLink } from '../selling.ts';
+import { albumNamed, offerFor, offerLabel, supportLink } from '../selling.ts';
 
 export const MAX_BUFFERED_DOWNLOAD_BYTES = 104_857_600;
 export type DownloadAdmission = { guard(): void; begin(): void };
@@ -59,6 +59,8 @@ export function downloadFilename(track: Track, mime: string): string {
 
 export async function prepareDownload(id: string, uri: string, read: {
   track: (id: string) => Promise<Track>; playback: (id: string) => Promise<Playback>; artist: (did: string) => Promise<Artist>;
+  /** the artist's albums, so a track sold as part of one gets its buy link */
+  albums?: (did: string) => Promise<ListSummary[]>;
   manifest?: (source: string, signal?: AbortSignal) => Promise<DownloadManifest>;
   authorize?: (record: { uri: string; cid: string }) => Promise<DownloadAdmission>;
   protected?: (track: Track, uri: string, admission?: DownloadAdmission) => Promise<Omit<ProtectedDownload, 'filename'> & { policy: 'open' | 'ask' | 'supporters' }>;
@@ -79,8 +81,11 @@ export async function prepareDownload(id: string, uri: string, read: {
   if (playback.record.uri !== uri || playback.record.cid !== track.record.cid) throw new Error('this track changed or is unavailable. try again.');
   const asks = async (ask: boolean) => {
     if (!ask) return { support: null, buy: null };
-    const artist = await read.artist(track.artist.did).catch(() => undefined);
-    const offer = offerFor(artist, [track.record.uri]);
+    const [artist, albums] = await Promise.all([
+      read.artist(track.artist.did).catch(() => undefined),
+      track.metadata.album && read.albums ? read.albums(track.artist.did).catch(() => []) : [],
+    ]);
+    const offer = offerFor(artist, [track.record.uri, albumNamed(track.metadata.album, albums)?.record.uri]);
     return { support: supportLink(artist) ?? null, buy: offer ? { url: offer.url, label: offerLabel(offer) } : null };
   };
   if (availability.status === 'gated' && availability.space && read.protected) {
