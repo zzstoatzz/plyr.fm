@@ -132,6 +132,7 @@
 		<div class="identity">
 			<h1>{name}</h1>
 			{#if artist.handle && artist.display_name?.trim() && artist.display_name.trim() !== artist.handle}<p class="handle">@{artist.handle}</p>{/if}
+			<ListeningNow did={artist.did} {name} />
 			{#if artist.bio}<p class="bio">{artist.bio}</p>{/if}
 			{#await visibleMetrics then result}
 				{#if result}
@@ -155,28 +156,29 @@
 			{#if copied}<p role="status" class="subtle">link copied</p>{/if}
 		</div>
 	</header>
-	<div class="cards">
-		<ListeningNow did={artist.did} {name} />
-		{#await visibleMetrics then result}
-			{#if support}
-				<a class="card" href={support} target="_blank" rel="noopener noreferrer" aria-label={`Support ${name} at ${supportLabel(support)}`}>
-					<span class="lead heart"><Icon name="heart" size={20} /></span>
-					<span class="card-copy"><small>support {name}</small><strong class="truncate">{supportLabel(support)}</strong></span>
-					<Icon name="chevron" size={16} />
-				</a>
-			{/if}
-			{#if result?.top_track}
-				{@const top = result.top_track}
-				{@const art = views.tracks.data.find(track => track.id === top.id)}
-				<a class="card" href={trackHref({ id: top.id })} aria-label={`Most played: ${top.title}`}>
-					<span class="lead"><Artwork src={art ? trackArtwork(art) : undefined} size={40} /></span>
-					<span class="card-copy"><small>most played</small><strong class="truncate">{top.title}</strong></span>
-					<span class="meta">{compactCount(top.play_count)} {top.play_count === 1 ? 'play' : 'plays'}</span>
-					<Icon name="chevron" size={16} />
-				</a>
+	{#await visibleMetrics then result}
+		{#if support || result?.top_track}
+			<div class="cards">
+				{#if support}
+					<a class="card" href={support} target="_blank" rel="noopener noreferrer" aria-label={`Support ${name} at ${supportLabel(support)}`}>
+						<span class="lead heart"><Icon name="heart" size={20} /></span>
+						<span class="card-copy"><small>support {name}</small><strong class="truncate">{supportLabel(support)}</strong></span>
+						<Icon name="chevron" size={16} />
+					</a>
 				{/if}
-		{/await}
-	</div>
+				{#if result?.top_track}
+					{@const top = result.top_track}
+					{@const art = views.tracks.data.find(track => track.id === top.id)}
+					<a class="card" href={trackHref({ id: top.id })} aria-label={`Most played: ${top.title}`}>
+						<span class="lead"><Artwork src={art ? trackArtwork(art) : undefined} size={40} /></span>
+						<span class="card-copy"><small>most played</small><strong class="truncate">{top.title}</strong></span>
+						<span class="meta">{compactCount(top.play_count)} {top.play_count === 1 ? 'play' : 'plays'}</span>
+						<Icon name="chevron" size={16} />
+					</a>
+				{/if}
+			</div>
+		{/if}
+	{/await}
 	<div class="tabs" role="tablist" aria-label="Artist catalog">
 		{#each tabs as item (item)}
 			<button type="button" id={`${id}-tab-${item}`} role="tab" bind:this={buttons[item]} aria-controls={`${id}-panel-${item}`}
@@ -220,8 +222,7 @@
 	.bio { color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; max-width: 44rem; margin-top: 0.35rem; }
 	.chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.6rem; }
 	.actions { display: flex; align-items: center; gap: 0.6rem; margin-top: 1rem; }
-	.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr)); align-items: start; gap: 0.6rem; }
-	.cards:not(:has(*)) { display: none; }
+	.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr)); gap: 0.6rem; }
 	.card { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; min-height: 3.75rem; padding: 0.6rem 0.75rem; border-radius: 0.75rem; background: var(--raised); color: var(--text); text-decoration: none; }
 	.card:hover { background: var(--hover); }
 	.card > :global(svg) { color: var(--faint); flex: none; }

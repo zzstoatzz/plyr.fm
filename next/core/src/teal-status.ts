@@ -74,12 +74,6 @@ export function listeningNow(record: unknown, now: number): ListeningNow | null 
 	};
 }
 
-/** seconds into the track, capped at its length */
-export function listeningElapsed(status: ListeningNow, now: number): number {
-	const elapsed = Math.max(0, Math.floor((now - status.startedAt) / 1000));
-	return status.duration ? Math.min(elapsed, status.duration) : elapsed;
-}
-
 /** what `did` is listening to right now according to teal, read from their own PDS. never throws. */
 export async function readListeningNow(did: string, { signal, now = Date.now }: { signal?: AbortSignal; now?: () => number } = {}): Promise<ListeningNow | null> {
 	try {

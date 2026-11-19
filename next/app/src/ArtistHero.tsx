@@ -6,7 +6,7 @@ import { trackArtwork } from '@plyr/next-core/artwork';
 import { useAppearance } from './appearance';
 import { BLEED, Chip, HeroBackdrop, Pill, Round, TOP, shuffled } from './HeroPieces';
 import { Cover } from './CatalogPieces';
-import { ListeningNowCard } from './ListeningNow';
+import { ListeningNowPill } from './ListeningNow';
 import { catalogRuntime } from '@plyr/next-core/catalog/runtime';
 import { compactCount } from './home-state';
 import { CaretRight, Heart, PencilSimple, Play as PlayIcon, ShareNetwork, Shuffle } from './icons';
@@ -43,6 +43,7 @@ export function ArtistHero({ artist, tracks, metrics, owner, onPlay, onShare, fo
       <Text accessibilityRole="header" aria-level={1} numberOfLines={2} style={{ marginTop: 14, color: theme.text, fontFamily: theme.fontFamily,
         fontSize: 30 * theme.scale, lineHeight: 36 * theme.scale, fontWeight: '800', letterSpacing: -0.4, textAlign: 'center' }}>{name}</Text>
       {artist.display_name && artist.display_name !== artist.handle ? <Text numberOfLines={1} style={{ color: theme.muted, fontFamily: theme.fontFamily, fontSize: 15 * theme.scale, textAlign: 'center' }}>@{artist.handle}</Text> : null}
+      <ListeningNowPill did={artist.did} name={name} />
       {artist.bio ? <Text style={{ marginTop: 12, color: theme.muted, fontFamily: theme.fontFamily, fontSize: 15 * theme.scale, lineHeight: 22 * theme.scale, textAlign: 'center' }}>{artist.bio}</Text> : null}
     </View>
 
@@ -60,8 +61,6 @@ export function ArtistHero({ artist, tracks, metrics, owner, onPlay, onShare, fo
       {owner ? <Round label="Edit profile" href="/edit-profile"><PencilSimple size={icon(20)} color={theme.text} /></Round> : null}
       <Round label="Share" onPress={onShare}><ShareNetwork size={icon(20)} color={theme.text} /></Round>
     </View>
-
-    <ListeningNowCard did={artist.did} name={name} />
 
     {support || top ? <View style={styles.cards}>
       {support ? <InfoCard eyebrow={`support ${name}`} title={supportLabel(support)} accessibilityLabel={`Support ${name} at ${supportLabel(support)}`}
