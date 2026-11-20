@@ -63,13 +63,17 @@ const suggestion_query =
     \\WITH seeds AS MATERIALIZED (
     \\  SELECT v.record_uri, v.owner_did
     \\  FROM plyr_index.track_records AS v
+    \\  JOIN plyr_index.account_availability AS aa ON aa.repo_did = v.owner_did AND aa.available
+    \\  LEFT JOIN plyr_index.track_policies AS pol ON pol.record_uri = v.record_uri
     \\  WHERE v.record_uri = ANY($4::text[]) AND v.collection = $1 AND NOT v.deleted
+    \\    AND COALESCE(pol.visibility, 'public') <> 'private'
     \\),
     \\liked_together AS (
     \\  SELECT other.subject_uri AS uri, 3.0 * COUNT(DISTINCT other.owner_did) AS score
     \\  FROM seeds
     \\  JOIN plyr_index.like_records AS seed_like
     \\    ON seed_like.subject_uri = seeds.record_uri AND seed_like.collection = $3 AND NOT seed_like.deleted
+    \\  JOIN plyr_index.account_availability AS liker ON liker.repo_did = seed_like.owner_did AND liker.available
     \\  JOIN plyr_index.like_records AS other
     \\    ON other.owner_did = seed_like.owner_did AND other.collection = $3 AND NOT other.deleted
     \\  GROUP BY other.subject_uri
@@ -79,6 +83,7 @@ const suggestion_query =
     \\  FROM seeds
     \\  JOIN plyr_index.list_members AS seed_member ON seed_member.track_uri = seeds.record_uri
     \\  JOIN plyr_index.list_records AS lists ON lists.record_uri = seed_member.list_uri AND NOT lists.deleted
+    \\  JOIN plyr_index.account_availability AS curator ON curator.repo_did = lists.owner_did AND curator.available
     \\  JOIN plyr_index.list_members AS other ON other.list_uri = seed_member.list_uri
     \\  GROUP BY other.track_uri
     \\),
@@ -93,7 +98,7 @@ const suggestion_query =
     \\  FROM plyr_index.track_tag_records AS tags
     \\  CROSS JOIN LATERAL unnest(tags.tags) AS tag(name)
     \\  JOIN seed_tags ON seed_tags.name = tag.name
-    \\  WHERE tags.tags_present
+    \\  WHERE tags.tags_present AND tags.tags && (SELECT array_agg(name) FROM seed_tags)
     \\  GROUP BY tags.record_uri
     \\),
     \\same_artist AS (

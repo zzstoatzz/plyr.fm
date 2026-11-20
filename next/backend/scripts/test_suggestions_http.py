@@ -90,6 +90,48 @@ def exercise(database_url: str) -> None:
                 (TRACK.format(99),),
             )
             assert numbers(f"{seeds(50)}&limit=3") == [100, 98, 97]
+            # a private seed is not a seed
+            db.execute(
+                "UPDATE plyr_index.track_policies SET visibility = 'private' WHERE record_uri = %s",
+                (TRACK.format(50),),
+            )
+            assert numbers(f"{seeds(50)}&limit=3") == []
+            db.execute(
+                "UPDATE plyr_index.track_policies SET visibility = NULL WHERE record_uri = %s",
+                (TRACK.format(50),),
+            )
+            # likers whose accounts are gone stop counting: five such
+            # accounts liked both track-2 and track-60
+            cid = "bafyreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku"
+            for n in range(5):
+                db.execute(
+                    "INSERT INTO plyr_index.account_availability "
+                    "(repo_did, available, evidence_source, observed_at_us) "
+                    "VALUES (%s, false, 'verified_repository', 1)",
+                    (f"did:plc:gone{n}",),
+                )
+                for liked in (2, 60):
+                    db.execute(
+                        "INSERT INTO plyr_index.like_records VALUES "
+                        "(%s, %s, %s, 'fm.plyr.dev.like', %s, %s, %s, "
+                        "'2026-08-09T11:00:00Z', false, %s, '3jqfcqzm3fo2j', 1)",
+                        (
+                            f"at://did:plc:gone{n}/fm.plyr.dev.like/t{liked}",
+                            cid,
+                            f"did:plc:gone{n}",
+                            f"t{liked}",
+                            TRACK.format(liked),
+                            cid,
+                            cid,
+                        ),
+                    )
+            assert 60 not in numbers(f"{seeds(2)}&limit=3")
+            db.execute(
+                "UPDATE plyr_index.account_availability SET available = true "
+                "WHERE repo_did LIKE 'did:plc:gone%%'"
+            )
+            got = numbers(f"{seeds(2)}&limit=5")
+            assert got[0] == 60, ("control: live likers count", got)
             # unknown seeds suggest nothing rather than failing
             assert (
                 numbers(f"seed={quote('at://did:plc:nobody/fm.plyr.dev.track/x')}")
