@@ -70,6 +70,8 @@ pub fn checkUserAccess(
     allocator: std.mem.Allocator,
     io: std.Io,
     config: managed_space.Config,
+    /// null only without a database: policies alone then decide
+    restrictions: ?space_access.Restrictions,
     cors: response.CorsPolicy,
     request_id: []const u8,
 ) !void {
@@ -122,6 +124,7 @@ pub fn checkUserAccess(
         .policies = network.policies(),
         .evidence = network.evidence(),
         .sync_reader = config.sync_reader,
+        .restrictions = restrictions,
     };
     // anything short of a definite yes is no: the PDS treats it the same
     const authorized = core.decider().decide(allocator, .{

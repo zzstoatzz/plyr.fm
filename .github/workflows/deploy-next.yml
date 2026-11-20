@@ -120,6 +120,10 @@ jobs:
           GRANT SELECT, INSERT, UPDATE ON plyr_playback.jam_room_records TO :"role";
           GRANT USAGE ON SCHEMA plyr_account TO :"role";
           GRANT SELECT, INSERT, UPDATE ON plyr_account.preferences TO :"role";
+          -- download authorize asks the same takedown and removal questions as checkUserAccess
+          GRANT SELECT ON plyr_account.space_removals TO :"role";
+          GRANT USAGE ON SCHEMA plyr_index TO :"role";
+          GRANT SELECT ON plyr_index.track_records, plyr_index.track_policies TO :"role";
           SQL
 
       # The Osprey rules worker (next/services/osprey, next-osprey.yml) also runs

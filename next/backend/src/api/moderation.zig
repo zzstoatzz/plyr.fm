@@ -269,7 +269,7 @@ fn unavailable(request: *Exchange, err: anyerror, request_id: []const u8, cors: 
     try xrpcError(request, .service_unavailable, "ServiceUnavailable", "moderation is temporarily unavailable", request_id, cors);
 }
 
-fn authenticate(
+pub fn authenticate(
     request: *Exchange,
     allocator: std.mem.Allocator,
     io: std.Io,
@@ -307,7 +307,7 @@ fn authenticate(
     };
 }
 
-fn xrpcError(
+pub fn xrpcError(
     request: *Exchange,
     status: std.http.Status,
     comptime name: []const u8,

@@ -35,9 +35,29 @@ provider is wired in.
 1. a space of another type: closed.
 2. the space authority (the artist): open, read or write.
 3. anyone else writing: closed.
-4. otherwise the artist's policies naming this exact space uri decide.
-5. a space with no policy records falls back to its legacy skey: `signed-in`
+4. plyr's sync account reading: open (its copy is read through this same check).
+5. a space holding audio moderation took down: closed to everyone else. that is
+   any of the artist's own tracks (deleted ones too) whose `audioSpace` points
+   into the space, with an `exclude` decision or the `copyright-violation`
+   label and no `allow`. the whole space closes, since a reader who opens it
+   gets everything in it.
+6. a reader the artist removed (`plyr_account.space_removals`): closed, whatever
+   they bought or are listed in.
+7. otherwise the artist's policies naming this exact space uri decide.
+8. a space with no policy records falls back to its legacy skey: `signed-in`
    reads as `signedIn`, `supporters` as `supporter`. anything else stays closed.
+
+steps 5 and 6 are plyr's own state (`postgres_restrictions.zig`), asked by both
+`checkUserAccess` and download authorize. supporter downloads of audio outside a
+space also refuse a removed reader.
+
+## removing a reader
+
+the artist manages their list with their own service JWT, next to the other
+moderation methods: `fm.plyr.moderation.removeReader` and `restoreReader`
+(POST `{"reader": "<did>"}`) and `listRemovedReaders` (GET, newest first). the
+list is private to the artist and holds up to 1000 accounts. it is plyr state,
+not a record: a public deny list would publish who an artist blocked.
 
 unknown rule types and malformed records are ignored (they open nothing).
 lookup failures fail closed unless another policy already allowed the reader.

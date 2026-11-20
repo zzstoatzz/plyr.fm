@@ -31,6 +31,7 @@ const postgres_moderation = @import("internal/moderation/postgres_log.zig");
 const Labeler = @import("internal/moderation/labeler.zig").Labeler;
 const actor_identity_refresher = @import("internal/identity/actor_identity_refresher.zig");
 const space_consumer = @import("internal/space/consumer.zig");
+const postgres_restrictions = @import("internal/space/postgres_restrictions.zig");
 const telemetry = @import("internal/telemetry.zig");
 
 var threaded_io: std.Io.Threaded = undefined;
@@ -187,6 +188,7 @@ pub fn main() !void {
         )
     else
         null;
+    var space_restrictions: ?postgres_restrictions.PostgresRestrictions = if (postgres_store) |*store| .{ .pool = store.pool } else null;
     var platform_stats: ?postgres_platform_stats.PostgresPlatformStatsStore = if (postgres_store) |*store| .{ .pool = store.pool, .io = io, .collection = settings.track_collection } else null;
     switch (settings.role) {
         .jams => unreachable,
@@ -236,6 +238,7 @@ pub fn main() !void {
                 .notification_store = notification_store,
                 .moderation = moderation_service,
                 .moderation_log = if (moderation_log) |*value| value else null,
+                .space_restrictions = if (space_restrictions) |*value| value else null,
             });
         },
         .space_consumer => {
@@ -340,6 +343,8 @@ test {
     _ = @import("internal/space/policy.zig");
     _ = @import("internal/space/sync.zig");
     _ = @import("internal/space/postgres_sync_store.zig");
+    _ = @import("internal/space/postgres_restrictions.zig");
+    _ = @import("api/space_removals.zig");
     _ = @import("internal/space/consumer.zig");
     _ = @import("internal/ingest/relay_repository_candidates.zig");
     _ = @import("api/artists.zig");
