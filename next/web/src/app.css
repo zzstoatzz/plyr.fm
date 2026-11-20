@@ -80,7 +80,19 @@ button:focus-visible, a:focus-visible, input:focus-visible, summary:focus-visibl
 }
 h1, h2, h3, p { margin: 0; }
 img { display: block; max-width: 100%; }
-input[type='range'] { accent-color: var(--accent); min-width: 0; width: 100%; cursor: pointer; }
+/* sliders: a thin rail filled to --fill (set by each slider), with a plain accent dot and no ring */
+input[type='range'] { --fill: 0%; --rail: color-mix(in srgb, var(--text) 22%, transparent); appearance: none; -webkit-appearance: none; height: 1.25rem; min-width: 0; width: 100%; margin: 0; background: transparent; cursor: pointer; }
+input[type='range']:disabled { cursor: default; opacity: 0.5; }
+input[type='range']::-webkit-slider-runnable-track { height: 0.25rem; border-radius: 999px; background: linear-gradient(to right, var(--accent) var(--fill), var(--rail) var(--fill)); }
+input[type='range']::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 0.75rem; height: 0.75rem; margin-top: -0.25rem; border: 0; border-radius: 50%; background: var(--accent); transition: transform 0.12s; }
+input[type='range']::-moz-range-track { height: 0.25rem; border-radius: 999px; background: var(--rail); }
+input[type='range']::-moz-range-progress { height: 0.25rem; border-radius: 999px; background: var(--accent); }
+input[type='range']::-moz-range-thumb { width: 0.75rem; height: 0.75rem; border: 0; border-radius: 50%; background: var(--accent); transition: transform 0.12s; }
+input[type='range']:not(:disabled):is(:hover, :active, :focus-visible)::-webkit-slider-thumb { transform: scale(1.3); }
+input[type='range']:not(:disabled):is(:hover, :active, :focus-visible)::-moz-range-thumb { transform: scale(1.3); }
+input[type='range']:focus-visible { outline: none; }
+input[type='range']:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }
+input[type='range']:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }
 .skip { position: fixed; z-index: 100; left: 1rem; top: 1rem; padding: 0.75rem; background: var(--surface); }
 .skip:not(:focus) { transform: translateY(-200%); }
 .icon-button, .primary-button, .text-button {

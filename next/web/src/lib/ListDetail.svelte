@@ -176,7 +176,7 @@
 	.members { display: grid; }
 	.playlist .members { gap: 0.5rem; }
 	.playlist .members :global(.track), .playlist .unavailable { background: var(--surface); border: 1px solid var(--line); padding: 0.55rem; border-radius: 0.65rem; margin: 0; }
-	.album .members :global(.track) { border-bottom: 1px solid var(--line); padding-inline: 0.5rem; margin-inline: -0.5rem; border-radius: 0.5rem; }
+	.album .members :global(.track) { border-bottom: 1px solid var(--line); }
 	.album .members :global(.track:last-child) { border-bottom: 0; }
 	.album .unavailable { display: flex; align-items: center; gap: 0.75rem; min-height: 3.5rem; margin: 0 -0.5rem; padding-inline: 0.5rem; border-bottom: 1px solid var(--line); }
 	.album .number { width: 2.25rem; text-align: center; color: var(--faint); font-variant-numeric: tabular-nums; }

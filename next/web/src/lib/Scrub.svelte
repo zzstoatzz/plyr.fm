@@ -21,6 +21,7 @@
 	{#if clockLabels}<span>{clock(position)}</span>{/if}
 	<input aria-label="Playback position" type="range" min="0" max={player.duration || 1} step="0.01"
 		value={Math.min(position, player.duration)}
+		style:--fill={`${player.duration ? Math.min(100, position / player.duration * 100) : 0}%`}
 		disabled={!player.duration || !player.canSeek}
 		oninput={event => { scrub = event.currentTarget.valueAsNumber; }}
 		onchange={event => { player.seek(event.currentTarget.valueAsNumber); scrub = undefined; }}
