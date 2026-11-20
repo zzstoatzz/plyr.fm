@@ -129,7 +129,7 @@ pub fn awaitingCopy(comptime t: []const u8) []const u8 {
     return "(" ++ t ++ ".audio_space IS NULL AND " ++ t ++ ".audio_blob_cid IS NOT NULL" ++
         " AND (" ++ t ++ ".audio_url IS NULL OR " ++ t ++ ".audio_url NOT LIKE 'https://%')" ++
         " AND NOT EXISTS (SELECT 1 FROM plyr_index.track_delivery_origins AS ready" ++
-        " WHERE ready.record_uri = " ++ t ++ ".record_uri AND ready.record_cid = " ++ t ++ ".record_cid" ++
+        " WHERE ready.record_uri = " ++ t ++ ".record_uri" ++
         " AND ready.artifact_cid = " ++ t ++ ".audio_blob_cid AND ready.service = 'r2'))";
 }
 
@@ -141,8 +141,8 @@ pub const pending_where =
     \\  -- a record that already names an https audio URL (e.g. prod's CDN)
     \\  -- plays from it; copying it again would double storage for no gain.
     \\  AND (v.audio_url IS NULL OR v.audio_url NOT LIKE 'https://%')
-    \\  AND (d.record_uri IS NULL OR d.record_cid <> v.record_cid
-    \\       OR d.artifact_cid <> v.audio_blob_cid)
+    \\  -- the origin proves a blob, so an edit that keeps the audio keeps its copy
+    \\  AND (d.record_uri IS NULL OR d.artifact_cid <> v.audio_blob_cid)
 ;
 
 const candidate_query =

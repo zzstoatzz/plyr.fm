@@ -207,7 +207,7 @@ const query =
     \\LEFT JOIN plyr_index.track_policies AS pol
     \\  ON pol.record_uri = v.record_uri
     \\LEFT JOIN plyr_index.track_delivery_origins AS d
-    \\  ON d.record_uri = v.record_uri AND d.record_cid = v.record_cid
+    \\  ON d.record_uri = v.record_uri AND d.artifact_cid = v.audio_blob_cid
     \\  AND d.service = 'r2' AND d.verification = 'verified_blob_cid'
     \\LEFT JOIN plyr_index.track_mirror_attempts AS m
     \\  ON m.record_uri = v.record_uri AND m.record_cid = v.record_cid

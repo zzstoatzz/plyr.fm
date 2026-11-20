@@ -527,7 +527,7 @@ const detail_query = "SELECT\n" ++ header_columns ++ "\n" ++
     \\LEFT JOIN plyr_index.account_availability AS aa
     \\  ON aa.repo_did = v.owner_did AND aa.available
     \\LEFT JOIN plyr_index.track_delivery_origins AS d
-    \\  ON d.record_uri = v.record_uri AND d.record_cid = v.record_cid
+    \\  ON d.record_uri = v.record_uri AND d.artifact_cid = v.audio_blob_cid
     \\  AND d.service = 'r2' AND d.verification = 'verified_blob_cid'
     \\LEFT JOIN plyr_index.track_metrics AS metrics
     \\  ON metrics.record_uri = v.record_uri

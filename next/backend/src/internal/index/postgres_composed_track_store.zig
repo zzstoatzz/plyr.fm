@@ -621,7 +621,7 @@ pub const projected_joins =
     \\JOIN plyr_index.account_availability AS aa
     \\  ON aa.repo_did = v.owner_did AND aa.available
     \\LEFT JOIN plyr_index.track_delivery_origins AS d
-    \\  ON d.record_uri = v.record_uri AND d.record_cid = v.record_cid
+    \\  ON d.record_uri = v.record_uri AND d.artifact_cid = v.audio_blob_cid
     \\  AND d.service = 'r2' AND d.verification = 'verified_blob_cid'
     \\LEFT JOIN plyr_index.track_policies AS pol
     \\  ON pol.record_uri = v.record_uri
@@ -1280,9 +1280,19 @@ test "composed PostgreSQL reads use verified records and authoritative account s
         shared_origin.media.origins[0].artifact_cid.?,
     );
 
+    // the origin proves the blob, so a record edit that keeps the audio keeps it verified
     _ = try pool.exec(
         "UPDATE plyr_index.track_delivery_origins SET record_cid = $1",
         .{try commit.toString(a)},
+    );
+    const edited_delivery = (try implementation.store().getByUri(a, record_uri)).?;
+    try std.testing.expectEqual(track.ArtifactVerification.verified, edited_delivery.media.artifacts[0].verification);
+    try std.testing.expect((try playback_implementation.store().getByUri(a, record_uri)).?.verified_delivery != null);
+
+    // an origin for other audio is stale
+    _ = try pool.exec(
+        "UPDATE plyr_index.track_delivery_origins SET artifact_cid = 'bafkreiotheraudio'",
+        .{},
     );
     const stale_delivery = (try implementation.store().getByUri(a, record_uri)).?;
     try std.testing.expectEqual(@as(usize, 1), stale_delivery.media.origins.len);

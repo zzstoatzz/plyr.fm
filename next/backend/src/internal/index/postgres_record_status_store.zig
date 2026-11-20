@@ -139,4 +139,14 @@ test "PostgreSQL record status prefers projections over rejections" {
     const playable = (try status_store.get(a, track_uri)).?;
     try std.testing.expectEqual(store_module.State.indexed, playable.state);
     try std.testing.expectEqualStrings("bafytrack", playable.record_cid.?);
+
+    // an edit that keeps the audio keeps its copy: no gap while nothing is re-copied
+    _ = try pool.exec("UPDATE plyr_index.track_records SET record_cid = 'bafyedited', title = 'renamed' WHERE record_uri = $1", .{track_uri});
+    const edited = (try status_store.get(a, track_uri)).?;
+    try std.testing.expectEqual(store_module.State.indexed, edited.state);
+    try std.testing.expectEqualStrings("bafyedited", edited.record_cid.?);
+
+    // new audio is a new copy
+    _ = try pool.exec("UPDATE plyr_index.track_records SET record_cid = 'bafyreplaced', audio_blob_cid = 'bafkreiother' WHERE record_uri = $1", .{track_uri});
+    try std.testing.expect((try status_store.get(a, track_uri)) == null);
 }
