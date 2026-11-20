@@ -27,7 +27,7 @@
 	--adapted-accent: light-dark(color-mix(in srgb, var(--custom-accent) 48%, black), color-mix(in srgb, var(--custom-accent) 50%, white));
 	--on-accent: light-dark(white, #0a0a0a);
 	--sidebar: 13.5rem;
-	--queue: 22.5rem;
+	--queue: 26rem;
 	/* phones: the floating tab bar sits in the home-indicator zone like the iOS
 	   one; --tab-gap is its distance from the bottom edge and --tabs is all the
 	   room it takes (gap, bar, and the space above it), safe area included */

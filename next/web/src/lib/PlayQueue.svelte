@@ -12,6 +12,7 @@
 	import Artwork from './ui/Artwork.svelte';
 	import Icon from './ui/Icon.svelte';
 	import PlayingWave from './ui/PlayingWave.svelte';
+	import QueueSuggestions from './QueueSuggestions.svelte';
 	let { close }: { close?: () => void } = $props();
 	let account = $state.raw(auth.getAuth());
 	onMount(() => auth.subscribe(() => { account = auth.getAuth(); }));
@@ -22,6 +23,8 @@
 	const end = $derived(tail ? Math.max(start, explicitEnd(queueState)) : player.queue.length);
 	const picks = $derived(player.queue.slice(start, end));
 	const continuation = $derived(player.queue.slice(end));
+	const nothingNext = $derived(!picks.length && !(tail && continuation.length));
+	const wash = $derived(player.current && !player.liveStation ? trackArtwork(player.current) : undefined);
 	let pickList: HTMLOListElement | undefined = $state();
 	let pendingPromotion: { key: string; opener: HTMLButtonElement } | undefined;
 
@@ -191,6 +194,7 @@
 </script>
 
 <section aria-label="Queue" class="queue" class:rail={!!close}>
+	{#if wash}<div class="wash" aria-hidden="true" style:background-image={`url("${wash}")`}></div>{/if}
 	<header>
 		<h1>queue</h1>
 		<div class="actions">
@@ -210,10 +214,25 @@
 		<p class="state">you’re tuned to {player.liveStation.label} radio.</p>
 		<button class="text-button" onclick={() => player.stopRadio()}>leave radio</button>
 	{:else if player.current}
-		<section aria-labelledby="queue-current">
-			<h2 id="queue-current">now playing</h2>
-			<div class="row current">{@render row(player.current, player.index, true)}</div>
+		{@const now = player.current}
+		{@const nowPlaying = player.playing && !player.outputElsewhere}
+		<section class="hero" aria-labelledby="queue-current">
+			<button class="hero-cover" type="button" aria-label={`${nowPlaying ? 'Pause' : 'Play'} ${now.metadata.title}`} onclick={() => player.toggle()}>
+				<Artwork src={trackArtwork(now)} size={160} eager />
+				<span class="play hero-play"><Icon name={nowPlaying ? 'pause' : 'play'} size={26} /></span>
+			</button>
+			<div class="hero-meta">
+				<h2 id="queue-current">{#if nowPlaying}<PlayingWave />{/if}now playing</h2>
+				<a class="hero-title" href={trackHref(now)}>{now.metadata.title}</a>
+				<a class="hero-artist truncate" href={resolve('/(app)/u/[actor]', { actor: now.artist.did })}>{artistName(now)}</a>
+			</div>
 		</section>
+		{#if nothingNext && player.canEditPublicQueue && !player.jam}
+			<QueueSuggestions empty />
+		{:else if nothingNext}
+			<p class="empty">add a track to hear it next.</p>
+		{:else}
+		<div class="glass">
 		<section aria-labelledby="queue-picks">
 			<div class="queue-head">
 				<h2 id="queue-picks">up next</h2>
@@ -227,7 +246,7 @@
 					{/each}
 				</ol>
 			{:else}
-				<p class="empty">{continuation.length ? 'no tracks queued by you.' : 'add a track to hear it next.'}</p>
+				<p class="empty">no tracks queued by you.</p>
 			{/if}
 		</section>
 		{#if tail && continuation.length}
@@ -240,9 +259,11 @@
 				</ol>
 			</section>
 		{/if}
-	{:else}
-		<p class="state">your queue is empty.</p>
-		<a href={resolve('/')}>browse tracks</a>
+		</div>
+		{#if player.canEditPublicQueue && !player.privateMode}<QueueSuggestions empty={false} />{/if}
+		{/if}
+	{:else if player.canEditPublicQueue}
+		<QueueSuggestions empty />
 	{/if}
 	{#if deviceQueue}
 		<p class="empty">your queue is saved on this device. <a class="queue-signin" href={resolve('/login?return_to=%2Fqueue')} onclick={close}>sign in again</a> to use it on other devices.</p>
@@ -256,34 +277,45 @@
 		onclickcapture={suppressSwipeClick} oncontextmenu={event => { if (press?.touch || drag) event.preventDefault(); }}
 		onpointerdown={event => { swipeStart(event, index); pressStart(event, index); }} onpointermove={pressMove}
 		onpointerup={event => { pressEnd(event, true); swipeEnd(event, index); }} onpointercancel={event => { swipe = undefined; pressEnd(event, false); }}>
-		{@render row(track, index, false)}
+		{@render row(track, index)}
 	</li>
 {/snippet}
 
-{#snippet row(track: NonNullable<typeof player.current>, index: number, current: boolean)}
+{#snippet row(track: NonNullable<typeof player.current>, index: number)}
 		{@const promote = promotes(index)}
-		<button class="cover" type="button" aria-label={`${current && player.playing && !player.outputElsewhere ? 'Pause' : 'Play'} ${track.metadata.title}`} onclick={() => current ? player.toggle() : player.jump(index, true)}>
+		<button class="cover" type="button" aria-label={`Play ${track.metadata.title}`} onclick={() => player.jump(index, true)}>
 			<Artwork src={trackArtwork(track)} size={44} eager={index - player.index < 8} />
-			<span class="play" class:playing={current && player.playing && !player.outputElsewhere}>
-				{#if current && player.playing && !player.outputElsewhere}<PlayingWave />{:else}<Icon name="play" size={18} />{/if}
-			</span>
+			<span class="play"><Icon name="play" size={18} /></span>
 		</button>
 		<div class="labels">
 			<a class="truncate" href={trackHref(track)}>{track.metadata.title}</a>
 			<span class="subtle truncate">{artistName(track)}</span>
 		</div>
 		<span class="subtle time">{clock(track.metadata.duration_seconds)}</span>
-		{#if !current}
-			<div class="actions">
-				<span class="drag-handle" aria-hidden="true" onpointerdown={event => { event.stopPropagation(); pressStart(event, index, true); }}>⠿</span>
-				<button class="icon-button move" type="button" aria-label={promote ? `Move ${track.metadata.title} into up next` : `Move ${track.metadata.title} up`} title={promote ? 'move into up next' : 'move up'} disabled={index === start} onclick={event => moveUp(index, event.currentTarget)}><Icon name="down" size={16} /></button>
-				<button class="icon-button" type="button" aria-label={`Remove ${track.metadata.title}`} onclick={() => player.remove(index)}><Icon name="x" size={16} /></button>
-			</div>
-		{/if}
+		<div class="actions">
+			<span class="drag-handle" aria-hidden="true" onpointerdown={event => { event.stopPropagation(); pressStart(event, index, true); }}>⠿</span>
+			<button class="icon-button move" type="button" aria-label={promote ? `Move ${track.metadata.title} into up next` : `Move ${track.metadata.title} up`} title={promote ? 'move into up next' : 'move up'} disabled={index === start} onclick={event => moveUp(index, event.currentTarget)}><Icon name="down" size={16} /></button>
+			<button class="icon-button" type="button" aria-label={`Remove ${track.metadata.title}`} onclick={() => player.remove(index)}><Icon name="x" size={16} /></button>
+		</div>
 {/snippet}
 
 <style>
-	.queue { display: grid; gap: 1.1rem; container-type: inline-size; }
+	.queue { position: relative; isolation: isolate; display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.1rem; container-type: inline-size; }
+	.wash { position: absolute; z-index: -1; inset: 0; overflow: hidden; pointer-events: none; background-size: cover; background-position: center; filter: blur(64px) saturate(1.1); opacity: light-dark(0.2, 0.32); transform: scale(1.3); }
+	.hero { display: flex; align-items: flex-end; gap: 0.9rem; min-width: 0; }
+	.hero-cover { position: relative; flex: none; width: min(9.5rem, 40cqi); padding: 0; border: 0; border-radius: 0.75rem; background: none; box-shadow: 0 0.9rem 2.2rem rgb(0 0 0 / 0.35); }
+	.hero-cover .play { border-radius: inherit; }
+	.hero-cover:not(:hover, :focus-visible) .hero-play { opacity: 0; }
+	.hero-meta { min-width: 0; display: grid; gap: 0.15rem; }
+	.hero-meta h2 { display: flex; align-items: center; gap: 0.4rem; margin: 0; font-size: 0.75rem; color: var(--faint); font-weight: 600; }
+	.hero-meta h2 :global(*) { color: var(--accent); }
+	.hero-title { font-size: 1.3rem; font-weight: 700; line-height: 1.15; letter-spacing: -0.02em; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+	.hero-artist { color: var(--muted); font-size: 0.92rem; }
+	.glass { display: grid; gap: 0.9rem; padding: 0.75rem 0.55rem 0.55rem; border-radius: 0.9rem; background: color-mix(in srgb, var(--surface) 62%, transparent); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); border: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
+	.glass h2, .glass .count, .glass .hint { padding-inline: 0.35rem; }
+	.glass .row { border-color: transparent; background: none; }
+	.glass .upcoming.lifted { background: var(--raised); }
+	.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.rail { padding: 1rem; }
 	header, .queue-head { display: flex; justify-content: space-between; align-items: center; }
 	.actions { display: flex; align-items: center; }
@@ -300,7 +332,6 @@
 	@media (prefers-reduced-motion: reduce) { .upcoming.dragging { transition: none; } }
 	.drag-handle { display: grid; place-items: center; min-width: 2.25rem; height: 2.75rem; touch-action: none; cursor: grab; color: var(--muted); user-select: none; }
 	.drag-handle:active { cursor: grabbing; }
-	.current { border-color: color-mix(in srgb, var(--accent), var(--line) 55%); background: color-mix(in srgb, var(--accent) 9%, var(--raised)); }
 	.cover { border: 0; padding: 0; width: 2.75rem; flex: none; border-radius: 0.35rem; background: none; position: relative; }
 	.play { position: absolute; inset: 0; display: grid; place-items: center; background: rgb(0 0 0 / 0.48); color: white; border-radius: inherit; }
 	@media (hover: hover) { .cover:not(:hover, :focus-visible) .play:not(.playing) { opacity: 0; } }
