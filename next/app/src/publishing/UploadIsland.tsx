@@ -70,13 +70,14 @@ export function UploadIslandHost() {
   return <View pointerEvents="none" style={{ position: 'absolute', top: island ? ISLAND.top : insets.top + 6, left: 0, right: 0, alignItems: 'center', zIndex: 1000 }}>
     <Animated.View accessible accessibilityRole="progressbar" accessibilityLabel={shown.announce}
       accessibilityValue={shown.progress === undefined ? undefined : { min: 0, max: 100, now: Math.round(shown.progress * 100) }}
-      style={{ width, height, borderRadius: 20, backgroundColor: '#000000', overflow: 'hidden', opacity: island ? 1 : grow }}>
-      <Animated.View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: PAD, opacity: content }}>
-        <View style={{ width: WING - PAD, flexDirection: 'row', alignItems: 'center' }}>
-          <Glyph size={17} color={tint} weight="bold" />
+      style={{ width, height, borderRadius: 20, backgroundColor: '#000000', overflow: 'hidden', alignItems: 'center', justifyContent: 'center', opacity: island ? 1 : grow }}>
+      {/* Laid out at full width from the start; the pill grows to reveal it, so the glyphs never render squeezed. */}
+      <Animated.View style={{ width: wide, height: 40, flexShrink: 0, flexDirection: 'row', alignItems: 'center', paddingHorizontal: PAD, opacity: content }}>
+        <View style={{ width: WING - PAD, flexShrink: 0, flexDirection: 'row', alignItems: 'center' }}>
+          <View style={{ width: 20, height: 20, flexShrink: 0, alignItems: 'center', justifyContent: 'center' }}><Glyph size={17} color={tint} weight="bold" /></View>
         </View>
-        {island ? <View style={{ width: ISLAND.width }} /> : <View style={{ flex: 1 }} />}
-        <View style={{ flex: island ? undefined : 0, width: island ? WING - PAD : undefined, alignItems: 'flex-end' }}>
+        {island ? <View style={{ width: ISLAND.width, flexShrink: 0 }} /> : <View style={{ flex: 1 }} />}
+        <View style={{ flexShrink: 0, width: island ? WING - PAD : undefined, alignItems: 'flex-end' }}>
           <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}
             style={{ color: shown.phase === 'failed' ? '#f2c078' : '#ffffff', fontSize: 12, fontWeight: '600', paddingRight: 3, fontVariant: ['tabular-nums'] }}>{shown.summary}</Text>
         </View>

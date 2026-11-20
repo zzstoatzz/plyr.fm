@@ -111,7 +111,8 @@ function Shell() {
             <Settings size={20} color={theme.muted} />
           </Pressable></Link>}
         </View>
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.background } }}>
+        {/* Status bar visibility belongs to the screens (view-controller based), so the island hides it here. */}
+        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.background }, statusBarHidden: islandOut, statusBarAnimation: 'fade' }}>
           <Stack.Screen name="(main)" />
         </Stack>
         {dock}
