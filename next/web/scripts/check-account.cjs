@@ -6,6 +6,7 @@ const path = require('node:path');
 const { chromium } = require('playwright');
 const { fixtureAccounts, fixturePage, authorizeFixture } = require('./pds-browser-fixture.cjs');
 const { tracks, serveAudio } = require('./fixture-catalog.cjs');
+const { method, names, trackIdFromUri } = require('./xrpc-fixture.cjs');
 
 const origin = 'https://next.plyr.fm';
 const track = { ...tracks[0], record: { ...tracks[0].record, cid: 'bafyreib2rxk3rybk3aobmv5cjuql3bm2twh4jo5uxgf5kpqcsgz7soitae' } };
@@ -30,17 +31,17 @@ const coordinator = 'https://jams.next.plyr.fm';
     page.on('pageerror', error => errors.push(error.message));
     await context.route('https://typeahead.waow.tech/**', route => route.fulfill({ json: { actors: [] } }));
     await page.route('https://api.next.plyr.fm/**', route => {
-      const pathname = new URL(route.request().url()).pathname;
-      if (pathname.endsWith('/comments')) return failCommentsRead ? route.fulfill({ status: 503, json: {} })
+      const url = new URL(route.request().url());
+      if (method(url) === 'getTrackComments') return failCommentsRead ? route.fulfill({ status: 503, json: {} })
         : route.fulfill({ json: { object: 'list', data: [], has_more: false, comments_enabled: true } });
-      if (pathname === '/v1/artists/' + encodeURIComponent(accounts[handle].did)) {
+      if (method(url) === 'getArtist' && url.searchParams.get('actor') === accounts[handle].did) {
         return route.fulfill({ json: { avatar_url: 'https://panel-fixture.invalid/avatar.svg' } });
       }
-      if (pathname === '/v1/tracks/resolve') return route.fulfill({ json: { data: [track], missing: [] } });
-      if (pathname.endsWith('/playback')) return route.fulfill({ json: {
+      if (method(url) === 'resolveTracks') return route.fulfill({ json: { data: [track], missing: [] } });
+      if (method(url) === 'getPlayback') return route.fulfill({ json: {
         availability: { status: 'available', delivery: { url: 'https://panel-fixture.invalid/audio.wav' } }
       } });
-      if (pathname === '/v1/tracks/' + track.id) return route.fulfill({ json: track });
+      if (method(url) === 'getTrack' && names(url, track.id)) return route.fulfill({ json: track });
       if (route.request().method() !== 'GET') return route.abort();
       return route.fulfill({ json: { data: [], has_more: false } });
     });

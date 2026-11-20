@@ -5,6 +5,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { chromium } = require('playwright');
 const { fixtureAccounts, fixturePage, authorizeFixture } = require('./pds-browser-fixture.cjs');
+const { method } = require('./xrpc-fixture.cjs');
 
 const origin = 'https://next.plyr.fm';
 const appView = 'https://api.next.plyr.fm';
@@ -89,8 +90,8 @@ async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'reg
   await context.route(appView + '/**', route => {
     assert.equal(route.request().method(), 'GET', 'catalog traffic is read-only');
     const url = new URL(route.request().url());
-    if (decodeURIComponent(url.pathname) === '/v1/artists/' + did) return route.fulfill({ json: { display_name: 'Fixture Artist' } });
-    if (url.pathname === '/v1/records/await') return route.fulfill({ json: { status: 'indexed' } });
+    if (method(url) === 'getArtist' && url.searchParams.get('actor') === did) return route.fulfill({ json: { display_name: 'Fixture Artist' } });
+    if (method(url) === 'awaitRecord') return route.fulfill({ json: { status: 'indexed' } });
     return route.fulfill({ json: { object: 'list', data: [], has_more: false } });
   });
   await context.route('https://typeahead.waow.tech/**', route => route.fulfill({ json: { actors: [] } }));

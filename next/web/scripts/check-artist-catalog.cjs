@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const { chromium } = require('playwright');
 const { artistDid, tracks, setup, serve, close } = require('./fixture-catalog.cjs');
+const { method, names, trackIdFromUri, uriFromId } = require('./xrpc-fixture.cjs');
 
 const output = process.env.SCREENS_OUTPUT || '/tmp/plyr-svelte-artist';
 const api = 'https://api.next.plyr.fm';
@@ -41,31 +42,31 @@ async function verify(browser, origin, width, scheme) {
       };
     });
     page.on('request', request => {
-      if (new URL(request.url()).pathname.endsWith('/playback')) reads.playback++;
+      if (method(new URL(request.url())) === 'getPlayback') reads.playback++;
     });
-    await page.route(`${api}/v1/artists/sketches.test`, route => route.fulfill({ json: {
+    await page.route(url => url.origin === api && method(url) === 'getArtist' && url.searchParams.get('actor') === 'sketches.test', route => route.fulfill({ json: {
       object: 'artist', did: artistDid, handle: 'sketches.test', display_name: whitespace ? ' \t ' : artistName,
       bio: 'Recordings from an afternoon at home.', avatar_url: 'https://panel-fixture.invalid/avatar.jpg',
       support_url: whitespace ? 'javascript:alert(1)' : 'https://example.test/support'
     } }));
-    await page.route(url => url.origin === api && decodeURIComponent(url.pathname) === `/v1/artists/${artistDid}/metrics`, route => {
+    await page.route(url => url.origin === api && method(url) === 'getArtistMetrics' && url.searchParams.get('actor') === artistDid, route => {
       reads.metrics++;
       if (reads.metrics === 1) return fail(route, 'totals unavailable');
       return route.fulfill({ json: { object: 'artist_metrics', artist_did: artistDid, totals: { tracks: 2, plays: 1, duration_seconds: 180 }, top_track: null } });
     });
-    await page.route(`${api}/v1/tracks?**`, route => {
+    await page.route(`${api}/xrpc/fm.plyr.unspecced.listTracks?**`, route => {
       const params = new URL(route.request().url()).searchParams;
-      if (params.get('artist_did') !== artistDid) return route.fallback();
+      if (params.get('artistDid') !== artistDid) return route.fallback();
       reads.tracks++;
       return route.fulfill({ json: params.has('cursor') ? pageOf([tracks[1]]) : pageOf([tracks[0]], 'next-track') });
     });
-    await page.route(`${api}/v1/albums?**`, route => {
+    await page.route(`${api}/xrpc/fm.plyr.unspecced.listAlbums?**`, route => {
       reads.albums++;
       if (reads.albums === 1) return fail(route, 'album catalog unavailable');
       const params = new URL(route.request().url()).searchParams;
       return route.fulfill({ json: params.has('cursor') ? pageOf(albumPage) : pageOf([album], 'next-album') });
     });
-    await page.route(`${api}/v1/albums/${album.id}`, route => route.fulfill({ json: album }));
+    await page.route(url => url.origin === api && method(url) === 'getAlbum' && names(url, album.id), route => route.fulfill({ json: album }));
     await page.route(`https://plc.directory/${artistDid}`, route => route.fulfill({ json: {
       id: artistDid, service: [{ id: '#atproto_pds', type: 'AtprotoPersonalDataServer', serviceEndpoint: 'https://pds.fixture.invalid' }]
     } }));

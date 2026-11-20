@@ -1,5 +1,6 @@
 // Canonical records are read-only here; anonymous play metrics are app-owned.
 import { PlayDeliveryError, type PlayReceipt, type QualifiedPlay } from './play-outbox.ts';
+import { uriFromId } from './record-ids.ts';
 
 export interface Page<T> {
 	object: 'list';
@@ -126,7 +127,7 @@ async function request<T>(url: string, timeout: number, signal?: AbortSignal, in
 		const response = await fetch(url, { ...init, signal: controller.signal });
 		if (!response.ok) {
 			let message = response.statusText;
-			try { message = (await response.json())?.error?.message ?? message; } catch {}
+			try { const body = await response.json(); message = body?.message ?? body?.error?.message ?? message; } catch {}
 			throw new ApiError(response.status, message);
 		}
 		return await response.json() as T;
@@ -156,7 +157,18 @@ export interface TrackComment {
 	updated_at: string | null;
 }
 
-export function createApi(origin: string, playListenerId: () => string) {
+/** A track named by a numeric production id goes by `legacyId`; anything else by its record's AT-URI. */
+function trackSubject(id: string): Record<string, string> {
+	return /^[1-9][0-9]*$/.test(id) ? { legacyId: id } : { uri: uriFromId(id) };
+}
+
+/**
+ * The appview's reads, as `{nsidPrefix}.unspecced.*` XRPC methods. Callers
+ * still pass the `/v1` ids (`trk_…`, `alb_…`, `pls_…`); each is the record's
+ * AT-URI, decoded here.
+ */
+export function createApi(origin: string, playListenerId: () => string, nsidPrefix = 'fm.plyr') {
+	const xrpc = (name: string) => `/xrpc/${nsidPrefix}.unspecced.${name}`;
 	async function get<T>(path: string, params?: Record<string, string | number | string[] | undefined>, signal?: AbortSignal): Promise<T> {
 		const url = new URL(origin + path);
 		for (const [key, value] of Object.entries(params ?? {})) {
@@ -177,13 +189,14 @@ export function createApi(origin: string, playListenerId: () => string) {
 	}
 
 	return {
-		resolveArtists: (dids: string[], signal?: AbortSignal) => request<{ object: 'list'; data: NetworkArtist[] }>(origin + '/v1/artists/resolve', 15_000, signal,
+		resolveArtists: (dids: string[], signal?: AbortSignal) => request<{ object: 'list'; data: NetworkArtist[] }>(origin + xrpc('resolveArtists'), 15_000, signal,
 			{ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dids }) }).then(page => page.data),
-		resolveTracks: (ids: string[], signal?: AbortSignal) => request<{ object: 'list'; data: Track[]; missing: string[] }>(origin + '/v1/tracks/resolve', 15_000, signal,
-			{ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ids }) }),
-		stats: (signal?: AbortSignal) => get<{ object: 'platform_stats'; tracks: number; artists: number; duration_seconds: number; plays: number; updated_at_ms: number }>('/v1/stats', undefined, signal),
+		resolveTracks: (ids: string[], signal?: AbortSignal) => request<{ object: 'list'; data: Track[]; missing: string[] }>(origin + xrpc('resolveTracks'), 15_000, signal,
+			{ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ uris: ids.map(uriFromId) }) }),
+		stats: (signal?: AbortSignal) => get<{ object: 'platform_stats'; tracks: number; artists: number; duration_seconds: number; plays: number; updated_at_ms: number }>(xrpc('getStats'), undefined, signal),
 		recordPlay: async (play: QualifiedPlay): Promise<PlayReceipt> => {
-			const url = new URL(`${origin}/v1/tracks/${encodeURIComponent(play.trackId)}/plays`);
+			const url = new URL(origin + xrpc('recordPlay'));
+			for (const [key, value] of Object.entries(trackSubject(play.trackId))) url.searchParams.set(key, value);
 			url.searchParams.set('occurrence', play.occurrenceId);
 			url.searchParams.set('listener', playListenerId());
 			const controller = new AbortController();
@@ -199,38 +212,39 @@ export function createApi(origin: string, playListenerId: () => string) {
 			}
 		},
 		trackLikes: (id: string, cursor?: string) =>
-			get<Page<TrackLike>>(`/v1/tracks/${encodeURIComponent(id)}/likes`, { limit: 30, cursor }),
+			get<Page<TrackLike>>(xrpc('getTrackLikes'), { uri: uriFromId(id), limit: 30, cursor }),
 		trackComments: (id: string, signal?: AbortSignal) =>
-			get<TrackCommentPage>(`/v1/tracks/${encodeURIComponent(id)}/comments`, {}, signal),
-		tracks: (p: { limit?: number; cursor?: string; artist_did?: string; tag?: string[]; hidden_tag?: string[] } = {}, signal?: AbortSignal) => get<Page<Track>>('/v1/tracks', p, signal),
-		tags: (limit = 24, signal?: AbortSignal) => get<Page<{ name: string; track_count: number }>>('/v1/tags', { limit }, signal),
+			get<TrackCommentPage>(xrpc('getTrackComments'), { uri: uriFromId(id) }, signal),
+		tracks: ({ artist_did, hidden_tag, ...p }: { limit?: number; cursor?: string; artist_did?: string; tag?: string[]; hidden_tag?: string[] } = {}, signal?: AbortSignal) =>
+			get<Page<Track>>(xrpc('listTracks'), { ...p, artistDid: artist_did, hiddenTag: hidden_tag }, signal),
+		tags: (limit = 24, signal?: AbortSignal) => get<Page<{ name: string; track_count: number }>>(xrpc('getTags'), { limit }, signal),
 		track: (id: string, options?: { fresh?: boolean }) => options?.fresh
-			? request<Track>(`${origin}/v1/tracks/${encodeURIComponent(id)}`, 15_000, undefined, { cache: 'no-store' })
-			: get<Track>(`/v1/tracks/${encodeURIComponent(id)}`),
+			? request<Track>(`${origin}${xrpc('getTrack')}?${new URLSearchParams(trackSubject(id))}`, 15_000, undefined, { cache: 'no-store' })
+			: get<Track>(xrpc('getTrack'), trackSubject(id)),
 		playback: (id: string, options?: { fresh?: boolean }) => options?.fresh
-			? request<Playback>(`${origin}/v1/tracks/${encodeURIComponent(id)}/playback`, 15_000, undefined, { cache: 'no-store' })
-			: get<Playback>(`/v1/tracks/${encodeURIComponent(id)}/playback`),
-		artist: (didOrHandle: string, signal?: AbortSignal) => get<Artist>(`/v1/artists/${encodeURIComponent(didOrHandle)}`, undefined, signal),
-		artistMetrics: (did: string, signal?: AbortSignal) => get<ArtistMetrics>(`/v1/artists/${encodeURIComponent(did)}/metrics`, undefined, signal),
-		albums: (artist_did: string, p: { limit?: number; cursor?: string } = {}) => get<Page<ListSummary>>('/v1/albums', { artist_did, ...p }),
-		album: (id: string) => get<ListDetail>(`/v1/albums/${encodeURIComponent(id)}`),
-		playlists: (p: { limit?: number; cursor?: string; owner_did?: string } = {}) =>
-			get<Page<ListSummary>>('/v1/playlists', p),
-		playlist: (id: string) => get<ListDetail>(`/v1/playlists/${encodeURIComponent(id)}`),
+			? request<Playback>(`${origin}${xrpc('getPlayback')}?${new URLSearchParams({ uri: uriFromId(id) })}`, 15_000, undefined, { cache: 'no-store' })
+			: get<Playback>(xrpc('getPlayback'), { uri: uriFromId(id) }),
+		artist: (didOrHandle: string, signal?: AbortSignal) => get<Artist>(xrpc('getArtist'), { actor: didOrHandle }, signal),
+		artistMetrics: (did: string, signal?: AbortSignal) => get<ArtistMetrics>(xrpc('getArtistMetrics'), { actor: did }, signal),
+		albums: (artist_did: string, p: { limit?: number; cursor?: string } = {}) => get<Page<ListSummary>>(xrpc('listAlbums'), { artistDid: artist_did, ...p }),
+		album: (id: string) => get<ListDetail>(xrpc('getAlbum'), { uri: uriFromId(id) }),
+		playlists: ({ owner_did, ...p }: { limit?: number; cursor?: string; owner_did?: string } = {}) =>
+			get<Page<ListSummary>>(xrpc('listPlaylists'), { ...p, ownerDid: owner_did }),
+		playlist: (id: string) => get<ListDetail>(xrpc('getPlaylist'), { uri: uriFromId(id) }),
 		/** an actor's likes are public records, so the appview serves them without a session. */
 		actorLikes: (did: string, p: { limit?: number; cursor?: string } = {}) =>
-			get<Page<Track>>(`/v1/actors/${did}/likes`, p),
+			get<Page<Track>>(xrpc('getActorLikes'), { actor: did, ...p }),
 		search: (q: string, options: { limit?: number; types?: SearchHit['type']; signal?: AbortSignal } = {}) =>
-			get<Page<SearchHit>>('/v1/search', { q, limit: options.limit, types: options.types }, options.signal),
+			get<Page<SearchHit>>(xrpc('search'), { q, limit: options.limit, types: options.types }, options.signal),
 		/** up to 50 tracks; the server has no cursor past that */
 		chart: (period: 'day' | 'week' | 'month' | 'all_time' = 'week', limit?: number, signal?: AbortSignal) =>
-			get<{ period: string; data: ChartEntry[] }>('/v1/charts/tracks', { period, limit }, signal),
+			get<{ period: string; data: ChartEntry[] }>(xrpc('getTrackChart'), { period, limit }, signal),
 		/** block (≤ timeout) until the appview has projected a write the client made on its PDS. */
 		awaitRecord: (uri: string, cid?: string, timeout_ms = 8000) =>
-			get<{ uri: string; status: AwaitStatus; cid?: string; reason?: string }>('/v1/records/await', {
+			get<{ uri: string; status: AwaitStatus; cid?: string; reason?: string }>(xrpc('awaitRecord'), {
 				uri,
 				cid,
-				timeout_ms
+				timeoutMs: timeout_ms
 			})
 	};
 }

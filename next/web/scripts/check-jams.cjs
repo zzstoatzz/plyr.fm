@@ -5,6 +5,7 @@ const path = require('node:path');
 const { chromium } = require('playwright');
 const { authorizeFixture, fixtureAccounts, fixturePage } = require('./pds-browser-fixture.cjs');
 const { tracks, serveAudio } = require('./fixture-catalog.cjs');
+const { method, names, trackIdFromUri } = require('./xrpc-fixture.cjs');
 
 const site = 'https://next.plyr.fm';
 const coordinator = 'https://jams.next.plyr.fm';
@@ -48,12 +49,13 @@ async function run(browser, accounts, { delayedSolo = false, startFromQueue = fa
     await context.route('https://panel-fixture.invalid/**', route => route.request().url().endsWith('/audio.wav')
       ? serveAudio(route) : route.fulfill({ status: 404 }));
     await context.route('https://api.next.plyr.fm/**', route => {
-      const pathname = new URL(route.request().url()).pathname;
-      const published = catalog.find(item => pathname === '/v1/tracks/' + item.id || pathname === '/v1/tracks/' + item.id + '/playback');
+      const url = new URL(route.request().url());
+      const call = method(url);
+      const published = ['getTrack', 'getPlayback'].includes(call) ? catalog.find(item => names(url, item.id)) : undefined;
       const track = startFromQueue && published === catalog[0]
         ? { ...published, metadata: { ...published.metadata, duration_seconds: null } }
         : published;
-      if (track && pathname.endsWith('/playback')) return route.fulfill({ json: {
+      if (track && call === 'getPlayback') return route.fulfill({ json: {
         availability: { status: 'available', delivery: { url: 'https://panel-fixture.invalid/audio.wav' } }
       } });
       if (revisedTrack && published === catalog[0]) return route.fulfill({ json: {
@@ -61,12 +63,12 @@ async function run(browser, accounts, { delayedSolo = false, startFromQueue = fa
         metadata: { ...track.metadata, title: 'revised recording', duration_seconds: 60 }
       } });
       if (track) return route.fulfill({ json: track });
-      if (pathname === '/v1/tracks/resolve') {
-        const { ids } = route.request().postDataJSON();
+      if (call === 'resolveTracks') {
+        const ids = route.request().postDataJSON().uris.map(trackIdFromUri);
         const data = catalog.filter(item => ids.includes(item.id));
         return route.fulfill({ json: { data, missing: ids.filter(id => !data.some(item => item.id === id)) } });
       }
-      if (pathname === '/v1/tracks') return route.fulfill({ json: {
+      if (call === 'listTracks') return route.fulfill({ json: {
         data: startFromQueue ? [{ ...catalog[0], metadata: { ...catalog[0].metadata, duration_seconds: null } }, ...catalog.slice(1)] : catalog,
         has_more: false
       } });
@@ -277,13 +279,13 @@ async function run(browser, accounts, { delayedSolo = false, startFromQueue = fa
 async function verifySoloHandoff({ page, context }, room) {
   const solo = Promise.withResolvers();
   const jam = Promise.withResolvers();
-  const soloPlayback = 'https://api.next.plyr.fm/v1/tracks/' + catalog[1].id + '/playback';
+  const soloPlayback = url => url.hostname === 'api.next.plyr.fm' && method(url) === 'getPlayback' && names(url, catalog[1].id);
   const join = coordinator + '/v1/jams/join';
   await context.route(soloPlayback, async route => { await solo.promise; await route.fallback(); });
   await context.route(join, async route => { await jam.promise; await route.fallback(); });
   try {
     await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'home', exact: true }).click();
-    const requested = page.waitForRequest(soloPlayback);
+    const requested = page.waitForRequest(request => soloPlayback(new URL(request.url())));
     await page.getByTestId('home-track-row').nth(1).getByRole('button', { name: /^play/i }).click();
     await requested;
     await page.goBack();

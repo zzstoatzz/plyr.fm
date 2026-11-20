@@ -44,7 +44,7 @@ async function openClient(browser, width, permitSpaceWrite) {
       constructor(...args) { super(...args); window.testAudio.push(this); }
     };
   });
-  await context.route(`${api}/v1/tracks/*/plays*`, route => route.abort());
+  await context.route(`${api}/xrpc/fm.plyr.unspecced.recordPlay*`, route => route.abort());
   await context.route(`${coordinator}/v1/playback/join`, route => route.abort());
   const page = await context.newPage();
   page.on('response', response => {

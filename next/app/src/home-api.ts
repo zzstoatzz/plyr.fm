@@ -11,7 +11,7 @@ function data(value: unknown): unknown[] {
 export async function homeTags(signal: AbortSignal, cursor?: string): Promise<{ data: HomeTag[]; nextCursor?: string }> {
   const query = new URLSearchParams({ limit: '50' });
   if (cursor) query.set('cursor', cursor);
-  const response = await fetch(`${API_URL}/v1/tags?${query}`, { signal });
+  const response = await fetch(`${API_URL}/xrpc/fm.plyr.unspecced.getTags?${query}`, { signal });
   if (!response.ok) throw new Error('could not load tags');
   const body: unknown = await response.json();
   const tags = data(body).map((value) => {
@@ -29,7 +29,7 @@ export async function homeTags(signal: AbortSignal, cursor?: string): Promise<{ 
 }
 
 export async function resolveArtists(dids: string[], signal: AbortSignal): Promise<NetworkArtist[]> {
-  const response = await fetch(`${API_URL}/v1/artists/resolve`, {
+  const response = await fetch(`${API_URL}/xrpc/fm.plyr.unspecced.resolveArtists`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dids }), signal,
   });
   if (!response.ok) throw new Error('could not load artists you know');

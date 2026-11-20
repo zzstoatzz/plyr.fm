@@ -3,6 +3,7 @@ const path = require('node:path');
 const { chromium } = require('playwright');
 const { fixtureAccounts, fixturePage, authorizeFixture } = require('./pds-browser-fixture.cjs');
 const { tracks } = require('./fixture-catalog.cjs');
+const { method, names, trackIdFromUri, uriFromId } = require('./xrpc-fixture.cjs');
 
 const origin = 'https://next.plyr.fm';
 const first = 'svelteswitchone.test';
@@ -20,14 +21,14 @@ const second = 'svelteswitchtwo.test';
     await context.route('https://typeahead.waow.tech/**', route => route.fulfill({ json: { actors: [] } }));
     await page.route('https://api.next.plyr.fm/**', route => {
       const url = new URL(route.request().url());
-      const owner = url.searchParams.get('artist_did');
-      if (url.pathname === '/v1/tracks' && owner === accounts[first].did) return route.fulfill({
+      const owner = url.searchParams.get('artistDid');
+      if (method(url) === 'listTracks' && owner === accounts[first].did) return route.fulfill({
         json: { data: [tracks[0], tracks[1]].map((track, i) => ({ ...track,
           metadata: { ...track.metadata, title: i === 0 ? 'After midnight' : 'Blue sky' },
           metrics: { ...track.metrics, play_count: i === 0 ? 1 : 21 }
         })) }
       });
-      if (url.pathname.startsWith('/v1/artists/')) return route.fulfill({ json: { display_name: 'A musician' } });
+      if (method(url) === 'getArtist') return route.fulfill({ json: { display_name: 'A musician' } });
       if (route.request().method() !== 'GET') return route.abort();
       return route.fulfill({ json: { data: [], has_more: false } });
     });

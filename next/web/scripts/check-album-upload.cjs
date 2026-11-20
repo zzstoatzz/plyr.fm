@@ -4,6 +4,7 @@ const { mkdir } = require('node:fs/promises');
 const path = require('node:path');
 const { chromium } = require('playwright');
 const { fixtureAccounts, fixturePage, authorizeFixture } = require('./pds-browser-fixture.cjs');
+const { method } = require('./xrpc-fixture.cjs');
 
 const origin = process.env.NEXT_WEB_URL || 'https://next.plyr.fm';
 const upload = origin + '/upload?mode=album';
@@ -91,7 +92,7 @@ async function fixture(browser, accounts, handle, width, scheme, scenario, audio
   await context.route(appView + '/**', async route => {
     const url = new URL(route.request().url());
     assert.equal(route.request().method(), 'GET', 'publishing never sends writes to the appview');
-    if (url.pathname.endsWith('/v1/albums/' + idFromUri('alb', albumUri ?? ''))) {
+    if (method(url) === 'getAlbum' && url.searchParams.get('uri') === albumUri) {
       const album = (await records(listCollection)).find(item => item.uri === albumUri);
       assert.ok(album);
       const songs = await records(trackCollection);
@@ -111,14 +112,14 @@ async function fixture(browser, accounts, handle, width, scheme, scenario, audio
         media: { artwork: null }, metrics: { member_count: members.length, available_count: members.length, total_plays: 0 }, members
       } });
     }
-    if (url.pathname === '/v1/records/await') {
+    if (method(url) === 'awaitRecord') {
       if (url.searchParams.get('uri') === albumUri) {
         if (albumPending) return route.fulfill({ json: { status: 'pending' } });
         projected = true;
       }
       return route.fulfill({ json: { status: 'indexed' } });
     }
-    if (url.pathname.startsWith('/v1/artists/')) return route.fulfill({ json: { did, handle, display_name: 'Fixture Artist' } });
+    if (method(url) === 'getArtist') return route.fulfill({ json: { did, handle, display_name: 'Fixture Artist' } });
     return route.fulfill({ json: { object: 'list', data: [], has_more: false } });
   });
 
@@ -185,7 +186,7 @@ async function fixture(browser, accounts, handle, width, scheme, scenario, audio
       albumPending = false;
       const indexed = page.waitForResponse(response => {
         const url = new URL(response.url());
-        return url.pathname === '/v1/records/await' && url.searchParams.get('uri') === albumUri && response.ok();
+        return method(url) === 'awaitRecord' && url.searchParams.get('uri') === albumUri && response.ok();
       });
       await check.click();
       assert.equal((await (await indexed).json()).status, 'indexed');

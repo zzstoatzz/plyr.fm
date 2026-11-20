@@ -3,6 +3,7 @@ const path = require('node:path');
 const { chromium } = require('playwright');
 const { fixtureAccounts, fixturePage, authorizeFixture } = require('./pds-browser-fixture.cjs');
 const { tracks } = require('./fixture-catalog.cjs');
+const { method, names } = require('./xrpc-fixture.cjs');
 
 const origin = 'http://127.0.0.1:5534';
 const handle = 'svelteteal.test';
@@ -31,11 +32,11 @@ const track = { ...tracks[0], metadata: { ...tracks[0].metadata, duration_second
       if (body.collection === collection) scrobbles.push(body);
     });
     await page.route('https://api.next.plyr.fm/**', route => {
-      const pathname = new URL(route.request().url()).pathname;
-      if (pathname === '/v1/tracks/' + track.id + '/playback') return route.fulfill({ json: {
+      const url = new URL(route.request().url());
+      if (method(url) === 'getPlayback' && names(url, track.id)) return route.fulfill({ json: {
         availability: { status: 'available', delivery: { url: audioUrl } }
       } });
-      if (pathname === '/v1/tracks/' + track.id) return route.fulfill({ json: track });
+      if (method(url) === 'getTrack' && names(url, track.id)) return route.fulfill({ json: track });
       if (route.request().method() !== 'GET') return route.abort();
       return route.fulfill({ json: { data: [], has_more: false } });
     });
