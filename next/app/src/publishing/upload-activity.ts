@@ -4,7 +4,8 @@ import type { LiveActivity } from 'expo-widgets';
 import type { UploadActivityProps } from './UploadActivity';
 
 type Factory = typeof import('./UploadActivity').default;
-const STALE_MS = 10 * 60_000, LINGER_MS = 4 * 60_000;
+// A finished upload stays on the Lock Screen briefly; a failure stays long enough to be noticed.
+const STALE_MS = 10 * 60_000, DONE_LINGER_MS = 60_000, FAILED_LINGER_MS = 15 * 60_000;
 const running = new Map<string, LiveActivity<UploadActivityProps>>();
 let factory: Factory | null | undefined;
 
@@ -33,7 +34,7 @@ export function reportUploadActivity(key: string, island: UploadIsland) {
     }
     if (!current) return;
     running.delete(key);
-    void current.end({ after: new Date(Date.now() + LINGER_MS) }, props(island)).catch(() => undefined);
+    void current.end({ after: new Date(Date.now() + (island.phase === 'failed' ? FAILED_LINGER_MS : DONE_LINGER_MS)) }, props(island)).catch(() => undefined);
   } catch {
     // Live Activities can be switched off in Settings; the in-app island still shows the upload.
   }
