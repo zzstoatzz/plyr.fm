@@ -6,11 +6,13 @@ import { Action, Copy } from '../controls';
 import { guardLeave } from './leave-guard';
 import { jobLine } from '@plyr/next-core/publishing/upload-queue-model';
 import { uploadQueue, useUploadQueue } from './upload-queue';
+import { endOrphanedUploadActivities } from './upload-activity';
 
 /** Mounted once at the root: resumes saved uploads for the signed-in account and guards the tab while one runs. */
 export function UploadQueueHost() {
   const auth = useAuth();
   useEffect(() => guardLeave(uploadQueue.active), []);
+  useEffect(() => endOrphanedUploadActivities(), []);
   useEffect(() => { if (auth.did && auth.uploadStorage) void uploadQueue.resume(auth.did).catch(() => undefined); }, [auth.did, auth.uploadStorage]);
   return null;
 }

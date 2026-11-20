@@ -1,9 +1,14 @@
 import { jobLine, type UploadJobView } from './upload-queue-model.ts';
 
 /** What the upload island shows: a short word or two beside the camera, plus the full sentence for VoiceOver. */
-export type UploadIsland = { phase: 'active' | 'done' | 'failed'; summary: string; progress?: number; announce: string };
+export type UploadIsland = { phase: 'active' | 'done' | 'failed'; title: string; summary: string; progress?: number; announce: string };
 
 export function uploadIsland(job: Pick<UploadJobView, 'title' | 'phase' | 'progress' | 'error'>): UploadIsland | undefined {
+  const island = step(job);
+  return island && { ...island, title: job.title };
+}
+
+function step(job: Pick<UploadJobView, 'title' | 'phase' | 'progress' | 'error'>): Omit<UploadIsland, 'title'> | undefined {
   const announce = jobLine({ id: '', owner: '', ...job });
   switch (job.phase) {
     case 'waiting': return { phase: 'active', summary: 'up next', announce };

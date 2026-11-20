@@ -3,7 +3,7 @@ import test from 'node:test';
 import { islandJob, uploadIsland } from '../src/publishing/upload-island.ts';
 
 test('the island says each upload step in a word or two', () => {
-  assert.deepEqual(uploadIsland({ title: 'demo', phase: 'uploading', progress: 0.427 }), { phase: 'active', summary: '42%', progress: 0.427, announce: 'uploading "demo" 42%' });
+  assert.deepEqual(uploadIsland({ title: 'demo', phase: 'uploading', progress: 0.427 }), { phase: 'active', summary: '42%', progress: 0.427, announce: 'uploading "demo" 42%', title: 'demo' });
   assert.equal(uploadIsland({ title: 'demo', phase: 'uploading' })?.summary, 'uploading');
   assert.equal(uploadIsland({ title: 'demo', phase: 'processing' })?.summary, 'to mp3');
   assert.equal(uploadIsland({ title: 'demo', phase: 'done' })?.phase, 'done');

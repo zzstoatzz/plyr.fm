@@ -58,6 +58,13 @@
           "microphonePermission": false
         }
       ],
+      [
+        "expo-widgets",
+        {
+          "bundleIdentifier": "fm.plyr.uploads",
+          "groupIdentifier": "group.fm.plyr"
+        }
+      ],
       "./plugins/share-extension-name"
     ],
     "extra": {
