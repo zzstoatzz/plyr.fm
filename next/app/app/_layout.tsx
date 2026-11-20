@@ -21,7 +21,7 @@ import { useMyAvatar } from '../src/use-my-avatar';
 import { usePreferences } from '../src/preferences';
 import { usesLiquidTabs } from '../src/tab-platform';
 import { UploadQueueHost } from '../src/publishing/UploadQueue';
-import { UploadIslandHost } from '../src/publishing/UploadIsland';
+import { UploadIslandHost, useIslandHidesStatusBar } from '../src/publishing/UploadIsland';
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
@@ -52,6 +52,7 @@ function Shell() {
   const tab = segments[1];
   const auth = useAuth();
   const avatar = useMyAvatar(usesLiquidTabs ? null : auth.did);
+  const islandOut = useIslandHidesStatusBar();
   useFinishPendingLike();
   const tabs: { label: string; href: Href; icon: Icon; active: boolean }[] = [
     { label: 'Home', href: '/(main)/(home)', icon: House, active: tab === '(home)' },
@@ -82,7 +83,7 @@ function Shell() {
   </SafeAreaView>;
   const dock = !usesLiquidTabs && <RadioPlayback><PlayerBar /></RadioPlayback>;
   return <SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1, backgroundColor: theme.background }}>
-    <StatusBar style={theme.dark ? 'light' : 'dark'} />
+    <StatusBar style={theme.dark ? 'light' : 'dark'} hidden={islandOut} animated />
     <View testID="app-frame" style={{ flex: 1, width: '100%', overflow: 'hidden' }}>
       <View style={{ flex: 1, minWidth: 0 }}>
         <Toasts />
@@ -110,7 +111,8 @@ function Shell() {
             <Settings size={20} color={theme.muted} />
           </Pressable></Link>}
         </View>
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.background } }}>
+        {/* Status bar visibility belongs to the screens (view-controller based), so the island hides it here. */}
+        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.background }, statusBarHidden: islandOut, statusBarAnimation: 'fade' }}>
           <Stack.Screen name="(main)" />
         </Stack>
         {dock}

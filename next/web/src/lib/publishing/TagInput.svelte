@@ -7,6 +7,7 @@
 </script>
 
 <script lang="ts">
+  import { onMount } from 'svelte';
 
   let { value = $bindable(''), disabled = false, label = 'tags', onedit }: { value: string; disabled?: boolean; label?: string; onedit?: () => void } = $props();
 
@@ -19,6 +20,9 @@
   const tags = $derived(tagList(value));
   const suggestions = $derived(open ? suggestTags(catalog, draft, tags) : []);
   const full = $derived(tags.length >= 20);
+
+  // Load before the first keystroke so suggestions are ready when typing starts.
+  onMount(load);
 
   function load() {
     if (catalog.length) return;

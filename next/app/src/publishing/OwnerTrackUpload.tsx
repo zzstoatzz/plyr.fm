@@ -78,25 +78,25 @@ export function OwnerTrackUpload({ auth, selected, onBusy, audience, file, setFi
         <Action primary label={busy ? 'Saving…' : 'Upload'} disabled={busy || active || loading || !!recoveryError || !file || !title.trim() || !artist} onPress={() => void run(async () => {
           if (!selected || !file) return;
           const name = `"${title.trim()}"`, island = `private:${title.trim()}`;
-          showUploadIsland(island, { phase: 'active', summary: 'uploading', announce: `uploading ${name}…` });
+          showUploadIsland(island, { phase: 'active', title: title.trim(), summary: 'uploading', announce: `uploading ${name}…` });
           let result: Awaited<ReturnType<typeof pds.upload>>;
           try {
             const duration = await measureAudioDuration(file).catch(() => undefined);
             if (!current()) { hideUploadIsland(island); return; }
             result = await pds.upload({ file, title, artist, description, tags: tags.split('\n'), duration }, operation => {
               if (current()) ownAttempt.current = operation.rkey;
-              showUploadIsland(island, { phase: 'active', summary: 'saving', announce: `saving ${name}…` });
+              showUploadIsland(island, { phase: 'active', title: title.trim(), summary: 'saving', announce: `saving ${name}…` });
             });
           } catch (failure) {
             const reason = failure instanceof Error ? failure.message.replace(/\.$/, '') : undefined;
             const line = reason ? `${name} didn't upload: ${reason}` : `${name} didn't upload`;
-            showUploadIsland(island, { phase: 'failed', summary: 'failed', announce: line });
+            showUploadIsland(island, { phase: 'failed', title: title.trim(), summary: 'failed', announce: line });
             toast.add(line, 'error', 10000, { label: 'open upload', href: '/upload?visibility=only-you' }, island);
             throw failure;
           }
           showUploadIsland(island, result.result.state === 'accepted'
-            ? { phase: 'done', summary: 'uploaded', announce: `${name} uploaded` }
-            : { phase: 'failed', summary: 'check it', announce: `${name} may not have saved. check its status on the upload page.` });
+            ? { phase: 'done', title: title.trim(), summary: 'uploaded', announce: `${name} uploaded` }
+            : { phase: 'failed', title: title.trim(), summary: 'check it', announce: `${name} may not have saved. check its status on the upload page.` });
           if (result.result.state === 'accepted') toast.add(`${name} uploaded`, 'success', 6000, { label: 'your music', href: '/portal' }, island);
           else toast.add(`${name} may not have saved`, 'warning', 10000, { label: 'open upload', href: '/upload?visibility=only-you' }, island);
           if (!current()) return;

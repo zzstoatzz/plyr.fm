@@ -28,11 +28,11 @@ export function TagsField({ value, onChange, disabled }: { value: string; onChan
   useEffect(() => { if (draft.trim() && value.split('\n').at(-1) !== draft) setDraft(''); }, [value]); // eslint-disable-line react-hooks/exhaustive-deps -- only an outside change to the value should clear it
 
   useEffect(() => {
-    if (!focused || catalog.length) return;
+    if (catalog.length) return;
     let live = true;
     loadCatalog().then(found => { if (live) setCatalog(found); }, () => undefined);
     return () => { live = false; };
-  }, [focused, catalog.length]);
+  }, [catalog.length]);
 
   function emit(next: string, typing: string) {
     setDraft(typing);

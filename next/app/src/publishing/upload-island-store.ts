@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import type { UploadIsland } from '@plyr/next-core/publishing/upload-island';
+import { endUploadActivity, reportUploadActivity } from './upload-activity';
 
 export type IslandShown = UploadIsland & { key: string; serial: number };
 
@@ -17,6 +18,7 @@ function publish(next: IslandShown | null) {
 /** Shows an upload step in the island; a finish holds briefly, then the island folds away. */
 export function showUploadIsland(key: string, island: UploadIsland | undefined) {
   if (!island) return;
+  reportUploadActivity(key, island);
   clearTimeout(hold);
   publish({ ...island, key, serial: ++serial });
   if (island.phase === 'active') return;
@@ -26,6 +28,7 @@ export function showUploadIsland(key: string, island: UploadIsland | undefined) 
 
 /** Folds the island away when it is showing an upload that left the queue. */
 export function hideUploadIsland(key: string) {
+  endUploadActivity(key);
   if (shown?.key !== key) return;
   clearTimeout(hold);
   publish(null);
