@@ -8,6 +8,7 @@ const queue_record = @import("../jams/queue_record.zig");
 const account_preferences = @import("preferences.zig");
 const upload_admission = @import("../uploads/admission.zig");
 const download_authorization = @import("../downloads/authorization.zig");
+const PostgresRestrictions = @import("../space/postgres_restrictions.zig").PostgresRestrictions;
 const upload_inspection = @import("../uploads/inspection.zig");
 const tickets = @import("../jams/tickets.zig");
 const config = @import("../../config.zig");
@@ -44,6 +45,11 @@ pub fn run(a: std.mem.Allocator, io: std.Io, settings: config.Config) !void {
     const budget_ms = if (env("DOWNLOAD_AUTH_BUDGET_MS")) |text| try std.fmt.parseInt(u64, text, 10) else 15_000;
     if (budget_ms == 0 or budget_ms > 15_000) return error.InvalidDownloadSettings;
     context.download_settings = .{ .identity = download_auth.identity(), .track_collection = settings.track_collection, .audio_space_type = env("SPACE_TYPE_NSID"), .budget_ns = budget_ms * std.time.ns_per_ms };
+    // takedowns and artists' removed readers gate downloads like checkUserAccess
+    if (context.records) |records| {
+        context.space_restrictions = .{ .pool = records.pool };
+        context.download_settings.?.restrictions = context.space_restrictions.?.restrictions();
+    }
     context.upload_settings = try upload_admission.fromEnvironment(a, settings.track_collection, context.auth_config.identity());
     defer context.store.deinit();
     defer context.tickets.deinit();
@@ -83,6 +89,7 @@ const Context = struct {
     auth_config: auth.Config,
     upload_settings: ?upload_admission.Settings = null,
     download_settings: ?download_authorization.Settings = null,
+    space_restrictions: ?PostgresRestrictions = null,
     download_admissions: std.atomic.Value(u8) = .init(0),
     origins: []const u8,
     records: ?queue_record.Records,

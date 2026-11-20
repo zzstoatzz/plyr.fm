@@ -4,6 +4,8 @@ const response = @import("response.zig");
 const managed_space = @import("managed_space.zig");
 const notifications = @import("notifications.zig");
 const moderation = @import("moderation.zig");
+const space_removals = @import("space_removals.zig");
+const PostgresRestrictions = @import("../internal/space/postgres_restrictions.zig").PostgresRestrictions;
 const labels = @import("labels.zig");
 const PostgresModerationLog = @import("../internal/moderation/postgres_log.zig").PostgresModerationLog;
 const catalog = @import("catalog.zig");
@@ -62,6 +64,8 @@ pub const App = struct {
     /// null when no service DID is configured, like notifications
     moderation: ?moderation.Config = null,
     moderation_log: ?*PostgresModerationLog = null,
+    /// takedowns and artists' removed readers, asked by checkUserAccess
+    space_restrictions: ?*PostgresRestrictions = null,
 };
 
 pub fn handle(
@@ -116,7 +120,7 @@ pub fn handle(
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
             return;
         }
-        try managed_space.checkUserAccess(request, allocator, app.io, config, app.cors, request_id);
+        try managed_space.checkUserAccess(request, allocator, app.io, config, if (app.space_restrictions) |store| store.restrictions() else null, app.cors, request_id);
     } else if (catalog.match(app.track_collection, path)) |method| {
         try catalog.handle(request, allocator, app.io, method, .{
             .chart = app.track_chart_store,
@@ -153,6 +157,8 @@ pub fn handle(
             app.cors,
             request_id,
         );
+    } else if (if (app.moderation) |config| space_removals.match(config, path) else null) |method| {
+        try space_removals.handle(request, allocator, app.io, app.moderation.?, app.space_restrictions, method, app.cors, request_id);
     } else if (mem.eql(u8, path, "/")) {
         if (request.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
