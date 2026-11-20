@@ -1,15 +1,21 @@
 import { api } from './api-client';
 import { type Playback, type Track } from '@plyr/next-core/api';
 import { isPrivateTrack } from '@plyr/next-core/track-access';
+import { freshPlayback } from '@plyr/next-core/fresh-playback';
 
 const fresh = 60_000;
 const warmed = new Map<string, { at: number; lookup: Promise<Playback> }>();
 
 /** The playback lookup for a track, reusing one `warm` started within the last minute. */
-export function playbackFor(id: string): Promise<Playback> {
+function playbackFor(id: string): Promise<Playback> {
   const hit = warmed.get(id);
   warmed.delete(id);
   return hit && Date.now() - hit.at < fresh ? hit.lookup.catch(() => api.playback(id)) : api.playback(id);
+}
+
+/** The lookup for a track about to play; a just-published track waits briefly for its audio to be ready to stream. */
+export function playableFor(track: Track, stale: () => boolean, onWaiting: () => void): Promise<Playback> {
+  return freshPlayback(attempt => attempt ? api.playback(track.id, { fresh: true }) : playbackFor(track.id), { createdAt: track.metadata.created_at, stale, onWaiting });
 }
 
 /** Starts the lookup for the track likely to play next, so skipping to it waits only on audio. */
