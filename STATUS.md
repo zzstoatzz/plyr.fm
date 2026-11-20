@@ -1,6 +1,9 @@
 # plyr.fm - status
 
-Start here for the next agent: [November 12 daily-driver checkpoint](docs/research/2026-11-12-next-daily-driver-checkpoint.md).
+Start here for the next agent: [November 12 paused handoff](docs/research/2026-11-12-next-paused-handoff.md).
+
+The daily-driver goal is paused at Nate's request. Processing admission is deployed,
+but cloud conversion acceptance and several native/client gates remain unfinished.
 
 ## Next daily-driver work (2026-11-12)
 
