@@ -1,6 +1,7 @@
 import type { Track } from '@plyr/next-core/api';
 import { isPrivateTrack } from '@plyr/next-core/track-access';
 import { blobUrl } from '@plyr/next-core/identity';
+import { readyPlayback } from '@plyr/next-core/playback-ready';
 import { api } from '$lib/api';
 import type { AudioSource } from './gated-audio';
 
@@ -10,9 +11,10 @@ async function protectedSource(uri: string, signal: AbortSignal) {
 	return protectedAudio(uri, signal);
 }
 
-export async function playbackSource(track: Track, signal: AbortSignal): Promise<AudioSource> {
+export async function playbackSource(track: Track, signal: AbortSignal, onPreparing?: () => void): Promise<AudioSource> {
 	if (isPrivateTrack(track)) return protectedSource(track.record.uri, signal);
-	const { availability } = await api.playback(track.id);
+	// a track published moments ago may still be copying to the streaming origin
+	const { availability } = await readyPlayback(() => api.playback(track.id), { signal, onPreparing });
 	signal.throwIfAborted();
 	if (availability.status === 'gated' && availability.space) {
 		return protectedSource(availability.space.record, signal);
@@ -21,5 +23,5 @@ export async function playbackSource(track: Track, signal: AbortSignal): Promise
 		if (availability.delivery?.url) return { url: availability.delivery.url };
 		if (availability.artifact?.cid) return { url: await blobUrl(track.artist.did, availability.artifact.cid) };
 	}
-	throw new Error('audio unavailable');
+	throw new Error(availability.status === 'preparing' ? 'this track is still being prepared. try again in a moment.' : 'audio unavailable');
 }

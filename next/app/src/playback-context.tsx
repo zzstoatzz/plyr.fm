@@ -28,6 +28,8 @@ export interface Playback {
   current?: Track;
   index: number;
   loading: boolean;
+  /** the track's audio is still being copied to the streaming origin */
+  preparing: boolean;
   error: string | null;
   status: ReturnType<typeof useAudioPlayerStatus>;
   repeat: 'off' | 'all' | 'one';

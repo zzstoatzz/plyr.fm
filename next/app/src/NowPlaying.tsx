@@ -236,7 +236,7 @@ export function NowPlaying({ track, close: leave, navigate: go }: {
                 <View testID="now-playing-time" style={styles.time}>
                   <Text style={[caption, styles.numeric]}>{time(position)}</Text>
                   {!error && chapterIndex >= 0 ? <ChapterWheel chapters={chapters} current={chapterIndex} seek={seek} onPreview={setWheelPreview} onActive={setWheelActive} guard={dismiss.protectSlider} blocks={wheelBlocks} outside={wheelOutside} />
-                    : <Text accessibilityLiveRegion="polite" style={[caption, styles.status]}>{error ? 'couldn’t play this track' : ''}</Text>}
+                    : <Text accessibilityLiveRegion="polite" style={[caption, styles.status]}>{error ? 'couldn’t play this track' : player.preparing ? 'preparing…' : ''}</Text>}
                   <Text style={[caption, styles.numeric]}>{time(duration)}</Text>
                 </View>
               </View>

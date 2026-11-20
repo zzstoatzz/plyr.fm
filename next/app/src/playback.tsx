@@ -21,6 +21,7 @@ import { useMediaSession } from './media-session';
 import { useRemoteTrackControls } from './use-remote-track-controls';
 import { toast } from './toast';
 import { playbackFor, warm } from './playback-lookup';
+import { readyPlayback } from '@plyr/next-core/playback-ready';
 import { PlaybackScope, type Playback } from './playback-context';
 
 const viewQueue = { label: 'view queue', href: '/queue' } as const;
@@ -46,6 +47,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
   const [ready, setReady] = useState(false);
   const [lockScreenSuspended, setLockScreenSuspended] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [preparing, setPreparing] = useState(false);
   const [repeat, setRepeat] = useState<'off' | 'all' | 'one'>('off');
   const settings = useRef({ repeat, volume });
   settings.current = { repeat, volume };
@@ -166,8 +168,12 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     setLockScreenSuspended(false);
     setStarting(null);
     setError(null);
+    setPreparing(false);
     try {
-      const playback = privateTrack ? { availability: { status: 'gated' as const, space: { record: track.record.uri }, delivery: undefined, artifact: undefined } } : await playbackFor(track.id);
+      // a track published moments ago may still be copying to the streaming origin
+      const lookup = () => { if (request !== sequence.current) throw new Error('superseded'); return playbackFor(track.id); };
+      const playback = privateTrack ? { availability: { status: 'gated' as const, space: { record: track.record.uri }, delivery: undefined, artifact: undefined } }
+        : await readyPlayback(lookup, { onPreparing: () => { if (request === sequence.current) setPreparing(true); } });
       if (request !== sequence.current) return false;
       const { status: availability, space, delivery, artifact } = playback.availability;
       if (!privateTrack) console.info("[playback] availability", { request, track: track.id, availability, delivery: !!delivery, artifact: !!artifact, elapsedMs: Date.now() - startedAt });
@@ -177,10 +183,11 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
         url = await gatedAudioUrl(space.record, auth);
       } else if (availability === 'available' && delivery?.url) {
         url = delivery.url;
-      } else if (availability === 'available' && artifact?.cid) {
+      } else if (availability === 'available' && artifact?.cid && Platform.OS !== 'ios') {
+        // AVPlayer refuses a PDS getBlob that ignores Range, so iOS plays only delivery URLs
         url = await blobUrl(track.artist.did, artifact.cid);
       } else {
-        throw new Error('audio unavailable');
+        throw new Error(availability === 'preparing' ? 'this track is still being prepared. try again in a moment.' : 'audio unavailable');
       }
       if (request !== sequence.current || privateTrack && (getAuth().rpc !== auth.rpc || getAuth().did !== auth.did)) {
         if (availability === 'gated') releaseGatedAudioUrl(url);
@@ -247,7 +254,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
       }
       return false;
     } finally {
-      if (request === sequence.current) setResolving(false);
+      if (request === sequence.current) { setResolving(false); setPreparing(false); }
     }
   }
 
@@ -420,7 +427,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     joinJam: input => { if (privateMode.current) { setError('play a public track before joining a jam.'); return; } personal.suspend(); jam.join(input); },
     leaveJam: (restore = true) => { jam.leave(false); if (restore) personal.restore(); },
     jamCommand: intent => intent.action === 'play' || intent.action === 'pause' ? jam.setPlaying(intent.action === 'play', jam.jam?.state) : jam.command(intent),
-    play, queue: accountVisible ? queue : [], current: accountVisible ? current : undefined, index: accountVisible ? index : -1, loading: shownLoading, error, status: presentationStatus, tail: privatePlayback || jam.jam || !accountVisible ? undefined : personal.state.tail, outputElsewhere: !privatePlayback && !jam.jam && personal.outputElsewhere, deviceQueue: !privatePlayback && personal.deviceOnly, queueError: privatePlayback || jam.jam ? undefined : personal.queueError, keepPlaying: !privatePlayback && personal.keepPlaying, setKeepPlaying: value => { if (!privateMode.current) personal.setKeepPlaying(value); }, repeat: jam.jam ? 'off' : repeat, setRepeat: value => { if (privateMode.current) setRepeat(value); else if (!jam.active()) personal.setRepeat(value); }, toggle, setPlaying, next,
+    play, queue: accountVisible ? queue : [], current: accountVisible ? current : undefined, index: accountVisible ? index : -1, loading: shownLoading, preparing, error, status: presentationStatus, tail: privatePlayback || jam.jam || !accountVisible ? undefined : personal.state.tail, outputElsewhere: !privatePlayback && !jam.jam && personal.outputElsewhere, deviceQueue: !privatePlayback && personal.deviceOnly, queueError: privatePlayback || jam.jam ? undefined : personal.queueError, keepPlaying: !privatePlayback && personal.keepPlaying, setKeepPlaying: value => { if (!privateMode.current) personal.setKeepPlaying(value); }, repeat: jam.jam ? 'off' : repeat, setRepeat: value => { if (privateMode.current) setRepeat(value); else if (!jam.active()) personal.setRepeat(value); }, toggle, setPlaying, next,
     isPlaying: () => player.playing,
     pauseLocal: () => { setLockScreenSuspended(true); personal.suspend(); player.pause(); },
     previous: () => {
