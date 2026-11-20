@@ -194,7 +194,7 @@
 </script>
 
 <section aria-label="Queue" class="queue" class:rail={!!close}>
-	{#if wash}<div class="wash" aria-hidden="true" style:background-image={`url("${wash}")`}></div>{/if}
+	{#if wash}<div class="wash" aria-hidden="true" style:--wash={`url("${wash}")`}></div>{/if}
 	<header>
 		<h1>queue</h1>
 		<div class="actions">
@@ -301,7 +301,8 @@
 
 <style>
 	.queue { position: relative; isolation: isolate; display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.1rem; container-type: inline-size; }
-	.wash { position: absolute; z-index: -1; inset: 0; overflow: hidden; pointer-events: none; background-size: cover; background-position: center; filter: blur(64px) saturate(1.1); opacity: light-dark(0.2, 0.32); transform: scale(1.3); }
+	.wash { position: absolute; z-index: -1; inset: 0; overflow: hidden; pointer-events: none; }
+	.wash::before { content: ''; position: absolute; inset: -15%; background: var(--wash) center / cover; filter: blur(64px) saturate(1.1); opacity: light-dark(0.2, 0.32); }
 	.hero { display: flex; align-items: flex-end; gap: 0.9rem; min-width: 0; }
 	.hero-cover { position: relative; flex: none; width: min(9.5rem, 40cqi); padding: 0; border: 0; border-radius: 0.75rem; background: none; box-shadow: 0 0.9rem 2.2rem rgb(0 0 0 / 0.35); }
 	.hero-cover .play { border-radius: inherit; }

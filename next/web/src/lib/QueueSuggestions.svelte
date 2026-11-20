@@ -160,7 +160,7 @@
 <style>
 	h2 { color: var(--muted); font-size: 0.87rem; font-weight: 650; margin: 0; }
 	.strip-head { display: flex; justify-content: space-between; align-items: center; min-height: 2.25rem; margin-block-end: 0.35rem; gap: 0.5rem; }
-	.cards { display: flex; gap: 0.65rem; margin: 0 -1rem; padding: 0 1rem 0.25rem; list-style: none; overflow-x: auto; scroll-snap-type: x proximity; scroll-padding-inline: 1rem; scrollbar-width: none; }
+	.cards { display: flex; gap: 0.65rem; margin: 0; padding: 0 0 0.25rem; list-style: none; overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: none; }
 	.cards::-webkit-scrollbar { display: none; }
 	.card { flex: none; width: 7.4rem; display: grid; gap: 0.1rem; scroll-snap-align: start; min-width: 0; }
 	.art { position: relative; border-radius: 0.6rem; margin-block-end: 0.3rem; }
