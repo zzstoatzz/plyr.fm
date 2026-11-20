@@ -53,7 +53,7 @@ def validate_python_collection(target: HttpTarget) -> None:
 
 
 def validate_zig_collection(target: HttpTarget) -> None:
-    payload = _request_json(target, "/v1/tracks?limit=50")
+    payload = _request_json(target, "/xrpc/fm.plyr.dev.unspecced.listTracks?limit=50")
     tracks = payload.get("data")
     if payload.get("object") != "list" or not isinstance(tracks, list):
         raise RuntimeError("Zig fixture did not return a list resource")
@@ -159,7 +159,7 @@ def run(
             _zig_environment(database_url, concurrency),
             duration,
             concurrency,
-            "/v1/tracks?limit=50",
+            "/xrpc/fm.plyr.dev.unspecced.listTracks?limit=50",
             200,
             validate=validate_zig_collection,
         )

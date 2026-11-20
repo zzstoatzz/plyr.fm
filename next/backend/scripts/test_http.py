@@ -9,6 +9,7 @@ import socket
 import subprocess
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,13 @@ from xrpc_contract import assert_xrpc_methods
 ROOT = Path(__file__).resolve().parents[1]
 COLLECTION = "fm.plyr.dev.track"
 ALLOWED_ORIGIN = "https://client.example"
+X = "/xrpc/fm.plyr.dev.unspecced."
+ERRORS = {
+    400: "InvalidRequest",
+    404: "NotFound",
+    405: "MethodNotAllowed",
+    503: "ServiceUnavailable",
+}
 
 
 def _unused_port() -> int:
@@ -31,14 +39,8 @@ def _track_id(uri: str) -> str:
     return f"trk_{payload}"
 
 
-def _album_id(uri: str) -> str:
-    payload = base64.urlsafe_b64encode(uri.encode()).decode().rstrip("=")
-    return f"alb_{payload}"
-
-
-def _playlist_id(uri: str) -> str:
-    payload = base64.urlsafe_b64encode(uri.encode()).decode().rstrip("=")
-    return f"pls_{payload}"
+def _q(uri: str) -> str:
+    return urllib.parse.quote(uri, safe="")
 
 
 def _request(
@@ -64,6 +66,14 @@ def _request(
             key.lower(): value for key, value in response.headers.items()
         }
         return response.status, response_headers, body
+
+
+def _expect(base_url: str, call: str, status: int, **kwargs: Any) -> None:
+    """An unspecced method answers `status` with the matching XRPC error."""
+    actual, _, body = _request(base_url, X + call, **kwargs)
+    assert actual == status, (call, actual, body)
+    if kwargs.get("method") != "HEAD":
+        assert body.get("error") == ERRORS[status], (call, body)
 
 
 def _wait_until_ready(base_url: str, process: subprocess.Popen[bytes]) -> None:
@@ -147,7 +157,7 @@ def main() -> None:
         for payload in (None, b"", b"ignored"):
             status, headers, body = _request(
                 base_url,
-                "/v1/tracks",
+                X + "listTracks",
                 method="HEAD",
                 origin=ALLOWED_ORIGIN,
                 data=payload,
@@ -159,7 +169,7 @@ def main() -> None:
 
         # a browser preflight before every JSON POST; an empty 204 once
         # crashed the process, so check it answers and the server survives
-        for path in ("/v1/artists/resolve", "/v1/tracks", "/health"):
+        for path in (X + "resolveArtists", X + "listTracks", "/health"):
             status, headers, body = _request(
                 base_url, path, method="OPTIONS", origin=ALLOWED_ORIGIN
             )
@@ -169,420 +179,192 @@ def main() -> None:
 
         assert_xrpc_methods(base_url, _request, COLLECTION)
 
-        status, _, api = _request(base_url, "/v1")
-        assert status == 200 and api == {"object": "api", "version": "v1"}
+        status, _, root = _request(base_url, "/")
+        assert status == 200 and root == {"name": "plyr.fm", "api": "/xrpc"}
 
         status, _, readiness = _request(base_url, "/ready")
         assert status == 503 and readiness["error"]["code"] == "service_unavailable"
 
-        # read-only appview: no oauth client, sessions, or proxied writes
+        # read-only appview: no oauth client, sessions, proxied writes, or /v1
         song_id = _track_id(f"at://did:plc:artist/{COLLECTION}/song")
         for gone_path, gone_method in (
             ("/oauth-client-metadata.json", "GET"),
             ("/auth/pds-options", "GET"),
             ("/auth/start?handle=artist.example", "GET"),
             ("/auth/logout", "POST"),
+            ("/v1", "GET"),
+            ("/v1/tracks", "GET"),
+            (f"/v1/tracks/{song_id}", "GET"),
             ("/v1/me/likes", "GET"),
-            ("/v1/me/likes/resolve", "POST"),
+            ("/v1/actors/did:plc:artist/likes/resolve", "POST"),
             (f"/v1/tracks/{song_id}/like", "PUT"),
-            (f"/v1/tracks/{song_id}/like", "DELETE"),
         ):
             status, _, gone = _request(base_url, gone_path, method=gone_method)
             assert status == 404, (gone_path, gone_method, status)
             assert gone["error"]["code"] == "not_found"
 
-        status, _, stats = _request(base_url, "/v1/stats")
-        assert status == 503
-        assert stats["error"]["code"] == "service_unavailable"
-        status, _, _ = _request(base_url, "/v1/stats", method="POST", data=b"")
-        assert status == 405
+        _expect(base_url, "getStats", 503)
+        _expect(base_url, "getStats", 405, method="POST", data=b"")
+        _expect(base_url, "getActorLikes?actor=did:plc:artist", 503)
+        _expect(base_url, "getActorLikes?actor=artist.example", 400)
 
-        status, _, actor_likes = _request(base_url, "/v1/actors/did:plc:artist/likes")
-        assert status == 503
-        assert actor_likes["error"]["code"] == "service_unavailable"
-        status, _, resolve_method = _request(
-            base_url, "/v1/actors/did:plc:artist/likes/resolve"
-        )
-        assert status == 405
-        assert resolve_method["error"]["code"] == "method_not_allowed"
-        valid_resolve = json.dumps(
-            {
-                "tracks": [
-                    {
-                        "track_id": song_id,
-                        "record_cid": "bafyreihdcss27ihlhmjofustbdvksrwyxnjj3hhk7azqs2626paka66c2a",
-                    }
-                ]
-            }
-        ).encode()
-        for payload, expected in [(valid_resolve, 503), (b'{"bad":true}', 400)]:
-            status, headers, _ = _request(
-                base_url,
-                "/v1/actors/did:plc:artist/likes/resolve",
-                method="POST",
-                origin=ALLOWED_ORIGIN,
-                data=payload,
-            )
-            assert status == expected
-            assert headers["access-control-allow-origin"] == ALLOWED_ORIGIN
-        status, headers, _ = _request(
-            base_url,
-            "/v1/actors/did:plc:artist/likes/resolve",
-            method="POST",
-            origin="https://untrusted.example",
-            data=valid_resolve,
-        )
-        assert status == 503 and "access-control-allow-origin" not in headers
-
-        status, _, handle_likes = _request(base_url, "/v1/actors/artist.example/likes")
-        assert status == 404 and handle_likes["error"]["code"] == "not_found"
-
-        status, _, unavailable_list = _request(base_url, "/v1/tracks?limit=2")
-        assert status == 503
-        assert unavailable_list["error"]["code"] == "service_unavailable"
-
-        status, _, list_method = _request(base_url, "/v1/tracks", method="POST")
-        assert status == 405
-        assert list_method["error"]["code"] == "method_not_allowed"
-
-        for invalid_target in (
-            "/v1/tracks?limit=0",
-            "/v1/tracks?limit=101",
-            "/v1/tracks?cursor=not-a-cursor",
-            "/v1/tracks?artist_did=not-a-did",
-            "/v1/tracks?artist_did=did%3Xplc",
-            "/v1/tracks?artist_did=did:plc:a&artist_did=did:plc:b",
-            "/v1/tracks?offset=10",
+        _expect(base_url, "listTracks?limit=2", 503)
+        _expect(base_url, "listTracks", 405, method="POST")
+        for invalid in (
+            "listTracks?limit=0",
+            "listTracks?limit=101",
+            "listTracks?cursor=not-a-cursor",
+            "listTracks?artistDid=not-a-did",
+            "listTracks?artistDid=did%3Xplc",
+            "listTracks?artistDid=did:plc:a&artistDid=did:plc:b",
+            "listTracks?offset=10",
         ):
-            status, _, invalid_list = _request(base_url, invalid_target)
-            assert status == 400
-            assert invalid_list["error"]["code"] == "invalid_request"
+            _expect(base_url, invalid, 400)
+        _expect(base_url, "listTracks?artistDid=did%3Aplc%3Aartist&limit=5", 503)
 
-        status, _, unavailable_artist_tracks = _request(
-            base_url, "/v1/tracks?artist_did=did%3Aplc%3Aartist&limit=5"
-        )
-        assert status == 503
-        assert unavailable_artist_tracks["error"]["code"] == "service_unavailable"
-
-        for invalid_target in (
-            "/v1/albums",
-            "/v1/albums?artist_did=not-a-did",
-            "/v1/albums?artist_did=did:plc:artist&limit=0",
-            "/v1/albums?artist_did=did:plc:a&artist_did=did:plc:b",
+        for invalid in (
+            "listAlbums",
+            "listAlbums?artistDid=not-a-did",
+            "listAlbums?artistDid=did:plc:artist&limit=0",
+            "listAlbums?artistDid=did:plc:a&artistDid=did:plc:b",
         ):
-            status, _, invalid_albums = _request(base_url, invalid_target)
-            assert status == 400
-            assert invalid_albums["error"]["code"] == "invalid_request"
-
-        status, _, unavailable_albums = _request(
-            base_url, "/v1/albums?artist_did=did%3Aplc%3Aartist&limit=5"
-        )
-        assert status == 503
-        assert unavailable_albums["error"]["code"] == "service_unavailable"
-
-        status, _, album_method = _request(
-            base_url, "/v1/albums?artist_did=did:plc:artist", method="POST"
-        )
-        assert status == 405
-        assert album_method["error"]["code"] == "method_not_allowed"
-
-        status, _, invalid_album = _request(base_url, "/v1/albums/42")
-        assert status == 400
-        assert invalid_album["error"]["code"] == "invalid_request"
+            _expect(base_url, invalid, 400)
+        _expect(base_url, "listAlbums?artistDid=did%3Aplc%3Aartist&limit=5", 503)
+        _expect(base_url, "listAlbums?artistDid=did:plc:artist", 405, method="POST")
 
         album_uri = "at://did:plc:artist/fm.plyr.dev.list/album"
-        status, _, unavailable_album = _request(
-            base_url, f"/v1/albums/{_album_id(album_uri)}"
-        )
-        assert status == 503
-        assert unavailable_album["error"]["code"] == "service_unavailable"
+        _expect(base_url, "getAlbum?uri=42", 400)
+        _expect(base_url, f"getAlbum?uri={_q(album_uri)}", 503)
+        foreign_album = "at://did:plc:artist/fm.plyr.list/album"
+        _expect(base_url, f"getAlbum?uri={_q(foreign_album)}", 404)
+        _expect(base_url, f"getAlbum?uri={_q(album_uri)}", 405, method="POST")
 
-        foreign_album_uri = "at://did:plc:artist/fm.plyr.list/album"
-        status, _, missing_album = _request(
-            base_url, f"/v1/albums/{_album_id(foreign_album_uri)}"
-        )
-        assert status == 404
-        assert missing_album["error"]["code"] == "not_found"
-
-        status, _, album_detail_method = _request(
-            base_url, f"/v1/albums/{_album_id(album_uri)}", method="POST"
-        )
-        assert status == 405
-        assert album_detail_method["error"]["code"] == "method_not_allowed"
-
-        for invalid_target in (
-            "/v1/playlists?owner_did=not-a-did",
-            "/v1/playlists?owner_did=did:plc:owner&limit=0",
-            "/v1/playlists?owner_did=did:plc:a&owner_did=did:plc:b",
+        for invalid in (
+            "listPlaylists?ownerDid=not-a-did",
+            "listPlaylists?ownerDid=did:plc:owner&limit=0",
+            "listPlaylists?ownerDid=did:plc:a&ownerDid=did:plc:b",
         ):
-            status, _, invalid_playlists = _request(base_url, invalid_target)
-            assert status == 400
-            assert invalid_playlists["error"]["code"] == "invalid_request"
-
-        status, _, unavailable_global_playlists = _request(
-            base_url, "/v1/playlists?limit=5"
-        )
-        assert status == 503
-        assert unavailable_global_playlists["error"]["code"] == "service_unavailable"
-
-        status, _, unavailable_playlists = _request(
-            base_url, "/v1/playlists?owner_did=did%3Aplc%3Aowner&limit=5"
-        )
-        assert status == 503
-        assert unavailable_playlists["error"]["code"] == "service_unavailable"
+            _expect(base_url, invalid, 400)
+        _expect(base_url, "listPlaylists?limit=5", 503)
+        _expect(base_url, "listPlaylists?ownerDid=did%3Aplc%3Aowner&limit=5", 503)
 
         playlist_uri = "at://did:plc:owner/fm.plyr.dev.list/playlist"
-        status, _, unavailable_playlist = _request(
-            base_url, f"/v1/playlists/{_playlist_id(playlist_uri)}"
-        )
-        assert status == 503
-        assert unavailable_playlist["error"]["code"] == "service_unavailable"
+        _expect(base_url, f"getPlaylist?uri={_q(playlist_uri)}", 503)
+        foreign_playlist = "at://did:plc:owner/fm.plyr.list/playlist"
+        _expect(base_url, f"getPlaylist?uri={_q(foreign_playlist)}", 404)
+        _expect(base_url, f"getPlaylist?uri={_q(playlist_uri)}", 405, method="POST")
 
-        foreign_playlist_uri = "at://did:plc:owner/fm.plyr.list/playlist"
-        status, _, missing_playlist = _request(
-            base_url, f"/v1/playlists/{_playlist_id(foreign_playlist_uri)}"
-        )
-        assert status == 404
-        assert missing_playlist["error"]["code"] == "not_found"
+        _expect(base_url, "getTrack?uri=4x2", 400)
+        _expect(base_url, "getTrack?legacyId=1667", 503)
 
-        status, _, playlist_method = _request(
-            base_url, f"/v1/playlists/{_playlist_id(playlist_uri)}", method="POST"
-        )
-        assert status == 405
-        assert playlist_method["error"]["code"] == "method_not_allowed"
+        for method in ("getArtist", "getArtistMetrics"):
+            _expect(base_url, f"{method}?actor=not-an-identifier", 400)
+            for actor in ("did:plc:artist", "did%3Aplc%3Aartist", "Artist.Example"):
+                _expect(base_url, f"{method}?actor={actor}", 503)
+            _expect(base_url, f"{method}?actor=did:plc:artist", 405, method="POST")
 
-        status, _, invalid = _request(base_url, "/v1/tracks/4x2")
-        assert status == 400 and invalid["error"]["code"] == "invalid_request"
-
-        status, _, numeric_track = _request(base_url, "/v1/tracks/1667")
-        assert status == 503
-        assert numeric_track["error"]["code"] == "service_unavailable"
-
-        status, _, invalid_artist = _request(base_url, "/v1/artists/not-an-identifier")
-        assert status == 400
-        assert invalid_artist["error"]["code"] == "invalid_request"
-
-        for identifier in ("did:plc:artist", "did%3Aplc%3Aartist", "Artist.Example"):
-            status, _, unavailable_artist = _request(
-                base_url, f"/v1/artists/{identifier}"
-            )
-            assert status == 503
-            assert unavailable_artist["error"]["code"] == "service_unavailable"
-
-        status, _, artist_method = _request(
-            base_url, "/v1/artists/did:plc:artist", method="POST"
-        )
-        assert status == 405
-        assert artist_method["error"]["code"] == "method_not_allowed"
-
-        status, _, invalid_artist_metrics = _request(
-            base_url, "/v1/artists/not-an-identifier/metrics"
-        )
-        assert status == 400
-        assert invalid_artist_metrics["error"]["code"] == "invalid_request"
-
-        for identifier in ("did:plc:artist", "did%3Aplc%3Aartist", "Artist.Example"):
-            status, _, unavailable_artist_metrics = _request(
-                base_url, f"/v1/artists/{identifier}/metrics"
-            )
-            assert status == 503
-            assert unavailable_artist_metrics["error"]["code"] == "service_unavailable"
-
-        status, _, artist_metrics_method = _request(
-            base_url, "/v1/artists/did:plc:artist/metrics", method="POST"
-        )
-        assert status == 405
-        assert artist_metrics_method["error"]["code"] == "method_not_allowed"
-
-        for invalid_target in (
-            "/v1/search",
-            "/v1/search?q=okay&q=again",
-            "/v1/search?q=okay&types=track,track",
-            "/v1/search?q=okay&types=tag",
-            "/v1/search?q=okay&limit=0",
-            "/v1/search?q=okay&limit=51",
-            "/v1/search?q=okay&offset=1",
+        for invalid in (
+            "search",
+            "search?q=okay&q=again",
+            "search?q=okay&types=track,track",
+            "search?q=okay&types=tag",
+            "search?q=okay&limit=0",
+            "search?q=okay&limit=51",
+            "search?q=okay&offset=1",
         ):
-            status, _, invalid_search = _request(base_url, invalid_target)
-            assert status == 400
-            assert invalid_search["error"]["code"] == "invalid_request"
+            _expect(base_url, invalid, 400)
+        status, _, short_search = _request(base_url, X + "search?q=a")
+        assert status == 200 and short_search["data"] == []
+        _expect(base_url, "search?q=artist.example&types=artist,track&limit=10", 503)
+        _expect(base_url, "search?q=artist.example", 405, method="POST")
 
-        status, _, short_search = _request(base_url, "/v1/search?q=a")
-        assert status == 200
-        assert short_search["data"] == []
-
-        for path in [
-            "/v1/tags",
-            "/v1/tags?limit=100",
-            "/v1/tracks?tag=ambient&tag=drone",
-        ]:
-            assert _request(base_url, path)[0] == 503
-        for path in [
-            "/v1/tags?limit=0",
-            "/v1/tags?limit=101",
-            "/v1/tags?limit=2&limit=3",
-            "/v1/tags?offset=1",
-            "/v1/tracks?tag=",
-            "/v1/tracks?tag=bad%00tag",
-            "/v1/tracks?tag=1&tag=2&tag=3&tag=4&tag=5&tag=6&tag=7&tag=8&tag=9&tag=10&tag=11",
-        ]:
-            assert _request(base_url, path)[0] == 400
-        assert _request(base_url, "/v1/tags", method="POST")[0] == 405
+        for target in (
+            "getTags",
+            "getTags?limit=100",
+            "listTracks?tag=ambient&tag=drone",
+        ):
+            _expect(base_url, target, 503)
+        for invalid in (
+            "getTags?limit=0",
+            "getTags?limit=101",
+            "getTags?limit=2&limit=3",
+            "getTags?offset=1",
+            "listTracks?tag=",
+            "listTracks?tag=bad%00tag",
+            "listTracks?" + "&".join(f"tag={n}" for n in range(1, 12)),
+        ):
+            _expect(base_url, invalid, 400)
+        _expect(base_url, "getTags", 405, method="POST")
 
         status, _, empty_artists = _request(
-            base_url, "/v1/artists/resolve", method="POST", data=b'{"dids":[]}'
+            base_url, X + "resolveArtists", method="POST", data=b'{"dids":[]}'
         )
         assert status == 200 and empty_artists["data"] == []
-        for payload in [
+        for payload in (
             b'{"dids":["invalid"]}',
             b'{"dids":[],"extra":true}',
             json.dumps({"dids": ["did:plc:artist"] * 501}).encode(),
             b"x" * 65537,
-        ]:
-            status, _, _ = _request(
-                base_url, "/v1/artists/resolve", method="POST", data=payload
-            )
-            assert status == 400
-        status, _, _ = _request(
-            base_url,
-            "/v1/artists/resolve",
-            method="POST",
-            data=b'{"dids":["did:plc:artist"]}',
-        )
-        assert status == 503
-        status, _, _ = _request(base_url, "/v1/artists/resolve")
-        assert status == 405
-
-        status, _, unavailable_search = _request(
-            base_url,
-            "/v1/search?q=artist.example&types=artist,track&limit=10",
-        )
-        assert status == 503
-        assert unavailable_search["error"]["code"] == "service_unavailable"
-
-        status, _, search_method = _request(
-            base_url, "/v1/search?q=artist.example", method="POST"
-        )
-        assert status == 405
-        assert search_method["error"]["code"] == "method_not_allowed"
-
-        for invalid_target in (
-            "/v1/charts/tracks?period=year",
-            "/v1/charts/tracks?period=week&period=day",
-            "/v1/charts/tracks?limit=0",
-            "/v1/charts/tracks?limit=51",
-            "/v1/charts/tracks?offset=1",
         ):
-            status, _, invalid_chart = _request(base_url, invalid_target)
-            assert status == 400
-            assert invalid_chart["error"]["code"] == "invalid_request"
+            _expect(base_url, "resolveArtists", 400, method="POST", data=payload)
+        artist_body = b'{"dids":["did:plc:artist"]}'
+        _expect(base_url, "resolveArtists", 503, method="POST", data=artist_body)
+        _expect(base_url, "resolveArtists", 405)
 
-        status, _, unavailable_chart = _request(
-            base_url, "/v1/charts/tracks?period=all_time&limit=10"
-        )
-        assert status == 503
-        assert unavailable_chart["error"]["code"] == "service_unavailable"
+        for invalid in (
+            "getTrackChart?period=year",
+            "getTrackChart?period=week&period=day",
+            "getTrackChart?limit=0",
+            "getTrackChart?limit=51",
+            "getTrackChart?offset=1",
+        ):
+            _expect(base_url, invalid, 400)
+        _expect(base_url, "getTrackChart?period=all_time&limit=10", 503)
+        _expect(base_url, "getTrackChart", 405, method="POST")
 
-        status, _, chart_method = _request(base_url, "/v1/charts/tracks", method="POST")
-        assert status == 405
-        assert chart_method["error"]["code"] == "method_not_allowed"
-
-        uri = f"at://did:plc:artist/{COLLECTION}/3m123abc"
+        uri = _q(f"at://did:plc:artist/{COLLECTION}/3m123abc")
         status, headers, unavailable = _request(
-            base_url,
-            f"/v1/tracks/{_track_id(uri)}",
-            origin=ALLOWED_ORIGIN,
+            base_url, X + f"getTrack?uri={uri}", origin=ALLOWED_ORIGIN
         )
-        assert status == 503
-        assert unavailable["error"]["code"] == "service_unavailable"
+        assert status == 503 and unavailable["error"] == "ServiceUnavailable"
         assert headers["access-control-allow-origin"] == ALLOWED_ORIGIN
-        assert headers["x-request-id"] == unavailable["error"]["request_id"]
-
+        assert headers["x-request-id"]
         status, headers, _ = _request(
             base_url,
-            f"/v1/tracks/{_track_id(uri)}",
+            X + f"getTrack?uri={uri}",
             origin="https://client.example.attacker.test",
         )
         assert status == 503 and "access-control-allow-origin" not in headers
 
-        foreign_uri = "at://did:plc:artist/fm.plyr.track/3m123abc"
-        status, _, missing = _request(base_url, f"/v1/tracks/{_track_id(foreign_uri)}")
-        assert status == 404 and missing["error"]["code"] == "not_found"
+        foreign = _q("at://did:plc:artist/fm.plyr.track/3m123abc")
+        _expect(base_url, f"getTrack?uri={uri}", 405, method="POST")
+        _expect(base_url, f"getPlayback?uri={uri}", 503)
+        _expect(base_url, f"getPlayback?uri={uri}", 405, method="POST")
 
-        status, _, method = _request(
-            base_url, f"/v1/tracks/{_track_id(uri)}", method="POST"
-        )
-        assert status == 405 and method["error"]["code"] == "method_not_allowed"
-
-        status, _, unavailable_playback = _request(
-            base_url, f"/v1/tracks/{_track_id(uri)}/playback"
-        )
-        assert status == 503
-        assert unavailable_playback["error"]["code"] == "service_unavailable"
-
-        status, _, playback_method = _request(
-            base_url,
-            f"/v1/tracks/{_track_id(uri)}/playback",
-            method="POST",
-        )
-        assert status == 405
-        assert playback_method["error"]["code"] == "method_not_allowed"
-
-        likes_path = f"/v1/tracks/{_track_id(uri)}/likes"
-        status, _, unavailable_likes = _request(base_url, likes_path)
-        assert status == 503
-        assert unavailable_likes["error"]["code"] == "service_unavailable"
-
-        status, _, likes_method = _request(base_url, likes_path, method="POST")
-        assert status == 405
-        assert likes_method["error"]["code"] == "method_not_allowed"
-
-        for invalid_likes_path in (
-            "/v1/tracks/42/likes",
-            f"{likes_path}?limit=0",
-            f"{likes_path}?limit=101",
-            f"{likes_path}?limit=2&limit=3",
-            f"{likes_path}?unknown=value",
+        likes = f"getTrackLikes?uri={uri}"
+        _expect(base_url, likes, 503)
+        _expect(base_url, likes, 405, method="POST")
+        for invalid in (
+            "getTrackLikes?uri=42",
+            f"{likes}&limit=0",
+            f"{likes}&limit=101",
+            f"{likes}&limit=2&limit=3",
+            f"{likes}&unknown=value",
         ):
-            status, _, invalid_likes = _request(base_url, invalid_likes_path)
-            assert status == 400
-            assert invalid_likes["error"]["code"] == "invalid_request"
+            _expect(base_url, invalid, 400)
 
-        occurrence_query = "?occurrence=01234567-89ab-4def-8123-456789abcdef"
-        play_path = f"/v1/tracks/{_track_id(uri)}/plays"
-        status, _, play_method = _request(base_url, play_path)
-        assert status == 405
-        assert play_method["error"]["code"] == "method_not_allowed"
-
-        status, _, unavailable_play = _request(
-            base_url,
-            play_path + occurrence_query,
-            method="POST",
-        )
-        assert status == 503
-        assert unavailable_play["error"]["code"] == "service_unavailable"
-
-        for invalid_play_path in (
-            "/v1/tracks/42/plays",
-            f"{play_path}?ref=short",
-            f"{play_path}?ref=share123&ref=again123",
-            f"{play_path}?unknown=value",
+        play = f"recordPlay?uri={uri}"
+        occurrence = "&occurrence=01234567-89ab-4def-8123-456789abcdef"
+        _expect(base_url, play, 405)
+        _expect(base_url, play + occurrence, 503, method="POST")
+        for invalid in (
+            "recordPlay?uri=42",
+            f"{play}&ref=short",
+            f"{play}&ref=share123&ref=again123",
+            f"{play}&unknown=value",
         ):
-            status, _, invalid_play = _request(
-                base_url,
-                invalid_play_path,
-                method="POST",
-            )
-            assert status == 400
-            assert invalid_play["error"]["code"] == "invalid_request"
-
-        status, _, foreign_play = _request(
-            base_url,
-            f"/v1/tracks/{_track_id(foreign_uri)}/plays{occurrence_query}",
-            method="POST",
-        )
-        assert status == 404
-        assert foreign_play["error"]["code"] == "not_found"
+            _expect(base_url, invalid, 400, method="POST")
+        _expect(base_url, f"recordPlay?uri={foreign}{occurrence}", 404, method="POST")
     finally:
         process.terminate()
         try:

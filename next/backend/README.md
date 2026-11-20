@@ -1,6 +1,6 @@
-# plyr.fm Zig REST backend
+# plyr.fm Zig appview
 
-This is the source-authoritative `/v1` app-view API. It is intentionally a
+This is the source-authoritative XRPC app-view API. It is intentionally a
 separate contract from the Python API: user-owned records remain authoritative,
 Postgres is a rebuildable index, and R2 is a delivery mirror rather than a
 second source of truth.
@@ -44,7 +44,7 @@ DATABASE_URL=... TRACK_COLLECTION_NSID=... LIST_COLLECTION_NSID=... PROFILE_COLL
 INDEX_MODE=disabled TRACK_COLLECTION_NSID=fm.plyr.dev.track LIST_COLLECTION_NSID=fm.plyr.dev.list PROFILE_COLLECTION_NSID=fm.plyr.dev.actor.profile LIKE_COLLECTION_NSID=fm.plyr.dev.like just zig run
 just zig bench-http --duration 5 --concurrency 16
 just zig bench-api-parity
-DATABASE_URL=postgresql://... just zig bench-http --with-index --path '/v1/tracks?limit=50'
+DATABASE_URL=postgresql://... just zig bench-http --with-index --path '/xrpc/fm.plyr.dev.unspecced.listTracks?limit=50'
 DATABASE_URL=postgresql://... TRACK_COLLECTION_NSID=fm.plyr.dev.track LIST_COLLECTION_NSID=fm.plyr.dev.list PROFILE_COLLECTION_NSID=fm.plyr.dev.actor.profile LIKE_COLLECTION_NSID=fm.plyr.dev.like just zig repair-repo did:plc:example
 DATABASE_URL=postgresql://... TRACK_COLLECTION_NSID=fm.plyr.dev.track LIST_COLLECTION_NSID=fm.plyr.dev.list PROFILE_COLLECTION_NSID=fm.plyr.dev.actor.profile LIKE_COLLECTION_NSID=fm.plyr.dev.like just zig reconcile-accounts
 just zig bench-snapshot
@@ -201,7 +201,7 @@ unbounded detached threads.
 The appview is read-only and holds no sessions. Clients run ATProto OAuth
 themselves (`next/app/` hosts the Expo client), write tracks,
 lists, likes, and profiles straight to the user's PDS, and use
-`GET /v1/records/await?uri=...&cid=...` to wait for the ingester to project the
+`fm.plyr.unspecced.awaitRecord?uri=...&cid=...` to wait for the ingester to project the
 write. There is no `/auth/*`, no OAuth client metadata, no cookie, and no
 server-held credential to protect; every route is a public projection of
 public records.
@@ -210,9 +210,8 @@ The reads are XRPC methods under the track collection's experimental namespace
 (`fm.plyr.unspecced.*` on Next), defined in [lexicons/unspecced](lexicons/unspecced)
 and served by `src/api/xrpc.zig`: records by AT-URI (`uri`), accounts by `actor`,
 camelCase parameters, XRPC `{error, message}` errors, no published schema records.
-They mirror the `/v1` routes (tracks, tags, likes, comments, playback, charts,
-albums, playlists, artists, search, suggestions, records/await), which go once clients move.
-Search accepts
+Handlers still read snake_case names internally (`artist_did`, `hidden_tag`);
+`xrpc.zig` maps the XRPC parameters onto them. Search accepts
 one strict query, a bounded global limit, and an optional type set; it returns
 verified record references with match class and provenance but no unstable
 numeric score. Suggestions rank tracks for 1-20 `seed` URIs by shared likers, lists, tags and artist. The track collection accepts a strict
@@ -249,13 +248,13 @@ Tag discovery prefers independently verified creator tags joined to the current
 record CID. A verified absent `tags` field may use imported, explicitly
 `legacy-plyr` app annotations for that same CID; an explicit array, including
 `[]`, always supersedes every legacy tag. Unknown fields and mismatched CIDs
-never inherit annotations. `GET /v1/tags?limit=15` returns `{object: "list", data:
+never inherit annotations. `getTags?limit=15` returns `{object: "list", data:
 [{name, track_count, total_plays, sources: {verified_repo, legacy_plyr}}]}` ranked
 by plays, then name; its limit is 1–100. Source counters count contributing
 tracks, distinguishing authored claims from imported app annotations. Private,
 unlisted, excluded, adult-discovery and unavailable records do not contribute.
 There are no Python runtime reads or PDS writes.
-`GET /v1/tracks?tag=ambient&tag=drone` applies OR semantics before keyset
+`listTracks?tag=ambient&tag=drone` applies OR semantics before keyset
 pagination, with at most ten distinct derived tag names of 200 UTF-8 bytes each. Authored record tags retain their fifty-byte lexicon limit; Unicode lowercasing
 can expand their derived names. Migration 0034 repairs derived arrays and
 canonicalizes legacy annotations within each record URI and observed CID,
@@ -483,7 +482,7 @@ cancelled. Cross-architecture assurance belongs on the matching runner, while
 the deployment workflow remains the authoritative Fly image build.
 
 `next.plyr.fm` is the public parallel deployment of the successor application,
-not a percentage canary. It always means a frontend backed by the Zig `/v1`
+not a percentage canary. It always means a frontend backed by the Zig XRPC
 surface. The initial A/AAAA records exposing the bare Fly service were a
 temporary backend-verification state, not the completed next application. The
 dedicated `plyr-fm-next` Pages project serves the Expo client's web export.

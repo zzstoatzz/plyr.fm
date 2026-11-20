@@ -21,8 +21,8 @@ async function socket(base, ticket) {
   const bases = fixture.bases;
   const sockets = [];
   try {
-    const found = (await (await fetch('https://api.next.plyr.fm/v1/search?q=Sounds%20of%20the%20Drone%20Mix')).json()).data.find(hit => hit.type === 'track' && hit.title === 'Sounds of the Drone Mix');
-    const track = await (await fetch('https://api.next.plyr.fm/v1/tracks/' + found.id)).json();
+    const found = (await (await fetch('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.search?q=Sounds%20of%20the%20Drone%20Mix')).json()).data.find(hit => hit.type === 'track' && hit.title === 'Sounds of the Drone Mix');
+    const track = await (await fetch('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.getTrack?uri=' + encodeURIComponent(found.record.uri))).json();
     const reference = { id: track.id, uri: track.record.uri, cid: track.record.cid, durationMs: Math.round(track.metadata.duration_seconds * 1000), key: 'current' };
     async function join(base, token, clientId, initial, path = '/v1/playback/join', extra = {}) {
       const response = await fetch(base + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ serviceToken: token, clientId, initial, ...extra }) });

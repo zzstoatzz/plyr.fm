@@ -1,4 +1,4 @@
-"""The /v1 reads as XRPC methods: run by test_http.py against its server."""
+"""The unspecced XRPC methods: run by test_http.py against its server."""
 
 from __future__ import annotations
 
@@ -11,12 +11,12 @@ from typing import Any
 def assert_xrpc_methods(
     base_url: str, request: Callable[..., Any], collection: str
 ) -> None:
-    """The /v1 reads as fm.plyr.dev.unspecced.* XRPC methods, index disabled."""
+    """The fm.plyr.dev.unspecced.* XRPC methods, index disabled."""
     xrpc = "/xrpc/fm.plyr.dev.unspecced."
     song = f"at://did:plc:artist/{collection}/song"
     album = "at://did:plc:artist/fm.plyr.dev.list/album"
     quoted = urllib.parse.quote
-    # every method reaches its /v1 handler, which reports the missing index
+    # every method reaches its handler, which reports the missing index
     for target in (
         "listTracks?limit=2&artistDid=did%3Aplc%3Aartist&hiddenTag=ai",
         f"getTrack?uri={quoted(song, safe='')}",

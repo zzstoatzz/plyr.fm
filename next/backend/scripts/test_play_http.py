@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import base64
 import concurrent.futures
 import json
 import os
@@ -11,6 +10,7 @@ import subprocess
 import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 from pathlib import Path
@@ -24,11 +24,6 @@ COLLECTION = "fm.plyr.dev.track"
 RECORD_URI = f"at://did:plc:artist/{COLLECTION}/play-http"
 SECOND_URI = f"at://did:plc:artist/{COLLECTION}/second"
 COOKIE = "plyr_play_id=abcdefghijklmnopqrstuv"
-
-
-def _track_id(uri: str) -> str:
-    payload = base64.urlsafe_b64encode(uri.encode()).decode().rstrip("=")
-    return f"trk_{payload}"
 
 
 def _unused_port() -> int:
@@ -145,7 +140,8 @@ def _wait_until_ready(base_url: str, process: subprocess.Popen[bytes]) -> None:
 
 
 def _path(occurrence: str, uri: str = RECORD_URI) -> str:
-    return f"/v1/tracks/{_track_id(uri)}/plays?occurrence={occurrence}"
+    track = urllib.parse.quote(uri, safe="")
+    return f"/xrpc/fm.plyr.dev.unspecced.recordPlay?uri={track}&occurrence={occurrence}"
 
 
 def _sql(query: str, params: tuple[Any, ...] = ()) -> Any:

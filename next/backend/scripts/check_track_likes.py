@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import subprocess
 
-from test_http import _request, _track_id, _unused_port, _wait_until_ready
+from test_http import _q, _request, _unused_port, _wait_until_ready
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TRACK_CID = "bafyreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku"
@@ -43,7 +43,8 @@ def main() -> None:
         # likes. Only the strong reference to the current record is visible.
         track_one_uri = "at://did:plc:bench/fm.plyr.dev.track/track-1"
         status, _, body = _request(
-            base_url, f"/v1/tracks/{_track_id(track_one_uri)}/likes?limit=10"
+            base_url,
+            f"/xrpc/fm.plyr.dev.unspecced.getTrackLikes?uri={_q(track_one_uri)}&limit=10",
         )
         assert status == 200
         assert body["object"] == "list"
@@ -55,20 +56,21 @@ def main() -> None:
         }
         assert body["data"][0]["sources"]["record"] == "verified_repo"
         status, _, track_one = _request(
-            base_url, f"/v1/tracks/{_track_id(track_one_uri)}"
+            base_url, f"/xrpc/fm.plyr.dev.unspecced.getTrack?uri={_q(track_one_uri)}"
         )
         assert status == 200 and track_one["metrics"]["like_count"] == 1
 
         # A busy subject paginates with an opaque cursor scoped to this exact
         # URI + CID. Adjacent pages cannot repeat a record.
         track_hundred_uri = "at://did:plc:bench/fm.plyr.dev.track/track-100"
-        path = f"/v1/tracks/{_track_id(track_hundred_uri)}/likes?limit=2"
+        path = f"/xrpc/fm.plyr.dev.unspecced.getTrackLikes?uri={_q(track_hundred_uri)}&limit=2"
         status, _, first = _request(base_url, path)
         assert status == 200 and len(first["data"]) == 2
         assert first["has_more"] is True and first["next_cursor"]
         assert all(item["subject"]["cid"] == TRACK_CID for item in first["data"])
         status, _, track_hundred = _request(
-            base_url, f"/v1/tracks/{_track_id(track_hundred_uri)}"
+            base_url,
+            f"/xrpc/fm.plyr.dev.unspecced.getTrack?uri={_q(track_hundred_uri)}",
         )
         assert status == 200 and track_hundred["metrics"]["like_count"] == 100
         status, _, second = _request(base_url, f"{path}&cursor={first['next_cursor']}")

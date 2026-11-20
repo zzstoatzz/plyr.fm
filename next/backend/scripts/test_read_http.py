@@ -10,7 +10,7 @@ import time
 import uuid
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import quote, urlsplit, urlunsplit
 
 import psycopg
 from bench_http import HttpTarget, _unused_port, _wait_until_ready
@@ -137,17 +137,19 @@ def _exercise(admin: Any, role: str, api_url: str) -> None:
         process = subprocess.Popen([binary], env=environment, stdout=logs, stderr=logs)
         try:
             _wait_until_ready(port, process)
-            status, first = _request(target, "/v1/tracks?limit=3")
+            status, first = _request(
+                target, "/xrpc/fm.plyr.dev.unspecced.listTracks?limit=3"
+            )
             assert status == 200, (status, first)
             tracks = json.loads(first)["data"]
             assert all(track["access"]["download_policy"] is None for track in tracks)
-            track_id = tracks[0]["id"]
+            track_uri = quote(tracks[0]["record"]["uri"], safe="")
             paths = (
-                "/v1/tracks?limit=3",
-                "/v1/tracks?limit=3&tag=ambient",
-                "/v1/tracks?limit=3&artist_did=did:plc:bench",
-                f"/v1/tracks/{track_id}",
-                "/v1/tags?limit=3",
+                "/xrpc/fm.plyr.dev.unspecced.listTracks?limit=3",
+                "/xrpc/fm.plyr.dev.unspecced.listTracks?limit=3&tag=ambient",
+                "/xrpc/fm.plyr.dev.unspecced.listTracks?limit=3&artistDid=did:plc:bench",
+                f"/xrpc/fm.plyr.dev.unspecced.getTrack?uri={track_uri}",
+                "/xrpc/fm.plyr.dev.unspecced.getTags?limit=3",
                 "/ready",
             )
             for path in paths:
@@ -164,7 +166,9 @@ def _exercise(admin: Any, role: str, api_url: str) -> None:
             admin.execute(sql.SQL("ALTER ROLE {} NOLOGIN").format(sql.Identifier(role)))
             admin.execute("SELECT pg_terminate_backend(%s)", (_pid(admin, role),))
             began = time.monotonic()
-            status, body = _request(target, "/v1/tracks?limit=3")
+            status, body = _request(
+                target, "/xrpc/fm.plyr.dev.unspecced.listTracks?limit=3"
+            )
             assert status == 503, (status, body)
             assert time.monotonic() - began < 5, "failed read exceeded request timeout"
             print(

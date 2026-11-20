@@ -77,9 +77,9 @@ function remotePresent(pid, localPort) {
     const space = `at://${host.did}/space/fm.plyr.next.jam/${key}`;
     await rpc('com.atproto.space.createSpace', { spaceType: 'fm.plyr.next.jam', skey: key, policy: { $type: 'com.atproto.memberspace.policy', publicRead: false, publicWrite: false, publishPolicy: false, publishMembers: false } }, host.token);
     await rpc('com.atproto.memberspace.putMembers', { space, members: [{ did: guest.did, read: true, write: false }] }, host.token);
-    const hits = await (await fetch('https://api.next.plyr.fm/v1/search?q=Sounds%20of%20the%20Drone%20Mix')).json();
+    const hits = await (await fetch('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.search?q=Sounds%20of%20the%20Drone%20Mix')).json();
     const found = hits.data.find(hit => hit.type === 'track' && hit.title === 'Sounds of the Drone Mix');
-    const track = await (await fetch('https://api.next.plyr.fm/v1/tracks/' + found.id)).json();
+    const track = await (await fetch('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.getTrack?uri=' + encodeURIComponent(found.record.uri))).json();
     const ref = { id: track.id, uri: track.record.uri, cid: track.record.cid, durationMs: Math.round(track.metadata.duration_seconds * 1000) };
     const queue = Array.from({ length: 200 }, () => ({ ...ref }));
     const producer = await connect(bases[0], await join(bases[0], host, host.did, key, { queue })); sockets.push(producer.ws);
