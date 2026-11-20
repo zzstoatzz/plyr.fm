@@ -1,11 +1,13 @@
 import { routeUpload } from "./upload-worker.ts";
 import { routeGenres } from "./genres.ts";
+import { verifyCapability } from "./upload-capability.ts";
 export { OwnerUploads } from "./upload-worker.ts";
 
 // Content-addressed audio for next.plyr.fm.
 //
 //   GET/HEAD /audio/{cid}  public, Range-capable, immutable
-//   PUT      /audio/{cid}  bearer UPLOAD_TOKEN; body must hash to the cid
+//   PUT      /audio/{cid}  bearer UPLOAD_TOKEN (the backend mirror) or an upload
+//                          capability (the uploading client); body must hash to the cid
 //
 // The key's CID (v1, raw codec, sha2-256) fixes the digest, and R2 rejects the
 // write unless the streamed bytes match it, so even a leaked token can only
@@ -33,8 +35,8 @@ export default {
           status: 204,
           headers: {
             ...CORS,
-            "access-control-allow-methods": "GET, HEAD, OPTIONS",
-            "access-control-allow-headers": "range",
+            "access-control-allow-methods": "GET, HEAD, PUT, OPTIONS",
+            "access-control-allow-headers": "range, authorization, content-type, x-content-sha256",
             "access-control-max-age": "86400",
           },
         });
@@ -82,8 +84,8 @@ async function read(request, env, key) {
 }
 
 async function write(request, env, key, cid) {
-  if (!env.UPLOAD_TOKEN || !(await authorized(request, env.UPLOAD_TOKEN)))
-    return text(401, "unauthorized");
+  const claim = await writer(request, env);
+  if (!claim) return text(401, "unauthorized");
   const digest = cidDigestHex(cid);
   if (!digest) return text(400, "key must be a raw sha2-256 CIDv1");
   if (request.headers.get("x-content-sha256")?.toLowerCase() !== digest)
@@ -94,6 +96,8 @@ async function write(request, env, key, cid) {
   const contentType = request.headers.get("content-type") ?? "";
   if (!/^audio\/[a-z0-9.+-]+$/i.test(contentType))
     return text(415, "audio content-type required");
+  if (claim !== MIRROR && (claim.sizeBytes !== length || claim.contentType !== contentType))
+    return text(403, "the upload capability names a different size or type");
   if (await env.AUDIO.head(key)) return text(200, "exists");
   try {
     await env.AUDIO.put(key, request.body, {
@@ -126,6 +130,16 @@ function span(range, size) {
       ? size - 1
       : Math.min(start + range.length, size) - 1;
   return { start, end };
+}
+
+const MIRROR = Symbol("mirror");
+
+// The mirror's shared token, or a coordinator upload capability for unprocessed public audio.
+async function writer(request, env) {
+  if (env.UPLOAD_TOKEN && (await authorized(request, env.UPLOAD_TOKEN))) return MIRROR;
+  const bearer = (request.headers.get("authorization") ?? "").replace(/^Bearer /, "");
+  const claim = await verifyCapability(bearer || null, env.UPLOAD_CAPABILITY_SECRET);
+  return claim && !claim.processing ? claim : null;
 }
 
 async function authorized(request, token) {
