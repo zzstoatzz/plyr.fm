@@ -60,7 +60,9 @@ def exercise(database_url: str) -> None:
             _wait_until_ready(port, process)
 
             def numbers(query: str) -> list[int]:
-                status, body = _request(target, f"/v1/suggestions/tracks?{query}")
+                status, body = _request(
+                    target, f"/xrpc/fm.plyr.dev.unspecced.getTrackSuggestions?{query}"
+                )
                 assert status == 200, (query, status, body)
                 payload = json.loads(body)
                 assert payload["object"] == "track_suggestions"
@@ -143,7 +145,9 @@ def exercise(database_url: str) -> None:
                 "seed=https://example.com",
                 f"{seeds(50)}&limit=25",
             ):
-                status, _ = _request(target, f"/v1/suggestions/tracks?{bad}")
+                status, _ = _request(
+                    target, f"/xrpc/fm.plyr.dev.unspecced.getTrackSuggestions?{bad}"
+                )
                 assert status == 400, bad
             print(
                 "suggestions rank by shared likers and lists, exclude, moderate and validate"

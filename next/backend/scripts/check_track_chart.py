@@ -38,7 +38,8 @@ def main() -> None:
     try:
         _wait_until_ready(base_url, process)
         status, _, body = _request(
-            base_url, "/v1/charts/tracks?period=all_time&limit=10"
+            base_url,
+            "/xrpc/fm.plyr.dev.unspecced.getTrackChart?period=all_time&limit=10",
         )
         assert status == 200
         assert body["object"] == "track_chart" and body["period"] == "all_time"

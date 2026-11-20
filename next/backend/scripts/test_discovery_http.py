@@ -65,12 +65,12 @@ def exercise(database_url: str) -> None:
             db.execute(
                 "INSERT INTO plyr_index.account_label_policies VALUES ('did:plc:bench', '[\"ai\"]', 1, (extract(epoch FROM statement_timestamp()) * 1000000)::bigint + 3600000000)"
             )
-            assert get("/v1/tracks?limit=3")["data"] == [], (
-                "account label hides untagged discovery"
-            )
-            visible = get("/v1/tracks?limit=3&hidden_tag=")
+            assert (
+                get("/xrpc/fm.plyr.dev.unspecced.listTracks?limit=3")["data"] == []
+            ), "account label hides untagged discovery"
+            visible = get("/xrpc/fm.plyr.dev.unspecced.listTracks?limit=3&hiddenTag=")
             assert len(visible["data"]) == 3 and visible["has_more"]
-            many = get("/v1/tracks?limit=50&hidden_tag=")
+            many = get("/xrpc/fm.plyr.dev.unspecced.listTracks?limit=50&hiddenTag=")
             assert len(many["data"]) == 50
             assert all(
                 item["moderation"]["account_labels"] == ["ai"] for item in many["data"]
@@ -79,42 +79,66 @@ def exercise(database_url: str) -> None:
             assert track["moderation"]["account_labels"] == ["ai"]
             assert track["moderation"]["operator_labels"] == []
             assert track["sources"]["account_labels"] == "moderation_service"
-            assert len(get("/v1/tracks?artist_did=did:plc:bench&limit=3")["data"]) == 3
-            assert get(f"/v1/tracks/{track['id']}")["moderation"]["account_labels"] == [
-                "ai"
-            ]
+            assert (
+                len(
+                    get(
+                        "/xrpc/fm.plyr.dev.unspecced.listTracks?artistDid=did:plc:bench&limit=3"
+                    )["data"]
+                )
+                == 3
+            )
+            assert get(
+                f"/xrpc/fm.plyr.dev.unspecced.getTrack?uri={quote(track['record']['uri'], safe='')}"
+            )["moderation"]["account_labels"] == ["ai"]
             db.execute("UPDATE plyr_index.account_label_policies SET expires_at_us = 1")
-            expired = get("/v1/tracks?limit=3")
+            expired = get("/xrpc/fm.plyr.dev.unspecced.listTracks?limit=3")
             assert len(expired["data"]) == 3
             assert expired["data"][0]["moderation"]["account_labels"] == []
             db.execute("DELETE FROM plyr_index.account_label_policies")
             db.execute(
                 "UPDATE plyr_index.track_tag_records SET tags=ARRAY['suno'] WHERE record_uri LIKE '%/track-100' OR record_uri LIKE '%/track-98'"
             )
-            first = get("/v1/tracks?limit=3")
+            first = get("/xrpc/fm.plyr.dev.unspecced.listTracks?limit=3")
             assert len(first["data"]) == 3 and first["has_more"]
             assert all(
                 item["record"]["rkey"] not in {"track-100", "track-98"}
                 for item in first["data"]
             )
-            second = get(f"/v1/tracks?limit=3&cursor={quote(first['next_cursor'])}")
+            second = get(
+                f"/xrpc/fm.plyr.dev.unspecced.listTracks?limit=3&cursor={quote(first['next_cursor'])}"
+            )
             assert len(second["data"]) == 3
             assert not (
                 {item["id"] for item in first["data"]}
                 & {item["id"] for item in second["data"]}
             )
             status, _ = _request(
-                target, f"/v1/tracks?hidden_tag=&cursor={quote(first['next_cursor'])}"
+                target,
+                f"/xrpc/fm.plyr.dev.unspecced.listTracks?hiddenTag=&cursor={quote(first['next_cursor'])}",
             )
             assert status == 400, "preference changes invalidate discovery cursors"
             assert (
-                get("/v1/tracks?hidden_tag=&limit=1")["data"][0]["record"]["rkey"]
+                get("/xrpc/fm.plyr.dev.unspecced.listTracks?hiddenTag=&limit=1")[
+                    "data"
+                ][0]["record"]["rkey"]
                 == "track-100"
             )
-            duplicates = "&".join(["hidden_tag=ai"] * 11)
-            assert len(get(f"/v1/tracks?limit=3&{duplicates}")["data"]) == 3
-            too_many = "&".join(f"hidden_tag=tag-{index}" for index in range(11))
-            assert _request(target, f"/v1/tracks?{too_many}")[0] == 400
+            duplicates = "&".join(["hiddenTag=ai"] * 11)
+            assert (
+                len(
+                    get(f"/xrpc/fm.plyr.dev.unspecced.listTracks?limit=3&{duplicates}")[
+                        "data"
+                    ]
+                )
+                == 3
+            )
+            too_many = "&".join(f"hiddenTag=tag-{index}" for index in range(11))
+            assert (
+                _request(target, f"/xrpc/fm.plyr.dev.unspecced.listTracks?{too_many}")[
+                    0
+                ]
+                == 400
+            )
             print(
                 "account labels, tag defaults, show-all, artist/detail visibility and cursor filtering passed"
             )

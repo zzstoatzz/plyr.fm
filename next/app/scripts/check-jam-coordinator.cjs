@@ -32,9 +32,9 @@ async function socket(base, ticket) { const ws = new WebSocket(base.replace('htt
         const suffix = Date.now().toString(36), host = await account('jhost' + suffix), guest = await account('jguest' + suffix), key = 'room' + suffix;
         const space = `at://${host.did}/space/fm.plyr.next.jam/${key}`;
         await rpc('com.atproto.space.createSpace', { spaceType: 'fm.plyr.next.jam', skey: key, policy: { $type: 'com.atproto.memberspace.policy', publicRead: false, publicWrite: false, publishPolicy: false, publishMembers: false } }, host.token);
-        const hits = await (await fetch('https://api.next.plyr.fm/v1/search?q=Sounds%20of%20the%20Drone%20Mix')).json();
+        const hits = await (await fetch('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.search?q=Sounds%20of%20the%20Drone%20Mix')).json();
         const found = hits.data.find(t => t.type === 'track' && t.title === 'Sounds of the Drone Mix');
-        const track = await (await fetch('https://api.next.plyr.fm/v1/tracks/' + found.id)).json();
+        const track = await (await fetch('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.getTrack?uri=' + encodeURIComponent(found.record.uri))).json();
         const initial = { queue: [{ id: track.id, uri: track.record.uri, cid: track.record.cid, durationMs: Math.round(track.metadata.duration_seconds * 1000) }] };
         const denied = await join(a, guest, host.did, key);
         assert.equal(denied.status, 403);

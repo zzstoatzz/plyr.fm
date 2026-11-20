@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import base64
 import json
 import time
 import urllib.error
@@ -26,9 +25,11 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def _opaque_id(prefix: str, uri: str) -> str:
-    payload = base64.urlsafe_b64encode(uri.encode()).decode().rstrip("=")
-    return f"{prefix}{payload}"
+X = "/xrpc/fm.plyr.unspecced."
+
+
+def _q(value: str) -> str:
+    return urllib.parse.quote(value, safe="")
 
 
 def _request(
@@ -88,6 +89,8 @@ def _verify_read_only_boundary(base_url: str) -> None:
         ("/oauth-client-metadata.json", "GET"),
         ("/auth/me", "GET"),
         ("/auth/start?handle=alice.example", "GET"),
+        ("/v1", "GET"),
+        ("/v1/tracks?limit=1", "GET"),
         ("/v1/me/likes", "GET"),
         ("/v1/tracks/trk_smoke/like", "PUT"),
     ):
@@ -95,14 +98,14 @@ def _verify_read_only_boundary(base_url: str) -> None:
         assert gone.status == 404, (path, method, gone.status, gone.body)
         _expect_request_id(gone)
 
-    likes = _request(base_url, "/v1/actors/did:plc:canarysmoke/likes")
+    likes = _request(base_url, X + "getActorLikes?actor=did:plc:canarysmoke")
     assert likes.status == 200, (likes.status, likes.body)
     assert likes.body["object"] == "list" and likes.body["data"] == [], likes.body
     _expect_request_id(likes)
 
 
 def _verify_real_product_reads(base_url: str) -> dict[str, Any]:
-    tracks = _request(base_url, "/v1/tracks?limit=20")
+    tracks = _request(base_url, X + "listTracks?limit=20")
     assert tracks.status == 200, (tracks.status, tracks.body)
     assert tracks.body["object"] == "list"
     data = tracks.body["data"]
@@ -112,12 +115,12 @@ def _verify_real_product_reads(base_url: str) -> dict[str, Any]:
     listed_track: dict[str, Any] | None = None
     playback: Response | None = None
     for candidate in data:
-        candidate_id = urllib.parse.quote(candidate["id"], safe="_-")
-        candidate_playback = _request(base_url, f"/v1/tracks/{candidate_id}/playback")
+        candidate_uri = _q(candidate["record"]["uri"])
+        candidate_playback = _request(base_url, f"{X}getPlayback?uri={candidate_uri}")
         if candidate_playback.status == 401:
-            assert (
-                candidate_playback.body["error"]["code"] == "authentication_required"
-            ), candidate_playback.body
+            assert candidate_playback.body["error"] == "AuthenticationRequired", (
+                candidate_playback.body
+            )
             continue
         assert candidate_playback.status == 200, (
             candidate_playback.status,
@@ -161,8 +164,8 @@ def _verify_real_product_reads(base_url: str) -> dict[str, Any]:
     assert delivery["source"] in {"verified_delivery", "authored_record"}, delivery
     assert delivery["integrity"] in {"verified_blob_cid", "unverified"}, delivery
 
-    track_id = urllib.parse.quote(listed_track["id"], safe="_-")
-    detail = _request(base_url, f"/v1/tracks/{track_id}")
+    track_uri = _q(listed_track["record"]["uri"])
+    detail = _request(base_url, f"{X}getTrack?uri={track_uri}")
     assert detail.status == 200, (detail.status, detail.body)
     _expect_request_id(detail)
     listed_metadata = listed_track["metadata"]
@@ -179,13 +182,13 @@ def _verify_real_product_reads(base_url: str) -> dict[str, Any]:
 
     artist_did = listed_track["artist"]["did"]
     encoded_did = urllib.parse.quote(artist_did, safe="")
-    artist = _request(base_url, f"/v1/artists/{artist_did}")
+    artist = _request(base_url, f"{X}getArtist?actor={encoded_did}")
     assert artist.status == 200, (artist.status, artist.body)
     _expect_request_id(artist)
     assert artist.body["object"] == "artist", artist.body
     assert artist.body["did"] == artist_did, artist.body
 
-    metrics = _request(base_url, f"/v1/artists/{encoded_did}/metrics")
+    metrics = _request(base_url, f"{X}getArtistMetrics?actor={encoded_did}")
     assert metrics.status == 200, (metrics.status, metrics.body)
     _expect_request_id(metrics)
     assert metrics.body["object"] == "artist_metrics", metrics.body
@@ -211,7 +214,7 @@ def _verify_real_product_reads(base_url: str) -> dict[str, Any]:
     search_query = urllib.parse.quote(listed_track["metadata"]["title"], safe="")
     search = _request(
         base_url,
-        f"/v1/search?q={search_query}&types=track&limit=10",
+        f"{X}search?q={search_query}&types=track&limit=10",
     )
     assert search.status == 200, (search.status, search.body)
     _expect_request_id(search)
@@ -227,7 +230,7 @@ def _verify_real_product_reads(base_url: str) -> dict[str, Any]:
     assert search_hit["projection"]["verification"] == "verified_repo", search_hit
     assert "score" not in search_hit and "relevance" not in search_hit, search_hit
 
-    albums = _request(base_url, f"/v1/albums?artist_did={encoded_did}&limit=1")
+    albums = _request(base_url, f"{X}listAlbums?artistDid={encoded_did}&limit=1")
     assert albums.status == 200, (albums.status, albums.body)
     _expect_request_id(albums)
     assert albums.body["object"] == "list", albums.body
@@ -240,14 +243,14 @@ def _verify_real_product_reads(base_url: str) -> dict[str, Any]:
         assert summary["projection"]["verification"] == "verified_repo", summary
         assert summary["sources"]["record"] == "verified_repo", summary
         assert "presentation" not in summary, summary
-        album_id = urllib.parse.quote(album_data[0]["id"], safe="_-")
-        album = _request(base_url, f"/v1/albums/{album_id}")
+        album_uri = _q(album_data[0]["record"]["uri"])
+        album = _request(base_url, f"{X}getAlbum?uri={album_uri}")
         assert album.status == 200, (album.status, album.body)
         _expect_request_id(album)
         assert album.body["object"] == "album", album.body
         assert album.body["id"] == album_data[0]["id"], album.body
 
-    playlists = _request(base_url, "/v1/playlists?limit=1")
+    playlists = _request(base_url, X + "listPlaylists?limit=1")
     assert playlists.status == 200, (playlists.status, playlists.body)
     _expect_request_id(playlists)
     assert playlists.body["object"] == "list", playlists.body
@@ -261,8 +264,8 @@ def _verify_real_product_reads(base_url: str) -> dict[str, Any]:
     assert playlist_summary["sources"]["membership"] == "verified_repo", (
         playlist_summary
     )
-    playlist_id = urllib.parse.quote(playlist_summary["id"], safe="_-")
-    playlist = _request(base_url, f"/v1/playlists/{playlist_id}")
+    playlist_uri = _q(playlist_summary["record"]["uri"])
+    playlist = _request(base_url, f"{X}getPlaylist?uri={playlist_uri}")
     assert playlist.status == 200, (playlist.status, playlist.body)
     _expect_request_id(playlist)
     assert playlist.body["object"] == "playlist", playlist.body
@@ -292,9 +295,8 @@ def _verify_real_product_reads(base_url: str) -> dict[str, Any]:
 
 
 def _verify_sustained_play(base_url: str, track: dict[str, Any]) -> None:
-    track_id = urllib.parse.quote(track["id"], safe="_-")
     occurrence = str(uuid.uuid4())
-    path = f"/v1/tracks/{track_id}/plays?occurrence={occurrence}"
+    path = f"{X}recordPlay?uri={_q(track['record']['uri'])}&occurrence={occurrence}"
     first = _request(base_url, path, method="POST")
     assert first.status == 200, (first.status, first.body)
     _expect_request_id(first)
@@ -345,40 +347,36 @@ def _wait_for_product_readiness(base_url: str, timeout_seconds: float) -> None:
 
 
 def verify_product(api_base_url: str) -> None:
-    """Verify v1 through either Fly or next's deliberately narrow transport."""
+    """Verify the XRPC reads through either Fly or next's narrow transport."""
 
     api_base_url = api_base_url.rstrip("/")
     _expect(
-        _request(api_base_url, "/v1"),
+        _request(api_base_url, "/"),
         200,
-        {"object": "api", "version": "v1"},
+        {"name": "plyr.fm", "api": "/xrpc"},
     )
     _verify_read_only_boundary(api_base_url)
     track = _verify_real_product_reads(api_base_url)
     _verify_sustained_play(api_base_url, track)
 
     absent_did = "did:plc:canarysmoke"
-    artist = _request(api_base_url, f"/v1/artists/{absent_did}")
-    assert artist.status == 404 and artist.body["error"]["code"] == "not_found"
-    assert artist.body["error"]["request_id"] == artist.headers.get("x-request-id")
+    artist = _request(api_base_url, f"{X}getArtist?actor={_q(absent_did)}")
+    assert artist.status == 404 and artist.body["error"] == "NotFound", artist.body
+    _expect_request_id(artist)
 
-    encoded_did = urllib.parse.quote(absent_did, safe="")
-    albums = _request(api_base_url, f"/v1/albums?artist_did={encoded_did}&limit=1")
+    albums = _request(api_base_url, f"{X}listAlbums?artistDid={_q(absent_did)}&limit=1")
     assert albums.status == 200, (albums.status, albums.body)
     assert albums.body["object"] == "list" and albums.body["data"] == []
 
-    track_uri = f"at://{absent_did}/fm.plyr.track/smoke"
-    track = _request(api_base_url, f"/v1/tracks/{_opaque_id('trk_', track_uri)}")
-    assert track.status == 404 and track.body["error"]["code"] == "not_found"
-    playback = _request(
-        api_base_url, f"/v1/tracks/{_opaque_id('trk_', track_uri)}/playback"
-    )
-    assert playback.status == 404
-    assert playback.body["error"]["code"] == "not_found"
+    track_uri = _q(f"at://{absent_did}/fm.plyr.track/smoke")
+    track = _request(api_base_url, f"{X}getTrack?uri={track_uri}")
+    assert track.status == 404 and track.body["error"] == "NotFound", track.body
+    playback = _request(api_base_url, f"{X}getPlayback?uri={track_uri}")
+    assert playback.status == 404 and playback.body["error"] == "NotFound"
 
-    album_uri = f"at://{absent_did}/fm.plyr.list/smoke"
-    album = _request(api_base_url, f"/v1/albums/{_opaque_id('alb_', album_uri)}")
-    assert album.status == 404 and album.body["error"]["code"] == "not_found"
+    album_uri = _q(f"at://{absent_did}/fm.plyr.list/smoke")
+    album = _request(api_base_url, f"{X}getAlbum?uri={album_uri}")
+    assert album.status == 404 and album.body["error"] == "NotFound", album.body
 
 
 def verify(base_url: str, timeout_seconds: float = 90) -> None:
@@ -395,7 +393,7 @@ def main() -> None:
     parser.add_argument(
         "--product-only",
         action="store_true",
-        help="verify v1 without requiring infrastructure health routes",
+        help="verify the reads without requiring infrastructure health routes",
     )
     parser.add_argument("--allow-http", action="store_true")
     args = parser.parse_args()

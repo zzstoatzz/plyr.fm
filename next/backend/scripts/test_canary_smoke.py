@@ -75,7 +75,7 @@ def test_request_identifies_the_smoke_client() -> None:
     with patch.object(
         canary_smoke.urllib.request, "urlopen", return_value=_UrlResponse()
     ) as urlopen:
-        response = canary_smoke._request("https://api.next.plyr.fm", "/v1")
+        response = canary_smoke._request("https://api.next.plyr.fm", "/")
 
     assert response.status == 200
     request = urlopen.call_args.args[0]
@@ -110,7 +110,7 @@ def test_read_only_boundary_has_no_session_routes() -> None:
 
     def request(_: str, path: str, *, method: str = "GET") -> canary_smoke.Response:
         seen.append((path, method))
-        if path == "/v1/actors/did:plc:canarysmoke/likes":
+        if path == "/xrpc/fm.plyr.unspecced.getActorLikes?actor=did:plc:canarysmoke":
             return _response({"object": "list", "data": [], "next_cursor": None})
         return not_found
 
@@ -135,11 +135,13 @@ def test_real_product_reads_traverse_projected_track_and_artist() -> None:
         "projection": {"verification": "verified_repo"},
     }
     responses = {
-        "/v1/tracks?limit=20": _response({"object": "list", "data": [track]}),
-        "/v1/tracks/trk_verified": _response(
+        "/xrpc/fm.plyr.unspecced.listTracks?limit=20": _response(
+            {"object": "list", "data": [track]}
+        ),
+        "/xrpc/fm.plyr.unspecced.getTrack?uri=at%3A%2F%2Fdid%3Aplc%3Aartist%2Ffm.plyr.track%2Fone": _response(
             {**track, "metadata": {**track["metadata"], "tags": ["ambient"]}}
         ),
-        "/v1/tracks/trk_verified/playback": _response(
+        "/xrpc/fm.plyr.unspecced.getPlayback?uri=at%3A%2F%2Fdid%3Aplc%3Aartist%2Ffm.plyr.track%2Fone": _response(
             {
                 "object": "playback",
                 "track_id": "trk_verified",
@@ -155,11 +157,13 @@ def test_real_product_reads_traverse_projected_track_and_artist() -> None:
                 },
             }
         ),
-        "/v1/artists/did:plc:artist": _response(
+        "/xrpc/fm.plyr.unspecced.getArtist?actor=did%3Aplc%3Aartist": _response(
             {"object": "artist", "did": "did:plc:artist"}
         ),
-        "/v1/artists/did%3Aplc%3Aartist/metrics": _response(ARTIST_METRICS),
-        "/v1/search?q=Verified%20Song&types=track&limit=10": _response(
+        "/xrpc/fm.plyr.unspecced.getArtistMetrics?actor=did%3Aplc%3Aartist": _response(
+            ARTIST_METRICS
+        ),
+        "/xrpc/fm.plyr.unspecced.search?q=Verified%20Song&types=track&limit=10": _response(
             {
                 "object": "list",
                 "query": "Verified Song",
@@ -176,13 +180,15 @@ def test_real_product_reads_traverse_projected_track_and_artist() -> None:
                 ],
             }
         ),
-        "/v1/albums?artist_did=did%3Aplc%3Aartist&limit=1": _response(
+        "/xrpc/fm.plyr.unspecced.listAlbums?artistDid=did%3Aplc%3Aartist&limit=1": _response(
             {"object": "list", "data": []}
         ),
-        "/v1/playlists?limit=1": _response(
+        "/xrpc/fm.plyr.unspecced.listPlaylists?limit=1": _response(
             {"object": "list", "data": [PLAYLIST_SUMMARY]}
         ),
-        "/v1/playlists/pls_verified": _response(PLAYLIST_DETAIL),
+        "/xrpc/fm.plyr.unspecced.getPlaylist?uri=at%3A%2F%2Fdid%3Aplc%3Aowner%2Ffm.plyr.list%2Fplaylist": _response(
+            PLAYLIST_DETAIL
+        ),
     }
 
     def request(_: str, path: str) -> canary_smoke.Response:
@@ -210,16 +216,19 @@ def test_real_product_reads_traverse_album_when_present() -> None:
     album_summary = {
         "object": "album",
         "id": "alb_verified",
+        "record": {"uri": "at://did:plc:artist/fm.plyr.list/album"},
         "owner": {"did": "did:plc:artist"},
         "sources": {"record": "verified_repo"},
         "projection": {"verification": "verified_repo"},
     }
     responses = {
-        "/v1/tracks?limit=20": _response({"object": "list", "data": [track]}),
-        "/v1/tracks/trk_verified": _response(
+        "/xrpc/fm.plyr.unspecced.listTracks?limit=20": _response(
+            {"object": "list", "data": [track]}
+        ),
+        "/xrpc/fm.plyr.unspecced.getTrack?uri=at%3A%2F%2Fdid%3Aplc%3Aartist%2Ffm.plyr.track%2Fone": _response(
             {**track, "metadata": {**track["metadata"], "tags": ["ambient"]}}
         ),
-        "/v1/tracks/trk_verified/playback": _response(
+        "/xrpc/fm.plyr.unspecced.getPlayback?uri=at%3A%2F%2Fdid%3Aplc%3Aartist%2Ffm.plyr.track%2Fone": _response(
             {
                 "object": "playback",
                 "track_id": "trk_verified",
@@ -235,11 +244,13 @@ def test_real_product_reads_traverse_album_when_present() -> None:
                 },
             }
         ),
-        "/v1/artists/did:plc:artist": _response(
+        "/xrpc/fm.plyr.unspecced.getArtist?actor=did%3Aplc%3Aartist": _response(
             {"object": "artist", "did": "did:plc:artist"}
         ),
-        "/v1/artists/did%3Aplc%3Aartist/metrics": _response(ARTIST_METRICS),
-        "/v1/search?q=Verified%20Song&types=track&limit=10": _response(
+        "/xrpc/fm.plyr.unspecced.getArtistMetrics?actor=did%3Aplc%3Aartist": _response(
+            ARTIST_METRICS
+        ),
+        "/xrpc/fm.plyr.unspecced.search?q=Verified%20Song&types=track&limit=10": _response(
             {
                 "object": "list",
                 "query": "Verified Song",
@@ -256,14 +267,18 @@ def test_real_product_reads_traverse_album_when_present() -> None:
                 ],
             }
         ),
-        "/v1/albums?artist_did=did%3Aplc%3Aartist&limit=1": _response(
+        "/xrpc/fm.plyr.unspecced.listAlbums?artistDid=did%3Aplc%3Aartist&limit=1": _response(
             {"object": "list", "data": [album_summary]}
         ),
-        "/v1/albums/alb_verified": _response(album_summary),
-        "/v1/playlists?limit=1": _response(
+        "/xrpc/fm.plyr.unspecced.getAlbum?uri=at%3A%2F%2Fdid%3Aplc%3Aartist%2Ffm.plyr.list%2Falbum": _response(
+            album_summary
+        ),
+        "/xrpc/fm.plyr.unspecced.listPlaylists?limit=1": _response(
             {"object": "list", "data": [PLAYLIST_SUMMARY]}
         ),
-        "/v1/playlists/pls_verified": _response(PLAYLIST_DETAIL),
+        "/xrpc/fm.plyr.unspecced.getPlaylist?uri=at%3A%2F%2Fdid%3Aplc%3Aowner%2Ffm.plyr.list%2Fplaylist": _response(
+            PLAYLIST_DETAIL
+        ),
     }
 
     def request(_: str, path: str) -> canary_smoke.Response:
@@ -349,7 +364,7 @@ def test_sustained_play_reuses_one_durable_occurrence_receipt() -> None:
         == duplicate_call.args
         == (
             "https://canary.example",
-            f"/v1/tracks/trk_verified/plays?occurrence={occurrence}",
+            f"/xrpc/fm.plyr.unspecced.recordPlay?uri=at%3A%2F%2Fdid%3Aplc%3Aartist%2Ffm.plyr.track%2Fone&occurrence={occurrence}",
         )
     )
     assert first_call.kwargs == {"method": "POST"}
@@ -406,7 +421,7 @@ def test_sustained_play_rejects_obsolete_or_changed_receipts(
 
 
 def test_product_only_transport_does_not_probe_infrastructure_routes() -> None:
-    api = _response({"object": "api", "version": "v1"})
+    api = _response({"name": "plyr.fm", "api": "/xrpc"})
 
     with (
         patch.object(canary_smoke, "_request", return_value=api) as request,
@@ -424,6 +439,6 @@ def test_product_only_transport_does_not_probe_infrastructure_routes() -> None:
         else:
             raise AssertionError("product verification unexpectedly continued")
 
-    request.assert_called_once_with("https://api.next.plyr.fm", "/v1")
+    request.assert_called_once_with("https://api.next.plyr.fm", "/")
     auth.assert_called_once_with("https://api.next.plyr.fm")
     reads.assert_called_once_with("https://api.next.plyr.fm")
