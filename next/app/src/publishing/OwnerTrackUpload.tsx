@@ -10,6 +10,8 @@ import { TagsField } from './TagsField';
 import { privatePds, type PrivateResult } from './private-pds';
 import type { PrivateCreate } from '@plyr/next-core/publishing/private-music';
 import { useArtistName } from './artist-name';
+import { hideUploadIsland, showUploadIsland } from './upload-island-store';
+import { toast } from '../toast';
 
 export function OwnerTrackUpload({ auth, selected, onBusy, audience, file, setFile, title, setTitle, description, setDescription, tags, setTags }: TrackDraftFields & { auth: Auth; selected: boolean; onBusy: (value: boolean) => void; audience: ReactNode }) {
   const navigation = useNavigation();
@@ -75,9 +77,28 @@ export function OwnerTrackUpload({ auth, selected, onBusy, audience, file, setFi
       <UploadBar audience={audience}>
         <Action primary label={busy ? 'Saving…' : 'Upload'} disabled={busy || active || loading || !!recoveryError || !file || !title.trim() || !artist} onPress={() => void run(async () => {
           if (!selected || !file) return;
-          const duration = await measureAudioDuration(file).catch(() => undefined);
-          if (!current()) return;
-          const result = await pds.upload({ file, title, artist, description, tags: tags.split('\n'), duration }, operation => { if (current()) ownAttempt.current = operation.rkey; });
+          const name = `"${title.trim()}"`, island = `private:${title.trim()}`;
+          showUploadIsland(island, { phase: 'active', summary: 'uploading', announce: `uploading ${name}…` });
+          let result: Awaited<ReturnType<typeof pds.upload>>;
+          try {
+            const duration = await measureAudioDuration(file).catch(() => undefined);
+            if (!current()) { hideUploadIsland(island); return; }
+            result = await pds.upload({ file, title, artist, description, tags: tags.split('\n'), duration }, operation => {
+              if (current()) ownAttempt.current = operation.rkey;
+              showUploadIsland(island, { phase: 'active', summary: 'saving', announce: `saving ${name}…` });
+            });
+          } catch (failure) {
+            const reason = failure instanceof Error ? failure.message.replace(/\.$/, '') : undefined;
+            const line = reason ? `${name} didn't upload: ${reason}` : `${name} didn't upload`;
+            showUploadIsland(island, { phase: 'failed', summary: 'failed', announce: line });
+            toast.add(line, 'error', 10000, { label: 'open upload', href: '/upload?visibility=only-you' }, island);
+            throw failure;
+          }
+          showUploadIsland(island, result.result.state === 'accepted'
+            ? { phase: 'done', summary: 'uploaded', announce: `${name} uploaded` }
+            : { phase: 'failed', summary: 'check it', announce: `${name} may not have saved. check its status on the upload page.` });
+          if (result.result.state === 'accepted') toast.add(`${name} uploaded`, 'success', 6000, { label: 'your music', href: '/portal' }, island);
+          else toast.add(`${name} may not have saved`, 'warning', 10000, { label: 'open upload', href: '/upload?visibility=only-you' }, island);
           if (!current()) return;
           setResults(values => ({ ...values, [result.operation.rkey]: result.result }));
           if (result.result.state === 'accepted') {

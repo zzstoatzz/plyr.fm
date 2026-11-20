@@ -150,7 +150,7 @@ export function createGatedAudio<Key extends SpaceKey, RecordValue extends Recor
 		validate?.(value.value);
 		const blob = value.value.audioBlob;
 		if (!isLexMap(blob) || !isCid(blob.ref) || typeof blob.size !== 'number' || !Number.isSafeInteger(blob.size)
-			|| blob.size <= 0 || blob.size > 104_857_600 || typeof blob.mimeType !== 'string' || !/^audio\/[a-z0-9.+-]+$/i.test(blob.mimeType)) {
+			|| blob.size <= 0 || blob.size > 104_857_600 || typeof blob.mimeType !== 'string' || !playableBlobType(blob.mimeType)) {
 			throw new Error('this track has no playable audio');
 		}
 		const blobParams = new URLSearchParams({ space, repo, cid: blob.ref.toString() });
@@ -176,4 +176,9 @@ export function createGatedAudio<Key extends SpaceKey, RecordValue extends Recor
 	}
 
 	return { credentialFor, signedFetch, resolveGatedAudio, openGatedAudio };
+}
+
+/** A PDS that sniffs uploads labels most iPhone .m4a files video/mp4 (an isom/mp42 brand); the audio inside still plays. */
+export function playableBlobType(mimeType: string) {
+	return /^audio\/[a-z0-9.+-]+$/i.test(mimeType) || mimeType.toLowerCase() === 'video/mp4';
 }
