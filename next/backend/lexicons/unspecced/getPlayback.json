@@ -4,7 +4,7 @@
   "defs": {
     "main": {
       "type": "query",
-      "description": "Where and whether a track's audio can be played: a delivery URL, or the space a closed track's audio is in. The response body is the appview's own JSON shape, not yet specified here.",
+      "description": "Where and whether a track's audio can be played: a delivery URL, or the space a closed track's audio is in. availability.status is available, preparing (the record is verified and its audio is being copied to the streaming origin; ask again shortly), unavailable or gated. The response body is the appview's own JSON shape, not yet specified here.",
       "parameters": {
         "type": "params",
         "properties": {

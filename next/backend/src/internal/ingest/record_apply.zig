@@ -18,6 +18,7 @@ const postgres_like = @import("../projection/postgres_like_store.zig");
 const postgres_comment = @import("../projection/postgres_comment_store.zig");
 const repository_lock = @import("../projection/postgres_repository_lock.zig");
 const postgres_rejections = @import("../projection/postgres_record_rejection_store.zig");
+const blob_mirror = @import("../delivery/blob_mirror.zig");
 const Collections = @import("stream_runner.zig").Collections;
 
 const log = std.log.scoped(.ingester);
@@ -123,6 +124,8 @@ pub fn applyOperation(
     };
     conn.commit() catch return error.ProjectionUnavailable;
     open = false;
+    // a new track version is not published until its audio is copied
+    if (change == .track) blob_mirror.wake();
 }
 
 const Change = union(enum) {

@@ -137,6 +137,7 @@ fn decode(
         .visibility = visibility,
         .gate_type = gate_type,
         .audio_space = try duplicateOptional(allocator, try row.get(?[]const u8, 13)),
+        .copy_attempts = try row.get(i32, 14),
         .artifact = artifact,
         .verified_delivery = verified_delivery,
         .authored_delivery = authored_delivery,
@@ -198,15 +199,18 @@ const query =
     \\  d.origin_url,
     \\  d.media_type,
     \\  d.artifact_cid,
-    \\  v.audio_space
+    \\  v.audio_space,
+    \\  COALESCE(m.attempts, 0)
     \\FROM plyr_index.track_records AS v
     \\JOIN plyr_index.account_availability AS aa
     \\  ON aa.repo_did = v.owner_did AND aa.available
     \\LEFT JOIN plyr_index.track_policies AS pol
     \\  ON pol.record_uri = v.record_uri
     \\LEFT JOIN plyr_index.track_delivery_origins AS d
-    \\  ON d.record_uri = v.record_uri AND d.record_cid = v.record_cid
+    \\  ON d.record_uri = v.record_uri AND d.artifact_cid = v.audio_blob_cid
     \\  AND d.service = 'r2' AND d.verification = 'verified_blob_cid'
+    \\LEFT JOIN plyr_index.track_mirror_attempts AS m
+    \\  ON m.record_uri = v.record_uri AND m.record_cid = v.record_cid
     \\WHERE v.record_uri = $1
     \\  AND NOT v.deleted
     \\  AND COALESCE(pol.visibility, 'public') <> 'private'

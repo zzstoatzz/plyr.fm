@@ -260,7 +260,8 @@ test "artist resolution returns ordered visible music and current profile artwor
     _ = try postgres.pool.exec("CREATE TABLE plyr_index.actor_identities (did text PRIMARY KEY, handle text, display_name text, avatar_url text)", .{});
     _ = try postgres.pool.exec("CREATE TABLE plyr_index.profile_records (owner_did text, collection text, rkey text, deleted boolean, avatar text)", .{});
     _ = try postgres.pool.exec("CREATE TABLE plyr_index.account_availability (repo_did text PRIMARY KEY, available boolean, evidence_source text DEFAULT 'verified_repository')", .{});
-    _ = try postgres.pool.exec("CREATE TABLE plyr_index.track_records (record_uri text PRIMARY KEY, owner_did text, collection text, deleted boolean DEFAULT false, record_created_at_us bigint DEFAULT 1, support_gate_type text, self_labels text[] DEFAULT '{}')", .{});
+    _ = try postgres.pool.exec("CREATE TABLE plyr_index.track_records (record_uri text PRIMARY KEY, owner_did text, collection text, deleted boolean DEFAULT false, record_created_at_us bigint DEFAULT 1, support_gate_type text, self_labels text[] DEFAULT '{}', record_cid text, audio_space text, audio_blob_cid text, audio_url text)", .{});
+    try @import("../delivery/postgres_mirror_store.zig").createTestTables(postgres.pool);
     _ = try postgres.pool.exec("CREATE TABLE plyr_index.track_policies (record_uri text PRIMARY KEY, visibility text, moderation_decision text, operator_labels jsonb DEFAULT '[]')", .{});
     const owners = [_][]const u8{ "did:plc:first", "did:plc:second", "did:plc:hidden", "did:plc:offline", "did:plc:empty" };
     for (owners) |did| {
