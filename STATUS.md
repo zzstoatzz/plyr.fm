@@ -4,6 +4,18 @@ Start here for the next agent: [November 12 daily-driver checkpoint](docs/resear
 
 ## Next daily-driver work (2026-11-12)
 
+#2537 ships public downloads with fresh policy/access checks, optional support,
+browser attachment delivery and native Save to Files. Eight deployed browser
+cases and rebuilt iOS simulator save/temporary-file cleanup passed. Protected
+downloads, real-account consent and physical-device acceptance remain open.
+
+#2533 deploys durable processing ownership with execution disabled; #2540 adds
+client transport/model preparation and #2543 the cloud processing fixture.
+Configured processing acceptance has not run. The separate legacy staging run
+`43247585011` passed 22 suite tests and one large-FLAC capacity test; that does not
+prove the Next processing path. Download-preference editing (#2539) and original
+download client (#2544) remain pending native/dependency acceptance.
+
 #2525 adds explicit owner deletion for private tracks, including uncertain-response
 recovery and removal from private playback. Eight deployed browser cases and an
 iOS simulator deletion/recovery check pass. Confirmation covers the current
@@ -29,8 +41,9 @@ not a throughput SLO or real-account OAuth acceptance.
 
 #2529 projects verified download preferences; historical reconciliation finished
 with 461 verified, one absent, 16 retryable and two rejected outcomes, so complete
-backfill remains open. #2526 adds a disabled processing executor, not an enabled upload
-processing flow. Protected/large replacements, processing ownership, real-account
+backfill remains open. #2526/#2533 provide the disabled processing executor and
+owner, not an enabled upload processing flow. Protected/large replacements,
+configured processing integration, real-account
 OAuth and physical-device/native distribution acceptance remain open.
 
 #2512 verifies current Spaces response signatures and canonical record/commit
