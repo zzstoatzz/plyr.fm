@@ -136,6 +136,10 @@ jobs:
         working-directory: backend
         run: uv run python ../next/backend/scripts/test_discovery_http.py
 
+      - name: queue suggestions HTTP contract
+        working-directory: backend
+        run: uv run python ../next/backend/scripts/test_suggestions_http.py
+
       - name: Python canary and benchmark contract checks
         working-directory: backend
         run: |
