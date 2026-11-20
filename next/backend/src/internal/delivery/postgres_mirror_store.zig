@@ -122,6 +122,17 @@ pub const pending_from =
     \\  ON d.record_uri = v.record_uri AND d.service = 'r2'
 ;
 
+/// True for a public, blob-backed version (alias `t`) whose streamable copy doesn't
+/// exist yet. Listings, notifications and read-after-write treat it as not yet
+/// published, and playback reports it as `preparing`.
+pub fn awaitingCopy(comptime t: []const u8) []const u8 {
+    return "(" ++ t ++ ".audio_space IS NULL AND " ++ t ++ ".audio_blob_cid IS NOT NULL" ++
+        " AND (" ++ t ++ ".audio_url IS NULL OR " ++ t ++ ".audio_url NOT LIKE 'https://%')" ++
+        " AND NOT EXISTS (SELECT 1 FROM plyr_index.track_delivery_origins AS ready" ++
+        " WHERE ready.record_uri = " ++ t ++ ".record_uri AND ready.record_cid = " ++ t ++ ".record_cid" ++
+        " AND ready.artifact_cid = " ++ t ++ ".audio_blob_cid AND ready.service = 'r2'))";
+}
+
 pub const pending_where =
     \\WHERE NOT v.deleted
     \\  AND v.record_cid IS NOT NULL
@@ -182,3 +193,22 @@ const failure_query =
     \\  ),
     \\  last_error = EXCLUDED.last_error
 ;
+
+/// The delivery tables, for tests whose queries read a track's copy state.
+pub fn createTestTables(pool: *pg.Pool) !void {
+    _ = try pool.exec(
+        \\CREATE TABLE IF NOT EXISTS plyr_index.track_delivery_origins (
+        \\  record_uri text NOT NULL, service text NOT NULL, record_cid text NOT NULL,
+        \\  origin_url text NOT NULL, media_type text NOT NULL, artifact_cid text NOT NULL,
+        \\  verification text NOT NULL, observed_at_us bigint NOT NULL,
+        \\  PRIMARY KEY (record_uri, service)
+        \\)
+    , .{});
+    _ = try pool.exec(
+        \\CREATE TABLE IF NOT EXISTS plyr_index.track_mirror_attempts (
+        \\  record_uri text NOT NULL, record_cid text NOT NULL, attempts integer NOT NULL,
+        \\  next_attempt_us bigint NOT NULL, last_error text NOT NULL,
+        \\  PRIMARY KEY (record_uri)
+        \\)
+    , .{});
+}

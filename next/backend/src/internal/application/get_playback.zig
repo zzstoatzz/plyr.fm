@@ -14,6 +14,9 @@ pub const Result = union(enum) {
     unavailable,
 };
 
+/// A blob whose copy has failed this often (backing off from a minute) is not coming.
+pub const max_copy_attempts = 5;
+
 pub fn execute(
     allocator: std.mem.Allocator,
     store: ?PlaybackStore,
@@ -58,6 +61,7 @@ pub fn execute(
         return .authentication_required;
 
     const selected = candidate.verified_delivery orelse candidate.authored_delivery;
+    const copying = selected == null and candidate.artifact != null and candidate.copy_attempts < max_copy_attempts;
     return .{ .found = .{
         .track_id = id,
         .record = .{
@@ -70,7 +74,7 @@ pub fn execute(
             .artifact = candidate.artifact,
             .delivery = delivery,
         } else .{
-            .status = .unavailable,
+            .status = if (copying) .preparing else .unavailable,
             .artifact = candidate.artifact,
         },
     } };
@@ -194,4 +198,24 @@ test "playback store errors preserve corruption and availability" {
     try std.testing.expectEqual(Result.internal_error, classifyStoreError(error.CorruptProjection));
     try std.testing.expectEqual(Result.unavailable, classifyStoreError(error.IndexUnavailable));
     try std.testing.expectEqual(Result.unavailable, classifyStoreError(error.OutOfMemory));
+}
+
+test "a verified blob awaiting its streaming copy is preparing until the copy gives up" {
+    const uri = "at://did:plc:artist/fm.plyr.dev.track/track";
+    var id_buffer: [256]u8 = undefined;
+    const id = try track_id.encode(&id_buffer, uri);
+    var value = fixtureCandidate(uri);
+    value.authored_delivery = null;
+    value.artifact = .{ .cid = "bafkreiblob", .media_type = "audio/x-m4a", .byte_length = 510621 };
+    var fake: FakeStore = .{ .expected_uri = uri, .candidate = value };
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const preparing = execute(arena.allocator(), fake.store(), "fm.plyr.dev.track", id);
+    try std.testing.expectEqual(playback.AvailabilityStatus.preparing, preparing.found.availability.status);
+    try std.testing.expect(preparing.found.availability.delivery == null);
+
+    value.copy_attempts = max_copy_attempts;
+    fake.candidate = value;
+    const failed = execute(arena.allocator(), fake.store(), "fm.plyr.dev.track", id);
+    try std.testing.expectEqual(playback.AvailabilityStatus.unavailable, failed.found.availability.status);
 }

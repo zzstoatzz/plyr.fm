@@ -10,6 +10,7 @@ const std = @import("std");
 const pg = @import("pg");
 const zat = @import("zat");
 const store_module = @import("store.zig");
+const mirror_store = @import("../delivery/postgres_mirror_store.zig");
 const postgres_test_lock = @import("../testing/postgres_lock.zig");
 
 const NotificationStore = store_module.NotificationStore;
@@ -224,6 +225,8 @@ const events =
     \\    AND tracks.collection = $2 AND tracks.owner_did <> $1
     \\    AND tracks.record_created_at_us IS NOT NULL
     \\    AND tracks.audio_space IS NULL
+    \\    AND NOT 
+++ mirror_store.awaitingCopy("tracks") ++ "\n" ++
     \\)
 ;
 
@@ -310,6 +313,7 @@ test "PostgreSQL notifications: likes and features, newest first, read by waterm
     defer _ = pool.exec("DROP SCHEMA IF EXISTS plyr_account CASCADE", .{}) catch null;
     _ = try pool.exec("CREATE SCHEMA plyr_index", .{});
     try @import("../projection/postgres_track_store.zig").createTestTable(pool);
+    try mirror_store.createTestTables(pool);
     try @import("../projection/postgres_like_store.zig").createTestTable(pool);
     try @import("../projection/postgres_profile_store.zig").createTestTable(pool);
     try @import("../account/postgres_availability_store.zig").createTestTable(pool);

@@ -35,7 +35,9 @@ pub const Availability = struct {
     space: ?Space = null,
 };
 
-pub const AvailabilityStatus = enum { available, unavailable, gated };
+/// `preparing`: the record is verified and its audio blob is being copied to
+/// the streaming origin; ask again shortly. `unavailable`: nothing can play it.
+pub const AvailabilityStatus = enum { available, preparing, unavailable, gated };
 
 /// Gated audio held in a space on the artist's PDS. The listener mints a
 /// space credential (the PDS asks plyr whether they pass `gate`) and reads
@@ -83,6 +85,8 @@ pub const Candidate = struct {
     artifact: ?Artifact,
     verified_delivery: ?Delivery,
     authored_delivery: ?Delivery,
+    /// failed attempts to copy this version's blob to the streaming origin
+    copy_attempts: i32 = 0,
 };
 
 pub const Visibility = enum { public, unlisted, supporters };

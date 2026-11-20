@@ -3,6 +3,7 @@
 const std = @import("std");
 const pg = @import("pg");
 const store_module = @import("record_status_store.zig");
+const mirror_store = @import("../delivery/postgres_mirror_store.zig");
 
 const RecordStatusStore = store_module.RecordStatusStore;
 
@@ -48,7 +49,10 @@ const status_query =
     \\SELECT state, record_cid, reason FROM (
     \\  SELECT CASE WHEN deleted THEN 'deleted' ELSE 'indexed' END AS state,
     \\    record_cid, NULL::text AS reason, 0 AS priority
-    \\  FROM plyr_index.track_records WHERE record_uri = $1
+    \\  FROM plyr_index.track_records AS t
+    \\  WHERE record_uri = $1 AND (t.deleted OR NOT 
+++ mirror_store.awaitingCopy("t") ++ "\n" ++
+    \\  )
     \\  UNION ALL
     \\  SELECT CASE WHEN deleted THEN 'deleted' ELSE 'indexed' END,
     \\    record_cid, NULL::text, 0
@@ -94,6 +98,7 @@ test "PostgreSQL record status prefers projections over rejections" {
     defer _ = pool.exec("DROP SCHEMA IF EXISTS plyr_index CASCADE", .{}) catch null;
     try postgres_list.createTestSchema(pool);
     try postgres_track.createTestTable(pool);
+    try mirror_store.createTestTables(pool);
     try postgres_profile.createTestTable(pool);
     try postgres_like.createTestTable(pool);
     try postgres_rejections.createTestTable(pool);
@@ -116,4 +121,22 @@ test "PostgreSQL record status prefers projections over rejections" {
     try std.testing.expectEqual(store_module.State.rejected, rejected.state);
     try std.testing.expectEqualStrings("bafyrejected", rejected.record_cid.?);
     try std.testing.expectEqualStrings("invalid_schema", rejected.reason.?);
+
+    // a blob-backed track is not read back until its audio can stream
+    const track_uri = "at://did:plc:a/fm.plyr.dev.track/3t";
+    _ = try pool.exec(
+        \\INSERT INTO plyr_index.track_records (record_uri, record_cid, owner_did, collection, rkey,
+        \\  title, artist_name, file_type, record_created_at, audio_blob_cid, audio_blob_media_type,
+        \\  audio_blob_size, deleted, commit_rev, indexed_at_us)
+        \\VALUES ($1, 'bafytrack', 'did:plc:a', 'fm.plyr.dev.track', '3t', 'song', 'artist', 'm4a',
+        \\  '2026-11-20T19:54:09Z', 'bafkreiaudio', 'audio/x-m4a', 10, false, '3kaaaaaaaaaaa', 1)
+    , .{track_uri});
+    try std.testing.expect((try status_store.get(a, track_uri)) == null);
+    _ = try pool.exec(
+        \\INSERT INTO plyr_index.track_delivery_origins VALUES ($1, 'r2', 'bafytrack',
+        \\  'https://audio.example/audio/bafkreiaudio', 'audio/x-m4a', 'bafkreiaudio', 'verified_blob_cid', 2)
+    , .{track_uri});
+    const playable = (try status_store.get(a, track_uri)).?;
+    try std.testing.expectEqual(store_module.State.indexed, playable.state);
+    try std.testing.expectEqualStrings("bafytrack", playable.record_cid.?);
 }

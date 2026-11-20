@@ -21,6 +21,7 @@ const liked_track_store = @import("liked_track_store.zig");
 const store_module = @import("track_store.zig");
 const resolve_tracks = @import("../application/resolve_tracks.zig");
 const track_tag_sql = @import("track_tag_sql.zig");
+const mirror_store = @import("../delivery/postgres_mirror_store.zig");
 
 const TrackStore = store_module.TrackStore;
 const TrackLookup = union(enum) {
@@ -668,7 +669,10 @@ const resolve_query = joined_projection ++ "\n" ++
     \\  AND COALESCE(pol.visibility, 'public') <> 'private'
 ++ common_policy;
 
-pub const discovery_policy = common_policy ++
+// listings show only tracks that can play now
+const published_policy = "  AND NOT " ++ mirror_store.awaitingCopy("v") ++ "\n";
+
+pub const discovery_policy = common_policy ++ published_policy ++
     \\  AND v.collection = $1
     \\  AND COALESCE(pol.visibility, 'public') IN ('public', 'supporters')
     \\  AND NOT (
@@ -677,7 +681,7 @@ pub const discovery_policy = common_policy ++
     \\  )
 ;
 
-const artist_policy = common_policy ++
+const artist_policy = common_policy ++ published_policy ++
     \\  AND v.collection = $1
     \\  AND v.owner_did = $5
     \\  AND COALESCE(pol.visibility, 'public') <> 'private'
@@ -834,14 +838,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     _ = try pool.exec(@embedFile("migration_0043_legacy_album_covers"), .{});
     try projected_likes.createTestTable(pool);
     try @import("../projection/like_counts.zig").applyTestMigration(pool);
-    _ = try pool.exec(
-        \\CREATE TABLE plyr_index.track_delivery_origins (
-        \\  record_uri text NOT NULL, service text NOT NULL, record_cid text NOT NULL,
-        \\  origin_url text NOT NULL, media_type text NOT NULL, artifact_cid text NOT NULL,
-        \\  verification text NOT NULL, observed_at_us bigint NOT NULL,
-        \\  PRIMARY KEY (record_uri, service)
-        \\)
-    , .{});
+    try mirror_store.createTestTables(pool);
     _ = try pool.exec(
         \\CREATE TABLE plyr_index.track_policies (
         \\  record_uri text PRIMARY KEY, visibility text, space_uri text,
