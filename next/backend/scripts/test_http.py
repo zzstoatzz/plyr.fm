@@ -13,6 +13,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from xrpc_contract import assert_xrpc_methods
+
 ROOT = Path(__file__).resolve().parents[1]
 COLLECTION = "fm.plyr.dev.track"
 ALLOWED_ORIGIN = "https://client.example"
@@ -164,6 +166,8 @@ def main() -> None:
             assert status == 204 and body == {}
             assert headers["access-control-allow-origin"] == ALLOWED_ORIGIN
             assert _request(base_url, "/health")[0] == 200
+
+        assert_xrpc_methods(base_url, _request, COLLECTION)
 
         status, _, api = _request(base_url, "/v1")
         assert status == 200 and api == {"object": "api", "version": "v1"}

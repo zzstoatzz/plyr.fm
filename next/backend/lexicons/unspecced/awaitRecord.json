@@ -1,0 +1,36 @@
+{
+  "lexicon": 1,
+  "id": "fm.plyr.unspecced.awaitRecord",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "Wait, up to timeoutMs, until the appview has indexed a record the client just wrote to its PDS, then say what became of it. The response body is the appview's own JSON shape, not yet specified here.",
+      "parameters": {
+        "type": "params",
+        "properties": {
+          "uri": {
+            "type": "string",
+            "format": "at-uri",
+            "description": "AT-URI of the record."
+          },
+          "cid": {
+            "type": "string",
+            "format": "cid",
+            "description": "Wait for this version."
+          },
+          "timeoutMs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          }
+        },
+        "required": [
+          "uri"
+        ]
+      },
+      "output": {
+        "encoding": "application/json"
+      }
+    }
+  }
+}

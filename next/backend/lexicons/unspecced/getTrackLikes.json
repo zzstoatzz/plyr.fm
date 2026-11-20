@@ -1,0 +1,35 @@
+{
+  "lexicon": 1,
+  "id": "fm.plyr.unspecced.getTrackLikes",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "Accounts that liked a track, newest first. The response body is the appview's own JSON shape, not yet specified here.",
+      "parameters": {
+        "type": "params",
+        "properties": {
+          "uri": {
+            "type": "string",
+            "format": "at-uri",
+            "description": "AT-URI of the fm.plyr.track record."
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          },
+          "cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "uri"
+        ]
+      },
+      "output": {
+        "encoding": "application/json"
+      }
+    }
+  }
+}

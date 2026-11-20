@@ -1,0 +1,47 @@
+{
+  "lexicon": 1,
+  "id": "fm.plyr.unspecced.listTracks",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "Public tracks, newest first, optionally narrowed to one artist or to tags. The response body is the appview's own JSON shape, not yet specified here.",
+      "parameters": {
+        "type": "params",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 50
+          },
+          "cursor": {
+            "type": "string"
+          },
+          "artistDid": {
+            "type": "string",
+            "format": "did",
+            "description": "Only this artist's tracks."
+          },
+          "tag": {
+            "type": "array",
+            "maxLength": 10,
+            "items": {
+              "type": "string"
+            },
+            "description": "Only tracks with every one of these tags."
+          },
+          "hiddenTag": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Leave out tracks with any of these tags."
+          }
+        }
+      },
+      "output": {
+        "encoding": "application/json"
+      }
+    }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "lexicon": 1,
+  "id": "fm.plyr.unspecced.recordPlay",
+  "defs": {
+    "main": {
+      "type": "procedure",
+      "description": "Count one qualified play of a track. occurrence makes a retry idempotent; listener is an anonymous, client-generated ID. The response body is the appview's own JSON shape, not yet specified here.",
+      "parameters": {
+        "type": "params",
+        "properties": {
+          "uri": {
+            "type": "string",
+            "format": "at-uri",
+            "description": "AT-URI of the fm.plyr.track record."
+          },
+          "occurrence": {
+            "type": "string"
+          },
+          "listener": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "uri",
+          "occurrence"
+        ]
+      },
+      "output": {
+        "encoding": "application/json"
+      }
+    }
+  }
+}

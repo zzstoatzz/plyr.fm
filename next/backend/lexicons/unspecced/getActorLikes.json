@@ -1,0 +1,34 @@
+{
+  "lexicon": 1,
+  "id": "fm.plyr.unspecced.getActorLikes",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "Tracks an account liked, newest first. Likes are public records, so no auth is needed. The response body is the appview's own JSON shape, not yet specified here.",
+      "parameters": {
+        "type": "params",
+        "properties": {
+          "actor": {
+            "type": "string",
+            "format": "did"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 50
+          },
+          "cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "actor"
+        ]
+      },
+      "output": {
+        "encoding": "application/json"
+      }
+    }
+  }
+}

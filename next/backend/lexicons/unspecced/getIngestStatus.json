@@ -1,0 +1,13 @@
+{
+  "lexicon": 1,
+  "id": "fm.plyr.unspecced.getIngestStatus",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "How far behind the network the appview's index is. The response body is the appview's own JSON shape, not yet specified here.",
+      "output": {
+        "encoding": "application/json"
+      }
+    }
+  }
+}

@@ -206,14 +206,13 @@ write. There is no `/auth/*`, no OAuth client metadata, no cookie, and no
 server-held credential to protect; every route is a public projection of
 public records.
 
-The current product surface is `GET /v1/tags`, `GET /v1/tracks`,
-`GET /v1/tracks/{track_id}`, `GET /v1/tracks/{track_id}/playback`,
-`GET /v1/tracks/{track_id}/likes`,
-`GET /v1/actors/{did}/likes`, `POST /v1/actors/{did}/likes/resolve`,
-`GET /v1/records/await`,
-`GET /v1/artists/{identifier}`, `GET /v1/artists/{identifier}/metrics`,
-`GET /v1/charts/tracks`, `GET /v1/suggestions/tracks`, and the collection and detail forms of `GET /v1/albums`
-and `GET /v1/playlists`, plus `GET /v1/search`. Search accepts
+The reads are XRPC methods under the track collection's experimental namespace
+(`fm.plyr.unspecced.*` on Next), defined in [lexicons/unspecced](lexicons/unspecced)
+and served by `src/api/xrpc.zig`: records by AT-URI (`uri`), accounts by `actor`,
+camelCase parameters, XRPC `{error, message}` errors, no published schema records.
+They mirror the `/v1` routes (tracks, tags, likes, comments, playback, charts,
+albums, playlists, artists, search, suggestions, records/await), which go once clients move.
+Search accepts
 one strict query, a bounded global limit, and an optional type set; it returns
 verified record references with match class and provenance but no unstable
 numeric score. Suggestions rank tracks for 1-20 `seed` URIs by shared likers, lists, tags and artist. The track collection accepts a strict

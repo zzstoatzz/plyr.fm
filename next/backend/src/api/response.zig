@@ -16,6 +16,22 @@ pub const ApiError = enum {
     internal_error,
     service_unavailable,
 
+    fn xrpcName(self: ApiError) []const u8 {
+        return switch (self) {
+            .invalid_request => "InvalidRequest",
+            .authentication_required => "AuthenticationRequired",
+            .forbidden => "Forbidden",
+            .insufficient_scope => "InsufficientScope",
+            .conflict => "Conflict",
+            .not_found => "NotFound",
+            .method_not_allowed => "MethodNotAllowed",
+            .rate_limited => "RateLimitExceeded",
+            .upstream_failure => "UpstreamFailure",
+            .internal_error => "InternalServerError",
+            .service_unavailable => "ServiceUnavailable",
+        };
+    }
+
     fn message(self: ApiError) []const u8 {
         return switch (self) {
             .invalid_request => "The request is invalid.",
@@ -190,7 +206,10 @@ pub fn apiErrorWithHeaders(
     additional_headers: []const http.Header,
 ) !void {
     var buffer: [384]u8 = undefined;
-    const body = try formatError(&buffer, kind, request_id);
+    const body = if (std.mem.startsWith(u8, request.target, "/xrpc"))
+        try formatXrpcError(&buffer, kind)
+    else
+        try formatError(&buffer, kind, request_id);
     try jsonWithHeaders(
         request,
         kind.status(),
@@ -199,6 +218,11 @@ pub fn apiErrorWithHeaders(
         cors,
         additional_headers,
     );
+}
+
+/// XRPC's error body: a PascalCase name and a message.
+fn formatXrpcError(buffer: []u8, kind: ApiError) ![]const u8 {
+    return std.fmt.bufPrint(buffer, "{{\"error\":\"{s}\",\"message\":\"{s}\"}}", .{ kind.xrpcName(), kind.message() });
 }
 
 fn formatError(buffer: []u8, kind: ApiError, request_id: []const u8) ![]const u8 {
@@ -257,6 +281,14 @@ test "error envelopes are stable and include the request id" {
     try std.testing.expectEqualStrings(
         "{\"error\":{\"code\":\"not_found\",\"message\":\"The requested resource was not found.\",\"request_id\":\"req_test\"}}",
         body,
+    );
+}
+
+test "errors on XRPC paths take XRPC's shape" {
+    var buffer: [384]u8 = undefined;
+    try std.testing.expectEqualStrings(
+        "{\"error\":\"NotFound\",\"message\":\"The requested resource was not found.\"}",
+        try formatXrpcError(&buffer, .not_found),
     );
 }
 

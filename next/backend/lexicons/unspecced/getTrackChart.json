@@ -1,0 +1,34 @@
+{
+  "lexicon": 1,
+  "id": "fm.plyr.unspecced.getTrackChart",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "The most liked tracks over a period, with each track's full view. getTopTracks is the public, record-shaped version. The response body is the appview's own JSON shape, not yet specified here.",
+      "parameters": {
+        "type": "params",
+        "properties": {
+          "period": {
+            "type": "string",
+            "knownValues": [
+              "day",
+              "week",
+              "month",
+              "all_time"
+            ],
+            "default": "all_time"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
+            "default": 10
+          }
+        }
+      },
+      "output": {
+        "encoding": "application/json"
+      }
+    }
+  }
+}

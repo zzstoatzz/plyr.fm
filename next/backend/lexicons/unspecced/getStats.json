@@ -1,0 +1,13 @@
+{
+  "lexicon": 1,
+  "id": "fm.plyr.unspecced.getStats",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "Platform totals: tracks, artists, listening time and plays. The response body is the appview's own JSON shape, not yet specified here.",
+      "output": {
+        "encoding": "application/json"
+      }
+    }
+  }
+}
