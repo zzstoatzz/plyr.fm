@@ -80,14 +80,14 @@ export function FieldError({ children }: { children: ReactNode }) {
   return <Text role="alert" accessibilityLiveRegion="polite" style={{ color: theme.danger, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale, lineHeight: 20 * theme.scale }}>{children}</Text>;
 }
 
-function clock(seconds: number) {
+export function clock(seconds: number) {
   const whole = Math.round(seconds);
   const hours = Math.floor(whole / 3600);
   const rest = `${Math.floor(whole / 60) % 60}:${String(whole % 60).padStart(2, '0')}`;
   return hours ? `${hours}:${rest.padStart(5, '0')}` : rest;
 }
 
-function Chip({ label, strong, icon: Glyph, onPress }: { label: string; strong?: boolean; icon?: typeof Waveform; onPress?: () => void }) {
+export function Chip({ label, strong, icon: Glyph, onPress }: { label: string; strong?: boolean; icon?: typeof Waveform; onPress?: () => void }) {
   const theme = useAppearance();
   const body = <>
     {Glyph && <Glyph size={15} color={theme.text} />}
