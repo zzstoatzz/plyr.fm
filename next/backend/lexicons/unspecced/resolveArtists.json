@@ -1,0 +1,32 @@
+{
+  "lexicon": 1,
+  "id": "fm.plyr.unspecced.resolveArtists",
+  "defs": {
+    "main": {
+      "type": "procedure",
+      "description": "Profiles for up to 500 DIDs, for accounts that have published tracks. The response body is the appview's own JSON shape, not yet specified here.",
+      "input": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "required": [
+            "dids"
+          ],
+          "properties": {
+            "dids": {
+              "type": "array",
+              "maxLength": 500,
+              "items": {
+                "type": "string",
+                "format": "did"
+              }
+            }
+          }
+        }
+      },
+      "output": {
+        "encoding": "application/json"
+      }
+    }
+  }
+}

@@ -307,6 +307,7 @@ test {
     _ = @import("internal/account/repo_status.zig");
     _ = @import("api/response.zig");
     _ = @import("api/router.zig");
+    _ = @import("api/xrpc.zig");
     _ = @import("api/managed_space.zig");
     _ = @import("api/notifications.zig");
     _ = @import("api/catalog.zig");

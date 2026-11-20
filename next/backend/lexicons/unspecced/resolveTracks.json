@@ -1,0 +1,32 @@
+{
+  "lexicon": 1,
+  "id": "fm.plyr.unspecced.resolveTracks",
+  "defs": {
+    "main": {
+      "type": "procedure",
+      "description": "Several tracks at once, in request order, with the ones not found listed under missing. The response body is the appview's own JSON shape, not yet specified here.",
+      "input": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "required": [
+            "uris"
+          ],
+          "properties": {
+            "uris": {
+              "type": "array",
+              "maxLength": 100,
+              "items": {
+                "type": "string",
+                "format": "at-uri"
+              }
+            }
+          }
+        }
+      },
+      "output": {
+        "encoding": "application/json"
+      }
+    }
+  }
+}

@@ -17,6 +17,7 @@ const moderation = @import("moderation.zig");
 const labels = @import("labels.zig");
 const PostgresModerationLog = @import("../internal/moderation/postgres_log.zig").PostgresModerationLog;
 const catalog = @import("catalog.zig");
+const xrpc = @import("xrpc.zig");
 const NotificationService = @import("../internal/notification/service.zig").Config;
 const NotificationStore = @import("../internal/notification/store.zig").NotificationStore;
 const ManagedSpaceConfig = @import("../internal/space/managed_space.zig").Config;
@@ -137,6 +138,8 @@ pub fn handle(
             .profile = app.profile_collection,
             .like = app.like_collection,
         }, publicCors(app.cors), request_id);
+    } else if (xrpc.match(app.track_collection, path)) |method| {
+        try xrpc.handle(request, allocator, app, method, request_id);
     } else if (if (app.notifications) |config| notifications.match(config, path) else null) |method| {
         try notifications.handle(
             request,

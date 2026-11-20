@@ -1,0 +1,26 @@
+{
+  "lexicon": 1,
+  "id": "fm.plyr.unspecced.getTags",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "Tags on public tracks, most used first. The response body is the appview's own JSON shape, not yet specified here.",
+      "parameters": {
+        "type": "params",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 15
+          },
+          "cursor": {
+            "type": "string"
+          }
+        }
+      },
+      "output": {
+        "encoding": "application/json"
+      }
+    }
+  }
+}
