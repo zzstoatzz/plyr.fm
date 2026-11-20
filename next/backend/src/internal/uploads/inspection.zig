@@ -1,5 +1,6 @@
 const std = @import("std");
 const zat = @import("zat");
+const logfire = @import("logfire");
 const admission = @import("admission.zig");
 const Repository = @import("../ingest/zat_pds_repository_source.zig").ZatPdsRepositorySource;
 const Keys = @import("../ingest/zat_signing_key_resolver.zig").ZatSigningKeyResolver;
@@ -9,7 +10,20 @@ pub const Request = struct { owner: []const u8, recordUri: []const u8, audioUrl:
 pub const State = enum { published, absent, conflict };
 
 pub fn inspect(a: std.mem.Allocator, io: std.Io, settings: admission.Settings, body: []const u8) !State {
+    const span = logfire.span("upload.inspect", .{});
+    defer span.end();
+    const state = inspectTraced(span, a, io, settings, body) catch |err| {
+        span.recordError(err);
+        return err;
+    };
+    span.setAttribute("upload.state", @tagName(state));
+    return state;
+}
+
+fn inspectTraced(span: logfire.Span, a: std.mem.Allocator, io: std.Io, settings: admission.Settings, body: []const u8) !State {
     const request = std.json.parseFromSliceLeaky(Request, a, body, .{}) catch return error.InvalidUpload;
+    span.setAttribute("upload.owner_did", request.owner);
+    span.setAttribute("upload.record_uri", request.recordUri);
     const key = try admission.recordKey(request.recordUri, request.owner, settings.track_collection);
     const hash = admission.ownerHash(request.owner);
     const prefix = try std.fmt.allocPrint(a, "{s}/media/{s}/", .{ settings.base_url, hash });

@@ -534,14 +534,15 @@ class Player {
 		if (!this.privateMode && !this.#embedded) this.#model.select(index);
 		else if (this.queue[index]) this.#startLocal(this.queue, index);
 	}
-	enqueue(track: Track) {
-		this.#add(track, false);
+	/** quiet: the caller already shows the track as added, so skip the toast */
+	enqueue(track: Track, quiet = false) {
+		this.#add(track, false, quiet);
 	}
 	/** Puts the track right after the one playing, ahead of other picks. */
 	playNext(track: Track) {
 		this.#add(track, true);
 	}
-	#add(track: Track, next: boolean) {
+	#add(track: Track, next: boolean, quiet = false) {
 		if (this.liveStation) return;
 		const title = track.metadata.title || 'untitled';
 		if (isPrivateTrack(track)) {
@@ -554,7 +555,7 @@ class Player {
 			if (!this.current) { this.play(track); return; }
 			if (next) this.#model.playNext(track); else this.#model.enqueue(track);
 		}
-		toast.add(next ? `playing ${title} next` : `queued ${title}`, 'success', 3000, { label: 'view queue', run: () => { this.queueRequest++; } });
+		if (!quiet) toast.add(next ? `playing ${title} next` : `queued ${title}`, 'success', 3000, { label: 'view queue', run: () => { this.queueRequest++; } });
 	}
 	enqueueCollection(tracks: Track[]) {
 		if (!this.canEditPublicQueue) return;

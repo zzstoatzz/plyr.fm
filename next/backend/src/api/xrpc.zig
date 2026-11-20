@@ -16,6 +16,7 @@ const albums = @import("albums.zig");
 const artists = @import("artists.zig");
 const actors = @import("actors.zig");
 const charts = @import("charts.zig");
+const suggestions = @import("suggestions.zig");
 const health = @import("health.zig");
 const playlists = @import("playlists.zig");
 const records = @import("records.zig");
@@ -37,6 +38,7 @@ pub const Method = enum {
     getTrackComments,
     getTags,
     getTrackChart,
+    getTrackSuggestions,
     search,
     getStats,
     awaitRecord,
@@ -151,6 +153,7 @@ pub fn handle(
         .getTrackComments => try tracks.comments(request, allocator, app.track_store, app.comment_store, app.track_collection, app.comment_collection, app.profile_collection, app.cors, id, request_id),
         .getTags => try tracks.tags(request, allocator, app.track_store, app.track_collection, app.cors, request_id),
         .getTrackChart => try charts.tracks(request, allocator, app.track_chart_store, app.track_collection, app.profile_collection, app.like_collection, app.cors, app.io, request_id),
+        .getTrackSuggestions => try suggestions.tracks(request, allocator, app.track_suggestion_store, .{ .track = app.track_collection, .profile = app.profile_collection, .like = app.like_collection }, app.cors, request_id),
         .search => try search_api.list(request, allocator, app.search_store, app.track_collection, app.list_collection, app.profile_collection, app.cors, request_id),
         .getStats => try stats.get(request, allocator, app.stats_store, app.cors, request_id),
         .awaitRecord => try records.awaitRecord(request, allocator, app.io, app.record_status_store, .{

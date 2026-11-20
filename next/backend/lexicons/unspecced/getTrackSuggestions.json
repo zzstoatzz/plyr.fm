@@ -1,0 +1,35 @@
+{
+  "lexicon": 1,
+  "id": "fm.plyr.unspecced.getTrackSuggestions",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "Tracks to queue after the seed tracks, ranked by shared likers, lists, tags and artist. The response body is the appview's own JSON shape, not yet specified here.",
+      "parameters": {
+        "type": "params",
+        "required": ["seed"],
+        "properties": {
+          "seed": {
+            "type": "array",
+            "items": { "type": "string", "format": "at-uri" },
+            "minLength": 1,
+            "maxLength": 20
+          },
+          "exclude": {
+            "type": "array",
+            "items": { "type": "string", "format": "at-uri" },
+            "maxLength": 60
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 24
+          }
+        }
+      },
+      "output": {
+        "encoding": "application/json"
+      }
+    }
+  }
+}

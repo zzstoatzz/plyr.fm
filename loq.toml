@@ -536,7 +536,7 @@ max_lines = 948
 
 [[rules]]
 path = "next/backend/src/internal/coordinator/server.zig"
-max_lines = 580
+max_lines = 592
 
 [[rules]]
 path = "next/backend/src/internal/projection/postgres_track_store.zig"
@@ -574,3 +574,7 @@ max_lines = 511
 [[rules]]
 path = "next/core/src/pds.ts"
 max_lines = 516
+
+[[rules]]
+path = "next/backend/README.md"
+max_lines = 515

@@ -217,7 +217,7 @@ export function createApi(origin: string, playListenerId: () => string, nsidPref
 			get<TrackCommentPage>(xrpc('getTrackComments'), { uri: uriFromId(id) }, signal),
 		tracks: ({ artist_did, hidden_tag, ...p }: { limit?: number; cursor?: string; artist_did?: string; tag?: string[]; hidden_tag?: string[] } = {}, signal?: AbortSignal) =>
 			get<Page<Track>>(xrpc('listTracks'), { ...p, artistDid: artist_did, hiddenTag: hidden_tag }, signal),
-		tags: (limit = 24, signal?: AbortSignal) => get<Page<{ name: string; track_count: number }>>(xrpc('getTags'), { limit }, signal),
+		tags: (limit = 24, signal?: AbortSignal, cursor?: string) => get<Page<{ name: string; track_count: number }>>(xrpc('getTags'), { limit, cursor }, signal),
 		track: (id: string, options?: { fresh?: boolean }) => options?.fresh
 			? request<Track>(`${origin}${xrpc('getTrack')}?${new URLSearchParams(trackSubject(id))}`, 15_000, undefined, { cache: 'no-store' })
 			: get<Track>(xrpc('getTrack'), trackSubject(id)),
@@ -239,6 +239,9 @@ export function createApi(origin: string, playListenerId: () => string, nsidPref
 		/** up to 50 tracks; the server has no cursor past that */
 		chart: (period: 'day' | 'week' | 'month' | 'all_time' = 'week', limit?: number, signal?: AbortSignal) =>
 			get<{ period: string; data: ChartEntry[] }>(xrpc('getTrackChart'), { period, limit }, signal),
+		/** tracks that go with the seeds (record URIs), best first; never returns a seed or an excluded URI */
+		suggestions: (seeds: string[], options: { exclude?: string[]; limit?: number; signal?: AbortSignal } = {}) =>
+			get<{ object: 'track_suggestions'; data: Track[] }>(xrpc('getTrackSuggestions'), { seed: seeds, exclude: options.exclude, limit: options.limit }, options.signal),
 		/** block (≤ timeout) until the appview has projected a write the client made on its PDS. */
 		awaitRecord: (uri: string, cid?: string, timeout_ms = 8000) =>
 			get<{ uri: string; status: AwaitStatus; cid?: string; reason?: string }>(xrpc('awaitRecord'), {

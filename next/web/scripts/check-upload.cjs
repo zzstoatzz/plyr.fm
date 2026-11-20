@@ -1,4 +1,7 @@
 const assert = require('node:assert/strict');
+
+// Tags are chips now; read them back one per line like the stored value.
+const chosenTags = async scope => (await scope.locator('.tag-input .chip').allInnerTexts()).map(text => text.replace(/×$/, '').trim()).join('\n');
 const { execFileSync } = require('node:child_process');
 const { createHash } = require('node:crypto');
 const fs = require('node:fs/promises');
@@ -179,7 +182,7 @@ async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'reg
     await audioInput.setInputFiles({ name: 'direct.mp3', mimeType: 'audio/mpeg', buffer: mp3 });
     const title = page.getByRole('textbox', { name: 'title', exact: true });
     await title.fill('direct from Svelte');
-    await page.getByRole('textbox', { name: 'tags', exact: true }).fill('ambient\nfield recording');
+    await page.getByRole('combobox', { name: 'tags', exact: true }).fill('ambient,field recording,');
     await page.reload();
     await page.getByText('your draft is still here. choose the audio file again.').waitFor();
     assert.equal(await title.inputValue(), 'direct from Svelte');
@@ -188,7 +191,7 @@ async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'reg
     const heic = await fs.readFile(path.join(__dirname, 'fixtures/cover.heic'));
     const coverInput = page.locator('input[type=file][accept^="image"]');
     if (scenario === 'regular') {
-      const tags = page.getByRole('textbox', { name: 'tags', exact: true });
+      const tags = { inputValue: () => chosenTags(page) };
       const [chooser] = await Promise.all([
         page.waitForEvent('filechooser'), page.getByRole('button', { name: 'change audio', exact: true }).click()
       ]);
@@ -257,7 +260,7 @@ async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'reg
         await uploadLink.click();
         await page.getByText('your draft is still here. choose the audio file again.').waitFor();
         assert.equal(await title.inputValue(), 'direct from Svelte');
-        assert.equal(await page.getByRole('textbox', { name: 'tags', exact: true }).inputValue(), 'ambient\nfield recording');
+        assert.equal(await chosenTags(page), 'ambient\nfield recording');
         assert.equal(writes.length, 0);
       } else {
         await page.waitForFunction(key => localStorage.getItem(key) === null, `plyr-upload-draft:${did}`);

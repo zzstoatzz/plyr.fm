@@ -1,4 +1,5 @@
 <script lang="ts">
+  import TagInput from './TagInput.svelte';
   let { album = $bindable(''), tags = $bindable(''), description = $bindable(''), autoTag = $bindable(false), tagProblem }: {
     album: string; tags: string; description: string; autoTag: boolean; tagProblem: string;
   } = $props();
@@ -7,7 +8,7 @@
 <div class="details">
   <div class="card">
     <label class="field"><span>album</span><input bind:value={album} maxlength="256" placeholder="optional" /></label>
-    <label class="field"><span>tags</span><textarea bind:value={tags} rows="2" placeholder="one tag per line"></textarea></label>
+    <TagInput bind:value={tags} />
     {#if tagProblem}<p class="problem" role="alert">{tagProblem}</p>{/if}
     <label class="switch">
       <span><b>auto-tag with recommended genres</b><small>we listen once it's up and add a few genre tags. you can remove them later.</small></span>

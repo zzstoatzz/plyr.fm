@@ -5,6 +5,7 @@ const server = @import("server.zig");
 const postgres = @import("internal/index/postgres_track_store.zig");
 const postgres_composed_tracks = @import("internal/index/postgres_composed_track_store.zig");
 const postgres_track_charts = @import("internal/index/postgres_track_chart_store.zig");
+const postgres_track_suggestions = @import("internal/index/postgres_track_suggestion_store.zig");
 const track_record_json = @import("internal/index/track_record_json_store.zig");
 const postgres_likes = @import("internal/index/postgres_like_query_store.zig");
 const postgres_comments = @import("internal/index/postgres_comment_query_store.zig");
@@ -30,9 +31,12 @@ const postgres_moderation = @import("internal/moderation/postgres_log.zig");
 const Labeler = @import("internal/moderation/labeler.zig").Labeler;
 const actor_identity_refresher = @import("internal/identity/actor_identity_refresher.zig");
 const space_consumer = @import("internal/space/consumer.zig");
+const telemetry = @import("internal/telemetry.zig");
 
 var threaded_io: std.Io.Threaded = undefined;
 pub const std_options_debug_threaded_io: ?*std.Io.Threaded = &threaded_io;
+pub const std_options: std.Options = .{ .log_level = std.log.default_level, .logFn = telemetry.logFn };
+pub const panic = std.debug.FullPanic(telemetry.panicFn);
 
 pub fn main() !void {
     const allocator = std.heap.smp_allocator;
@@ -43,6 +47,9 @@ pub fn main() !void {
         std.log.err("invalid configuration: {}", .{err});
         return err;
     };
+
+    telemetry.configure(settings.role);
+    defer telemetry.shutdown();
 
     if (settings.role == .jams) return @import("internal/coordinator/server.zig").run(allocator, io, settings);
 
@@ -74,6 +81,11 @@ pub fn main() !void {
     else
         null;
     const track_chart_store = if (postgres_track_chart_store) |*store| store.store() else null;
+    var postgres_track_suggestion_store: ?postgres_track_suggestions.PostgresTrackSuggestionStore = if (postgres_store) |*store|
+        .{ .pool = store.pool }
+    else
+        null;
+    const track_suggestion_store = if (postgres_track_suggestion_store) |*store| store.store() else null;
     var postgres_track_record_json_store: ?track_record_json.PostgresStore = if (postgres_store) |*store|
         .{ .pool = store.pool }
     else
@@ -198,6 +210,7 @@ pub fn main() !void {
                 .io = io,
                 .track_store = track_store,
                 .track_chart_store = track_chart_store,
+                .track_suggestion_store = track_suggestion_store,
                 .track_record_json_store = track_record_json_store,
                 .like_store = like_store,
                 .comment_store = comment_store,
@@ -311,6 +324,7 @@ test {
     _ = @import("api/managed_space.zig");
     _ = @import("api/notifications.zig");
     _ = @import("api/catalog.zig");
+    _ = @import("internal/application/list_track_suggestions.zig");
     _ = @import("internal/application/public_catalog.zig");
     _ = @import("internal/index/track_record_json_store.zig");
     _ = @import("internal/application/notifications.zig");
@@ -466,6 +480,7 @@ test {
     _ = @import("internal/uploads/admission.zig");
     _ = @import("internal/uploads/inspection.zig");
     _ = @import("server.zig");
+    _ = @import("internal/telemetry.zig");
 }
 
 fn logDatabaseUser(pool: *pg.Pool) void {
