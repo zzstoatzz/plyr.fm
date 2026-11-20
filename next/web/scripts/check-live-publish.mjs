@@ -80,13 +80,15 @@ try {
   await page.goto(app + '/track/' + id);
   await page.getByRole('button', { name: 'Play', exact: true }).click();
   // the player's audio element is never attached to the document; its Pause state is the signal
-  await page.getByRole('button', { name: 'Pause', exact: true }).waitFor({ timeout: 20_000 });
-  await page.getByRole('button', { name: 'Pause', exact: true }).click();
+  // the track page and the player bar both switch to Pause once audio is playing
+  const pause = page.getByRole('button', { name: 'Pause', exact: true }).first();
+  await pause.waitFor({ timeout: 20_000 });
+  await pause.click();
   console.log(`published "${title}": audio stored ${events.written - events.stored} ms before the record, first lookup available, played on the first try`);
 } catch (error) { errors.push(new Error(`live publish failed at ${stage}: ${error.message}`)); }
 finally {
   try { if (consented) { await page.setViewportSize({ width: 1280, height: 900 }); await account.signOut(page, '/settings'); } }
-  catch (error) { errors.push(new Error(`browser sign-out failed (${error.name})`)); }
+  catch (error) { errors.push(new Error(`browser sign-out failed: ${error.message.split('\n')[0]}`)); }
   try { await browser.close(); }
   catch (error) { errors.push(new Error(`browser cleanup failed (${error.name})`)); }
   try {
