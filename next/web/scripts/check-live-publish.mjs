@@ -38,6 +38,8 @@ try {
   await context.route('https://jams.next.plyr.fm/v1/playback/join', route => route.abort());
   page = await context.newPage();
   page.setDefaultTimeout(20_000);
+  // leaving /upload asks before discarding a draft; the check always leaves deliberately
+  page.on('dialog', dialog => dialog.accept());
   page.on('request', req => {
     const url = new URL(req.url());
     if (req.method() === 'PUT' && url.origin === audioOrigin && url.pathname.startsWith('/audio/')) events.stored ??= Date.now();
@@ -67,7 +69,7 @@ try {
   assert.ok([200, 201].includes(events.storedStatus), `the streaming origin answered ${events.storedStatus}`);
 
   stage = 'checking the first playback lookup';
-  const status = (await json(api + '/xrpc/fm.plyr.unspecced.awaitRecord?' + new URLSearchParams({ uri: created.uri, cid: created.cid, timeoutMs: '15000' }))).status;
+  const status = (await json(api + '/xrpc/fm.plyr.unspecced.awaitRecord?' + new URLSearchParams({ uri: created.uri, cid: created.cid, timeoutMs: '8000' }))).status;
   assert.equal(status, 'indexed', 'the record was not projected');
   const playback = await json(api + '/xrpc/fm.plyr.unspecced.getPlayback?' + new URLSearchParams({ uri: created.uri }));
   assert.equal(playback.availability.status, 'available', 'the first lookup after publishing must be playable');
