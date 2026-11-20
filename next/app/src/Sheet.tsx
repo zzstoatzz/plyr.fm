@@ -14,8 +14,12 @@ const MENU_WIDTH = 248;
 /** A long-pressed row, shown lifted above the page with the menu beside it. */
 export type Lift = { anchor: Anchor; preview: ReactNode };
 
-export function Sheet({ title, close, children, notice, visible = true, onDismiss, anchor, lift }: {
+/** A form sheet's navigation bar: a way out on the left and its one action on the right, both always in view. */
+export type SheetBar = { leading: ReactNode; trailing: ReactNode };
+
+export function Sheet({ title, close, children, notice, visible = true, onDismiss, anchor, lift, bar }: {
   title: string; close: () => void; children: ReactNode; notice?: ReactNode; visible?: boolean; onDismiss?: () => void;
+  bar?: SheetBar;
   /** On a wide window, open as a dropdown beside this control instead of a centered sheet. */
   anchor?: Anchor;
   lift?: Lift;
@@ -54,12 +58,16 @@ export function Sheet({ title, close, children, notice, visible = true, onDismis
         borderBottomLeftRadius: wide ? 22 : 0, borderBottomRightRadius: wide ? 22 : 0,
         backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.hairline, paddingBottom: wide ? 12 : insets.bottom
       }}>
-        <View style={{ paddingHorizontal: 20, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        {bar ? <View style={{ paddingHorizontal: 8, paddingVertical: 6, flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderColor: theme.hairline }}>
+          <View style={{ flex: 1, alignItems: 'flex-start' }}>{bar.leading}</View>
+          <Heading>{title}</Heading>
+          <View style={{ flex: 1, alignItems: 'flex-end' }}>{bar.trailing}</View>
+        </View> : <View style={{ paddingHorizontal: 20, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <View style={{ flex: 1, minWidth: 0 }}><Heading>{title}</Heading></View>
           <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={close} style={{ padding: 12 }}><X size={22} color={theme.text} /></Pressable>
-        </View>
+        </View>}
         {notice && <View style={{ paddingHorizontal: 20, paddingBottom: 12, gap: 12 }}>{notice}</View>}
-        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, paddingTop: 4, gap: 12 }}>
+        <ScrollView keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets={!!bar} contentContainerStyle={{ padding: 20, paddingTop: bar ? 16 : 4, gap: 12 }}>
           {children}
         </ScrollView>
       </View>
