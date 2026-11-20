@@ -7,31 +7,40 @@ export class UploadRequestError extends Error {
   constructor(status: number, message: string) { super(message); this.status = status; }
 }
 type Capability = { uploadUrl: string; capability: string; expiresAt: number };
-type UploadConfig = Pick<AuthConfig, 'UPLOAD_AUTHORIZE_METHOD' | 'UPLOAD_COORDINATOR_URL' | 'UPLOAD_SERVICE_AUDIENCE'>;
-export function uploadTransport({ UPLOAD_AUTHORIZE_METHOD, UPLOAD_COORDINATOR_URL, UPLOAD_SERVICE_AUDIENCE }: UploadConfig, auth: Pick<Auth<unknown>, 'did' | 'agent' | 'uploadStorage'>, operation: UploadOperation,
+export type UploadConfig = Pick<AuthConfig, 'UPLOAD_AUTHORIZE_METHOD' | 'UPLOAD_COORDINATOR_URL' | 'UPLOAD_SERVICE_AUDIENCE'>;
+export type AdmissionFields = Pick<UploadOperation, 'uploadId' | 'sizeBytes' | 'contentType' | 'fileType' | 'processing'> & { recordUri: string };
+
+/** Asks the upload coordinator for a capability to store these bytes for this record, as the signed-in owner. */
+export async function admitUpload({ UPLOAD_AUTHORIZE_METHOD, UPLOAD_COORDINATOR_URL, UPLOAD_SERVICE_AUDIENCE }: UploadConfig, agent: NonNullable<Auth<unknown>['agent']>,
+  fields: AdmissionFields, signal?: AbortSignal, fetcher: typeof fetch = fetch): Promise<Capability> {
+  const response = await agent.handle(`/xrpc/com.atproto.server.getServiceAuth?${new URLSearchParams({ aud: UPLOAD_SERVICE_AUDIENCE, lxm: UPLOAD_AUTHORIZE_METHOD })}`, { signal });
+  if (!response.ok) throw new UploadRequestError(response.status, 'could not authorize this upload. sign in again.');
+  const token: unknown = await response.json();
+  if (!token || typeof token !== 'object' || !('token' in token) || typeof token.token !== 'string') throw new Error('invalid upload authorization.');
+  signal?.throwIfAborted();
+  const admission = await fetcher(`${UPLOAD_COORDINATOR_URL}/v1/uploads/authorize`, { method: 'POST', signal, redirect: 'error', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ serviceToken: token.token, uploadId: fields.uploadId, recordUri: fields.recordUri, sizeBytes: fields.sizeBytes,
+      contentType: fields.contentType, fileType: fields.fileType, visibility: 'public', downloadPolicy: 'open', processing: fields.processing }) });
+  if (!admission.ok) throw new UploadRequestError(admission.status, admission.status === 403 ? 'large uploads are not allowed for this account.' : 'large upload service is unavailable. try again.');
+  const value: unknown = await admission.json();
+  if (!value || typeof value !== 'object' || !('uploadUrl' in value) || !('capability' in value) || !('expiresAt' in value)
+    || typeof value.uploadUrl !== 'string' || typeof value.capability !== 'string' || typeof value.expiresAt !== 'number' || value.expiresAt <= Date.now() || value.expiresAt > Date.now() + 600000 || !value.capability || value.capability.length > 4096) throw new Error('invalid upload admission.');
+  const url = new URL(value.uploadUrl);
+  if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash
+    || !new RegExp(`^/v1/uploads/[a-f0-9]{64}/${fields.uploadId}$`).test(url.pathname)) throw new Error('invalid upload address.');
+  return { uploadUrl: url.href, capability: value.capability, expiresAt: value.expiresAt };
+}
+
+export function uploadTransport(config: UploadConfig, auth: Pick<Auth<unknown>, 'did' | 'agent' | 'uploadStorage'>, operation: UploadOperation,
   assertCurrent: () => void, signal: AbortSignal, fetcher: typeof fetch = fetch) {
   let capability: Capability | undefined;
   const active = () => { assertCurrent(); if (signal.aborted) throw new Error('upload paused.'); };
   async function authorize() {
     active();
     if (!auth.agent || auth.did !== operation.owner || !auth.uploadStorage) throw new Error('sign in again to allow large uploads.');
-    const response = await auth.agent.handle(`/xrpc/com.atproto.server.getServiceAuth?${new URLSearchParams({ aud: UPLOAD_SERVICE_AUDIENCE, lxm: UPLOAD_AUTHORIZE_METHOD })}`, { signal });
-    if (!response.ok) throw new UploadRequestError(response.status, 'could not authorize this upload. sign in again.');
-    const token: unknown = await response.json();
-    if (!token || typeof token !== 'object' || !('token' in token) || typeof token.token !== 'string') throw new Error('invalid upload authorization.');
+    const admitted = await admitUpload(config, auth.agent, { ...operation, recordUri: operation.uri }, signal, fetcher);
     active();
-    const admission = await fetcher(`${UPLOAD_COORDINATOR_URL}/v1/uploads/authorize`, { method: 'POST', signal, redirect: 'error', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ serviceToken: token.token, uploadId: operation.uploadId, recordUri: operation.uri, sizeBytes: operation.sizeBytes,
-        contentType: operation.contentType, fileType: operation.fileType, visibility: 'public', downloadPolicy: 'open', processing: operation.processing }) });
-    if (!admission.ok) throw new UploadRequestError(admission.status, admission.status === 403 ? 'large uploads are not allowed for this account.' : 'large upload service is unavailable. try again.');
-    const value: unknown = await admission.json();
-    if (!value || typeof value !== 'object' || !('uploadUrl' in value) || !('capability' in value) || !('expiresAt' in value)
-      || typeof value.uploadUrl !== 'string' || typeof value.capability !== 'string' || typeof value.expiresAt !== 'number' || value.expiresAt <= Date.now() || value.expiresAt > Date.now() + 600000 || !value.capability || value.capability.length > 4096) throw new Error('invalid upload admission.');
-    const url = new URL(value.uploadUrl);
-    if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash
-      || !new RegExp(`^/v1/uploads/[a-f0-9]{64}/${operation.uploadId}$`).test(url.pathname)) throw new Error('invalid upload address.');
-    active();
-    return capability = { uploadUrl: url.href, capability: value.capability, expiresAt: value.expiresAt };
+    return capability = admitted;
   }
   async function request(method: string, suffix = '', body?: Uint8Array<ArrayBuffer>, refreshed = false): Promise<unknown> {
     active();
