@@ -121,6 +121,10 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     }).module("redis"));
+    root_module.addImport("logfire", b.dependency("logfire", .{
+        .target = target,
+        .optimize = optimize,
+    }).module("logfire"));
 
     const executable = b.addExecutable(.{
         .name = "plyr-backend",

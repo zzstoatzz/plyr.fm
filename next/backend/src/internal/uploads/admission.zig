@@ -1,5 +1,6 @@
 const std = @import("std");
 const zat = @import("zat");
+const logfire = @import("logfire");
 const service_auth = @import("../atproto/service_auth.zig");
 
 pub const max_bytes = 1_610_612_736;
@@ -95,9 +96,25 @@ pub fn sign(a: std.mem.Allocator, claim: Claim, secret: []const u8) ![]const u8 
 }
 
 pub fn authorize(a: std.mem.Allocator, io: std.Io, settings: Settings, body: []const u8) ![]const u8 {
+    const span = logfire.span("upload.authorize", .{});
+    defer span.end();
+    return authorizeTraced(span, a, io, settings, body) catch |err| {
+        span.recordError(err);
+        return err;
+    };
+}
+
+fn authorizeTraced(span: logfire.Span, a: std.mem.Allocator, io: std.Io, settings: Settings, body: []const u8) ![]const u8 {
     const request = std.json.parseFromSliceLeaky(Request, a, body, .{}) catch return error.InvalidUpload;
+    span.setAttribute("upload.id", request.uploadId);
+    span.setAttribute("upload.record_uri", request.recordUri);
+    span.setAttribute("upload.size_bytes", request.sizeBytes);
+    span.setAttribute("upload.content_type", request.contentType);
+    span.setAttribute("upload.visibility", request.visibility);
+    span.setAttribute("upload.processing", request.processing != null);
     if (request.processing != null and !settings.processing_enabled) return error.UploadUnavailable;
     const owner = (try service_auth.verifyResolved(a, io, request.serviceToken, settings.identity)).issuer;
+    span.setAttribute("upload.owner_did", owner);
     try requireAllowed(a, owner);
     try validate(request, owner, settings.track_collection);
     const expiry = (std.Io.Timestamp.now(io, .real).toSeconds() + 300) * 1000;

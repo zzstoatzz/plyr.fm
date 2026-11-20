@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { audioAccept } from '$lib/media/accept';
+	import TagInput from './TagInput.svelte';
 	import { onMount, type Snippet } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -150,7 +151,7 @@
 				</div>
 				<label class="field"><span>title</span><input id="private-title" bind:value={title} maxlength="256" required disabled={busy || active} placeholder="name this track" /></label>
 				<label class="field"><span>description</span><textarea id="private-description" bind:value={description} maxlength="5000" rows="3" disabled={busy || active} placeholder="notes to yourself…"></textarea></label>
-				<label class="field"><span>tags</span><textarea id="private-tags" bind:value={tags} placeholder="one tag per line" rows="2" disabled={busy || active}></textarea></label>
+				<TagInput bind:value={tags} disabled={busy || active} />
 			</div>
 			<div class="bar">
 				{@render visibility?.()}

@@ -203,7 +203,7 @@ export function createApi(origin: string, playListenerId: () => string) {
 		trackComments: (id: string, signal?: AbortSignal) =>
 			get<TrackCommentPage>(`/v1/tracks/${encodeURIComponent(id)}/comments`, {}, signal),
 		tracks: (p: { limit?: number; cursor?: string; artist_did?: string; tag?: string[]; hidden_tag?: string[] } = {}, signal?: AbortSignal) => get<Page<Track>>('/v1/tracks', p, signal),
-		tags: (limit = 24, signal?: AbortSignal) => get<Page<{ name: string; track_count: number }>>('/v1/tags', { limit }, signal),
+		tags: (limit = 24, signal?: AbortSignal, cursor?: string) => get<Page<{ name: string; track_count: number }>>('/v1/tags', { limit, cursor }, signal),
 		track: (id: string, options?: { fresh?: boolean }) => options?.fresh
 			? request<Track>(`${origin}/v1/tracks/${encodeURIComponent(id)}`, 15_000, undefined, { cache: 'no-store' })
 			: get<Track>(`/v1/tracks/${encodeURIComponent(id)}`),
@@ -225,6 +225,9 @@ export function createApi(origin: string, playListenerId: () => string) {
 		/** up to 50 tracks; the server has no cursor past that */
 		chart: (period: 'day' | 'week' | 'month' | 'all_time' = 'week', limit?: number, signal?: AbortSignal) =>
 			get<{ period: string; data: ChartEntry[] }>('/v1/charts/tracks', { period, limit }, signal),
+		/** tracks that go with the seeds (record URIs), best first; never returns a seed or an excluded URI */
+		suggestions: (seeds: string[], options: { exclude?: string[]; limit?: number; signal?: AbortSignal } = {}) =>
+			get<{ object: 'track_suggestions'; data: Track[] }>('/v1/suggestions/tracks', { seed: seeds, exclude: options.exclude, limit: options.limit }, options.signal),
 		/** block (≤ timeout) until the appview has projected a write the client made on its PDS. */
 		awaitRecord: (uri: string, cid?: string, timeout_ms = 8000) =>
 			get<{ uri: string; status: AwaitStatus; cid?: string; reason?: string }>('/v1/records/await', {

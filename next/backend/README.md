@@ -211,11 +211,11 @@ The reads are XRPC methods under the track collection's experimental namespace
 and served by `src/api/xrpc.zig`: records by AT-URI (`uri`), accounts by `actor`,
 camelCase parameters, XRPC `{error, message}` errors, no published schema records.
 They mirror the `/v1` routes (tracks, tags, likes, comments, playback, charts,
-albums, playlists, artists, search, records/await), which go once clients move.
+albums, playlists, artists, search, suggestions, records/await), which go once clients move.
 Search accepts
 one strict query, a bounded global limit, and an optional type set; it returns
 verified record references with match class and provenance but no unstable
-numeric score. The track collection accepts a strict
+numeric score. Suggestions rank tracks for 1-20 `seed` URIs by shared likers, lists, tags and artist. The track collection accepts a strict
 `limit` from 1 to 100 and an opaque `cursor`; it
 accepts an optional canonical `artist_did`, applies discovery or artist-view
 policy before keyset pagination, and returns the same track representation as
@@ -346,6 +346,21 @@ Canonical writes and OAuth belong to the Expo client. The API maintains
 application-owned play aggregates and deduplication alongside read-only catalog
 operations. It does not read legacy Python tables or mirror their play totals.
 Current public-service dependencies and cutover work are in the rewrite inventory.
+
+## telemetry
+
+Every role exports to the production Logfire project through
+[logfire-zig](https://tangled.org/zzstoatzz.io/logfire-zig) when
+`LOGFIRE_WRITE_TOKEN` is set, and exports nothing without it. Each role
+reports as `plyr-next-<role>` (`plyr-next-api`, `plyr-next-jams`,
+`plyr-next-ingester`, …) with environment `next` unless `LOGFIRE_ENVIRONMENT`
+says otherwise, and `FLY_IMAGE_REF` as the service version.
+
+The API and the Jam coordinator open one span per HTTP request, named by
+method and route with identifiers replaced by `{id}`; health checks are not
+traced. Upload admission adds `upload.authorize` and `upload.inspect` spans
+carrying the owner DID and upload ID. Warnings and errors ship as log records;
+lower levels stay on stderr for `fly logs`.
 
 ## Historical canary design
 

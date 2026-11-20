@@ -11,12 +11,14 @@ const download_authorization = @import("../downloads/authorization.zig");
 const upload_inspection = @import("../uploads/inspection.zig");
 const tickets = @import("../jams/tickets.zig");
 const config = @import("../../config.zig");
+const telemetry = @import("../telemetry.zig");
 
 const allocator = std.heap.smp_allocator;
 const max_outbox_bytes = 512 * 1024;
 /// Clients ping every 10 seconds; a peer silent for longer than this is gone
 /// without a close frame (network loss, a killed tab) and must release output.
 const idle_timeout_ms = 30_000;
+threadlocal var response_status: u16 = 0;
 
 pub fn run(a: std.mem.Allocator, io: std.Io, settings: config.Config) !void {
     if (env("FLY_APP_NAME") != null and std.mem.eql(u8, env("JAM_TEST_MODE") orelse "", "1")) return error.TestModeForbidden;
@@ -373,6 +375,9 @@ const Handler = struct {
         var arena = std.heap.ArenaAllocator.init(allocator);
         defer arena.deinit();
         const a = arena.allocator();
+        response_status = 0;
+        const traced = telemetry.Request.begin(a, method, url, null);
+        defer traced.end(response_status);
         const origin = headers.get("origin") orelse "";
         if (!context.allowed(origin)) return http(conn, a, 403, "{}", "");
         if (std.mem.eql(u8, method, "OPTIONS")) return http(conn, a, 204, "", origin);
@@ -393,12 +398,15 @@ const Handler = struct {
             }
             defer _ = context.download_admissions.fetchSub(1, .acq_rel);
             const settings = context.download_settings orelse return http(conn, a, 503, "{}", origin);
-            const response = download_authorization.authorize(a, context.io, settings, body) catch |err| return http(conn, a, switch (err) {
-                error.InvalidRequest => 400,
-                error.InvalidIdentity, error.DownloadDenied => 403,
-                error.TrackChanged => 409,
-                else => 503,
-            }, "{}", origin);
+            const response = download_authorization.authorize(a, context.io, settings, body) catch |err| {
+                traced.failed(err);
+                return http(conn, a, switch (err) {
+                    error.InvalidRequest => 400,
+                    error.InvalidIdentity, error.DownloadDenied => 403,
+                    error.TrackChanged => 409,
+                    else => 503,
+                }, "{}", origin);
+            };
             return http(conn, a, 200, response, origin);
         }
         const upload_authorize = std.mem.eql(u8, url, "/v1/uploads/authorize");
@@ -413,6 +421,7 @@ const Handler = struct {
             }
             defer _ = context.upload_admissions.fetchSub(1, .acq_rel);
             return upload(conn, a, body, origin, context, upload_settings, upload_inspect) catch |err| {
+                traced.failed(err);
                 http(conn, a, switch (err) {
                     error.InvalidUpload => 400,
                     error.InvalidIdentity, error.UploadPaused => 403,
@@ -429,6 +438,7 @@ const Handler = struct {
         }
         defer _ = context.admissions.fetchSub(1, .acq_rel);
         if (settings) return preferences(conn, a, body, origin, context) catch |err| {
+            traced.failed(err);
             std.log.warn("settings request failed: {s}", .{@errorName(err)});
             http(conn, a, switch (err) {
                 error.InvalidRequest, error.InvalidPreferences => 400,
@@ -437,6 +447,7 @@ const Handler = struct {
             }, "{}", origin);
         };
         join(conn, a, body, origin, context, personal_join) catch |err| {
+            traced.failed(err);
             std.log.warn("Jam admission failed: {s}", .{@errorName(err)});
             const result = std.json.Stringify.valueAlloc(a, .{ .@"error" = .{ .message = if (personal_join) "Could not open your queue" else if (err == error.RoomNotStarted) "The host needs to start this Jam" else "Could not authorize this Jam" } }, .{}) catch return;
             const status: u16 = switch (err) {
@@ -539,6 +550,7 @@ fn restoreRoom(a: std.mem.Allocator, context: *Context, records: *queue_record.R
 }
 
 fn http(conn: *websocket.Conn, a: std.mem.Allocator, status: u16, body: []const u8, origin: []const u8) void {
+    response_status = status;
     const headers = std.fmt.allocPrint(a, "HTTP/1.1 {d} OK\r\nContent-Type: application/json\r\nContent-Length: {d}\r\nConnection: close\r\nCache-Control: no-store\r\nAccess-Control-Allow-Origin: {s}\r\nVary: Origin\r\nAccess-Control-Allow-Methods: GET, POST, OPTIONS\r\nAccess-Control-Allow-Headers: content-type\r\n\r\n", .{ status, body.len, origin }) catch return;
     var buffer: [4096]u8 = undefined;
     var writer = conn.stream.writer(conn.io, &buffer);
