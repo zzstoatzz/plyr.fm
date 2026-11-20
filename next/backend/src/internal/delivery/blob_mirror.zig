@@ -6,6 +6,9 @@
 //! bucket (R2), only after the bytes hash to the record's blob CID, and records
 //! the object URL as a `verified_blob_cid` delivery origin. Playback then
 //! prefers that URL, and anyone can re-check it against the signed record.
+//! A blob-backed version isn't listed or read back until that origin exists, so
+//! ingest wakes this worker for every new version; the uploading client has
+//! usually stored the object already, leaving only a HEAD.
 //! Records that already carry an https `audioUrl` aren't mirrored: they play
 //! from that URL (unverified), so storage isn't paid twice.
 //!
@@ -33,7 +36,9 @@ pub const Settings = struct {
     upload_token: []const u8,
     key_prefix: []const u8 = "audio",
     batch_size: u32 = 8,
-    idle_ms: i64 = 15_000,
+    /// ingest wakes the mirror for each new version; this sweep only recovers
+    /// retries that came due and anything a missed wake left behind
+    recovery_ms: i64 = 60_000,
 
     pub fn fromEnvironment() ?Settings {
         const base_url = getenv("MIRROR_BASE_URL") orelse return null;
@@ -53,6 +58,24 @@ pub const Settings = struct {
         if (!safeSegment(self.key_prefix)) return error.InvalidMirrorPrefix;
     }
 };
+
+var woken = std.atomic.Value(bool).init(false);
+
+/// Called by ingest after it projects a track version, so its audio is copied now
+/// rather than at the next sweep.
+pub fn wake() void {
+    woken.store(true, .release);
+}
+
+/// Sleeps up to `ms`, returning as soon as `wake` has been called.
+fn idle(io: std.Io, ms: i64) !void {
+    const slice_ms = 100;
+    var waited: i64 = 0;
+    while (waited < ms) : (waited += slice_ms) {
+        if (woken.swap(false, .acq_rel)) return;
+        try io.sleep(std.Io.Duration.fromMilliseconds(slice_ms), .awake);
+    }
+}
 
 pub fn run(io: std.Io, allocator: std.mem.Allocator, pool: *pg.Pool) !void {
     const settings = Settings.fromEnvironment() orelse {
@@ -111,7 +134,7 @@ fn runWith(io: std.Io, allocator: std.mem.Allocator, pool: *pg.Pool, settings: S
             log.err("mirror batch failed: {}", .{err});
             break :blk 0;
         };
-        if (copied == 0) try io.sleep(std.Io.Duration.fromMilliseconds(settings.idle_ms), .awake);
+        if (copied == 0) try idle(io, settings.recovery_ms);
     }
 }
 
@@ -149,13 +172,34 @@ const Worker = struct {
     /// Fetch, verify, upload. Returns the public URL (owned by self.allocator).
     fn mirror(self: *Worker, candidate: store_module.Candidate) ![]u8 {
         if (candidate.byte_length) |size| if (size < 0 or size > max_blob_bytes) return error.BlobTooLarge;
-        const blob = try self.fetchBlob(candidate);
-        defer self.pds_transport.allocator.free(blob);
-        try verifyBlob(self.allocator, candidate.blob_cid, blob);
         const key = try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ self.settings.key_prefix, candidate.blob_cid });
         defer self.allocator.free(key);
-        try self.put(key, candidate.media_type, blob);
+        // the uploading client usually stored it already; the key fixes the digest
+        if (!try self.stored(key)) {
+            const blob = try self.fetchBlob(candidate);
+            defer self.pds_transport.allocator.free(blob);
+            try verifyBlob(self.allocator, candidate.blob_cid, blob);
+            try self.put(key, candidate.media_type, blob);
+        }
         return std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ self.settings.base_url, key });
+    }
+
+    /// The worker only stores bytes that hash to the key's CID, so presence is proof.
+    fn stored(self: *Worker, key: []const u8) !bool {
+        const url = try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ self.settings.base_url, key });
+        defer self.allocator.free(url);
+        var result = self.bucket_transport.fetch(.{
+            .url = url,
+            .method = .HEAD,
+            .max_response_size = 1024,
+            .on_redirect = .refuse,
+            .deadline_ns = 30 * std.time.ns_per_s,
+        }) catch |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            else => return false,
+        };
+        defer result.deinit(self.bucket_transport.allocator);
+        return result.status == .ok;
     }
 
     fn fetchBlob(self: *Worker, candidate: store_module.Candidate) ![]u8 {
@@ -290,4 +334,15 @@ test "mirror settings require https, a real token, and a plain prefix" {
     settings.upload_token = "0123456789abcdef0123456789abcdef";
     settings.key_prefix = "../etc";
     try std.testing.expectError(error.InvalidMirrorPrefix, settings.validate());
+}
+
+test "a wake from ingest ends the mirror's idle wait at once" {
+    var threaded = std.Io.Threaded.init(std.testing.allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    wake();
+    const started = std.Io.Timestamp.now(io, .awake).nanoseconds;
+    try idle(io, 60_000);
+    try std.testing.expect(std.Io.Timestamp.now(io, .awake).nanoseconds - started < std.time.ns_per_s);
+    try std.testing.expect(!woken.load(.acquire));
 }
