@@ -1,5 +1,6 @@
 <script lang="ts">
   import { audioAccept } from '$lib/media/accept';
+  import TagInput from '$lib/publishing/TagInput.svelte';
   import { goto } from '$app/navigation';
   import { onMount, tick, untrack } from 'svelte';
   import { isOpen } from '@plyr/next-core/access/policy';
@@ -167,7 +168,7 @@
       <label>title <input bind:value={title} maxlength="256" required disabled={busy || confirm} /></label>
       <label>album <input bind:value={album} maxlength="256" disabled={busy || confirm} /></label>
       <label>description <textarea bind:value={description} maxlength="5000" rows="4" disabled={busy || confirm}></textarea></label>
-      <label>tags <textarea bind:value={tags} oninput={() => { tagsEdited = true; }} placeholder="one tag per line" rows="2" disabled={busy || confirm}></textarea></label>
+      <TagInput bind:value={tags} onedit={() => { tagsEdited = true; }} disabled={busy || confirm} />
       <label>change cover <input type="file" accept="image/*,.heic,.heif" bind:this={artworkInput} disabled={busy || imageBusy || confirm} onchange={event => chooseArtwork(event.currentTarget.files?.[0])} /></label>
       <div class="editor-actions">
         <button type="button" class="text-button" disabled={busy || imageBusy || confirm} onclick={() => { artwork = artwork === null ? undefined : null; if (artworkInput) artworkInput.value = ''; }}>

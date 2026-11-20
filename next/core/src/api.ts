@@ -203,7 +203,7 @@ export function createApi(origin: string, playListenerId: () => string) {
 		trackComments: (id: string, signal?: AbortSignal) =>
 			get<TrackCommentPage>(`/v1/tracks/${encodeURIComponent(id)}/comments`, {}, signal),
 		tracks: (p: { limit?: number; cursor?: string; artist_did?: string; tag?: string[]; hidden_tag?: string[] } = {}, signal?: AbortSignal) => get<Page<Track>>('/v1/tracks', p, signal),
-		tags: (limit = 24, signal?: AbortSignal) => get<Page<{ name: string; track_count: number }>>('/v1/tags', { limit }, signal),
+		tags: (limit = 24, signal?: AbortSignal, cursor?: string) => get<Page<{ name: string; track_count: number }>>('/v1/tags', { limit, cursor }, signal),
 		track: (id: string, options?: { fresh?: boolean }) => options?.fresh
 			? request<Track>(`${origin}/v1/tracks/${encodeURIComponent(id)}`, 15_000, undefined, { cache: 'no-store' })
 			: get<Track>(`/v1/tracks/${encodeURIComponent(id)}`),

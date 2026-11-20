@@ -21,6 +21,7 @@ import { useMyAvatar } from '../src/use-my-avatar';
 import { usePreferences } from '../src/preferences';
 import { usesLiquidTabs } from '../src/tab-platform';
 import { UploadQueueHost } from '../src/publishing/UploadQueue';
+import { UploadIslandHost } from '../src/publishing/UploadIsland';
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
@@ -37,6 +38,7 @@ export default function RootLayout() {
         <RadioProvider>
           <UploadQueueHost />
           <Shell />
+          <UploadIslandHost />
         </RadioProvider>
       </PlaybackProvider>
     </AppearanceProvider>

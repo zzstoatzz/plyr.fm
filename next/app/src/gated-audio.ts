@@ -3,6 +3,7 @@ import { getRandomBytesAsync, randomUUID } from 'expo-crypto';
 import { Directory, File, FileMode, Paths } from 'expo-file-system';
 import { fetch } from 'expo/fetch';
 import type { Auth } from './auth-state';
+import { sniffAudioExtension } from '@plyr/next-core/audio-sniff';
 import { openGatedAudio } from './gated-audio-shared';
 import { MAX_AUDIO_BYTES } from './pds';
 
@@ -15,8 +16,17 @@ const EXTENSIONS: Record<string, string> = {
 	'audio/x-wav': 'wav',
 	'audio/flac': 'flac',
 	'audio/ogg': 'ogg',
-	'audio/webm': 'webm'
+	'audio/x-m4a': 'm4a',
+	'audio/m4a': 'm4a',
+	'audio/aiff': 'aiff',
+	'audio/x-aiff': 'aiff',
+	'audio/wave': 'wav',
+	'audio/vnd.wave': 'wav',
+	'audio/x-flac': 'flac',
+	'audio/webm': 'webm',
+	'video/mp4': 'm4a'
 };
+
 const active = new Map<string, File>();
 let cache: Directory | undefined;
 
@@ -44,8 +54,14 @@ export async function gatedAudioUrl(uri: string, auth: Auth): Promise<string> {
 	});
 	if (!response.body) throw new Error('this track has no audio');
 	const reader = response.body.getReader();
-	const type = response.headers.get('content-type')?.split(';')[0] ?? '';
-	const extension = EXTENSIONS[type] ?? 'audio';
+	const first = await reader.read();
+	if (first.done || !first.value.byteLength) {
+		await reader.cancel().catch(() => undefined);
+		throw new Error('this track has no audio');
+	}
+	// AVPlayer picks its decoder from the file extension, and a PDS may serve the blob as octet-stream.
+	const type = response.headers.get('content-type')?.split(';')[0].trim().toLowerCase() ?? '';
+	const extension = sniffAudioExtension(first.value) ?? EXTENSIONS[type] ?? 'mp3';
 	const file = new File(audioCache(), `${randomUUID()}.${extension}`);
 
 	try {
@@ -53,8 +69,8 @@ export async function gatedAudioUrl(uri: string, auth: Auth): Promise<string> {
 		const handle = file.open(FileMode.WriteOnly);
 		try {
 			let bytes = 0;
-			for (;;) {
-				const { done, value } = await reader.read();
+			for (let chunk: ReadableStreamReadResult<Uint8Array> = first; ; chunk = await reader.read()) {
+				const { done, value } = chunk;
 				if (done) break;
 				bytes += value.byteLength;
 				if (bytes > MAX_AUDIO_BYTES) throw new Error('this protected track exceeds the 100 MB limit');

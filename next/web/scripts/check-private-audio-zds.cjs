@@ -36,9 +36,9 @@ async function checkOwnerTrack(page, audio, previousSource, origin, appView, coo
   await page.waitForURL('**/upload?visibility=only-you');
   assert.equal(await editor.getByRole('textbox', { name: 'title', exact: true }).inputValue(), ownerTitle);
   await editor.getByText(/fixture\.wav/).waitFor();
-  await editor.getByRole('textbox', { name: 'tags', exact: true }).fill('field\nambient');
+  await editor.getByRole('combobox', { name: 'tags', exact: true }).fill('field,ambient,');
   await policy.getByRole('link', { name: 'everyone' }).click();
-  assert.equal(await editor.getByRole('textbox', { name: 'tags', exact: true }).inputValue(), 'field\nambient');
+  assert.equal((await editor.locator('.tag-input .chip').allInnerTexts()).map(text => text.replace(/×$/, '').trim()).join('\n'), 'field\nambient');
   await policy.getByRole('link', { name: 'only you' }).click();
   await editor.getByRole('textbox', { name: 'artist', exact: true }).fill('fixture artist');
   await page.getByRole('button', { name: 'upload', exact: true }).click();
