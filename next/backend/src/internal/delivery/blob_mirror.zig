@@ -18,6 +18,7 @@ const zat = @import("zat");
 const pinned_tls = @import("../net/pinned_tls.zig");
 const safe_endpoint = @import("../net/safe_endpoint.zig");
 const store_module = @import("postgres_mirror_store.zig");
+const mirror_wake = @import("mirror_wake.zig");
 
 const log = std.log.scoped(.blob_mirror);
 
@@ -111,8 +112,16 @@ fn runWith(io: std.Io, allocator: std.mem.Allocator, pool: *pg.Pool, settings: S
             log.err("mirror batch failed: {}", .{err});
             break :blk 0;
         };
-        if (copied == 0) try io.sleep(std.Io.Duration.fromMilliseconds(settings.idle_ms), .awake);
+        if (copied == 0) try idle(io, settings.idle_ms);
     }
+}
+
+/// Waits out the idle period, cut short when the ingester verifies a new track version.
+fn idle(io: std.Io, idle_ms: i64) !void {
+    const step_ms = 250;
+    var waited: i64 = 0;
+    while (waited < idle_ms and !mirror_wake.take()) : (waited += step_ms)
+        try io.sleep(std.Io.Duration.fromMilliseconds(step_ms), .awake);
 }
 
 const Worker = struct {

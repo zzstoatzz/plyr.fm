@@ -21,6 +21,8 @@ import { useMediaSession } from './media-session';
 import { useRemoteTrackControls } from './use-remote-track-controls';
 import { toast } from './toast';
 import { playbackFor, warm } from './playback-lookup';
+import { freshPlayback } from '@plyr/next-core/fresh-playback';
+import { api } from './api-client';
 import { PlaybackScope, type Playback } from './playback-context';
 
 const viewQueue = { label: 'view queue', href: '/queue' } as const;
@@ -167,7 +169,11 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     setStarting(null);
     setError(null);
     try {
-      const playback = privateTrack ? { availability: { status: 'gated' as const, space: { record: track.record.uri }, delivery: undefined, artifact: undefined } } : await playbackFor(track.id);
+      const playback = privateTrack ? { availability: { status: 'gated' as const, space: { record: track.record.uri }, delivery: undefined, artifact: undefined } } : await freshPlayback(attempt => attempt ? api.playback(track.id, { fresh: true }) : playbackFor(track.id), {
+        createdAt: track.metadata.created_at,
+        stale: () => request !== sequence.current,
+        onWaiting: () => recordPlayback('waiting on delivery', { request, elapsedMs: Date.now() - startedAt })
+      });
       if (request !== sequence.current) return false;
       const { status: availability, space, delivery, artifact } = playback.availability;
       if (!privateTrack) console.info("[playback] availability", { request, track: track.id, availability, delivery: !!delivery, artifact: !!artifact, elapsedMs: Date.now() - startedAt });

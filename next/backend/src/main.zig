@@ -415,6 +415,7 @@ test {
     _ = @import("internal/ingest/cached_signing_key_resolver.zig");
     _ = @import("internal/ingest/catalog_reconciler.zig");
     _ = @import("internal/delivery/blob_mirror.zig");
+    _ = @import("internal/delivery/mirror_wake.zig");
     _ = @import("internal/moderation/label_sync.zig");
     _ = @import("internal/moderation/log.zig");
     _ = @import("internal/moderation/postgres_log.zig");

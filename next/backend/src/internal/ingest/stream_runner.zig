@@ -26,6 +26,7 @@ const snapshot_store = @import("../projection/postgres_verified_snapshot_store.z
 const account_schedule = @import("../account/postgres_check_schedule.zig");
 const record_proof_verifier = @import("../projection/record_proof_verifier.zig");
 const record_apply = @import("record_apply.zig");
+const mirror_wake = @import("../delivery/mirror_wake.zig");
 
 const log = std.log.scoped(.ingester);
 
@@ -227,6 +228,8 @@ const Handler = struct {
             .commit_rev = state.commit_rev,
             .indexed_at_us = indexed_at_us,
         });
+        // A new or changed track has audio for the mirror to copy before it can play.
+        if (state.record != null and std.mem.eql(u8, commit.collection, self.collections.track)) mirror_wake.signal();
         const verify_ms = @divFloor(std.Io.Timestamp.now(self.io, .awake).nanoseconds - started, std.time.ns_per_ms);
         log.info("live verified {s}/{s} at rev {s}: verify {d}ms, event lag {d}ms", .{
             commit.did,
