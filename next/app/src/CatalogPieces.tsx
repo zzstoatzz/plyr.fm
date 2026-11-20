@@ -150,9 +150,13 @@ export function Cover({ uri, size = 48, round = false, radius = 8, instant = fal
 }) {
   const colors = useAppearance();
   const sources = uri && /^https?:\/\//i.test(uri) ? [...new Set([displayUrl(uri, size, PixelRatio.get()), uri])] : [];
-  // A resized or thumbnail rendition that fails falls back to the original before the placeholder.
+  // A resized or thumbnail rendition that fails falls back to the original, and the first rendition
+  // is asked for once more past any cached failure, before the placeholder.
   const [failed, setFailed] = useState<{ uri?: string | null; count: number }>({ count: 0 });
-  const source = sources[failed.uri === uri ? failed.count : 0];
+  const attempt = failed.uri === uri ? failed.count : 0;
+  const reloading = sources.length > 0 && attempt === sources.length;
+  // a distinct URL, since iOS answers the same one from a cached failure whatever the cache policy
+  const source = reloading ? `${sources[0]}${sources[0].includes('?') ? '&' : '?'}retry=1` : sources[attempt];
   const opacity = useRef(new Animated.Value(instant || source && revealed.has(source) ? 1 : 0)).current;
   const borderRadius = round ? size / 2 : radius;
   const style = { width: size, height: size, borderRadius, backgroundColor: colors.raised, ...(size >= 100 && !round ? artworkShadow(colors) : {}) };
@@ -163,10 +167,10 @@ export function Cover({ uri, size = 48, round = false, radius = 8, instant = fal
   const fail = () => {
     const count = (failed.uri === uri ? failed.count : 0) + 1;
     setFailed({ uri, count });
-    if (count >= sources.length) onSettle?.();
+    if (count > sources.length) onSettle?.();
   };
   return source ? <View style={style}>
-    <Animated.Image accessibilityIgnoresInvertColors source={{ uri: source, cache: 'force-cache' }} style={{ width: size, height: size, borderRadius, opacity }} onLoad={reveal} onError={fail} />
+    <Animated.Image accessibilityIgnoresInvertColors source={{ uri: source, cache: reloading ? 'reload' : 'default' }} style={{ width: size, height: size, borderRadius, opacity }} onLoad={reveal} onError={fail} />
   </View> : <View style={[style, { alignItems: 'center', justifyContent: 'center' }]}>
     {round ? <UserRound size={size * 0.38} color={colors.muted} /> : <Music2 size={size * 0.32} color={colors.muted} />}
   </View>;
