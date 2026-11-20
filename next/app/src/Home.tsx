@@ -46,7 +46,7 @@ function HomeFeed({ onPlay, hiddenTags }: { onPlay: Play; hiddenTags: string[] }
       <HomeTagBar feed={feed} hiddenTags={hiddenTags} />
     </View>
   </View>;
-  return <FlatList ref={list} testID="home-feed" data={tracks} keyExtractor={track => track.id}
+  return <FlatList ref={list} testID="home-feed" data={tracks} keyExtractor={track => track.id} contentInsetAdjustmentBehavior="automatic"
     style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ ...pageFrame, paddingTop: 16, paddingBottom: 24 }}
     onLayout={event => { setListHeight(event.nativeEvent.layout.height); viewport.current.height = event.nativeEvent.layout.height; fillViewport(); }}
     onContentSizeChange={(_, height) => { viewport.current.content = height; fillViewport(); }}
