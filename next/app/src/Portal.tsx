@@ -39,7 +39,7 @@ function PortalPage({ children, scrollRef, ...props }: {
   children: ReactNode; scrollRef?: Ref<ScrollViewInstance>;
 } & Pick<ScrollViewProps, 'onScroll' | 'onContentSizeChange'>) {
   const theme = useAppearance();
-  return <ScrollView ref={scrollRef} {...props} scrollEventThrottle={16} keyboardShouldPersistTaps="handled"
+  return <ScrollView ref={scrollRef} {...props} scrollEventThrottle={16} contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled"
     style={{ backgroundColor: theme.background }} contentContainerStyle={{ ...pageFrame, gap: 16, paddingTop: 16, paddingBottom: 32 }}>
     {children}
   </ScrollView>;
