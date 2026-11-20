@@ -13,7 +13,7 @@ async function queueSuggestions(browser, phone, scheme) {
   const { context, page, errors } = await setup(browser, width, phone ? 844 : 960, { phone, scheme });
   try {
     const seen = [];
-    await page.route('https://api.next.plyr.fm/v1/suggestions/tracks?**', route => {
+    await page.route('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.getTrackSuggestions?**', route => {
       const url = new URL(route.request().url());
       seen.push({ seeds: url.searchParams.getAll('seed'), exclude: url.searchParams.getAll('exclude') });
       return route.fulfill({ json: { object: 'track_suggestions', data: tracks.slice(4, 8) } });

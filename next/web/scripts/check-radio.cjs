@@ -4,6 +4,7 @@ const path = require('node:path');
 const { chromium } = require('playwright');
 process.env.PLAYER_DIST ??= path.resolve(__dirname, '../build');
 const { tracks, setup, serve, close } = require('./fixture-catalog.cjs');
+const { method, trackIdFromUri } = require('./xrpc-fixture.cjs');
 
 const output = process.env.SCREENS_OUTPUT || '/tmp/plyr-svelte-radio';
 const slugs = ['loved', 'fresh', 'deep-cuts', 'slop', 'firehose'];
@@ -69,7 +70,7 @@ async function fixture(browser, width, scheme, fastChange = false) {
     const request = route.request();
     const url = new URL(request.url());
     if (request.method() !== 'POST') return route.fallback();
-    const trackId = url.pathname.match(/^\/v1\/tracks\/([^/]+)\/plays$/)?.[1];
+    const trackId = method(url) === 'recordPlay' && url.searchParams.get('uri') ? trackIdFromUri(url.searchParams.get('uri')) : undefined;
     if (!trackId) { appViewWrites.push(url.pathname); return route.abort(); }
     const occurrence = url.searchParams.get('occurrence');
     receipts.push({ trackId, occurrence });

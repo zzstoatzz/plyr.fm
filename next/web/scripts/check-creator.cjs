@@ -5,6 +5,7 @@ const path = require('node:path');
 const { chromium } = require('playwright');
 const { authorizeFixture, fixtureAccounts, fixturePage } = require('./pds-browser-fixture.cjs');
 const { serveAudio } = require('./fixture-catalog.cjs');
+const { method, names, trackIdFromUri, uriFromId } = require('./xrpc-fixture.cjs');
 
 const origin = 'https://next.plyr.fm';
 const pds = 'http://127.0.0.1:5197/xrpc/';
@@ -73,12 +74,12 @@ async function run(browser, accounts, width, theme, mp3) {
     ? serveAudio(route) : route.fulfill({ status: 404, body: '' }));
   await context.route('https://api.next.plyr.fm/**', async route => {
     const url = new URL(route.request().url());
-    if (url.pathname === `/v1/tracks/${id}/plays`) return route.fulfill({ status: 204 });
+    if (method(url) === 'recordPlay' && names(url, id)) return route.fulfill({ status: 204 });
     assert.equal(route.request().method(), 'GET', 'creator activity never writes to the AppView');
-    if ([`/v1/artists/${did}`, `/v1/artists/${handle}`].includes(decodeURIComponent(url.pathname))) return route.fulfill({ json: { display_name: author, handle, did } });
-    if (url.pathname === '/v1/tracks') {
-      if (!url.searchParams.has('artist_did')) return route.fulfill({ json: list([]) });
-      assert.equal(url.searchParams.get('artist_did'), did);
+    if (method(url) === 'getArtist' && [did, handle].includes(url.searchParams.get('actor'))) return route.fulfill({ json: { display_name: author, handle, did } });
+    if (method(url) === 'listTracks') {
+      if (!url.searchParams.has('artistDid')) return route.fulfill({ json: list([]) });
+      assert.equal(url.searchParams.get('artistDid'), did);
       if (initialError) { initialError = false; return route.fulfill({ status: 503, json: { error: { message: 'fixture catalog unavailable' } } }); }
       if (url.searchParams.get('cursor') === 'next') {
         if (moreError) { moreError = false; return route.fulfill({ status: 503, json: { error: { message: 'fixture next page unavailable' } } }); }
@@ -86,22 +87,22 @@ async function run(browser, accounts, width, theme, mp3) {
       }
       return route.fulfill({ json: list(Array.from({ length: 25 }, (_, index) => row(index)), 'next') });
     }
-    if (url.pathname === '/v1/albums') {
-      assert.equal(url.searchParams.get('artist_did'), did);
+    if (method(url) === 'listAlbums') {
+      assert.equal(url.searchParams.get('artistDid'), did);
       albumRequests.push(url.search);
       return route.fulfill({ json: list([album, emptyAlbum]) });
     }
-    if (url.pathname === `/v1/tracks/${id}`) {
+    if (method(url) === 'getTrack' && names(url, id)) {
       if (!trackLoadFailed) { trackLoadFailed = true; return route.abort('failed'); }
       return route.fulfill({ json: row(25) });
     }
-    if (url.pathname === `/v1/tracks/${id}/playback`) return route.fulfill({ json: {
+    if (method(url) === 'getPlayback' && names(url, id)) return route.fulfill({ json: {
       availability: { status: 'available', ...(projected.audioBlob
         ? { artifact: { cid: projected.audioBlob.ref.$link } }
         : { delivery: { url: seed.audioUrl } }) }
     } });
-    if (decodeURIComponent(url.pathname) === `/v1/actors/${did}/likes`) return route.fulfill({ json: list(projectedLike ? [row(25)] : []) });
-    if (url.pathname === '/v1/records/await') {
+    if (method(url) === 'getActorLikes' && url.searchParams.get('actor') === did) return route.fulfill({ json: list(projectedLike ? [row(25)] : []) });
+    if (method(url) === 'awaitRecord') {
       const address = url.searchParams.get('uri');
       if (address?.startsWith(`at://${did}/fm.plyr.like/`)) {
         const like = await pdsRecord('fm.plyr.like', address.split('/').at(-1));
@@ -283,7 +284,7 @@ async function run(browser, accounts, width, theme, mp3) {
     await main.getByRole('link', { name: 'recording after edit', exact: true }).click();
     const indexedLike = page.waitForResponse(response => {
       const url = new URL(response.url());
-      return url.pathname === '/v1/records/await' && url.searchParams.get('uri')?.startsWith(`at://${did}/fm.plyr.like/`) && response.ok();
+      return method(url) === 'awaitRecord' && url.searchParams.get('uri')?.startsWith(`at://${did}/fm.plyr.like/`) && response.ok();
     });
     await main.getByRole('button', { name: 'Like track', exact: true }).click();
     await main.getByRole('button', { name: 'Unlike track', exact: true }).waitFor();

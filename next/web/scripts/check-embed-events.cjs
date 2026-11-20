@@ -5,6 +5,7 @@ const http = require('node:http');
 const { chromium } = require('playwright');
 process.env.PLAYER_DIST ??= path.resolve(__dirname, '../build');
 const { tracks, setup, serve, close } = require('./fixture-catalog.cjs');
+const { method, names, trackIdFromUri } = require('./xrpc-fixture.cjs');
 const protocol = 'fm.plyr.embed.experimental.v1';
 const output = process.env.SCREENS_OUTPUT || '/tmp/plyr-embed-screens';
 
@@ -68,7 +69,7 @@ const output = process.env.SCREENS_OUTPUT || '/tmp/plyr-embed-screens';
     await embed.getByRole('button', { name: 'Play', exact: true }).click();
     assert.equal(await child.evaluate(() => window.media[0].paused), false, 'unsubscribe preserves audio');
     await page.screenshot({ path: path.join(output, 'cross-origin-embed.png') });
-    const failedPath = `https://api.next.plyr.fm/v1/tracks/${tracks[1].id}/playback`;
+    const failedPath = url => url.hostname === 'api.next.plyr.fm' && method(url) === 'getPlayback' && names(url, tracks[1].id);
     await page.route(failedPath, async route => {
       await new Promise(resolve => setTimeout(resolve, 600));
       await route.fulfill({ status: 503, json: { error: { code: 'unavailable' } } });

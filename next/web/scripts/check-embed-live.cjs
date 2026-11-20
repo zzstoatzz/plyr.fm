@@ -50,7 +50,7 @@ const protocol = 'fm.plyr.embed.experimental.v1';
       }, scenario === 'no-capture');
       const counts = { corsRequests: 0, plainRequests: 0 };
       requests.set(scenario, counts);
-      await page.route('https://api.next.plyr.fm/v1/tracks/*/playback', route => route.fulfill({ json: {
+      await page.route('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.getPlayback?**', route => route.fulfill({ json: {
         object: 'playback', track_id: tracks[0].id, record: tracks[0].record,
         availability: { status: 'available', delivery: { url: `${parent}/audio?scenario=${scenario}&track=${route.request().url().split('/').at(-2)}`, media_type: 'audio/wav' } }
       } }));

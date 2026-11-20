@@ -3,6 +3,7 @@ const { mkdir } = require('node:fs/promises');
 const path = require('node:path');
 const { chromium } = require('playwright');
 const homePagination = require('./home-pagination.cjs');
+const { method, names, xrpc } = require('./xrpc-fixture.cjs');
 process.env.PLAYER_DIST ??= path.resolve(__dirname, '../build');
 const { tracks, collectionTracks, setup, serve, close } = require('./fixture-catalog.cjs');
 
@@ -21,7 +22,7 @@ async function screen(browser, phone, scheme) {
       ...tracks[2],
       artist: { ...tracks[2].artist, did: 'did:plc:otherartist', profile: { ...tracks[2].artist.profile, display_name: 'another artist' } }
     }];
-    await page.route('https://api.next.plyr.fm/v1/charts/tracks?**', route => {
+    await page.route('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.getTrackChart?**', route => {
       if (new URL(route.request().url()).searchParams.get('period') !== 'all_time') return route.fallback();
       return route.fulfill({ json: { data: featuredTracks.map(track => ({ track })) } });
     });
@@ -29,17 +30,16 @@ async function screen(browser, phone, scheme) {
     await page.addInitScript(() => {
       Object.defineProperty(navigator, 'share', { value: async ({ url }) => sessionStorage.setItem('shared-track', url) });
     });
-    await page.route(/^https:\/\/api\.next\.plyr\.fm\/v1\/tracks(?:\?|$)/, route => route.fulfill({
+    await page.route(/^https:\/\/api\.next\.plyr\.fm\/xrpc\/fm\.plyr\.unspecced\.listTracks(?:\?|$)/, route => route.fulfill({
       json: { object: 'list', data: [linkedTrack, ...tracks.slice(1)], has_more: false }
     }));
-    await page.route('https://api.next.plyr.fm/v1/tracks/1667', route => route.fulfill({ json: linkedTrack }));
-    await page.route('https://api.next.plyr.fm/v1/tracks/' + tracks[0].id, route => route.fulfill({ json: linkedTrack }));
+    await page.route(url => url.pathname === xrpc('getTrack') && (names(url, 1667) || names(url, tracks[0].id)), route => route.fulfill({ json: linkedTrack }));
     await page.goto(origin + '/track/' + tracks[0].id + '?ref=fixture');
     await page.waitForURL('**/track/1667?ref=fixture');
     await page.getByRole('heading', { name: linkedTrack.metadata.title, exact: true }).waitFor();
     await page.reload();
     await page.getByRole('heading', { name: linkedTrack.metadata.title, exact: true }).waitFor();
-    await Promise.all([page.waitForResponse(response => response.url().endsWith(tracks[3].id + '/comments')), page.goto(origin + '/track/' + tracks[3].id)]);
+    await Promise.all([page.waitForResponse(response => method(new URL(response.url())) === 'getTrackComments' && names(new URL(response.url()), tracks[3].id)), page.goto(origin + '/track/' + tracks[3].id)]);
     await page.getByRole('heading', { name: tracks[3].metadata.title, exact: true }).waitFor();
     await page.waitForTimeout(250);
     assert.equal(await page.getByRole('button', { name: 'comments', exact: true }).count(), 0, 'no comments button when the artist has not opted in');
@@ -93,9 +93,9 @@ async function screen(browser, phone, scheme) {
     let releaseDelivery;
     let deliveries = 0;
     const waiting = new Promise(resolve => { releaseDelivery = resolve; });
-    const playbackUrl = 'https://api.next.plyr.fm/v1/tracks/' + tracks[0].id + '/playback';
+    const playbackUrl = url => url.hostname === 'api.next.plyr.fm' && url.pathname === xrpc('getPlayback') && names(url, tracks[0].id);
     await page.route(playbackUrl, async route => { deliveries++; await waiting; await route.fallback(); });
-    const loading = page.waitForRequest(playbackUrl);
+    const loading = page.waitForRequest(request => playbackUrl(new URL(request.url())));
     await page.getByRole('article').getByRole('button', { name: 'Play', exact: true }).click();
     await loading;
     await opener.click();
@@ -229,7 +229,7 @@ async function statsScreen(browser, phone, scheme) {
   const { context, page, errors } = await setup(browser, width, phone ? 844 : 960, { phone, scheme });
   let reads = 0;
   try {
-    await page.route('https://api.next.plyr.fm/v1/stats', route => {
+    await page.route('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.getStats', route => {
       const visits = ++reads - Number(phone);
       if (visits === 2 || visits === 4) return route.fulfill({ status: 503, json: {} });
       return route.fulfill({ json: { object: 'platform_stats', plays: 393 + visits, tracks: 1422, artists: 122, duration_seconds: 532800, updated_at_ms: 1794651020000 } });
@@ -239,21 +239,21 @@ async function statsScreen(browser, phone, scheme) {
     const artist = { did, handle: 'alice.test', display_name: 'Alice Example' };
     let weekReads = 0;
     let artistLookups = 0;
-    await page.route('https://api.next.plyr.fm/v1/charts/tracks?**', route => {
+    await page.route('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.getTrackChart?**', route => {
       const params = new URL(route.request().url()).searchParams;
       if (params.get('limit') !== '5') return route.fallback();
       const period = params.get('period');
       if (period === 'week' && ++weekReads === 1) return route.fulfill({ status: 503, json: {} });
       return route.fulfill({ json: { data: period === 'all_time' ? [] : [{ rank: 1, period_like_count: 12, track: chartTrack }] } });
     });
-    await page.route('https://api.next.plyr.fm/v1/search?**', route => {
+    await page.route('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.search?**', route => {
       const params = new URL(route.request().url()).searchParams;
       assert.equal(params.get('types'), 'artist');
       const match = { id: did, title: artist.display_name, owner: artist };
       return route.fulfill({ json: { data: params.get('q') === 'alice' ? [match] : [] } });
     });
-    await page.route('https://api.next.plyr.fm/v1/artists/**', route => {
-      if (!new URL(route.request().url()).pathname.endsWith('/metrics')) return route.fulfill({ json: artist });
+    await page.route('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.getArtist*', route => {
+      if (method(new URL(route.request().url())) !== 'getArtistMetrics') return route.fulfill({ json: artist });
       artistLookups += 1;
       return route.fulfill({ json: { totals: { tracks: 3, plays: 57, duration_seconds: 1200 },
         top_track: { id: chartTrack.id, title: chartTrack.metadata.title, play_count: 42 } } });
@@ -345,7 +345,7 @@ async function collectionControls(browser, phone, scheme) {
     });
     const requests = [];
     page.on('request', request => {
-      if (new URL(request.url()).pathname.endsWith('/playback')) requests.push(request);
+      if (method(new URL(request.url())) === 'getPlayback') requests.push(request);
     });
     await page.goto(origin + collectionPath);
     await page.getByRole('heading', { name: title, exact: true }).waitFor();
@@ -474,7 +474,7 @@ async function keyboard(browser, phone, scheme) {
     }
 
     const chartOpener = page.getByTestId('home-chart').getByRole('link', { name: tracks[0].metadata.title, exact: true });
-    await page.route('https://api.next.plyr.fm/v1/playlists?**', route => route.fulfill({ json: { data: [{
+    await page.route('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.listPlaylists?**', route => route.fulfill({ json: { data: [{
       object: 'playlist', id: 'fixture', metadata: { name: 'At the edge of the day' },
       owner: { did: tracks[0].artist.did, profile: tracks[0].artist.profile }, media: tracks[0].media
     }], has_more: false } }));
@@ -499,7 +499,7 @@ async function keyboard(browser, phone, scheme) {
     };
     const artistHit = { ...hit, type: 'artist', id: hit.owner.did, title: hit.owner.display_name, image_url: hit.owner.avatar_url };
     let submitted = 0;
-    await page.route('https://api.next.plyr.fm/v1/search?**', route => {
+    await page.route('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.search?**', route => {
       const params = new URL(route.request().url()).searchParams;
       const term = params.get('q');
       if (term === 'q?' && params.get('limit') === '40' && ++submitted === 1) {
@@ -534,7 +534,7 @@ async function keyboard(browser, phone, scheme) {
     await page.getByText('could not search. try again.').waitFor();
     await search.press('Enter');
     await page.getByText('no results for “q?”.').waitFor();
-    await page.route('https://api.next.plyr.fm/v1/charts/tracks?**', async route => {
+    await page.route('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.getTrackChart?**', async route => {
       if (new URL(route.request().url()).searchParams.get('period') === 'month') {
         await new Promise(resolve => setTimeout(resolve, 1800));
       }

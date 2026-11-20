@@ -4,6 +4,7 @@
 const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
+const { method, names } = require('./xrpc-fixture.cjs');
 const dist = process.env.PLAYER_DIST || path.resolve(__dirname, '../build');
 const images = process.env.FIXTURE_IMAGES || process.env.QUEUE_PANEL_IMAGES;
 
@@ -76,24 +77,25 @@ async function setup(browser, width, height = 900, options = {}) {
   await page.route('https://api.plyr.fm/stats/atlas', route => route.fulfill({ json: atlas }));
   await page.route('https://api.next.plyr.fm/**', async route => {
     const url = new URL(route.request().url());
-    const byId = tracks.find(track => url.pathname.startsWith('/v1/tracks/' + track.id));
+    const call = method(url);
+    const byId = ['getTrack', 'getPlayback', 'getTrackComments'].includes(call) ? tracks.find(track => names(url, track.id)) : undefined;
     let body = { object: 'list', data: [], has_more: false };
-    if (byId && url.pathname.endsWith('/playback')) body = { object: 'playback', track_id: byId.id, record: byId.record,
+    if (byId && call === 'getPlayback') body = { object: 'playback', track_id: byId.id, record: byId.record,
       availability: { status: 'available', delivery: { url: 'https://panel-fixture.invalid/audio.wav', media_type: 'audio/wav' } } };
-    else if (byId && url.pathname === '/v1/tracks/' + byId.id) body = { ...byId, metadata: { ...byId.metadata, tags: ['ambient', 'home recordings', 'field & nature'] } };
-    else if (byId && url.pathname.endsWith('/comments')) body = { ...body, comments_enabled: byId.id !== commentsOff, data: byId.id === commentsOff ? [] : [{
+    else if (byId && call === 'getTrack') body = { ...byId, metadata: { ...byId.metadata, tags: ['ambient', 'home recordings', 'field & nature'] } };
+    else if (byId && call === 'getTrackComments') body = { ...body, comments_enabled: byId.id !== commentsOff, data: byId.id === commentsOff ? [] : [{
       record: { uri: 'at://did:plc:listener/fm.plyr.comment/123', cid: 'bafycomment', rkey: '123' },
       author: { did: 'did:plc:listener', handle: 'listener.example', display_name: 'A Listener', avatar_url: null },
       subject: byId.record, text: 'I love this moment.', timestamp_ms: 14_000, created_at: '2026-11-03T20:00:00Z', updated_at: null
     }] };
-    else if (url.pathname === '/v1/tracks/missing-track') {
-      await route.fulfill({ status: 400, json: { error: { code: 'invalid_request' } } });
+    else if (call === 'getTrack' && url.searchParams.get('uri') === 'missing-track') {
+      await route.fulfill({ status: 400, json: { error: 'InvalidRequest', message: 'The request is invalid.' } });
       return;
     }
-    else if (url.pathname === '/v1/stats') body = { object: 'platform_stats', tracks: 9, artists: 1, duration_seconds: 2000, plays: 9, updated_at_ms: 1794651020000 };
-    else if (url.pathname === '/v1/tracks') body = { object: 'list', data: tracks, has_more: false };
-    else if (/^\/v1\/(albums|playlists)\/fixture$/.test(url.pathname)) {
-      const kind = url.pathname.includes('/albums/') ? 'album' : 'playlist';
+    else if (call === 'getStats') body = { object: 'platform_stats', tracks: 9, artists: 1, duration_seconds: 2000, plays: 9, updated_at_ms: 1794651020000 };
+    else if (call === 'listTracks') body = { object: 'list', data: tracks, has_more: false };
+    else if ((call === 'getAlbum' || call === 'getPlaylist') && url.searchParams.get('uri') === 'fixture') {
+      const kind = call === 'getAlbum' ? 'album' : 'playlist';
       const members = collectionTracks.map((track, position) => ({ position, track, subject: track.record, availability: 'available' }));
       members.splice(1, 0, { position: 3, track: null, subject: tracks[3].record, availability: 'unavailable' });
       body = {
@@ -103,9 +105,9 @@ async function setup(browser, width, height = 900, options = {}) {
         media: { artwork: collectionTracks[0].media.artwork }
       };
     }
-    else if (url.pathname === '/v1/charts/tracks') body = { period: url.searchParams.get('period') || 'week', data: tracks.map((track, index) => ({ rank: index + 1, track, plays: 1, likes: track.metrics.like_count })) };
-    else if (url.pathname.startsWith('/v1/artists/') && url.pathname.endsWith('/metrics')) body = { totals: { plays: 9, tracks: 9, duration_seconds: 2000 }, top_track: null };
-    else if (url.pathname.startsWith('/v1/artists/')) body = { object: 'artist', did: artistDid, handle: 'sketches.test', display_name: 'replyomatic', bio: null, avatar_url: null, support_url: null };
+    else if (call === 'getTrackChart') body = { period: url.searchParams.get('period') || 'week', data: tracks.map((track, index) => ({ rank: index + 1, track, plays: 1, likes: track.metrics.like_count })) };
+    else if (call === 'getArtistMetrics') body = { totals: { plays: 9, tracks: 9, duration_seconds: 2000 }, top_track: null };
+    else if (call === 'getArtist') body = { object: 'artist', did: artistDid, handle: 'sketches.test', display_name: 'replyomatic', bio: null, avatar_url: null, support_url: null };
     await route.fulfill({ json: body });
   });
   return { context, page, errors };

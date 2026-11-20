@@ -8,6 +8,7 @@ const { execFileSync } = require('node:child_process');
 const { Transform } = require('node:stream');
 const { chromium } = require('playwright');
 const { fixtureAccounts, fixturePage, authorizeFixture } = require('./pds-browser-fixture.cjs');
+const { method, names } = require('./xrpc-fixture.cjs');
 
 const pds = process.env.PRIVATE_AUDIO_PDS || 'http://127.0.0.1:5197';
 const origin = process.env.PRIVATE_AUDIO_ORIGIN || 'http://127.0.0.1:5310';
@@ -172,10 +173,10 @@ async function checkOwnerTrack(page, audio, previousSource, origin, appView, coo
       requestsToAppView.push(route.request().url() + (route.request().postData() ?? ''));
       const url = new URL(route.request().url());
       if (route.request().method() !== 'GET') return route.abort();
-      if (url.pathname === `/v1/tracks/${id}`) return route.fulfill({ json: track });
-      if (url.pathname === `/v1/tracks/${id}/playback`) return route.fulfill({ json: { object: 'playback', track_id: id, record: track.record,
+      if (method(url) === 'getTrack' && names(url, id)) return route.fulfill({ json: track });
+      if (method(url) === 'getPlayback' && names(url, id)) return route.fulfill({ json: { object: 'playback', track_id: id, record: track.record,
         availability: { status: 'gated', space: { uri: space, record: privateUri, gate: 'signed-in' } } } });
-      if (url.pathname.endsWith('/likes')) return route.fulfill({ json: list([]) });
+      if (method(url) === 'getTrackLikes') return route.fulfill({ json: list([]) });
       return route.fallback();
     });
     await context.route('https://pds.fixture.test/xrpc/com.atproto.space.getBlob?**', route => {

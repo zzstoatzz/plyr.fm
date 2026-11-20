@@ -24,7 +24,7 @@ async function checkProduction() {
 }
 
 await checkProduction();
-const track = await json(api + '/v1/tracks/' + id);
+const track = await json(api + '/xrpc/fm.plyr.unspecced.getTrack?' + new URLSearchParams({ uri }));
 assert.ok(track.legacy_id == null && track.access.visibility === 'public' && track.record.uri === uri && track.record.cid,
   'expected the preflighted Next-only track');
 const account = await browserAccount(handle, password, origin);
@@ -52,8 +52,8 @@ async function exactLikes() {
 }
 
 async function indexed(record, deleting = false) {
-  const query = new URLSearchParams({ uri: record.uri, timeout_ms: '8000', ...(deleting ? {} : { cid: record.cid }) });
-  return (await json(api + '/v1/records/await?' + query)).status;
+  const query = new URLSearchParams({ uri: record.uri, timeoutMs: '8000', ...(deleting ? {} : { cid: record.cid }) });
+  return (await json(api + '/xrpc/fm.plyr.unspecced.awaitRecord?' + query)).status;
 }
 
 try {

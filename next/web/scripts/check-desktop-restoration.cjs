@@ -10,7 +10,7 @@ async function verify(browser, origin, width, scheme) {
   const height = 900;
   const { context, page, errors } = await setup(browser, width, height, { scheme });
   try {
-    await page.route('https://api.next.plyr.fm/v1/tags**', route => route.fulfill({ json: {
+    await page.route('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.getTags**', route => route.fulfill({ json: {
       object: 'list', data: ['ambient', 'electronic', 'jazz'].map(name => ({ name, track_count: 9 })), has_more: false
     } }));
     await page.goto(origin);

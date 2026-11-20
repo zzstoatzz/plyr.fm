@@ -3,6 +3,7 @@ const { once } = require('node:events');
 const { mkdir } = require('node:fs/promises');
 const path = require('node:path');
 const { tracks } = require('./fixture-catalog.cjs');
+const { method, names, trackIdFromUri } = require('./xrpc-fixture.cjs');
 
 module.exports = async function restoredListening({ page, context, origin, coordinatorEvents, track, did }) {
   const otherDid = 'did:plc:otherartist';
@@ -21,20 +22,20 @@ module.exports = async function restoredListening({ page, context, origin, coord
   } }));
   await page.route('https://api.next.plyr.fm/**', route => {
     const url = new URL(route.request().url());
-    if (url.pathname === '/v1/artists/resolve') return route.fulfill({ json: { object: 'list', data: catalog.map(item => ({
+    if (method(url) === 'resolveArtists') return route.fulfill({ json: { object: 'list', data: catalog.map(item => ({
       did: item.artist.did, handle: item.artist.profile.handle, display_name: item.artist.profile.display_name, avatar_url: item.artist.profile.avatar_url, track_count: 1
     })) } });
-    if (url.pathname === '/v1/tracks/resolve') {
-      const ids = route.request().postDataJSON().ids;
+    if (method(url) === 'resolveTracks') {
+      const ids = route.request().postDataJSON().uris.map(trackIdFromUri);
       return route.fulfill({ json: { object: 'list', data: catalog.filter(item => ids.includes(item.id)), missing: [] } });
     }
-    if (url.pathname === '/v1/tracks') return route.fulfill({ json: {
-      object: 'list', data: catalog.filter(item => !url.searchParams.has('artist_did') || item.artist.did === url.searchParams.get('artist_did')), has_more: false
+    if (method(url) === 'listTracks') return route.fulfill({ json: {
+      object: 'list', data: catalog.filter(item => !url.searchParams.has('artistDid') || item.artist.did === url.searchParams.get('artistDid')), has_more: false
     } });
-    const found = catalog.find(item => url.pathname === '/v1/tracks/' + item.id);
+    const found = method(url) === 'getTrack' ? catalog.find(item => names(url, item.id)) : undefined;
     if (found) return route.fulfill({ json: found });
-    if (url.pathname.startsWith('/v1/tracks/') && url.pathname.endsWith('/comments')) return route.fulfill({ json: { object: 'list', data: [], has_more: false, comments_enabled: true } });
-    if (url.pathname.startsWith('/v1/tracks/') && url.pathname.endsWith('/likes')) return route.fulfill({ json: { object: 'list', data: [], has_more: false } });
+    if (method(url) === 'getTrackComments') return route.fulfill({ json: { object: 'list', data: [], has_more: false, comments_enabled: true } });
+    if (method(url) === 'getTrackLikes') return route.fulfill({ json: { object: 'list', data: [], has_more: false } });
     return route.fallback();
   });
   await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'home', exact: true }).click();

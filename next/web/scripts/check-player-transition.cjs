@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 const { chromium } = require('playwright');
 const { tracks, setup, serve, close } = require('./fixture-catalog.cjs');
+const { method } = require('./xrpc-fixture.cjs');
 
 async function transition(browser, origin, width, reducedMotion) {
   const phone = width < 600;
@@ -16,10 +17,10 @@ async function transition(browser, origin, width, reducedMotion) {
     });
     const deliveries = [];
     page.on('request', request => {
-      if (new URL(request.url()).pathname.endsWith('/playback')) deliveries.push(request);
+      if (method(new URL(request.url())) === 'getPlayback') deliveries.push(request);
     });
     const moreTracks = tracks.map(track => ({ ...track, id: track.id + 'more', metadata: { ...track.metadata, title: 'Later page: ' + track.metadata.title } }));
-    await page.route(url => url.pathname === '/v1/tracks' && url.hostname === 'api.next.plyr.fm', route => {
+    await page.route(url => method(url) === 'listTracks' && url.hostname === 'api.next.plyr.fm', route => {
       const more = new URL(route.request().url()).searchParams.has('cursor');
       return route.fulfill({ json: { object: 'list', data: more ? moreTracks : tracks, has_more: !more, next_cursor: more ? null : 'next-page' } });
     });

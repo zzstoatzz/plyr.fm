@@ -4,6 +4,7 @@ const path = require('node:path');
 const { chromium } = require('playwright');
 const { authorizeFixture, fixtureAccounts, fixturePage } = require('./pds-browser-fixture.cjs');
 const { serveAudio } = require('./fixture-catalog.cjs');
+const { method, names, trackIdFromUri, uriFromId } = require('./xrpc-fixture.cjs');
 
 const origin = 'https://next.plyr.fm';
 const pds = 'http://127.0.0.1:5197/xrpc/';
@@ -98,12 +99,12 @@ async function check(browser, accounts, width, scheme) {
   await context.route('https://fixture.invalid/audio.wav', serveAudio);
   await context.route('https://api.next.plyr.fm/**', async route => {
     const url = new URL(route.request().url());
-    if (url.pathname === '/v1/tracks/resolve') {
-      const { ids } = route.request().postDataJSON();
+    if (method(url) === 'resolveTracks') {
+      const ids = route.request().postDataJSON().uris.map(trackIdFromUri);
       return route.fulfill({ json: { data: tracks.filter(track => ids.includes(track.id)), missing: [] } });
     }
     assert.equal(route.request().method(), 'GET', 'the AppView only receives reads');
-    if (url.pathname === '/v1/records/await') {
+    if (method(url) === 'awaitRecord') {
       const uri = url.searchParams.get('uri');
       if (deferred.has(uri)) return route.fulfill({ json: { status: 'pending' } });
       if (uri.includes('/' + listCollection + '/')) {
@@ -114,21 +115,21 @@ async function check(browser, accounts, width, scheme) {
       }
       return route.fulfill({ json: { status: 'indexed' } });
     }
-    if (url.pathname === '/v1/playlists' || url.pathname === '/v1/albums') {
-      const kind = url.pathname === '/v1/albums' ? 'album' : 'playlist';
+    if (method(url) === 'listPlaylists' || method(url) === 'listAlbums') {
+      const kind = method(url) === 'listAlbums' ? 'album' : 'playlist';
       return route.fulfill({ json: listPage([...projection.values()].filter(record => record.value.listType === kind).map(listDetail)) });
     }
-    if (/^\/v1\/(albums|playlists)\//.test(url.pathname)) {
-      const detail = [...projection.values()].map(listDetail).find(item => url.pathname.endsWith('/' + item.id));
+    if (method(url) === 'getAlbum' || method(url) === 'getPlaylist') {
+      const detail = [...projection.values()].map(listDetail).find(item => names(url, item.id));
       return detail ? route.fulfill({ json: detail }) : route.fulfill({ status: 404, json: {} });
     }
-    if (url.pathname.endsWith('/likes') && url.pathname.startsWith('/v1/actors/')) {
+    if (method(url) === 'getActorLikes') {
       const likes = (await list(likeCollection)).records;
       return route.fulfill({ json: listPage(tracks.filter(track => likes.some(({ value }) => value.subject.uri === track.record.uri))) });
     }
-    if (url.pathname.endsWith('/playback')) return route.fulfill({ json: { availability: { status: 'available', delivery: { url: 'https://fixture.invalid/audio.wav' } } } });
-    if (url.pathname === '/v1/tracks') return route.fulfill({ json: listPage(tracks) });
-    const track = tracks.find(item => url.pathname.endsWith('/' + item.id));
+    if (method(url) === 'getPlayback') return route.fulfill({ json: { availability: { status: 'available', delivery: { url: 'https://fixture.invalid/audio.wav' } } } });
+    if (method(url) === 'listTracks') return route.fulfill({ json: listPage(tracks) });
+    const track = method(url) === 'getTrack' ? tracks.find(item => names(url, item.id)) : undefined;
     if (track) return route.fulfill({ json: track });
     return route.fulfill({ json: listPage([]) });
   });

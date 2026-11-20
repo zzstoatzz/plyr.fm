@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const { chromium } = require('playwright');
 const { tracks, setup, serve, close } = require('./fixture-catalog.cjs');
+const { method } = require('./xrpc-fixture.cjs');
 
 const output = process.env.SCREENS_OUTPUT || '/tmp/plyr-svelte-player-presentation';
 
@@ -10,7 +11,7 @@ async function verify(browser, origin, width, scheme) {
   const height = phone ? 760 : 900;
   const { context, page, errors } = await setup(browser, width, height, { phone: true, scheme, scale: phone && scheme === 'dark' ? 1.5 : 1 });
   try {
-    await page.route(url => url.hostname === 'api.next.plyr.fm' && url.pathname === '/v1/tracks', route => route.fulfill({ json: {
+    await page.route(url => url.hostname === 'api.next.plyr.fm' && method(url) === 'listTracks', route => route.fulfill({ json: {
       object: 'list', has_more: false, data: [
         { ...tracks[0], metadata: { ...tracks[0].metadata, album: 'Sketches at Dawn', description: 'A recording made at dawn on the porch. '.repeat(80) + '\n\n0:00 morning\n0:25 field\n1:00 porch' } },
         ...tracks.slice(1)

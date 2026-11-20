@@ -11,7 +11,7 @@ async function verify(browser, origin, width, scheme) {
   try {
     const accountReads = [];
     page.on('request', request => { if (/getFollows|com.atproto.repo.listRecords/.test(request.url())) accountReads.push(request.url()); });
-    await page.route('https://api.next.plyr.fm/v1/tracks/*/likes**', route => route.fulfill({ json: { object: 'list', data: [{ record: { uri: 'at://did:plc:listener/fm.plyr.like/1' }, actor: { did: 'did:plc:listener', profile: { display_name: 'a listener', handle: 'listener.test' } } }], has_more: false } }));
+    await page.route('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.getTrackLikes?**', route => route.fulfill({ json: { object: 'list', data: [{ record: { uri: 'at://did:plc:listener/fm.plyr.like/1' }, actor: { did: 'did:plc:listener', profile: { display_name: 'a listener', handle: 'listener.test' } } }], has_more: false } }));
     await page.goto(origin);
     const row = page.getByTestId('home-track-row').first();
     const likeCount = row.getByRole('button', { name: `${tracks[0].metrics.like_count} likes on ${tracks[0].metadata.title}` });

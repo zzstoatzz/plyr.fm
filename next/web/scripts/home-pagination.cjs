@@ -8,7 +8,7 @@ async function homePagination(browser, origin) {
       const first = Array.from({ length: 24 }, (_, index) => ({ ...tracks[0], id: tracks[0].id + index }));
       let secondReads = 0;
       const requests = [];
-      await page.route('https://api.next.plyr.fm/v1/tracks?**', route => {
+      await page.route('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.listTracks?**', route => {
         const query = new URL(route.request().url()).searchParams;
         if (!query.has('tag')) return route.fallback();
         assert.equal(query.get('tag'), 'ambient');
@@ -21,7 +21,7 @@ async function homePagination(browser, origin) {
       });
       const chartReads = [];
       const rankings = { month: [tracks[0]], week: [tracks[1]], day: [], all_time: [tracks[2]] };
-      await page.route('https://api.next.plyr.fm/v1/charts/tracks?**', route => {
+      await page.route('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.getTrackChart?**', route => {
         const query = new URL(route.request().url()).searchParams;
         if (query.get('limit') !== '10') return route.fallback();
         const period = query.get('period');
@@ -29,7 +29,7 @@ async function homePagination(browser, origin) {
         if (period === 'week' && chartReads.filter(read => read === 'week').length === 1) return route.fulfill({ status: 503 });
         return route.fulfill({ json: { period, data: rankings[period].map(track => ({ track })) } });
       });
-      await page.route('https://api.next.plyr.fm/v1/tags?**', route => route.fulfill({
+      await page.route('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.getTags?**', route => route.fulfill({
         json: { data: [{ name: 'ambient', track_count: 24 }] }
       }));
       await page.goto(origin);
