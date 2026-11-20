@@ -5,6 +5,7 @@ const std = @import("std");
 const httpz = @import("httpz");
 const router = @import("api/router.zig");
 const exchange = @import("api/exchange.zig");
+const telemetry = @import("internal/telemetry.zig");
 
 const Io = std.Io;
 
@@ -28,8 +29,12 @@ const Handler = struct {
     app: router.App,
 
     pub fn handle(self: *Handler, req: *httpz.Request, res: *httpz.Response) void {
-        serve(self.app, req, res) catch |err| {
-            std.log.err("request failed: {}", .{err});
+        var request_id_buffer: [64]u8 = undefined;
+        const request_id = makeRequestId(self.app.io, &request_id_buffer) catch "req_unavailable";
+        const traced = telemetry.Request.begin(req.arena, @tagName(req.method), req.url.raw, request_id);
+        defer traced.end(res.status);
+        serve(self.app, req, res, request_id) catch |err| {
+            std.log.err("request {s} failed: {}", .{ request_id, err });
             res.status = 500;
             res.body = "";
             res.keepalive = false;
@@ -37,10 +42,7 @@ const Handler = struct {
     }
 };
 
-fn serve(app: router.App, req: *httpz.Request, res: *httpz.Response) !void {
-    var request_id_buffer: [64]u8 = undefined;
-    const request_id = try makeRequestId(app.io, &request_id_buffer);
-
+fn serve(app: router.App, req: *httpz.Request, res: *httpz.Response, request_id: []const u8) !void {
     var headers: std.ArrayList(exchange.Header) = .empty;
     var iterator = req.headers.iterator();
     while (iterator.next()) |kv| try headers.append(req.arena, .{ .name = kv.key, .value = kv.value });

@@ -31,6 +31,10 @@
             .hash = "hegel-0.0.0-1OMgSbDLmwDlvaT4eqcrRtiYuV06ftNfj09JEMYtVKmo",
             .lazy = true,
         },
+        .logfire = .{
+            .url = "https://tangled.org/zzstoatzz.io/logfire-zig/archive/v0.4.0.tar.gz",
+            .hash = "logfire_zig-0.4.0-x2yDLrjUAADNUNN3H9j5x3OjGjhji3utK-kVwK2qXd1g",
+        },
     },
     .fingerprint = 0x4fd7f1002bfb4cee,
     .minimum_zig_version = "0.17.0",

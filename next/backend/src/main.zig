@@ -31,9 +31,12 @@ const postgres_moderation = @import("internal/moderation/postgres_log.zig");
 const Labeler = @import("internal/moderation/labeler.zig").Labeler;
 const actor_identity_refresher = @import("internal/identity/actor_identity_refresher.zig");
 const space_consumer = @import("internal/space/consumer.zig");
+const telemetry = @import("internal/telemetry.zig");
 
 var threaded_io: std.Io.Threaded = undefined;
 pub const std_options_debug_threaded_io: ?*std.Io.Threaded = &threaded_io;
+pub const std_options: std.Options = .{ .log_level = std.log.default_level, .logFn = telemetry.logFn };
+pub const panic = std.debug.FullPanic(telemetry.panicFn);
 
 pub fn main() !void {
     const allocator = std.heap.smp_allocator;
@@ -44,6 +47,9 @@ pub fn main() !void {
         std.log.err("invalid configuration: {}", .{err});
         return err;
     };
+
+    telemetry.configure(settings.role);
+    defer telemetry.shutdown();
 
     if (settings.role == .jams) return @import("internal/coordinator/server.zig").run(allocator, io, settings);
 
@@ -473,6 +479,7 @@ test {
     _ = @import("internal/uploads/admission.zig");
     _ = @import("internal/uploads/inspection.zig");
     _ = @import("server.zig");
+    _ = @import("internal/telemetry.zig");
 }
 
 fn logDatabaseUser(pool: *pg.Pool) void {

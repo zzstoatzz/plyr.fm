@@ -348,6 +348,21 @@ application-owned play aggregates and deduplication alongside read-only catalog
 operations. It does not read legacy Python tables or mirror their play totals.
 Current public-service dependencies and cutover work are in the rewrite inventory.
 
+## telemetry
+
+Every role exports to the production Logfire project through
+[logfire-zig](https://tangled.org/zzstoatzz.io/logfire-zig) when
+`LOGFIRE_WRITE_TOKEN` is set, and exports nothing without it. Each role
+reports as `plyr-next-<role>` (`plyr-next-api`, `plyr-next-jams`,
+`plyr-next-ingester`, …) with environment `next` unless `LOGFIRE_ENVIRONMENT`
+says otherwise, and `FLY_IMAGE_REF` as the service version.
+
+The API and the Jam coordinator open one span per HTTP request, named by
+method and route with identifiers replaced by `{id}`; health checks are not
+traced. Upload admission adds `upload.authorize` and `upload.inspect` spans
+carrying the owner DID and upload ID. Warnings and errors ship as log records;
+lower levels stay on stderr for `fly logs`.
+
 ## Historical canary design
 
 The following records the earlier server-OAuth/manual-deployment stage before
