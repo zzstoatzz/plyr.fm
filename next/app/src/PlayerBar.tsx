@@ -60,7 +60,7 @@ export function PlayerBar({ accessory = false }: { accessory?: boolean } = {}) {
   const error = player.error ?? player.status.error;
   const stopRadio = <PlayerControl label="Stop radio" icon={X} onPress={radio.stop} />;
   const artist = artistName(track);
-  const subtitle = error ? "couldn’t play this track" : player.outputElsewhere ? "playing on another device" : player.live ? `${artist} · ${player.live.station.label} radio` : artist;
+  const subtitle = error ? "couldn’t play this track" : player.preparing ? "preparing…" : player.outputElsewhere ? "playing on another device" : player.live ? `${artist} · ${player.live.station.label} radio` : artist;
   const compactAccessory = accessory && theme.scale * fontScale >= 1.6;
   const titleMaxScale = accessory ? 2.2 / theme.scale : undefined;
   const identity = <Pressable accessibilityRole="button" accessibilityLabel={`Open now playing, ${track.metadata.title}, ${subtitle}`} onPress={() => setExpanded(true)}

@@ -133,7 +133,7 @@
 					</label>
 				{/if}
 				</div>
-				{#if player.error}<p class="state" role="status">{player.error}</p>{/if}
+				{#if player.error}<p class="state" role="status">{player.error}</p>{:else if player.preparing}<p class="state" role="status">preparing…</p>{/if}
 				{#if player.liveStation}<button class="text-button stop" onclick={() => { player.stopRadio(); close?.(); }}>leave radio</button>{/if}
 			</div>
 			{#if close && !player.liveStation && !player.privateMode}

@@ -174,7 +174,7 @@
 			{@render ownerActions()}
 		{/if}
 		{#if sharedTrack === track.id}<p role="status">link copied</p>{/if}
-		{#if active && player.error}<p class="state" role="status">{player.error}</p>{/if}
+		{#if active && player.error}<p class="state" role="status">{player.error}</p>{:else if active && player.preparing}<p class="state" role="status">preparing…</p>{/if}
 	</article>
 
 	{#if canDiscuss}

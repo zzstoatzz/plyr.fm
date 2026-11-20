@@ -33,6 +33,8 @@ class Player {
 	current = $derived(this.queue[this.index]);
 	playing = $state(false);
 	loading = $state(false);
+	/** the track's audio is still being copied to the streaming origin */
+	preparing = $state(false);
 	time = $state(0);
 	length = $state(0);
 	volume = $state(1);
@@ -674,7 +676,7 @@ class Player {
 		const track = tracks[index];
 		if (!track || this.liveStation || this.privateMode !== isPrivateTrack(track)) return false;
 		if (this.privateMode && !privateLibrary.ownsPrivateTrack(track, auth.getAuth().did)) return false;
-		return this.#loadMedia(track, signal => playbackSource(track, signal), !this.privateMode);
+		return this.#loadMedia(track, signal => playbackSource(track, signal, () => { if (!signal.aborted) this.preparing = true; }), !this.privateMode);
 	}
 
 	async #loadMedia(track: Track, resolve: (signal: AbortSignal) => Promise<AudioSource>, count: boolean) {
@@ -691,9 +693,11 @@ class Player {
 		this.length = 0;
 		this.loading = true;
 		this.error = undefined;
+		this.preparing = false;
 		let media: AudioSource | undefined;
 		try {
-			media = await resolve(source.signal);
+			try { media = await resolve(source.signal); }
+			finally { if (this.#audioSource === source) this.preparing = false; }
 			source.signal.throwIfAborted();
 			this.#releaseMedia = media.release;
 			if (this.#embedAnalysis) await this.#embedAnalysis.load(audio, media.url, source.signal);

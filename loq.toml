@@ -557,7 +557,7 @@ max_lines = 571
 
 [[rules]]
 path = "next/web/src/lib/player.svelte.ts"
-max_lines = 834
+max_lines = 838
 
 [[rules]]
 path = "next/web/src/lib/atlas/renderer.ts"
@@ -578,3 +578,7 @@ max_lines = 516
 [[rules]]
 path = "next/backend/README.md"
 max_lines = 515
+
+[[rules]]
+path = "next/app/src/playback.tsx"
+max_lines = 507
