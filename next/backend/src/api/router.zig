@@ -4,6 +4,7 @@ const albums = @import("albums.zig");
 const artists = @import("artists.zig");
 const stats = @import("stats.zig");
 const charts = @import("charts.zig");
+const suggestions = @import("suggestions.zig");
 const playlists = @import("playlists.zig");
 const health = @import("health.zig");
 const records = @import("records.zig");
@@ -32,6 +33,7 @@ const SearchStore = @import("../internal/index/search_store.zig").SearchStore;
 const PlayMetricStore = @import("../internal/metrics/play_metric_store.zig").PlayMetricStore;
 const TrackStore = @import("../internal/index/track_store.zig").TrackStore;
 const TrackChartStore = @import("../internal/index/track_chart_store.zig").TrackChartStore;
+const TrackSuggestionStore = @import("../internal/index/track_suggestion_store.zig").TrackSuggestionStore;
 const TrackRecordJsonStore = @import("../internal/index/track_record_json_store.zig").Store;
 const VerifiedListStore = @import("../internal/index/verified_list_store.zig").VerifiedListStore;
 const RecordStatusStore = @import("../internal/index/record_status_store.zig").RecordStatusStore;
@@ -46,6 +48,7 @@ pub const App = struct {
     stats_store: ?@import("../internal/metrics/platform_stats_store.zig").Store = null,
     track_store: ?TrackStore,
     track_chart_store: ?TrackChartStore = null,
+    track_suggestion_store: ?TrackSuggestionStore = null,
     track_record_json_store: ?TrackRecordJsonStore = null,
     like_store: ?LikeQueryStore = null,
     comment_store: ?CommentQueryStore = null,
@@ -250,6 +253,16 @@ pub fn handle(
             app.io,
             request_id,
         );
+    } else if (mem.eql(u8, path, prefix ++ "/suggestions/tracks")) {
+        if (request.method != .GET) {
+            try response.apiError(request, .method_not_allowed, request_id, app.cors);
+            return;
+        }
+        try suggestions.tracks(request, allocator, app.track_suggestion_store, .{
+            .track = app.track_collection,
+            .profile = app.profile_collection,
+            .like = app.like_collection,
+        }, app.cors, request_id);
     } else if (mem.eql(u8, path, prefix ++ "/health/ingest")) {
         if (request.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
