@@ -11,7 +11,7 @@ export function suggestionRequest(queue: readonly Track[], index: number, shown:
   const seeds = unique(queue.slice(from).map(track => track.record.uri)).slice(0, maxSeeds);
   if (!seeds.length) return undefined;
   const nearby = [...queue.slice(from), ...queue.slice(0, from).reverse()].map(track => track.record.uri);
-  const exclude = unique([...shown, ...nearby]).filter(uri => !seeds.includes(uri)).slice(0, maxExclude);
+  const exclude = unique([...nearby, ...shown]).filter(uri => !seeds.includes(uri)).slice(0, maxExclude);
   return { seeds, exclude };
 }
 

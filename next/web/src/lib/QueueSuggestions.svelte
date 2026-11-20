@@ -34,7 +34,7 @@
 			if (!request) return;
 			api.suggestions(request.seeds, { exclude: request.exclude, limit: 12, signal: controller.signal }).then(result => {
 				picks = result.data;
-				shown = [...result.data.map(track => track.record.uri), ...(round ? shown : [])];
+				shown = [...result.data.map(track => track.record.uri), ...(round ? shown : [])].slice(0, 60);
 			}, () => {});
 		}, 300);
 		return () => { clearTimeout(timer); controller.abort(); };
@@ -63,15 +63,24 @@
 	const offered = $derived(starters(!!account.did));
 	let stacks = $state<Record<string, Loaded>>({});
 	let started = $state.raw(new Set<string>());
+	let stacksFor: string | null | undefined;
+	const pending: Record<string, number> = {};
 
 	function load(starter: Starter) {
+		const attempt = pending[starter.key] = (pending[starter.key] ?? 0) + 1;
+		const settle = (value: Loaded) => { if (pending[starter.key] === attempt) stacks[starter.key] = value; };
 		stacks[starter.key] = 'loading';
-		loadStarter(api, starter.key, account.did ?? undefined).then(result => { stacks[starter.key] = result; }, () => { stacks[starter.key] = 'failed'; });
+		loadStarter(api, starter.key, account.did ?? undefined).then(settle, () => settle('failed'));
 	}
 
 	$effect(() => {
+		const did = account.did;
 		if (!empty) return;
-		for (const starter of offered) if (!untrack(() => stacks[starter.key])) load(starter);
+		untrack(() => {
+			// A different account gets its own stacks, never the last one's.
+			if (did !== stacksFor) { stacksFor = did; stacks = {}; started = new Set(); for (const key in pending) pending[key]++; }
+			for (const starter of offered) if (!stacks[starter.key]) load(starter);
+		});
 	});
 
 	function start(starter: Starter) {
@@ -98,7 +107,7 @@
 				{@const stack = stacks[starter.key]}
 				{#if stack !== 'failed' && !(typeof stack === 'object' && !stack.tracks.length)}
 					<div class="tile" class:big={index === 0}>
-						<button class="stack" type="button" aria-label={`${player.current ? 'Add' : 'Play'} ${starter.title}`} disabled={typeof stack !== 'object'} onclick={() => start(starter)}>
+						<button class="stack" type="button" tabindex="-1" aria-hidden="true" disabled={typeof stack !== 'object'} onclick={() => start(starter)}>
 							{#each { length: 4 } as _, at (at)}
 								{@const cover = covers(stack)[at]}
 								<span class="cell">{#if cover}<Artwork src={trackArtwork(cover)} size={index === 0 ? 120 : 64} eager />{/if}</span>

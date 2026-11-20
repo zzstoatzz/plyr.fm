@@ -37,7 +37,7 @@ export function QueueSuggestionStrips() {
       if (!request) return;
       api.suggestions(request.seeds, { exclude: request.exclude, limit: 12, signal: controller.signal }).then(result => {
         setPicks(result.data);
-        shown.current = [...result.data.map(track => track.record.uri), ...(round ? shown.current : [])];
+        shown.current = [...result.data.map(track => track.record.uri), ...(round ? shown.current : [])].slice(0, 60);
       }, () => {});
     }, 300);
     return () => { clearTimeout(timer); controller.abort(); };
@@ -60,7 +60,7 @@ export function QueueSuggestionStrips() {
     {picks.length > 0 && <View style={styles.section}>
       <View style={styles.head}>
         <Text accessibilityRole="header" style={[styles.heading, { color: theme.muted, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale }]}>add to your queue</Text>
-        <Pressable accessibilityRole="button" accessibilityLabel="Show other suggestions" onPress={() => { setAdded(new Set()); setRound(value => value + 1); }}
+        <Pressable accessibilityRole="button" accessibilityLabel="Show other suggestions" onPress={() => { setAdded(new Set()); setRound(value => value + 1); }} hitSlop={4}
           style={({ pressed }) => [styles.icon, { opacity: pressed ? 0.6 : 1 }]}>
           <ArrowClockwise size={18} color={theme.muted} />
         </Pressable>
@@ -107,14 +107,19 @@ export function QueueStarters() {
   const offered = starters(!!did);
   const [stacks, setStacks] = useState<Record<string, Loaded>>({});
   const [started, setStarted] = useState<Set<string>>(new Set());
+  const pending = useRef<Record<string, number>>({});
 
   const load = (starter: Starter) => {
-    setStacks(previous => ({ ...previous, [starter.key]: 'loading' }));
-    loadStarter(api, starter.key, did ?? undefined).then(
-      result => setStacks(previous => ({ ...previous, [starter.key]: result })),
-      () => setStacks(previous => ({ ...previous, [starter.key]: 'failed' })));
+    const attempt = pending.current[starter.key] = (pending.current[starter.key] ?? 0) + 1;
+    const settle = (value: Loaded) => { if (pending.current[starter.key] === attempt) setStacks(previous => ({ ...previous, [starter.key]: value })); };
+    settle('loading');
+    loadStarter(api, starter.key, did ?? undefined).then(settle, () => settle('failed'));
   };
-  useEffect(() => { for (const starter of offered) load(starter); }, [did]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    for (const key in pending.current) pending.current[key]++;
+    setStacks({}); setStarted(new Set());
+    for (const starter of offered) load(starter);
+  }, [did]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const start = (starter: Starter) => {
     const stack = stacks[starter.key];
@@ -140,7 +145,7 @@ export function QueueStarters() {
         const done = started.has(starter.key);
         const covers = ready ? stack.tracks.slice(0, 4) : [];
         return <View key={starter.key} style={[styles.tile, surface, big ? { width: '100%' } : { flexBasis: 0, flexGrow: 1 }]}>
-          <Pressable accessibilityRole="button" accessibilityLabel={label} disabled={!ready} onPress={() => start(starter)}
+          <Pressable accessible={false} importantForAccessibility="no-hide-descendants" disabled={!ready} onPress={() => start(starter)}
             style={({ pressed }) => [styles.stack, { backgroundColor: theme.raised, opacity: pressed ? 0.8 : 1 }, big ? null : { flexWrap: 'wrap' }]}>
             {[0, 1, 2, 3].map(at => <View key={at} style={big ? { flex: 1, aspectRatio: 1 } : { width: '50%', aspectRatio: 1 }}>
               {covers[at] ? <Cover uri={trackArtwork(covers[at])} size={big ? 90 : 70} radius={0} instant /> : null}
@@ -152,10 +157,10 @@ export function QueueStarters() {
                 {starter.key === 'playlist' && ready ? stack.label : starter.title}</Text>
               {big && <Text numberOfLines={1} style={{ color: theme.muted, fontFamily: theme.fontFamily, fontSize: 12.5 * theme.scale }}>{starter.subtitle}</Text>}
             </View>
-            {starter.key === 'playlist' && <Pressable accessibilityRole="button" accessibilityLabel="Pick another playlist" onPress={() => load(starter)} style={styles.icon}>
+            {starter.key === 'playlist' && <Pressable accessibilityRole="button" accessibilityLabel="Pick another playlist" onPress={() => load(starter)} hitSlop={4} style={styles.icon}>
               <ArrowClockwise size={16} color={theme.muted} />
             </Pressable>}
-            <Pressable accessibilityRole="button" accessibilityLabel={label} disabled={!ready} onPress={() => start(starter)}
+            <Pressable accessibilityRole="button" accessibilityLabel={label} disabled={!ready} onPress={() => start(starter)} hitSlop={6}
               style={({ pressed }) => [styles.round, { borderColor: done ? theme.accent : theme.border, backgroundColor: done ? theme.accent : 'transparent', opacity: !ready ? 0.4 : pressed ? 0.7 : 1 }]}>
               {done ? <Check size={16} color={theme.onAccent} weight="bold" /> : player.current ? <Plus size={16} color={theme.text} weight="bold" /> : <Play size={14} color={theme.text} weight="fill" />}
             </Pressable>

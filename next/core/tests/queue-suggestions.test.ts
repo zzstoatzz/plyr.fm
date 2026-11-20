@@ -10,7 +10,7 @@ test('suggestions go with what is playing and what follows, never repeating the 
   const queue = [1, 2, 3, 4, 2].map(track);
   const request = suggestionRequest(queue, 1, [uri(9)]);
   assert.deepEqual(request?.seeds, [uri(2), uri(3), uri(4)]);
-  assert.deepEqual(request?.exclude, [uri(9), uri(1)]);
+  assert.deepEqual(request?.exclude, [uri(1), uri(9)]);
   assert.equal(suggestionRequest([], 0), undefined);
 });
 
@@ -20,6 +20,7 @@ test('suggestion requests stay inside the server bounds', () => {
   assert.equal(request.seeds.length, maxSeeds);
   assert.equal(request.exclude.length, maxExclude);
   assert.equal(request.seeds[0], uri(100));
+  assert.ok(!request.exclude.includes(uri(1000)), 'the queue is never crowded out by earlier suggestions');
 });
 
 test('signed-out starters never ask for an account', () => {

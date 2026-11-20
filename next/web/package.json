@@ -10,7 +10,7 @@
     "check:jams": "node scripts/check-jams.cjs",
     "check:creator": "node scripts/check-creator.cjs",
     "check:collections": "node scripts/check-collections.cjs",
-    "check:browser": "node scripts/check-shell.cjs && node scripts/check-queue-gestures.cjs && node scripts/check-desktop-restoration.cjs && node scripts/check-restored-listening.cjs",
+    "check:browser": "node scripts/check-shell.cjs && node scripts/check-queue-gestures.cjs && node scripts/check-queue-suggestions.cjs && node scripts/check-desktop-restoration.cjs && node scripts/check-restored-listening.cjs",
     "check:player-transition": "node scripts/check-player-transition.cjs",
     "check:player-presentation": "node scripts/check-player-presentation.cjs",
     "check:artist-catalog": "node scripts/check-artist-catalog.cjs",

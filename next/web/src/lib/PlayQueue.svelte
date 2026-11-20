@@ -260,10 +260,13 @@
 			</section>
 		{/if}
 		</div>
-		{#if player.canEditPublicQueue && !player.privateMode}<QueueSuggestions empty={false} />{/if}
+		{#if player.canEditPublicQueue && !player.privateMode && !player.jam}<QueueSuggestions empty={false} />{/if}
 		{/if}
-	{:else if player.canEditPublicQueue}
+	{:else if player.canEditPublicQueue && !player.jam}
 		<QueueSuggestions empty />
+	{:else}
+		<p class="state">your queue is empty.</p>
+		<a href={resolve('/')}>browse tracks</a>
 	{/if}
 	{#if deviceQueue}
 		<p class="empty">your queue is saved on this device. <a class="queue-signin" href={resolve('/login?return_to=%2Fqueue')} onclick={close}>sign in again</a> to use it on other devices.</p>
@@ -306,7 +309,7 @@
 	.hero { display: flex; align-items: flex-end; gap: 0.9rem; min-width: 0; }
 	.hero-cover { position: relative; flex: none; width: min(9.5rem, 40cqi); padding: 0; border: 0; border-radius: 0.75rem; background: none; box-shadow: 0 0.9rem 2.2rem rgb(0 0 0 / 0.35); }
 	.hero-cover .play { border-radius: inherit; }
-	.hero-cover:not(:hover, :focus-visible) .hero-play { opacity: 0; }
+	@media (hover: hover) { .hero-cover:not(:hover, :focus-visible) .hero-play { opacity: 0; } }
 	.hero-meta { min-width: 0; display: grid; gap: 0.15rem; }
 	.hero-meta h2 { display: flex; align-items: center; gap: 0.4rem; margin: 0; font-size: 0.75rem; color: var(--faint); font-weight: 600; }
 	.hero-meta h2 :global(*) { color: var(--accent); }

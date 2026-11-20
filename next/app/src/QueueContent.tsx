@@ -81,7 +81,7 @@ export function QueueContent({ scrollRef, scrollMetrics, onDragging, returnTo = 
           renderTrack={(track, index) => <QueueTrack track={track} play={() => player.jump(index)} remove={() => player.remove(index)} />} /></View>
           : <Copy>nothing queued. add tracks from their menus.</Copy>}
       </View>
-      {upcoming.length > 0 && !player.privatePlayback && !player.live && <QueueSuggestionStrips />}
+      {upcoming.length > 0 && !player.privatePlayback && !player.jam && !player.live && <QueueSuggestionStrips />}
       {player.index > 0 && <View style={styles.section}>
         <Pressable accessibilityRole="button" accessibilityState={{ expanded: history }} onPress={() => setHistory(!history)}
           style={{ minHeight: 44, justifyContent: 'center' }}>
@@ -90,7 +90,7 @@ export function QueueContent({ scrollRef, scrollMetrics, onDragging, returnTo = 
         {history && player.queue.slice(0, player.index).map((track, index) =>
           <QueueTrack key={`${track.id}:${index}`} track={track} play={() => player.jump(index)} />)}
       </View>}
-    </> : player.privatePlayback ? <Copy>pick a track to start listening.</Copy> : <QueueStarters />}
+    </> : player.privatePlayback || player.jam ? <Copy>pick a track to start listening.</Copy> : <QueueStarters />}
     {dialog === 'clear' && <Sheet title="clear upcoming tracks?" close={() => setDialog(null)}>
       <Copy>{player.jam ? "the current track will keep playing." : "clear your picks. tracks from the current collection will remain."}</Copy>
       <View style={row}>
