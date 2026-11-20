@@ -573,7 +573,7 @@ max_lines = 511
 
 [[rules]]
 path = "next/core/src/pds.ts"
-max_lines = 516
+max_lines = 520
 
 [[rules]]
 path = "next/backend/README.md"

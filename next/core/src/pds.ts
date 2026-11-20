@@ -17,6 +17,7 @@ import { trackEditor } from './publishing/track-pds';
 import { assertPublicUploadRecord } from './publishing/upload-model';
 import type { MediaFile } from './publishing/private-music';
 import type { CatalogScope } from './catalog/changes';
+import type { DeliverAudio } from './publishing/audio-delivery';
 import { AVATAR_TYPES, MAX_AVATAR_BYTES, editedProfile, type ProfileEdits, type ProfileRecord } from './profile-record';
 export type { ProfileEdits, ProfileRecord } from './profile-record';
 
@@ -59,10 +60,11 @@ export interface NewTrack {
 async function uploadBlob(rpc: RepoRpc, file: MediaFile, assertSession: () => void) {
 	const bytes = await file.arrayBuffer();
 	assertSession();
-	return ok(uploadRepoBlob(rpc, {
+	const uploaded = await ok(uploadRepoBlob(rpc, {
 		input: bytes,
 		headers: { 'content-type': file.type }
 	}));
+	return { ...uploaded, bytes };
 }
 
 type ViewerLikes = { did: string; promise: Promise<Map<string, LikeRef>> };
@@ -71,13 +73,15 @@ const viewerLikes = new WeakMap<RepoRpc, ViewerLikes>();
 type PdsSession = Pick<Auth<RepoRpc>, 'did' | 'rpc'>;
 type CommentAttempt = { rkey: string; createdAt: string };
 
-export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, getAuth, newRkey, catalogChanged }: {
+export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, getAuth, newRkey, catalogChanged, deliverAudio }: {
   NSID: AuthConfig['NSID'];
   api: Pick<ReturnType<typeof createApi>, 'awaitRecord' | 'track'>;
   createStorage: CreateStorage;
   getAuth: () => PdsSession;
   newRkey: () => string;
   catalogChanged: (did: string, scope: CatalogScope) => void;
+  /** stores the audio at the streaming origin before the record is written */
+  deliverAudio?: DeliverAudio;
 }) {
 	const catalogScopes: Record<string, CatalogScope> = {
 		[NSID.track]: 'tracks', [NSID.list]: 'collections', [NSID.like]: 'likes', [NSID.profile]: 'profile'
@@ -371,6 +375,9 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 		if (!input.file.type.startsWith('audio/')) throw new Error('pick an audio file');
 		if (input.file.size > MAX_AUDIO_BYTES) throw new Error('audio files are limited to 100 MB');
 		const uploaded = await uploadBlob(rpc, input.file, assertSession);
+		assertSession();
+		const cid = (uploaded.blob as { ref: { $link: string } }).ref.$link;
+		await deliverAudio?.({ uri: reservation.uri, name: input.file.name, type: input.file.type, bytes: new Uint8Array(uploaded.bytes), cid });
 		assertSession();
 		const record = await prepareTrackRecord(input);
 		assertSession();
