@@ -23,3 +23,6 @@ class_name = "OwnerUploads"
 [[migrations]]
 tag = "v1-uploads"
 new_sqlite_classes = ["OwnerUploads"]
+
+[observability]
+enabled = true
