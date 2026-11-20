@@ -129,7 +129,7 @@
 				{#if !player.liveStation}
 					<label class="volume">
 						<Icon name={player.volume ? 'volume' : 'mute'} size={18} />
-						<input type="range" aria-label="Volume" min="0" max="1" step="0.01" value={player.volume} oninput={event => player.setVolume(event.currentTarget.valueAsNumber)} />
+						<input type="range" aria-label="Volume" min="0" max="1" step="0.01" value={player.volume} style:--fill={`${player.volume * 100}%`} oninput={event => player.setVolume(event.currentTarget.valueAsNumber)} />
 					</label>
 				{/if}
 				</div>

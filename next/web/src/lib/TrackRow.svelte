@@ -51,7 +51,7 @@
 </div>
 
 <style>
-	.track { -webkit-touch-callout: none; position: relative; display: grid; grid-template-columns: 3.25rem minmax(0, 1fr) auto 3rem; align-items: center; gap: 0.75rem; min-height: 4.65rem; }
+	.track { -webkit-touch-callout: none; position: relative; display: grid; grid-template-columns: 3.25rem minmax(0, 1fr) auto 3rem; align-items: center; gap: 0.75rem; min-height: 4.65rem; padding-inline: 0.75rem; margin-inline: -0.75rem; border-radius: 0.6rem; }
 	.playback { display: block; border: 0; border-radius: 0.42rem; padding: 0; background: transparent; }
 	.playback::after { content: ''; position: absolute; inset: 0; z-index: 1; }
 	.cover { position: relative; display: block; border-radius: inherit; overflow: hidden; }
@@ -74,5 +74,5 @@
 	.duration { text-align: end; font-variant-numeric: tabular-nums; }
 	.add { position: relative; z-index: 2; color: var(--muted); }
 	@media (hover: hover) { .track:not(:hover, :focus-within) .row-actions > :global(:not(.liked)) { opacity: 0; } }
-	@media (max-width: 520px) { .track { grid-template-columns: 3.25rem minmax(0, 1fr) auto; } .numbered { grid-template-columns: 2.25rem minmax(0, 1fr) auto 2.75rem; } .numbered .metrics, .numbered .row-actions > :global(:nth-child(-n+2)) { display: none; } .numbered .duration { display: block; } .duration, .metrics time { display: none; } }
+	@media (max-width: 520px) { .track { grid-template-columns: 3.25rem minmax(0, 1fr) auto; padding-inline: 0.5rem; margin-inline: -0.5rem; } .numbered { grid-template-columns: 2.25rem minmax(0, 1fr) auto 2.75rem; } .numbered .metrics, .numbered .row-actions > :global(:nth-child(-n+2)) { display: none; } .numbered .duration { display: block; } .duration, .metrics time { display: none; } }
 </style>

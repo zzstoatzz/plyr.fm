@@ -31,7 +31,7 @@
 		<div class="extras">
 			<label class="volume">
 				<Icon name={player.volume === 0 ? 'mute' : 'volume'} size={19} />
-				<input type="range" aria-label="Volume" min="0" max="1" step="0.01" value={player.volume} oninput={event => player.setVolume(event.currentTarget.valueAsNumber)} />
+				<input type="range" aria-label="Volume" min="0" max="1" step="0.01" value={player.volume} style:--fill={`${player.volume * 100}%`} oninput={event => player.setVolume(event.currentTarget.valueAsNumber)} />
 			</label>
 			{#if player.liveStation}
 				<button type="button" class="icon-button" aria-label="Stop radio" onclick={() => player.stopRadio()}><Icon name="x" /></button>
