@@ -460,7 +460,7 @@ async function keyboard(browser, phone, scheme) {
 
     await press('q');
     const queue = page.getByRole('region', { name: 'Queue', exact: true });
-    await queue.getByText('your queue is empty.').waitFor({ timeout: 5000 });
+    await queue.getByRole('heading', { name: 'nothing up next' }).waitFor({ timeout: 5000 });
     if (phone) assert.equal(new URL(page.url()).pathname, '/queue');
     await press('q');
     await queue.waitFor({ state: 'hidden' });
@@ -468,7 +468,7 @@ async function keyboard(browser, phone, scheme) {
     if (phone) {
       await page.goForward();
       await page.waitForURL('**/queue');
-      await queue.getByText('your queue is empty.').waitFor();
+      await queue.getByRole('heading', { name: 'nothing up next' }).waitFor();
       await press('q');
       await page.waitForURL(origin + '/');
     }

@@ -435,10 +435,10 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     seek,
     skip: (seconds) => { const base = privateMode.current ? player.currentTime : jam.jam ? (jam.jam.pendingSeekMs === undefined ? player.currentTime : jam.jam.pendingSeekMs / 1000) : pendingSeek?.source === sequence.current ? pendingSeek.seconds : personal.position(); seek(base + seconds); },
     jump: (at) => { if (privateMode.current) { void load(queue, at); return; } if (!jam.command({ action: 'selectTrack', index: at })) personal.select(at); },
-    enqueue: (track) => {
+    enqueue: (track, quiet) => {
       if (isPrivateTrack(track)) { if (privateMode.current && track.artist.did === auth.did) setQueue(items => [...items, track]); else play(track); return; }
       if (privateMode.current) { toast.info('play a public track to change queues'); return; }
-      toast.success(`queued ${track.metadata.title}`, 3000, viewQueue);
+      if (!quiet) toast.success(`queued ${track.metadata.title}`, 3000, viewQueue);
       if (!jam.enqueue([track])) personal.enqueue(track);
     },
     enqueueAll: (tracks, label) => {

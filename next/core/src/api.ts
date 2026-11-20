@@ -225,6 +225,9 @@ export function createApi(origin: string, playListenerId: () => string) {
 		/** up to 50 tracks; the server has no cursor past that */
 		chart: (period: 'day' | 'week' | 'month' | 'all_time' = 'week', limit?: number, signal?: AbortSignal) =>
 			get<{ period: string; data: ChartEntry[] }>('/v1/charts/tracks', { period, limit }, signal),
+		/** tracks that go with the seeds (record URIs), best first; never returns a seed or an excluded URI */
+		suggestions: (seeds: string[], options: { exclude?: string[]; limit?: number; signal?: AbortSignal } = {}) =>
+			get<{ object: 'track_suggestions'; data: Track[] }>('/v1/suggestions/tracks', { seed: seeds, exclude: options.exclude, limit: options.limit }, options.signal),
 		/** block (≤ timeout) until the appview has projected a write the client made on its PDS. */
 		awaitRecord: (uri: string, cid?: string, timeout_ms = 8000) =>
 			get<{ uri: string; status: AwaitStatus; cid?: string; reason?: string }>('/v1/records/await', {
