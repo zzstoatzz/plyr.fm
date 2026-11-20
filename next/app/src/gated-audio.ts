@@ -54,11 +54,22 @@ export async function gatedAudioUrl(uri: string, auth: Auth): Promise<string> {
 	});
 	if (!response.body) throw new Error('this track has no audio');
 	const reader = response.body.getReader();
-	const first = await reader.read();
-	if (first.done || !first.value.byteLength) {
+	// Gather enough of the head to see the container's signature, even if the first chunks are tiny.
+	let head = new Uint8Array(0);
+	for (let chunk = await reader.read(); ; chunk = await reader.read()) {
+		if (!chunk.done) {
+			const joined = new Uint8Array(head.byteLength + chunk.value.byteLength);
+			joined.set(head);
+			joined.set(chunk.value, head.byteLength);
+			head = joined;
+		}
+		if (chunk.done || head.byteLength >= 16) break;
+	}
+	if (!head.byteLength) {
 		await reader.cancel().catch(() => undefined);
 		throw new Error('this track has no audio');
 	}
+	const first: ReadableStreamReadResult<Uint8Array> = { done: false, value: head };
 	// AVPlayer picks its decoder from the file extension, and a PDS may serve the blob as octet-stream.
 	const type = response.headers.get('content-type')?.split(';')[0].trim().toLowerCase() ?? '';
 	const extension = sniffAudioExtension(first.value) ?? EXTENSIONS[type] ?? 'mp3';

@@ -12,7 +12,8 @@ export function uploadIsland(job: Pick<UploadJobView, 'title' | 'phase' | 'progr
     case 'processing': return { phase: 'active', summary: 'to mp3', announce };
     case 'publishing': return { phase: 'active', summary: 'publishing', announce };
     case 'retrying': return { phase: 'active', summary: 'retrying', announce };
-    case 'awaiting-publication': return { phase: 'active', summary: 'almost', announce };
+    // The queue stops here and recovery finishes it later, so the island folds away like a finish.
+    case 'awaiting-publication': return { phase: 'done', summary: 'almost', announce };
     case 'done': return { phase: 'done', summary: 'uploaded', announce };
     case 'failed': return { phase: 'failed', summary: 'failed', announce };
   }

@@ -24,6 +24,13 @@ export function showUploadIsland(key: string, island: UploadIsland | undefined) 
   hold = setTimeout(() => { if (shown?.serial === finished) publish(null); }, HOLD_MS);
 }
 
+/** Folds the island away when it is showing an upload that left the queue. */
+export function hideUploadIsland(key: string) {
+  if (shown?.key !== key) return;
+  clearTimeout(hold);
+  publish(null);
+}
+
 export function useUploadIsland() {
   return useSyncExternalStore(listener => { listeners.add(listener); return () => { listeners.delete(listener); }; }, () => shown, () => shown);
 }

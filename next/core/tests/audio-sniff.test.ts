@@ -14,6 +14,8 @@ test('audio containers are recognised from their first bytes', () => {
   assert.equal(sniffAudioExtension(bytes('FORM', [1, 2, 3, 4], 'AIFF')), 'aiff');
   assert.equal(sniffAudioExtension(bytes('OggS')), 'ogg');
   assert.equal(sniffAudioExtension(bytes([0x1a, 0x45, 0xdf, 0xa3])), 'webm');
+  assert.equal(sniffAudioExtension(bytes('ID3', [4, 0, 0, 0, 0, 0, 2], [0, 0], [0xff, 0xf1, 0x50])), 'aac');
+  assert.equal(sniffAudioExtension(bytes('ID3', [4, 0, 0, 0, 0, 0, 2], [0, 0], [0xff, 0xfb, 0x90])), 'mp3');
   assert.equal(sniffAudioExtension(bytes('<html>')), undefined);
 });
 

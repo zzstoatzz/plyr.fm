@@ -28,7 +28,7 @@ nate first. Add an entry when a PR settles something.
 - **Reusable native accessibility behavior lives in `src/behaviors/`.** Exercise it with platform accessibility controls.
 - **Uploads run in the app-level queue** (`src/publishing/upload-queue.ts`),
   mounted above the route stack like playback. The upload page only queues a
-  track and resets; one persistent toast per upload carries its progress.
+  track and resets; on iOS the upload island (a pill drawn over the Dynamic Island, after noti's refresh island) carries each upload's progress; a toast marks the finish with a link.
   WAV, FLAC, AIFF and WebM go through plyr storage with the server's MP3
   playback copy (the original stays downloadable), as production does; small
   MP3/M4A/AAC/OGG go straight to the account's PDS. Storage consent is asked

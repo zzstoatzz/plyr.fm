@@ -16,9 +16,16 @@ export function TagsField({ value, onChange, disabled }: { value: string; onChan
   const [draft, setDraft] = useState('');
   const [focused, setFocused] = useState(false);
   const [catalog, setCatalog] = useState<TagCount[]>([]);
-  const tags = tagList(value);
+  // What's being typed rides along as the value's last line, so Upload and Save include it without a blur.
+  const lines = value.split('\n');
+  const pending = draft.trim() && lines.at(-1) === draft ? draft : '';
+  const committed = pending ? lines.slice(0, -1).join('\n') : value;
+  const tags = tagList(committed);
   const suggestions = focused ? suggestTags(catalog, draft, tags) : [];
   const full = tags.length >= 20;
+
+  // A reset from outside (after an upload) clears the half-typed tag too.
+  useEffect(() => { if (draft.trim() && value.split('\n').at(-1) !== draft) setDraft(''); }, [value]); // eslint-disable-line react-hooks/exhaustive-deps -- only an outside change to the value should clear it
 
   useEffect(() => {
     if (!focused || catalog.length) return;
@@ -27,19 +34,21 @@ export function TagsField({ value, onChange, disabled }: { value: string; onChan
     return () => { live = false; };
   }, [focused, catalog.length]);
 
+  function emit(next: string, typing: string) {
+    setDraft(typing);
+    onChange(typing.trim() ? [next, typing].filter(Boolean).join('\n') : next);
+  }
+
   function commit(tag: string) {
-    if (tag.trim()) onChange(addTag(value, tag));
-    setDraft('');
+    emit(tag.trim() ? addTag(committed, tag) : committed, '');
   }
 
   function type(text: string) {
     // A comma or return finishes a tag, as on production.
     const parts = text.split(/[,\n]/u);
-    if (parts.length === 1) { setDraft(text); return; }
-    let next = value;
+    let next = committed;
     for (const part of parts.slice(0, -1)) next = addTag(next, part);
-    if (next !== value) onChange(next);
-    setDraft(parts.at(-1)!);
+    emit(next, parts.at(-1)!);
   }
 
   const label = { color: theme.text, fontFamily: theme.fontFamily, fontSize: 15 * theme.scale, lineHeight: 22 * theme.scale };
@@ -51,7 +60,7 @@ export function TagsField({ value, onChange, disabled }: { value: string; onChan
         backgroundColor: theme.accent + '22', borderWidth: 1, borderColor: theme.accent + '55' }}>
         <Text style={{ color: theme.text, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale }}>{tag}</Text>
         <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${tag}`} disabled={disabled} hitSlop={6}
-          onPress={() => onChange(removeTag(value, tag))} style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}>
+          onPress={() => emit(removeTag(committed, tag), draft)} style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}>
           <X size={13} color={theme.muted} />
         </Pressable>
       </View>)}

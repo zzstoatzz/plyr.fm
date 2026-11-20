@@ -4,6 +4,7 @@ export type TagCount = { name: string; track_count: number };
 type TagPages = (limit: number, cursor?: string) => Promise<Page<TagCount>>;
 
 const PAGE = 100, PAGES = 5;
+export const MAX_TAGS = 20;
 
 /** The tags typed so far, one per line, in the order they were added. */
 export function tagList(value: string): string[] {
@@ -14,7 +15,7 @@ export function tagList(value: string): string[] {
 export function addTag(value: string, tag: string): string {
   const next = tag.trim().toLowerCase().replace(/\s+/gu, ' ');
   const tags = tagList(value);
-  return (next && !tags.includes(next) ? [...tags, next] : tags).join('\n');
+  return (next && !tags.includes(next) && tags.length < MAX_TAGS ? [...tags, next] : tags).join('\n');
 }
 
 export function removeTag(value: string, tag: string): string {

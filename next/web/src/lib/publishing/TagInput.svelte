@@ -12,6 +12,7 @@
 
   const id = $props.id();
   let draft = $state('');
+  let field = $state<HTMLInputElement>();
   let open = $state(false);
   let active = $state(-1);
   let catalog = $state<TagCount[]>([]);
@@ -48,6 +49,7 @@
   }
 
   function keydown(event: KeyboardEvent) {
+    if (event.isComposing) return;
     if (event.key === 'Enter') {
       event.preventDefault();
       commit(active >= 0 && suggestions[active] ? suggestions[active].name : draft);
@@ -79,15 +81,13 @@
   <div class="anchor">
   <div class="box" class:disabled>
     {#each tags as tag (tag)}
-      <span class="chip">{tag}<button type="button" aria-label="remove {tag}" {disabled} onclick={() => set(removeTag(value, tag))}>×</button></span>
+      <span class="chip">{tag}<button type="button" aria-label="remove {tag}" {disabled} onclick={() => { set(removeTag(value, tag)); field?.focus(); }}>×</button></span>
     {/each}
-    {#if !full}
-      <input id="{id}-input" value={draft} {disabled} autocomplete="off" autocapitalize="none" spellcheck="false"
-        placeholder={tags.length ? 'add another' : 'add a tag'} role="combobox" aria-autocomplete="list"
+    <input bind:this={field} id="{id}-input" value={draft} disabled={disabled} readonly={full} autocomplete="off" autocapitalize="none" spellcheck="false"
+        placeholder={full ? '' : tags.length ? 'add another' : 'add a tag'} role="combobox" aria-autocomplete="list"
         aria-expanded={suggestions.length > 0} aria-controls="{id}-list"
         aria-activedescendant={active >= 0 ? `${id}-option-${active}` : undefined}
         oninput={input} onkeydown={keydown} onfocus={() => { open = true; load(); }} />
-    {/if}
   </div>
   {#if suggestions.length}
     <ul id="{id}-list" role="listbox" aria-label="existing tags">

@@ -9,7 +9,7 @@ import { getAuth } from '../auth-state';
 import { measureAudioDuration } from '../media-picker';
 import { createPds } from '../pds';
 import { toast } from '../toast';
-import { showUploadIsland } from './upload-island-store';
+import { hideUploadIsland, showUploadIsland } from './upload-island-store';
 import { openUploadReader } from './upload-reader';
 import { sendParts } from './part-sender';
 import { queuedDrafts, uploadStorage } from './upload-storage';
@@ -22,6 +22,7 @@ export const uploadQueue = createUploadQueue({
   onJob(job) {
     const key = `upload:${job.id}`;
     // Steps show in the island; the finish also leaves a toast with somewhere to go.
+    // onJob runs before the queue republishes, so the snapshot may hold this job's previous step; `job` is current.
     const followed = islandJob(uploadQueue.snapshot(), job);
     showUploadIsland(`upload:${followed.id}`, uploadIsland(followed.id === job.id ? job : followed));
     if (job.phase === 'done') toast.add(jobLine(job), 'success', 6000, job.uri ? { label: 'view track', href: `/track/${trackIdFromUri(job.uri)}` } : undefined, key);
@@ -29,7 +30,7 @@ export const uploadQueue = createUploadQueue({
     else if (job.phase === 'failed') toast.add(jobLine(job), 'error', 10000, { label: 'open upload', href: '/upload' }, key);
     else toast.dismissKey(key);
   },
-  onDismiss(job) { toast.dismissKey(`upload:${job.id}`); }
+  onDismiss(job) { toast.dismissKey(`upload:${job.id}`); hideUploadIsland(`upload:${job.id}`); }
 });
 
 export function useUploadQueue() {

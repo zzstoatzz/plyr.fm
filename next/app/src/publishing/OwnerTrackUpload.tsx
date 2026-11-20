@@ -10,7 +10,7 @@ import { TagsField } from './TagsField';
 import { privatePds, type PrivateResult } from './private-pds';
 import type { PrivateCreate } from '@plyr/next-core/publishing/private-music';
 import { useArtistName } from './artist-name';
-import { showUploadIsland } from './upload-island-store';
+import { hideUploadIsland, showUploadIsland } from './upload-island-store';
 import { toast } from '../toast';
 
 export function OwnerTrackUpload({ auth, selected, onBusy, audience, file, setFile, title, setTitle, description, setDescription, tags, setTags }: TrackDraftFields & { auth: Auth; selected: boolean; onBusy: (value: boolean) => void; audience: ReactNode }) {
@@ -82,7 +82,7 @@ export function OwnerTrackUpload({ auth, selected, onBusy, audience, file, setFi
           let result: Awaited<ReturnType<typeof pds.upload>>;
           try {
             const duration = await measureAudioDuration(file).catch(() => undefined);
-            if (!current()) return;
+            if (!current()) { hideUploadIsland(island); return; }
             result = await pds.upload({ file, title, artist, description, tags: tags.split('\n'), duration }, operation => {
               if (current()) ownAttempt.current = operation.rkey;
               showUploadIsland(island, { phase: 'active', summary: 'saving', announce: `saving ${name}…` });

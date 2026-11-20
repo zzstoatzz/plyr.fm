@@ -23,6 +23,8 @@ test('adding and removing keeps one tag per line without duplicates', () => {
   assert.deepEqual(tagList('a\n\n b \na'), ['a', 'b']);
   assert.equal(removeTag(value, 'dark ambient'), 'techno');
   assert.equal(addTag(value, '   '), value);
+  const full = Array.from({ length: 20 }, (_, at) => `t${at}`).join('\n');
+  assert.equal(addTag(full, 'one more'), full);
 });
 
 test('the catalog loads a few pages once and retries after a failure', async () => {
