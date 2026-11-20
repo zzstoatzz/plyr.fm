@@ -39,6 +39,14 @@ export function reportUploadActivity(key: string, island: UploadIsland) {
   }
 }
 
+/** Takes down the activity for an upload that left the queue without finishing. */
+export function endUploadActivity(key: string) {
+  const current = running.get(key);
+  if (!current) return;
+  running.delete(key);
+  void current.end('immediate').catch(() => undefined);
+}
+
 /** Ends activities left behind by an earlier launch, whose uploads this process isn't driving. */
 export function endOrphanedUploadActivities() {
   const live = activities();
