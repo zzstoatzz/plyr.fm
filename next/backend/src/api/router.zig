@@ -237,32 +237,15 @@ pub fn handle(
             app.cors,
             request_id,
         );
-    } else if (mem.eql(u8, path, prefix ++ "/charts/tracks")) {
+    } else if (mem.eql(u8, path, prefix ++ "/charts/tracks") or mem.eql(u8, path, prefix ++ "/suggestions/tracks")) {
         if (request.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
             return;
         }
-        try charts.tracks(
-            request,
-            allocator,
-            app.track_chart_store,
-            app.track_collection,
-            app.profile_collection,
-            app.like_collection,
-            app.cors,
-            app.io,
-            request_id,
-        );
-    } else if (mem.eql(u8, path, prefix ++ "/suggestions/tracks")) {
-        if (request.method != .GET) {
-            try response.apiError(request, .method_not_allowed, request_id, app.cors);
-            return;
-        }
-        try suggestions.tracks(request, allocator, app.track_suggestion_store, .{
-            .track = app.track_collection,
-            .profile = app.profile_collection,
-            .like = app.like_collection,
-        }, app.cors, request_id);
+        if (mem.eql(u8, path, prefix ++ "/charts/tracks"))
+            try charts.tracks(request, allocator, app.track_chart_store, app.track_collection, app.profile_collection, app.like_collection, app.cors, app.io, request_id)
+        else
+            try suggestions.tracks(request, allocator, app.track_suggestion_store, .{ .track = app.track_collection, .profile = app.profile_collection, .like = app.like_collection }, app.cors, request_id);
     } else if (mem.eql(u8, path, prefix ++ "/health/ingest")) {
         if (request.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);

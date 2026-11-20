@@ -216,10 +216,7 @@ The current product surface is `GET /v1/tags`, `GET /v1/tracks`,
 and `GET /v1/playlists`, plus `GET /v1/search`. Search accepts
 one strict query, a bounded global limit, and an optional type set; it returns
 verified record references with match class and provenance but no unstable
-numeric score. Suggestions take one to 20 `seed` record URIs, up to 60
-`exclude` URIs and a `limit` up to 24, and rank discoverable tracks by shared
-likers, shared lists, shared tags and artist, with each further track from one
-artist counting for less. They are derived from the projection only. The track collection accepts a strict
+numeric score. Suggestions rank tracks for 1-20 `seed` URIs by shared likers, lists, tags and artist. The track collection accepts a strict
 `limit` from 1 to 100 and an opaque `cursor`; it
 accepts an optional canonical `artist_did`, applies discovery or artist-view
 policy before keyset pagination, and returns the same track representation as
