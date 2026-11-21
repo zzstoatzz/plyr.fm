@@ -232,7 +232,7 @@
 		{:else if nothingNext}
 			<p class="empty">add a track to hear it next.</p>
 		{:else}
-		<div class="glass">
+		<div class="upcoming-list">
 		<section aria-labelledby="queue-picks">
 			<div class="queue-head">
 				<h2 id="queue-picks">up next</h2>
@@ -321,10 +321,11 @@
 	.hero-meta h2 :global(*) { color: var(--accent); }
 	.hero-title { font-size: 1.3rem; font-weight: 700; line-height: 1.15; letter-spacing: -0.02em; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 	.hero-artist { color: var(--muted); font-size: 0.92rem; }
-	.glass { display: grid; gap: 0.9rem; padding: 0.75rem 0.55rem 0.55rem; border-radius: 0.9rem; background: color-mix(in srgb, var(--surface) 62%, transparent); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); border: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
-	.glass h2, .glass .count, .glass .hint { padding-inline: 0.35rem; }
-	.glass .row { border-color: transparent; background: none; }
-	.glass .upcoming.lifted { background: var(--raised); }
+	/* the list sits straight on the wash, no card: rows pull out by their padding so covers line up with the hero */
+	.upcoming-list { display: grid; gap: 0.9rem; }
+	.upcoming-list ol { margin-inline: -0.45rem; }
+	.upcoming-list .row { border-color: transparent; background: none; }
+	.upcoming-list .upcoming.lifted { background: var(--raised); }
 	.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.rail { padding: 1rem; }
 	header, .queue-head { display: flex; justify-content: space-between; align-items: center; }

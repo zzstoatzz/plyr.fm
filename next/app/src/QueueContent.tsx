@@ -73,12 +73,12 @@ export function QueueContent({ scrollRef, scrollMetrics, onDragging, returnTo = 
             </IconButton>
           </View>
         </View>
-        {upcoming.length > 1 && <Text style={{ color: theme.muted, fontSize: 13 * theme.scale, paddingHorizontal: 8, paddingBottom: 6 }}>hold a track to move it, or swipe it away</Text>}
+        {upcoming.length > 1 && <Text style={{ color: theme.muted, fontSize: 13 * theme.scale, paddingBottom: 6 }}>hold a track to move it, or swipe it away</Text>}
         {!upcoming.length && !player.privatePlayback && !player.jam && !player.live ? <QueueStarters />
-          : upcoming.length ? <View style={[styles.glass, { backgroundColor: translucent(theme.surface), borderColor: theme.border }]}><QueueReorder queue={player.queue} start={player.index + 1} move={player.move} remove={player.remove}
+          : upcoming.length ? <View style={styles.list}><QueueReorder queue={player.queue} start={player.index + 1} move={player.move} remove={player.remove}
           scrollRef={scrollRef} scrollMetrics={scrollMetrics} onDragging={onDragging}
           renderHeader={index => player.tail && index === Math.max(player.index + 1, player.tail.from)
-            ? <View style={{ paddingTop: 10, paddingBottom: 4, paddingHorizontal: 12 }}><Copy>from {player.tail.label}</Copy></View> : null}
+            ? <View style={{ paddingTop: 10, paddingBottom: 4, paddingHorizontal: 8 }}><Copy>from {player.tail.label}</Copy></View> : null}
           renderTrack={(track, index) => <QueueTrack track={track} play={() => player.jump(index)} remove={() => player.remove(index)} />} /></View>
           : <Copy>nothing queued. add tracks from their menus.</Copy>}
       </View>
@@ -104,11 +104,6 @@ export function QueueContent({ scrollRef, scrollMetrics, onDragging, returnTo = 
         minimumTrackTintColor={theme.accent} onSlidingComplete={(volume) => setPreferences({ volume })} />
     </Sheet>}
   </>;
-}
-
-/** The surface colour at about two-thirds strength, so the cover wash shows through the list. */
-function translucent(color: string) {
-  return /^#[0-9a-f]{6}$/i.test(color) ? color + 'a8' : color;
 }
 
 function NowPlayingHero({ track, playing }: { track: Track; playing: boolean }) {
@@ -164,5 +159,6 @@ const styles = StyleSheet.create({
   track: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6, paddingHorizontal: 8 },
   icon: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   hero: { flexDirection: 'row', alignItems: 'flex-end', gap: 14, paddingVertical: 4 },
-  glass: { borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, paddingVertical: 4 }
+  // no card around the list: rows pull out by their own padding so covers line up with the hero
+  list: { marginHorizontal: -8 }
 });
