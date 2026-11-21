@@ -1,0 +1,428 @@
+// @ts-nocheck: plain JS shipped to Cloudflare as-is (no bundler step); tests/link-preview.test.ts covers it
+// Link previews for a static app. next web is a single-page app, so the HTML for
+// /track/123 is the same empty shell for every track and a link pasted into
+// bluesky, discord, slack or imessage would unfurl as a bare "plyr.fm". This is
+// the Cloudflare Pages worker (built to `build/_worker.js`) that, for link
+// unfurlers only, reads the appview and writes the page's title, Open Graph and
+// twitter tags into that shell. People in a browser get the static file
+// untouched, so the app never waits on it. It also serves `/oembed`, which
+// embed services (iframely and friends) discover from those tags.
+//
+// Only the routes in `_routes.json` reach this worker; everything else is served
+// straight from the static assets.
+
+const SITE_NAME = 'plyr.fm';
+const SITE_DESCRIPTION = 'discover and stream audio on the AT Protocol with plyr.fm';
+const API_TIMEOUT_MS = 6_000;
+const API_CACHE_SECONDS = 300;
+const ADULT_LABELS = new Set(['sexual', 'porn', 'nudity']);
+
+// A browser navigation sends Sec-Fetch-Mode: navigate; unfurlers send no
+// Sec-Fetch headers. Some unfurlers drive a headless browser, so their user
+// agent still sends them to the preview path.
+const UNFURLER = /bot|crawl|spider|slurp|facebookexternalhit|facebot|embedly|iframely|cardyb|bluesky|discord|slack|telegram|whatsapp|signal|mastodon|pleroma|akkoma|misskey|skype|linkedin|pinterest|vkshare|redditbot|preview|headless|lighthouse/i;
+
+export function wantsPreview(request) {
+  if (request.method !== 'GET' && request.method !== 'HEAD') return false;
+  const ua = request.headers.get('user-agent') || '';
+  if (UNFURLER.test(ua)) return true;
+  return request.headers.get('sec-fetch-mode') !== 'navigate';
+}
+
+/** production's album slug (backend/utilities/slugs.py), to resolve /u/{handle}/album/{slug} links */
+export function slugify(text, maxLength = 100) {
+  let slug = (text || '')
+    .normalize('NFKD')
+    .replace(/[^\x00-\x7f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  if (slug.length > maxLength) {
+    slug = slug.slice(0, maxLength);
+    const hyphen = slug.lastIndexOf('-');
+    if (hyphen > 0) slug = slug.slice(0, hyphen);
+  }
+  return slug;
+}
+
+const decode = (segment) => {
+  try { return decodeURIComponent(segment); } catch { return segment; }
+};
+
+/** the page a path names, or null for pages without their own preview */
+export function route(pathname) {
+  const parts = pathname.replace(/\/+$/, '').split('/').slice(1).map(decode);
+  const [kind, a, b, c] = parts;
+  if (parts.length === 0) return { kind: 'home' };
+  if (kind === 'track' && a && parts.length === 2) return { kind: 'track', id: a };
+  if (kind === 'album' && a && parts.length === 2) return { kind: 'album', id: a };
+  if (kind === 'playlist' && a && parts.length === 2) return { kind: 'playlist', id: a };
+  if (kind === 'tag' && a && parts.length === 2) return { kind: 'tag', name: a };
+  if (kind === 'jam' && a && parts.length === 2) return { kind: 'jam', room: a };
+  if (kind === 'u' && a && parts.length === 2) return { kind: 'artist', actor: a };
+  if (kind === 'u' && a && b === 'album' && c && parts.length === 4) return { kind: 'legacy-album', actor: a, slug: c };
+  return null;
+}
+
+/** reads the appview's `fm.plyr.unspecced.*` methods; null on any miss */
+export function createApi(origin, fetcher = fetch) {
+  const get = async (method, params) => {
+    const url = new URL(`${origin}/xrpc/fm.plyr.unspecced.${method}`);
+    for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+    try {
+      const response = await fetcher(url.href, {
+        signal: controller.signal,
+        headers: { accept: 'application/json' },
+        cf: { cacheTtl: API_CACHE_SECONDS, cacheEverything: true }
+      });
+      return response.ok ? await response.json() : null;
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+  return {
+    track: (id) => get('getTrack', /^[1-9][0-9]*$/.test(id) ? { legacyId: id } : { uri: uriFromId(id) }),
+    artist: (actor) => get('getArtist', { actor }),
+    artistMetrics: (actor) => get('getArtistMetrics', { actor }),
+    albums: (artistDid) => get('listAlbums', { artistDid, limit: '100' }),
+    album: (id) => get('getAlbum', { uri: uriFromId(id) }),
+    playlist: (id) => get('getPlaylist', { uri: uriFromId(id) })
+  };
+}
+
+// ids are a type prefix + base64url(at-uri); see core/src/record-ids.ts
+export function uriFromId(id) {
+  const match = /^(?:trk|alb|pls)_([A-Za-z0-9_-]+)$/.exec(id);
+  if (!match) return id;
+  try {
+    const payload = match[1].replace(/-/g, '+').replace(/_/g, '/');
+    const bin = atob(payload + '='.repeat((4 - (payload.length % 4)) % 4));
+    const uri = new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from(bin, (ch) => ch.charCodeAt(0)));
+    return uri.startsWith('at://') ? uri : id;
+  } catch {
+    return id;
+  }
+}
+
+const plyrImage = /^https:\/\/images(?:-stg)?\.plyr\.fm\/(?!cdn-cgi\/)[^?#]+$/;
+const legacyBucket = /^https:\/\/pub-7ea7ea9a6f224f4f8c0321a2bb008c5a\.r2\.dev\/images\//;
+
+/**
+ * Artwork for a card. Uploaded art can be a 20 MB phone photo, which unfurlers
+ * time out on or refuse, so plyr images are resized at the edge to a 1200px
+ * JPEG (every unfurler reads JPEG; not all read WebP).
+ */
+export function cardImage(url) {
+  if (!url) return null;
+  const canonical = url.replace(legacyBucket, 'https://images.plyr.fm/images/');
+  if (!plyrImage.test(canonical)) return { url: canonical };
+  const parsed = new URL(canonical);
+  return {
+    url: `${parsed.origin}/cdn-cgi/image/width=1200,height=1200,fit=scale-down,quality=85,format=jpeg${parsed.pathname}`,
+    type: 'image/jpeg'
+  };
+}
+
+const isAdult = (track) =>
+  [track.moderation?.self_labels, track.moderation?.operator_labels].some((labels) => labels?.some((label) => ADULT_LABELS.has(label)));
+
+const isOpen = (track) => track.access?.visibility === 'public' && !track.access.gate && !track.access.space_uri;
+
+const embeddable = (track) => isOpen(track) && !isAdult(track);
+
+const artistName = (track) => track.metadata.artist_name?.trim() || track.artist.profile.display_name || track.artist.profile.handle;
+
+const plural = (count, noun) => `${count} ${noun}${count === 1 ? '' : 's'}`;
+
+function duration(seconds) {
+  if (!seconds || seconds < 1) return null;
+  const s = Math.round(seconds);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const rest = String(s % 60).padStart(2, '0');
+  return h ? `${h}:${String(m).padStart(2, '0')}:${rest}` : `${m}:${rest}`;
+}
+
+function listArtwork(list) {
+  return list.media?.artwork?.url || list.owner?.profile?.avatar_url || null;
+}
+
+function listDuration(list) {
+  const total = (list.members || []).reduce((sum, member) => sum + (member.track?.metadata?.duration_seconds || 0), 0);
+  return duration(total);
+}
+
+/**
+ * What a card for this page shows, or a redirect for an old production link.
+ * Returns null when the page has nothing of its own to show (the static
+ * site-wide card then stands).
+ */
+export async function preview(url, api) {
+  const page = route(url.pathname);
+  if (!page) return null;
+  const origin = url.origin;
+
+  if (page.kind === 'track') {
+    const track = await api.track(page.id);
+    if (!track || track.access?.visibility === 'private') return null;
+    const artist = artistName(track);
+    const path = `/track/${track.legacy_id || track.id}`;
+    const adult = isAdult(track);
+    const art = adult ? null : cardImage(track.media?.artwork?.url || track.artist.profile.avatar_url);
+    const length = duration(track.metadata.duration_seconds);
+    const audio = embeddable(track) ? track.media?.origins?.find((o) => /^https:\/\/audio\.plyr\.fm\//.test(o.url)) : null;
+    return {
+      type: 'music.song',
+      title: `${track.metadata.title} - ${artist}`,
+      shortTitle: track.metadata.title,
+      description: [artist, track.metadata.album, length].filter(Boolean).join(' • '),
+      url: origin + path,
+      image: art,
+      imageAlt: `${track.metadata.title} by ${artist}`,
+      large: Boolean(art),
+      audio: audio ? { url: audio.url, type: audio.media_type?.includes('/') ? audio.media_type : `audio/${audio.media_type || 'mpeg'}` } : null,
+      author: { name: artist, url: `${origin}/u/${track.artist.profile.handle || track.artist.did}` },
+      music: { duration: track.metadata.duration_seconds, musician: `${origin}/u/${track.artist.profile.handle || track.artist.did}` },
+      oembed: embeddable(track) ? origin + path : null,
+      at: { canonical: track.record?.uri, author: `at://${track.artist.did}` }
+    };
+  }
+
+  if (page.kind === 'artist') {
+    const [artist, metrics] = await Promise.all([api.artist(page.actor), api.artistMetrics(page.actor)]);
+    if (!artist) return null;
+    const name = artist.display_name || artist.handle;
+    const tracks = metrics?.totals?.tracks;
+    return {
+      type: 'profile',
+      title: name,
+      shortTitle: name,
+      description: `@${artist.handle}${tracks ? ` · ${plural(tracks, 'track')}` : ''} on ${SITE_NAME}`,
+      url: `${origin}/u/${artist.handle}`,
+      image: cardImage(artist.avatar_url),
+      imageAlt: name,
+      large: false,
+      author: { name, url: `${origin}/u/${artist.handle}` },
+      oembed: tracks ? `${origin}/u/${artist.handle}` : null,
+      at: { author: `at://${artist.did}` }
+    };
+  }
+
+  if (page.kind === 'legacy-album') {
+    const artist = await api.artist(page.actor);
+    if (!artist) return null;
+    const albums = await api.albums(artist.did);
+    const album = albums?.data?.find((list) => slugify(list.metadata?.name) === page.slug);
+    return album ? { redirect: `${origin}/album/${album.id}${url.search}` } : null;
+  }
+
+  if (page.kind === 'album' || page.kind === 'playlist') {
+    const list = await (page.kind === 'album' ? api.album(page.id) : api.playlist(page.id));
+    if (!list) return null;
+    const name = list.metadata?.name || page.kind;
+    const owner = list.owner?.profile?.display_name || list.owner?.profile?.handle || 'someone';
+    const count = list.metrics?.available_count ?? list.members?.length ?? 0;
+    const art = cardImage(listArtwork(list));
+    return {
+      type: page.kind === 'album' ? 'music.album' : 'music.playlist',
+      title: `${name} by ${owner}`,
+      shortTitle: name,
+      description: [page.kind === 'album' ? `album by ${owner}` : `playlist by ${owner}`, count ? plural(count, 'track') : null, listDuration(list)].filter(Boolean).join(' • '),
+      url: `${origin}/${page.kind}/${list.id}`,
+      image: art,
+      imageAlt: `${name} by ${owner}`,
+      large: Boolean(art),
+      author: { name: owner, url: `${origin}/u/${list.owner?.profile?.handle || list.owner?.did}` },
+      oembed: count ? `${origin}/${page.kind}/${list.id}` : null,
+      at: { canonical: list.record?.uri, author: list.owner?.did ? `at://${list.owner.did}` : null }
+    };
+  }
+
+  if (page.kind === 'home') {
+    return {
+      type: 'website',
+      title: `${SITE_NAME} - audio streaming app`,
+      description: SITE_DESCRIPTION,
+      url: `${origin}/`
+    };
+  }
+
+  if (page.kind === 'tag') {
+    return {
+      type: 'website',
+      title: `#${page.name} on ${SITE_NAME}`,
+      shortTitle: `#${page.name}`,
+      description: `tracks tagged #${page.name} on ${SITE_NAME}`,
+      url: `${origin}/tag/${encodeURIComponent(page.name)}`
+    };
+  }
+
+  if (page.kind === 'jam') {
+    return {
+      type: 'website',
+      title: `join the jam on ${SITE_NAME}`,
+      shortTitle: 'join the jam',
+      description: `listen along together on ${SITE_NAME}`,
+      url: `${origin}/jam/${encodeURIComponent(page.room)}`
+    };
+  }
+
+  return null;
+}
+
+const escape = (text) =>
+  String(text).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
+
+const meta = (key, name, content) => (content || content === 0 ? `<meta ${key}="${name}" content="${escape(content)}" />` : '');
+
+/** the head tags for a card; `fallbackImage` stands in when the page has no art */
+export function headTags(card, fallbackImage) {
+  const image = card.image || { url: fallbackImage };
+  const tags = [
+    `<title>${escape(card.title.endsWith(SITE_NAME) || card.title.startsWith(SITE_NAME) ? card.title : `${card.title} | ${SITE_NAME}`)}</title>`,
+    meta('name', 'description', card.description),
+    `<link rel="canonical" href="${escape(card.url)}" />`,
+    meta('property', 'og:type', card.type),
+    meta('property', 'og:site_name', SITE_NAME),
+    meta('property', 'og:title', card.title),
+    meta('property', 'og:description', card.description),
+    meta('property', 'og:url', card.url),
+    meta('property', 'og:image', image.url),
+    meta('property', 'og:image:secure_url', image.url),
+    meta('property', 'og:image:type', image.type),
+    meta('property', 'og:image:alt', card.image ? card.imageAlt : SITE_NAME),
+    card.audio ? meta('property', 'og:audio', card.audio.url) : '',
+    card.audio ? meta('property', 'og:audio:type', card.audio.type) : '',
+    card.music?.duration ? meta('property', 'music:duration', Math.round(card.music.duration)) : '',
+    card.music?.musician ? meta('property', 'music:musician', card.music.musician) : '',
+    meta('name', 'twitter:card', card.large ? 'summary_large_image' : 'summary'),
+    meta('name', 'twitter:title', card.shortTitle || card.title),
+    meta('name', 'twitter:description', card.description),
+    meta('name', 'twitter:image', image.url),
+    meta('name', 'twitter:image:alt', card.image ? card.imageAlt : SITE_NAME),
+    card.oembed
+      ? `<link rel="alternate" type="application/json+oembed" href="${escape(`${new URL(card.url).origin}/oembed?url=${encodeURIComponent(card.oembed)}&format=json`)}" title="${escape(card.title)}" />`
+      : '',
+    card.at?.canonical ? meta('name', 'at:canonical', card.at.canonical) : '',
+    card.at?.author ? meta('name', 'at:author', card.at.author) : ''
+  ];
+  return tags.filter(Boolean).join('\n\t\t');
+}
+
+const PREVIEW_BLOCK = /<!-- link-preview -->[\s\S]*?<!-- \/link-preview -->/;
+
+/** the static shell with its site-wide card swapped for this page's */
+export function injectCard(html, card, fallbackImage) {
+  const tags = `<!-- link-preview -->\n\t\t${headTags(card, fallbackImage)}\n\t\t<!-- /link-preview -->`;
+  const withoutTitle = html.replace(/<title>[\s\S]*?<\/title>\s*/, '');
+  return PREVIEW_BLOCK.test(withoutTitle) ? withoutTitle.replace(PREVIEW_BLOCK, () => tags) : withoutTitle.replace('</head>', () => `${tags}\n\t</head>`);
+}
+
+const OEMBED_SIZES = { track: [400, 165, 165], album: [400, 380, 600], playlist: [400, 380, 600], artist: [400, 380, 600] };
+
+/** oEmbed for a plyr.fm page link: a rich embed of its player */
+export async function oembed(requestUrl, api) {
+  const target = requestUrl.searchParams.get('url');
+  const format = requestUrl.searchParams.get('format') || 'json';
+  if (format !== 'json') return { status: 501, body: { error: 'only json format is supported' } };
+  if (!target) return { status: 400, body: { error: 'url is required' } };
+  let parsed;
+  try {
+    parsed = new URL(target);
+  } catch {
+    return { status: 404, body: { error: 'unsupported url' } };
+  }
+  const origin = requestUrl.origin;
+  let path = parsed.pathname;
+  let page = route(path);
+  if (page?.kind === 'legacy-album') {
+    const moved = await preview(new URL(path, origin), api);
+    path = moved?.redirect ? new URL(moved.redirect).pathname : path;
+    page = moved?.redirect ? route(path) : null;
+  }
+  if (!page || !['track', 'album', 'playlist', 'artist'].includes(page.kind)) return { status: 404, body: { error: 'unsupported url' } };
+
+  let card;
+  let embedPath;
+  if (page.kind === 'track') {
+    const track = await api.track(page.id);
+    if (!track || !embeddable(track)) return { status: 404, body: { error: 'track not found' } };
+    card = await preview(new URL(`/track/${page.id}`, origin), { track: async () => track });
+    embedPath = `/embed/track/${track.legacy_id || track.id}`;
+  } else {
+    card = await preview(new URL(path, origin), api);
+    if (!card?.oembed) return { status: 404, body: { error: `${page.kind} not found` } };
+    embedPath = `/embed${new URL(card.url).pathname}`;
+  }
+
+  const [defaultWidth, defaultHeight, maxHeight] = OEMBED_SIZES[page.kind];
+  const askedWidth = Number(requestUrl.searchParams.get('maxwidth')) || defaultWidth;
+  const askedHeight = Number(requestUrl.searchParams.get('maxheight')) || defaultHeight;
+  const width = Math.max(200, Math.min(askedWidth, 800));
+  const height = Math.max(120, Math.min(askedHeight, maxHeight));
+  const body = {
+    version: '1.0',
+    type: 'rich',
+    provider_name: SITE_NAME,
+    provider_url: origin,
+    title: card.title,
+    author_name: card.author.name,
+    author_url: card.author.url,
+    width,
+    height,
+    html: `<iframe src="${escape(origin + embedPath)}" width="${width}" height="${height}" frameborder="0" allow="autoplay; encrypted-media" style="border-radius: 8px;"></iframe>`,
+    cache_age: API_CACHE_SECONDS
+  };
+  if (card.image) Object.assign(body, { thumbnail_url: card.image.url, thumbnail_width: 1200, thumbnail_height: 1200 });
+  return { status: 200, body };
+}
+
+const API_ORIGIN = '__PLYR_API_ORIGIN__';
+
+export default {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    const api = createApi(API_ORIGIN.startsWith('http') ? API_ORIGIN : 'https://api.next.plyr.fm');
+
+    if (url.pathname === '/oembed') {
+      const { status, body } = await oembed(url, api);
+      return new Response(JSON.stringify(body), {
+        status,
+        headers: {
+          'content-type': 'application/json; charset=utf-8',
+          'access-control-allow-origin': '*',
+          'cache-control': status === 200 ? `public, max-age=${API_CACHE_SECONDS}` : 'public, max-age=60'
+        }
+      });
+    }
+
+    const page = route(url.pathname);
+    // an old production album link moves for everyone, not only unfurlers
+    if (page?.kind === 'legacy-album') {
+      const moved = await preview(url, api).catch(() => null);
+      if (moved?.redirect) return Response.redirect(moved.redirect, 301);
+      return env.ASSETS.fetch(request);
+    }
+    if (!page || !wantsPreview(request)) return env.ASSETS.fetch(request);
+
+    const [shell, card] = await Promise.all([
+      env.ASSETS.fetch(new Request(new URL('/', url), request)),
+      preview(url, api).catch(() => null)
+    ]);
+    if (!card || card.redirect || !shell.ok) return env.ASSETS.fetch(request);
+    const html = injectCard(await shell.text(), card, `${url.origin}/icons/icon-512.png`);
+    const headers = new Headers(shell.headers);
+    headers.delete('content-length');
+    headers.delete('etag');
+    headers.set('content-type', 'text/html; charset=utf-8');
+    headers.set('cache-control', 'public, max-age=0, must-revalidate');
+    headers.set('x-plyr-preview', page.kind);
+    return new Response(request.method === 'HEAD' ? null : html, { status: 200, headers });
+  }
+};
