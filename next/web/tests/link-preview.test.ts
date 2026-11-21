@@ -117,6 +117,12 @@ test('album, artist and legacy album links', async () => {
   assert.equal(await preview(new URL('https://plyr.fm/u/warklo.test/album/nope'), api()), null);
 });
 
+test('a list without its own cover uses its first member with art', async () => {
+  const bare = { ...album, media: { artwork: null }, members: [{ track: null }, { track: { metadata: { duration_seconds: 60 }, media: { artwork: { url: 'https://images.plyr.fm/images/m.png' } } } }] };
+  const card = await preview(new URL(`https://plyr.fm/album/${albumId}`), api({ album: async () => bare }));
+  assert.match(card.image.url, /\/images\/m\.png$/);
+});
+
 test('the shell gets one title and one set of tags, escaped', async () => {
   const shell = await readFile(new URL('../src/app.html', import.meta.url), 'utf8');
   const card = await preview(new URL('https://plyr.fm/track/1667'), api());

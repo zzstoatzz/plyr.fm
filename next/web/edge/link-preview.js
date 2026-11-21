@@ -149,8 +149,10 @@ function duration(seconds) {
   return h ? `${h}:${String(m).padStart(2, '0')}:${rest}` : `${m}:${rest}`;
 }
 
+// a list's own cover, else its first member with art (as the app draws it), else the owner
 function listArtwork(list) {
-  return list.media?.artwork?.url || list.owner?.profile?.avatar_url || null;
+  const member = (list.members || []).find((m) => m.track?.media?.artwork?.url && !isAdult(m.track));
+  return list.media?.artwork?.url || member?.track.media.artwork.url || list.owner?.profile?.avatar_url || null;
 }
 
 function listDuration(list) {
