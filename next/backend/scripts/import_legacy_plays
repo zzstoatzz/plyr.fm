@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# Brings legacy production play totals into next's track_metrics.
+#
+# Reads public.tracks on the legacy database in a read-only session, then in
+# one transaction on next: each track's count moves by (new legacy total -
+# previously imported legacy total), and the baseline is stored in
+# plyr_index.legacy_play_counts. Plays next counted itself are kept, and
+# running it again (e.g. at cutover) only adds plays legacy counted since.
+#
+#   LEGACY_DATABASE_URL  legacy production database (read only)
+#   DATABASE_URL         next database; must carry the 'plyr-zig-next' or
+#                        'plyr-zig-test' marker comment, like scripts/migrate
+#   DRY_RUN=1            report what would change, then roll back
+#
+# Prints counts only, so its output is safe in public CI logs.
+set -euo pipefail
+
+: "${LEGACY_DATABASE_URL:?set LEGACY_DATABASE_URL to the legacy production database}"
+: "${DATABASE_URL:?set DATABASE_URL to the next database}"
+
+plain() { local url="${1/postgresql+psycopg:/postgresql:}"; url="${url/postgresql+psycopg2:/postgresql:}"; echo "${url/postgresql+asyncpg:/postgresql:}"; }
+legacy="$(plain "$LEGACY_DATABASE_URL")"
+next="$(plain "$DATABASE_URL")"
+next_psql() { PGOPTIONS='-c client_min_messages=warning' psql "$next" -X -q -v ON_ERROR_STOP=1 "$@"; }
+
+marker="$(next_psql -At -c "SELECT coalesce(shobj_description(oid, 'pg_database'), '') FROM pg_database WHERE datname = current_database()")"
+case "$marker" in
+    plyr-zig-next | plyr-zig-test) ;;
+    *) echo "refusing: next database has no plyr-zig marker comment" >&2; exit 1 ;;
+esac
+
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+
+# Same canonical-record and owner checks as the legacy track link export
+# (docs/legacy-track-links.md). Private and owner-only tracks keep their
+# totals too: the count belongs to the record whoever can see it.
+PGOPTIONS='-c default_transaction_read_only=on' psql "$legacy" -X -q -v ON_ERROR_STOP=1 -c "
+COPY (
+    SELECT atproto_record_uri, sum(play_count)::bigint
+    FROM public.tracks
+    WHERE play_count > 0
+      AND atproto_record_uri ~ '^at://did:[^/]+/fm[.]plyr[.]track/[A-Za-z0-9._~:-]+\$'
+      AND split_part(atproto_record_uri, '/', 3) = artist_did
+    GROUP BY atproto_record_uri
+) TO STDOUT WITH (FORMAT csv)" > "$work/legacy.csv"
+
+finish=COMMIT
+[[ "${DRY_RUN:-}" == 1 ]] && finish=ROLLBACK
+
+next_psql <<SQL
+BEGIN;
+LOCK TABLE plyr_index.legacy_play_counts IN EXCLUSIVE MODE;
+CREATE TEMP TABLE incoming (record_uri TEXT PRIMARY KEY, play_count BIGINT NOT NULL CHECK (play_count >= 0)) ON COMMIT DROP;
+\copy incoming FROM '$work/legacy.csv' WITH (FORMAT csv)
+
+CREATE TEMP TABLE delta ON COMMIT DROP AS
+SELECT i.record_uri, i.play_count - coalesce(l.play_count, 0) AS change
+FROM incoming AS i
+LEFT JOIN plyr_index.legacy_play_counts AS l USING (record_uri);
+
+\echo before
+SELECT count(*) AS tracks_with_plays, coalesce(sum(play_count), 0) AS next_total FROM plyr_index.track_metrics;
+\echo legacy export
+SELECT count(*) AS tracks, sum(play_count) AS plays,
+    count(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM plyr_index.track_records AS v WHERE v.record_uri = incoming.record_uri AND NOT v.deleted)) AS not_indexed_on_next
+FROM incoming;
+\echo change
+SELECT count(*) FILTER (WHERE change <> 0) AS tracks_changed, coalesce(sum(change), 0) AS plays_added FROM delta;
+
+INSERT INTO plyr_index.track_metrics AS m (record_uri, play_count, write_source, observed_at_us)
+SELECT record_uri, greatest(change, 0), 'legacy_import', (extract(epoch FROM clock_timestamp()) * 1000000)::BIGINT
+FROM delta WHERE change <> 0
+ON CONFLICT (record_uri) DO UPDATE
+    SET play_count = greatest(m.play_count + (SELECT d.change FROM delta AS d WHERE d.record_uri = m.record_uri), 0),
+        write_source = 'legacy_import',
+        observed_at_us = EXCLUDED.observed_at_us;
+
+INSERT INTO plyr_index.legacy_play_counts (record_uri, play_count, observed_at_us)
+SELECT record_uri, play_count, (extract(epoch FROM clock_timestamp()) * 1000000)::BIGINT FROM incoming
+ON CONFLICT (record_uri) DO UPDATE
+    SET play_count = EXCLUDED.play_count, observed_at_us = EXCLUDED.observed_at_us;
+
+\echo after
+SELECT count(*) AS tracks_with_plays, coalesce(sum(play_count), 0) AS next_total FROM plyr_index.track_metrics;
+$finish;
+\echo $finish
+SQL

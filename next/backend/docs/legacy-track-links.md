@@ -43,3 +43,13 @@ microseconds. Fill missing visibility only and preserve existing moderation
 fields. Compare the resulting policies with the snapshot before cutover and
 resolve any conflicting explicit settings. Verify a direct link still opens
 and that search omits the track.
+
+## play counts
+
+Legacy play totals come over with `scripts/import_legacy_plays` (the
+`next import legacy plays` workflow). It stores the imported legacy total per
+record in `plyr_index.legacy_play_counts` and moves `track_metrics.play_count`
+by the difference, so plays next counted itself are kept and a second run adds
+only what legacy counted since. Both apps count the same way: one play after
+30 seconds or half the track, at most once per listener per track-length
+window (30 s to 1 h). Run it once more after legacy stops taking plays.
