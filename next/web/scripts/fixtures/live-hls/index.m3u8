@@ -3,8 +3,8 @@
 #EXT-X-TARGETDURATION:4
 #EXT-X-MEDIA-SEQUENCE:0
 #EXTINF:4.040278,
-seg0.ts
+seg0.mpegts
 #EXTINF:3.993833,
-seg1.ts
+seg1.mpegts
 #EXTINF:3.993833,
-seg2.ts
+seg2.mpegts
