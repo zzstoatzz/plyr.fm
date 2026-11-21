@@ -1,5 +1,6 @@
 import { useAppearance } from './appearance';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { HomeTrackRow } from './HomeTrackRow';
 import { HomeChart } from './HomeChart';
@@ -26,6 +27,14 @@ function HomeFeed({ onPlay, hiddenTags }: { onPlay: Play; hiddenTags: string[] }
   const { did, ready } = useAuth();
   const feed = useLatestFeed(hiddenTags);
   const { latest, tracks, pending, selected } = feed;
+  const { tag } = useLocalSearchParams<{ tag?: string }>();
+  const [latestTop, setLatestTop] = useState(0);
+  useEffect(() => {
+    if (!tag) return;
+    feed.changeTags([tag]);
+    router.setParams({ tag: undefined });
+    list.current?.scrollToOffset({ offset: latestTop, animated: false });
+  }, [tag]);
   const [headerHeight, setHeaderHeight] = useState(0);
   const rowHeight = Math.max(96, Math.ceil(64 * colors.scale + 32));
   const viewport = useRef({ height: 0, content: 0, offset: 0 });
@@ -39,7 +48,7 @@ function HomeFeed({ onPlay, hiddenTags }: { onPlay: Play; hiddenTags: string[] }
     <HomeChart onPlay={onPlay} />
     {(network.loading || network.artists.length > 0) && <HomeArtists artists={network.artists} loading={network.loading} onPlay={onPlay} />}
     <Status error={network.error} retry={network.retry} />
-    <View style={styles.section}>
+    <View style={styles.section} onLayout={event => setLatestTop(event.nativeEvent.layout.y)}>
       <View style={styles.headingRow}>
         <Pressable accessibilityRole="button" accessibilityLabel="Refresh tracks" onPress={() => { list.current?.scrollToOffset({ offset: 0, animated: false }); latest.reload(); }} style={{ minHeight: 44, justifyContent: 'center' }}><Heading>latest tracks</Heading></Pressable>
       </View>

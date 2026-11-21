@@ -114,7 +114,7 @@ function Card({ pile, width, enter, leave, onSeek, seeAll, total }: {
           <Text numberOfLines={3} style={{ color: theme.text, fontSize: 12.5 * theme.scale, lineHeight: 17 * theme.scale }}>{comment.text}</Text>
         </View>
       </View>)}
-      {hidden > 0 && (seeAll ? <Pressable accessibilityRole="link" accessibilityLabel={seeAll.label} onPress={seeAll.open} style={styles.more}>
+      {hidden > 0 && (seeAll ? <Pressable accessibilityRole="button" accessibilityLabel={seeAll.label} onPress={seeAll.open} style={styles.more}>
         {({ hovered }: { pressed: boolean; hovered?: boolean }) => <Text style={{ color: hovered ? theme.text : theme.muted, fontSize: 12 * theme.scale, textDecorationLine: hovered ? 'underline' : 'none' }}>
           {hidden} more here · {seeAll.label.toLowerCase()}
         </Text>}

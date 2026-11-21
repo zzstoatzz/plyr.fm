@@ -16,7 +16,7 @@ import { Text } from './Text';
 import { toast } from './toast';
 import { removeComment, useTrackComments } from './track-comments';
 
-export function TrackComments({ track }: { track: Track }) {
+export function TrackComments({ track, heading = true }: { track: Track; heading?: boolean }) {
   const theme = useAppearance();
   const player = usePlayback();
   const comments = useTrackComments(track.id);
@@ -29,9 +29,9 @@ export function TrackComments({ track }: { track: Track }) {
   // Comments are the artist's choice: no section at all until they've turned them on.
   if (!comments.enabled && !comments.error) return null;
   return <View style={styles.section}>
-    <Text accessibilityRole="header" aria-level={2} style={{ color: theme.text, fontSize: 17 * theme.scale, fontWeight: '700' }}>
+    {heading && <Text accessibilityRole="header" aria-level={2} style={{ color: theme.text, fontSize: 17 * theme.scale, fontWeight: '700' }}>
       comments{count ? <Text style={{ color: theme.faint, fontWeight: '400' }}> {count}</Text> : null}
-    </Text>
+    </Text>}
     {comments.error ? <View style={styles.status}>
         <Text style={{ color: theme.muted, fontSize: 14 * theme.scale }}>couldn’t load comments.</Text>
         <Pressable accessibilityRole="button" accessibilityLabel="Retry loading comments" onPress={comments.retry} style={styles.retry}>
