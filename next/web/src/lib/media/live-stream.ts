@@ -38,3 +38,10 @@ export async function liveStream(url: string, audio: HTMLAudioElement, signal: A
 		}
 	};
 }
+
+/** A broadcast has no shared clock: listening again means catching up to what is on air now. */
+export function joinLiveEdge(audio: HTMLAudioElement | undefined) {
+	if (!audio?.seekable.length) return;
+	const edge = audio.seekable.end(audio.seekable.length - 1);
+	if (edge - audio.currentTime > 8) audio.currentTime = Math.max(0, edge - 3);
+}

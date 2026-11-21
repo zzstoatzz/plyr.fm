@@ -20,7 +20,7 @@ import { auth } from './auth';
 import { authConfig } from './auth-config';
 import { playbackSource } from './media/playback-source';
 import type { AudioSource } from './media/gated-audio';
-import { liveStream } from './media/live-stream';
+import { joinLiveEdge, liveStream } from './media/live-stream';
 import { consumeQueueLogin, registerQueueLogin } from './storage/queue-login';
 import { playOutboxStorage } from './storage/play-outbox-storage';
 import { queueStorage } from './storage/queue-storage';
@@ -268,11 +268,7 @@ class Player {
 	#resetOutput() {
 		this.#startAt = undefined;
 		this.#dropRadio();
-		this.#detachMedia();
-		this.#mediaTrack = undefined;
-		this.#embedInstance = crypto.randomUUID();
-		this.#embedDiscontinuity++;
-		this.#listening.stop();
+		this.#dropMedia();
 		this.privateMode = false;
 		this.repeat = 'off';
 		this.queueOpen = false;
@@ -332,11 +328,7 @@ class Player {
 		});
 		this.repeat = 'off';
 		this.#startAt = undefined;
-		this.#detachMedia();
-		this.#mediaTrack = undefined;
-		this.#embedInstance = crypto.randomUUID();
-		this.#embedDiscontinuity++;
-		this.#listening.stop();
+		this.#dropMedia();
 		this.#jam.join({ ...room, admit });
 	}
 
@@ -361,12 +353,8 @@ class Player {
 		if (this.liveStation?.slug === station.slug) return;
 		this.#holdQueue();
 		this.privateMode = false;
-		this.#detachMedia();
+		this.#dropMedia();
 		this.#audioElement();
-		this.#mediaTrack = undefined;
-		this.#embedInstance = crypto.randomUUID();
-		this.#embedDiscontinuity++;
-		this.#listening.stop();
 		this.liveStation = station;
 		this.#leaveRadio = leave;
 		this.liveListening = true;
@@ -416,11 +404,7 @@ class Player {
 		if (!this.liveStation || !this.current) return;
 		this.#liveOccurrence = undefined;
 		this.#liveClock = undefined;
-		this.#detachMedia();
-		this.#mediaTrack = undefined;
-		this.#embedInstance = crypto.randomUUID();
-		this.#embedDiscontinuity++;
-		this.#listening.stop();
+		this.#dropMedia();
 		this.queue = [];
 		this.index = -1;
 		this.playing = false;
@@ -450,7 +434,7 @@ class Player {
 		try {
 			await this.#ready();
 			if (!current()) return;
-			if (this.#liveBroadcast) this.#joinLiveEdge();
+			if (this.#liveBroadcast) joinLiveEdge(this.#audio);
 			else this.#setPosition(Math.min(clock(), this.duration));
 			this.#playMedia();
 		} catch {
@@ -460,14 +444,6 @@ class Player {
 				this.error = 'could not play this station';
 			}
 		}
-	}
-
-	/** A broadcast has no shared clock: listening again means catching up to what is on air now. */
-	#joinLiveEdge() {
-		const audio = this.#audio;
-		if (!audio?.seekable.length) return;
-		const edge = audio.seekable.end(audio.seekable.length - 1);
-		if (edge - audio.currentTime > 8) audio.currentTime = Math.max(0, edge - 3);
 	}
 
 	forgetPrivateTrack(uri: string) {
@@ -674,6 +650,15 @@ class Player {
 		this.#playMedia();
 	}
 
+	/** Lets go of the current audio: its source, its play count and the embed's view of it. */
+	#dropMedia() {
+		this.#detachMedia();
+		this.#mediaTrack = undefined;
+		this.#embedInstance = crypto.randomUUID();
+		this.#embedDiscontinuity++;
+		this.#listening.stop();
+	}
+
 	#detachMedia() {
 		this.#embedAnalysis?.reset();
 		this.#audioSource?.abort();
@@ -696,13 +681,9 @@ class Player {
 	async #loadMedia(track: Track, resolve: (signal: AbortSignal) => Promise<AudioSource>, count: boolean) {
 		if (this.#startAt?.uri !== track.record.uri || this.#startAt.cid !== track.record.cid) this.#startAt = undefined;
 		const audio = this.#audioElement();
-		this.#detachMedia();
+		this.#dropMedia();
 		const source = new AbortController();
 		this.#audioSource = source;
-		this.#mediaTrack = undefined;
-		this.#embedInstance = crypto.randomUUID();
-		this.#embedDiscontinuity++;
-		this.#listening.stop();
 		this.time = 0;
 		this.length = 0;
 		this.loading = true;
