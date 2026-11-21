@@ -26,14 +26,18 @@ export function useWaysIn(track: Track, offer?: Offer, support?: string) {
 
 /** a closed track, seen by someone the rules don't let in: who can listen and how to get in */
 export function WaysIn({ track, view }: { track: Track; view: ReturnType<typeof useWaysIn> & { policies?: Policy[] } }) {
-  const theme = useAppearance();
   const { space, ways, note, policies, admitted } = view;
   if (!space || admitted) return null;
-  const artist = artistName(track);
+  return <WaysInList artist={artistName(track)} ways={ways} note={note} empty={!!policies} signIn={`/track/${track.id}`} />;
+}
+
+/** the panel itself, also the upload page's preview of it, where nothing is pressable */
+export function WaysInList({ artist, ways, note, empty, signIn, preview }: { artist: string; ways: WayIn[]; note?: string; empty?: boolean; signIn?: string; preview?: boolean }) {
+  const theme = useAppearance();
   const size = 15 * theme.scale;
   const small = { color: theme.faint, fontFamily: theme.fontFamily, fontSize: 13 * theme.scale, lineHeight: 18 * theme.scale };
   const go = { color: theme.accent, fontFamily: theme.fontFamily, fontSize: size, fontWeight: '700' } as const;
-  return <View accessibilityLabel="how to listen" style={styles.ways}>
+  return <View accessibilityLabel={preview ? 'what a listener without access sees' : 'how to listen'} style={[styles.ways, preview && styles.preview]}>
     <View style={styles.lead}>
       <Lock size={16 * theme.scale} color={theme.muted} />
       <Text style={{ color: theme.muted, fontFamily: theme.fontFamily, fontSize: size }}>{artist} shares this one with some people</Text>
@@ -47,16 +51,17 @@ export function WaysIn({ track, view }: { track: Track; view: ReturnType<typeof 
             <Text style={{ color: theme.text, fontFamily: theme.fontFamily, fontSize: size }}>{way.title}</Text>
             <Text style={small}>{way.detail}</Text>
           </View>
-          {way.url ? <Pressable accessibilityRole="link" accessibilityLabel={`${way.action} ${way.detail}, opens your browser`} hitSlop={8} style={styles.go}
-            onPress={() => void Linking.openURL(way.url!).catch(() => toast.error('couldn’t open that link'))}>
-            <Text style={go}>{way.action}</Text><ArrowSquareOut size={14 * theme.scale} color={theme.accent} />
-          </Pressable>
-            : way.action === 'sign in' ? <Link href={{ pathname: '/login', params: { return_to: `/track/${track.id}` } }} asChild>
-              <Pressable accessibilityRole="link" hitSlop={8} style={styles.go}><Text style={go}>sign in</Text></Pressable>
-            </Link> : null}
+          {preview ? way.action ? <Text importantForAccessibility="no" style={[go, styles.go, { lineHeight: 44 }]}>{way.action}</Text> : null
+            : way.url ? <Pressable accessibilityRole="link" accessibilityLabel={`${way.action} ${way.detail}, opens your browser`} hitSlop={8} style={styles.go}
+              onPress={() => void Linking.openURL(way.url!).catch(() => toast.error('couldn’t open that link'))}>
+              <Text style={go}>{way.action}</Text><ArrowSquareOut size={14 * theme.scale} color={theme.accent} />
+            </Pressable>
+              : way.action === 'sign in' && signIn ? <Link href={{ pathname: '/login', params: { return_to: signIn } }} asChild>
+                <Pressable accessibilityRole="link" hitSlop={8} style={styles.go}><Text style={go}>sign in</Text></Pressable>
+              </Link> : null}
         </View>;
       })}
-    </View> : policies ? <Text style={small}>only {artist} can listen right now.</Text> : null}
+    </View> : empty ? <Text style={small}>only {artist} can listen right now.</Text> : null}
     {note ? <Text style={small}>{note}</Text> : null}
   </View>;
 }
@@ -67,5 +72,6 @@ const styles = StyleSheet.create({
   list: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12, minHeight: 56 },
   copy: { flex: 1, minWidth: 0 },
+  preview: { maxWidth: undefined },
   go: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 44, paddingHorizontal: 4 },
 });

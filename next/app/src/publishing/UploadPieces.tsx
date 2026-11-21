@@ -8,12 +8,6 @@ import { Text } from '../Text';
 import type { MediaFile } from '../pds';
 import { usePreviewUri } from './preview-uri';
 
-export type TrackDraftFields = {
-  file: MediaFile | null; artwork: MediaFile | null; title: string; description: string; tags: string;
-  setFile: (file: MediaFile | null) => void; setArtwork: (file: MediaFile | null) => void; setTitle: (text: string) => void;
-  setDescription: (text: string) => void; setTags: (text: string) => void;
-};
-
 export function formatSize(bytes: number) {
   return bytes >= 1_048_576 ? `${(bytes / 1_048_576).toFixed(1)} MiB` : `${Math.max(1, Math.round(bytes / 1024))} KiB`;
 }
@@ -38,24 +32,6 @@ export function PickTile({ kind, file, hint, disabled, onPress }: { kind: 'audio
       <Text numberOfLines={2} style={{ color: theme.muted, fontFamily: theme.fontFamily, fontSize: 13 * theme.scale }}>{file ? `${formatSize(file.size)} · tap to change` : hint}</Text>
     </View>
   </Pressable>;
-}
-
-export function AudienceToggle({ onlyYou, select, disabled }: { onlyYou: boolean; select: (value: boolean) => void; disabled: boolean }) {
-  const theme = useAppearance();
-  const segment = (label: string, selected: boolean) => {
-    const Glyph = label === 'everyone' ? Globe : Lock;
-    return <><Glyph size={15} color={selected ? theme.text : theme.muted} /><Text style={{ color: selected ? theme.text : theme.muted, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale, fontWeight: '600', textTransform: 'lowercase' }}>{label}</Text></>;
-  };
-  const box = { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 40, paddingHorizontal: 12, borderRadius: 20, justifyContent: 'center' } as const;
-  return <View accessibilityLabel="who can listen" style={{ flexDirection: 'row', alignSelf: 'flex-start', padding: 4, gap: 4, borderRadius: 24, borderWidth: 1, borderColor: theme.hairline, backgroundColor: theme.raised }}>
-    {[false, true].map(value => {
-      const selected = value === onlyYou;
-      return <Pressable key={String(value)} accessibilityRole="button" accessibilityState={{ selected, disabled }} disabled={disabled} onPress={() => select(value)}
-        style={({ pressed }) => ({ ...box, backgroundColor: selected ? theme.surface : pressed ? theme.hover : 'transparent', ...(selected ? { shadowColor: '#000', shadowOpacity: 0.14, shadowRadius: 3, shadowOffset: { width: 0, height: 1 } } : null) })}>
-        {segment(value ? 'only you' : 'everyone', selected)}
-      </Pressable>;
-    })}
-  </View>;
 }
 
 export function FormCard({ children }: { children: ReactNode }) {
@@ -196,10 +172,10 @@ export function SwitchRow({ label, detail, value, onChange }: { label: string; d
 }
 
 /** Who can listen beside the upload button, at the end of the form. */
-export function UploadBar({ audience, children }: { audience: ReactNode; children: ReactNode }) {
+export function UploadBar({ summary, children }: { summary: ReactNode; children: ReactNode }) {
   const theme = useAppearance();
   return <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, padding: 6, borderRadius: 32, borderWidth: 1, borderColor: theme.glassBorder, backgroundColor: theme.glass }}>
-    {audience}
+    {summary}
     <View style={{ flex: 1 }}>{children}</View>
   </View>;
 }

@@ -56,6 +56,19 @@ function rule(value: unknown, policyCollection: string): Rule | undefined {
   return undefined;
 }
 
+/** a Rule as the client stores it ({ kind, ... }), checked as strictly as a record's rule */
+export function readRule(value: unknown): Rule | undefined {
+  if (!object(value) || typeof value.kind !== 'string') return undefined;
+  const { kind, ...fields } = value;
+  return rule({ ...fields, $type: `rule#${kind}` }, 'rule');
+}
+
+/** whether two rules let in the same people, so a retried write can skip one that exists */
+export function sameRule(a: Rule, b: Rule): boolean {
+  const key = (value: Rule) => JSON.stringify(value.kind === 'members' ? { ...value, members: [...value.members].sort() } : value, Object.keys(value).sort());
+  return a.kind === b.kind && key(a) === key(b);
+}
+
 /** one listRecords item from `author`'s repo, or undefined when it opens nothing */
 export function parsePolicy(item: unknown, author: string, { audioSpaceType, policyCollection }: { audioSpaceType: string; policyCollection: string }): Policy | undefined {
   if (!object(item) || typeof item.uri !== 'string' || typeof item.cid !== 'string' || !object(item.value)) return undefined;

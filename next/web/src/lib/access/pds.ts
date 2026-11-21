@@ -3,7 +3,9 @@ import { policyRecord, type Policy, type Rule } from '@plyr/next-core/access/pol
 import { TID } from '@atproto/common-web';
 import type { Auth } from '@plyr/next-core/auth-state';
 import { createClosing } from '@plyr/next-core/access/close';
-import { spaceParts } from '@plyr/next-core/access/policy';
+import { sameRule, spaceParts } from '@plyr/next-core/access/policy';
+import { listPolicies } from '@plyr/next-core/access/policy-read';
+import type { UploadAccess } from '@plyr/next-core/pds';
 import { auth as authState } from '$lib/auth';
 import { authConfig } from '$lib/auth-config';
 
@@ -95,7 +97,35 @@ export function trackAccess(auth: Auth<RepoRpc>) {
       await space('com.atproto.space.deleteRecord', undefined, { space: match[1], repo: did, collection: NSID.track, rkey: match[4] }).catch(() => undefined);
     }
   }
-  return { close, reopen };
+  /** a new track's audio goes straight into its own space (named by the track's rkey); the public record points at it */
+  async function protect(record: Value, rkey: string): Promise<Value> {
+    const { did } = session();
+    const target = spaceFor(did, rkey);
+    await ensureSpace(target);
+    const records = closedRecords(record, target, did, rkey);
+    try {
+      await space('com.atproto.space.createRecord', undefined, { space: target, repo: did, collection: NSID.track, rkey, record: records.protected });
+    } catch (error) { if (!(error instanceof SpaceRequestError) || error.code !== 'RecordAlreadyExists') throw error; }
+    return records.public;
+  }
+
+  return { close, reopen, protect };
+}
+
+/** closing for the upload pipeline, or undefined when this session can't close music */
+export function uploadAccess(account: Auth<RepoRpc>): UploadAccess | undefined {
+  if (!account.closing || !account.policyEditing) return undefined;
+  const { protect } = trackAccess(account);
+  return {
+    protect,
+    async addWaysIn(trackUri, rules) {
+      const did = account.did!;
+      const rkey = trackUri.slice(`at://${did}/${NSID.track}/`.length);
+      const target = spaceFor(did, rkey);
+      const existing = await listPolicies({ policyCollection: NSID.policy, audioSpaceType: authConfig.AUDIO_SPACE_TYPE }, did, target);
+      for (const rule of rules) if (!existing.some(policy => sameRule(policy.rule, rule))) await addPolicy(account, target, rule);
+    },
+  };
 }
 
 const collection = () => NSID.policy as `${string}.${string}.${string}`;

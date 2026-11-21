@@ -5,6 +5,9 @@ import { getAuth } from '../auth-state';
 import { NSID } from '../auth-config';
 import { closedRecords, managedPolicy, reopenedRecord, requireManagedSpace, spaceFor } from './close';
 import { spaceParts } from './policy';
+import { sameRule } from '@plyr/next-core/access/policy';
+import type { UploadAccess } from '@plyr/next-core/pds';
+import { addPolicy, listPolicies } from './policy-pds';
 
 type Nsid = `${string}.${string}.${string}`;
 type Value = Record<string, unknown>;
@@ -91,5 +94,32 @@ export function trackAccess(auth: Auth) {
       await space('com.atproto.space.deleteRecord', undefined, { space: match[1], repo: did, collection: NSID.track, rkey: match[4] }).catch(() => undefined);
     }
   }
-  return { close, reopen };
+  /** a new track's audio goes straight into its own space (named by the track's rkey); the public record points at it */
+  async function protect(record: Value, rkey: string): Promise<Value> {
+    const { did } = session();
+    const target = spaceFor(did, rkey);
+    await ensureSpace(target);
+    const records = closedRecords(record, target, did, rkey);
+    try {
+      await space('com.atproto.space.createRecord', undefined, { space: target, repo: did, collection: NSID.track, rkey, record: records.protected });
+    } catch (error) { if (!(error instanceof SpaceRequestError) || error.code !== 'RecordAlreadyExists') throw error; }
+    return records.public;
+  }
+
+  return { close, reopen, protect };
+}
+
+/** closing for the upload pipeline, or undefined when this session can't close music */
+export function uploadAccess(account: Auth): UploadAccess | undefined {
+  if (!account.closing || !account.policyEditing || !account.did) return undefined;
+  const did = account.did;
+  const { protect } = trackAccess(account);
+  return {
+    protect,
+    async addWaysIn(trackUri, rules) {
+      const target = spaceFor(did, trackUri.slice(`at://${did}/${NSID.track}/`.length));
+      const existing = await listPolicies(did, target);
+      for (const rule of rules) if (!existing.some(policy => sameRule(policy.rule, rule))) await addPolicy(account, target, rule);
+    },
+  };
 }

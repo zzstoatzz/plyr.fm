@@ -176,7 +176,7 @@ export function createUploadQueue<Rpc extends RepoRpc>({
     const auth = session(job), pds = createPds(auth);
     const duration = input.duration ?? await measureAudioDuration(input.file).catch(() => undefined);
     const ready = { ...input, duration };
-    const route = uploadRoute(input.file, duration);
+    const route = uploadRoute(input.file, duration, !!input.waysIn?.length);
     if (route.kind === 'service' && !auth.uploadStorage) throw new Error('sign in again to allow plyr.fm storage');
     const reservation = await pds.reserveCreate('track', draft.reservedRkey).catch(() => { throw new Error('finish the earlier upload first'); });
     session(job);
@@ -243,7 +243,7 @@ export function createUploadQueue<Rpc extends RepoRpc>({
       const owner = getAuth().did;
       if (!owner) throw new Error('sign in first.');
       if (planned && planned.owner !== owner) throw new Error('sign in to the account that started it');
-      uploadRoute(input.file);
+      uploadRoute(input.file, undefined, !!input.waysIn?.length);
       const draft = queuedUploadDraft(input, owner, planned?.id ?? randomUUID(), planned?.reservedRkey);
       await queuedDrafts.put(draft);
       if (getAuth().did === owner) enqueueDraft(draft, input);
