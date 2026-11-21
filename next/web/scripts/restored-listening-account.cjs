@@ -54,7 +54,7 @@ module.exports = async function restoredListening({ page, context, origin, coord
   const contextCommand = once(coordinatorEvents, 'playContext', { signal: AbortSignal.timeout(10_000) });
   await shelf.getByRole('button', { name: 'play one from each' }).click();
   const [command] = await contextCommand;
-  assert.deepEqual(command.queue.map(item => item.id), [other.id, track.id], 'the real playback owner receives one track per followed artist, newest first');
+  assert.deepEqual(command.queue.map(item => item.id).sort(), [other.id, track.id].sort(), 'the real playback owner receives one track per followed artist, shuffled');
   const row = page.locator(`[data-testid="home-track-row"][data-track-id="${track.id}"]`);
   const like = row.getByRole('button', { name: 'Like ' + track.metadata.title, exact: true });
   await like.waitFor();

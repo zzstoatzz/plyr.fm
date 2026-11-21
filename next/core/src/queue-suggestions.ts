@@ -1,4 +1,5 @@
 import type { createApi, Track } from './api.ts';
+import { shuffled } from './queue-state.ts';
 
 type Api = Pick<ReturnType<typeof createApi>, 'suggestions' | 'actorLikes' | 'chart' | 'tracks' | 'playlists' | 'playlist'>;
 
@@ -47,7 +48,7 @@ export async function loadStarter(api: Api, key: StarterKey, did: string | undef
       return { tracks: unique([...found, ...top.filter(track => !liked.has(track.id))], track => track.id), label: 'for you' };
     }
     case 'likes':
-      return { tracks: shuffle(did ? (await api.actorLikes(did, { limit: 50 })).data : [], random), label: 'your likes' };
+      return { tracks: shuffled(did ? (await api.actorLikes(did, { limit: 50 })).data : [], undefined, random), label: 'your likes' };
     case 'top':
       return { tracks: (await api.chart('week', 30, signal)).data.map(entry => entry.track), label: 'top tracks this week' };
     case 'latest':
@@ -68,11 +69,3 @@ function unique<T>(values: readonly T[], key: (value: T) => unknown = value => v
   return values.filter(value => { const id = key(value); if (seen.has(id)) return false; seen.add(id); return true; });
 }
 
-function shuffle<T>(values: readonly T[], random: () => number): T[] {
-  const copy = [...values];
-  for (let i = copy.length - 1; i > 0; i--) {
-    const j = Math.floor(random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
-  }
-  return copy;
-}

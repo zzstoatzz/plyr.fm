@@ -8,7 +8,9 @@ import { trackArtwork } from '@plyr/next-core/artwork';
 import { PlayingArtworkOverlay } from './PlayingWave';
 import { GestureDetector } from 'react-native-gesture-handler';
 import { useTrackPress } from './TrackPress';
-import { useTrackPlayback } from './playback-context';
+import { useTrackPlayback, useTrackPlaybackState } from './playback-context';
+import { canToggleTrack } from '@plyr/next-core/track-revision';
+import { shuffled } from '@plyr/next-core/queue-state';
 import { Cover, type Play } from './CatalogPieces';
 import type { NetworkArtist } from './home-api';
 import { formatDuration, timeAgo } from './home-state';
@@ -52,9 +54,10 @@ export const followingLabel = 'new from people you know';
 /** Plays every person's newest track in a row; an icon on phones so the heading never wraps. */
 export function PlayOneFromEach({ tracks, onPlay, compact }: { tracks: Track[]; onPlay: Play; compact: boolean }) {
   const theme = useAppearance();
+  const player = useTrackPlaybackState();
   if (tracks.length < 2) return null;
   return <Pressable accessibilityRole="button" accessibilityLabel="play one from each"
-    onPress={() => onPlay(tracks[0], tracks, followingLabel)} style={styles.each}>
+    onPress={() => { const order = shuffled(tracks, track => canToggleTrack(player.current, track, player.inJam)); onPlay(order[0], order, followingLabel); }} style={styles.each}>
     {({ hovered, pressed }: { pressed: boolean; hovered?: boolean }) => compact
       ? <View style={[styles.round, { backgroundColor: pressed ? theme.hover : theme.raised }]}><Shuffle size={16} color={theme.text} /></View>
       : <>
@@ -79,7 +82,6 @@ export function FollowingTrack({ track, tracks, onPlay, now, width }: { track: T
     <View pointerEvents="none" style={styles.art}>
       <Cover uri={trackArtwork(track) || track.artist.profile.avatar_url} size={48} radius={6} />
       {playing && <PlayingArtworkOverlay />}
-      <View style={[styles.face, { borderColor: theme.card }]}><Cover uri={track.artist.profile.avatar_url} size={20} round instant /></View>
     </View>
     <View pointerEvents="box-none" style={styles.text}>
       <Link href={{ pathname: '/track/[id]', params: { id: track.id } }} asChild><Pressable accessibilityRole="link" accessibilityLabel={`Track details: ${track.metadata.title}`} hitSlop={{ top: 6, bottom: 2, right: 8 }} style={styles.link}>
@@ -100,7 +102,6 @@ export function FollowingTrack({ track, tracks, onPlay, now, width }: { track: T
 const styles = StyleSheet.create({
   card: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 8 },
   art: { width: 48, height: 48 },
-  face: { position: 'absolute', right: -5, bottom: -5, borderWidth: 2, borderRadius: 12, overflow: 'hidden' },
   text: { flex: 1, minWidth: 0, gap: 1 },
   link: { justifyContent: 'center', alignSelf: 'flex-start', maxWidth: '100%' },
   meta: { flexDirection: 'row', alignItems: 'center', minWidth: 0 },

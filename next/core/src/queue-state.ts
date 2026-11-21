@@ -80,3 +80,14 @@ export function shufflePicks<T>(state: QueueState<T>, random: () => number = Mat
   }
   return { ...state, entries };
 }
+
+/** A shuffled copy, never starting on `avoid` when anything else could go first. */
+export function shuffled<T>(values: readonly T[], avoid?: (value: T) => boolean, random: () => number = Math.random): T[] {
+  const copy = [...values];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  if (avoid && copy.length > 1 && avoid(copy[0])) copy.push(copy.shift() as T);
+  return copy;
+}
