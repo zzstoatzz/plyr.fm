@@ -16,6 +16,7 @@ from test_read_http import ADMIN_URL, ROOT, _prepare, _request
 
 TRACK = "at://did:plc:bench/fm.plyr.dev.track/track-{}"
 OTHER = "at://did:plc:radio{0}/fm.plyr.dev.track/song-{0}-{1}"
+UNTIMED = OTHER.format(12, 3)
 
 
 def main() -> None:
@@ -106,6 +107,12 @@ def _prepare_radio(database_url: str) -> None:
                     source,
                     {"record_uri": uri},
                 )
+        # no length on the record: the loop can't keep time with it
+        connection.execute(
+            "UPDATE plyr_index.track_records SET duration_seconds = NULL "
+            "WHERE record_uri = %s",
+            (UNTIMED,),
+        )
 
 
 def _copy(
@@ -186,6 +193,7 @@ def exercise(database_url: str) -> None:
                 assert item["atproto_record_uri"].startswith("at://")
                 assert item["liked"] is False
                 assert "ambient" in item["tags"]
+            assert UNTIMED not in [t["atproto_record_uri"] for t in rotation]
             # no artist airs twice within three entries
             dids = [t["artist_did"] for t in rotation]
             for index, did in enumerate(dids):
