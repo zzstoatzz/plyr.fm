@@ -62,7 +62,16 @@ export interface NewTrack {
 	explicit?: boolean;
 	/** closed: the audio goes into a space and these open it. absent or empty means open to everyone */
 	waysIn?: Rule[];
+	/** who can download; absent leaves the default (open, or off for a closed track) */
+	downloadPolicy?: DownloadPolicy;
+	/** kept out of discovery feeds; still on the artist's profile and in search */
+	unlisted?: boolean;
+	/** where the artist already sells it, saved to their buy links before the track is published */
+	buyLink?: BuyLink;
 }
+
+export type DownloadPolicy = 'open' | 'ask' | 'supporters' | 'off';
+export interface BuyLink { url: string; amount?: number; currency?: string }
 
 export interface FeaturedArtist { did: string; handle?: string; displayName?: string }
 
@@ -431,6 +440,8 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 		if (input.description?.trim()) record.description = input.description.trim();
 		if (input.duration && Number.isFinite(input.duration)) record.duration = Math.round(input.duration);
 		if (input.features?.length) record.features = input.features.slice(0, 10).map(({ did, handle, displayName }) => ({ did, ...(handle ? { handle } : {}), ...(displayName ? { displayName } : {}) }));
+		if (input.downloadPolicy) record.downloadPolicy = input.downloadPolicy;
+		if (input.unlisted) record.visibility = 'unlisted';
 		if (input.explicit) record.labels = { $type: 'com.atproto.label.defs#selfLabels', values: [{ val: 'sexual' }] };
 		if (input.artwork) Object.assign(record, await uploadArtwork(input.artwork));
 		assertSession();

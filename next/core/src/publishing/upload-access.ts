@@ -1,4 +1,6 @@
 import { formatPrice, parsePrice, priceText, type Rule } from '../access/policy.ts';
+import { normalizeLink } from '../selling.ts';
+import type { BuyLink, DownloadPolicy } from '../pds.ts';
 
 // who can listen to a track being uploaded: open to everyone, or closed with
 // any number of ways in. closed with none is "only you", which stays in the
@@ -112,4 +114,71 @@ export function accessFromRules(rules: readonly Rule[] | undefined, currency = U
     else ways.push({ kind: rule.kind });
   }
   return { closed: true, ways };
+}
+
+/** who can download, as the upload form offers it */
+export const DOWNLOAD_CHOICES: readonly { value: DownloadPolicy; title: string; detail: string }[] = [
+  { value: 'open', title: 'free download', detail: 'anyone who can listen can download the original.' },
+  { value: 'ask', title: 'free, but ask for support first', detail: 'the download shows your support and buy links before it starts.' },
+  { value: 'supporters', title: 'supporters only', detail: 'people with a verified payment to you can download it.' },
+  { value: 'off', title: 'no downloads', detail: 'only you can download it. people can still record what they hear.' },
+];
+
+/** the download setting in effect: what the artist picked, else what the track gets without one */
+export function downloadsFor(access: AccessDraft, picked: DownloadPolicy | undefined, plyrStorage = false): DownloadPolicy {
+  if (plyrStorage) return 'open';
+  return picked ?? (access.closed ? 'off' : 'open');
+}
+
+/** "where else you sell it": a link listeners can open; a sale there never opens the track here */
+export interface SellDraft { url: string; price: string }
+
+export function sellProblem(sell: SellDraft | undefined, currency = UPLOAD_CURRENCY): string | undefined {
+  if (!sell) return undefined;
+  if (!normalizeLink(sell.url)) return 'use a full link, like https://you.bandcamp.com/track/name.';
+  if (sell.price.trim() && !parsePrice(sell.price, currency)) return 'enter a price, like 8 or 7.99, or leave it empty.';
+  return undefined;
+}
+
+export function buyLinkFor(sell: SellDraft | undefined, currency = UPLOAD_CURRENCY): BuyLink | undefined {
+  if (!sell || sellProblem(sell, currency)) return undefined;
+  const amount = sell.price.trim() ? parsePrice(sell.price, currency) : undefined;
+  return { url: normalizeLink(sell.url)!, ...(amount ? { amount, currency } : {}) };
+}
+
+/** a saved draft's sell row, or none */
+export function readSellDraft(value: unknown): SellDraft | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const { url, price } = value as Record<string, unknown>;
+  return typeof url === 'string' && typeof price === 'string' ? { url, price } : undefined;
+}
+
+export function sellFromLink(link: BuyLink | undefined, currency = UPLOAD_CURRENCY): SellDraft | undefined {
+  if (!link) return undefined;
+  return { url: link.url, price: link.amount && (link.currency ?? currency) === currency ? priceText(link.amount, currency) : '' };
+}
+
+/** the rest of who gets the track: downloads, feeds, and where else it's sold */
+export interface UploadOptions { downloads?: DownloadPolicy; listed: boolean; sell?: SellDraft }
+export const DEFAULT_OPTIONS: UploadOptions = { listed: true };
+
+export function readUploadOptions(value: unknown): UploadOptions {
+  if (!value || typeof value !== 'object') return { ...DEFAULT_OPTIONS };
+  const { downloads, listed, sell } = value as Record<string, unknown>;
+  const picked = DOWNLOAD_CHOICES.find(choice => choice.value === downloads)?.value;
+  // a saved choice that can't be read stays narrow: out of feeds, no downloads
+  return { listed: listed === undefined || listed === true, ...(downloads === undefined ? {} : { downloads: picked ?? 'off' }), ...(readSellDraft(sell) ? { sell: readSellDraft(sell) } : {}) };
+}
+
+/** what an upload sends for these options; an only-you track has none of them */
+export function optionsInput(options: UploadOptions, access: AccessDraft, plyrStorage: boolean, currency = UPLOAD_CURRENCY): { downloadPolicy?: DownloadPolicy; unlisted?: true; buyLink?: BuyLink } {
+  if (onlyYou(access)) return {};
+  const buyLink = buyLinkFor(options.sell, currency);
+  const downloadPolicy = options.downloads === undefined && !access.closed ? undefined : downloadsFor(access, options.downloads, plyrStorage);
+  return { ...(downloadPolicy ? { downloadPolicy } : {}), ...(options.listed ? {} : { unlisted: true as const }), ...(buyLink ? { buyLink } : {}) };
+}
+
+export function optionsFromInput(input: { downloadPolicy?: DownloadPolicy; unlisted?: boolean; buyLink?: BuyLink }): UploadOptions {
+  const sell = sellFromLink(input.buyLink);
+  return { listed: !input.unlisted, ...(input.downloadPolicy ? { downloads: input.downloadPolicy } : {}), ...(sell ? { sell } : {}) };
 }

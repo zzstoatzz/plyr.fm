@@ -1,13 +1,17 @@
 <script lang="ts">
   import { waysIn } from '@plyr/next-core/access/ways-in';
-  import { addWay, previewRules, WAY_KINDS, wayProblem, type AccessDraft, type WayDraft, type WayKind } from '@plyr/next-core/publishing/upload-access';
+  import { addWay, buyLinkFor, DOWNLOAD_CHOICES, downloadsFor, onlyYou, previewRules, sellProblem, WAY_KINDS, wayProblem, type AccessDraft, type UploadOptions, type WayDraft, type WayKind } from '@plyr/next-core/publishing/upload-access';
   import WaysInList from '$lib/access/WaysInList.svelte';
   import Icon, { type IconName } from '$lib/ui/Icon.svelte';
 
   // who can listen to a new track: open, or closed with any number of ways in.
   // closed with none is only you. the preview is the panel listeners get.
-  let { access = $bindable(), artist, title, cover, disabled = false, checked = false, needsSignIn }: {
-    access: AccessDraft; artist: string; title: string; cover?: string; disabled?: boolean;
+  let { access = $bindable(), options = $bindable(), artist, title, cover, disabled = false, checked = false, needsSignIn, plyrStorage = false, needsSettings }: {
+    access: AccessDraft; options: UploadOptions; artist: string; title: string; cover?: string; disabled?: boolean;
+    /** plyr.fm storage serves the file publicly, so downloads stay on */
+    plyrStorage?: boolean;
+    /** a sign-in link when this session can't save buy links */
+    needsSettings?: string;
     /** show each way's problem, after a submit tried */
     checked?: boolean;
     /** a sign-in link when this session can't publish the chosen kind of track */
@@ -22,7 +26,10 @@
     members: { icon: 'users', title: 'people you pick', detail: 'they sign in to listen. the list is public.', add: 'people you pick' },
   };
   const missing = $derived(WAY_KINDS.filter(kind => !access.ways.some(way => way.kind === kind)));
-  const preview = $derived(waysIn({ artist, rules: previewRules(access) }));
+  const buy = $derived(buyLinkFor(options.sell));
+  const preview = $derived(waysIn({ artist, rules: previewRules(access), offer: buy && { provider: 'link', subject: '', ...buy } }));
+  const downloads = $derived(downloadsFor(access, options.downloads, plyrStorage));
+  const sellIssue = $derived(checked ? sellProblem(options.sell) : undefined);
 
   function setClosed(closed: boolean) { access = { closed, ways: closed ? access.ways : [] }; }
   function update(index: number, way: WayDraft) { access = { ...access, ways: access.ways.map((item, at) => at === index ? way : item) }; }
@@ -91,6 +98,45 @@
       {:else}
         <p class="note">on your profile, in feeds and search, free to play.</p>
       {/if}
+      {#if !onlyYou(access)}
+        <div class="more">
+          {#if options.sell}
+            <div class="way">
+              <span class="icon on"><Icon name="link" size={18} /></span>
+              <div class="copy">
+                <label for="{id}-sell"><b>where else you sell it</b></label>
+                <div class="sell-row">
+                  <input class="people" id="{id}-sell" type="url" inputmode="url" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="https://you.bandcamp.com/track/…" value={options.sell.url} {disabled}
+                    aria-invalid={!!sellIssue} aria-describedby={sellIssue ? `${id}-sell-problem` : undefined}
+                    oninput={event => { options = { ...options, sell: { ...options.sell!, url: event.currentTarget.value } }; }} />
+                  <span class="money"><span aria-hidden="true">$</span><input aria-label="its price there, optional" inputmode="decimal" autocomplete="off" placeholder="price" value={options.sell.price} {disabled}
+                    oninput={event => { options = { ...options, sell: { ...options.sell!, price: event.currentTarget.value } }; }} /><small>USD</small></span>
+                </div>
+                <small>listeners get a buy button. a sale there doesn’t open it here.</small>
+                {#if sellIssue}<p class="problem" id="{id}-sell-problem" role="alert">{sellIssue}</p>{/if}
+                {#if needsSettings}<p class="problem">sign in again to save buy links. <a href={needsSettings}>sign in again</a></p>{/if}
+              </div>
+              <button type="button" class="remove" aria-label="remove where else you sell it" {disabled} onclick={() => { options = { ...options, sell: undefined }; }}><Icon name="x" size={18} /></button>
+            </div>
+          {:else}
+            <div class="adds"><button type="button" class="add" {disabled} onclick={() => { options = { ...options, sell: { url: '', price: '' } }; queueMicrotask(() => document.getElementById(`${id}-sell`)?.focus()); }}><Icon name="plus" size={15} />where else you sell it</button></div>
+          {/if}
+          <label class="switch">
+            <span><b>show in feeds</b><small>{options.listed ? 'in home, latest and top tracks.' : 'off: still on your profile and in search.'}</small></span>
+            <input type="checkbox" role="switch" checked={options.listed} {disabled} onchange={event => { options = { ...options, listed: event.currentTarget.checked }; }} />
+          </label>
+          <fieldset class="downloads" disabled={disabled || plyrStorage}>
+            <legend>downloads</legend>
+            {#each DOWNLOAD_CHOICES as choice (choice.value)}
+              <label class="pick" class:on={downloads === choice.value}>
+                <input type="radio" name="{id}-downloads" checked={downloads === choice.value} onchange={() => { options = { ...options, downloads: choice.value }; }} />
+                <span class="copy"><b>{choice.title}</b><small>{choice.detail}</small></span>
+              </label>
+            {/each}
+            {#if plyrStorage}<p class="note">plyr.fm storage serves the file openly, so downloads stay on.</p>{/if}
+          </fieldset>
+        </div>
+      {/if}
       {#if needsSignIn}<p class="problem">sign in again to allow this. what you typed stays here. <a href={needsSignIn}>sign in again</a></p>{/if}
     </div>
 
@@ -119,7 +165,7 @@
   .lead { color: var(--muted); font-size: 0.9rem; line-height: 1.4; margin-bottom: 0.6rem; }
   .layout { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.75fr); gap: 1rem; align-items: start; }
   .layout.solo { grid-template-columns: minmax(0, 1fr); }
-  .card { display: grid; gap: 0.9rem; padding: 1.1rem; background: var(--surface); border: 1px solid var(--line); border-radius: 0.9rem; }
+  .card { display: grid; gap: 0.9rem; min-width: 0; padding: 1.1rem; background: var(--surface); border: 1px solid var(--line); border-radius: 0.9rem; }
   .choice { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
   .layout.solo .choice { max-width: 36rem; }
   .tile { display: flex; align-items: center; gap: 0.7rem; min-height: 3.5rem; padding: 0.7rem 0.85rem; border: 1.5px solid var(--line); border-radius: 0.8rem; cursor: pointer; }
@@ -150,6 +196,24 @@
   .note { color: var(--faint); font-size: 0.85rem; line-height: 1.4; }
   .problem { color: light-dark(#a3271f, #ff8f87); font-size: 0.85rem; margin-top: 0.2rem; }
   .problem a { color: inherit; text-decoration: underline; }
+  .more { display: grid; gap: 0.9rem; min-width: 0; padding-top: 0.9rem; border-top: 1px solid var(--line); }
+  .sell-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; min-width: 0; margin: 0.3rem 0 0.15rem; }
+  .sell-row .people { flex: 1 1 10rem; width: auto; min-width: 0; margin: 0; }
+  .switch { display: flex; align-items: center; justify-content: space-between; gap: 1rem; cursor: pointer; }
+  .switch span { display: grid; gap: 0.15rem; }
+  .switch small { color: var(--faint); font-size: 0.83rem; line-height: 1.35; }
+  .switch input { appearance: none; flex: none; position: relative; width: 2.6rem; height: 1.5rem; margin: 0; border-radius: 999px; background: var(--hover); cursor: pointer; transition: background 0.15s; }
+  .switch input::after { content: ''; position: absolute; left: 0.2rem; top: 0.2rem; width: 1.1rem; height: 1.1rem; border-radius: 50%; background: var(--faint); transition: transform 0.15s; }
+  .switch input:checked { background: var(--accent); }
+  .switch input:checked::after { transform: translateX(1.1rem); background: var(--on-accent); }
+  .switch input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .downloads { display: grid; gap: 0.4rem; margin: 0; padding: 0; border: 0; min-width: 0; }
+  .downloads legend { padding: 0; margin-bottom: 0.4rem; font-size: 0.8rem; font-weight: 700; color: var(--faint); letter-spacing: 0.04em; }
+  .downloads:disabled .pick { opacity: 0.6; cursor: default; }
+  .pick { display: flex; align-items: center; gap: 0.7rem; min-height: 2.75rem; padding: 0.55rem 0.75rem; border: 1.5px solid var(--line); border-radius: 0.7rem; cursor: pointer; }
+  .pick.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, transparent); }
+  .pick:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .pick input { width: 1.1rem; height: 1.1rem; margin: 0; accent-color: var(--accent); flex: none; }
   .preview { display: grid; gap: 0.55rem; }
   .cap { display: flex; align-items: center; gap: 0.4rem; font-size: 0.75rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
   .locked { display: grid; gap: 0.6rem; padding: 1rem; border-radius: 0.9rem; background: var(--surface); border: 1px solid var(--line); }

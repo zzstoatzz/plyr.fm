@@ -149,3 +149,9 @@ export async function sellableReleases(read: {
     ...tracks.filter(track => !isPrivateTrack(track)).map(track => ({ uri: track.record.uri, title: track.metadata.title, kind: track.metadata.album ? `track on ${track.metadata.album}` : 'single' })),
   ];
 }
+
+/** adds or replaces one release's buy link through the settings call, keeping the rest */
+export async function addBuyLink(settings: (patch?: Record<string, unknown>) => Promise<unknown>, subject: string, link: Omit<StoredOffer, 'subject'>) {
+  const { buyLinks } = readSelling(await settings());
+  await settings({ buyLinks: withBuyLink(buyLinks, { subject, ...link }) });
+}

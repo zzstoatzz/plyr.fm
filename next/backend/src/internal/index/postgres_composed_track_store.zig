@@ -587,8 +587,8 @@ pub const projected_columns =
     \\  p.bio IS NOT NULL,
     \\  NULL::text,
     \\  NULL::text,
-    \\  COALESCE(pol.visibility, 'public'),
-    \\  COALESCE(pol.visibility, 'public') IN ('public', 'supporters'),
+    \\  COALESCE(pol.visibility, CASE WHEN v.record_json->>'visibility' = 'unlisted' THEN 'unlisted' END, 'public'),
+    \\  COALESCE(pol.visibility, CASE WHEN v.record_json->>'visibility' = 'unlisted' THEN 'unlisted' END, 'public') IN ('public', 'supporters'),
     \\  pol.space_uri,
     \\  COALESCE(pol.operator_labels, '[]'::jsonb)::text,
     \\  pol.moderation_decision,
@@ -674,7 +674,7 @@ const published_policy = "  AND NOT " ++ mirror_store.awaitingCopy("v") ++ "\n";
 
 pub const discovery_policy = common_policy ++ published_policy ++
     \\  AND v.collection = $1
-    \\  AND COALESCE(pol.visibility, 'public') IN ('public', 'supporters')
+    \\  AND COALESCE(pol.visibility, CASE WHEN v.record_json->>'visibility' = 'unlisted' THEN 'unlisted' END, 'public') IN ('public', 'supporters')
     \\  AND NOT (
     \\    v.self_labels && ARRAY['sexual', 'porn']::text[]
     \\    OR COALESCE(pol.operator_labels, '[]'::jsonb) ?| ARRAY['sexual', 'porn']
@@ -1357,6 +1357,21 @@ test "composed PostgreSQL reads use verified records and authoritative account s
         "UPDATE plyr_index.track_policies SET visibility = 'public' WHERE record_uri = $1",
         .{record_uri},
     );
+
+    // an artist's own record can ask to stay out of discovery; nothing else in it changes access
+    _ = try pool.exec("UPDATE plyr_index.track_records SET record_json = '{\"visibility\":\"unlisted\"}'::json WHERE record_uri = $1", .{pds_only_uri});
+    const self_unlisted = (try implementation.store().getByUri(a, pds_only_uri)).?;
+    try std.testing.expectEqual(track.Visibility.unlisted, self_unlisted.access.visibility);
+    try std.testing.expect(!self_unlisted.access.in_discovery);
+    try std.testing.expectEqual(@as(usize, 1), (try implementation.store().listPublic(a, .{
+        .collection = "fm.plyr.dev.track",
+        .scope = .discovery,
+        .limit = 2,
+        .after = null,
+    })).len);
+    _ = try pool.exec("UPDATE plyr_index.track_records SET record_json = '{\"visibility\":\"private\"}'::json WHERE record_uri = $1", .{pds_only_uri});
+    try std.testing.expectEqual(track.Visibility.public, (try implementation.store().getByUri(a, pds_only_uri)).?.access.visibility);
+    _ = try pool.exec("UPDATE plyr_index.track_records SET record_json = NULL WHERE record_uri = $1", .{pds_only_uri});
 
     _ = try pool.exec("UPDATE plyr_index.track_records SET support_gate_type = 'owner' WHERE record_uri = $1", .{record_uri});
     try std.testing.expectEqual(get_track.Result.not_found, get_track.execute(a, implementation.store(), "fm.plyr.dev.track", "1667"));

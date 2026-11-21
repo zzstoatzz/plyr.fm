@@ -84,10 +84,12 @@ test('upload metadata validates limits and account without retaining credentials
 test('persisted uploads never downgrade restricted policies or protected sources', () => {
   for (const fields of [
     ...['off', 'ask', 'supporters', 'future-policy', null].map(downloadPolicy => ({ downloadPolicy })),
-    ...['private', 'unlisted', 'supporters', 'future-policy', null].map(visibility => ({ visibility })),
+    ...['private', 'supporters', 'future-policy', null].map(visibility => ({ visibility })),
     ...['audioBlob', 'audioSpace', 'audioFileId', 'supportGate', 'audioPayload', 'privateAudio', 'originalAudioBlob', 'originalFileId', 'originalFileType'].map(key => ({ [key]: null })),
   ]) assert.throws(() => uploadOperation({ ...operation, record: { ...operation.record, ...fields } }, operation.owner), /public, open audio only/);
   assert.equal(uploadOperation({ ...operation, record: { ...operation.record, downloadPolicy: 'open', visibility: 'public', futureMetadata: true } }, operation.owner).record.futureMetadata, true);
+  // unlisted only keeps the track out of feeds; the audio stays as open as a public upload
+  assert.equal(uploadOperation({ ...operation, record: { ...operation.record, visibility: 'unlisted' } }, operation.owner).record.visibility, 'unlisted');
 });
 test('sequential reads are bounded at10MiB including the final part and release the reader', async () => {
   const input = { ...operation, sizeBytes: UPLOAD_PART_BYTES + 13 }, f = fixture(input), r = reader(input.sizeBytes), signal = new AbortController().signal;

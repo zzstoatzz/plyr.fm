@@ -28,7 +28,7 @@ export type ChunkReader = { size: number; read(offset: number, length: number): 
 
 export function assertPublicUploadRecord(record: Record<string, unknown>): void {
   if ((Object.hasOwn(record, 'downloadPolicy') && record.downloadPolicy !== 'open')
-    || (Object.hasOwn(record, 'visibility') && record.visibility !== 'public')
+    || (Object.hasOwn(record, 'visibility') && record.visibility !== 'public' && record.visibility !== 'unlisted')
     || ['audioBlob', 'audioSpace', 'audioFileId', 'supportGate', 'audioPayload', 'privateAudio', 'originalAudioBlob', 'originalFileId', 'originalFileType'].some(field => Object.hasOwn(record, field))) {
     throw new Error('large uploads support public, open audio only.');
   }

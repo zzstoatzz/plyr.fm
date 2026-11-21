@@ -1,5 +1,5 @@
 import type { Auth, Did } from '../auth-state';
-import type { createPublicPds, MediaFile, NewTrack } from '../pds';
+import type { BuyLink, createPublicPds, MediaFile, NewTrack } from '../pds';
 import type { RepoRpc } from './repo-rpc';
 import type { CreateReservation } from './create-operation';
 import { audioFormat, uploadPublication, type ChunkReader, type UploadOperation, type UploadStatus, type UploadStorage, type transferParts } from './upload-model.ts';
@@ -17,7 +17,7 @@ const hex = (bytes: ArrayBuffer) => Array.from(new Uint8Array(bytes), byte => by
 
 export function createUploadQueue<Rpc extends RepoRpc>({
   getAuth, createPds, measureAudioDuration, openUploadReader, sendParts, uploadStorage, queuedDrafts, createUploadTransport,
-  applyGenreTags, randomUUID, sha256, onJob, onDismiss
+  applyGenreTags, saveBuyLink, randomUUID, sha256, onJob, onDismiss
 }: {
   getAuth: () => Auth<Rpc>;
   createPds: (auth: Auth<Rpc>) => Pds;
@@ -28,6 +28,8 @@ export function createUploadQueue<Rpc extends RepoRpc>({
   queuedDrafts: QueuedUploadDrafts;
   createUploadTransport: (auth: Session, operation: UploadOperation, assertCurrent: () => void, signal: AbortSignal) => UploadTransport;
   applyGenreTags: (session: () => Auth<Rpc>, uri: string) => Promise<void>;
+  /** adds the artist's buy link for a release; absent where a client can't write them */
+  saveBuyLink?: (session: () => Auth<Rpc>, subject: string, link: BuyLink) => Promise<void>;
   randomUUID: () => string;
   sha256: (bytes: Uint8Array<ArrayBuffer>) => Promise<ArrayBuffer>;
   onJob?: (job: UploadJobView) => void;
@@ -178,9 +180,13 @@ export function createUploadQueue<Rpc extends RepoRpc>({
     const ready = { ...input, duration };
     const route = uploadRoute(input.file, duration, !!input.waysIn?.length);
     if (route.kind === 'service' && !auth.uploadStorage) throw new Error('sign in again to allow plyr.fm storage');
+    if (route.kind === 'service' && input.downloadPolicy && input.downloadPolicy !== 'open') throw new Error('downloads stay on for tracks in plyr.fm storage');
+    if (input.buyLink && !saveBuyLink) throw new Error('sign in again to save buy links');
     const reservation = await pds.reserveCreate('track', draft.reservedRkey).catch(() => { throw new Error('finish the earlier upload first'); });
     session(job);
     patch(job, { phase: 'uploading', rkey: reservation.rkey });
+    // saved before the track exists: a link to something not yet published shows nowhere, and nothing is lost if it never is
+    if (input.buyLink) await withRetries(job, () => saveBuyLink!(() => session(job), reservation.uri, input.buyLink!));
     if (route.kind === 'pds') return runPds(job, ready, reservation, draft);
     const format = audioFormat(input.file.name, input.file.type, !!route.processing);
     const record = await pds.prepareTrackRecord(ready);
