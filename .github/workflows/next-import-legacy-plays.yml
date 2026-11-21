@@ -3,6 +3,9 @@
 # only the plays legacy counted since the last import, and keeps plays next
 # counted itself. run it again as the final step of the cutover export.
 #
+# also runs (for real) when this workflow or the script changes on main, so
+# a fix lands without anyone dispatching it.
+#
 # reads prod read-only; writes only the database marked 'plyr-zig-next'.
 # logs print counts only.
 #
@@ -13,6 +16,11 @@
 name: next import legacy plays
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/next-import-legacy-plays.yml
+      - next/backend/scripts/import_legacy_plays
   workflow_dispatch:
     inputs:
       dry_run:
