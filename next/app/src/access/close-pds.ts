@@ -23,7 +23,7 @@ export function trackAccess(auth: Auth) {
     const { did, agent, rpc } = auth;
     if (!did || !agent || !rpc) throw new Error('sign in to change who can listen.');
     if (getAuth().did !== did || getAuth().rpc !== rpc) throw new Error('account changed. return to the original account.');
-    if (!auth.closing) throw new Error('sign in again to allow closing your music.');
+    if (!auth.closing) throw new Error('sign in again to allow closing your tracks.');
     return { did, agent, rpc };
   }
   async function space(method: string, params?: Record<string, string>, body?: object) {

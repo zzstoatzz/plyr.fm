@@ -132,24 +132,24 @@ async function fixture(browser, accounts, handle, width, scheme, scenario, audio
     const fields = page.getByRole('textbox', { name: 'album name' });
     await fields.fill(title);
     const chooser = page.waitForEvent('filechooser');
-    await page.getByRole('button', { name: 'choose songs', exact: true }).click();
+    await page.getByRole('button', { name: 'choose tracks', exact: true }).click();
     await (await chooser).setFiles([...selection, { name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('notes') }]);
     await page.getByRole('alert').filter({ hasText: 'notes.txt' }).waitFor();
     assert.equal(await fields.inputValue(), title);
-    await page.getByRole('textbox', { name: 'title for song 1' }).fill('Alpha remastered');
+    await page.getByRole('textbox', { name: 'title for track 1' }).fill('Alpha remastered');
     await page.getByRole('button', { name: 'Move beta up' }).click();
     await page.locator('input[type="file"][accept^="image"]').setInputFiles({ name: 'cover.png', mimeType: 'image/png', buffer: cover });
     await page.getByRole('img', { name: 'selected cover preview' }).waitFor();
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth === innerWidth), 'the album form fits the viewport');
     await page.screenshot({ path: path.join(output, `${width}-${scheme}-${scenario}-editor.png`), fullPage: true });
-    await page.getByRole('button', { name: 'upload songs' }).click();
+    await page.getByRole('button', { name: 'upload tracks' }).click();
 
     if (scenario === 'reload') {
       await pausedBlob.promise;
       assert.equal((await records(trackCollection)).filter(record => !tracksAtStart.has(record.uri)).length, 2);
       await page.reload();
       releaseBlob.resolve();
-      await page.getByText('2 of 3 songs uploaded').waitFor();
+      await page.getByText('2 of 3 tracks uploaded').waitFor();
       await page.getByText('choose cover.png again to include a cover.').waitFor();
       async function switchAccount(nextHandle) {
         await page.goto(origin + '/settings');
@@ -164,11 +164,11 @@ async function fixture(browser, accounts, handle, width, scheme, scenario, audio
       assert.equal(await page.getByRole('textbox', { name: 'album name' }).inputValue(), '');
       assert.equal(await page.getByRole('heading', { name: title }).count(), 0);
       await switchAccount(handle);
-      await page.getByText('2 of 3 songs uploaded').waitFor();
+      await page.getByText('2 of 3 tracks uploaded').waitFor();
       await page.getByLabel('original file for gamma').setInputFiles(selection[2]);
     }
     const count = failSong ? 2 : 3;
-    await page.getByText(`${count} of 3 songs uploaded`).waitFor();
+    await page.getByText(`${count} of 3 tracks uploaded`).waitFor();
     if (scenario === 'reload') {
       await page.locator('input[type="file"][accept^="image"]').setInputFiles({ name: 'cover.png', mimeType: 'image/png', buffer: cover });
       await page.getByRole('img', { name: 'selected cover preview' }).waitFor();
@@ -197,9 +197,9 @@ async function fixture(browser, accounts, handle, width, scheme, scenario, audio
     } else if (scenario === 'partial') {
       await page.getByText('upload didn’t finish. choose alpha.mp3 to try again.').waitFor();
       await page.getByRole('button', { name: 'set aside album', exact: true }).click();
-      await page.getByText('uploaded songs stay in your music. unfinished songs stay in upload recovery.').waitFor();
+      await page.getByText('uploaded tracks stay in your uploads. unfinished tracks stay in upload recovery.').waitFor();
       await page.getByRole('button', { name: 'cancel', exact: true }).click();
-      await page.getByRole('button', { name: 'create album with 2 songs' }).click();
+      await page.getByRole('button', { name: 'create album with 2 tracks' }).click();
       await page.getByRole('button', { name: 'try saving again' }).waitFor();
       await page.getByRole('button', { name: 'try saving again' }).click();
       await page.getByRole('link', { name: 'view album' }).waitFor();
@@ -207,11 +207,11 @@ async function fixture(browser, accounts, handle, width, scheme, scenario, audio
     } else if (scenario === 'stale') {
       const other = await context.newPage();
       await other.goto(upload);
-      await other.getByText('2 of 3 songs uploaded').waitFor();
+      await other.getByText('2 of 3 tracks uploaded').waitFor();
       await other.getByLabel('original file for Alpha remastered').setInputFiles(selection[0]);
-      await other.getByText('3 of 3 songs uploaded').waitFor();
+      await other.getByText('3 of 3 tracks uploaded').waitFor();
       await other.close();
-      await page.getByRole('button', { name: 'create album with 2 songs' }).click();
+      await page.getByRole('button', { name: 'create album with 2 tracks' }).click();
       await page.waitForURL('**/album/**');
     } else if (scenario === 'journal' || scenario === 'journal-other') {
       await page.evaluate(() => {
@@ -245,7 +245,7 @@ async function fixture(browser, accounts, handle, width, scheme, scenario, audio
     } else {
       const other = await context.newPage();
       await other.goto(upload);
-      await other.getByText('3 of 3 songs uploaded').waitFor();
+      await other.getByText('3 of 3 tracks uploaded').waitFor();
       await other.locator('input[type="file"][accept^="image"]').setInputFiles({ name: 'cover.png', mimeType: 'image/png', buffer: cover });
       await other.getByRole('img', { name: 'selected cover preview' }).waitFor();
       await Promise.all([

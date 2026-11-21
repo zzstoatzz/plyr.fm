@@ -100,7 +100,7 @@
 					<button class="text-button" type="button" onclick={() => { removal = 'confirm'; }}>delete track</button>
 				{/if}
 				{#if problem}<p role="alert">{problem}</p>{/if}
-				<a class="text-button" href={resolve('/(app)/portal')}>your music</a>
+				<a class="text-button" href={resolve('/(app)/portal')}>your uploads</a>
 			</div>
 		{/snippet}
 	</TrackDetail>
@@ -112,7 +112,7 @@
 			<button class="text-button" type="button" onclick={load}>try again</button>
 		{:else}
 			<h1>track not found</h1>
-			<a class="text-button" href={resolve('/(app)/portal')}>your music</a>
+			<a class="text-button" href={resolve('/(app)/portal')}>your uploads</a>
 		{/if}
 	</div>
 {/if}

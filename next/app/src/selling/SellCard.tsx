@@ -1,21 +1,25 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { parsePrice, priceText } from '@plyr/next-core/access/policy';
-import { normalizeLink, offerLabel, readSelling, sellableReleases, storeName, withBuyLink, type Release, type SellingSettings, type StoredOffer } from '@plyr/next-core/selling';
+import { findReleases, linkedReleases, normalizeLink, offerLabel, readSelling, sellableReleases, storeName, withBuyLink, type Release, type SellingSettings, type StoredOffer } from '@plyr/next-core/selling';
 import { api } from '../api-client';
 import { useAuth } from '../auth';
 import { getAuth } from '../auth-state';
 import { useAppearance } from '../appearance';
 import { Choice } from '../AccountPieces';
-import { Action, Copy, Field, row } from '../controls';
+import { Action, Copy, Field, inputFontSize, row } from '../controls';
+import { Cover } from '../CatalogPieces';
+import { Sheet } from '../Sheet';
 import { CaretDown, CaretUp } from '../icons';
 import { accountSettings } from '../preference-sync';
 import { Text } from '../Text';
 import { toast } from '../toast';
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY'];
+const SHOWN = 50;
+const GROUPS = [{ label: 'all', value: undefined }, { label: 'albums', value: 'album' }, { label: 'tracks', value: 'track' }] as const;
 
-/** portal: where listeners can support you and buy each release. plyr links out, never takes the payment. */
+/** portal: where listeners can pay you: a support link, and buy links on the releases you pick. plyr.fm links out, never takes the payment. */
 export function SellCard({ did }: { did: string }) {
   const theme = useAppearance();
   const auth = useAuth();
@@ -26,13 +30,13 @@ export function SellCard({ did }: { did: string }) {
   const [busy, setBusy] = useState(false);
   const [support, setSupport] = useState('');
   const [supportError, setSupportError] = useState('');
-  const [editing, setEditing] = useState<string>();
+  const [sheet, setSheet] = useState<{ picking: boolean; release?: Release }>();
   const controller = useRef<AbortController>(null);
   useEffect(() => () => controller.current?.abort(), []);
 
   const call = useCallback(() => {
     const current = getAuth();
-    if (!current.agent || !current.accountSync) throw new Error('reconnect to change how you sell your music.');
+    if (!current.agent || !current.accountSync) throw new Error('reconnect to change where listeners can pay you.');
     controller.current ??= new AbortController();
     return accountSettings(current.agent, controller.current.signal);
   }, []);
@@ -46,7 +50,7 @@ export function SellCard({ did }: { did: string }) {
       })]);
       const next = readSelling(value);
       setSettings(next); setSupport(next.supportUrl); setReleases(list);
-    } catch (error) { setLoadError(error instanceof Error ? error.message : 'could not load your selling settings.'); }
+    } catch (error) { setLoadError(error instanceof Error ? error.message : 'could not load your payment settings.'); }
   }, [call, did]);
   useEffect(() => { if (auth.accountSync && auth.agent) void load(); }, [auth.accountSync, auth.agent, load]);
 
@@ -77,18 +81,18 @@ export function SellCard({ did }: { did: string }) {
   const small = { color: theme.faint, fontFamily: theme.fontFamily, fontSize: 13 * theme.scale, lineHeight: 18 * theme.scale };
 
   return <View style={[styles.card, { borderColor: theme.line, backgroundColor: theme.surface }]}>
-    <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} accessibilityLabel={`sell your music, ${summary}`}
+    <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} accessibilityLabel={`get paid, ${summary}`}
       onPress={() => setOpen(value => !value)} style={styles.header}>
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={{ color: theme.text, fontFamily: theme.fontFamily, fontSize: 17 * theme.scale, fontWeight: '700' }}>sell your music</Text>
+        <Text style={{ color: theme.text, fontFamily: theme.fontFamily, fontSize: 17 * theme.scale, fontWeight: '700' }}>get paid</Text>
         <Text numberOfLines={1} style={small}>{summary}</Text>
       </View>
       {open ? <CaretUp size={18} color={theme.muted} /> : <CaretDown size={18} color={theme.muted} />}
     </Pressable>
     {open && <View style={{ gap: 14 }}>
-      <Copy>point listeners at wherever you already sell. buttons show up on your artist page and releases. plyr.fm never sees the payment.</Copy>
+      <Copy>point listeners to wherever you already sell or take tips. buttons show up on your artist page and on what you've uploaded. plyr.fm never sees the payment.</Copy>
       {!auth.accountSync ? <View style={{ gap: 8 }}>
-        <Copy>reconnect to choose where listeners can buy your music.</Copy>
+        <Copy>reconnect to choose where listeners can pay you.</Copy>
         <View style={row}><Action primary label="reconnect" href={{ pathname: '/login', params: { return_to: '/portal' } }} /></View>
       </View> : loadError ? <View style={{ gap: 8 }}>
         <Copy live>{loadError}</Copy>
@@ -103,39 +107,87 @@ export function SellCard({ did }: { did: string }) {
         </View>
         <View style={{ gap: 4 }}>
           <Text style={{ color: theme.text, fontFamily: theme.fontFamily, fontSize: 15 * theme.scale, fontWeight: '700' }}>buy links</Text>
-          <Text style={small}>optional, per release. leave the price empty to just say "buy on Bandcamp".</Text>
-          {!releases.length && <Copy>upload something first, then add where it's sold.</Copy>}
-          {releases.map(release => {
-            const offer = settings.buyLinks.find(link => link.subject === release.uri);
-            return <View key={release.uri} style={[styles.release, { borderTopColor: theme.hairline }]}>
-              <View style={styles.releaseRow}>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text numberOfLines={1} style={{ color: theme.text, fontFamily: theme.fontFamily, fontSize: 15 * theme.scale, fontWeight: '600' }}>{release.title}</Text>
-                  <Text style={small}>{release.kind}</Text>
-                </View>
-                {editing !== release.uri && <Pressable accessibilityRole="button" onPress={() => setEditing(release.uri)}
-                  accessibilityLabel={offer ? `edit buy link for ${release.title}: ${offerLabel(offer)}` : `add a buy link for ${release.title}`}
-                  style={({ pressed }) => [styles.pill, { borderColor: offer ? theme.accent : theme.line, opacity: pressed ? 0.7 : 1 }]}>
-                  <Text numberOfLines={1} style={{ color: offer ? theme.accent : theme.muted, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale, fontWeight: offer ? '700' : '400' }}>{offer ? offerLabel(offer) : 'add a buy link'}</Text>
-                </Pressable>}
+          <Text style={small}>a buy button on one track or album, pointing wherever it's sold.</Text>
+          {linkedReleases(releases, settings.buyLinks).map(({ release, offer }) =>
+            <Pressable key={release.uri} accessibilityRole="button" onPress={() => setSheet({ picking: false, release })}
+              accessibilityLabel={`edit buy link for ${release.title}: ${offerLabel(offer)}`}
+              style={({ pressed }) => [styles.release, { borderTopColor: theme.hairline, opacity: pressed ? 0.7 : 1 }]}>
+              <ReleaseLine release={release} detail={release.group} />
+              <View style={[styles.tag, { borderColor: theme.accent }]}>
+                <Text numberOfLines={1} style={{ color: theme.accent, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale, fontWeight: '700' }}>{offerLabel(offer)}</Text>
               </View>
-              {editing === release.uri && <BuyEditor release={release} offer={offer} busy={busy} cancel={() => setEditing(undefined)}
-                save={async next => {
-                  const links = withBuyLink(settings.buyLinks, next);
-                  const done = next.url ? `${release.title}: buy ${offerLabel(next)}` : `removed the buy link for ${release.title}`;
-                  if (await save({ buyLinks: links }, done)) setEditing(undefined);
-                }} />}
-            </View>;
-          })}
+            </Pressable>)}
+          {!releases.length ? <Copy>upload something first, then add where it's sold.</Copy>
+            : settings.buyLinks.length < releases.length && <View style={[row, { marginTop: 8 }]}>
+              <Pressable accessibilityRole="button" onPress={() => setSheet({ picking: true })}
+                style={({ pressed }) => [styles.add, { borderColor: theme.accent, opacity: pressed ? 0.7 : 1 }]}>
+                <Text style={{ color: theme.accent, fontFamily: theme.fontFamily, fontSize: 15 * theme.scale, fontWeight: '700' }}>+ add a buy link</Text>
+              </Pressable>
+            </View>}
         </View>
       </>}
     </View>}
+    {sheet && settings && releases && <BuySheet releases={releases} links={settings.buyLinks} picking={sheet.picking} release={sheet.release} busy={busy}
+      choose={release => setSheet({ ...sheet, release })} close={() => { if (!busy) setSheet(undefined); }}
+      save={async (release, next) => {
+        const done = next.url ? `${release.title}: buy ${offerLabel(next)}` : `removed the buy link for ${release.title}`;
+        if (await save({ buyLinks: withBuyLink(settings.buyLinks, next) }, done)) setSheet(undefined);
+      }} />}
   </View>;
 }
 
-function BuyEditor({ release, offer, busy, save, cancel }: {
+function ReleaseLine({ release, detail }: { release: Release; detail: string }) {
+  const theme = useAppearance();
+  return <View style={styles.releaseLine}>
+    <Cover uri={release.art} size={44} radius={6} />
+    <View style={{ flex: 1, minWidth: 0 }}>
+      <Text numberOfLines={1} style={{ color: theme.text, fontFamily: theme.fontFamily, fontSize: 15 * theme.scale, fontWeight: '600' }}>{release.title}</Text>
+      <Text numberOfLines={1} style={{ color: theme.faint, fontFamily: theme.fontFamily, fontSize: 13 * theme.scale }}>{detail}</Text>
+    </View>
+  </View>;
+}
+
+/** add a buy link: find the release first, then its link. editing an existing link skips the finding. */
+function BuySheet({ releases, links, picking, release, busy, choose, close, save }: {
+  releases: Release[]; links: StoredOffer[]; picking: boolean; release?: Release; busy: boolean;
+  choose: (release: Release | undefined) => void; close: () => void;
+  save: (release: Release, next: StoredOffer | { subject: string; url?: undefined }) => Promise<void>;
+}) {
+  const theme = useAppearance();
+  const [query, setQuery] = useState('');
+  const [group, setGroup] = useState<Release['group']>();
+  const [focused, setFocused] = useState(false);
+  const offer = release && links.find(link => link.subject === release.uri);
+  const found = findReleases(releases, links, query, group);
+  const small = { color: theme.faint, fontFamily: theme.fontFamily, fontSize: 13 * theme.scale, lineHeight: 18 * theme.scale };
+  return <Sheet title={offer ? 'edit buy link' : 'add a buy link'} close={close}>
+    {release ? <>
+      <View style={[styles.picked, { backgroundColor: theme.hover }]}>
+        <ReleaseLine release={release} detail={release.kind} />
+        {picking && !offer && <Action label="change" onPress={() => choose(undefined)} />}
+      </View>
+      <BuyEditor release={release} offer={offer} busy={busy} save={next => save(release, next)} />
+    </> : <>
+      <TextInput value={query} onChangeText={setQuery} placeholder="find a track or album" accessibilityLabel="find a track or album" autoFocus
+        autoCapitalize="none" autoCorrect={false} returnKeyType="search" placeholderTextColor={theme.muted}
+        onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
+        style={[styles.search, { color: theme.text, backgroundColor: theme.surface, fontFamily: theme.fontFamily, fontSize: inputFontSize(theme.scale), borderColor: focused ? theme.accent : theme.border }]} />
+      <View style={row}>{GROUPS.map(option => <Choice key={option.label} label={option.label} selected={group === option.value} onPress={() => setGroup(option.value)} />)}</View>
+      <View>
+        {found.slice(0, SHOWN).map(item => <Pressable key={item.uri} accessibilityRole="button" accessibilityLabel={`${item.title}, ${item.kind}`} onPress={() => choose(item)}
+          style={({ pressed }) => [styles.release, { borderTopColor: theme.hairline, opacity: pressed ? 0.7 : 1 }]}>
+          <ReleaseLine release={item} detail={item.kind} />
+        </Pressable>)}
+        {!found.length && <Copy>{query.trim() ? `nothing without a buy link matches "${query.trim()}".` : 'everything here already has a buy link.'}</Copy>}
+        {found.length > SHOWN && <Text style={[small, { marginTop: 8 }]}>showing {SHOWN} of {found.length}. keep typing to narrow it down.</Text>}
+      </View>
+    </>}
+  </Sheet>;
+}
+
+function BuyEditor({ release, offer, busy, save }: {
   release: Release; offer?: StoredOffer; busy: boolean;
-  save: (next: StoredOffer | { subject: string; url?: undefined }) => Promise<void>; cancel: () => void;
+  save: (next: StoredOffer | { subject: string; url?: undefined }) => Promise<void>;
 }) {
   const theme = useAppearance();
   const [url, setUrl] = useState(offer?.url ?? '');
@@ -154,18 +206,18 @@ function BuyEditor({ release, offer, busy, save, cancel }: {
     void save({ subject: release.uri, url: link, ...(amount !== undefined ? { amount, currency } : {}) });
   };
   return <View style={{ gap: 10, paddingTop: 8 }}>
-    <Field label={`buy link for ${release.title}`} value={url} onChangeText={setUrl} placeholder="https://you.bandcamp.com/album/…"
+    <Field label="where it's sold" value={url} onChangeText={setUrl} placeholder="https://you.bandcamp.com/album/…"
       autoCapitalize="none" autoCorrect={false} keyboardType="url" textContentType="URL" />
     <Field label="price (optional)" value={price} onChangeText={setPrice} placeholder="8" keyboardType="decimal-pad" />
     <Text style={{ color: theme.text, fontSize: 15 * theme.scale }}>currency</Text>
     <View style={[row, { marginTop: -4 }]}>
       {CURRENCIES.map(code => <Choice key={code} label={code} selected={currency === code} onPress={() => setCurrency(code)} />)}
     </View>
-    {error ? <Text accessibilityLiveRegion="polite" style={{ color: theme.danger, fontSize: 14 * theme.scale }}>{error}</Text> : null}
+    {error ? <Text accessibilityLiveRegion="polite" style={{ color: theme.danger, fontSize: 14 * theme.scale }}>{error}</Text>
+      : <Text style={{ color: theme.faint, fontFamily: theme.fontFamily, fontSize: 13 * theme.scale }}>leave the price empty to just say "buy on Bandcamp".</Text>}
     <View style={row}>
-      <Action primary label="save" disabled={busy} onPress={submit} />
-      {offer && <Action label="remove" disabled={busy} onPress={() => void save({ subject: release.uri })} />}
-      <Action label="cancel" onPress={cancel} />
+      <Action primary label="save buy link" disabled={busy} onPress={submit} />
+      {offer && <Action label="remove" destructive disabled={busy} onPress={() => void save({ subject: release.uri })} />}
     </View>
   </View>;
 }
@@ -173,7 +225,10 @@ function BuyEditor({ release, offer, busy, save, cancel }: {
 const styles = StyleSheet.create({
   card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 16, padding: 14, gap: 12 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 44 },
-  release: { borderTopWidth: StyleSheet.hairlineWidth, paddingVertical: 8 },
-  releaseRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  pill: { minHeight: 44, maxWidth: '55%', justifyContent: 'center', paddingHorizontal: 14, borderRadius: 22, borderWidth: 1 },
+  release: { borderTopWidth: StyleSheet.hairlineWidth, paddingVertical: 8, minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  releaseLine: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 11 },
+  tag: { maxWidth: '50%', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 18, borderWidth: 1 },
+  add: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 18, borderRadius: 22, borderWidth: 1 },
+  picked: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 8, borderRadius: 12 },
+  search: { minHeight: 48, padding: 12, borderRadius: 8, borderWidth: 1 },
 });

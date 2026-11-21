@@ -61,7 +61,7 @@ export function usePrivateUploads(auth: Auth) {
       const accepted = result.result.state === 'accepted';
       showUploadIsland(island, accepted ? { phase: 'done', title, summary: 'uploaded', announce: `${name} uploaded` }
         : { phase: 'failed', title, summary: 'check it', announce: `${name} may not have saved. check its status on the upload page.` });
-      if (accepted) toast.add(`${name} uploaded`, 'success', 6000, { label: 'your music', href: '/portal' }, island);
+      if (accepted) toast.add(`${name} uploaded`, 'success', 6000, { label: 'your uploads', href: '/portal' }, island);
       else toast.add(`${name} may not have saved`, 'warning', 10000, { label: 'open upload', href: '/upload' }, island);
       if (!current()) return;
       setResults(values => ({ ...values, [result.operation.rkey]: result.result }));

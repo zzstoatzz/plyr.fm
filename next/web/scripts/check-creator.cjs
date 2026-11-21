@@ -154,7 +154,7 @@ async function run(browser, accounts, width, theme, mp3) {
   };
   try {
     await page.goto(origin + '/portal');
-    await main.getByText('sign in to manage your music.').waitFor();
+    await main.getByText('sign in to manage your uploads.').waitFor();
     await capture('signed-out');
     await main.getByRole('link', { name: 'sign in', exact: true }).click();
     await authorizeFixture(page, accounts, handle);

@@ -92,8 +92,8 @@ async function verify(browser, origin, width, scheme) {
     assert.equal(await page.getByRole('link', { name: 'edit profile' }).count(), 0);
     await page.getByText('couldn’t load totals.', { exact: false }).waitFor();
     await page.getByRole('button', { name: 'retry totals' }).click();
-    await page.getByText('of music', { exact: false }).waitFor();
-    assert.equal(await page.locator('.hero-chip').allTextContents().then(chips => chips.join(' | ')), '1 play | 2 tracks | 3m of music');
+    await page.getByText('of audio', { exact: false }).waitFor();
+    assert.equal(await page.locator('.hero-chip').allTextContents().then(chips => chips.join(' | ')), '1 play | 2 tracks | 3m of audio');
     const tabs = page.getByRole('tablist', { name: 'Artist catalog' });
     const tab = name => tabs.getByRole('tab', { name, exact: true });
     const panel = name => page.getByRole('tabpanel', { name, exact: true });

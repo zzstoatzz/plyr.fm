@@ -96,7 +96,7 @@
 
 <div class="access" bind:this={root}>
   {#if !account.policyEditing || !account.closing}
-    <p>reconnect to choose who can listen to your music.</p>
+    <p>reconnect to choose who can listen to your tracks.</p>
     <a class="text-button strong" href={`${resolve('/(app)/login')}?${new URLSearchParams({ return_to: returnTo })}`}>reconnect</a>
   {:else if !space}
     <p>{openCount === owned.length ? `this ${subject.noun} is open to everyone.` : `${openCount} of ${owned.length} tracks are open to everyone; ${elsewhere} already have their own access.`}</p>

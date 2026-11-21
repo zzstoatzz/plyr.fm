@@ -70,7 +70,7 @@
       {#if tracks.length > 1}<button class="text-button each" type="button" aria-label="play one from each" title="play one from each" onclick={shuffle}><Icon name="shuffle" size={15} /><span>play one from each</span></button>{/if}
       {#if !(edges.start && edges.end)}<span class="pager"><button class="icon-button" type="button" aria-label="Scroll back" disabled={edges.start} onclick={() => page(-1)}><Icon name="back" size={18} /></button><button class="icon-button" type="button" aria-label="Scroll forward" disabled={edges.end} onclick={() => page(1)}><Icon name="chevron" size={18} /></button></span>{/if}
     </header>
-    {#if pending}<Loading label="finding new music from people you know" inline />{/if}
+    {#if pending}<Loading label="finding new uploads from people you know" inline />{/if}
     {#if tracks.length}
       <div class="releases" bind:this={strip} onscroll={measure}>
         {#each tracks as track (track.id)}
@@ -88,7 +88,7 @@
         {/each}
       </div>
     {/if}
-    {#if failed}<p class="state">{tracks.length ? 'some new music could not load.' : 'could not load new music from people you know.'} <button class="text-button" type="button" onclick={() => { attempt++; }}>try again</button></p>{/if}
+    {#if failed}<p class="state">{tracks.length ? 'some new uploads could not load.' : 'could not load new uploads from people you know.'} <button class="text-button" type="button" onclick={() => { attempt++; }}>try again</button></p>{/if}
   </section>
 {/if}
 

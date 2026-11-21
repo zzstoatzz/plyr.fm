@@ -130,12 +130,12 @@
         if (job && uploadInProgress(job.phase)) {
           updated.push({ slot, state: 'working', detail: jobLine(job) });
         } else if (transfers.some(item => item.draftId === slot.id)) {
-          updated.push({ slot, state: 'recover', detail: 'finish this song in upload recovery.' });
+          updated.push({ slot, state: 'recover', detail: 'finish this track in upload recovery.' });
         } else {
           const known = previous.find((song): song is Extract<Song, { state: 'ready' }> => song.slot.id === slot.id && song.state === 'ready');
           const reference = known?.reference ?? await organization.readUpload(address(slot));
           if (reference) updated.push({ slot, state: 'ready', reference });
-          else if (draftInRecovery(slot, creates)) updated.push({ slot, state: 'recover', detail: 'finish this song in upload recovery.' });
+          else if (draftInRecovery(slot, creates)) updated.push({ slot, state: 'recover', detail: 'finish this track in upload recovery.' });
           else updated.push({ slot, state: 'choose', detail: job?.phase === 'failed' ? `upload didn’t finish. choose ${slot.audio.name} to try again.` : `choose ${slot.audio.name} again.` });
         }
       }
@@ -161,7 +161,7 @@
     }
     input.value = '';
     if (selections.length + additions.length > 500) {
-      selectionProblem = 'an album can hold up to 500 songs.';
+      selectionProblem = 'an album can hold up to 500 tracks.';
       return;
     }
     selections = [...selections, ...additions];
@@ -231,7 +231,7 @@
         else await uploadQueue.add(input, slot);
       });
     } catch (failure) {
-      if (current()) problem = message(failure, 'could not resume the song.');
+      if (current()) problem = message(failure, 'could not resume the track.');
     } finally {
       if (current()) { saving = false; await refresh(); }
     }
@@ -337,7 +337,7 @@
 {:else if plan}
   <div class="panel">
     <h2>{plan.name}</h2>
-    <p role="status">{ready.length} of {plan.slots.length} songs uploaded</p>
+    <p role="status">{ready.length} of {plan.slots.length} tracks uploaded</p>
     <ol>
       {#each songs as song (song.slot.id)}
         <li>
@@ -366,12 +366,12 @@
     {/if}
     <AlbumCoverPicker bind:file={cover} bind:pending={coverPending} disabled={saving} />
     {#if ready.length && ready.length < plan.slots.length && !working}
-      <p class="subtle">unfinished songs stay available in upload recovery.</p>
+      <p class="subtle">unfinished tracks stay available in upload recovery.</p>
     {/if}
     <div class="actions">
       <button type="button" class="text-button primary" onclick={finish}
         disabled={saving || !!statusProblem || blocked || working || !ready.length || coverPending || coverMissing}>
-        {saving ? 'saving…' : ready.length && ready.length < plan.slots.length ? `create album with ${ready.length} ${ready.length === 1 ? 'song' : 'songs'}` : 'create album'}
+        {saving ? 'saving…' : ready.length && ready.length < plan.slots.length ? `create album with ${ready.length} ${ready.length === 1 ? 'track' : 'tracks'}` : 'create album'}
       </button>
       <button type="button" class="text-button" onclick={() => refresh(true)} disabled={saving}>refresh status</button>
       {#if !working && !confirming}
@@ -379,7 +379,7 @@
       {/if}
     </div>
     {#if confirming && !working}
-      <p>uploaded songs stay in your music. unfinished songs stay in upload recovery.</p>
+      <p>uploaded tracks stay in your uploads. unfinished tracks stay in upload recovery.</p>
       <div class="actions">
         <button type="button" class="text-button" onclick={setAside} disabled={saving || !!statusProblem}>set aside this album</button>
         <button type="button" class="text-button" onclick={() => { confirming = false; }} disabled={saving}>cancel</button>
@@ -394,9 +394,9 @@
     {/if}
     <AlbumCoverPicker bind:file={cover} bind:pending={coverPending} disabled={saving} />
     <div class="song-picker">
-      <strong>songs</strong>
+      <strong>tracks</strong>
       <span class="subtle">{PUBLIC_AUDIO_FORMATS.toLowerCase()}</span>
-      <button type="button" class="text-button" onclick={() => songInput?.click()}>{selections.length ? 'add more songs' : 'choose songs'}</button>
+      <button type="button" class="text-button" onclick={() => songInput?.click()}>{selections.length ? 'add more tracks' : 'choose tracks'}</button>
       <input type="file" aria-label="audio files" hidden multiple bind:this={songInput} accept={audioAccept()}
         onchange={event => chooseFiles(event.currentTarget)} />
     </div>
@@ -404,7 +404,7 @@
     {#if selections.length}
       <OrderRows rows={selections} {move} remove={index => { selections = selections.filter((_, position) => position !== index); }}>
         {#snippet titleField(index)}
-          <input aria-label={`title for song ${index + 1}`} bind:value={selections[index].title} required maxlength="256" />
+          <input aria-label={`title for track ${index + 1}`} bind:value={selections[index].title} required maxlength="256" />
         {/snippet}
       </OrderRows>
     {/if}
@@ -414,7 +414,7 @@
     {/if}
     <button class="text-button primary" type="submit"
       disabled={!!statusProblem || blocked || coverPending || !name.trim() || !selections.length || selections.some(item => !item.title.trim()) || (usesStorage && !consent)}>
-      {saving ? 'starting…' : usesStorage && !account.uploadStorage ? 'save album draft and sign in' : 'upload songs'}
+      {saving ? 'starting…' : usesStorage && !account.uploadStorage ? 'save album draft and sign in' : 'upload tracks'}
     </button>
   </form>
 {/if}

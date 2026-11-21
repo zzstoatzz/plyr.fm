@@ -8,7 +8,7 @@
   onMount(() => auth.subscribe(() => { account = auth.getAuth(); }));
 </script>
 
-<svelte:head><title>your music · plyr.fm</title></svelte:head>
+<svelte:head><title>your uploads · plyr.fm</title></svelte:head>
 
 <section class="page-content">
   {#if !account.ready}
@@ -16,8 +16,8 @@
   {:else if account.did && account.rpc}
     {#key account.rpc}<CreatorPortal account={{ ...account, did: account.did, rpc: account.rpc }} />{/key}
   {:else}
-    <h1>your music</h1>
-    <p class="state">sign in to manage your music.</p>
+    <h1>your uploads</h1>
+    <p class="state">sign in to manage your uploads.</p>
     <a class="text-button sign-in" href="/login?return_to=%2Fportal">sign in</a>
   {/if}
 </section>

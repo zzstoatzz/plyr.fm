@@ -188,7 +188,7 @@
       {#if imageBusy}<p role="status">preparing your cover…</p>{/if}
       {#if failure && !conflict}<p role="alert" class="editor-error">{failure}</p>{/if}
       {#if confirm}
-        <p>delete “{track?.metadata.title}”? it will be removed from your music.</p>
+        <p>delete “{track?.metadata.title}”? it will be removed from your uploads.</p>
         <div class="editor-actions">
           <button type="button" class="text-button editor-danger" disabled={busy} onclick={() => save(true)}>confirm delete</button>
           <button type="button" class="text-button" disabled={busy} onclick={() => { confirm = false; }}>cancel delete</button>
