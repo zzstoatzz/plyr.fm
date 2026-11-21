@@ -11,8 +11,6 @@ export const radioStations = [
 
 export type RadioStation = typeof radioStations[number];
 
-const STATE_URL = 'https://api.plyr.fm/radio/state';
-
 interface StateTrack {
   id: number;
   title: string;
@@ -121,8 +119,8 @@ export function parseRadio(state: StateResponse, receivedAt: number, now = Date.
 }
 
 /** A broadcasting station must not ask for catalog only: the api leaves its live stream out of that answer. */
-export function radioStateUrl(station: RadioStation) {
-  return `${STATE_URL}?station=${encodeURIComponent(station.slug)}&catalog_only=${!('broadcasts' in station)}`;
+export function radioStateUrl(api: string, station: RadioStation) {
+  return `${api}/xrpc/fm.plyr.unspecced.getRadioState?station=${encodeURIComponent(station.slug)}&catalogOnly=${!('broadcasts' in station)}`;
 }
 
 /** The made-up track a broadcast airs as: nothing to like, count, share or link to. */
@@ -130,8 +128,8 @@ export function isBroadcast(track: Pick<Track, 'id'>) {
   return track.id.startsWith('live:');
 }
 
-export async function readRadio(station: RadioStation, signal: AbortSignal): Promise<RadioSnapshot> {
-  const response = await fetch(radioStateUrl(station), { signal, cache: 'no-store' });
+export async function readRadio(api: string, station: RadioStation, signal: AbortSignal): Promise<RadioSnapshot> {
+  const response = await fetch(radioStateUrl(api, station), { signal, cache: 'no-store' });
   if (!response.ok) throw new Error('could not reach this station');
   return parseRadio(await response.json(), performance.now(), Date.now(), station);
 }

@@ -164,8 +164,9 @@ test('a live broadcast airs even with an empty rotation, with the station as its
 
 test('only stations that broadcast ask for the live stream', () => {
 	for (const station of radioStations) {
-		const url = new URL(radioStateUrl(station));
+		const url = new URL(radioStateUrl('https://api.test', station));
+		assert.equal(url.origin + url.pathname, 'https://api.test/xrpc/fm.plyr.unspecced.getRadioState');
 		assert.equal(url.searchParams.get('station'), station.slug);
-		assert.equal(url.searchParams.get('catalog_only'), station.slug === 'firehose' ? 'false' : 'true');
+		assert.equal(url.searchParams.get('catalogOnly'), station.slug === 'firehose' ? 'false' : 'true');
 	}
 });
