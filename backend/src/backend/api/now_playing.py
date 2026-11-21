@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend._internal import Session, now_playing_service, require_auth
+from backend._internal.tasks import sync_teal_status
 from backend.config import settings
 from backend.models import Artist, get_db
 from backend.schemas import StatusResponse
@@ -95,6 +96,12 @@ async def update_now_playing(
         image_url=update.image_url,
         is_playing=update.is_playing,
     )
+    await sync_teal_status(
+        session,
+        track_id=update.track_id,
+        progress_ms=update.progress_ms,
+        is_playing=update.is_playing,
+    )
 
     return StatusResponse(status="ok")
 
@@ -110,6 +117,7 @@ async def clear_now_playing(
     called when user explicitly stops playback.
     """
     now_playing_service.clear(session.did)
+    await sync_teal_status(session, track_id=None)
     return StatusResponse(status="ok")
 
 

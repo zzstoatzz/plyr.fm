@@ -83,6 +83,10 @@ from backend._internal.tasks.storage import (
     move_track_audio,
     schedule_move_track_audio,
 )
+from backend._internal.tasks.teal_status import (
+    sync_teal_status,
+    write_teal_status,
+)
 from backend._internal.tasks.sync import (
     schedule_album_list_sync,
     schedule_atproto_sync,
@@ -130,6 +134,7 @@ def _build_background_tasks() -> list:
         process_album_download,
         sync_atproto,
         scrobble_to_teal,
+        write_teal_status,
         sync_album_list,
         pds_create_like,
         pds_delete_like,
@@ -240,5 +245,7 @@ __all__ = [
     "sync_atproto",
     "sync_copyright_resolutions",
     "sync_operator_labels",
+    "sync_teal_status",
     "warm_follow_graph",
+    "write_teal_status",
 ]

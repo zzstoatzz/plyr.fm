@@ -10,6 +10,7 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 	import { preferences, FONT_OPTIONS, type Theme, type FontFamily } from '$lib/preferences.svelte';
 	import { AT_CLIENTS, DEFAULT_AT_CLIENT } from '$lib/atclients';
 	import ClientLogo from '$lib/components/ClientLogo.svelte';
+	import TealShowingNow from '$lib/components/TealShowingNow.svelte';
 	import { ambient } from '$lib/ambient.svelte';
 	import { eq } from '$lib/eq.svelte';
 	import { player } from '$lib/player.svelte';
@@ -141,7 +142,7 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 							window.location.href = returnTo;
 							return;
 						}
-						toast.success('teal.fm scrobbling connected!');
+						toast.success('teal.fm connected!');
 					}
 				}
 			} catch (_e) {
@@ -332,7 +333,7 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 			// disabling teal - just update preference
 			try {
 				await preferences.update({ enable_teal_scrobbling: false });
-				toast.success('teal.fm scrobbling disabled');
+				toast.success('teal.fm disabled');
 			} catch (_e) {
 				console.error('failed to save preference:', _e);
 				toast.error('failed to update preference');
@@ -791,10 +792,13 @@ import WaveLoading from '$lib/components/WaveLoading.svelte';
 			<div class="settings-card">
 				<div class="setting-row">
 					<div class="setting-info">
-						<h3>teal.fm scrobbling</h3>
+						<h3>teal.fm</h3>
 						<p>
-							track your listens as <a href="https://pdsls.dev/at://{auth.user?.did}/fm.teal.feed.play" target="_blank" rel="noopener">fm.teal.feed.play</a> records
+							log your listens as <a href="https://pdsls.dev/at://{auth.user?.did}/fm.teal.feed.play" target="_blank" rel="noopener">fm.teal.feed.play</a> records and show what you're playing right now as your <a href="https://pdsls.dev/at://{auth.user?.did}/fm.teal.actor.status/self" target="_blank" rel="noopener">fm.teal.actor.status</a>, which apps like teal.fm and Colibri display
 						</p>
+						{#if enableTealScrobbling && !tealNeedsReauth}
+							<TealShowingNow />
+						{/if}
 					</div>
 					<label class="toggle-switch">
 						<input
