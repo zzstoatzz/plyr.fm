@@ -219,7 +219,7 @@
     try {
       const audio = canonicalAudioFile(file);
       const input = reattachQueuedUpload(slot, audio);
-      if (needsPlyrStorage(audio) && !account.uploadStorage) throw new Error('sign in again to allow plyr storage.');
+      if (needsPlyrStorage(audio) && !account.uploadStorage) throw new Error('sign in again to allow plyr.fm storage.');
       await albumUploads.withLock(owner, async () => {
         if ((await albumUploads.load(owner))?.id !== planId) throw new Error('this album upload has already changed. refresh and try again.');
         const [reference, drafts, creates, transfers] = await Promise.all([
@@ -409,8 +409,8 @@
       </OrderRows>
     {/if}
     {#if usesStorage}
-      <p class="subtle">plyr stores these files and makes an mp3 for playback when needed. playback and downloads are public.</p>
-      <label class="consent"><input type="checkbox" bind:checked={consent} /> use plyr storage</label>
+      <p class="subtle">plyr.fm stores these files and makes an mp3 for playback when needed. playback and downloads are public.</p>
+      <label class="consent"><input type="checkbox" bind:checked={consent} /> use plyr.fm storage</label>
     {/if}
     <button class="text-button primary" type="submit"
       disabled={!!statusProblem || blocked || coverPending || !name.trim() || !selections.length || selections.some(item => !item.title.trim()) || (usesStorage && !consent)}>

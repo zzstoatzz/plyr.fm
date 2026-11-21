@@ -105,7 +105,7 @@
     </ul>
   {/if}
   </div>
-  <p class="hint">{full ? 'that’s 20 tags, the most a track can have.' : 'type to see tags already on plyr. use ai for AI-generated music.'}</p>
+  <p class="hint">{full ? 'that’s 20 tags, the most a track can have.' : 'type to see tags already on plyr.fm. use ai for AI-generated music.'}</p>
 </div>
 
 <style>

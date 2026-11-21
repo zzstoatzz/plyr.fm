@@ -163,7 +163,7 @@
 		<p class="state">only moderators can see this page.</p>
 	{:else if !granted}
 		<div class="grant">
-			<p class="state">to review reports, let plyr open the queue for you. you'll come right back here.</p>
+			<p class="state">to review reports, let plyr.fm open the queue for you. you'll come right back here.</p>
 			<button class="hero-pill primary" type="button" disabled={granting} onclick={allowQueue}>{granting ? 'opening…' : 'open the queue'}</button>
 			{#if error}<p class="error" role="alert">{error}</p>{/if}
 		</div>

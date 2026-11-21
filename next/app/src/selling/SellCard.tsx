@@ -86,7 +86,7 @@ export function SellCard({ did }: { did: string }) {
       {open ? <CaretUp size={18} color={theme.muted} /> : <CaretDown size={18} color={theme.muted} />}
     </Pressable>
     {open && <View style={{ gap: 14 }}>
-      <Copy>point listeners at wherever you already sell. buttons show up on your artist page and releases. plyr never sees the payment.</Copy>
+      <Copy>point listeners at wherever you already sell. buttons show up on your artist page and releases. plyr.fm never sees the payment.</Copy>
       {!auth.accountSync ? <View style={{ gap: 8 }}>
         <Copy>reconnect to choose where listeners can buy your music.</Copy>
         <View style={row}><Action primary label="reconnect" href={{ pathname: '/login', params: { return_to: '/portal' } }} /></View>

@@ -26,12 +26,12 @@ export function starters(signedIn: boolean): Starter[] {
     ? [
       { key: 'for-you', title: 'for you', subtitle: 'new to you, close to what you like' },
       { key: 'likes', title: 'your likes', subtitle: 'shuffled' },
-      { key: 'playlist', title: 'a random playlist', subtitle: 'from someone on plyr' }
+      { key: 'playlist', title: 'a random playlist', subtitle: 'from someone on plyr.fm' }
     ]
     : [
       { key: 'top', title: 'top tracks this week', subtitle: 'what people are playing' },
       { key: 'latest', title: 'just uploaded', subtitle: 'fresh from artists' },
-      { key: 'playlist', title: 'a random playlist', subtitle: 'from someone on plyr' }
+      { key: 'playlist', title: 'a random playlist', subtitle: 'from someone on plyr.fm' }
     ];
 }
 

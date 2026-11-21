@@ -48,6 +48,6 @@ export function waysIn({ artist, rules, offer, support, viewer }: WaysInInput): 
     else if (rule.kind === 'purchase') ways.push({ key, kind: 'purchase', title: title ?? 'buyers', detail: `a verified purchase of ${formatPrice(rule.amount, rule.currency)} or more opens it` });
   });
   // a plain link is never verified, so buying there never opens the track here, whatever the rules say
-  const note = offer?.provider === 'link' ? `buying ${offerLabel(offer)} gets you the files there. it doesn't unlock this track on plyr.` : undefined;
+  const note = offer?.provider === 'link' ? `buying ${offerLabel(offer)} gets you the files there. it doesn't unlock this track on plyr.fm.` : undefined;
   return { ways, ...(note ? { note } : {}), admitted: false };
 }

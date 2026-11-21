@@ -81,6 +81,6 @@ export function TagsField({ value, onChange, disabled }: { value: string; onChan
         <Text style={{ color: theme.muted, fontFamily: theme.fontFamily, fontSize: 13 * theme.scale }}>{tag.track_count} {tag.track_count === 1 ? 'track' : 'tracks'}</Text>
       </Pressable>)}
     </View>}
-    <Copy>{full ? 'that’s 20 tags, the most a track can have.' : 'type to see tags already on plyr. use ai for AI-generated music.'}</Copy>
+    <Copy>{full ? 'that’s 20 tags, the most a track can have.' : 'type to see tags already on plyr.fm. use ai for AI-generated music.'}</Copy>
   </View>;
 }
