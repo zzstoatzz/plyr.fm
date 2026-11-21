@@ -344,7 +344,6 @@ test {
     _ = @import("internal/space/sync.zig");
     _ = @import("internal/space/postgres_sync_store.zig");
     _ = @import("internal/space/postgres_restrictions.zig");
-    _ = @import("api/space_removals.zig");
     _ = @import("internal/space/consumer.zig");
     _ = @import("internal/ingest/relay_repository_candidates.zig");
     _ = @import("api/artists.zig");

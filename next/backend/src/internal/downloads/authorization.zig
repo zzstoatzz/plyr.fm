@@ -14,7 +14,7 @@ pub const Settings = struct {
     identity: service_auth.Resolved,
     track_collection: []const u8,
     audio_space_type: ?[]const u8 = null,
-    /// takedowns and artists' removed readers (null only without a database)
+    /// takedowns (null only without a database)
     restrictions: ?access.Restrictions = null,
     budget_ns: u64 = 15 * std.time.ns_per_s,
 };
@@ -76,10 +76,6 @@ fn execute(a: std.mem.Allocator, io: std.Io, settings: Settings, request: Reques
         .restrictions = settings.restrictions,
     };
     try evaluate(a, state, request.recordCid, at.authority(), viewer, settings.track_collection, settings.audio_space_type, core.decider(), network.evidence());
-    // a reader the artist removed loses supporter downloads outside a space too
-    if (settings.restrictions) |restrictions| {
-        if (!std.mem.eql(u8, viewer, at.authority()) and try restrictions.removed(a, at.authority(), viewer)) return error.DownloadDenied;
-    }
     try network.checkDeadline();
     return .{ .viewer = viewer, .recordUri = request.recordUri, .recordCid = request.recordCid, .expiresAt = (std.Io.Timestamp.now(io, .real).toSeconds() + 30) * 1000 };
 }

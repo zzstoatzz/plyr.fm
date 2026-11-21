@@ -45,7 +45,7 @@ pub fn run(a: std.mem.Allocator, io: std.Io, settings: config.Config) !void {
     const budget_ms = if (env("DOWNLOAD_AUTH_BUDGET_MS")) |text| try std.fmt.parseInt(u64, text, 10) else 15_000;
     if (budget_ms == 0 or budget_ms > 15_000) return error.InvalidDownloadSettings;
     context.download_settings = .{ .identity = download_auth.identity(), .track_collection = settings.track_collection, .audio_space_type = env("SPACE_TYPE_NSID"), .budget_ns = budget_ms * std.time.ns_per_ms };
-    // takedowns and artists' removed readers gate downloads like checkUserAccess
+    // takedowns gate downloads like checkUserAccess
     if (context.records) |records| {
         context.space_restrictions = .{ .pool = records.pool };
         context.download_settings.?.restrictions = context.space_restrictions.?.restrictions();
