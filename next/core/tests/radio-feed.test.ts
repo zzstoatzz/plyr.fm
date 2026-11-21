@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { setImmediate } from 'node:timers/promises';
 import { RadioFeed } from '../src/radio-feed.ts';
-import { nextRead, parseRadio } from '../src/radio.ts';
+import { isBroadcast, nextRead, parseRadio, radioPosition, radioStateUrl, radioStations } from '../src/radio.ts';
 import type { RadioSnapshot } from '../src/radio.ts';
 
 function snapshot(position: number): RadioSnapshot {
@@ -141,4 +141,31 @@ test('a station state becomes a catalog track that now playing and likes can use
 	assert.equal(song.thumbnail, 'https://images.plyr.fm/images/x_thumb.webp');
 	assert.equal(parsed.endsAt, 2_000_000);
 	assert.equal(parsed.positionSeconds, 50);
+});
+
+test('a live broadcast airs even with an empty rotation, with the station as its title and its cover as artwork', () => {
+	const firehose = radioStations.find(station => station.slug === 'firehose')!;
+	const parsed = parseRadio({
+		station: 'firehose', current: null, current_ends_at: null, progress_seconds: 0, up_next: [],
+		live: { stream_url: 'https://relay.test/sonify/live/index.m3u8', kind: 'hls', started_at: '2026-11-15T06:46:15Z', artwork_url: 'https://relay.test/sonify/live/cover.png' },
+	}, 5, 1_900_000, firehose);
+	const song = parsed.currentSong!;
+	assert.equal(song.live, true);
+	assert.equal(song.audio, 'https://relay.test/sonify/live/index.m3u8');
+	assert.equal(song.artwork, 'https://relay.test/sonify/live/cover.png');
+	assert.equal(song.track.media.artwork?.url, 'https://relay.test/sonify/live/cover.png');
+	assert.equal(song.title, 'firehose');
+	assert.equal(song.artist, 'the atproto firehose, sonified');
+	assert.doesNotMatch(song.id, /^trk_/, 'a broadcast is never counted as a catalog play');
+	assert.equal(parsed.endsAt, null);
+	assert.equal(radioPosition(parsed, 99_999), 0, 'a broadcast has no position to join at');
+	assert.ok(isBroadcast(song.track));
+});
+
+test('only stations that broadcast ask for the live stream', () => {
+	for (const station of radioStations) {
+		const url = new URL(radioStateUrl(station));
+		assert.equal(url.searchParams.get('station'), station.slug);
+		assert.equal(url.searchParams.get('catalog_only'), station.slug === 'firehose' ? 'false' : 'true');
+	}
 });

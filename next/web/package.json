@@ -48,6 +48,7 @@
     "@atproto/space": "file:../vendor/space-sdk/atproto-space-0.0.1.tgz",
     "@atproto/syntax": "file:../vendor/space-sdk/atproto-syntax-0.7.6.tgz",
     "@plyr/next-core": "workspace:*",
-    "heic-to": "1.6.7"
+    "heic-to": "1.6.7",
+    "hls.js": "1.6.16"
   }
 }

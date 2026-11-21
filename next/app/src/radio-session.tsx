@@ -1,11 +1,11 @@
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useMediaSession } from './media-session';
 import { PlaybackScope, usePlayback } from './playback-context';
 import { useAppPreferences } from './preference-context';
 import { radioPosition, type RadioSnapshot, type RadioSong, type RadioStation } from '@plyr/next-core/radio';
 import { usePlayerAccounting } from './use-player-accounting';
 import { useRadioFeed } from './use-radio-feed';
+import { useRemoteTrackControls } from './use-remote-track-controls';
 
 interface Radio {
   station: RadioStation | null;
@@ -56,7 +56,7 @@ export function RadioProvider({ children }: { children: ReactNode }) {
   }, [accounting, audio, source]);
 
   useEffect(() => {
-    if (!listening || !song) return;
+    if (!listening || !song || song.live) return;
     accounting.begin(song.id, song.durationSeconds);
     return () => accounting.stop();
   }, [accounting, listening, song]);
@@ -74,16 +74,30 @@ export function RadioProvider({ children }: { children: ReactNode }) {
     if (!listening || !source) { audio.pause(); return; }
     if (!status.isLoaded) { audio.play(); return; }
     const live = latest.current;
-    if (live && Math.abs(audio.currentTime - radioPosition(live)) > 2) void accounting.seekTo(radioPosition(live));
+    if (live && !live.currentSong?.live && Math.abs(audio.currentTime - radioPosition(live)) > 2) void accounting.seekTo(radioPosition(live));
     if (!audio.playing) audio.play();
   }, [accounting, audio, listening, source, status.isLoaded]);
 
-  useMediaSession('radio', station && song ? {
-    title: song.title, artist: song.artist, album: `${station.label} radio`, artwork: song.artwork,
-    playing: listening && status.playing,
-    play: () => setListening(true),
-    pause: () => setListening(false),
-  } : null);
+  // The lock screen and headphones pause and resume the radio player directly; follow them so the app agrees.
+  // A new song starts unarmed: the old item's last statuses, and the pause that swaps it out, are not the listener's.
+  const mirror = useRef({ source, armed: false, playing: false });
+  useEffect(() => {
+    const playing = status.playing;
+    if (mirror.current.source !== source) mirror.current = { source, armed: false, playing: false };
+    const now = mirror.current;
+    if (!now.armed) { if (!playing) now.armed = true; return; }
+    if (playing === now.playing) return;
+    now.playing = playing;
+    if (playing) { if (!listening && source) setListening(true); return; }
+    const ending = !song?.live && status.duration > 0 && status.currentTime >= status.duration - 1.5;
+    if (listening && source && status.isLoaded && !status.isBuffering && !status.didJustFinish && !ending) setListening(false);
+  }, [status.playing, status.isLoaded, status.isBuffering, status.didJustFinish, status.currentTime, status.duration, listening, source, song?.live]);
+
+  // Stays on the lock screen while paused, so play there brings the station back.
+  useRemoteTrackControls(audio, station && song ? {
+    metadata: { title: song.title, artist: song.artist, albumTitle: `${station.label} radio`, artworkUrl: song.artwork ?? undefined },
+    live: true,
+  } : solo.status.playing || solo.loading ? 'yielded' : null);
 
   const value = useMemo<Radio>(() => ({
     station, snapshot, song, feedError, listening, status,

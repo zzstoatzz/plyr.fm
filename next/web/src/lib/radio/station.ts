@@ -8,7 +8,7 @@ function onAir(snapshot: RadioSnapshot) {
   const song = snapshot.currentSong;
   if (!song || (snapshot.endsAt !== null && snapshot.endsAt <= Date.now())) { player.clearRadioTrack(); return; }
   const occurrence = JSON.stringify([song.id, song.audio, snapshot.endsAt]);
-  void player.setRadioTrack(song.track, song.audio, occurrence, () => radioPosition(snapshot));
+  void player.setRadioTrack(song.track, song.audio, occurrence, () => radioPosition(snapshot), song.live);
 }
 
 export function tuneRadio(station: RadioStation, openNowPlaying?: () => void) {

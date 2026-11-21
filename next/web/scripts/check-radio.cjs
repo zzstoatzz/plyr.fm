@@ -9,7 +9,9 @@ const { method, trackIdFromUri } = require('./xrpc-fixture.cjs');
 const output = process.env.SCREENS_OUTPUT || '/tmp/plyr-svelte-radio';
 const slugs = ['loved', 'fresh', 'deep-cuts', 'slop', 'firehose'];
 const airing = tracks[1];
-const titles = ['Heavy rotation', airing.metadata.title, 'Side B, track nine', 'Long station title that does not fit in one line', 'Segment 0412'];
+const titles = ['Heavy rotation', airing.metadata.title, 'Side B, track nine', 'Long station title that does not fit in one line', 'on air now'];
+const broadcastDir = path.join(__dirname, 'fixtures/live-hls');
+const broadcastCover = 'https://live-fixture.invalid/firehose/cover.png';
 const radioUri = slug => `at://did:plc:fixtureartist/fm.plyr.track/radio-${slug}`;
 const id = uri => 'trk_' + Buffer.from(uri).toString('base64url');
 const audio = Buffer.alloc(44 + 8000 * 2 * 10);
@@ -38,13 +40,18 @@ async function fixture(browser, width, scheme, fastChange = false) {
     if (url.pathname === '/tracks/42') return route.fulfill({ json: { atproto_record_uri: tracks[0].record.uri } });
     if (url.pathname !== '/radio/state' || !slugs.includes(slug)) return route.abort();
     assert.equal(route.request().method(), 'GET');
-    assert.equal(url.searchParams.get('catalog_only'), 'true');
+    assert.equal(url.searchParams.get('catalog_only'), slug === 'firehose' ? 'false' : 'true', 'only the broadcasting station asks for its live stream');
     const now = Date.now();
     if (!starts.has(slug)) starts.set(slug, now);
     const start = starts.get(slug);
     const changed = fastChange && now >= start + 6500;
     const title = changed ? 'Next live song' : titles[slugs.indexOf(slug)];
     reads.set(slug, (reads.get(slug) ?? 0) + 1);
+    // Like the real station: a sonified broadcast with no rotation behind it.
+    if (slug === 'firehose') return route.fulfill({ json: {
+      station: 'firehose', current: null, current_ends_at: null, progress_seconds: 0, up_next: [],
+      live: { stream_url: 'https://live-fixture.invalid/firehose/index.m3u8', kind: 'hls', started_at: '2026-11-15T06:46:15Z', artwork_url: broadcastCover }
+    } });
     return route.fulfill({ json: {
       current: {
         id: slugs.indexOf(slug) + 1, title, artist: 'Fixture radio artist', artist_handle: 'sketches.test', artist_did: 'did:plc:fixtureartist',
@@ -59,7 +66,13 @@ async function fixture(browser, width, scheme, fastChange = false) {
       up_next: []
     } });
   });
-  await context.route('https://live-fixture.invalid/**', route => {
+  await context.route('https://live-fixture.invalid/firehose/**', async route => {
+    const name = new URL(route.request().url()).pathname.split('/').pop();
+    if (name === 'cover.png') return route.fulfill({ contentType: 'image/png', body: await fs.readFile(path.join(__dirname, '../static/apple-touch-icon.png')).catch(() => Buffer.alloc(0)) });
+    const type = name.endsWith('.m3u8') ? 'application/vnd.apple.mpegurl' : 'video/mp2t';
+    return route.fulfill({ contentType: type, body: await fs.readFile(path.join(broadcastDir, path.basename(name))), headers: { 'access-control-allow-origin': '*' } });
+  });
+  await context.route(/^https:\/\/live-fixture\.invalid\/(?!firehose\/)/, route => {
     const range = /^bytes=(\d+)-(\d*)$/.exec(route.request().headers().range || '');
     const from = range ? Number(range[1]) : 0;
     const to = range?.[2] ? Math.min(Number(range[2]), audio.length - 1) : audio.length - 1;
@@ -118,6 +131,8 @@ async function stationFlow(browser, origin, width, scheme) {
     assert.equal(await now.getByRole('slider').count(), 0);
     assert.equal(await now.getByRole('button', { name: 'Next track' }).count(), 0);
     assert.ok(Number(await now.getByRole('progressbar', { name: 'Song progress' }).getAttribute('value')) >= 0.4);
+    assert.deepEqual(await page.evaluate(() => { const meta = navigator.mediaSession.metadata; return meta && [meta.title, meta.album, navigator.mediaSession.playbackState]; }),
+      [airing.metadata.title, 'fresh radio', 'playing'], 'radio fills the lock screen like any track');
     await page.screenshot({ path: path.join(output, `${width}-${scheme}-live.png`) });
     await now.getByRole('button', { name: 'Pause', exact: true }).click();
     await page.waitForFunction(() => window.media.every(media => media.paused));
@@ -151,6 +166,35 @@ async function stationFlow(browser, origin, width, scheme) {
     assert.deepEqual(appViewWrites, []);
     assert.deepEqual(errors, []);
     console.log(`station grid, live controls and queue handoff passed at ${width}px (${scheme})`);
+  } finally { await context.close(); }
+}
+
+async function broadcastFlow(browser, origin, width) {
+  const { context, page, errors, receipts } = await fixture(browser, width, 'dark');
+  try {
+    await page.goto(origin + '/radio');
+    const grid = page.getByTestId('radio-stations');
+    const card = grid.getByRole('button', { name: 'Listen to firehose radio', exact: true });
+    await card.getByText('on air now').waitFor();
+    await page.waitForFunction(cover => [...document.querySelectorAll('[data-testid="radio-stations"] img')].some(img => img.currentSrc.includes(encodeURIComponent(cover)) || img.currentSrc === cover), broadcastCover);
+    await card.click();
+    const now = page.getByRole('dialog', { name: 'Now playing' });
+    await now.getByRole('heading', { name: 'firehose', exact: true }).waitFor();
+    await now.getByText('live · firehose radio', { exact: true }).waitFor();
+    assert.equal(await now.getByRole('link', { name: 'the atproto firehose, sonified' }).count(), 0, 'a broadcast has no artist page to link to');
+    await page.waitForFunction(() => window.media.some(media => !media.paused && media.currentTime > 0.5), null, { timeout: 15_000 });
+    assert.deepEqual(await page.evaluate(() => { const meta = navigator.mediaSession.metadata; return meta && [meta.title, meta.artist, meta.album, meta.artwork.length, navigator.mediaSession.playbackState]; }),
+      ['firehose', 'the atproto firehose, sonified', 'firehose radio', 1, 'playing'], 'the broadcast fills the lock screen');
+    await page.screenshot({ path: path.join(output, `${width}-firehose-live.png`) });
+    await now.getByRole('button', { name: 'Pause', exact: true }).click();
+    await page.waitForFunction(() => window.media.every(media => media.paused));
+    await now.getByRole('button', { name: 'Listen live', exact: true }).click();
+    await page.waitForFunction(() => window.media.some(media => !media.paused));
+    await now.getByRole('button', { name: 'leave radio' }).click();
+    await page.waitForFunction(() => window.media.every(media => media.paused));
+    assert.deepEqual(receipts, [], 'a broadcast is never counted as a catalog play');
+    assert.deepEqual(errors, []);
+    console.log(`firehose broadcast plays over hls with lock screen metadata at ${width}px`);
   } finally { await context.close(); }
 }
 
@@ -196,6 +240,7 @@ async function accountingAndEmbeds(browser, origin) {
   const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
   try {
     for (const width of [390, 1280]) for (const scheme of ['light', 'dark']) await stationFlow(browser, origin, width, scheme);
+    for (const width of [390, 1280]) await broadcastFlow(browser, origin, width);
     await accountingAndEmbeds(browser, origin);
   } finally { await browser.close(); close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -26,7 +26,15 @@ test('native commands use the current queue callbacks without re-registering on 
   command('previous');
   assert.deepEqual(calls, ['next', 'previous']);
   assert.equal(configured.length, 1);
-  assert.deepEqual(configured[0][2], { showNextTrack: true, showPreviousTrack: true, showSeekForward: false, showSeekBackward: false });
+  assert.deepEqual(configured[0][2], { showNextTrack: true, showPreviousTrack: true, showSeekForward: false, showSeekBackward: false, isLiveStream: false });
+});
+
+test('radio claims the lock screen as a live stream with no skipping', () => {
+  const { controls, configured } = setup();
+  controls.update({ metadata: { title: 'firehose', artist: 'the atproto firehose, sonified', albumTitle: 'firehose radio', artworkUrl: 'https://relay.test/cover.png' }, live: true });
+  assert.equal(configured.length, 1);
+  assert.equal(configured[0][1]?.artworkUrl, 'https://relay.test/cover.png');
+  assert.deepEqual(configured[0][2], { showNextTrack: false, showPreviousTrack: false, showSeekForward: false, showSeekBackward: false, isLiveStream: true });
 });
 
 test('tail and permission changes disable commands and ignore already queued native events', () => {
@@ -61,4 +69,16 @@ test('ownership loss clears controls and cleanup removes the subscription', () =
   assert.equal(calls, 1);
   assert.equal(removed(), 1);
   assert.equal(cleared(), 2);
+});
+
+test('yielding to another player forgets the controls without clearing them, and claims again later', () => {
+  const { controls, configured, cleared, command } = setup();
+  let calls = 0;
+  controls.update({ metadata: { title: 'queue' }, next: () => { calls++; } });
+  controls.update('yielded');
+  command('next');
+  assert.equal(calls, 0, 'commands for the yielded player are ignored');
+  assert.equal(cleared(), 0, 'yielding never clears what the other player claimed');
+  controls.update({ metadata: { title: 'queue' }, next: () => { calls++; } });
+  assert.equal(configured.length, 2, 'the same track claims the lock screen again after a yield');
 });
