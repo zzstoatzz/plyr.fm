@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import * as edge from '../edge/link-preview.js';
 
 // the worker is plain JS for Cloudflare; its inferred types are too narrow to assert against
-const { default: worker, cardImage, injectCard, oembed, preview, route, slugify, wantsPreview } = edge as any;
+const { default: worker, cardImage, injectCard, oembed, ogImage, preview, route, slugify, wantsPreview } = edge as any;
 
 const uri = 'at://did:plc:artist/fm.plyr.track/3abc';
 const trackId = 'trk_' + btoa(uri).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -74,10 +74,11 @@ test('browsers skip the preview; unfurlers get it', () => {
 test('plyr art is resized to a jpeg; other images pass through', () => {
   assert.deepEqual(cardImage('https://images.plyr.fm/images/a.png'), {
     url: 'https://images.plyr.fm/cdn-cgi/image/width=1200,height=1200,fit=scale-down,quality=85,format=jpeg/images/a.png',
-    type: 'image/jpeg'
+    type: 'image/jpeg',
+    source: 'https://images.plyr.fm/images/a.png'
   });
   assert.equal(cardImage('https://pub-7ea7ea9a6f224f4f8c0321a2bb008c5a.r2.dev/images/b.jpg')?.url.startsWith('https://images.plyr.fm/cdn-cgi/image/'), true);
-  assert.deepEqual(cardImage('https://cdn.bsky.app/a.jpg'), { url: 'https://cdn.bsky.app/a.jpg' });
+  assert.deepEqual(cardImage('https://cdn.bsky.app/a.jpg'), { url: 'https://cdn.bsky.app/a.jpg', source: 'https://cdn.bsky.app/a.jpg' });
   assert.equal(cardImage(null), null);
 });
 
@@ -120,7 +121,7 @@ test('album, artist and legacy album links', async () => {
 test('a list without its own cover uses its first member with art', async () => {
   const bare = { ...album, media: { artwork: null }, members: [{ track: null }, { track: { metadata: { duration_seconds: 60 }, media: { artwork: { url: 'https://images.plyr.fm/images/m.png' } } } }] };
   const card = await preview(new URL(`https://plyr.fm/album/${albumId}`), api({ album: async () => bare }));
-  assert.match(card.image.url, /\/images\/m\.png$/);
+  assert.equal(card.image.source, 'https://images.plyr.fm/images/m.png');
 });
 
 test('the shell gets one title and one set of tags, escaped', async () => {
@@ -131,7 +132,9 @@ test('the shell gets one title and one set of tags, escaped', async () => {
   assert.equal(html.match(/property="og:title"/g)?.length, 1);
   assert.equal(html.match(/name="twitter:card"/g)?.length, 1);
   assert.match(html, /<title>bolloré &lt;est&gt; ton &quot;ennemi&quot; - Warklo \| plyr\.fm<\/title>/);
-  assert.match(html, /property="og:image" content="https:\/\/images\.plyr\.fm\/cdn-cgi\/image\//);
+  assert.match(html, /property="og:image" content="https:\/\/plyr\.fm\/og\/track\/1667\.jpg"/);
+  assert.match(html, /property="og:image:width" content="1200"/);
+  assert.match(html, /property="og:image:height" content="630"/);
   assert.match(html, /name="twitter:card" content="summary_large_image"/);
   assert.match(html, /rel="alternate" type="application\/json\+oembed" href="https:\/\/plyr\.fm\/oembed\?url=https%3A%2F%2Fplyr\.fm%2Ftrack%2F1667&amp;format=json"/);
   assert.match(html, /name="at:canonical" content="at:\/\/did:plc:artist\/fm\.plyr\.track\/3abc"/);
@@ -179,4 +182,42 @@ test('the worker serves browsers the static file and unfurlers the card', async 
     globalThis.fetch = realFetch;
   }
   assert.deepEqual(seen, ['/track/1667', '/', '/', '/track/999']);
+});
+
+const playlistUri = 'at://did:plc:owner/fm.plyr.list/3pls';
+const legacy = { '18111b6d-d16d-47a9-ab98-d96f505e2372': playlistUri };
+
+test('production playlist and embed links move to their next records', async () => {
+  const uuid = '18111b6d-d16d-47a9-ab98-d96f505e2372';
+  const pls = 'pls_' + btoa(playlistUri).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  assert.deepEqual(route(`/playlist/${uuid}`), { kind: 'legacy-playlist', id: uuid });
+  assert.deepEqual(await preview(new URL(`https://plyr.fm/playlist/${uuid}?ref=x`), api(), legacy), { redirect: `https://plyr.fm/playlist/${pls}?ref=x` });
+  assert.deepEqual(await preview(new URL(`https://plyr.fm/embed/playlist/${uuid}`), api(), legacy), { redirect: `https://plyr.fm/embed/playlist/${pls}` });
+  assert.equal(await preview(new URL('https://plyr.fm/playlist/00000000-0000-4000-8000-000000000000'), api(), legacy), null);
+  assert.equal(await preview(new URL('https://plyr.fm/playlist/constructor'), api(), { }), null);
+  assert.deepEqual(await preview(new URL('https://plyr.fm/embed/album/warklo.test/etudes-pour-dac'), api()), { redirect: `https://plyr.fm/embed/album/${albumId}` });
+  assert.equal(route('/embed/track/1667'), null, 'other embeds stay static');
+});
+
+test('the card image is composed by the image service, or falls back to the plain cover', async () => {
+  const page = route('/og/track/1667.jpg');
+  assert.deepEqual(page, { kind: 'og', of: 'track', id: '1667' });
+  let asked: any;
+  const composed = await ogImage(page, 'https://plyr.fm', api(), async (input: string, init: any) => {
+    asked = { input, init };
+    return new Response('jpeg', { headers: { 'content-type': 'image/jpeg', 'cf-resized': 'internal=ok' } });
+  });
+  assert.equal(composed.status, 200);
+  assert.equal(composed.headers.get('x-plyr-og'), 'composed');
+  assert.equal(asked.input, 'https://images.plyr.fm/images/9029ce64709a5717.png');
+  assert.equal(asked.init.cf.image.width, 1200);
+  assert.equal(asked.init.cf.image.height, 630);
+  assert.equal(asked.init.cf.image.draw[0].url, asked.input);
+  const raw = await ogImage(page, 'https://plyr.fm', api(), async () => new Response('png', { headers: { 'content-type': 'image/png' } }));
+  assert.equal(raw.status, 302);
+  assert.match(raw.headers.get('location'), /^https:\/\/images\.plyr\.fm\/cdn-cgi\/image\//);
+  const failed = await ogImage(page, 'https://plyr.fm', api(), async () => new Response('png', { headers: { 'content-type': 'image/png', 'cf-resized': 'err=9413' } }));
+  assert.equal(failed.status, 302, 'a failed transformation is the raw upload, not a card');
+  const adult = await ogImage(page, 'https://plyr.fm', api({ track: async () => track({ moderation: { self_labels: ['porn'] } }) }), async () => { throw new Error('not asked'); });
+  assert.equal(adult.headers.get('location'), 'https://plyr.fm/icons/icon-512.png');
 });
