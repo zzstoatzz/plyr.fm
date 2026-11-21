@@ -6,8 +6,9 @@
 //! and attested payment evidence. The authority always passes; plyr's own
 //! sync account may read, so it can keep a copy; nobody else writes; a space
 //! of another type, or one with no policy, stays closed. Before any policy,
-//! plyr's own `Restrictions` can close a space (moderation took its audio
-//! down) or shut out one reader (the authority removed them).
+//! `Restrictions` can close a space whose audio moderation took down.
+//! Nothing else private to plyr decides access: the rest follows from the
+//! authority's public policies and attested payments.
 
 const std = @import("std");
 const managed_space = @import("managed_space.zig");
@@ -44,22 +45,16 @@ pub const PolicySource = struct {
     }
 };
 
-/// What plyr holds against a space or a reader, apart from the authority's
-/// policies. Both are answered from plyr's own state, not the network.
+/// Moderation's hold on a space, apart from the authority's policies. It
+/// follows from plyr's public labels and decisions on the artist's tracks.
 pub const Restrictions = struct {
     context: *anyopaque,
     closed_fn: *const fn (*anyopaque, std.mem.Allocator, []const u8, []const u8) anyerror!bool,
-    removed_fn: *const fn (*anyopaque, std.mem.Allocator, []const u8, []const u8) anyerror!bool,
 
     /// moderation took down audio that lives in `space_uri` (owned by
     /// `authority`), so the space opens to nobody but its authority
     pub fn closed(self: Restrictions, a: std.mem.Allocator, authority: []const u8, space_uri: []const u8) !bool {
         return self.closed_fn(self.context, a, authority, space_uri);
-    }
-
-    /// `authority` removed `reader` from every space they own
-    pub fn removed(self: Restrictions, a: std.mem.Allocator, authority: []const u8, reader: []const u8) !bool {
-        return self.removed_fn(self.context, a, authority, reader);
     }
 };
 
@@ -72,7 +67,7 @@ pub const Core = struct {
     evidence: policy.Evidence,
     /// the account plyr's space-stream reads with (SPACE_SYNC_DID)
     sync_reader: ?[]const u8 = null,
-    /// takedowns and removed readers; null only where plyr has no database
+    /// takedowns; null only where plyr has no database
     restrictions: ?Restrictions = null,
 
     pub fn decider(self: *Core) Decider {
@@ -93,7 +88,6 @@ pub const Core = struct {
         const space_uri = try std.fmt.allocPrint(a, "at://{s}/space/{s}/{s}", .{ space.authority, space.space_type, space.skey });
         if (self.restrictions) |restrictions| {
             if (try restrictions.closed(a, space.authority, space_uri)) return false;
-            if (try restrictions.removed(a, space.authority, request.user)) return false;
         }
         const all = try self.policies.list(a, space.authority, self.policy_collection, self.space_type);
         var matching: std.ArrayList(policy.Policy) = .empty;
@@ -121,11 +115,10 @@ const Fixture = struct {
     payments: []const policy.Payment = &.{},
     listed: usize = 0,
     closed_spaces: []const []const u8 = &.{},
-    removed_readers: []const []const u8 = &.{},
     restrictions_fail: bool = false,
 
     fn restrictions(self: *Fixture) Restrictions {
-        return .{ .context = self, .closed_fn = isClosed, .removed_fn = isRemoved };
+        return .{ .context = self, .closed_fn = isClosed };
     }
     fn isClosed(context: *anyopaque, _: std.mem.Allocator, authority: []const u8, space_uri: []const u8) anyerror!bool {
         const self: *Fixture = @ptrCast(@alignCast(context));
@@ -133,11 +126,6 @@ const Fixture = struct {
         try std.testing.expect(std.mem.startsWith(u8, space_uri, "at://"));
         try std.testing.expect(std.mem.startsWith(u8, space_uri["at://".len..], authority));
         for (self.closed_spaces) |closed| if (std.mem.eql(u8, closed, space_uri)) return true;
-        return false;
-    }
-    fn isRemoved(context: *anyopaque, _: std.mem.Allocator, _: []const u8, reader: []const u8) anyerror!bool {
-        const self: *Fixture = @ptrCast(@alignCast(context));
-        for (self.removed_readers) |removed| if (std.mem.eql(u8, removed, reader)) return true;
         return false;
     }
 
@@ -253,26 +241,6 @@ test "a taken-down space opens only to its authority" {
     // and a lookup that fails is an error, which every caller reads as no
     fixture.restrictions_fail = true;
     try std.testing.expectError(error.Unavailable, ask(&core, a, "at://did:plc:artist/space/fm.plyr.dev.audio/3single", "did:plc:fan", .read));
-}
-
-test "a reader the authority removed passes none of their policies" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const a = arena.allocator();
-    const album = "at://did:plc:artist/space/fm.plyr.dev.audio/3album";
-    const members = [_][]const u8{ "did:plc:fan", "did:plc:friend" };
-    var fixture: Fixture = .{
-        .policies = &.{.{ .uri = "at://did:plc:artist/fm.plyr.dev.policy/3m", .spaces = &.{album}, .rule = .{ .members = &members } }},
-        .payments = &.{.{ .amount = 100, .currency = "USD" }},
-        .removed_readers = &.{"did:plc:fan"},
-    };
-    var core = fixture.core();
-    core.restrictions = fixture.restrictions();
-    try std.testing.expect(!try ask(&core, a, album, "did:plc:fan", .read));
-    try std.testing.expect(try ask(&core, a, album, "did:plc:friend", .read));
-    // the legacy supporter gate, which a payment would open, stays shut too
-    try std.testing.expect(!try ask(&core, a, "at://did:plc:artist/space/fm.plyr.dev.audio/supporters", "did:plc:fan", .read));
-    try std.testing.expect(try ask(&core, a, "at://did:plc:artist/space/fm.plyr.dev.audio/supporters", "did:plc:friend", .read));
 }
 
 test "policy collections sit beside the track collection" {
