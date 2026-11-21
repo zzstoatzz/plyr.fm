@@ -6,6 +6,7 @@ import { useAppearance } from './appearance';
 import { Heading } from './CatalogPieces';
 import { useLayer } from './behaviors/use-layer';
 import { CompactRows } from './ActionRow';
+import { Text } from './Text';
 
 /** Where the control that opened a sheet sits in the window. */
 export type Anchor = { x: number; y: number; width: number; height: number };
@@ -115,4 +116,13 @@ function LiftedMenu({ title, close, visible, onDismiss, lift: { anchor, preview 
       </CompactRows.Provider>
     </Animated.View>
   </Modal>;
+}
+
+/** A text button for a form sheet's bar. */
+export function BarButton({ label, onPress, disabled, strong }: { label: string; onPress: () => void; disabled?: boolean; strong?: boolean }) {
+  const theme = useAppearance();
+  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} hitSlop={8}
+    style={({ pressed }) => ({ paddingHorizontal: 12, paddingVertical: 10, opacity: disabled ? 0.4 : pressed ? 0.6 : 1 })}>
+    <Text style={{ color: theme.accent, fontFamily: theme.fontFamily, fontSize: 17 * theme.scale, fontWeight: strong ? '700' : '400' }}>{label}</Text>
+  </Pressable>;
 }
