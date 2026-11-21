@@ -138,6 +138,8 @@ fn airable(arena: std.mem.Allocator, entries: []const Entry, by_uri: *const std.
     for (entries) |entry| {
         const value = by_uri.get(entry.uri) orelse continue;
         if (streamOrigin(value.value) == null) continue;
+        // a loop pinned before the corpus required a length can still hold one
+        if ((value.value.metadata.duration_seconds orelse 0) <= 0) continue;
         try kept.append(arena, entry);
     }
     return kept.toOwnedSlice(arena);
@@ -262,7 +264,7 @@ fn fileType(media_type: []const u8) []const u8 {
     const subtype = media_type[slash + 1 ..];
     if (std.mem.eql(u8, subtype, "mpeg") or std.mem.eql(u8, subtype, "mp3")) return "mp3";
     if (std.mem.eql(u8, subtype, "mp4") or std.mem.eql(u8, subtype, "x-m4a") or std.mem.eql(u8, subtype, "aac")) return "m4a";
-    if (std.mem.eql(u8, subtype, "x-wav") or std.mem.eql(u8, subtype, "wave")) return "wav";
+    if (std.mem.eql(u8, subtype, "x-wav") or std.mem.eql(u8, subtype, "wave") or std.mem.eql(u8, subtype, "vnd.wave")) return "wav";
     if (std.mem.eql(u8, subtype, "x-flac")) return "flac";
     return subtype;
 }

@@ -206,6 +206,9 @@ const radio_policy = composed.discovery_policy ++
     \\  AND pol.space_uri IS NULL
     \\  AND v.audio_space IS NULL
     \\  AND v.record_created_at_us IS NOT NULL
+    // the loop's clock is the record's length: a guessed one cuts a song off
+    // or leaves silence, so a track without one doesn't air
+    \\  AND v.duration_seconds > 0
 ;
 
 // $1 track collection, $2 like collection, $3 the default hidden tags
