@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build",
+    "build": "vite build && node scripts/build-edge.mjs",
     "preview": "vite preview",
     "check:account": "node scripts/check-account.cjs",
     "check:jams": "node scripts/check-jams.cjs",

@@ -156,6 +156,15 @@ pub fn handle(
             app.cors,
             request_id,
         );
+    } else if (mem.eql(u8, path, "/oembed")) {
+        if (request.method != .GET and request.method != .HEAD) {
+            try response.apiError(request, .method_not_allowed, request_id, app.cors);
+            return;
+        }
+        // public like production's: embed hosts may ask from a page's own script
+        try response.redirectWithHeaders(request, try oembedLocation(allocator, request.header("host"), target), request_id, &.{
+            .{ .name = "access-control-allow-origin", .value = "*" },
+        });
     } else if (mem.eql(u8, path, "/")) {
         if (request.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
@@ -171,6 +180,34 @@ fn publicCors(cors: response.CorsPolicy) response.CorsPolicy {
     var public = cors;
     public.public = true;
     return public;
+}
+
+/// Production answered oEmbed at api.plyr.fm/oembed, and old pages and embed
+/// services still ask there. The web app serves it now (next/web/edge), so send
+/// each API host's callers to its own site.
+fn oembedLocation(allocator: std.mem.Allocator, host: ?[]const u8, target: []const u8) ![]const u8 {
+    const query = if (mem.indexOfScalar(u8, target, '?')) |index| target[index..] else "";
+    return std.fmt.allocPrint(allocator, "https://{s}/oembed{s}", .{ siteHost(host), query });
+}
+
+fn siteHost(host: ?[]const u8) []const u8 {
+    const value = host orelse return "next.plyr.fm";
+    const name = if (mem.indexOfScalar(u8, value, ':')) |index| value[0..index] else value;
+    if (std.ascii.eqlIgnoreCase(name, "api.plyr.fm")) return "plyr.fm";
+    return "next.plyr.fm";
+}
+
+test "oembed moves to the site that owns the api host" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    try std.testing.expectEqualStrings(
+        "https://plyr.fm/oembed?url=https%3A%2F%2Fplyr.fm%2Ftrack%2F1667",
+        try oembedLocation(arena, "api.plyr.fm", "/oembed?url=https%3A%2F%2Fplyr.fm%2Ftrack%2F1667"),
+    );
+    try std.testing.expectEqualStrings("https://next.plyr.fm/oembed?url=x", try oembedLocation(arena, "api.next.plyr.fm:443", "/oembed?url=x"));
+    try std.testing.expectEqualStrings("https://next.plyr.fm/oembed", try oembedLocation(arena, "evil.example", "/oembed"));
+    try std.testing.expectEqualStrings("https://next.plyr.fm/oembed", try oembedLocation(arena, null, "/oembed"));
 }
 
 fn pathFromTarget(target: []const u8) []const u8 {
