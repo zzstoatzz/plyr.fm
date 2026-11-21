@@ -161,7 +161,10 @@ pub fn handle(
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
             return;
         }
-        try response.redirect(request, try oembedLocation(allocator, request.header("host"), target), request_id);
+        // public like production's: embed hosts may ask from a page's own script
+        try response.redirectWithHeaders(request, try oembedLocation(allocator, request.header("host"), target), request_id, &.{
+            .{ .name = "access-control-allow-origin", .value = "*" },
+        });
     } else if (mem.eql(u8, path, "/")) {
         if (request.method != .GET) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);

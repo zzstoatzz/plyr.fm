@@ -364,8 +364,9 @@ export async function oembed(requestUrl, api) {
   const [defaultWidth, defaultHeight, maxHeight] = OEMBED_SIZES[page.kind];
   const askedWidth = Number(requestUrl.searchParams.get('maxwidth')) || defaultWidth;
   const askedHeight = Number(requestUrl.searchParams.get('maxheight')) || defaultHeight;
-  const width = Math.max(200, Math.min(askedWidth, 800));
-  const height = Math.max(120, Math.min(askedHeight, maxHeight));
+  // never larger than the caller's maxwidth/maxheight (oEmbed 2.2.1)
+  const width = Math.min(askedWidth, 800);
+  const height = Math.min(askedHeight, maxHeight);
   const body = {
     version: '1.0',
     type: 'rich',
