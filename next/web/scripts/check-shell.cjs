@@ -203,14 +203,17 @@ async function queueGroups(browser, phone, scheme) {
     else await dock.getByRole('button', { name: 'Queue', exact: true }).click();
     const queue = page.getByRole('region', { name: 'Queue', exact: true });
     const upNext = queue.getByRole('region', { name: 'up next', exact: true });
-    const continuation = queue.getByRole('region', { name: /next from/ });
+    const continuation = queue.locator('section[aria-labelledby="queue-continuation"]');
     await upNext.getByRole('button', { name: `Remove ${tracks[3].metadata.title}` }).waitFor({ timeout: 3000 });
     await continuation.getByRole('button', { name: `Remove ${tracks[8].metadata.title}` }).waitFor();
     assert.equal(await upNext.getByRole('listitem').count(), 4);
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
     await page.screenshot({ path: path.join(output, `${width}-${scheme}-queue-grouped.png`) });
 
-    await upNext.getByRole('button', { name: `Move ${tracks[3].metadata.title} up` }).click();
+    // move up is the keyboard way to reorder (pointers drag), so it's only drawn while focused
+    const moveUp = upNext.getByRole('button', { name: `Move ${tracks[3].metadata.title} up` });
+    await moveUp.focus();
+    await moveUp.press('Enter');
     await upNext.getByRole('listitem').nth(2).getByRole('link', { name: tracks[3].metadata.title, exact: true }).waitFor();
     await queue.getByRole('button', { name: 'clear your queued tracks' }).click();
     await upNext.getByText('no tracks queued by you.').waitFor();
