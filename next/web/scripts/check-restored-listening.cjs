@@ -29,12 +29,26 @@ async function verify(browser, origin, width, scheme) {
     await row.getByRole('button', { name: 'Play ' + tracks[0].metadata.title }).click();
     await page.getByTestId('player-dock').getByRole('button', { name: 'Open now playing' }).click();
     const now = page.getByRole('dialog', { name: 'Now playing' });
-    const marker = now.getByRole('button', { name: 'Comment at 0:14', exact: true });
-    await marker.click();
-    const card = page.locator('.comment-card:popover-open');
-    await card.getByText('I love this moment.', { exact: true }).waitFor();
+    await now.locator('input[aria-label="Playback position"]').evaluate(input => {
+      input.value = '13.5';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    const chip = now.getByTestId('cover-comment');
+    await chip.getByText('I love this moment.', { exact: true }).waitFor();
+    const cover = await now.getByTestId('now-playing-artwork').boundingBox();
+    const chipBox = await chip.boundingBox();
+    assert.ok(chipBox.y >= cover.y && chipBox.y + chipBox.height <= cover.y + cover.height + 0.5, 'the comment sits on the cover, not over the title');
+    await chip.evaluate(node => Promise.all(node.getAnimations().map(animation => animation.finished)));
+    await page.screenshot({ path: path.join(output, `${width}-${scheme}-cover-comment.png`) });
+    await chip.click();
+    const view = now.getByTestId('comments-view');
+    await view.getByText('I love this moment.', { exact: true }).waitFor();
+    assert.equal(await now.getByTestId('comments-toggle').getAttribute('aria-pressed'), 'true');
+    await page.waitForTimeout(600);
+    await page.screenshot({ path: path.join(output, `${width}-${scheme}-comments-view.png`) });
     if (phone) {
-      const text = await card.locator('p').boundingBox();
+      const text = await view.getByText('I love this moment.', { exact: true }).boundingBox();
       const cdp = await context.newCDPSession(page);
       const point = { x: text.x + text.width / 2, y: text.y + text.height / 2 };
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [point] });
@@ -42,9 +56,8 @@ async function verify(browser, origin, width, scheme) {
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
       assert.ok(await now.isVisible(), 'dragging comment text cannot dismiss Now Playing');
     }
-    await page.keyboard.press('Escape');
-    await card.waitFor({ state: 'hidden' });
-    assert.ok(await now.isVisible(), 'Escape closes the comment card first');
+    await view.getByRole('button', { name: 'Show the cover', exact: true }).click();
+    await view.waitFor({ state: 'hidden' });
     await now.getByTestId('now-playing-facts').waitFor();
     await page.screenshot({ path: path.join(output, `${width}-${scheme}-now-playing.png`) });
     await page.keyboard.press('Escape');

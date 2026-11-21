@@ -10,8 +10,7 @@ import { CommentComposer } from './CommentComposer';
 import { timeAgo } from './home-state';
 import { Trash } from './icons';
 import { usePlayback } from './playback';
-import { passingComment } from '@plyr/next-core/comment-faces';
-import { commentAuthor } from './ScrubberFaces';
+import { commentAuthor, reachedComments } from '@plyr/next-core/timed-comments';
 import { Text } from './Text';
 import { toast } from './toast';
 import { removeComment, useTrackComments } from './track-comments';
@@ -24,7 +23,7 @@ export function TrackComments({ track, heading = true }: { track: Track; heading
   const positionMs = current ? (player.seekPreview ?? player.status.currentTime) * 1000 : 0;
   const seek = current && player.status.isLoaded && player.canSeek ? player.seek : undefined;
   const passing = current && player.status.playing
-    ? passingComment(comments.comments, comment => comment.timestamp_ms, positionMs) : undefined;
+    ? reachedComments(comments.comments, comment => comment.timestamp_ms, positionMs, undefined, 1)[0] : undefined;
   const count = comments.comments.length;
   // Comments are the artist's choice: no section at all until they've turned them on.
   if (!comments.enabled && !comments.error) return null;

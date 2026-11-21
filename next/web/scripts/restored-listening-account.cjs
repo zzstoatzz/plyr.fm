@@ -74,14 +74,14 @@ module.exports = async function restoredListening({ page, context, origin, coord
   await page.waitForFunction(() => document.querySelector('[data-testid="player-dock"] input[aria-label="Playback position"]')?.valueAsNumber > 0);
   assert.equal(await now.getByRole('button', { name: /^at \d/ }).textContent(), timestamp, 'typing pins the comment while playback continues');
   await now.getByRole('button', { name: 'Post comment', exact: true }).click();
-  await now.getByRole('button', { name: /^Comment at / }).waitFor();
+  await now.getByTestId('comments-toggle').filter({ hasText: '1' }).waitFor();
   const records = await fetch('http://127.0.0.1:5197/xrpc/com.atproto.repo.listRecords?' + new URLSearchParams({ repo: did, collection: 'fm.plyr.comment' })).then(response => response.json());
   assert.equal(records.records.length, 1);
   assert.equal(records.records[0].value.text, 'a comment from the full-screen player');
   assert.deepEqual(records.records[0].value.subject, { uri: track.record.uri, cid: track.record.cid });
-  await now.getByRole('button', { name: /^Comment at / }).click();
-  await page.locator('.comment-card:popover-open').getByText('a comment from the full-screen player', { exact: true }).waitFor();
-  await page.keyboard.press('Escape');
+  await now.getByTestId('comments-toggle').click();
+  await now.getByTestId('comments-view').getByText('a comment from the full-screen player', { exact: true }).waitFor();
+  await now.getByTestId('comments-view').getByRole('button', { name: 'Show the cover', exact: true }).click();
   await now.getByRole('button', { name: 'Unlike track', exact: true }).click();
   await now.getByTestId('now-playing-facts').getByRole('button', { name: `${track.metrics.like_count} likes on ${track.metadata.title}` }).waitFor();
   await page.keyboard.press('Escape');

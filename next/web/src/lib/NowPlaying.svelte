@@ -19,6 +19,9 @@
 	import { playerSheet } from './player-sheet';
 	import type { DockPull } from './dock-pull';
 	import CommentComposer from './listening/CommentComposer.svelte';
+	import CoverComments from './listening/CoverComments.svelte';
+	import CommentsView from './listening/CommentsView.svelte';
+	import { comments } from './listening/comments';
 	import TrackBuy from './selling/TrackBuy.svelte';
 	import Likers from './listening/Likers.svelte';
 	import { compactCount } from './listening/format';
@@ -41,6 +44,28 @@
 	});
 	const tags = $derived(player.current?.metadata.tags ?? (fetchedTags?.id === player.current?.id ? fetchedTags?.tags : undefined) ?? []);
 	const playing = $derived(player.liveStation ? player.liveListening : player.playing && !player.outputElsewhere);
+	const commentable = $derived(!!player.current && !player.privateMode && !player.liveStation);
+	let commentState = $state.raw(comments.snapshot());
+	let commentsOpen = $state(false);
+	let composerBox = $state<HTMLElement>();
+	let account = $state.raw(auth.getAuth());
+	onMount(() => auth.subscribe(() => { account = auth.getAuth(); }));
+	$effect(() => {
+		const id = commentable ? player.current?.id : undefined;
+		commentsOpen = false;
+		if (!id) { commentState = comments.snapshot(); return; }
+		const update = () => { commentState = comments.snapshot(id); };
+		const stop = comments.subscribe(id, update);
+		update();
+		if (!comments.hasLoaded(id)) comments.loadComments(id);
+		return stop;
+	});
+	const showComments = $derived(commentable && commentState.enabled);
+	function compose() {
+		const field = composerBox?.querySelector<HTMLElement>('textarea, a');
+		field?.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+		field?.focus({ preventScroll: true });
+	}
 
 	onMount(() => {
 		if (!close) return;
@@ -106,6 +131,7 @@
 
 {#snippet trackActions()}
 	<button class="icon-button" type="button" aria-label="Share track" onclick={shareTrack}><Icon name="share" /></button>
+	{#if showComments}<button class="icon-button comment-toggle" type="button" data-testid="comments-toggle" aria-pressed={commentsOpen} aria-label={commentsOpen ? 'Show the cover' : `Show comments (${commentState.comments.length})`} onclick={() => { commentsOpen = !commentsOpen; }}><Icon name="chat" />{#if commentState.comments.length}<span>{commentState.comments.length}</span>{/if}</button>{/if}
 	<a href={resolve('/(app)/queue')} class="icon-button" aria-label="Open queue"><Icon name="queue" /></a>
 {/snippet}
 
@@ -124,14 +150,21 @@
 		</header>
 		<div class="hero" data-testid="now-playing-hero">
 			<div class="artwork-frame">
-				<div class="cover" data-testid="now-playing-artwork"><Artwork src={trackArtwork(player.current)} size={460} eager /></div>
+				<div class="cover" data-testid="now-playing-artwork"><Artwork src={trackArtwork(player.current)} size={460} eager />
+					{#if showComments && commentsOpen}
+						<CommentsView items={commentState.comments} cover={trackArtwork(player.current)} position={player.position} seek={player.canSeek ? seconds => player.seek(seconds) : undefined}
+							close={() => { commentsOpen = false; }} compose={{ label: account.commenting ? `say something at ${clock(player.position)}` : `${account.did ? 'reconnect' : 'sign in'} to leave a comment`, run: compose }} />
+					{:else if showComments && playing}
+						<CoverComments items={commentState.comments} position={player.position} open={() => { commentsOpen = true; }} />
+					{/if}
+				</div>
 			</div>
 			<div class="copy">
 				<h1 data-testid="now-playing-title">{player.current.metadata.title}</h1>
 				{#if isBroadcast(player.current)}<p class="subtle">{artistName(player.current)}</p>
 				{:else}<a class="subtle" href={resolve('/(app)/u/[actor]', { actor: player.current.artist.profile.handle || player.current.artist.did })}>{artistName(player.current)}</a>{/if}
 				{#if player.current.metadata.album}<p class="subtle">{player.current.metadata.album}</p>{/if}
-				<div class="position">{#if player.liveStation}<LiveProgress />{:else}<Scrub stacked comments chapters={chapters.chapters} {chapter} />{/if}</div>
+				<div class="position">{#if player.liveStation}<LiveProgress />{:else}<Scrub stacked chapters={chapters.chapters} {chapter} />{/if}</div>
 				<div class="commands" class:live={!!player.liveStation}>
 					<Transport />
 				</div>
@@ -157,7 +190,7 @@
 		</div>
 		<div class="details" data-testid="now-playing-details">
 				{#if !player.liveStation && !player.privateMode}
-					{#key player.current.id}<div class="composer"><CommentComposer track={player.current} compact /></div>{/key}
+					{#key player.current.id}<div class="composer" bind:this={composerBox}><CommentComposer track={player.current} compact /></div>{/key}
 				{/if}
 
 			{#if !player.privateMode && !player.liveStation}
@@ -205,7 +238,9 @@
 <style>
 	.now { max-width: 33rem; margin: auto; padding: 0 1rem 2rem; background: var(--bg); }
 	header { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; height: 3.5rem; color: var(--muted); font-size: 0.875rem; background: var(--bg); }
-	.cover { border-radius: 0.95rem; width: 100%; transform-origin: top left; }
+	.cover { position: relative; border-radius: 0.95rem; width: 100%; transform-origin: top left; }
+	.comment-toggle { display: inline-flex; gap: 0.3rem; width: auto; padding-inline: 0.5rem; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+	.comment-toggle[aria-pressed='true'] { color: var(--accent); }
 	.copy { padding-top: 1.25rem; }
 	h1 { font-size: clamp(1.35rem, 4vw, 2rem); line-height: 1.18; overflow-wrap: anywhere; margin-bottom: 0.35rem; transform-origin: top left; }
 	.phone-close { display: none; }

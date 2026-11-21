@@ -26,11 +26,9 @@ import { Coachmark } from './Coachmark';
 import { markHintSeen, useHintPending } from './hints';
 import { measure, playerSheet, setFlying, type Rect } from './player-sheet';
 import { artLeft, flightSteps, titleLeft } from './player-flight-path';
-import { ScrubberFaces } from './ScrubberFaces';
+import { CommentsView, CoverComments } from './TimedComments';
 import { CommentComposer } from './CommentComposer';
 import { useTrackComments } from './track-comments';
-import { Sheet } from './Sheet';
-import { TrackComments } from './TrackComments';
 
 const AnimatedSafeAreaView = Animated.createAnimatedComponent(SafeAreaView);
 const titleOriginFade = [0.05, 0.25] as const;
@@ -156,7 +154,10 @@ export function NowPlaying({ track, close: leave, navigate: go }: {
 
   const seek = player.canSeek && !player.live && !error ? player.seek : undefined;
   const [commentsOpen, setCommentsOpen] = useState(false);
-  const seeAll = { label: comments.comments.length === 1 ? 'See the comment' : `See all ${comments.comments.length} comments`, open: () => setCommentsOpen(true) };
+  // While a finger is on the comments list, the list scrolls and the page holds still.
+  const [inComments, setInComments] = useState(false);
+  useEffect(() => { setCommentsOpen(false); }, [track.id]);
+  const showComments = commentable && comments.enabled;
   const composer = <View><CommentComposer track={track} positionMs={position * 1000} returnTo={returnTo} /></View>;
   const details = <NowPlayingDetails track={track} plays={plays} navigate={navigate} position={position} playing={playing} seek={seek} />;
   const chapters = useMemo(() => parseChapters(track.metadata.description, track.metadata.duration_seconds ?? undefined).chapters, [track.metadata.description, track.metadata.duration_seconds]);
@@ -201,12 +202,16 @@ export function NowPlaying({ track, close: leave, navigate: go }: {
           </Animated.View> : <View><PlayerControl icon={ChevronDown} label="Close" onPress={close} /></View>}
         </View>
         <Animated.View {...dismiss.contentStartHandlers} onLayout={event => setViewport(event.nativeEvent.layout.height)} style={[styles.scrollRegion, { transform: [{ translateY: motion.lift }] }]}>
-          <PullDetector gesture={pull.scroll}><Animated.ScrollView testID="now-playing-scroll" {...dismiss.scrollProps} scrollEventThrottle={16} scrollEnabled={!dismiss.dragging && !wheelActive} showsVerticalScrollIndicator={!dismiss.dragging}
+          <PullDetector gesture={pull.scroll}><Animated.ScrollView testID="now-playing-scroll" {...dismiss.scrollProps} scrollEventThrottle={16} scrollEnabled={!dismiss.dragging && !wheelActive && !inComments} showsVerticalScrollIndicator={!dismiss.dragging}
             contentContainerStyle={styles.content}>
             <View testID="now-playing-hero" onLayout={event => { titleEnd.current.hero = event.nativeEvent.layout.y; }}
               style={[styles.hero, viewport > 0 && { minHeight: viewport - 36 }]}>
             <Animated.View testID="now-playing-artwork" style={[styles.art, artCarried]}>
-              <View ref={artRef}><Cover uri={art} size={artwork} radius={16} onSettle={() => setSettledArt(art)} /></View>
+              <View ref={artRef}><Cover uri={art} size={artwork} radius={16} onSettle={() => setSettledArt(art)} />
+                {showComments && (commentsOpen ? <View style={StyleSheet.absoluteFill} onTouchStart={() => setInComments(true)} onTouchEnd={() => setInComments(false)} onTouchCancel={() => setInComments(false)}><CommentsView track={track} comments={comments.comments} art={art} positionMs={position * 1000} size={artwork}
+                  seek={seek} close={() => setCommentsOpen(false)} returnTo={returnTo} /></View>
+                  : playing && !scrub && <CoverComments comments={comments.comments} positionMs={position * 1000} size={artwork} open={() => setCommentsOpen(true)} />)}
+              </View>
             </Animated.View>
             <View onLayout={event => {
               titleEnd.current.body = event.nativeEvent.layout.y;
@@ -231,8 +236,7 @@ export function NowPlaying({ track, close: leave, navigate: go }: {
                 {player.live ? <View testID="now-playing-live-progress" accessibilityRole="progressbar" accessibilityLabel="Song progress"
                   aria-valuemin={0} aria-valuemax={Math.round(duration)} aria-valuenow={Math.round(position)} style={[styles.liveTrack, { backgroundColor: theme.line }]}>
                   <View style={[styles.liveFill, { backgroundColor: theme.accent, width: `${duration ? Math.min(100, position / duration * 100) : 0}%` }]} />
-                </View> : <View style={styles.scrubber}>{commentable && <View><ScrubberFaces comments={comments.comments} durationMs={duration * 1000} positionMs={position * 1000}
-                  playing={playing && !scrub} onSeek={seek ? ms => seek(ms / 1000) : undefined} seeAll={seeAll} /></View>}<View {...dismiss.protectSlider}><Slider accessibilityLabel="Playback position" minimumValue={0} maximumValue={duration || 1}
+                </View> : <View style={styles.scrubber}><View {...dismiss.protectSlider}><Slider accessibilityLabel="Playback position" minimumValue={0} maximumValue={duration || 1}
                   value={position} minimumTrackTintColor={theme.accent} maximumTrackTintColor={theme.border}
                   thumbTintColor={theme.accent} disabled={!player.canSeek || !duration || !!error}
                   onSlidingStart={updateScrub} onValueChange={updateScrub}
@@ -254,11 +258,15 @@ export function NowPlaying({ track, close: leave, navigate: go }: {
               <View style={styles.utilities}>
                 {!player.privatePlayback && !isBroadcast(track) && <View><TrackLikes key={track.id} track={track} iconOnly returnTo={returnTo} /></View>}
                 {!player.privatePlayback && <View><ShareLink compact path={`/track/${encodeURIComponent(track.id)}`} /></View>}
-                {commentable && comments.comments.length > 0 && <View><Pressable accessibilityRole="button" accessibilityLabel={seeAll.label} onPress={seeAll.open} style={styles.commentCount}>
-                  {({ hovered }: { pressed: boolean; hovered?: boolean }) => <>
-                    <ChatCircle size={22} color={hovered ? theme.text : theme.muted} />
-                    <Text style={[caption, styles.numeric, hovered && { color: theme.text }]}>{comments.comments.length}</Text>
-                  </>}
+                {showComments && <View><Pressable testID="comments-toggle" accessibilityRole="button" accessibilityState={{ selected: commentsOpen }}
+                  accessibilityLabel={commentsOpen ? 'Show the cover' : `Show comments (${comments.comments.length})`} onPress={() => setCommentsOpen(open => !open)} style={styles.commentCount}>
+                  {({ hovered }: { pressed: boolean; hovered?: boolean }) => {
+                    const tint = commentsOpen ? theme.accent : hovered ? theme.text : theme.muted;
+                    return <>
+                      <ChatCircle size={22} color={tint} weight={commentsOpen ? 'fill' : undefined} />
+                      {comments.comments.length > 0 && <Text style={[caption, styles.numeric, { color: tint }]}>{comments.comments.length}</Text>}
+                    </>;
+                  }}
                 </Pressable></View>}
                 <View>{player.live ? <PlayerControl icon={RadioTower} label="Stations" onPress={() => navigate('/radio')} />
                   : <PlayerControl icon={ListMusic} label="Queue" onPress={() => navigate('/queue')} />}</View>
@@ -268,7 +276,7 @@ export function NowPlaying({ track, close: leave, navigate: go }: {
               <Coachmark hint="now-playing.more-below" ready={measured && dismiss.atTop && !dismiss.dragging} />
             </View>}
             </View>
-            <View style={{ width: artwork, gap: 20 }}>{commentable && comments.enabled && composer}{details}</View>
+            <View style={{ width: artwork, gap: 20 }}>{showComments && !commentsOpen && composer}{details}</View>
           </Animated.ScrollView></PullDetector>
         </Animated.View>
         </Animated.View>
@@ -287,9 +295,7 @@ export function NowPlaying({ track, close: leave, navigate: go }: {
         </View>
       </AnimatedSafeAreaView></PullDetector>
     </View>;
-  return <Modal visible transparent accessibilityLabel="Now playing" animationType="none" onShow={() => { requestAnimationFrame(() => setShown(true)); }} onRequestClose={close}><PullRoot>{sheet}</PullRoot>
-    {commentsOpen && <Sheet title="comments" close={() => setCommentsOpen(false)}><TrackComments track={track} heading={false} /></Sheet>}
-  </Modal>;
+  return <Modal visible transparent accessibilityLabel="Now playing" animationType="none" onShow={() => { requestAnimationFrame(() => setShown(true)); }} onRequestClose={close}><PullRoot>{sheet}</PullRoot></Modal>;
 }
 
 const styles = StyleSheet.create({
