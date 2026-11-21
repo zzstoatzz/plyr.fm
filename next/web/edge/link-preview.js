@@ -53,9 +53,7 @@ export function slugify(text, maxLength = 100) {
   return slug;
 }
 
-const decode = (segment) => {
-  try { return decodeURIComponent(segment); } catch { return segment; }
-};
+const decode = (segment) => { try { return decodeURIComponent(segment); } catch { return segment; } };
 
 /** the page a path names, or null for pages without their own preview */
 export function route(pathname) {
@@ -361,11 +359,7 @@ export async function oembed(requestUrl, api) {
   if (format !== 'json') return { status: 501, body: { error: 'only json format is supported' } };
   if (!target) return { status: 400, body: { error: 'url is required' } };
   let parsed;
-  try {
-    parsed = new URL(target);
-  } catch {
-    return { status: 404, body: { error: 'unsupported url' } };
-  }
+  try { parsed = new URL(target); } catch { return { status: 404, body: { error: 'unsupported url' } }; }
   const origin = requestUrl.origin;
   let path = parsed.pathname;
   let page = route(path);
@@ -408,10 +402,7 @@ export async function oembed(requestUrl, api) {
     html: `<iframe src="${escape(origin + embedPath)}" width="${width}" height="${height}" frameborder="0" allow="autoplay; encrypted-media" style="border-radius: 8px;"></iframe>`,
     cache_age: API_CACHE_SECONDS
   };
-  if (card.image) {
-    const [w, h] = card.image.width ? [card.image.width, card.image.height] : [400, 400];
-    Object.assign(body, { thumbnail_url: card.image.url, thumbnail_width: w, thumbnail_height: h });
-  }
+  if (card.image) Object.assign(body, { thumbnail_url: card.image.url, thumbnail_width: card.image.width || 400, thumbnail_height: card.image.height || 400 });
   return { status: 200, body };
 }
 
