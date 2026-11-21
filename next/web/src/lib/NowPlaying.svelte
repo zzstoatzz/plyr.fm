@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { player } from './player.svelte';
+	import { api } from './api';
 	import { auth } from './auth';
 	import { artistName, clock, trackHref } from './tracks';
 	import { trackArtwork } from '@plyr/next-core/artwork';
@@ -29,6 +30,15 @@
 	let hintKey: string | undefined;
 	const chapters = $derived(parseChapters(player.current?.metadata.description, player.current?.metadata.duration_seconds ?? undefined));
 	const chapter = $derived(currentChapter(chapters.chapters, player.position));
+	// Lists carry no tags; the track read does.
+	let fetchedTags = $state.raw<{ id: string; tags: string[] }>();
+	$effect(() => {
+		const current = player.current;
+		if (!current || current.metadata.tags != null || player.privateMode || player.liveStation) return;
+		const { id } = current;
+		void api.track(id).then(track => { fetchedTags = { id, tags: track.metadata.tags ?? [] }; }, () => {});
+	});
+	const tags = $derived(player.current?.metadata.tags ?? (fetchedTags?.id === player.current?.id ? fetchedTags?.tags : undefined) ?? []);
 	const playing = $derived(player.liveStation ? player.liveListening : player.playing && !player.outputElsewhere);
 
 	onMount(() => {
@@ -164,9 +174,9 @@
 					<span><strong>{player.current.artist.profile.display_name || artistName(player.current)}</strong><small>@{player.current.artist.profile.handle}</small></span><Icon name="chevron" size={19} />
 				</a>{/if}
 				{#if !player.liveStation}
-					{#if player.current.metadata.tags?.length}
+					{#if tags.length}
 						<nav class="tags" aria-label="Tags" data-testid="now-playing-tags">
-							{#each player.current.metadata.tags as tag (tag)}<a href={resolve(`/?${new URLSearchParams({ tag })}`)}>{tag}</a>{/each}
+							{#each tags as tag (tag)}<a href={resolve(`/?${new URLSearchParams({ tag })}`)}>{tag}</a>{/each}
 						</nav>
 					{/if}
 					{#key player.current.id}<TrackBuy track={player.current} />{/key}
