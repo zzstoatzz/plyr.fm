@@ -1,5 +1,5 @@
 import { trackArtwork, collectionArtwork } from '@plyr/next-core/artwork';
-import { CaretRight as ChevronRight, PencilSimple as Pencil } from './icons';
+import { CaretRight as ChevronRight, PencilSimple as Pencil, Trash } from './icons';
 import { Link, useFocusEffect, type Href } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react';
 import { Pressable, ScrollView, StyleSheet, View, type ScrollViewProps, type ScrollViewInstance } from 'react-native';
@@ -21,6 +21,9 @@ import { ShareLink } from './ShareLink';
 import { catalogRevision } from '@plyr/next-core/catalog/changes';
 import { useTabs } from './behaviors/use-tabs';
 import { SellCard } from './selling/SellCard';
+import { createPds } from './pds';
+import { toast } from './toast';
+import { confirmTrackDelete } from './publishing/confirm-delete';
 
 const portalTabs = ['tracks', 'albums'] as const;
 type PortalTab = typeof portalTabs[number];
@@ -123,7 +126,8 @@ function OwnedTracks({ did, active, tabs }: { did: string; active: boolean; tabs
   const load = useCallback((cursor?: string) => api.tracks({ artist_did: did, limit: 25, cursor }), [did]);
   const tracks = usePortalPages(did, 'tracks', load, active);
   const own = useOwnerOnlyTracks(did, active);
-  const all = [...tracks.data, ...own.data].sort((a, b) => b.metadata.created_at.localeCompare(a.metadata.created_at));
+  const [removed, setRemoved] = useState<ReadonlySet<string>>(new Set());
+  const all = [...tracks.data, ...own.data].filter(track => !removed.has(track.record.uri)).sort((a, b) => b.metadata.created_at.localeCompare(a.metadata.created_at));
   const plays = (track: Track) => `${track.metrics.play_count} ${track.metrics.play_count === 1 ? 'play' : 'plays'}`;
   return <View style={{ gap: 8 }}>
     {tabs && <CatalogToolbar>{tabs}</CatalogToolbar>}
@@ -131,7 +135,10 @@ function OwnedTracks({ did, active, tabs }: { did: string; active: boolean; tabs
       const subtitle = [accessLabel(track, AUDIO_SPACE_TYPE), !isPrivateTrack(track) && plays(track), track.metadata.album].filter(Boolean).join(' · ');
       return <Row key={track.record.uri} title={track.metadata.title} image={trackArtwork(track)} subtitle={subtitle}
         href={{ pathname: '/track/[id]', params: { id: track.id } }}
-        action={isPrivateTrack(track) ? undefined : <Edit label={`edit ${track.metadata.title}`} href={{ pathname: '/edit-track/[id]', params: { id: track.id } }} />} />;
+        action={isPrivateTrack(track) ? undefined : <View style={{ flexDirection: 'row', marginRight: -6 }}>
+          <Edit label={`edit ${track.metadata.title}`} href={{ pathname: '/edit-track/[id]', params: { id: track.id } }} />
+          <DeleteTrack track={track} deleted={() => setRemoved(current => new Set(current).add(track.record.uri))} />
+        </View>} />;
     })}
     <CatalogState loading={tracks.loading || own.loading} error={tracks.error || own.error} empty={!all.length}
       retry={tracks.error ? tracks.retry : own.more} />
@@ -141,6 +148,26 @@ function OwnedTracks({ did, active, tabs }: { did: string; active: boolean; tabs
         if (own.cursor) own.more();
       }} /></View>}
   </View>;
+}
+
+function DeleteTrack({ track, deleted }: { track: Track; deleted: () => void }) {
+  const theme = useAppearance();
+  const auth = useAuth();
+  const [busy, setBusy] = useState(false);
+  const confirm = () => confirmTrackDelete(track.metadata.title, () => {
+    setBusy(true);
+    createPds(auth).deleteTrack(track.record.uri).then(() => {
+      toast.success(`deleted "${track.metadata.title}"`);
+      deleted();
+    }, failure => {
+      setBusy(false);
+      toast.error(failure instanceof Error ? failure.message : 'could not delete this track. try again.');
+    });
+  });
+  return <Pressable accessibilityRole="button" accessibilityLabel={`delete ${track.metadata.title}`} accessibilityState={{ disabled: busy }} disabled={busy} onPress={confirm}
+    style={({ pressed }) => ({ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', opacity: busy ? 0.4 : pressed ? 0.6 : 1 })}>
+    <Trash color={theme.muted} size={18} />
+  </Pressable>;
 }
 
 function Edit({ label, href }: { label: string; href: Href }) {

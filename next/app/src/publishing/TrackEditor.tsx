@@ -1,6 +1,7 @@
 import { router, useIsFocused, useNavigation } from 'expo-router';
 import { toast } from '../toast';
 import { deletedScreens } from './deleted-screens';
+import { confirmTrackDelete } from './confirm-delete';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Image, Pressable, View } from 'react-native';
 import { api } from '../api-client';
@@ -155,10 +156,7 @@ function TrackForm({ auth, data, reload, feedback, deleted: leaveDeleted }: { au
   }
 
   function confirmDelete() {
-    Alert.alert(`delete "${track.metadata.title}"?`, 'it comes off your profile and plyr.fm, along with its likes and plays. keep your original file: this cannot be undone.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => void save(true) }
-    ]);
+    confirmTrackDelete(track.metadata.title, () => void save(true));
   }
 
   function chooseAudio() {
