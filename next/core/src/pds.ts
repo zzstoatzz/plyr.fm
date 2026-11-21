@@ -18,6 +18,7 @@ import { assertPublicUploadRecord } from './publishing/upload-model';
 import type { MediaFile } from './publishing/private-music';
 import type { CatalogScope } from './catalog/changes';
 import type { DeliverAudio } from './publishing/audio-delivery';
+import type { Rule } from './access/policy';
 import { AVATAR_TYPES, MAX_AVATAR_BYTES, editedProfile, type ProfileEdits, type ProfileRecord } from './profile-record';
 export type { ProfileEdits, ProfileRecord } from './profile-record';
 
@@ -55,6 +56,22 @@ export interface NewTrack {
 	autoTag?: boolean;
 	/** cover art, stored on your PDS as imageBlob */
 	artwork?: MediaFile | null;
+	/** featured artists, by did; handle and name are display snapshots */
+	features?: FeaturedArtist[];
+	/** self-labelled sexually explicit audio, hidden until a listener opts in */
+	explicit?: boolean;
+	/** closed: the audio goes into a space and these open it. absent or empty means open to everyone */
+	waysIn?: Rule[];
+}
+
+export interface FeaturedArtist { did: string; handle?: string; displayName?: string }
+
+/** how a client closes a new track before its record is written, and opens it to its ways in after */
+export interface UploadAccess {
+	/** put the audio into the track's own space; returns the public record to write */
+	protect(record: Record<string, unknown>, rkey: string): Promise<Record<string, unknown>>;
+	/** write a policy for each rule the track's space doesn't already have */
+	addWaysIn(trackUri: string, rules: Rule[]): Promise<void>;
 }
 
 async function uploadBlob(rpc: RepoRpc, file: MediaFile, assertSession: () => void) {
@@ -73,7 +90,7 @@ const viewerLikes = new WeakMap<RepoRpc, ViewerLikes>();
 type PdsSession = Pick<Auth<RepoRpc>, 'did' | 'rpc'>;
 type CommentAttempt = { rkey: string; createdAt: string };
 
-export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, getAuth, newRkey, catalogChanged, deliverAudio }: {
+export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, getAuth, newRkey, catalogChanged, deliverAudio, access }: {
   NSID: AuthConfig['NSID'];
   api: Pick<ReturnType<typeof createApi>, 'awaitRecord' | 'track'>;
   createStorage: CreateStorage;
@@ -82,6 +99,8 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
   catalogChanged: (did: string, scope: CatalogScope) => void;
   /** stores the audio at the streaming origin before the record is written */
   deliverAudio?: DeliverAudio;
+  /** closing support, when this session may close music */
+  access?: UploadAccess;
 }) {
 	const catalogScopes: Record<string, CatalogScope> = {
 		[NSID.track]: 'tracks', [NSID.list]: 'collections', [NSID.like]: 'likes', [NSID.profile]: 'profile'
@@ -374,14 +393,26 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 		assertSession();
 		if (!input.file.type.startsWith('audio/')) throw new Error('pick an audio file');
 		if (input.file.size > MAX_AUDIO_BYTES) throw new Error('audio files are limited to 100 MB');
+		const closed = !!input.waysIn?.length;
+		if (closed && !access) throw new Error('sign in again to allow closing your music');
 		const uploaded = await uploadBlob(rpc, input.file, assertSession);
 		assertSession();
 		const cid = (uploaded.blob as { ref: { $link: string } }).ref.$link;
-		await deliverAudio?.({ uri: reservation.uri, name: input.file.name, type: input.file.type, bytes: new Uint8Array(uploaded.bytes), cid });
+		// a closed track's audio never goes to the public streaming origin
+		if (!closed) await deliverAudio?.({ uri: reservation.uri, name: input.file.name, type: input.file.type, bytes: new Uint8Array(uploaded.bytes), cid });
 		assertSession();
-		const record = await prepareTrackRecord(input);
+		const prepared = await prepareTrackRecord(input);
 		assertSession();
-		return publishCreate(reservation, { ...record, audioBlob: uploaded.blob }, draft && { ...draft, autoTag: input.autoTag });
+		let record: Record<string, unknown> = { ...prepared, audioBlob: uploaded.blob };
+		// the audio lands in the space before the public record exists, so the track is never open, even briefly
+		// and its ways in are written before the record too: a crash after publishing can't leave it with none
+		if (closed) {
+			record = await access!.protect(record, reservation.rkey);
+			assertSession();
+			await access!.addWaysIn(reservation.uri, input.waysIn!);
+		}
+		assertSession();
+		return publishCreate(reservation, record, draft && { ...draft, autoTag: input.autoTag });
 	}
 
 	async function prepareTrackRecord(input: NewTrack) {
@@ -399,6 +430,8 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 		if (tags !== undefined) record.tags = tags;
 		if (input.description?.trim()) record.description = input.description.trim();
 		if (input.duration && Number.isFinite(input.duration)) record.duration = Math.round(input.duration);
+		if (input.features?.length) record.features = input.features.slice(0, 10).map(({ did, handle, displayName }) => ({ did, ...(handle ? { handle } : {}), ...(displayName ? { displayName } : {}) }));
+		if (input.explicit) record.labels = { $type: 'com.atproto.label.defs#selfLabels', values: [{ val: 'sexual' }] };
 		if (input.artwork) Object.assign(record, await uploadArtwork(input.artwork));
 		assertSession();
 
@@ -516,5 +549,10 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 			}, draft),
 		});
 	}
-	return { albumOrganization, collectionOrder, myLikes, like, unlike, newCommentAttempt, comment, deleteComment, createPlaylist, addToPlaylist, removeFromPlaylist, renameCollection, deleteCollection, deletePlaylist, uploadTrack, myProfile, saveProfile, myTrack, editTrack, deleteTrack, reserveCreate, pendingCreates, recoverCreate, dismissCreate, archiveCreate, prepareTrackRecord, uploadedTrack, archiveUploadedTrack };
+	async function addWaysIn(trackUri: string, rules: Rule[]) {
+		if (!access) throw new Error('sign in again to allow changing who can listen');
+		await access.addWaysIn(trackUri, rules);
+	}
+
+	return { addWaysIn, albumOrganization, collectionOrder, myLikes, like, unlike, newCommentAttempt, comment, deleteComment, createPlaylist, addToPlaylist, removeFromPlaylist, renameCollection, deleteCollection, deletePlaylist, uploadTrack, myProfile, saveProfile, myTrack, editTrack, deleteTrack, reserveCreate, pendingCreates, recoverCreate, dismissCreate, archiveCreate, prepareTrackRecord, uploadedTrack, archiveUploadedTrack };
 }

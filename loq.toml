@@ -573,7 +573,7 @@ max_lines = 511
 
 [[rules]]
 path = "next/core/src/pds.ts"
-max_lines = 520
+max_lines = 558
 
 [[rules]]
 path = "next/backend/README.md"
@@ -582,3 +582,7 @@ max_lines = 515
 [[rules]]
 path = "next/app/src/playback.tsx"
 max_lines = 507
+
+[[rules]]
+path = "next/web/src/lib/publishing/UploadForm.svelte"
+max_lines = 586

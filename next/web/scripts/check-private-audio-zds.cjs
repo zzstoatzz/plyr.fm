@@ -29,19 +29,14 @@ async function checkOwnerTrack(page, audio, previousSource, origin, appView, coo
   const shortAudio = Buffer.from(audio.subarray(0, 44 + 8000 * 2 * 4));
   shortAudio.writeUInt32LE(shortAudio.length - 8, 4);
   shortAudio.writeUInt32LE(shortAudio.length - 44, 40);
-  const policy = page.getByRole('navigation', { name: 'Who can listen' });
   const editor = page.locator('form:visible');
-  await editor.getByRole('textbox', { name: 'title', exact: true }).fill(ownerTitle);
   await editor.getByLabel('audio file', { exact: true }).setInputFiles({ name: 'fixture.wav', mimeType: 'audio/wav', buffer: shortAudio });
-  await policy.getByRole('link', { name: 'only you' }).click();
-  await page.waitForURL('**/upload?visibility=only-you');
-  assert.equal(await editor.getByRole('textbox', { name: 'title', exact: true }).inputValue(), ownerTitle);
-  await editor.getByText(/fixture\.wav/).waitFor();
+  await editor.getByRole('textbox', { name: 'title', exact: true }).fill(ownerTitle);
   await editor.getByRole('combobox', { name: 'tags', exact: true }).fill('field,ambient,');
-  await policy.getByRole('link', { name: 'everyone' }).click();
+  // only you is closed with no ways in: one form, no separate private page
+  await editor.getByRole('radiogroup', { name: 'who can listen' }).getByRole('radio').nth(1).check();
+  await editor.getByText('no ways in means only you can play it', { exact: false }).waitFor();
   assert.equal((await editor.locator('.tag-input .chip').allInnerTexts()).map(text => text.replace(/×$/, '').trim()).join('\n'), 'field\nambient');
-  await policy.getByRole('link', { name: 'only you' }).click();
-  await editor.getByRole('textbox', { name: 'artist', exact: true }).fill('fixture artist');
   await page.getByRole('button', { name: 'upload', exact: true }).click();
   await page.waitForURL('**/portal');
   const row = page.getByRole('list', { name: 'Your tracks' }).getByRole('listitem').filter({ hasText: ownerTitle });
