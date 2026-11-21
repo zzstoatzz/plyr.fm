@@ -40,7 +40,7 @@ async function fixture(browser, width, scheme, fastChange = false) {
     if (url.pathname === '/tracks/42') return route.fulfill({ json: { atproto_record_uri: tracks[0].record.uri } });
     if (url.pathname !== '/radio/state' || !slugs.includes(slug)) return route.abort();
     assert.equal(route.request().method(), 'GET');
-    assert.equal(url.searchParams.get('catalog_only'), 'true');
+    assert.equal(url.searchParams.get('catalog_only'), slug === 'firehose' ? 'false' : 'true', 'only the broadcasting station asks for its live stream');
     const now = Date.now();
     if (!starts.has(slug)) starts.set(slug, now);
     const start = starts.get(slug);
@@ -181,6 +181,7 @@ async function broadcastFlow(browser, origin, width) {
     const now = page.getByRole('dialog', { name: 'Now playing' });
     await now.getByRole('heading', { name: 'firehose', exact: true }).waitFor();
     await now.getByText('live · firehose radio', { exact: true }).waitFor();
+    assert.equal(await now.getByRole('link', { name: 'the atproto firehose, sonified' }).count(), 0, 'a broadcast has no artist page to link to');
     await page.waitForFunction(() => window.media.some(media => !media.paused && media.currentTime > 0.5), null, { timeout: 15_000 });
     assert.deepEqual(await page.evaluate(() => { const meta = navigator.mediaSession.metadata; return meta && [meta.title, meta.artist, meta.album, meta.artwork.length, navigator.mediaSession.playbackState]; }),
       ['firehose', 'the atproto firehose, sonified', 'firehose radio', 1, 'playing'], 'the broadcast fills the lock screen');

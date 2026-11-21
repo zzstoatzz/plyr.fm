@@ -6,7 +6,7 @@ export const radioStations = [
   { slug: 'fresh', label: 'fresh' },
   { slug: 'deep-cuts', label: 'deep cuts' },
   { slug: 'slop', label: 'slop' },
-  { slug: 'firehose', label: 'firehose', about: 'the atproto firehose, sonified' },
+  { slug: 'firehose', label: 'firehose', about: 'the atproto firehose, sonified', broadcasts: true },
 ] as const;
 
 export type RadioStation = typeof radioStations[number];
@@ -120,8 +120,18 @@ export function parseRadio(state: StateResponse, receivedAt: number, now = Date.
   });
 }
 
+/** A broadcasting station must not ask for catalog only: the api leaves its live stream out of that answer. */
+export function radioStateUrl(station: RadioStation) {
+  return `${STATE_URL}?station=${encodeURIComponent(station.slug)}&catalog_only=${!('broadcasts' in station)}`;
+}
+
+/** The made-up track a broadcast airs as: nothing to like, count, share or link to. */
+export function isBroadcast(track: Pick<Track, 'id'>) {
+  return track.id.startsWith('live:');
+}
+
 export async function readRadio(station: RadioStation, signal: AbortSignal): Promise<RadioSnapshot> {
-  const response = await fetch(`${STATE_URL}?station=${encodeURIComponent(station.slug)}&catalog_only=true`, { signal, cache: 'no-store' });
+  const response = await fetch(radioStateUrl(station), { signal, cache: 'no-store' });
   if (!response.ok) throw new Error('could not reach this station');
   return parseRadio(await response.json(), performance.now(), Date.now(), station);
 }

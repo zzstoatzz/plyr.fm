@@ -479,7 +479,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     }
   };
   const shown = value.current;
-  useRemoteTrackControls(player, shown && ready && !remoteOutput && !lockScreenSuspended ? {
+  useRemoteTrackControls(player, lockScreenSuspended ? 'yielded' : shown && ready && !remoteOutput ? {
     metadata: { title: shown.metadata.title, artist: shown.metadata.artist_name || shown.artist.profile.display_name || shown.artist.profile.handle, artworkUrl: trackArtwork(shown) },
     previous: value.canSeek ? value.previous : undefined,
     next: value.canSeek && (value.index + 1 < value.queue.length || !value.jam && (value.keepPlaying || value.repeat === 'all')) ? () => void value.next() : undefined,

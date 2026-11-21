@@ -70,3 +70,15 @@ test('ownership loss clears controls and cleanup removes the subscription', () =
   assert.equal(removed(), 1);
   assert.equal(cleared(), 2);
 });
+
+test('yielding to another player forgets the controls without clearing them, and claims again later', () => {
+  const { controls, configured, cleared, command } = setup();
+  let calls = 0;
+  controls.update({ metadata: { title: 'queue' }, next: () => { calls++; } });
+  controls.update('yielded');
+  command('next');
+  assert.equal(calls, 0, 'commands for the yielded player are ignored');
+  assert.equal(cleared(), 0, 'yielding never clears what the other player claimed');
+  controls.update({ metadata: { title: 'queue' }, next: () => { calls++; } });
+  assert.equal(configured.length, 2, 'the same track claims the lock screen again after a yield');
+});

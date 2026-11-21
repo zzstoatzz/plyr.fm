@@ -79,22 +79,25 @@ export function RadioProvider({ children }: { children: ReactNode }) {
   }, [accounting, audio, listening, source, status.isLoaded]);
 
   // The lock screen and headphones pause and resume the radio player directly; follow them so the app agrees.
-  const heard = useRef<string | null>(null);
-  const wasPlaying = useRef(false);
+  // A new song starts unarmed: the old item's last statuses, and the pause that swaps it out, are not the listener's.
+  const mirror = useRef({ source, armed: false, playing: false });
   useEffect(() => {
     const playing = status.playing;
-    if (playing) heard.current = source;
-    if (playing !== wasPlaying.current) {
-      wasPlaying.current = playing;
-      if (playing && !listening && source) setListening(true);
-      else if (!playing && listening && source && heard.current === source && status.isLoaded && !status.isBuffering && !status.didJustFinish) setListening(false);
-    }
-  }, [status.playing, status.isLoaded, status.isBuffering, status.didJustFinish, listening, source]);
+    if (mirror.current.source !== source) mirror.current = { source, armed: false, playing: false };
+    const now = mirror.current;
+    if (!now.armed) { if (!playing) now.armed = true; return; }
+    if (playing === now.playing) return;
+    now.playing = playing;
+    if (playing) { if (!listening && source) setListening(true); return; }
+    const ending = !song?.live && status.duration > 0 && status.currentTime >= status.duration - 1.5;
+    if (listening && source && status.isLoaded && !status.isBuffering && !status.didJustFinish && !ending) setListening(false);
+  }, [status.playing, status.isLoaded, status.isBuffering, status.didJustFinish, status.currentTime, status.duration, listening, source, song?.live]);
 
-  useRemoteTrackControls(audio, station && song && listening ? {
+  // Stays on the lock screen while paused, so play there brings the station back.
+  useRemoteTrackControls(audio, station && song ? {
     metadata: { title: song.title, artist: song.artist, albumTitle: `${station.label} radio`, artworkUrl: song.artwork ?? undefined },
     live: true,
-  } : null);
+  } : solo.status.playing || solo.loading ? 'yielded' : null);
 
   const value = useMemo<Radio>(() => ({
     station, snapshot, song, feedError, listening, status,

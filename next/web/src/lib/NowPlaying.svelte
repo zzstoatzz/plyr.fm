@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { isBroadcast } from '@plyr/next-core/radio';
 	import { onMount } from 'svelte';
 	import { player } from './player.svelte';
 	import { api } from './api';
@@ -127,7 +128,8 @@
 			</div>
 			<div class="copy">
 				<h1 data-testid="now-playing-title">{player.current.metadata.title}</h1>
-				<a class="subtle" href={resolve('/(app)/u/[actor]', { actor: player.current.artist.profile.handle || player.current.artist.did })}>{artistName(player.current)}</a>
+				{#if isBroadcast(player.current)}<p class="subtle">{artistName(player.current)}</p>
+				{:else}<a class="subtle" href={resolve('/(app)/u/[actor]', { actor: player.current.artist.profile.handle || player.current.artist.did })}>{artistName(player.current)}</a>{/if}
 				{#if player.current.metadata.album}<p class="subtle">{player.current.metadata.album}</p>{/if}
 				<div class="position">{#if player.liveStation}<LiveProgress />{:else}<Scrub stacked comments chapters={chapters.chapters} {chapter} />{/if}</div>
 				<div class="commands" class:live={!!player.liveStation}>

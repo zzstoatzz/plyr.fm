@@ -12,6 +12,7 @@ import { useAppearance } from './appearance';
 import { Cover, artistName } from './CatalogPieces';
 import { ShareLink } from './ShareLink';
 import { TrackLikes } from './TrackLikes';
+import { isBroadcast } from '@plyr/next-core/radio';
 import { usePlayCount } from './use-play-count';
 import { PlayerControl } from './PlayerControl';
 import { usePlayback } from './playback';
@@ -214,13 +215,14 @@ export function NowPlaying({ track, close: leave, navigate: go }: {
                 <Animated.View ref={titleRef} style={carried}><Text testID="now-playing-title" accessibilityRole="header" accessibilityLabel={track.metadata.title} style={titleStyle}>
                   {track.metadata.title}
                 </Text></Animated.View>
-                <View  style={{ alignSelf: 'flex-start', maxWidth: '100%' }}><Pressable accessibilityRole="link" accessibilityLabel={`Artist: ${artistName(track)}`} style={styles.artist} onPress={() => {
+                {isBroadcast(track) ? <Text numberOfLines={1} style={{ ...caption, fontSize: 15 * theme.scale, color: theme.muted }}>{artistName(track)}</Text>
+                : <View  style={{ alignSelf: 'flex-start', maxWidth: '100%' }}><Pressable accessibilityRole="link" accessibilityLabel={`Artist: ${artistName(track)}`} style={styles.artist} onPress={() => {
                   navigate(`/u/${encodeURIComponent(track.artist.profile.handle || track.artist.did)}`);
                 }}>
                   {({ hovered }: { pressed: boolean; hovered?: boolean }) => <>
                     <Text numberOfLines={1} style={{ ...caption, fontSize: 15 * theme.scale, color: hovered ? theme.text : theme.muted, textDecorationLine: hovered ? 'underline' : 'none' }}>{artistName(track)}</Text>
                   </>}
-                </Pressable></View>
+                </Pressable></View>}
                 {!!track.metadata.album && <View  style={{ alignSelf: 'flex-start', maxWidth: '100%' }}>
                   <AlbumLink track={track} navigate={navigate} />
                 </View>}
@@ -250,7 +252,7 @@ export function NowPlaying({ track, close: leave, navigate: go }: {
                 {!player.live && <View><PlayerControl large icon={SkipForward} label="Next" onPress={() => void player.next()} /></View>}
               </View>
               <View style={styles.utilities}>
-                {!player.privatePlayback && <View><TrackLikes key={track.id} track={track} iconOnly returnTo={returnTo} /></View>}
+                {!player.privatePlayback && !isBroadcast(track) && <View><TrackLikes key={track.id} track={track} iconOnly returnTo={returnTo} /></View>}
                 {!player.privatePlayback && <View><ShareLink compact path={`/track/${encodeURIComponent(track.id)}`} /></View>}
                 {commentable && comments.comments.length > 0 && <View><Pressable accessibilityRole="button" accessibilityLabel={seeAll.label} onPress={seeAll.open} style={styles.commentCount}>
                   {({ hovered }: { pressed: boolean; hovered?: boolean }) => <>

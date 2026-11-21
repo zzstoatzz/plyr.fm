@@ -22,10 +22,13 @@ export async function liveStream(url: string, audio: HTMLAudioElement, signal: A
 	return {
 		url,
 		attach(element) {
-			const stream = hls = new Hls();
+			// The element keeps its own src, which the player reads to know media is attached.
+			const stream = hls = new Hls({ preferManagedMediaSource: false });
+			let retries = 0;
+			stream.on(Hls.Events.FRAG_LOADED, () => { retries = 0; });
 			stream.on(Hls.Events.ERROR, (_event, data) => {
 				if (!data.fatal) return;
-				if (data.type === Hls.ErrorTypes.NETWORK_ERROR) stream.startLoad();
+				if (data.type === Hls.ErrorTypes.NETWORK_ERROR && retries++ < 3) stream.startLoad();
 				else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) stream.recoverMediaError();
 				else element.dispatchEvent(new Event('error'));
 			});

@@ -619,7 +619,7 @@ class Player {
 			});
 			if (play) this.#outbox?.enqueue(play);
 			if (play && !this.#embedded && this.#mediaTrack) void scrobble(this.#mediaTrack, play);
-			if (!this.#embedded) showNowPlaying(this.#mediaTrack, this.playing, audio.currentTime);
+			if (!this.#embedded && !this.#liveBroadcast) showNowPlaying(this.#mediaTrack, this.playing, audio.currentTime);
 			this.#jam?.observe();
 		};
 		for (const event of ['timeupdate', 'durationchange', 'play', 'pause', 'playing', 'waiting', 'ended']) {

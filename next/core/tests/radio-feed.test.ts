@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { setImmediate } from 'node:timers/promises';
 import { RadioFeed } from '../src/radio-feed.ts';
-import { nextRead, parseRadio, radioPosition, radioStations } from '../src/radio.ts';
+import { isBroadcast, nextRead, parseRadio, radioPosition, radioStateUrl, radioStations } from '../src/radio.ts';
 import type { RadioSnapshot } from '../src/radio.ts';
 
 function snapshot(position: number): RadioSnapshot {
@@ -159,4 +159,13 @@ test('a live broadcast airs even with an empty rotation, with the station as its
 	assert.doesNotMatch(song.id, /^trk_/, 'a broadcast is never counted as a catalog play');
 	assert.equal(parsed.endsAt, null);
 	assert.equal(radioPosition(parsed, 99_999), 0, 'a broadcast has no position to join at');
+	assert.ok(isBroadcast(song.track));
+});
+
+test('only stations that broadcast ask for the live stream', () => {
+	for (const station of radioStations) {
+		const url = new URL(radioStateUrl(station));
+		assert.equal(url.searchParams.get('station'), station.slug);
+		assert.equal(url.searchParams.get('catalog_only'), station.slug === 'firehose' ? 'false' : 'true');
+	}
 });

@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react';
 import type { AudioPlayer } from 'expo-audio';
-import { attachRemoteTrackControls, type RemoteTrackState } from './remote-track-controls';
+import { attachRemoteTrackControls, type RemoteTrackOwnership } from './remote-track-controls';
 
-export function useRemoteTrackControls(player: AudioPlayer, state: RemoteTrackState | null) {
+export function useRemoteTrackControls(player: AudioPlayer, state: RemoteTrackOwnership) {
   const controls = useRef<ReturnType<typeof attachRemoteTrackControls> | null>(null);
   useEffect(() => {
     const attached = attachRemoteTrackControls(player);
