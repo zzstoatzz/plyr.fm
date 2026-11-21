@@ -8,7 +8,7 @@ import { api } from '../api-client';
 import { useAuth } from '../auth';
 import { getAuth, type Auth } from '../auth-state';
 import { useResource } from '../CatalogPieces';
-import { Sheet } from '../Sheet';
+import { BarButton, Sheet } from '../Sheet';
 import { Action, Copy, Field } from '../controls';
 import { measureAudioDuration, pickMedia } from '../media-picker';
 import { createPds, TrackRevisionConflict, type MediaFile } from '../pds';
@@ -67,14 +67,6 @@ export function TrackEditor({ id }: { id: string }) {
   </> : undefined}>
     <EditorSession key={key} id={id} auth={auth} feedback={feedback} deleted={deleted} />
   </Sheet>;
-}
-
-function BarButton({ label, onPress, disabled, strong }: { label: string; onPress: () => void; disabled?: boolean; strong?: boolean }) {
-  const theme = useAppearance();
-  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} hitSlop={8}
-    style={({ pressed }) => ({ paddingHorizontal: 12, paddingVertical: 10, opacity: disabled ? 0.4 : pressed ? 0.6 : 1 })}>
-    <Text style={{ color: theme.accent, fontFamily: theme.fontFamily, fontSize: 17 * theme.scale, fontWeight: strong ? '700' : '400' }}>{label}</Text>
-  </Pressable>;
 }
 
 function EditorSession({ id, auth, feedback, deleted }: { id: string; auth: Auth; feedback: EditorFeedback; deleted: (title: string) => void }) {

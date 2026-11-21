@@ -10,6 +10,7 @@ import { ArrowsClockwiseIcon } from 'phosphor-react-native/src/icons/ArrowsClock
 import { ArrowSquareOutIcon } from 'phosphor-react-native/src/icons/ArrowSquareOut';
 import { TagIcon } from 'phosphor-react-native/src/icons/Tag';
 import { BooksIcon } from 'phosphor-react-native/src/icons/Books';
+import { CameraIcon } from 'phosphor-react-native/src/icons/Camera';
 import { CaretDownIcon } from 'phosphor-react-native/src/icons/CaretDown';
 import { CaretLeftIcon } from 'phosphor-react-native/src/icons/CaretLeft';
 import { CaretRightIcon } from 'phosphor-react-native/src/icons/CaretRight';
@@ -107,6 +108,7 @@ export const Headphones = icon(HeadphonesIcon);
 export const Heart = icon(HeartIcon);
 export const House = icon(HouseIcon);
 export const ImageSquare = icon(ImageSquareIcon);
+export const Camera = icon(CameraIcon);
 export const Info = icon(InfoIcon);
 export const ListPlus = icon(ListPlusIcon);
 export const Lock = icon(LockIcon);
