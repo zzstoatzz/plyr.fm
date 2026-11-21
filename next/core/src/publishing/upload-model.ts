@@ -5,6 +5,14 @@ export const MAX_SERVICE_AUDIO_BYTES = 1_610_612_736;
 const formats: Record<string, string> = { mp3: 'audio/mpeg', wav: 'audio/wav', flac: 'audio/flac', ogg: 'audio/ogg', m4a: 'audio/mp4', aac: 'audio/aac' };
 export const PUBLIC_AUDIO_FORMATS = 'MP3, WAV, FLAC, AIFF, OGG, Opus, M4A, AAC or WebM';
 const processingFormats: Record<string, string> = { ...formats, aif: 'audio/aiff', aiff: 'audio/aiff', webm: 'audio/webm', opus: 'audio/opus' };
+/**
+ * The `accept` value for an audio file input: every extension an upload takes, and no MIME wildcard.
+ * iOS Safari reads `audio/*` as video, and WebM is typed as video on iOS and Android, so either one
+ * makes a phone's picker offer the photo library and camera. Plain extensions open Files directly.
+ */
+export function audioPickerAccept(touch: boolean): string {
+  return Object.keys(processingFormats).filter(extension => !touch || extension !== 'webm').map(extension => `.${extension}`).join(',');
+}
 export type UploadProcessing = { recipe: 'mp3-320k-44100-v1'; outputBudget: number };
 export type UploadRendition = { duration: number; sizeBytes: number; contentType: 'audio/mpeg'; fileType: 'mp3' };
 export type UploadProcessingFailure = 'output_budget_exceeded' | 'executor_failed' | 'lease_expired';
