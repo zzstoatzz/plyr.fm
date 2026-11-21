@@ -210,10 +210,7 @@ async function queueGroups(browser, phone, scheme) {
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
     await page.screenshot({ path: path.join(output, `${width}-${scheme}-queue-grouped.png`) });
 
-    // move up is the keyboard way to reorder (pointers drag), so it's only drawn while focused
-    const moveUp = upNext.getByRole('button', { name: `Move ${tracks[3].metadata.title} up` });
-    await moveUp.focus();
-    await moveUp.press('Enter');
+    await upNext.getByRole('button', { name: `Move ${tracks[3].metadata.title} up` }).press('Enter'); // keyboard-only control
     await upNext.getByRole('listitem').nth(2).getByRole('link', { name: tracks[3].metadata.title, exact: true }).waitFor();
     await queue.getByRole('button', { name: 'clear your queued tracks' }).click();
     await upNext.getByText('no tracks queued by you.').waitFor();
