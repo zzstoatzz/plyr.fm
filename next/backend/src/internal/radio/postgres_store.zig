@@ -82,10 +82,13 @@ pub const PostgresRadioStore = struct {
         const body = encodeEntries(allocator, entries) catch return error.OutOfMemory;
         const conn = try self.acquire();
         defer self.pool.release(conn);
+        var transaction = try Writable.begin(conn);
+        defer transaction.rollbackUnlessCommitted();
         _ = conn.exec(prune_sql, .{ key.station, key.period - 2 }) catch |err| return failure(conn, "radio prune", err);
         // first writer wins: a concurrent build reads back the winner's rotation
         _ = conn.exec(pin_sql, .{ key.station, @as(i32, @intCast(key.size)), key.period, body }) catch |err| return failure(conn, "radio pin", err);
         const pinned = try peekWith(conn, allocator, key) orelse return error.IndexUnavailable;
+        try transaction.commit();
         return pinned.entries;
     }
 
@@ -100,13 +103,39 @@ pub const PostgresRadioStore = struct {
         const self: *PostgresRadioStore = @ptrCast(@alignCast(context));
         const conn = try self.acquire();
         defer self.pool.release(conn);
-        var result = conn.query(anchor_sql, .{ key.station, @as(i32, @intCast(key.size)), key.period, anchor_us }) catch |err| return failure(conn, "radio anchor", err);
-        defer result.deinit();
+        var transaction = try Writable.begin(conn);
+        defer transaction.rollbackUnlessCommitted();
         var anchor: ?i64 = null;
-        while (result.next() catch |err| return failure(conn, "radio anchor row", err)) |row| {
-            anchor = row.get(i64, 0) catch return error.CorruptProjection;
+        {
+            var result = conn.query(anchor_sql, .{ key.station, @as(i32, @intCast(key.size)), key.period, anchor_us }) catch |err| return failure(conn, "radio anchor", err);
+            defer result.deinit();
+            while (result.next() catch |err| return failure(conn, "radio anchor row", err)) |row| {
+                anchor = row.get(i64, 0) catch return error.CorruptProjection;
+            }
         }
+        try transaction.commit();
         return anchor;
+    }
+};
+
+/// The api's role defaults to read-only transactions; pins are its own
+/// writes, so they ask for a writable transaction explicitly.
+const Writable = struct {
+    conn: *pg.Conn,
+    committed: bool = false,
+
+    fn begin(conn: *pg.Conn) Error!Writable {
+        _ = conn.exec("BEGIN READ WRITE", .{}) catch |err| return failure(conn, "radio begin", err);
+        return .{ .conn = conn };
+    }
+
+    fn commit(self: *Writable) Error!void {
+        _ = self.conn.exec("COMMIT", .{}) catch |err| return failure(self.conn, "radio commit", err);
+        self.committed = true;
+    }
+
+    fn rollbackUnlessCommitted(self: *Writable) void {
+        if (!self.committed) _ = self.conn.exec("ROLLBACK", .{}) catch {};
     }
 };
 
