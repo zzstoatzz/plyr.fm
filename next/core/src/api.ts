@@ -118,6 +118,17 @@ export class ApiError extends Error {
 	}
 }
 
+/** The API's error bodies are written for developers; people see these instead. */
+export function plainError(status: number): string {
+	if (status === 400) return "that didn't work. check it and try again.";
+	if (status === 401) return 'sign in to do that.';
+	if (status === 403) return "you can't do that with this account.";
+	if (status === 404) return "this isn't on plyr.fm. it may have been deleted.";
+	if (status === 409) return "this isn't ready yet. try again in a moment.";
+	if (status === 429) return 'too many tries. wait a moment and try again.';
+	return "plyr.fm couldn't finish that. try again in a moment.";
+}
+
 async function request<T>(url: string, timeout: number, signal?: AbortSignal, init?: RequestInit): Promise<T> {
 	const controller = new AbortController();
 	const abort = () => controller.abort();
@@ -126,11 +137,7 @@ async function request<T>(url: string, timeout: number, signal?: AbortSignal, in
 	const timer = setTimeout(() => controller.abort(), timeout);
 	try {
 		const response = await fetch(url, { ...init, signal: controller.signal });
-		if (!response.ok) {
-			let message = response.statusText;
-			try { const body = await response.json(); message = body?.message ?? body?.error?.message ?? message; } catch {}
-			throw new ApiError(response.status, message);
-		}
+		if (!response.ok) throw new ApiError(response.status, plainError(response.status));
 		return await response.json() as T;
 	} finally {
 		clearTimeout(timer);

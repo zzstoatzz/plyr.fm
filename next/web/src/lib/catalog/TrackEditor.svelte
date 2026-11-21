@@ -9,6 +9,7 @@
   import { canReplaceTrackAudio, TrackWriteUnconfirmed, validateReplacementAudio } from '@plyr/next-core/publishing/track-audio';
   import { recordTags } from '@plyr/next-core/publishing/track-tags';
   import { api } from '$lib/api';
+  import { toast } from '$lib/toast.svelte';
   import { auth } from '$lib/auth';
   import { coverImage } from '$lib/media/cover-image';
   import { fileDuration } from '$lib/media/file-duration';
@@ -47,7 +48,7 @@
   let confirm = $state(false);
   let failure = $state('');
   let conflictNotice = $state<HTMLDivElement>();
-  let saved = $state<{ status: AwaitStatus; deleting: boolean }>();
+  let saved = $state<{ status: AwaitStatus }>();
   const trackPath = $derived(`/track/${encodeURIComponent(id)}`);
   const close = $derived(returnTo ?? trackPath);
   const canReplace = $derived(!!track && isOpen(track) && !!revision && canReplaceTrackAudio(revision.value));
@@ -122,13 +123,21 @@
     try {
       const duration = !deleting && audio ? await fileDuration(audio).catch(() => undefined) : undefined;
       if (!current()) return;
-      const status = deleting ? await pds.deleteTrack(track.record.uri) : await pds.editTrack(track.record.uri, {
+      if (deleting) {
+        // The record is gone from the PDS once this resolves; the catalog follows on its own, so there is nothing left to edit.
+        await pds.deleteTrack(track.record.uri);
+        if (!current()) return;
+        toast.add(`deleted "${track.metadata.title}"`, 'success');
+        await goto('/portal', { replaceState: true, invalidateAll: true });
+        return;
+      }
+      const status = await pds.editTrack(track.record.uri, {
         title, album, description, artwork, tags: tagsEdited ? tags.split('\n') : undefined,
         audio: audio ? { file: audio, duration } : undefined
       }, revision);
       if (!current()) return;
-      saved = { status, deleting };
-      if (status === 'indexed' || status === 'deleted' || status === 'absent') await goto(deleting ? '/portal' : trackPath, { replaceState: true, invalidateAll: true });
+      saved = { status };
+      if (status === 'indexed' || status === 'deleted' || status === 'absent') await goto(trackPath, { replaceState: true, invalidateAll: true });
     } catch (error) {
       if (!current()) return;
       conflict = error instanceof TrackRevisionConflict || error instanceof TrackWriteUnconfirmed;
@@ -149,7 +158,7 @@
     <button class="text-button" onclick={load}>retry loading track</button>
   {:else if saved}
     <p role="status" class="state">{saved.status === 'rejected' ? 'your change was saved. the catalog could not apply it.' : 'your change was saved. the catalog is catching up.'}</p>
-    <a class="text-button" href={saved.deleting ? '/portal' : trackPath}>{saved.deleting ? 'back to your music' : 'view track'}</a>
+    <a class="text-button" href={trackPath}>view track</a>
   {:else}
     {#if conflict}
       <div class="editor-error" bind:this={conflictNotice} tabindex="-1">

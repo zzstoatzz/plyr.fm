@@ -4,7 +4,7 @@ import { Text } from './Text';
 import { Link, type Href } from 'expo-router';
 import { useCallback, useContext, useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
 import { Animated, PixelRatio, Pressable, StyleSheet, View, type ViewInstance } from 'react-native';
-import type { ListSummary, Page, Track } from '@plyr/next-core/api';
+import { ApiError, type ListSummary, type Page, type Track } from '@plyr/next-core/api';
 import { Action, Copy } from './controls';
 import { WaveLoading } from './WaveLoading';
 import { compactCount, formatDuration } from './home-state';
@@ -14,7 +14,8 @@ import { artworkShadow, cardSurface } from './materials';
 
 export type Play = (track: Track, queue?: Track[], label?: string) => void;
 export type TrackActions = (track: Track) => ReactNode;
-type Result<T> = { data?: T; error?: string };
+/** `gone` marks a load that found nothing there, where retrying will not help. */
+type Result<T> = { data?: T; error?: string; gone?: boolean };
 
 export function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'could not load the catalog.';
@@ -31,7 +32,7 @@ export function useResource<T>(load: () => Promise<T>, delay = 0, keepDataOnRetr
     const timer = setTimeout(() => {
       void load().then(
         (data) => { if (current) setResult({ data }); },
-        (error: unknown) => { if (current) setResult({ error: errorMessage(error) }); },
+        (error: unknown) => { if (current) setResult({ error: errorMessage(error), gone: error instanceof ApiError && error.status === 404 }); },
       );
     }, delay);
     return () => {

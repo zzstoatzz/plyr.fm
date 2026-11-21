@@ -303,6 +303,7 @@ async function run(browser, accounts, width, theme, mp3) {
     await main.getByRole('button', { name: 'delete track', exact: true }).click();
     await main.getByRole('button', { name: 'confirm delete' }).click();
     await page.waitForURL(origin + '/portal');
+    await page.getByText('deleted "recording after edit"', { exact: true }).waitFor();
     await main.getByRole('link', { name: 'edit recording after edit' }).waitFor({ state: 'detached' });
     assert.equal((await pdsRecord(collection, rkey)).error, 'RecordNotFound');
     assert.deepEqual(errors, []);
