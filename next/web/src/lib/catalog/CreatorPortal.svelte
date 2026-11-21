@@ -16,6 +16,7 @@
   import Loading from '$lib/ui/Loading.svelte';
   import { portalFor } from './portal';
   import SellCard from './SellCard.svelte';
+  import DeleteTrackSheet from './DeleteTrackSheet.svelte';
 
   type Tab = 'tracks' | 'albums';
   let { account }: { account: ReturnType<typeof auth.getAuth> & { did: NonNullable<ReturnType<typeof auth.getAuth>['did']>; rpc: NonNullable<ReturnType<typeof auth.getAuth>['rpc']> } } = $props();
@@ -47,7 +48,9 @@
         : sort === 'plays' ? b.metrics.play_count - a.metrics.play_count : 0);
   });
   const publicPath = $derived('/u/' + encodeURIComponent(account.handle || did));
-  const music = $derived([...tracks.data, ...ownerTracks].sort((a, b) => b.metadata.created_at.localeCompare(a.metadata.created_at)));
+  let removed = $state<ReadonlySet<string>>(new Set());
+  let deleteSheet: DeleteTrackSheet;
+  const music = $derived([...tracks.data, ...ownerTracks].filter(track => !removed.has(track.record.uri)).sort((a, b) => b.metadata.created_at.localeCompare(a.metadata.created_at)));
   const catalog = $derived(tab === 'tracks' ? tracks : albums);
   let live = false;
   const current = () => live && auth.getAuth().rpc === account.rpc;
@@ -206,10 +209,14 @@
             <a href={trackHref(track)}>{track.metadata.title}</a>
             <p class="subtle">{subtitle(track)}</p>
           </div>
-          {#if !isPrivateTrack(track)}<a class="icon-button" href={`/edit-track/${track.id}?return_to=%2Fportal`} aria-label={`edit ${track.metadata.title}`}><Icon name="edit" size={18} /></a>{/if}
+          {#if !isPrivateTrack(track)}<div class="row-actions">
+            <a class="icon-button" href={`/edit-track/${track.id}?return_to=%2Fportal`} aria-label={`edit ${track.metadata.title}`}><Icon name="edit" size={18} /></a>
+            <button class="icon-button" type="button" aria-label={`delete ${track.metadata.title}`} onclick={() => deleteSheet.open(track)}><Icon name="trash" size={18} /></button>
+          </div>{/if}
         </li>
       {/each}
     </ul>
+    <DeleteTrackSheet bind:this={deleteSheet} ondeleted={track => { removed = new Set(removed).add(track.record.uri); }} />
     {#if music.length && !matchingMusic.length && !catalog.loading && !ownerLoading}
       <p class="state" role="status">{tracks.cursor || ownerCursor ? 'no matches in loaded tracks' : 'no matching tracks'}</p>
     {/if}
@@ -267,6 +274,7 @@
   .tabs button { border: 0; border-radius: 0.5rem 0.5rem 0 0; padding: 0.7rem 1rem; background: none; color: var(--muted); }
   .tabs button[aria-selected='true'] { color: var(--text); box-shadow: inset 0 -2px var(--accent); }
   ul { list-style: none; padding: 0; margin: 0 0 0.65rem; }
+  .row-actions { display: flex; flex: none; }
   li { display: flex; align-items: center; gap: 0.7rem; padding: 0.45rem 0; border-bottom: 1px solid var(--line); }
   .thumb { width: 3.25rem; flex: 0 0 3.25rem; border-radius: 0.35rem; }
   h1 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; font-size: clamp(1.35rem, 4.8vw, 1.85rem); line-height: 1.25; }
