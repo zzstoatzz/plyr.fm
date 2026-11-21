@@ -26,7 +26,15 @@ test('native commands use the current queue callbacks without re-registering on 
   command('previous');
   assert.deepEqual(calls, ['next', 'previous']);
   assert.equal(configured.length, 1);
-  assert.deepEqual(configured[0][2], { showNextTrack: true, showPreviousTrack: true, showSeekForward: false, showSeekBackward: false });
+  assert.deepEqual(configured[0][2], { showNextTrack: true, showPreviousTrack: true, showSeekForward: false, showSeekBackward: false, isLiveStream: false });
+});
+
+test('radio claims the lock screen as a live stream with no skipping', () => {
+  const { controls, configured } = setup();
+  controls.update({ metadata: { title: 'firehose', artist: 'the atproto firehose, sonified', albumTitle: 'firehose radio', artworkUrl: 'https://relay.test/cover.png' }, live: true });
+  assert.equal(configured.length, 1);
+  assert.equal(configured[0][1]?.artworkUrl, 'https://relay.test/cover.png');
+  assert.deepEqual(configured[0][2], { showNextTrack: false, showPreviousTrack: false, showSeekForward: false, showSeekBackward: false, isLiveStream: true });
 });
 
 test('tail and permission changes disable commands and ignore already queued native events', () => {

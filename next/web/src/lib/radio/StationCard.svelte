@@ -3,6 +3,7 @@
   import type { RadioStation } from '@plyr/next-core/radio';
   import { player } from '$lib/player.svelte';
   import Artwork from '$lib/ui/Artwork.svelte';
+  import { preloadLiveStream } from '$lib/media/live-stream';
   import { feeds, tuneRadio } from './station';
 
   let { station }: { station: RadioStation } = $props();
@@ -10,6 +11,8 @@
   let active = $derived(player.liveStation === station);
   let featured = $derived('about' in station);
   let song = $derived(feedState?.snapshot?.currentSong);
+
+  $effect(() => { if (song?.live) preloadLiveStream().catch(() => {}); });
 
   onMount(() => {
     const feed = feeds.get(station.slug);
@@ -26,7 +29,7 @@
   <span class="info">
     <strong><span class="dot" class:on={active && player.liveListening}></span>{station.label}</strong>
     {#if 'about' in station}<span class="subtle about">{station.about}</span>{/if}
-    <span class="subtle truncate">{song ? song.title + ' · ' + song.artist : feedState?.error ? 'off air for a moment' : 'tuning in…'}</span>
+    <span class="subtle truncate">{song?.live ? 'on air now' : song ? song.title + ' · ' + song.artist : feedState?.error ? 'off air for a moment' : 'tuning in…'}</span>
   </span>
 </button>
 

@@ -2,6 +2,8 @@ import type { AudioEvents, AudioMetadata, AudioPlayer } from 'expo-audio';
 
 export interface RemoteTrackState {
   metadata: AudioMetadata;
+  /** Radio: no scrubber, no skipping, the lock screen shows it as live. */
+  live?: boolean;
   next?(): void;
   previous?(): void;
 }
@@ -19,12 +21,12 @@ export function attachRemoteTrackControls(player: RemotePlayer) {
   return {
     update(state: RemoteTrackState | null) {
       current = state;
-      const key = state ? JSON.stringify([state.metadata, !!state.next, !!state.previous]) : '';
+      const key = state ? JSON.stringify([state.metadata, !!state.next, !!state.previous, !!state.live]) : '';
       if (key === configured) return;
       configured = key;
       if (state) player.setActiveForLockScreen(true, state.metadata, {
         showNextTrack: !!state.next, showPreviousTrack: !!state.previous,
-        showSeekForward: false, showSeekBackward: false,
+        showSeekForward: false, showSeekBackward: false, isLiveStream: !!state.live,
       });
       else player.clearLockScreenControls();
     },

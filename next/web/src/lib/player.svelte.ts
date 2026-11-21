@@ -20,6 +20,7 @@ import { auth } from './auth';
 import { authConfig } from './auth-config';
 import { playbackSource } from './media/playback-source';
 import type { AudioSource } from './media/gated-audio';
+import { liveStream } from './media/live-stream';
 import { consumeQueueLogin, registerQueueLogin } from './storage/queue-login';
 import { playOutboxStorage } from './storage/play-outbox-storage';
 import { queueStorage } from './storage/queue-storage';
@@ -69,6 +70,7 @@ class Player {
 	#liveClock: (() => number) | undefined;
 	#liveOccurrence: string | undefined;
 	#liveSync = 0;
+	#liveBroadcast = false;
 	#embedded = false;
 	get outputElsewhere() { return !this.localMode && this.snapshot.outputElsewhere; }
 	#publicRepeat: PersonalPlaybackTarget['repeat'] = 'off';
@@ -391,19 +393,22 @@ class Player {
 		this.#leaveRadio = undefined;
 		this.#liveClock = undefined;
 		this.#liveOccurrence = undefined;
+		this.#liveBroadcast = false;
 		this.liveStation = undefined;
 		this.liveListening = false;
 		this.#liveSync++;
 	}
 
-	async setRadioTrack(track: Track, url: string, occurrence: string, clock: () => number) {
+	async setRadioTrack(track: Track, url: string, occurrence: string, clock: () => number, broadcast = false) {
 		if (!this.liveStation) return;
 		this.#liveClock = clock;
 		if (this.#liveOccurrence === occurrence) return;
 		this.#liveOccurrence = occurrence;
+		this.#liveBroadcast = broadcast;
 		this.queue = [track];
 		this.index = 0;
-		const ready = await this.#loadMedia(track, async () => ({ url }), track.id.startsWith('trk_'));
+		const audio = this.#audioElement();
+		const ready = await this.#loadMedia(track, signal => broadcast ? liveStream(url, audio, signal) : Promise.resolve({ url }), track.id.startsWith('trk_'));
 		if (ready) void this.#resumeRadio();
 	}
 
@@ -445,7 +450,8 @@ class Player {
 		try {
 			await this.#ready();
 			if (!current()) return;
-			this.#setPosition(Math.min(clock(), this.duration));
+			if (this.#liveBroadcast) this.#joinLiveEdge();
+			else this.#setPosition(Math.min(clock(), this.duration));
 			this.#playMedia();
 		} catch {
 			if (current()) {
@@ -454,6 +460,14 @@ class Player {
 				this.error = 'could not play this station';
 			}
 		}
+	}
+
+	/** A broadcast has no shared clock: listening again means catching up to what is on air now. */
+	#joinLiveEdge() {
+		const audio = this.#audio;
+		if (!audio?.seekable.length) return;
+		const edge = audio.seekable.end(audio.seekable.length - 1);
+		if (edge - audio.currentTime > 8) audio.currentTime = Math.max(0, edge - 3);
 	}
 
 	forgetPrivateTrack(uri: string) {
@@ -701,6 +715,7 @@ class Player {
 			source.signal.throwIfAborted();
 			this.#releaseMedia = media.release;
 			if (this.#embedAnalysis) await this.#embedAnalysis.load(audio, media.url, source.signal);
+			else if (media.attach) media.attach(audio);
 			else audio.src = media.url;
 			source.signal.throwIfAborted();
 			this.#mediaTrack = track;

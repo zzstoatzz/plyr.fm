@@ -1,11 +1,11 @@
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useMediaSession } from './media-session';
 import { PlaybackScope, usePlayback } from './playback-context';
 import { useAppPreferences } from './preference-context';
 import { radioPosition, type RadioSnapshot, type RadioSong, type RadioStation } from '@plyr/next-core/radio';
 import { usePlayerAccounting } from './use-player-accounting';
 import { useRadioFeed } from './use-radio-feed';
+import { useRemoteTrackControls } from './use-remote-track-controls';
 
 interface Radio {
   station: RadioStation | null;
@@ -56,7 +56,7 @@ export function RadioProvider({ children }: { children: ReactNode }) {
   }, [accounting, audio, source]);
 
   useEffect(() => {
-    if (!listening || !song) return;
+    if (!listening || !song || song.live) return;
     accounting.begin(song.id, song.durationSeconds);
     return () => accounting.stop();
   }, [accounting, listening, song]);
@@ -74,15 +74,26 @@ export function RadioProvider({ children }: { children: ReactNode }) {
     if (!listening || !source) { audio.pause(); return; }
     if (!status.isLoaded) { audio.play(); return; }
     const live = latest.current;
-    if (live && Math.abs(audio.currentTime - radioPosition(live)) > 2) void accounting.seekTo(radioPosition(live));
+    if (live && !live.currentSong?.live && Math.abs(audio.currentTime - radioPosition(live)) > 2) void accounting.seekTo(radioPosition(live));
     if (!audio.playing) audio.play();
   }, [accounting, audio, listening, source, status.isLoaded]);
 
-  useMediaSession('radio', station && song ? {
-    title: song.title, artist: song.artist, album: `${station.label} radio`, artwork: song.artwork,
-    playing: listening && status.playing,
-    play: () => setListening(true),
-    pause: () => setListening(false),
+  // The lock screen and headphones pause and resume the radio player directly; follow them so the app agrees.
+  const heard = useRef<string | null>(null);
+  const wasPlaying = useRef(false);
+  useEffect(() => {
+    const playing = status.playing;
+    if (playing) heard.current = source;
+    if (playing !== wasPlaying.current) {
+      wasPlaying.current = playing;
+      if (playing && !listening && source) setListening(true);
+      else if (!playing && listening && source && heard.current === source && status.isLoaded && !status.isBuffering && !status.didJustFinish) setListening(false);
+    }
+  }, [status.playing, status.isLoaded, status.isBuffering, status.didJustFinish, listening, source]);
+
+  useRemoteTrackControls(audio, station && song && listening ? {
+    metadata: { title: song.title, artist: song.artist, albumTitle: `${station.label} radio`, artworkUrl: song.artwork ?? undefined },
+    live: true,
   } : null);
 
   const value = useMemo<Radio>(() => ({

@@ -17,7 +17,6 @@ import { gatedAudioUrl, releaseGatedAudioUrl } from './gated-audio';
 import { useJamPlayback } from './use-jam-playback';
 import { usePersonalQueue } from './use-personal-queue';
 import { usePlayerAccounting } from './use-player-accounting';
-import { useMediaSession } from './media-session';
 import { useRemoteTrackControls } from './use-remote-track-controls';
 import { toast } from './toast';
 import { playbackFor, warm } from './playback-lookup';
@@ -480,26 +479,10 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     }
   };
   const shown = value.current;
-  const seekable = value.canSeek && !remoteOutput;
   useRemoteTrackControls(player, shown && ready && !remoteOutput && !lockScreenSuspended ? {
     metadata: { title: shown.metadata.title, artist: shown.metadata.artist_name || shown.artist.profile.display_name || shown.artist.profile.handle, artworkUrl: trackArtwork(shown) },
     previous: value.canSeek ? value.previous : undefined,
     next: value.canSeek && (value.index + 1 < value.queue.length || !value.jam && (value.keepPlaying || value.repeat === 'all')) ? () => void value.next() : undefined,
-  } : null);
-  useMediaSession('player', shown ? {
-    title: shown.metadata.title,
-    artist: shown.metadata.artist_name || shown.artist.profile.display_name || shown.artist.profile.handle,
-    album: shown.metadata.album,
-    artwork: trackArtwork(shown),
-    playing: value.status.playing,
-    position: value.seekPreview ?? value.status.currentTime,
-    duration: value.status.duration || shown.metadata.duration_seconds || 0,
-    play: () => value.setPlaying(true),
-    pause: () => value.setPlaying(false),
-    previous: value.previous,
-    next: value.index + 1 < value.queue.length || value.keepPlaying || value.repeat === 'all' ? () => void value.next() : undefined,
-    seek: seekable ? value.seek : undefined,
-    skip: seekable ? value.skip : undefined,
   } : null);
   return <PlaybackScope value={value}>{children}</PlaybackScope>;
 }

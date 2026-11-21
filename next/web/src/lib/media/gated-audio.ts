@@ -14,6 +14,8 @@ export const { resolveGatedAudio } = createGatedAudio<P256Keypair, LexMap>({
 
 export interface AudioSource {
 	url: string;
+	/** Drives the element itself, for sources a plain `src` cannot play (HLS through hls.js). */
+	attach?(audio: HTMLAudioElement): void;
 	release?(): void;
 }
 

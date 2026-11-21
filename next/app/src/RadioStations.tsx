@@ -61,7 +61,7 @@ function StationWindow({ station, width, height, tuned, listening, onPress }: {
   useEffect(() => {
     for (const next of snapshot?.upNext ?? []) Image.prefetch(displayUrl(next, height, PixelRatio.get())).catch(() => {});
   }, [snapshot?.upNext, height]);
-  const now = song ? `${song.title} · ${song.artist}` : error ? 'off air for a moment' : 'tuning in…';
+  const now = song?.live ? 'on air now' : song ? `${song.title} · ${song.artist}` : error ? 'off air for a moment' : 'tuning in…';
   const name = <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
     <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: listening ? theme.accent : song ? theme.muted : theme.line, opacity: listening ? 1 : 0.6 }} />
     <Text numberOfLines={1} style={{ flexShrink: 1, color: theme.text, fontFamily: theme.fontFamily, fontSize: 16 * theme.scale, fontWeight: '700' }}>{station.label}</Text>
