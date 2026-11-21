@@ -5,12 +5,14 @@ import { api } from './api-client';
 import { type Track } from '@plyr/next-core/api';
 import { useAppearance } from './appearance';
 import { trackArtwork } from '@plyr/next-core/artwork';
-import { PlayingWave } from './PlayingWave';
+import { PlayingArtworkOverlay } from './PlayingWave';
+import { GestureDetector } from 'react-native-gesture-handler';
+import { useTrackPress } from './TrackPress';
 import { useTrackPlayback } from './playback-context';
 import { Cover, type Play } from './CatalogPieces';
 import type { NetworkArtist } from './home-api';
 import { formatDuration, timeAgo } from './home-state';
-import { Play as PlayIcon, Shuffle } from './icons';
+import { Shuffle } from './icons';
 import { cardSurface } from './materials';
 import { Text } from './Text';
 
@@ -45,50 +47,64 @@ export function useFollowingLatest(artists: NetworkArtist[]) {
 }
 
 const name = (track: Track) => track.artist.profile.display_name || track.artist.profile.handle;
+export const followingLabel = 'new from people you know';
 
-export function PlayOneFromEach({ tracks, onPlay }: { tracks: Track[]; onPlay: Play }) {
+/** Plays every person's newest track in a row; an icon on phones so the heading never wraps. */
+export function PlayOneFromEach({ tracks, onPlay, compact }: { tracks: Track[]; onPlay: Play; compact: boolean }) {
   const theme = useAppearance();
   if (tracks.length < 2) return null;
-  return <Pressable accessibilityRole="button" accessibilityLabel={`Play one track from each of ${tracks.length} people you follow`}
-    onPress={() => onPlay(tracks[0], tracks, 'new from people you follow')} style={styles.each}>
-    {({ hovered }: { pressed: boolean; hovered?: boolean }) => <>
-      <Shuffle size={16} color={hovered ? theme.text : theme.muted} />
-      <Text style={{ color: hovered ? theme.text : theme.muted, fontSize: 13.5 * theme.scale, fontWeight: '600' }}>play one from each</Text>
-    </>}
+  return <Pressable accessibilityRole="button" accessibilityLabel="play one from each"
+    onPress={() => onPlay(tracks[0], tracks, followingLabel)} style={styles.each}>
+    {({ hovered, pressed }: { pressed: boolean; hovered?: boolean }) => compact
+      ? <View style={[styles.round, { backgroundColor: pressed ? theme.hover : theme.raised }]}><Shuffle size={16} color={theme.text} /></View>
+      : <>
+        <Shuffle size={16} color={hovered ? theme.text : theme.muted} />
+        <Text style={{ color: hovered ? theme.text : theme.muted, fontSize: 13.5 * theme.scale, fontWeight: '600' }}>play one from each</Text>
+      </>}
   </Pressable>;
 }
 
-/** One person's newest track: the cover with their face on its corner, who posted it and when, and a play button. */
-export function FollowingTrack({ track, tracks, onPlay, now, width }: { track: Track; tracks: Track[]; onPlay: Play; now: number; width?: number }) {
+/** One person's newest track, drawn like a top tracks card: the whole card plays, the title and name link. */
+export function FollowingTrack({ track, tracks, onPlay, now, width }: { track: Track; tracks: Track[]; onPlay: Play; now: number; width: number }) {
   const theme = useAppearance();
   const { current, playing, toggle } = useTrackPlayback(track);
+  const { row, hold, menu } = useTrackPress(track);
   const who = name(track);
-  const profile = { pathname: '/u/[handle]' as const, params: { handle: track.artist.profile.handle || track.artist.did } };
-  return <View testID="following-track" style={[cardSurface(theme), styles.card, width ? { width } : undefined]}>
-    <Link href={profile} asChild><Pressable accessibilityRole="link" accessibilityLabel={who} style={styles.art}>
-      <Cover uri={trackArtwork(track) || track.artist.profile.avatar_url} size={56} radius={8} />
-      <View style={[styles.face, { borderColor: theme.surface }]}><Cover uri={track.artist.profile.avatar_url} size={22} round instant /></View>
-    </Pressable></Link>
-    <View style={styles.text}>
-      <Text numberOfLines={1} style={{ color: theme.faint, fontSize: 12.5 * theme.scale }}><Text style={{ color: theme.muted, fontWeight: '600' }}>{who}</Text> posted</Text>
-      <Text numberOfLines={1} style={{ color: current ? theme.accent : theme.text, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale, fontWeight: '600' }}>{track.metadata.title}</Text>
-      <Text numberOfLines={1} style={{ color: theme.faint, fontSize: 12.5 * theme.scale, fontVariant: ['tabular-nums'] }}>
-        {[timeAgo(track.metadata.created_at, now), formatDuration(track.metadata.duration_seconds)].filter(Boolean).join(' · ')}
-      </Text>
+  const lines = [14, 12].map(size => Math.ceil(size * theme.scale * 1.3));
+  const when = timeAgo(track.metadata.created_at, now);
+  return <GestureDetector gesture={hold}><View ref={row} testID="following-track" style={[cardSurface(theme), styles.card, { width }]}>
+    <Pressable testID="track-play-control" accessibilityRole="button" accessibilityLabel={`${playing ? 'Pause' : 'Play'} ${track.metadata.title} by ${who}`}
+      onPress={() => toggle(() => onPlay(track, tracks, followingLabel))}
+      style={({ pressed }) => [StyleSheet.absoluteFill, { borderRadius: 8, backgroundColor: pressed ? theme.hover : 'transparent' }]} />
+    <View pointerEvents="none" style={styles.art}>
+      <Cover uri={trackArtwork(track) || track.artist.profile.avatar_url} size={48} radius={6} />
+      {playing && <PlayingArtworkOverlay />}
+      <View style={[styles.face, { borderColor: theme.card }]}><Cover uri={track.artist.profile.avatar_url} size={20} round instant /></View>
     </View>
-    <Pressable accessibilityRole="button" accessibilityLabel={`${playing ? 'Pause' : current ? 'Resume' : 'Play'} ${track.metadata.title} by ${who}`}
-      onPress={() => toggle(() => onPlay(track, tracks, 'new from people you follow'))}
-      style={[styles.play, { backgroundColor: current ? theme.accent : theme.raised }]}>
-      {playing ? <PlayingWave size={16} color={theme.onAccent} /> : <PlayIcon size={15} color={current ? theme.onAccent : theme.text} fill={current ? theme.onAccent : theme.text} />}
-    </Pressable>
-  </View>;
+    <View pointerEvents="box-none" style={styles.text}>
+      <Link href={{ pathname: '/track/[id]', params: { id: track.id } }} asChild><Pressable accessibilityRole="link" accessibilityLabel={`Track details: ${track.metadata.title}`} hitSlop={{ top: 6, bottom: 2, right: 8 }} style={styles.link}>
+        <Text numberOfLines={1} style={{ color: current ? theme.accent : theme.text, fontSize: 14 * theme.scale, lineHeight: lines[0], fontWeight: '600' }}>{track.metadata.title}</Text>
+      </Pressable></Link>
+      <View pointerEvents="box-none" style={styles.meta}>
+        <Link href={{ pathname: '/u/[handle]', params: { handle: track.artist.profile.handle || track.artist.did } }} asChild><Pressable accessibilityRole="link" accessibilityLabel={who} hitSlop={{ top: 2, bottom: 6, right: 4 }} style={styles.who}>
+          <Text numberOfLines={1} style={{ color: theme.muted, fontSize: 12 * theme.scale, lineHeight: lines[1], fontWeight: '600' }}>{who}</Text>
+        </Pressable></Link>
+        {!!when && <Text pointerEvents="none" numberOfLines={1} style={{ color: theme.faint, fontSize: 12 * theme.scale, lineHeight: lines[1], flexShrink: 0 }}> · {when}</Text>}
+      </View>
+    </View>
+    <Text pointerEvents="none" style={{ color: theme.faint, fontSize: 12 * theme.scale, fontVariant: ['tabular-nums'] }}>{formatDuration(track.metadata.duration_seconds)}</Text>
+    {menu}
+  </View></GestureDetector>;
 }
 
 const styles = StyleSheet.create({
-  card: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 10, borderRadius: 14 },
-  art: { width: 62, height: 62, justifyContent: 'center' },
-  face: { position: 'absolute', right: -2, bottom: -2, borderWidth: 2, borderRadius: 13, overflow: 'hidden' },
+  card: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 8 },
+  art: { width: 48, height: 48 },
+  face: { position: 'absolute', right: -5, bottom: -5, borderWidth: 2, borderRadius: 12, overflow: 'hidden' },
   text: { flex: 1, minWidth: 0, gap: 1 },
-  play: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  each: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44, paddingHorizontal: 4 },
+  link: { justifyContent: 'center', alignSelf: 'flex-start', maxWidth: '100%' },
+  meta: { flexDirection: 'row', alignItems: 'center', minWidth: 0 },
+  who: { flexShrink: 1, minWidth: 0 },
+  each: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, minWidth: 44, paddingHorizontal: 4 },
+  round: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
 });

@@ -4,8 +4,10 @@ import { useRef, useState, type ReactNode } from 'react';
 import { ScrollView, StyleSheet, View, type ScrollViewInstance } from 'react-native';
 import { PlayerControl } from './PlayerControl';
 
-export function HomeShelf({ testID, heading, label, busy = false, children }: {
-  testID: string; heading: ReactNode; label: string; busy?: boolean; children: ReactNode;
+export function HomeShelf({ testID, heading, label, busy = false, snap, children }: {
+  testID: string; heading: ReactNode; label: string; busy?: boolean;
+  /** card width plus gap, so a swipe rests on a card's edge rather than halfway through one */
+  snap?: number; children: ReactNode;
 }) {
   const colors = useAppearance();
   const scroller = useRef<ScrollViewInstance>(null);
@@ -21,6 +23,7 @@ export function HomeShelf({ testID, heading, label, busy = false, children }: {
       </View>}
     </View>
     <ScrollView ref={scroller} horizontal testID={`${testID}-items`} showsHorizontalScrollIndicator={false} scrollEnabled={!busy} contentContainerStyle={styles.items}
+      snapToInterval={snap} decelerationRate={snap ? 'fast' : undefined}
       accessibilityState={{ busy }} scrollEventThrottle={32}
       onLayout={event => { const { width } = event.nativeEvent.layout; setView(previous => ({ ...previous, width })); }}
       onContentSizeChange={content => setView(previous => ({ ...previous, content }))}
