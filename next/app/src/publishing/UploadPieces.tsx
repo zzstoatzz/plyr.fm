@@ -9,8 +9,8 @@ import type { MediaFile } from '../pds';
 import { usePreviewUri } from './preview-uri';
 
 export type TrackDraftFields = {
-  file: MediaFile | null; title: string; description: string; tags: string;
-  setFile: (file: MediaFile | null) => void; setTitle: (text: string) => void;
+  file: MediaFile | null; artwork: MediaFile | null; title: string; description: string; tags: string;
+  setFile: (file: MediaFile | null) => void; setArtwork: (file: MediaFile | null) => void; setTitle: (text: string) => void;
   setDescription: (text: string) => void; setTags: (text: string) => void;
 };
 

@@ -9,13 +9,14 @@
 	import { privateMusic } from '$lib/private-library';
 	import { canonicalAudioFile } from '$lib/media/audio-file';
 	import { fileDuration } from '$lib/media/file-duration';
+	import { coverImage } from '$lib/media/cover-image';
 	import Loading from '$lib/ui/Loading.svelte';
 	import Icon from '$lib/ui/Icon.svelte';
 	import { api } from '$lib/api';
 	import { creditName } from '@plyr/next-core/publishing/credit-name';
 
-	let { account, selected, busy = $bindable(false), audio = $bindable(), title = $bindable(''), description = $bindable(''), tags = $bindable(''), visibility }: {
-		account: ReturnType<typeof auth.getAuth>; selected: boolean; busy: boolean; audio: File | undefined; title: string; description: string; tags: string; visibility?: Snippet;
+	let { account, selected, busy = $bindable(false), audio = $bindable(), cover = $bindable(), title = $bindable(''), description = $bindable(''), tags = $bindable(''), visibility }: {
+		account: ReturnType<typeof auth.getAuth>; selected: boolean; busy: boolean; audio: File | undefined; cover: File | undefined; title: string; description: string; tags: string; visibility?: Snippet;
 	} = $props();
 	const pds = $derived(privateMusic(account));
 	let live = false;
@@ -31,6 +32,35 @@
 	let attempt: string | undefined;
 	const active = $derived(pending.some(operation => !operation.archived));
 	let fileInput = $state<HTMLInputElement>();
+	let coverInput = $state<HTMLInputElement>();
+	let coverPreview = $state<string>();
+	let coverProblem = $state('');
+	let imageBusy = $state(false);
+	let imageVersion = 0;
+
+	$effect(() => {
+		const url = cover && URL.createObjectURL(cover);
+		coverPreview = url;
+		if (url) return () => URL.revokeObjectURL(url);
+	});
+
+	async function pickCover(file?: File) {
+		if (!file) return;
+		const version = ++imageVersion;
+		imageBusy = true;
+		coverProblem = '';
+		try {
+			const image = await coverImage(file);
+			if (current() && version === imageVersion) cover = image;
+		} catch (failure) {
+			if (current() && version === imageVersion) {
+				if (coverInput) coverInput.value = '';
+				coverProblem = failure instanceof Error ? failure.message : 'could not open the cover.';
+			}
+		} finally {
+			if (current() && version === imageVersion) imageBusy = false;
+		}
+	}
 
 	onMount(() => {
 		live = true;
@@ -70,6 +100,8 @@
 		if (!current() || attempt !== operation.rkey) return;
 		attempt = undefined;
 		audio = undefined;
+		cover = undefined;
+		if (coverInput) coverInput.value = '';
 		title = '';
 		description = '';
 		tags = '';
@@ -78,8 +110,8 @@
 
 	function upload() {
 		const file = audio;
-		if (!selected || !file || active) return;
-		const input = { file, title, artist, description, tags: tags.split('\n') };
+		if (!selected || !file || active || imageBusy) return;
+		const input = { file, artwork: cover, title, artist, description, tags: tags.split('\n') };
 		void run(async () => {
 			const duration = await fileDuration(file);
 			if (!current()) return;
@@ -90,7 +122,7 @@
 			results[result.operation.rkey] = result.result;
 			if (result.result.state === 'accepted') {
 				await pds.dismiss(result.operation);
-				if (current() && audio === file && title === input.title && description === input.description && tags === input.tags.join('\n')) reset(result.operation);
+				if (current() && audio === file && cover === input.artwork && title === input.title && description === input.description && tags === input.tags.join('\n')) reset(result.operation);
 				if (current() && selected) await goto(resolve('/(app)/portal'));
 			}
 		});
@@ -149,6 +181,19 @@
 						if (audio && !title) title = audio.name.replace(/\.[^.]+$/, '').slice(0, 256);
 					}} /><span>{audio ? 'change audio' : 'choose audio'}</span></label>
 				</div>
+				<div class="file">
+					<button type="button" class="file-icon thumb" disabled={busy || active || imageBusy} onclick={() => coverInput?.click()} aria-label={cover ? 'change cover' : 'choose cover'}>
+						{#if coverPreview}<img src={coverPreview} alt="selected cover preview" width="48" height="48" />{:else}<Icon name="image" size={20} />{/if}
+					</button>
+					<span class="file-text">
+						<b>{imageBusy ? 'preparing your cover…' : cover ? 'cover art' : 'add a cover'}</b>
+						<small>optional. only you see it, like the track.</small>
+						{#if coverProblem}<small class="problem" role="alert">{coverProblem}</small>{/if}
+					</span>
+					<input type="file" aria-label="cover image" hidden accept="image/*,.heic,.heif" bind:this={coverInput} onchange={event => pickCover(event.currentTarget.files?.[0])} />
+					{#if cover}<button type="button" class="pick" disabled={busy || active || imageBusy} onclick={() => { cover = undefined; if (coverInput) coverInput.value = ''; }}>remove</button>
+					{:else}<button type="button" class="pick" disabled={busy || active || imageBusy} onclick={() => coverInput?.click()}>choose cover</button>{/if}
+				</div>
 				<label class="field"><span>title</span><input id="private-title" bind:value={title} maxlength="256" required disabled={busy || active} placeholder="name this track" /></label>
 				<label class="field"><span>description</span><textarea id="private-description" bind:value={description} maxlength="5000" rows="3" disabled={busy || active} placeholder="notes to yourself…"></textarea></label>
 				<TagInput bind:value={tags} disabled={busy || active} />
@@ -156,7 +201,7 @@
 			<div class="bar">
 				{@render visibility?.()}
 				<span class="hint">only you can play it</span>
-				<button class="submit" type="submit" disabled={busy || active || loading || !!recoveryError || !audio || !title.trim()}>
+				<button class="submit" type="submit" disabled={busy || active || imageBusy || loading || !!recoveryError || !audio || !title.trim()}>
 					<Icon name="upload" size={18} />{busy ? 'saving…' : 'upload'}
 				</button>
 			</div>
@@ -174,6 +219,11 @@
 	.file-icon { width: 3rem; height: 3rem; flex: none; display: grid; place-items: center; border-radius: 0.7rem; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
 	.file-text { flex: 1; min-width: 0; display: grid; overflow-wrap: anywhere; }
 	.file-text small { color: var(--faint); font-size: 0.85rem; }
+	.file-text .problem { color: light-dark(#a3271f, #ff8f87); }
+	.thumb { padding: 0; border: 0; overflow: hidden; cursor: pointer; }
+	.thumb img { width: 100%; height: 100%; object-fit: cover; }
+	.thumb:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+	button.pick { border: 0; color: inherit; }
 	.pick { position: relative; flex: none; display: inline-flex; align-items: center; min-height: 2.5rem; padding: 0 1rem; border-radius: 999px; background: var(--raised); font-weight: 700; font-size: 0.9rem; cursor: pointer; }
 	.pick input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 	.pick:focus-within { outline: 2px solid var(--accent); outline-offset: 3px; }

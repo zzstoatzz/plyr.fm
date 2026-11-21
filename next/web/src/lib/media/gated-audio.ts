@@ -5,9 +5,11 @@ import { createSpaceSigHeaders, encapsulate, formatMacRequest, parseSpaceToken, 
 import { isSpaceAtUriString } from '@atproto/syntax';
 import { createGatedAudio, isSpaceCredentialRequest, type GatedAudioSource } from '@plyr/next-core/gated-audio';
 import { auth } from '$lib/auth';
+import type { PrivateArtwork } from '@plyr/next-core/publishing/private-music';
+import { MAX_ARTWORK_BYTES } from '@plyr/next-core/publishing/artwork-model';
 import { privateAudioUrl, releasePrivateAudio } from './private-audio';
 
-export const { resolveGatedAudio } = createGatedAudio<P256Keypair, LexMap>({
+export const { resolveGatedAudio, openSpaceBlob } = createGatedAudio<P256Keypair, LexMap>({
 	isSpaceAtUriString, createSpaceSigHeaders, encapsulate, formatMacRequest, parseSpaceToken,
 	RECORD_MAC_PROFILE, verifyRecord, isCid, isLexMap, lexParse
 });
@@ -79,4 +81,17 @@ async function bufferedAudio(source: GatedAudioSource, signal: AbortSignal): Pro
 		const url = URL.createObjectURL(new Blob(chunks, { type: source.mimeType }));
 		return { url, release: () => URL.revokeObjectURL(url) };
 	} finally { await reader.cancel().catch(() => undefined); }
+}
+
+/** A private track's cover, fetched with the owner's space credential and kept as an object URL. */
+export async function privateCoverUrl(artwork: PrivateArtwork): Promise<string> {
+	const account = auth.getAuth();
+	const response = await openSpaceBlob(artwork, account, {
+		guard: () => { if (auth.getAuth().agent !== account.agent) throw new Error('account changed. try again.'); },
+		fetch: (url, init) => fetch(url, init),
+		keypair: () => P256Keypair.create()
+	});
+	const bytes = await response.arrayBuffer();
+	if (!bytes.byteLength || bytes.byteLength > MAX_ARTWORK_BYTES) throw new Error('could not load this cover');
+	return URL.createObjectURL(new Blob([bytes], { type: artwork.mimeType }));
 }

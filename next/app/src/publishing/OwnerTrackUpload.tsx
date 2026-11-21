@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { router, useFocusEffect, useNavigation } from 'expo-router';
 import { View } from 'react-native';
 import { getAuth, type Auth } from '../auth-state';
-import { UploadBar, type TrackDraftFields } from './UploadPieces';
+import { PickTile, UploadBar, type TrackDraftFields } from './UploadPieces';
+import { pickArtwork } from './artwork';
 import { Action, Copy, Field } from '../controls';
 import { Heading } from '../CatalogPieces';
 import { measureAudioDuration, pickMedia } from '../media-picker';
@@ -13,12 +14,12 @@ import { useArtistName } from './artist-name';
 import { hideUploadIsland, showUploadIsland } from './upload-island-store';
 import { toast } from '../toast';
 
-export function OwnerTrackUpload({ auth, selected, onBusy, audience, file, setFile, title, setTitle, description, setDescription, tags, setTags }: TrackDraftFields & { auth: Auth; selected: boolean; onBusy: (value: boolean) => void; audience: ReactNode }) {
+export function OwnerTrackUpload({ auth, selected, onBusy, audience, file, setFile, artwork, setArtwork, title, setTitle, description, setDescription, tags, setTags }: TrackDraftFields & { auth: Auth; selected: boolean; onBusy: (value: boolean) => void; audience: ReactNode }) {
   const navigation = useNavigation();
   const selection = useRef(selected);
   selection.current = selected;
-  const latestDraft = useRef({ file, title, description, tags });
-  latestDraft.current = { file, title, description, tags };
+  const latestDraft = useRef({ file, artwork, title, description, tags });
+  latestDraft.current = { file, artwork, title, description, tags };
   const artist = useArtistName(auth);
   const pds = useMemo(() => privatePds(auth), [auth.did, auth.rpc]);
   const [pending, setPending] = useState<PrivateCreate[]>([]), [results, setResults] = useState<Record<string, PrivateResult>>({});
@@ -46,7 +47,7 @@ export function OwnerTrackUpload({ auth, selected, onBusy, audience, file, setFi
   }
   function reset(operation: PrivateCreate) {
     if (!current() || ownAttempt.current !== operation.rkey) return;
-    ownAttempt.current = undefined; setFile(null); setTitle(''); setDescription(''); setTags('');
+    ownAttempt.current = undefined; setFile(null); setArtwork(null); setTitle(''); setDescription(''); setTags('');
   }
   const active = pending.some(operation => !operation.archived);
   return <>
@@ -70,6 +71,10 @@ export function OwnerTrackUpload({ auth, selected, onBusy, audience, file, setFi
         if (next.size > 104_857_600) { setNotice('audio for this setting is limited to 100 MiB.'); return; }
         setFile(next); if (!title) setTitle(next.name.replace(/\.[^.]+$/, '').slice(0, 256));
       }).catch(() => { if (current()) setNotice('could not open the file.'); }); }} />
+      <PickTile kind="artwork" file={artwork} hint="optional. only you see it, like the track." disabled={busy || active} onPress={() => { setNoticeArea('upload'); void pickArtwork().then(next => {
+        if (next && current()) setArtwork(next);
+      }).catch(failure => { if (current()) setNotice(failure instanceof Error ? failure.message : 'could not open that image.'); }); }} />
+      {artwork && <Action label="Remove cover" disabled={busy || active} onPress={() => setArtwork(null)} />}
       <Field label="Title" value={title} onChangeText={setTitle} maxLength={256} editable={!busy && !active} />
       <Field label="Description" value={description} onChangeText={setDescription} maxLength={5000} multiline editable={!busy && !active} />
       <TagsField value={tags} onChange={setTags} disabled={busy || active} />
@@ -83,7 +88,7 @@ export function OwnerTrackUpload({ auth, selected, onBusy, audience, file, setFi
           try {
             const duration = await measureAudioDuration(file).catch(() => undefined);
             if (!current()) { hideUploadIsland(island); return; }
-            result = await pds.upload({ file, title, artist, description, tags: tags.split('\n'), duration }, operation => {
+            result = await pds.upload({ file, artwork, title, artist, description, tags: tags.split('\n'), duration }, operation => {
               if (current()) ownAttempt.current = operation.rkey;
               showUploadIsland(island, { phase: 'active', title: title.trim(), summary: 'saving', announce: `saving ${name}…` });
             });
@@ -103,7 +108,7 @@ export function OwnerTrackUpload({ auth, selected, onBusy, audience, file, setFi
           setResults(values => ({ ...values, [result.operation.rkey]: result.result }));
           if (result.result.state === 'accepted') {
             await pds.dismiss(result.operation);
-            if (current() && latestDraft.current.file === file && latestDraft.current.title === title && latestDraft.current.description === description && latestDraft.current.tags === tags) reset(result.operation);
+            if (current() && latestDraft.current.file === file && latestDraft.current.artwork === artwork && latestDraft.current.title === title && latestDraft.current.description === description && latestDraft.current.tags === tags) reset(result.operation);
             if (current() && selection.current && navigation.isFocused()) router.replace('/portal');
           }
         }, true, 'upload')} />

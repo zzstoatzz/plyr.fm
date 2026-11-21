@@ -5,6 +5,7 @@ import * as queue from '../queue-state.ts';
 import { isPrivateTrack } from '../track-access.ts';
 import { sameRecord } from './create-operation.ts';
 import { normalizeTrackTags } from './track-tags.ts';
+import { ARTWORK_TYPES, MAX_ARTWORK_BYTES } from './artwork-model.ts';
 
 export interface MediaFile {
   name: string;
@@ -27,6 +28,9 @@ class PrivateRequestError extends Error {
   constructor(code: string) { super('could not load all your tracks. try again.'); this.code = code; }
 }
 export type PrivateResult = { state: 'accepted' | 'different' | 'missing'; uri: string; cid?: string };
+/** The cover blob of a private track, read back only through the owner's space credential. */
+export type PrivateArtwork = { space: string; repo: string; cid: string; mimeType: string };
+export type PrivateArtworkUrl = (artwork: PrivateArtwork) => Promise<string>;
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 
 export function editPrivateQueue(tracks: Track[], index: number, edit: { action: 'remove'; at: number } | { action: 'move'; from: number; to: number } | { action: 'clear' | 'shuffle' }): Track[] {
@@ -66,13 +70,20 @@ export function createPrivateLibrary({ NSID, PRIVATE_SPACE_TYPE }: Pick<AuthConf
     };
   }
 
+  function privateArtwork(owner: string, value: unknown): PrivateArtwork | undefined {
+    if (!object(value) || !object(value.imageBlob)) return;
+    const blob = value.imageBlob, ref = object(blob.ref) ? blob.ref.$link : undefined;
+    if (typeof ref !== 'string' || !/^b[a-z2-7]{20,}$/.test(ref) || typeof blob.mimeType !== 'string' || !blob.mimeType.startsWith('image/')) return;
+    return { space: privateSpace(owner), repo: owner, cid: ref, mimeType: blob.mimeType };
+  }
+
   function privateCreate(value: unknown, owner: string): PrivateCreate {
     if (!value || typeof value !== 'object' || !('owner' in value) || value.owner !== owner
       || !('rkey' in value) || typeof value.rkey !== 'string' || !/^[234567abcdefghij][234567abcdefghijklmnopqrstuvwxyz]{12}$/.test(value.rkey)
       || !('uri' in value) || value.uri !== `${privateSpace(owner)}/${owner}/${NSID.track}/${value.rkey}`
       || !('record' in value) || !value.record || typeof value.record !== 'object' || Array.isArray(value.record)
       || !('$type' in value.record) || value.record.$type !== NSID.track
-      || 'audioUrl' in value.record || 'audioSpace' in value.record || 'supportGate' in value.record
+      || 'audioUrl' in value.record || 'audioSpace' in value.record || 'supportGate' in value.record || 'imageUrl' in value.record
       || !('audioBlob' in value.record) || !value.record.audioBlob || typeof value.record.audioBlob !== 'object'
       || ('archived' in value && typeof value.archived !== 'boolean')) throw new Error('could not read an earlier upload.');
     return { owner, rkey: value.rkey, uri: value.uri, record: value.record as Record<string, unknown>, ...('archived' in value ? { archived: value.archived as boolean } : {}) };
@@ -126,8 +137,18 @@ export function createPrivateLibrary({ NSID, PRIVATE_SPACE_TYPE }: Pick<AuthConf
     };
   }
 
-  function privatePds(auth: Auth<unknown>, getAuth: () => Auth<unknown>, privateCreateStorage: PrivateCreateStorage, nextRecordKey: () => string) {
+  function privatePds(auth: Auth<unknown>, getAuth: () => Auth<unknown>, privateCreateStorage: PrivateCreateStorage, nextRecordKey: () => string, artworkUrl?: PrivateArtworkUrl) {
     const owner = auth.did;
+    // a cover that can't be read leaves the track without art rather than hiding the track
+    async function withArtwork(track: Track, value: unknown): Promise<Track> {
+      const artwork = artworkUrl && privateArtwork(track.artist.did, value);
+      if (!artwork) return track;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const late = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('cover timed out')), 5_000); });
+      try { return { ...track, media: { ...track.media, artwork: { url: await Promise.race([artworkUrl(artwork), late]) } } }; }
+      catch { return track; }
+      finally { clearTimeout(timer); }
+    }
     function current() {
       if (!owner || !auth.agent || getAuth().did !== owner || getAuth().rpc !== auth.rpc) throw new Error('account changed. return to the original account.');
       return owner;
@@ -191,7 +212,7 @@ export function createPrivateLibrary({ NSID, PRIVATE_SPACE_TYPE }: Pick<AuthConf
         throw new Error('could not check whether the track was saved. check its status before trying again.');
       }
     }
-    async function upload(input: { file: MediaFile; title: string; artist: string; description: string; tags: string[]; duration?: number }, prepared: (operation: PrivateCreate) => void) {
+    async function upload(input: { file: MediaFile; artwork?: MediaFile | null; title: string; artist: string; description: string; tags: string[]; duration?: number }, prepared: (operation: PrivateCreate) => void) {
       const did = current();
       if (!auth.privatePublishing) throw new Error('sign in again to upload with this setting.');
       if (!input.title.trim() || !input.artist.trim()) throw new Error('a track needs a title and artist.');
@@ -202,6 +223,8 @@ export function createPrivateLibrary({ NSID, PRIVATE_SPACE_TYPE }: Pick<AuthConf
       const fileType = (input.file.name.includes('.') ? input.file.name.split('.').at(-1) : input.file.type.slice(6))?.toLowerCase();
       if (!fileType || new TextEncoder().encode(fileType).length > 16) throw new Error('choose a file with a supported audio extension.');
       const tags = normalizeTrackTags(input.tags);
+      const artwork = input.artwork ?? undefined;
+      if (artwork && (!(ARTWORK_TYPES as readonly string[]).includes(artwork.type) || !Number.isSafeInteger(artwork.size) || artwork.size <= 0 || artwork.size > MAX_ARTWORK_BYTES)) throw new Error('choose a PNG, JPEG, WebP, or GIF cover up to 10 MB.');
       if ((await privateCreateStorage.load(did)).some(item => !item.archived)) throw new Error('finish or set aside your earlier upload first.');
       await policy(true);
       const bytes = await input.file.arrayBuffer();
@@ -209,9 +232,18 @@ export function createPrivateLibrary({ NSID, PRIVATE_SPACE_TYPE }: Pick<AuthConf
       if (bytes.byteLength !== input.file.size) throw new Error('the selected audio changed. choose it again.');
       const uploaded = await request('com.atproto.repo.uploadBlob', undefined, bytes, input.file.type);
       if (!object(uploaded) || !object(uploaded.blob)) throw new Error('could not confirm the audio upload.');
+      let imageBlob: Record<string, unknown> | undefined;
+      if (artwork) {
+        const image = await artwork.arrayBuffer();
+        current();
+        if (image.byteLength !== artwork.size) throw new Error('the selected cover changed. choose it again.');
+        const cover = await request('com.atproto.repo.uploadBlob', undefined, image, artwork.type);
+        if (!object(cover) || !object(cover.blob)) throw new Error('could not confirm the cover upload.');
+        imageBlob = cover.blob;
+      }
       const rkey = nextRecordKey();
       const record = { $type: NSID.track, title: input.title.trim(), artist: input.artist.trim(), description: input.description.trim(), tags,
-        fileType, audioBlob: uploaded.blob,
+        fileType, audioBlob: uploaded.blob, ...(imageBlob ? { imageBlob } : {}),
         createdAt: new Date().toISOString(), ...(input.duration && Number.isFinite(input.duration) ? { duration: Math.round(input.duration) } : {}) };
       const operation = privateCreate({ owner: did, rkey, uri: `${privateSpace(did)}/${did}/${NSID.track}/${rkey}`, record }, did);
       await privateCreateStorage.put(operation);
@@ -225,10 +257,10 @@ export function createPrivateLibrary({ NSID, PRIVATE_SPACE_TYPE }: Pick<AuthConf
         await policy();
         const result = await request('com.atproto.space.listRecords', { space: privateSpace(did), repo: did, collection: NSID.track, limit: '20', ...(cursor ? { cursor } : {}) });
         if (!object(result) || !Array.isArray(result.records) || (result.cursor !== undefined && typeof result.cursor !== 'string')) throw new Error('could not load all your tracks.');
-        const tracks = result.records.map((item: unknown) => {
+        const tracks = await Promise.all(result.records.map((item: unknown) => {
           if (!object(item) || item.collection !== NSID.track || typeof item.rkey !== 'string' || typeof item.cid !== 'string') throw new Error('invalid private record.');
-          return privateTrack(did, item.rkey, item.cid, item.value);
-        });
+          return withArtwork(privateTrack(did, item.rkey, item.cid, item.value), item.value);
+        }));
         return { tracks, cursor: result.cursor };
       } catch (error) {
         if (error instanceof PrivateRequestError && ['SpaceNotFound', 'RepoNotFound'].includes(error.code)) return { tracks: [], cursor: undefined };
@@ -252,7 +284,7 @@ export function createPrivateLibrary({ NSID, PRIVATE_SPACE_TYPE }: Pick<AuthConf
         const record = await read(rkey);
         if (record === undefined) return;
         if (!object(record) || record.uri !== uri || typeof record.cid !== 'string') throw new Error('could not load this track.');
-        return privateTrack(did, rkey, record.cid, record.value);
+        return await withArtwork(privateTrack(did, rkey, record.cid, record.value), record.value);
       } catch (error) {
         if (error instanceof PrivateRequestError && ['SpaceNotFound', 'RepoNotFound'].includes(error.code)) return;
         throw error;
@@ -279,5 +311,5 @@ export function createPrivateLibrary({ NSID, PRIVATE_SPACE_TYPE }: Pick<AuthConf
       && track.record.uri === `${privateSpace(did)}/${did}/${NSID.track}/${track.record.rkey}`;
   }
 
-  return { privateSpace, privateTrack, ownsPrivateTrack, privateCreate, samePrivateCreate, requirePrivatePolicy, privateDeletion, privatePds };
+  return { privateSpace, privateTrack, privateArtwork, ownsPrivateTrack, privateCreate, samePrivateCreate, requirePrivatePolicy, privateDeletion, privatePds };
 }

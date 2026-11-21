@@ -10,6 +10,7 @@
   let openBusy = $state(false);
   let ownerVisited = $state(false);
   let audio = $state<File>();
+  let cover = $state<File>();
   let title = $state('');
   let description = $state('');
   let tags = $state('');
@@ -29,9 +30,9 @@
   </nav>
 {/snippet}
 
-<div hidden={onlyYou}><UploadForm {account} {visibility} bind:submitting={openBusy} bind:audio bind:title bind:description bind:tags /></div>
+<div hidden={onlyYou}><UploadForm {account} {visibility} bind:submitting={openBusy} bind:audio bind:cover bind:title bind:description bind:tags /></div>
 {#if onlyYou || ownerVisited}
-  <div hidden={!onlyYou}><OwnerTrackUpload {account} {visibility} selected={onlyYou} bind:busy={ownerBusy} bind:audio bind:title bind:description bind:tags /></div>
+  <div hidden={!onlyYou}><OwnerTrackUpload {account} {visibility} selected={onlyYou} bind:busy={ownerBusy} bind:audio bind:cover bind:title bind:description bind:tags /></div>
 {/if}
 
 <style>

@@ -39,8 +39,8 @@
   import LargeUpload from './LargeUpload.svelte';
   import QueuedUpload from './QueuedUpload.svelte';
 
-  let { account, submitting = $bindable(false), audio = $bindable(), title = $bindable(''), description = $bindable(''), tags = $bindable(''), visibility }: {
-    account: ReturnType<typeof auth.getAuth>; submitting: boolean; audio: File | undefined; title: string; description: string; tags: string; visibility?: Snippet;
+  let { account, submitting = $bindable(false), audio = $bindable(), cover = $bindable(), title = $bindable(''), description = $bindable(''), tags = $bindable(''), visibility }: {
+    account: ReturnType<typeof auth.getAuth>; submitting: boolean; audio: File | undefined; cover: File | undefined; title: string; description: string; tags: string; visibility?: Snippet;
   } = $props();
 
   const owner = untrack(() => account.did);
@@ -55,7 +55,6 @@
   let duration = $state<number>();
   let dragging = $state(false);
   let artist = $derived(profileName || account.handle || account.did || '');
-  let cover = $state<File>();
   let coverPreview = $state<string>();
   let audioInput = $state<HTMLInputElement>();
   let coverInput = $state<HTMLInputElement>();
