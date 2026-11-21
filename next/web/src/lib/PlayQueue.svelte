@@ -217,7 +217,7 @@
 		{@const now = player.current}
 		{@const nowPlaying = player.playing && !player.outputElsewhere}
 		<section class="hero" aria-labelledby="queue-current">
-			<button class="hero-cover" type="button" aria-label={`${nowPlaying ? 'Pause' : 'Play'} ${now.metadata.title}`} onclick={() => player.toggle()}>
+			<button class="hero-cover" class:playing={nowPlaying} type="button" aria-label={`${nowPlaying ? 'Pause' : 'Play'} ${now.metadata.title}`} onclick={() => player.toggle()}>
 				<Artwork src={trackArtwork(now)} size={160} eager />
 				<span class="play hero-play"><Icon name={nowPlaying ? 'pause' : 'play'} size={26} /></span>
 			</button>
@@ -251,7 +251,7 @@
 		</section>
 		{#if tail && continuation.length}
 			<section aria-labelledby="queue-continuation">
-				<h2 id="queue-continuation">next from {tail.label}</h2>
+				<h2 id="queue-continuation">{tail.label}</h2>
 				<ol role="list" use:holdScroll>
 					{#each continuation as track, offset (key(end + offset))}
 						{@render upcoming(track, end + offset)}
@@ -305,11 +305,17 @@
 <style>
 	.queue { position: relative; isolation: isolate; display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.1rem; container-type: inline-size; }
 	.wash { position: absolute; z-index: -1; inset: 0; overflow: hidden; pointer-events: none; }
-	.wash::before { content: ''; position: absolute; inset: -15%; background: var(--wash) center / cover; filter: blur(64px) saturate(1.1); opacity: light-dark(0.2, 0.32); }
+	.wash::before { content: ''; position: absolute; inset: -15%; background: var(--wash) center / cover; filter: blur(64px) saturate(1.1); opacity: 0.32; }
+	/* opacity is a number, so light-dark() can't pick it (that left the wash at full strength) */
+	:global(:root[data-theme='light']) .wash::before { opacity: 0.2; }
+	@media (prefers-color-scheme: light) { :global(:root:not([data-theme='dark'])) .wash::before { opacity: 0.2; } }
+	/* the queue page: the wash fills the page edge to edge, the content keeps the page's padding */
+	.queue:not(.rail) .wash { inset: calc(-1 * clamp(1rem, 3vw, 2.25rem)); }
 	.hero { display: flex; align-items: flex-end; gap: 0.9rem; min-width: 0; }
 	.hero-cover { position: relative; flex: none; width: min(9.5rem, 40cqi); padding: 0; border: 0; border-radius: 0.75rem; background: none; box-shadow: 0 0.9rem 2.2rem rgb(0 0 0 / 0.35); }
 	.hero-cover .play { border-radius: inherit; }
 	@media (hover: hover) { .hero-cover:not(:hover, :focus-visible) .hero-play { opacity: 0; } }
+	@media (hover: none) { .hero-cover.playing .hero-play { opacity: 0; } }
 	.hero-meta { min-width: 0; display: grid; gap: 0.15rem; }
 	.hero-meta h2 { display: flex; align-items: center; gap: 0.4rem; margin: 0; font-size: 0.75rem; color: var(--faint); font-weight: 600; }
 	.hero-meta h2 :global(*) { color: var(--accent); }
@@ -338,16 +344,17 @@
 	.drag-handle:active { cursor: grabbing; }
 	.cover { border: 0; padding: 0; width: 2.75rem; flex: none; border-radius: 0.35rem; background: none; position: relative; }
 	.play { position: absolute; inset: 0; display: grid; place-items: center; background: rgb(0 0 0 / 0.48); color: white; border-radius: inherit; }
-	@media (hover: hover) { .cover:not(:hover, :focus-visible) .play:not(.playing) { opacity: 0; } }
+	.cover:not(:hover, :focus-visible) .play { opacity: 0; }
 	.labels { min-width: 0; flex: 1; display: grid; gap: 0.12rem; font-size: 0.9rem; }
 	.labels > :first-child { font-weight: 650; }
 	.labels span, .time { font-size: 0.75rem; }
 	.time { font-variant-numeric: tabular-nums; }
 	.move :global(svg) { transform: rotate(180deg); }
+	/* move up is for keyboards; pointers drag the row or the handle */
+	.move:not(:focus-visible) { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); }
 	.queue-signin { color: var(--accent); text-decoration: underline; text-underline-offset: 0.2em; }
 	.hint { margin: -0.3rem 0 0.5rem; color: var(--faint); font-size: 0.8rem; }
 	.hint .touch { display: none; }
 	@media (pointer: coarse) { .hint .touch { display: inline; } .hint .mouse { display: none; } }
 	.empty { color: var(--muted); margin: 0; font-size: 0.88rem; }
-	@container (max-width: 24rem) { .time { display: none; } }
 </style>
