@@ -1,0 +1,204 @@
+{
+  "lexicon": 1,
+  "id": "fm.plyr.unspecced.getRadioState",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "What a radio station is playing right now. Every listener hears the same loop: the rotation is drawn once per four-hour period and pinned, and the playhead follows the wall clock. Also served at /radio/state with snake_case parameter names. No auth required.",
+      "parameters": {
+        "type": "params",
+        "properties": {
+          "station": {
+            "type": "string",
+            "description": "Station slug; defaults to loved."
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 75,
+            "default": 40
+          },
+          "catalogOnly": {
+            "type": "boolean",
+            "default": false,
+            "description": "Skip the live broadcast check and answer from the catalog loop only."
+          }
+        }
+      },
+      "output": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "required": [
+            "station",
+            "station_slug",
+            "generated_at",
+            "rotation",
+            "up_next"
+          ],
+          "properties": {
+            "station": {
+              "type": "string"
+            },
+            "station_slug": {
+              "type": "string"
+            },
+            "generated_at": {
+              "type": "string",
+              "format": "datetime"
+            },
+            "loop_duration_seconds": {
+              "type": "integer"
+            },
+            "current_index": {
+              "type": "integer"
+            },
+            "current_started_at": {
+              "type": "string",
+              "format": "datetime"
+            },
+            "current_ends_at": {
+              "type": "string",
+              "format": "datetime"
+            },
+            "progress_seconds": {
+              "type": "integer"
+            },
+            "current": {
+              "type": "ref",
+              "ref": "#radioTrack"
+            },
+            "up_next": {
+              "type": "array",
+              "items": {
+                "type": "ref",
+                "ref": "#radioTrack"
+              }
+            },
+            "rotation": {
+              "type": "array",
+              "items": {
+                "type": "ref",
+                "ref": "#radioTrack"
+              }
+            },
+            "live": {
+              "type": "ref",
+              "ref": "#liveBroadcast"
+            }
+          }
+        }
+      },
+      "errors": [
+        {
+          "name": "UnknownStation"
+        }
+      ]
+    },
+    "radioTrack": {
+      "type": "object",
+      "required": [
+        "id",
+        "title",
+        "artist",
+        "artist_handle",
+        "artist_did",
+        "stream_url",
+        "file_type",
+        "duration",
+        "atproto_record_uri",
+        "created_at",
+        "tags",
+        "like_count",
+        "play_count",
+        "liked"
+      ],
+      "properties": {
+        "id": {
+          "type": "integer"
+        },
+        "title": {
+          "type": "string"
+        },
+        "artist": {
+          "type": "string"
+        },
+        "artist_handle": {
+          "type": "string"
+        },
+        "artist_did": {
+          "type": "string"
+        },
+        "artist_avatar_url": {
+          "type": "string"
+        },
+        "stream_url": {
+          "type": "string"
+        },
+        "file_type": {
+          "type": "string"
+        },
+        "duration": {
+          "type": "integer"
+        },
+        "artwork_url": {
+          "type": "string"
+        },
+        "thumbnail_url": {
+          "type": "string"
+        },
+        "atproto_record_uri": {
+          "type": "string"
+        },
+        "atproto_record_cid": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "datetime"
+        },
+        "like_count": {
+          "type": "integer"
+        },
+        "play_count": {
+          "type": "integer"
+        },
+        "liked": {
+          "type": "boolean",
+          "description": "Always false: the rotation is shared and clients overlay their own likes."
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "liveBroadcast": {
+      "type": "object",
+      "required": [
+        "stream_url",
+        "kind"
+      ],
+      "properties": {
+        "stream_url": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "knownValues": [
+            "hls"
+          ]
+        },
+        "started_at": {
+          "type": "string",
+          "format": "datetime"
+        },
+        "artwork_url": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

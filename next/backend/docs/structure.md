@@ -16,6 +16,7 @@ table has one writing module; everything else reads.
 | account_reconciler | `internal/account` | `plyr_index.account_availability`, `account_status_checks` |
 | api | `internal/metrics` | `plyr_index.track_metrics` through `plyr_index.record_play()` |
 | api | `internal/notification` | `plyr_account.notification_seen` |
+| api | `internal/radio` | `plyr_playback.radio_rotations` (pinned loops; pruned as new periods are written) |
 | jams (coordinator) | `internal/jams` | `plyr_playback.queue_records`, `plyr_playback.jam_room_records` (Redis holds the live copy) |
 | jams (coordinator) | `internal/coordinator` | `plyr_account.preferences` |
 
