@@ -26,6 +26,12 @@ def main() -> None:
         try:
             _prepare(database_url, database)
             _prepare_radio(database_url)
+            # the deployed api role defaults to read-only transactions
+            admin.execute(
+                sql.SQL(
+                    "ALTER DATABASE {} SET default_transaction_read_only = on"
+                ).format(sql.Identifier(database))
+            )
             exercise(database_url)
         finally:
             admin.execute(
@@ -138,6 +144,7 @@ def exercise(database_url: str) -> None:
         tempfile.TemporaryFile() as logs,
         psycopg.connect(database_url, autocommit=True) as db,
     ):
+        db.execute("SET default_transaction_read_only = off")
         process = subprocess.Popen([binary], env=environment, stdout=logs, stderr=logs)
         try:
             _wait_until_ready(port, process)
