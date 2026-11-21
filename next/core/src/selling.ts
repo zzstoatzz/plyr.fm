@@ -151,7 +151,9 @@ export async function sellableReleases(read: {
 }
 
 /** adds or replaces one release's buy link through the settings call, keeping the rest */
-export async function addBuyLink(settings: (patch?: Record<string, unknown>) => Promise<unknown>, subject: string, link: Omit<StoredOffer, 'subject'>) {
+export async function addBuyLink(settings: (patch?: Record<string, unknown>) => Promise<unknown>, subject: string, link: Omit<StoredOffer, 'subject'> | undefined) {
   const { buyLinks } = readSelling(await settings());
-  await settings({ buyLinks: withBuyLink(buyLinks, { subject, ...link }) });
+  if (!link && !buyLinks.some(item => item.subject === subject)) return;
+  if (link && buyLinks.length >= MAX_OFFERS && !buyLinks.some(item => item.subject === subject)) throw new Error(`you have ${MAX_OFFERS} buy links already. remove one in settings first`);
+  await settings({ buyLinks: withBuyLink(buyLinks, link ? { subject, ...link } : { subject }) });
 }

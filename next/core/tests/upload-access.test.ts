@@ -5,10 +5,11 @@ import type { createPublicPds, NewTrack } from '../src/pds.ts';
 import type { RepoRpc } from '../src/publishing/repo-rpc.ts';
 import type { Rule } from '../src/access/policy.ts';
 import { readRule, sameRule } from '../src/access/policy.ts';
-import { accessProblem, accessRules, accessSummary, addWay, buyLinkFor, downloadsFor, onlyYou, previewRules, readAccessDraft, sellFromLink, sellProblem } from '../src/publishing/upload-access.ts';
+import { accessProblem, accessRules, accessSummary, addWay, buyLinkFor, downloadsFor, onlyYou, previewRules, readAccessDraft, sellFromLink, sellProblem, downloadChoices } from '../src/publishing/upload-access.ts';
 import { uploadRoute, needsPlyrStorage } from '../src/publishing/upload-queue-model.ts';
 import { queuedUploadDraft, queuedUploadKey, readQueuedUploadDraft, type QueuedUploadDraft } from '../src/publishing/queued-upload-draft.ts';
 import { createUploadQueue } from '../src/publishing/upload-queue.ts';
+import { addBuyLink } from '../src/selling.ts';
 
 const owner = 'did:plc:fixture';
 const resolve = async (handle: string) => `did:plc:${handle.split('.')[0]}`;
@@ -79,13 +80,13 @@ test('a queued closed upload keeps its ways in; an unreadable rule fails the dra
   assert.throws(() => readQueuedUploadDraft({ ...stored, waysIn: [{ kind: 'wizard' }] }, owner, queuedUploadKey({ owner, id: 'id1' })));
 });
 
-function fixtureQueue(options: { saveBuyLink?: boolean; uploadStorage?: boolean } = {}) {
+function fixtureQueue(options: { saveBuyLink?: boolean; uploadStorage?: boolean; failUpload?: boolean } = {}) {
   const calls: string[] = [];
   const drafts = new Map<string, QueuedUploadDraft>();
   const reservation = { owner, collection: 'fm.plyr.track', rkey: '3222222222222', uri: `at://${owner}/fm.plyr.track/3222222222222`, record: {} };
   const pds = {
     reserveCreate: async () => reservation,
-    uploadTrack: async (input: NewTrack) => { calls.push(`upload:${input.waysIn?.length ?? 0}`); return { uri: reservation.uri, status: 'indexed' }; },
+    uploadTrack: async (input: NewTrack) => { calls.push(`upload:${input.waysIn?.length ?? 0}`); if (options.failUpload) throw new Error('pds said no'); return { uri: reservation.uri, status: 'indexed' }; },
     pendingCreates: async () => [],
     dismissCreate: async () => {},
   } as unknown as ReturnType<typeof createPublicPds>;
@@ -104,7 +105,7 @@ function fixtureQueue(options: { saveBuyLink?: boolean; uploadStorage?: boolean 
     },
     createUploadTransport: () => { throw new Error('not used'); },
     applyGenreTags: async () => {},
-    ...(options.saveBuyLink ? { saveBuyLink: async (_session, subject, link) => { calls.push(`buy:${subject}:${link.url}:${link.amount ?? ''}`); } } : {}),
+    ...(options.saveBuyLink ? { saveBuyLink: async (_session, subject, link) => { calls.push(link ? `buy:${subject}:${link.url}:${link.amount ?? ''}` : `unbuy:${subject}`); } } : {}),
     randomUUID: () => 'id1',
     sha256: async () => new ArrayBuffer(32),
     onJob: job => { if (job.phase === 'done' || job.phase === 'failed') done(); },
@@ -163,11 +164,31 @@ test('download, feed and buy-link choices survive a queued draft; unreadable one
 test('the form keeps downloads on for plyr.fm storage and closes them by default on a closed track', () => {
   assert.equal(downloadsFor({ closed: false, ways: [] }, undefined), 'open');
   assert.equal(downloadsFor({ closed: true, ways: [{ kind: 'supporter' }] }, undefined), 'off');
-  assert.equal(downloadsFor({ closed: true, ways: [{ kind: 'supporter' }] }, 'ask'), 'ask');
+  // a closed track's file stays in its space: only supporter downloads reach it
+  assert.equal(downloadsFor({ closed: true, ways: [{ kind: 'supporter' }] }, 'ask'), 'off');
+  assert.equal(downloadsFor({ closed: true, ways: [{ kind: 'supporter' }] }, 'supporters'), 'supporters');
+  assert.deepEqual(downloadChoices({ closed: true, ways: [] }).map(choice => choice.value), ['supporters', 'off']);
   assert.equal(downloadsFor({ closed: false, ways: [] }, 'off', true), 'open');
   assert.equal(sellProblem({ url: 'nope', price: '' })?.includes('full link'), true);
   assert.equal(sellProblem({ url: 'me.bandcamp.com/x', price: 'lots' })?.includes('price'), true);
   assert.deepEqual(buyLinkFor({ url: 'me.bandcamp.com/x', price: '' }), { url: 'https://me.bandcamp.com/x' });
   assert.deepEqual(buyLinkFor({ url: 'https://me.bandcamp.com/x', price: '8' }), { url: 'https://me.bandcamp.com/x', amount: 800, currency: 'USD' });
   assert.deepEqual(sellFromLink({ url: 'https://me.bandcamp.com/x', amount: 800, currency: 'USD' }), { url: 'https://me.bandcamp.com/x', price: '8' });
+});
+
+test('a buy link saved for an upload that fails before publishing is taken back', async () => {
+  const { queue, calls, finished, reservation } = fixtureQueue({ saveBuyLink: true, failUpload: true });
+  await queue.add({ file: wavFile, title: 'demo', artist: 'nate', waysIn: [{ kind: 'supporter' }], buyLink: { url: 'https://me.bandcamp.com/track/demo' } });
+  await finished;
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.deepEqual(calls, [`buy:${reservation.uri}:https://me.bandcamp.com/track/demo:`, 'upload:1', `unbuy:${reservation.uri}`]);
+});
+
+test('a full buy-link list refuses a new link instead of dropping it', async () => {
+  const links = Array.from({ length: 200 }, (_, at) => ({ subject: `at://${owner}/fm.plyr.track/${at}`, url: 'https://me.bandcamp.com/x' }));
+  const writes: unknown[] = [];
+  const settings = async (patch?: Record<string, unknown>) => { if (patch) writes.push(patch); return { buyLinks: links }; };
+  await assert.rejects(addBuyLink(settings, `at://${owner}/fm.plyr.track/new`, { url: 'https://me.bandcamp.com/y' }), /200 buy links/);
+  await addBuyLink(settings, links[0].subject, { url: 'https://me.bandcamp.com/z' });
+  assert.equal(writes.length, 1);
 });

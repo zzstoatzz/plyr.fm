@@ -1,6 +1,6 @@
 <script lang="ts">
   import { waysIn } from '@plyr/next-core/access/ways-in';
-  import { addWay, buyLinkFor, DOWNLOAD_CHOICES, downloadsFor, onlyYou, previewRules, sellProblem, WAY_KINDS, wayProblem, type AccessDraft, type UploadOptions, type WayDraft, type WayKind } from '@plyr/next-core/publishing/upload-access';
+  import { addWay, buyLinkFor, downloadChoices, downloadsFor, onlyYou, previewRules, sellProblem, WAY_KINDS, wayProblem, type AccessDraft, type UploadOptions, type WayDraft, type WayKind } from '@plyr/next-core/publishing/upload-access';
   import WaysInList from '$lib/access/WaysInList.svelte';
   import Icon, { type IconName } from '$lib/ui/Icon.svelte';
 
@@ -109,7 +109,7 @@
                   <input class="people" id="{id}-sell" type="url" inputmode="url" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="https://you.bandcamp.com/track/…" value={options.sell.url} {disabled}
                     aria-invalid={!!sellIssue} aria-describedby={sellIssue ? `${id}-sell-problem` : undefined}
                     oninput={event => { options = { ...options, sell: { ...options.sell!, url: event.currentTarget.value } }; }} />
-                  <span class="money"><span aria-hidden="true">$</span><input aria-label="its price there, optional" inputmode="decimal" autocomplete="off" placeholder="price" value={options.sell.price} {disabled}
+                  <span class="money"><span aria-hidden="true">$</span><input aria-label="its price there, optional" aria-invalid={!!sellIssue && !!options.sell.price.trim()} inputmode="decimal" autocomplete="off" placeholder="price" value={options.sell.price} {disabled}
                     oninput={event => { options = { ...options, sell: { ...options.sell!, price: event.currentTarget.value } }; }} /><small>USD</small></span>
                 </div>
                 <small>listeners get a buy button. a sale there doesn’t open it here.</small>
@@ -127,13 +127,13 @@
           </label>
           <fieldset class="downloads" disabled={disabled || plyrStorage}>
             <legend>downloads</legend>
-            {#each DOWNLOAD_CHOICES as choice (choice.value)}
+            {#each downloadChoices(access) as choice (choice.value)}
               <label class="pick" class:on={downloads === choice.value}>
                 <input type="radio" name="{id}-downloads" checked={downloads === choice.value} onchange={() => { options = { ...options, downloads: choice.value }; }} />
                 <span class="copy"><b>{choice.title}</b><small>{choice.detail}</small></span>
               </label>
             {/each}
-            {#if plyrStorage}<p class="note">plyr.fm storage serves the file openly, so downloads stay on.</p>{/if}
+            {#if plyrStorage}<p class="note">plyr.fm storage serves the file openly, so downloads stay on.</p>{:else if access.closed}<p class="note">a closed track’s file stays in its space, so only supporters can download it, or no one.</p>{/if}
           </fieldset>
         </div>
       {/if}

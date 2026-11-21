@@ -124,10 +124,16 @@ export const DOWNLOAD_CHOICES: readonly { value: DownloadPolicy; title: string; 
   { value: 'off', title: 'no downloads', detail: 'only you can download it. people can still record what they hear.' },
 ];
 
-/** the download setting in effect: what the artist picked, else what the track gets without one */
+/** the download choices a track can have: a closed track's file stays in its space, where only supporter downloads reach it */
+export function downloadChoices(access: AccessDraft) {
+  return access.closed ? DOWNLOAD_CHOICES.filter(choice => choice.value === 'supporters' || choice.value === 'off') : DOWNLOAD_CHOICES;
+}
+
+/** the download setting in effect: what the artist picked, if this track can have it, else its default */
 export function downloadsFor(access: AccessDraft, picked: DownloadPolicy | undefined, plyrStorage = false): DownloadPolicy {
   if (plyrStorage) return 'open';
-  return picked ?? (access.closed ? 'off' : 'open');
+  if (access.closed) return picked === 'supporters' ? 'supporters' : 'off';
+  return picked ?? 'open';
 }
 
 /** "where else you sell it": a link listeners can open; a sale there never opens the track here */

@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { Image, Pressable, StyleSheet, TextInput, View, type TextInputInstance } from 'react-native';
 import { waysIn } from '@plyr/next-core/access/ways-in';
-import { addWay, buyLinkFor, DOWNLOAD_CHOICES, downloadsFor, onlyYou, previewRules, sellProblem, WAY_KINDS, wayProblem, type AccessDraft, type UploadOptions, type WayDraft, type WayKind } from '@plyr/next-core/publishing/upload-access';
+import { addWay, buyLinkFor, downloadChoices, downloadsFor, onlyYou, previewRules, sellProblem, WAY_KINDS, wayProblem, type AccessDraft, type UploadOptions, type WayDraft, type WayKind } from '@plyr/next-core/publishing/upload-access';
 import { useAppearance } from '../appearance';
 import { Action, inputFontSize } from '../controls';
 import { ArrowSquareOut, Globe, Heart, Info, Lock, MusicNote, Plus, Tag, UserCircle, Users, X, type Icon } from '../icons';
@@ -117,7 +117,7 @@ export function AccessSection({ access, onChange, options, onOptions, plyrStorag
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               <Text style={type(15, theme.muted)}>$</Text>
               <TextInput accessibilityLabel="its price there, optional, in US dollars" value={options.sell.price} placeholder="price" placeholderTextColor={theme.faint} keyboardType="decimal-pad"
-                editable={!disabled} onChangeText={price => onOptions({ ...options, sell: { ...options.sell!, price } })} style={[input(false), { width: 100 }]} />
+                editable={!disabled} onChangeText={price => onOptions({ ...options, sell: { ...options.sell!, price } })} style={[input(!!sellIssue && !!options.sell.price.trim()), { width: 100 }]} />
               <Text style={type(12, theme.faint, '700')}>USD</Text>
             </View>
             <Text style={type(13, theme.muted)}>listeners get a buy button. a sale there doesn’t open it here.</Text>
@@ -136,10 +136,10 @@ export function AccessSection({ access, onChange, options, onOptions, plyrStorag
           </Pressable>
         </View>}
         <SwitchRow label="show in feeds" detail={options.listed ? 'in home, latest and top tracks.' : 'off: still on your profile and in search.'} value={options.listed}
-          onChange={listed => onOptions({ ...options, listed })} />
+          onChange={listed => onOptions({ ...options, listed })} disabled={disabled} />
         <View {...downloadRadio.group} style={{ gap: 8 }}>
           <Text style={type(12, theme.faint, '700')}>DOWNLOADS</Text>
-          {DOWNLOAD_CHOICES.map(choice => {
+          {downloadChoices(access).map(choice => {
             const on = downloads === choice.value;
             return <Pressable key={choice.value} {...downloadRadio.option(choice.value)}
               style={({ pressed }) => [styles.pick, { borderColor: on ? theme.accent : theme.line, backgroundColor: on ? theme.accent + '14' : pressed ? theme.hover : theme.background, opacity: plyrStorage && !on ? 0.6 : 1 }]}>
@@ -150,7 +150,8 @@ export function AccessSection({ access, onChange, options, onOptions, plyrStorag
               </View>
             </Pressable>;
           })}
-          {plyrStorage && <Text style={type(13, theme.muted)}>plyr.fm storage serves the file openly, so downloads stay on.</Text>}
+          {plyrStorage ? <Text style={type(13, theme.muted)}>plyr.fm storage serves the file openly, so downloads stay on.</Text>
+            : access.closed ? <Text style={type(13, theme.muted)}>a closed track’s file stays in its space, so only supporters can download it, or no one.</Text> : null}
         </View>
       </View>}
       {needsSignIn && <View style={{ gap: 8 }}>

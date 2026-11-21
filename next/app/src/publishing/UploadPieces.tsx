@@ -160,14 +160,14 @@ export function TrackHero({ artwork, onArtwork, onRemoveArtwork, title, setTitle
   </View>;
 }
 
-export function SwitchRow({ label, detail, value, onChange }: { label: string; detail: string; value: boolean; onChange: (value: boolean) => void }) {
+export function SwitchRow({ label, detail, value, onChange, disabled }: { label: string; detail: string; value: boolean; onChange: (value: boolean) => void; disabled?: boolean }) {
   const theme = useAppearance();
   return <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
     <View style={{ flex: 1, gap: 2 }}>
       <Text style={{ color: theme.text, fontFamily: theme.fontFamily, fontSize: 15 * theme.scale, fontWeight: '700' }}>{label}</Text>
       <Text style={{ color: theme.muted, fontFamily: theme.fontFamily, fontSize: 13 * theme.scale, lineHeight: 18 * theme.scale }}>{detail}</Text>
     </View>
-    <Switch accessibilityLabel={label} value={value} onValueChange={onChange} trackColor={{ true: theme.accent, false: theme.hover }} />
+    <Switch accessibilityLabel={label} value={value} onValueChange={onChange} disabled={disabled} trackColor={{ true: theme.accent, false: theme.hover }} />
   </View>;
 }
 
