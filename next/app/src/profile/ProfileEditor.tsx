@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useIsFocused } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { useAuth } from '../auth';
@@ -27,10 +27,12 @@ function close() {
 
 export function ProfileEditor() {
   const { ready, did, rpc } = useAuth();
+  // A Modal outlives its screen losing focus, so the sheet follows the route.
+  const focused = useIsFocused();
   const [session, setSession] = useState({ rpc, version: 0 });
   if (session.rpc !== rpc) setSession({ rpc, version: session.version + 1 });
-  if (!ready) return <Sheet title="edit profile" close={close}><WaveLoading label="Loading account" /></Sheet>;
-  if (!did || !rpc) return <Sheet title="edit profile" close={close}>
+  if (!ready) return <Sheet title="edit profile" close={close} visible={focused}><WaveLoading label="Loading account" /></Sheet>;
+  if (!did || !rpc) return <Sheet title="edit profile" close={close} visible={focused}>
     <Copy>sign in to edit your profile.</Copy>
     <Action label="Sign in" onPress={() => router.replace({ pathname: '/login', params: { return_to: '/edit-profile' } })} />
   </Sheet>;
@@ -39,6 +41,7 @@ export function ProfileEditor() {
 
 function AccountProfileEditor({ did, rpc }: { did: NonNullable<Auth['did']>; rpc: NonNullable<Auth['rpc']> }) {
   const pds = useMemo(() => createPds({ did, rpc }), [did, rpc]);
+  const focused = useIsFocused();
   const load = useCallback(() => pds.myProfile(), [pds]);
   const profile = useResource(load);
   const live = useRef(true);
@@ -74,7 +77,7 @@ function AccountProfileEditor({ did, rpc }: { did: NonNullable<Auth['did']>; rpc
   const savedMessage = saved?.status === 'indexed' ? 'profile saved.'
     : saved?.status === 'rejected' ? 'saved to your PDS. the catalog rejected the change.'
       : 'saved to your PDS. the catalog is catching up.';
-  return <Sheet title="edit profile" close={() => { if (!busy) close(); }}>
+  return <Sheet title="edit profile" visible={focused} close={() => { if (!busy) close(); }}>
     {saved && <Copy live>{savedMessage}</Copy>}
     {profile.error ? <>
       <Copy live>{saved ? 'your changes are saved, but the latest profile could not be loaded.' : 'could not load your profile.'}</Copy>

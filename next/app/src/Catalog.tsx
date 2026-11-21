@@ -66,9 +66,9 @@ function TrackDetail({ id, onPlay, onEnqueue, trackActions }: {
   const player = usePlayback();
   const [actionsOpen, setActionsOpen] = useState(false);
   if (rkey && (!account.ready || !owner || !rpc || track === null || track && track.artist.did !== owner)) {
-    return account.ready ? <Status error="track not found" /> : <Status loading />;
+    return account.ready ? <Status error="couldn't find this track." /> : <Status loading />;
   }
-  if (!track) return <Status loading={!result.error} error={result.error} retry={result.retry} />;
+  if (!track) return <Status loading={!result.error} error={result.gone ? "this track isn't on plyr.fm anymore. it may have been deleted." : result.error} retry={result.gone ? undefined : result.retry} />;
   const active = canToggleTrack(player.current, track, !!player.jam);
   const playing = active && player.status.playing;
   if (pds) {
@@ -121,7 +121,7 @@ function Collection({ id, album, onPlay }: { id: string; album: boolean; onPlay:
     if (focus.current.visited) focus.current.retry();
     focus.current.visited = true;
   }, []));
-  if (!list) return <Status loading={!result.error} error={result.error} retry={result.retry} />;
+  if (!list) return <Status loading={!result.error} error={result.error} retry={result.gone ? undefined : result.retry} />;
   const tracks = list.members.flatMap((member) => member.track ? [member.track] : []);
   const title = list.metadata.name ?? (album ? 'album' : 'playlist');
   const active = tracks.some(track => canToggleTrack(player.current, track, !!player.jam));

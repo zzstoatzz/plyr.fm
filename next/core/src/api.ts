@@ -1,6 +1,7 @@
 // Canonical records are read-only here; anonymous play metrics are app-owned.
 import { PlayDeliveryError, type PlayReceipt, type QualifiedPlay } from './play-outbox.ts';
 import { uriFromId } from './record-ids.ts';
+import { readableError } from './api-errors.ts';
 
 export interface Page<T> {
 	object: 'list';
@@ -127,9 +128,9 @@ async function request<T>(url: string, timeout: number, signal?: AbortSignal, in
 	try {
 		const response = await fetch(url, { ...init, signal: controller.signal });
 		if (!response.ok) {
-			let message = response.statusText;
-			try { const body = await response.json(); message = body?.message ?? body?.error?.message ?? message; } catch {}
-			throw new ApiError(response.status, message);
+			let message: unknown;
+			try { const body = await response.json(); message = body?.message ?? body?.error?.message; } catch {}
+			throw new ApiError(response.status, readableError(response.status, message));
 		}
 		return await response.json() as T;
 	} finally {

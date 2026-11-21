@@ -1,4 +1,6 @@
-import { router } from 'expo-router';
+import { router, useIsFocused, useNavigation } from 'expo-router';
+import { toast } from '../toast';
+import { deletedScreens } from './deleted-screens';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Image, Pressable, View } from 'react-native';
 import { api } from '../api-client';
@@ -44,14 +46,25 @@ export function TrackEditor({ id }: { id: string }) {
   const message = notice?.key === key ? notice.value : undefined;
   const action = save?.key === key ? save.value : undefined;
   const leave = () => { if (!owner.current.busy) close(id); };
-  return <Sheet title="edit track" close={leave} bar={{
+  // A Modal outlives its screen losing focus, so the sheet must follow the route or it floats over other tabs.
+  const focused = useIsFocused();
+  const navigation = useNavigation();
+  const deleted = useCallback((title: string) => {
+    toast.success(`deleted "${title}"`);
+    const state = navigation.getState();
+    const count = state ? deletedScreens(state, id) : 1;
+    if (state && count > 0 && count < state.routes.length) { router.dismiss(count); return; }
+    if (router.canDismiss()) router.dismissAll();
+    router.replace('/portal');
+  }, [navigation, id]);
+  return <Sheet title="edit track" close={leave} visible={focused} bar={{
     leading: <BarButton label="Cancel" onPress={leave} />,
     trailing: action && <BarButton strong label={action.label} disabled={action.disabled} onPress={action.onPress} />
   }} notice={message ? <>
     <Copy live>{message.message}</Copy>
     {message.reload && <Action label="Discard draft and reload" onPress={message.reload} />}
   </> : undefined}>
-    <EditorSession key={key} id={id} auth={auth} feedback={feedback} />
+    <EditorSession key={key} id={id} auth={auth} feedback={feedback} deleted={deleted} />
   </Sheet>;
 }
 
@@ -63,7 +76,7 @@ function BarButton({ label, onPress, disabled, strong }: { label: string; onPres
   </Pressable>;
 }
 
-function EditorSession({ id, auth, feedback }: { id: string; auth: Auth; feedback: EditorFeedback }) {
+function EditorSession({ id, auth, feedback, deleted }: { id: string; auth: Auth; feedback: EditorFeedback; deleted: (title: string) => void }) {
   const pds = useMemo(() => createPds(auth), [auth.did, auth.rpc]);
   const load = useCallback(async () => {
     const track = await api.track(id);
@@ -75,16 +88,16 @@ function EditorSession({ id, auth, feedback }: { id: string; auth: Auth; feedbac
   const retry = useRef(resource.retry);
   retry.current = resource.retry;
   const reload = useCallback(() => retry.current(), []);
-  if (resource.data) return <TrackForm key={resource.data.revision.cid} auth={auth} data={resource.data} reload={reload} feedback={feedback} />;
+  if (resource.data) return <TrackForm key={resource.data.revision.cid} auth={auth} data={resource.data} reload={reload} feedback={feedback} deleted={deleted} />;
   return <>
-    {resource.error ? <><Copy live>{resource.error}</Copy><Action label="Retry loading track" onPress={resource.retry} /></>
+    {resource.error ? <><Copy live>{resource.error}</Copy>{!resource.gone && <Action label="Retry loading track" onPress={resource.retry} />}</>
       : <Copy>loading track…</Copy>}
   </>;
 }
 
 type Data = { track: Awaited<ReturnType<typeof api.track>>; revision: Awaited<ReturnType<ReturnType<typeof createPds>['myTrack']>>; tags?: string[] };
 
-function TrackForm({ auth, data, reload, feedback }: { auth: Auth; data: Data; reload: () => void; feedback: EditorFeedback }) {
+function TrackForm({ auth, data, reload, feedback, deleted: leaveDeleted }: { auth: Auth; data: Data; reload: () => void; feedback: EditorFeedback; deleted: (title: string) => void }) {
   const { track, revision } = data;
   const text = (key: string) => {
     const value = revision.value[key];
@@ -100,7 +113,6 @@ function TrackForm({ auth, data, reload, feedback }: { auth: Auth; data: Data; r
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [deleted, setDeleted] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [conflict, setConflict] = useState(false);
   const live = useRef(true), locked = useRef(false);
@@ -117,13 +129,19 @@ function TrackForm({ auth, data, reload, feedback }: { auth: Auth; data: Data; r
       const pds = createPds(auth);
       const duration = !deleting && audio ? await measureAudioDuration(audio).catch(() => undefined) : undefined;
       if (!current()) return;
-      const status = deleting ? await pds.deleteTrack(track.record.uri)
-        : await pds.editTrack(track.record.uri, { title, album, description, artwork, audio: audio ? { file: audio, duration } : undefined, tags: tagsEdited ? tags.split('\n') : undefined }, revision);
+      if (deleting) {
+        // The record is gone from the PDS once this resolves; the catalog follows on its own, so there is nothing left to edit.
+        await pds.deleteTrack(track.record.uri);
+        if (!current()) return;
+        feedback.busy(false);
+        leaveDeleted(track.metadata.title);
+        return;
+      }
+      const status = await pds.editTrack(track.record.uri, { title, album, description, artwork, audio: audio ? { file: audio, duration } : undefined, tags: tagsEdited ? tags.split('\n') : undefined }, revision);
       if (!current()) return;
       setSaved(true);
-      setDeleted(deleting);
       if (status === 'indexed' || status === 'deleted' || status === 'absent') {
-        router.replace(deleting ? '/portal' : `/track/${track.id}`);
+        router.replace(`/track/${track.id}`);
         return;
       }
       setError(status === 'rejected' ? 'saved to your PDS. the catalog rejected the change.' : 'saved to your PDS. the catalog is catching up.');
@@ -172,7 +190,7 @@ function TrackForm({ auth, data, reload, feedback }: { auth: Auth; data: Data; r
   const theme = useAppearance();
   const picked = usePreviewUri(artwork ?? null);
   const cover = artwork === null ? undefined : picked ?? trackArtwork(track);
-  if (saved) return <Action label={deleted ? 'Back to your music' : 'View track'} onPress={() => router.replace(deleted ? '/portal' : `/track/${track.id}`)} />;
+  if (saved) return <Action label="View track" onPress={() => router.replace(`/track/${track.id}`)} />;
   const replaceable = isOpen(track) && canReplaceTrackAudio(revision.value);
   return <>
     <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 14 }}>
