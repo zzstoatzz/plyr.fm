@@ -11,6 +11,7 @@ import type { Track } from '@plyr/next-core/api';
 import { useAppearance } from './appearance';
 import { trackArtwork } from '@plyr/next-core/artwork';
 import { artistName, Cover, Heading } from './CatalogPieces';
+import { formatDuration } from './home-state';
 import { Action, Copy, InlineLink, row } from './controls';
 import { usePlayback } from './playback';
 import { useAppPreferences } from './preference-context';
@@ -36,7 +37,7 @@ export function QueueContent({ scrollRef, scrollMetrics, onDragging, returnTo = 
   return <>
     {player.queueError && <Copy>{player.queueError}</Copy>}
     {player.current ? <>
-      {trackArtwork(player.current) ? <View pointerEvents="none" style={{ position: 'absolute', top: -TOP - 60, left: -BLEED, right: -BLEED }}>
+      {trackArtwork(player.current) ? <View pointerEvents="none" style={{ position: 'absolute', zIndex: -1, top: -TOP - 60, left: -BLEED, right: -BLEED }}>
         <HeroBackdrop uri={trackArtwork(player.current)!} height={460} />
       </View> : null}
       <View style={styles.section}>
@@ -77,7 +78,7 @@ export function QueueContent({ scrollRef, scrollMetrics, onDragging, returnTo = 
           : upcoming.length ? <View style={[styles.glass, { backgroundColor: translucent(theme.surface), borderColor: theme.border }]}><QueueReorder queue={player.queue} start={player.index + 1} move={player.move} remove={player.remove}
           scrollRef={scrollRef} scrollMetrics={scrollMetrics} onDragging={onDragging}
           renderHeader={index => player.tail && index === Math.max(player.index + 1, player.tail.from)
-            ? <View style={{ paddingVertical: 8 }}><Copy>from {player.tail.label}</Copy></View> : null}
+            ? <View style={{ paddingTop: 10, paddingBottom: 4, paddingHorizontal: 12 }}><Copy>from {player.tail.label}</Copy></View> : null}
           renderTrack={(track, index) => <QueueTrack track={track} play={() => player.jump(index)} remove={() => player.remove(index)} />} /></View>
           : <Copy>nothing queued. add tracks from their menus.</Copy>}
       </View>
@@ -136,6 +137,7 @@ function QueueTrack({ track, play, remove }: { track: Track; play?: () => void; 
       <Text numberOfLines={1} style={{ color: theme.text, fontFamily: theme.fontFamily, fontSize: 15 * theme.scale, fontWeight: '600' }}>{title}</Text>
       <Text numberOfLines={1} style={{ color: theme.muted, fontFamily: theme.fontFamily, fontSize: 13 * theme.scale }}>{artist}</Text>
     </View>
+    {track.metadata.duration_seconds ? <Text style={{ color: theme.muted, fontFamily: theme.fontFamily, fontSize: 12 * theme.scale, fontVariant: ['tabular-nums'] }}>{formatDuration(track.metadata.duration_seconds)}</Text> : null}
   </>;
   return <View style={styles.trackRow}>
     {play ? <Pressable accessibilityRole="button" accessibilityLabel={`Play ${title} by ${artist}`} onPress={play}

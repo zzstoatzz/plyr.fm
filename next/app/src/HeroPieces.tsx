@@ -1,6 +1,6 @@
 import { Link, type Href } from 'expo-router';
 import { useState, type ReactNode } from 'react';
-import { Image, PixelRatio, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Image, PixelRatio, Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { displayUrl } from '@plyr/next-core/artwork';
 import { useAppearance } from './appearance';
@@ -23,10 +23,10 @@ export function shuffled<T>(items: T[]): T[] {
 /** Blurred artwork behind a hero, fading into the page at the top and bottom. */
 export function HeroBackdrop({ uri, height }: { uri: string; height: number }) {
   const theme = useAppearance();
-  const { width } = useWindowDimensions();
   return <View aria-hidden pointerEvents="none" style={[styles.backdrop, { height }]}>
     <Backdrop key={uri} uri={uri} opacity={theme.dark ? 0.6 : 0.7} />
-    <Svg style={StyleSheet.absoluteFill} width={width} height={height}>
+    {/* 100% so the fade covers a backdrop wider than the window (the queue's bleeds past the page padding) */}
+    <Svg style={StyleSheet.absoluteFill} width="100%" height={height}>
       <Defs><LinearGradient id="hero-fade" x1="0" y1="0" x2="0" y2="1">
         <Stop offset={0} stopColor={theme.background} stopOpacity={1} />
         <Stop offset={0.28} stopColor={theme.background} stopOpacity={0} />

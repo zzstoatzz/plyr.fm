@@ -173,11 +173,13 @@ function RowHold({ begin, update, finish, cancel, remove, children }: {
     },
   });
   const gesture = useCompetingGestures(hold, swipe);
+  // The row stays see-through (it sits on the queue's glass card); the red remove strip slides in from the right edge with it.
   return <GestureDetector gesture={gesture}><View style={{ flex: 1, minWidth: 0, borderRadius: 10, overflow: 'hidden' }}>
-    {remove && <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: theme.danger, alignItems: 'flex-end', justifyContent: 'center', paddingRight: 16 }]}>
+    {remove && <Animated.View pointerEvents="none" style={{ position: 'absolute', top: 0, bottom: 0, left: '100%', width: '100%', backgroundColor: theme.danger,
+      justifyContent: 'center', paddingLeft: 16, transform: [{ translateX: slide }] }}>
       <Animated.Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 * theme.scale, opacity: slide.interpolate({ inputRange: [-96, -24, 0], outputRange: [1, 0.4, 0] }) }}>remove</Animated.Text>
-    </View>}
-    <Animated.View style={{ backgroundColor: theme.background, transform: [{ translateX: slide }] }}>{children}</Animated.View>
+    </Animated.View>}
+    <Animated.View style={{ transform: [{ translateX: slide }] }}>{children}</Animated.View>
   </View></GestureDetector>;
 }
 
@@ -199,8 +201,8 @@ function DragHandle({ register, position, total, label, active, begin, update, f
     onPanResponderTerminationRequest: () => false
   })).current;
   return <View ref={register} {...responder.panHandlers} {...handle} style={styles.handle}>
-    <View style={{ width: 32, height: 36, borderRadius: 8, backgroundColor: theme.surface, alignItems: 'center', justifyContent: 'center' }}>
-      <GripHorizontal size={22} color={active ? theme.accent : theme.text} />
+    <View style={{ width: 32, height: 36, alignItems: 'center', justifyContent: 'center' }}>
+      <GripHorizontal size={22} color={active ? theme.accent : theme.muted} />
     </View>
   </View>;
 }
