@@ -4,6 +4,7 @@
   import type { Track } from '@plyr/next-core/api';
   import { trackArtwork } from '@plyr/next-core/artwork';
   import { canToggleTrack } from '@plyr/next-core/track-revision';
+  import { shuffled } from '@plyr/next-core/queue-state';
   import { auth } from '$lib/auth';
   import { player } from '$lib/player.svelte';
   import { artistName, clock, trackHref } from '$lib/tracks';
@@ -42,6 +43,10 @@
     if (current(track)) player.toggle();
     else player.play(track, tracks, label);
   }
+  function shuffle() {
+    const order = shuffled(tracks, track => current(track));
+    player.play(order[0], order, label);
+  }
   function measure() {
     if (!strip) return;
     edges = { start: strip.scrollLeft <= 1, end: strip.scrollLeft + strip.clientWidth >= strip.scrollWidth - 1 };
@@ -62,7 +67,7 @@
   <section class="following" aria-label="New from people you know" data-testid="following-latest">
     <header>
       <h2>{label}</h2>
-      {#if tracks.length > 1}<button class="text-button each" type="button" aria-label="play one from each" title="play one from each" onclick={() => player.play(tracks[0], tracks, label)}><Icon name="shuffle" size={15} /><span>play one from each</span></button>{/if}
+      {#if tracks.length > 1}<button class="text-button each" type="button" aria-label="play one from each" title="play one from each" onclick={shuffle}><Icon name="shuffle" size={15} /><span>play one from each</span></button>{/if}
       {#if !(edges.start && edges.end)}<span class="pager"><button class="icon-button" type="button" aria-label="Scroll back" disabled={edges.start} onclick={() => page(-1)}><Icon name="back" size={18} /></button><button class="icon-button" type="button" aria-label="Scroll forward" disabled={edges.end} onclick={() => page(1)}><Icon name="chevron" size={18} /></button></span>{/if}
     </header>
     {#if pending}<Loading label="finding new music from people you know" inline />{/if}
@@ -73,7 +78,6 @@
           <article class:current={current(track)} data-track-id={track.id}>
             <button class="playback" type="button" aria-label={`${playing(track) ? 'Pause' : 'Play'} ${track.metadata.title} by ${artistName(track)}`} onclick={() => play(track)}>
               <span class="cover"><Artwork src={trackArtwork(track)} size={44} /><span class="play" class:on={playing(track)}>{#if playing(track)}<PlayingWave />{:else}<Icon name="play" size={18} />{/if}</span></span>
-              <span class="face"><Artwork src={track.artist.profile.avatar_url ?? undefined} size={20} fallbackIcon="user" /></span>
             </button>
             <div class="copy">
               <a class="title truncate" href={trackHref(track)}>{track.metadata.title}</a>
@@ -98,7 +102,7 @@
   .pager button:disabled { opacity: 0.35; }
   .releases { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(16rem, calc((100% - 2 * 0.75rem) / 3.15)); gap: 0.75rem; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scrollbar-width: none; margin-inline: -0.375rem; }
   .releases::-webkit-scrollbar { display: none; }
-  article { --pad: 0.375rem; --ring: var(--bg); position: relative; min-width: 0; display: flex; align-items: center; gap: 0.7rem; padding: var(--pad); border-radius: 0.6rem; scroll-snap-align: start; }
+  article { --pad: 0.375rem; position: relative; min-width: 0; display: flex; align-items: center; gap: 0.7rem; padding: var(--pad); border-radius: 0.6rem; scroll-snap-align: start; }
   article:has(:focus-visible) { background: var(--hover); }
   @media (hover: hover) { article:hover { background: var(--hover); } }
   .playback { position: static; flex: none; border: 0; padding: 0; background: transparent; border-radius: 0.375rem; }
@@ -107,9 +111,6 @@
   .play { position: absolute; inset: 0; display: grid; place-items: center; background: rgb(0 0 0 / 0.5); color: white; opacity: 0; }
   .play.on, .playback:focus-visible .play { opacity: 1; }
   @media (hover: hover) { article:hover .play { opacity: 1; } }
-  .face { position: absolute; left: calc(var(--pad) + 2.75rem - 1rem); top: calc(var(--pad) + 2.75rem - 1rem); width: 1.25rem; border: 2px solid var(--ring); border-radius: 50%; overflow: hidden; box-sizing: content-box; }
-  article:has(:focus-visible) .face { border-color: var(--hover); }
-  @media (hover: hover) { article:hover .face { border-color: var(--hover); } }
   .copy { flex: 1; min-width: 0; display: grid; }
   .copy a { position: relative; z-index: 2; max-width: 100%; }
   .title { font-size: 0.9rem; font-weight: 650; justify-self: start; }
@@ -121,7 +122,7 @@
   @media (max-width: 900px) {
     /* the same boxed cards as the top tracks shelf below it */
     .releases { grid-auto-columns: min(19rem, 84%); gap: 0.65rem; margin-inline: 0; }
-    article { --pad: 0.5rem; --ring: var(--surface); border: 1px solid var(--line); background: var(--surface); }
+    article { --pad: 0.5rem; border: 1px solid var(--line); background: var(--surface); }
   }
   @media (max-width: 720px) {
     .each { width: 2.25rem; height: 2.25rem; justify-content: center; border-radius: 50%; background: var(--raised); color: var(--text); }

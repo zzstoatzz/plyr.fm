@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { appendContinuation, clearPicks, emptyQueue, enqueue, moveEntry, removeEntry, shufflePicks, switchContext, trimGenerated, type QueueState } from '../src/queue-state.ts';
+import { appendContinuation, clearPicks, emptyQueue, enqueue, moveEntry, removeEntry, shufflePicks, shuffled, switchContext, trimGenerated, type QueueState } from '../src/queue-state.ts';
 
 let sequence = 0;
 const entry = (id: string) => ({ key: String(++sequence), track: { id } });
@@ -73,4 +73,14 @@ test('dragging to the tail boundary promotes a pick even with no explicit future
   assert.deepEqual(ids(moved), ['current', 'tail-b', 'tail-a']);
   assert.equal(moved.tail?.from, 2);
   assert.deepEqual(ids(clearPicks(moved)), ['current', 'tail-a']);
+});
+
+test('shuffled keeps every value and never starts on the avoided one', () => {
+  const values = [1, 2, 3, 4];
+  for (let run = 0; run < 50; run++) {
+    const order = shuffled(values, value => value === 1);
+    assert.deepEqual([...order].sort(), values);
+    assert.notEqual(order[0], 1);
+  }
+  assert.deepEqual(shuffled([1], value => value === 1), [1]);
 });
