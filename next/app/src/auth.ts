@@ -1,7 +1,8 @@
 import { ExpoOAuthClient, TokenInvalidError, TokenRefreshError, TokenRevokedError, type OAuthSession } from '@atproto/oauth-client-expo';
 import { hasTealGrant, hasTealPlayGrant, TEAL_SCOPE_PARTS } from '@plyr/next-core/teal-scrobble';
 import { upgradeScope } from '@plyr/next-core/scope-upgrade';
-import { NATIVE_REDIRECT_URI, BASE_SCOPE_PARTS, SCOPE_PARTS, SITE_URL } from './auth-config';
+import { NATIVE_REDIRECT_URI, BASE_SCOPE_PARTS, MODERATOR_SCOPE_PARTS, SCOPE_PARTS, SITE_URL } from './auth-config';
+import { registeredScopeParts } from '@plyr/next-core/oauth-metadata';
 import { restoreWithin, type RestoreOutcome } from './auth-restore';
 import { clearAuth, getAuth, scopeFor, setAuth } from './auth-state';
 import { prepareQueueLogin } from './queue-login';
@@ -12,7 +13,8 @@ export const authAvailable = true;
 const ACTIVE_KEY = 'plyr-next:active-did';
 const RESTORE_DEADLINE_MS = 8000;
 
-const REGISTERED_SCOPE = [...new Set([...SCOPE_PARTS, ...TEAL_SCOPE_PARTS])];
+// the same list the served native client metadata registers
+const REGISTERED_SCOPE = registeredScopeParts({ SCOPE_PARTS, MODERATOR_SCOPE_PARTS });
 let grantedScope = '';
 let client: ExpoOAuthClient | undefined;
 function oauthClient() {

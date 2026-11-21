@@ -2,7 +2,7 @@ import { TEAL_SCOPE_PARTS } from './teal-scrobble.ts';
 import type { AuthConfig } from './auth-config.ts';
 
 /** every scope part this client registers; a request may ask only for these */
-export function registeredScopeParts(config: AuthConfig): string[] {
+export function registeredScopeParts(config: Pick<AuthConfig, 'SCOPE_PARTS' | 'MODERATOR_SCOPE_PARTS'>): string[] {
 	// teal's and the moderator grants are only ever added on top of a session
 	return [...new Set([...config.SCOPE_PARTS, ...TEAL_SCOPE_PARTS, ...config.MODERATOR_SCOPE_PARTS])];
 }
