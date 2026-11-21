@@ -144,7 +144,7 @@ export function createPrivateLibrary({ NSID, PRIVATE_SPACE_TYPE }: Pick<AuthConf
       const artwork = artworkUrl && privateArtwork(track.artist.did, value);
       if (!artwork) return track;
       let timer: ReturnType<typeof setTimeout> | undefined;
-      const late = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('cover timed out')), 10_000); });
+      const late = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('cover timed out')), 5_000); });
       try { return { ...track, media: { ...track.media, artwork: { url: await Promise.race([artworkUrl(artwork), late]) } } }; }
       catch { return track; }
       finally { clearTimeout(timer); }

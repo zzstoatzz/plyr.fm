@@ -1,6 +1,6 @@
 import { P256Keypair } from '@atproto/crypto';
 import { TID } from '@atproto/common-web';
-import { getRandomBytesAsync } from 'expo-crypto';
+import { getRandomBytesAsync, randomUUID } from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
 import { fetch } from 'expo/fetch';
 import { MAX_ARTWORK_BYTES } from '@plyr/next-core/publishing/artwork-model';
@@ -27,9 +27,17 @@ async function saveCover(artwork: PrivateArtwork, auth: Auth): Promise<string> {
   });
   const bytes = new Uint8Array(await response.arrayBuffer());
   if (!bytes.byteLength || bytes.byteLength > MAX_ARTWORK_BYTES) throw new Error('could not load this cover');
-  if (file.exists) file.delete();
-  file.create();
-  file.write(bytes);
+  // written under a temporary name and moved into place, so an interrupted write is never cached under the cid
+  const part = new File(directory, `${artwork.cid}.${randomUUID()}.part`);
+  try {
+    part.create();
+    await part.write(bytes);
+    if (file.exists) file.delete();
+    await part.move(file);
+  } catch (error) {
+    if (part.exists) part.delete();
+    throw error;
+  }
   return file.uri;
 }
 
