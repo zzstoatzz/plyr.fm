@@ -6,6 +6,6 @@ import { WaveLoading } from '../../../src/WaveLoading';
 
 export default function AccountRoute() {
   const { did, ready } = useAuth();
-  if (!ready) return <Page title="your music"><WaveLoading label="loading your account" /></Page>;
+  if (!ready) return <Page title="your uploads"><WaveLoading label="loading your account" /></Page>;
   return did ? <Portal /> : <Login />;
 }

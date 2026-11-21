@@ -122,7 +122,7 @@ export function withBuyLink(links: StoredOffer[], next: StoredOffer | { subject:
   return next.url ? [...rest, next as StoredOffer].slice(0, MAX_OFFERS) : rest;
 }
 
-export interface Release { uri: string; title: string; kind: string }
+export interface Release { uri: string; title: string; kind: string; group: 'album' | 'track'; art?: string }
 
 const MAX_RELEASE_PAGES = 20;
 
@@ -145,9 +145,23 @@ export async function sellableReleases(read: {
 }): Promise<Release[]> {
   const [albums, tracks] = await Promise.all([every(read.albums), every(read.tracks)]);
   return [
-    ...albums.map(album => ({ uri: album.record.uri, title: album.metadata.name || 'untitled album', kind: `album · ${album.metrics.member_count} ${album.metrics.member_count === 1 ? 'track' : 'tracks'}` })),
-    ...tracks.filter(track => !isPrivateTrack(track)).map(track => ({ uri: track.record.uri, title: track.metadata.title, kind: track.metadata.album ? `track on ${track.metadata.album}` : 'single' })),
+    ...albums.map((album): Release => ({ uri: album.record.uri, title: album.metadata.name || 'untitled album', kind: `album · ${album.metrics.member_count} ${album.metrics.member_count === 1 ? 'track' : 'tracks'}`, group: 'album', art: album.media?.artwork?.url })),
+    ...tracks.filter(track => !isPrivateTrack(track)).map((track): Release => ({ uri: track.record.uri, title: track.metadata.title, kind: track.metadata.album ? `track on ${track.metadata.album}` : 'single', group: 'track', art: track.media.artwork?.url })),
   ];
+}
+
+/** the buy-link picker: releases without a link yet, of one group, whose title holds every typed word */
+export function findReleases(releases: Release[], links: Pick<StoredOffer, 'subject'>[], query: string, group?: Release['group']): Release[] {
+  const taken = new Set(links.map(link => link.subject));
+  const words = query.toLocaleLowerCase().split(/\s+/).filter(Boolean);
+  return releases.filter(release => !taken.has(release.uri) && (!group || release.group === group)
+    && words.every(word => release.title.toLocaleLowerCase().includes(word)));
+}
+
+/** the releases that have a buy link, each with its offer, in the order the links were added */
+export function linkedReleases(releases: Release[], links: StoredOffer[]): { release: Release; offer: StoredOffer }[] {
+  const byUri = new Map(releases.map(release => [release.uri, release]));
+  return links.flatMap(offer => { const release = byUri.get(offer.subject); return release ? [{ release, offer }] : []; });
 }
 
 /** adds or replaces one release's buy link through the settings call, keeping the rest */

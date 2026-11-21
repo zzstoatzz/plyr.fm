@@ -313,7 +313,7 @@ async function check(browser, accounts, width, scheme) {
     }, avatar);
     await button('edit album').click();
     await button('delete album').click();
-    await main.getByText('delete this album? its songs will stay published.', { exact: true }).waitFor();
+    await main.getByText('delete this album? its tracks will stay published.', { exact: true }).waitFor();
     await page.waitForFunction(() => document.activeElement?.textContent.trim() === 'cancel delete');
     await capture('album-delete-confirmation');
     await button('cancel delete').click();

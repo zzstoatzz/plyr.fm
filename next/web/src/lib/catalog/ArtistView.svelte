@@ -139,7 +139,7 @@
 					<div class="chips">
 						<span class="hero-chip"><b>{result.totals.plays.toLocaleString()}</b> {result.totals.plays === 1 ? 'play' : 'plays'}</span>
 						<span class="hero-chip"><b>{result.totals.tracks.toLocaleString()}</b> {result.totals.tracks === 1 ? 'track' : 'tracks'}</span>
-						{#if result.totals.duration_seconds > 0}<span class="hero-chip"><b>{catalogRuntime(result.totals.duration_seconds)}</b> of music</span>{/if}
+						{#if result.totals.duration_seconds > 0}<span class="hero-chip"><b>{catalogRuntime(result.totals.duration_seconds)}</b> of audio</span>{/if}
 					</div>
 				{:else}
 					<p class="subtle">couldn’t load totals. <button type="button" class="text-button" onclick={retryMetrics}>retry totals</button></p>

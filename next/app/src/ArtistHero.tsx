@@ -50,7 +50,7 @@ export function ArtistHero({ artist, tracks, metrics, owner, onPlay, onShare, fo
     {totals ? <View style={styles.chips} accessibilityRole="summary">
       <Chip value={totals.plays.toLocaleString()} label={totals.plays === 1 ? 'play' : 'plays'} />
       <Chip value={totals.tracks.toLocaleString()} label={totals.tracks === 1 ? 'track' : 'tracks'} />
-      {totals.duration_seconds > 0 ? <Chip value={catalogRuntime(totals.duration_seconds)} label="of music" /> : null}
+      {totals.duration_seconds > 0 ? <Chip value={catalogRuntime(totals.duration_seconds)} label="of audio" /> : null}
     </View> : null}
 
     <View style={styles.controls}>

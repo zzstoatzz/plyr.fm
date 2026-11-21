@@ -52,7 +52,7 @@ async function verify(browser, width, album) {
     if (album) {
       await page.getByRole('textbox', { name: 'album name' }).fill('browser fixture');
       await page.getByLabel('audio files', { exact: true }).setInputFiles([wave('first.wav'), wave('second.wav')]);
-      assert.equal(await page.getByRole('textbox', { name: 'title for song 2' }).inputValue(), 'second');
+      assert.equal(await page.getByRole('textbox', { name: 'title for track 2' }).inputValue(), 'second');
     } else {
       await page.getByLabel('audio file', { exact: true }).setInputFiles(wave('single.wav'));
       await page.getByText('selected: single.wav', { exact: true }).waitFor();
@@ -63,7 +63,7 @@ async function verify(browser, width, album) {
     const blocked = page.waitForEvent('requestfailed', { predicate: request => request.method() === 'POST' && /^\/v1\/uploads\/[a-f0-9]{64}\/[a-f0-9-]+$/.test(new URL(request.url()).pathname) }).catch(() => undefined);
     const [admission] = await Promise.all([
       page.waitForResponse(response => response.url() === authorizer && response.request().method() === 'POST'),
-      page.getByRole('button', { name: album ? 'upload songs' : 'upload', exact: true }).click()
+      page.getByRole('button', { name: album ? 'upload tracks' : 'upload', exact: true }).click()
     ]);
     if (!admission.ok()) throw new Error(`upload admission returned HTTP ${admission.status()}`);
     assert.ok(await blocked, 'transfer start did not reach the browser guard');

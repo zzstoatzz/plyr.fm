@@ -403,7 +403,7 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 		if (!input.file.type.startsWith('audio/')) throw new Error('pick an audio file');
 		if (input.file.size > MAX_AUDIO_BYTES) throw new Error('audio files are limited to 100 MB');
 		const closed = !!input.waysIn?.length;
-		if (closed && !access) throw new Error('sign in again to allow closing your music');
+		if (closed && !access) throw new Error('sign in again to allow closing your tracks');
 		const uploaded = await uploadBlob(rpc, input.file, assertSession);
 		assertSession();
 		const cid = (uploaded.blob as { ref: { $link: string } }).ref.$link;

@@ -37,7 +37,7 @@
   let tracksTab: HTMLButtonElement;
   let albumsTab: HTMLButtonElement;
 
-  const name = $derived(profile?.display_name || account.handle || 'your music');
+  const name = $derived(profile?.display_name || account.handle || 'your uploads');
   let filter = $state('');
   let loadingAll = $state(false);
   let sort = $state<'recent' | 'title' | 'plays'>('recent');
@@ -241,7 +241,7 @@
   </div>
 
   {#if catalog.loading || (tab === 'tracks' && ownerLoading && !music.length)}
-    <Loading label="loading your music" inline />
+    <Loading label="loading your uploads" inline />
   {:else if catalog.error}
     <p class="state" role="alert">{catalog.error}</p>
     <button class="text-button" onclick={() => owned[tab].retry()}>retry</button>

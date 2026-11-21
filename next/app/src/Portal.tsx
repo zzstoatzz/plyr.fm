@@ -32,7 +32,7 @@ export function Portal() {
   const auth = useAuth();
   if (!auth.ready) return <PortalPage><WaveLoading label="Loading account" /></PortalPage>;
   if (!auth.did) return <PortalPage>
-    <Copy>sign in to manage your music.</Copy>
+    <Copy>sign in to manage your uploads.</Copy>
     <View style={row}><Action label="sign in" href={{ pathname: '/login', params: { return_to: '/portal' } }} /></View>
   </PortalPage>;
   return <AccountPortal key={auth.did} did={auth.did} handle={auth.handle} />;
@@ -86,7 +86,7 @@ function AccountPortal({ did, handle }: { did: string; handle: string | null }) 
     const revision = catalogRevision(did, 'profile');
     if (revision !== profileRevision.current) { profileRevision.current = revision; artist.retry(); }
   }, [did, artist.retry]));
-  const name = profile?.display_name || handle || 'your music';
+  const name = profile?.display_name || handle || 'your uploads';
   const tabs = <View {...catalogTabs.list} style={row}>
       {portalTabs.map(value => <Choice key={value} {...catalogTabs.tab(value)} />)}
     </View>;
@@ -206,7 +206,7 @@ function OwnedAlbums({ did, active, tabs }: { did: string; active: boolean; tabs
 }
 
 function CatalogState({ loading, error, empty, retry }: { loading: boolean; error?: string; empty: boolean; retry: () => void }) {
-  if (loading) return <WaveLoading label="Loading your music" />;
+  if (loading) return <WaveLoading label="Loading your uploads" />;
   if (error) return <View style={{ gap: 10 }}><Copy>{error}</Copy><View style={row}><Action label="retry" onPress={retry} /></View></View>;
   if (empty) return <View style={{ gap: 12, paddingVertical: 20 }}><Copy>nothing here yet.</Copy></View>;
   return null;

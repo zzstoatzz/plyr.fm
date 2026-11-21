@@ -65,11 +65,26 @@ test('a track finds its album by name', async () => {
 
 test('the sell card sees the whole catalog, page by page', async () => {
   const { sellableReleases } = await import('../src/selling.ts');
-  const track = (n: number) => ({ record: { uri: `at://did:plc:a/fm.plyr.track/${n}` }, metadata: { title: `t${n}`, album: null }, access: { visibility: 'public' } });
+  const track = (n: number) => ({ record: { uri: `at://did:plc:a/fm.plyr.track/${n}` }, metadata: { title: `t${n}`, album: null }, media: {}, access: { visibility: 'public' } });
   const pages = [[track(1), track(2)], [track(3)]];
   const releases = await sellableReleases({
     albums: async () => ({ object: 'list', data: [], has_more: false }),
     tracks: async cursor => { const index = cursor ? Number(cursor) : 0; return { object: 'list', data: pages[index] as never, has_more: index < 1, next_cursor: String(index + 1) }; },
   });
   assert.deepEqual(releases.map(release => release.title), ['t1', 't2', 't3']);
+});
+
+test('the buy-link picker finds unlinked releases by every typed word', async () => {
+  const { findReleases, linkedReleases } = await import('../src/selling.ts');
+  const releases = [
+    { uri: 'a', title: 'Mike Jones Trio - Sept 12', kind: 'album', group: 'album' as const },
+    { uri: 'b', title: "mike's interview, part 2", kind: 'single', group: 'track' as const },
+    { uri: 'c', title: 'covers', kind: 'album', group: 'album' as const },
+  ];
+  const links = [{ subject: 'c', url: 'https://x.bandcamp.com' }];
+  assert.deepEqual(findReleases(releases, links, '').map(r => r.uri), ['a', 'b']);
+  assert.deepEqual(findReleases(releases, links, '  MIKE  trio ').map(r => r.uri), ['a']);
+  assert.deepEqual(findReleases(releases, links, 'mike', 'track').map(r => r.uri), ['b']);
+  assert.deepEqual(findReleases(releases, links, 'covers'), []);
+  assert.deepEqual(linkedReleases(releases, [...links, { subject: 'gone', url: 'https://y.bandcamp.com' }]).map(item => item.release.uri), ['c']);
 });

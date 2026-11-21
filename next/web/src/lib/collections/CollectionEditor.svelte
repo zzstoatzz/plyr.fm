@@ -163,7 +163,7 @@
       {/if}
       <OrderRows {rows} {move} remove={index => { entries = entries.filter((_, position) => position !== index); }} disabled={busy || conflict || confirming} />
       {#if confirming}
-        <p>delete this {list.object}?{list.object === 'album' ? ' its songs will stay published.' : ''}</p>
+        <p>delete this {list.object}?{list.object === 'album' ? ' its tracks will stay published.' : ''}</p>
         <div class="actions">
           <button type="button" class="text-button" disabled={busy} onclick={deleteCollection}>confirm delete</button>
           <button type="button" class="text-button" bind:this={cancelDeleteButton} disabled={busy} onclick={() => confirmDeletion(false)}>cancel delete</button>

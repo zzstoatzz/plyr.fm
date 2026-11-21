@@ -72,7 +72,7 @@ export function AccessSheet({ subject, close }: { subject: AccessSubject; close:
   const openCount = reopened ? owned.length : closedInto ? 0 : owned.filter(isOpen).length;
   const elsewhere = closedInto || reopened ? 0 : owned.filter(track => !isOpen(track) && trackSpace(track) !== space).length;
   if (!auth.policyEditing || !auth.closing) return <Sheet title="who can listen" close={close}>
-    <Copy>reconnect to choose who can listen to your music.</Copy>
+    <Copy>reconnect to choose who can listen to your tracks.</Copy>
     <Action label="reconnect" primary onPress={reconnect} />
   </Sheet>;
   if (!space) return <Sheet title="who can listen" close={close}>
