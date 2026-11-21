@@ -35,12 +35,15 @@ async function fixture(browser, width, scheme, fastChange = false) {
   const receipts = [];
   const appViewWrites = [];
   await context.route('https://api.plyr.fm/**', route => {
+    if (new URL(route.request().url()).pathname === '/tracks/42') return route.fulfill({ json: { atproto_record_uri: tracks[0].record.uri } });
+    return route.abort();
+  });
+  await page.route('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.getRadioState?**', route => {
     const url = new URL(route.request().url());
     const slug = url.searchParams.get('station');
-    if (url.pathname === '/tracks/42') return route.fulfill({ json: { atproto_record_uri: tracks[0].record.uri } });
-    if (url.pathname !== '/radio/state' || !slugs.includes(slug)) return route.abort();
+    if (!slugs.includes(slug)) return route.abort();
     assert.equal(route.request().method(), 'GET');
-    assert.equal(url.searchParams.get('catalog_only'), slug === 'firehose' ? 'false' : 'true', 'only the broadcasting station asks for its live stream');
+    assert.equal(url.searchParams.get('catalogOnly'), slug === 'firehose' ? 'false' : 'true', 'only the broadcasting station asks for its live stream');
     const now = Date.now();
     if (!starts.has(slug)) starts.set(slug, now);
     const start = starts.get(slug);

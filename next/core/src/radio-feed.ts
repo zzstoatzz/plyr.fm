@@ -89,6 +89,7 @@ export class RadioFeed {
 	}
 }
 
-export function createRadioFeeds() {
-  return new Map(radioStations.map(station => [station.slug, new RadioFeed(signal => readRadio(station, signal))]));
+/** One feed per station, read from `api` (next's api origin, no trailing slash). */
+export function createRadioFeeds(api: string) {
+  return new Map(radioStations.map(station => [station.slug, new RadioFeed(signal => readRadio(api, station, signal))]));
 }

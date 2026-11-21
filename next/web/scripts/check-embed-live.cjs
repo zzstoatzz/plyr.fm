@@ -131,7 +131,7 @@ const protocol = 'fm.plyr.embed.experimental.v1';
         await page.waitForTimeout(900);
         assert.equal(await page.evaluate(() => window.messages.at(-1).track.uri), tracks[1].record.uri, 'cancelled load cannot replace the new track');
         counts.delayFirst = false;
-        await page.route('https://api.plyr.fm/radio/state?*', route => route.fulfill({ json: {
+        await page.route('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.getRadioState?**', route => route.fulfill({ json: {
           current: { id: 42, title: 'live capture radio fixture', artist: 'fixture', artist_handle: 'sketches.test', artist_did: tracks[0].artist.did,
             stream_url: `${parent}/audio?scenario=${scenario}`, duration: 16, artwork_url: null, thumbnail_url: null,
             atproto_record_uri: tracks[0].record.uri, atproto_record_cid: tracks[0].record.cid,

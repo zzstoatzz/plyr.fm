@@ -1,8 +1,9 @@
 import { createRadioFeeds } from '@plyr/next-core/radio-feed';
 import { radioPosition, type RadioSnapshot, type RadioStation } from '@plyr/next-core/radio';
+import { apiOrigin } from '$lib/api';
 import { player } from '$lib/player.svelte';
 
-export const feeds = createRadioFeeds();
+export const feeds = createRadioFeeds(apiOrigin);
 
 function onAir(snapshot: RadioSnapshot) {
   const song = snapshot.currentSong;
