@@ -66,7 +66,7 @@ function TrackDetail({ id, onPlay, onEnqueue, trackActions }: {
   const player = usePlayback();
   const [actionsOpen, setActionsOpen] = useState(false);
   if (rkey && (!account.ready || !owner || !rpc || track === null || track && track.artist.did !== owner)) {
-    return account.ready ? <Status error="this track isn't on plyr.fm anymore. it may have been deleted." /> : <Status loading />;
+    return account.ready ? <Status error="couldn't find this track." /> : <Status loading />;
   }
   if (!track) return <Status loading={!result.error} error={result.gone ? "this track isn't on plyr.fm anymore. it may have been deleted." : result.error} retry={result.gone ? undefined : result.retry} />;
   const active = canToggleTrack(player.current, track, !!player.jam);

@@ -53,7 +53,7 @@ export function TrackEditor({ id }: { id: string }) {
     toast.success(`deleted "${title}"`);
     const state = navigation.getState();
     const count = state ? deletedScreens(state, id) : 1;
-    if (state && count < state.routes.length) { router.dismiss(count); return; }
+    if (state && count > 0 && count < state.routes.length) { router.dismiss(count); return; }
     if (router.canDismiss()) router.dismissAll();
     router.replace('/portal');
   }, [navigation, id]);
@@ -90,7 +90,7 @@ function EditorSession({ id, auth, feedback, deleted }: { id: string; auth: Auth
   const reload = useCallback(() => retry.current(), []);
   if (resource.data) return <TrackForm key={resource.data.revision.cid} auth={auth} data={resource.data} reload={reload} feedback={feedback} deleted={deleted} />;
   return <>
-    {resource.error ? <><Copy live>{resource.error}</Copy><Action label="Retry loading track" onPress={resource.retry} /></>
+    {resource.error ? <><Copy live>{resource.error}</Copy>{!resource.gone && <Action label="Retry loading track" onPress={resource.retry} />}</>
       : <Copy>loading track…</Copy>}
   </>;
 }
@@ -133,7 +133,6 @@ function TrackForm({ auth, data, reload, feedback, deleted: leaveDeleted }: { au
         // The record is gone from the PDS once this resolves; the catalog follows on its own, so there is nothing left to edit.
         await pds.deleteTrack(track.record.uri);
         if (!current()) return;
-        locked.current = false;
         feedback.busy(false);
         leaveDeleted(track.metadata.title);
         return;
