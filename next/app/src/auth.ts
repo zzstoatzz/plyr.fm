@@ -1,6 +1,8 @@
 import { ExpoOAuthClient, TokenInvalidError, TokenRefreshError, TokenRevokedError, type OAuthSession } from '@atproto/oauth-client-expo';
 import { hasTealGrant, hasTealPlayGrant, TEAL_SCOPE_PARTS } from '@plyr/next-core/teal-scrobble';
-import { NATIVE_REDIRECT_URI, BASE_SCOPE_PARTS, SCOPE_PARTS, SITE_URL } from './auth-config';
+import { upgradeScope } from '@plyr/next-core/scope-upgrade';
+import { NATIVE_REDIRECT_URI, BASE_SCOPE_PARTS, MODERATOR_SCOPE_PARTS, SCOPE_PARTS, SITE_URL } from './auth-config';
+import { registeredScopeParts } from '@plyr/next-core/oauth-metadata';
 import { restoreWithin, type RestoreOutcome } from './auth-restore';
 import { clearAuth, getAuth, scopeFor, setAuth } from './auth-state';
 import { prepareQueueLogin } from './queue-login';
@@ -11,6 +13,8 @@ export const authAvailable = true;
 const ACTIVE_KEY = 'plyr-next:active-did';
 const RESTORE_DEADLINE_MS = 8000;
 
+// the same list the served native client metadata registers
+const REGISTERED_SCOPE = registeredScopeParts({ SCOPE_PARTS, MODERATOR_SCOPE_PARTS });
 let grantedScope = '';
 let client: ExpoOAuthClient | undefined;
 function oauthClient() {
@@ -21,7 +25,7 @@ function oauthClient() {
 			client_name: 'plyr.fm (next)',
 			client_uri: SITE_URL,
 			redirect_uris: [NATIVE_REDIRECT_URI],
-			scope: [...SCOPE_PARTS, ...TEAL_SCOPE_PARTS].join(' '),
+			scope: REGISTERED_SCOPE.join(' '),
 			grant_types: ['authorization_code', 'refresh_token'],
 			response_types: ['code'],
 			token_endpoint_auth_method: 'none',
@@ -107,7 +111,7 @@ export async function authorizeScrobbling() {
 	const { did, agent } = getAuth();
 	if (!did) throw new Error('sign in to connect teal.fm');
 	if (canScrobble()) return;
-	const scope = [...new Set([...grantedScope.split(' ').filter(Boolean), ...TEAL_SCOPE_PARTS])].join(' ');
+	const scope = upgradeScope(REGISTERED_SCOPE, grantedScope, TEAL_SCOPE_PARTS, did);
 	await prepareQueueLogin();
 	if (getAuth().agent !== agent) throw new Error('account changed');
 	const session = await oauthClient().signIn(did, { scope, redirect_uri: NATIVE_REDIRECT_URI });

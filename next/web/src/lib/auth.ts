@@ -2,12 +2,15 @@ import { Client } from '@atcute/client';
 import type { BrowserOAuthClient, OAuthSession } from '@atproto/oauth-client-browser';
 import { createAuthState, type Did } from '@plyr/next-core/auth-state';
 import { hasTealGrant, hasTealPlayGrant, TEAL_SCOPE_PARTS } from '@plyr/next-core/teal-scrobble';
+import { registeredScopeParts } from '@plyr/next-core/oauth-metadata';
+import { upgradeScope } from '@plyr/next-core/scope-upgrade';
 import { setPrefs } from './prefs.svelte';
 import { returnPath } from '@plyr/next-core/return-path';
 import { authConfig } from './auth-config';
 import { completeQueueLogin, prepareQueueLogin } from './storage/queue-login';
 
-const { SITE_URL, SCOPE_PARTS } = authConfig;
+const { SITE_URL } = authConfig;
+const REGISTERED_SCOPE = registeredScopeParts(authConfig);
 const tealUpgradeKey = 'plyr-next:teal-upgrade';
 let grantedScope = '';
 export function canScrobble() { return hasTealGrant(grantedScope); }
@@ -58,7 +61,7 @@ function oauthClient() {
 	const loopback = location.hostname === '127.0.0.1';
 	const redirect = `${location.origin}/oauth/callback`;
 	const clientId = loopback
-		? `http://localhost?redirect_uri=${encodeURIComponent(redirect)}&scope=${encodeURIComponent([...SCOPE_PARTS, ...TEAL_SCOPE_PARTS].join(' '))}`
+		? `http://localhost?redirect_uri=${encodeURIComponent(redirect)}&scope=${encodeURIComponent(REGISTERED_SCOPE.join(' '))}`
 		: `${SITE_URL}/oauth-client-metadata.json`;
 	client = import('@atproto/oauth-client-browser').then(({ BrowserOAuthClient }) => BrowserOAuthClient.load({
 		clientId,
@@ -175,7 +178,7 @@ export async function authorizeScrobbling() {
 	}
 	sessionStorage.setItem(tealUpgradeKey, did);
 	try {
-		const scope = [...new Set([...grantedScope.split(' ').filter(Boolean), ...TEAL_SCOPE_PARTS])].join(' ');
+		const scope = upgradeScope(REGISTERED_SCOPE, grantedScope, TEAL_SCOPE_PARTS, did);
 		await (await oauthClient()).signInRedirect(did, { scope, state: 'teal:' + did });
 	} catch (error) {
 		sessionStorage.removeItem(tealUpgradeKey);
@@ -183,11 +186,24 @@ export async function authorizeScrobbling() {
 	}
 }
 
+/**
+ * What to tell someone whose grant upgrade didn't start. null when there is nothing to say:
+ * they went to their account host and came back without answering.
+ */
+export function grantFailure(error: unknown): string | null {
+	if (error instanceof Error && error.message === 'User navigated back') return null;
+	const code = typeof error === 'object' && error && 'error' in error && typeof error.error === 'string' ? error.error : null;
+	if (code === 'invalid_scope') return "your account host didn't accept this permission. try again, or sign out and back in.";
+	if (code) return `your account host said no (${code}). try again.`;
+	if (error instanceof TypeError) return "couldn't reach your account host. check your connection and try again.";
+	return "couldn't start that with your account host. try again.";
+}
+
 /** Adds grants to the signed-in session (reporting, the review queue) and comes back to `returnTo`. */
 export async function addGrants(parts: readonly string[], returnTo: string) {
 	const { did } = auth.getAuth();
 	if (!did) throw new Error('sign in first');
-	const scope = [...new Set([...grantedScope.split(' ').filter(Boolean), ...parts])].join(' ');
+	const scope = upgradeScope(REGISTERED_SCOPE, grantedScope, parts, did);
 	try { sessionStorage.setItem(grantUpgradeKey, JSON.stringify({ did, returnTo })); } catch {}
 	try {
 		await (await oauthClient()).signInRedirect(did, { scope, state: returnPath(returnTo) });

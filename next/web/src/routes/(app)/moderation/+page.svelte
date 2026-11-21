@@ -3,7 +3,7 @@
 	import { resolve } from '$app/paths';
 	import { trackIdFromUri } from '@plyr/next-core/api';
 	import { noteTooLong, REPORT_REASONS, type Decision, type QueueItem, type SubjectEvent } from '@plyr/next-core/moderation';
-	import { addGrants, auth } from '$lib/auth';
+	import { addGrants, auth, grantFailure } from '$lib/auth';
 	import { authConfig } from '$lib/auth-config';
 	import { tick } from 'svelte';
 	import { isModerator, moderation } from '$lib/moderation/client';
@@ -33,7 +33,7 @@
 		granting = true;
 		error = '';
 		try { await addGrants(authConfig.MODERATOR_SCOPE_PARTS, '/moderation'); }
-		catch { error = "couldn't reach your account host. try again."; granting = false; }
+		catch (failure) { console.warn('moderation grant did not start', failure); error = grantFailure(failure) ?? ''; granting = false; }
 	}
 	onMount(() => {
 		const stop = auth.subscribe(() => { const next = auth.getAuth(); const changed = next.agent !== account.agent; account = next; if (changed) void load(); });

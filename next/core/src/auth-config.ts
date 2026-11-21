@@ -32,10 +32,11 @@ export function createAuthConfig(options: Options = {}) {
   const AUDIO_SPACE_TYPE = options.audioSpaceType || 'fm.plyr.next.audio';
   const SPACE_MANAGING_APP = options.spaceManagingApp || 'did:web:api.next.plyr.fm#plyr_space';
   const CLOSE_SCOPE = `space:${AUDIO_SPACE_TYPE}?authority=self&collection=${NSID.track}&action=read&action=create&action=delete&manage=create`;
-  function hasCloseGrant(scope: string): boolean {
+  // a host may write `authority=self` back as the account's DID in the scope it grants
+  function hasCloseGrant(scope: string, owner?: string): boolean {
     return scope.split(' ').some(value => {
-      const [type, query] = value.split('?'), grant = new URLSearchParams(query);
-      return type === `space:${AUDIO_SPACE_TYPE}` && grant.get('authority') === 'self' && grant.getAll('collection').includes(NSID.track)
+      const [type, query] = value.split('?'), grant = new URLSearchParams(query), authority = grant.get('authority');
+      return type === `space:${AUDIO_SPACE_TYPE}` && grant.getAll('authority').length === 1 && (authority === 'self' || authority === owner) && grant.getAll('collection').includes(NSID.track)
         && ['read', 'create', 'delete'].every(action => grant.getAll('action').includes(action)) && grant.getAll('manage').includes('create');
     });
   }

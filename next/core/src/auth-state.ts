@@ -47,7 +47,7 @@ export function createAuthState<Rpc>(config: AuthConfig, createRpc: (agent: Agen
 	}
 
 	function setAuth(did: Did, agent: Agent, scope: string) {
-		update({ ...initial, ready: true, did, agent, rpc: createRpc(agent), jamSpace: hasJamGrant(scope), accountSync: hasSyncGrant(scope), privatePublishing: hasPrivatePublishGrant(scope, did), privateDeleting: hasPrivateDeleteGrant(scope, did), uploadStorage: hasUploadGrant(scope), supporterDownloads: hasDownloadGrant(scope), policyEditing: hasPolicyGrant(scope), commenting: hasCommentGrant(scope), closing: hasCloseGrant(scope), reporting: hasReportGrant(scope), moderating: hasModeratorGrant(scope) });
+		update({ ...initial, ready: true, did, agent, rpc: createRpc(agent), jamSpace: hasJamGrant(scope), accountSync: hasSyncGrant(scope), privatePublishing: hasPrivatePublishGrant(scope, did), privateDeleting: hasPrivateDeleteGrant(scope, did), uploadStorage: hasUploadGrant(scope), supporterDownloads: hasDownloadGrant(scope), policyEditing: hasPolicyGrant(scope), commenting: hasCommentGrant(scope), closing: hasCloseGrant(scope, did), reporting: hasReportGrant(scope), moderating: hasModeratorGrant(scope) });
 		void didDocument(did).then(doc => {
 			if (state.agent !== agent) return;
 			update({ ...state, handle: doc.alsoKnownAs?.find(value => value.startsWith('at://'))?.slice(5) ?? null });
