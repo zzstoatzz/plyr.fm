@@ -1,7 +1,12 @@
 import type { Href } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, CaretDown, CaretRight as ChevronRight, CaretUp, Disc, Play } from './icons';
-import { Pressable, StyleSheet, View, type ViewInstance } from 'react-native';
+import { ArrowRight, ArrowSquareOut, CaretDown, CaretRight as ChevronRight, CaretUp, Disc, Play } from './icons';
+import { Linking, Pressable, StyleSheet, View, type ViewInstance } from 'react-native';
+import { offerLabel } from '@plyr/next-core/selling';
+import { tagColors } from '@plyr/next-core/tag-colors';
+import { Pill } from './HeroPieces';
+import { toast } from './toast';
+import { useTrackSelling } from './selling/use-selling';
 import type { Track } from '@plyr/next-core/api';
 import { isPrivateTrack } from '@plyr/next-core/track-access';
 import { useAppearance } from './appearance';
@@ -47,18 +52,47 @@ export function NowPlayingDetails({ track, plays, navigate, position, playing, s
     </View>
     <View testID="now-playing-about" style={[styles.about, { borderColor: theme.line }]}>
       {!privateTrack && <Facts track={track} plays={plays} />}
-      <View>
+      {privateTrack ? <View>
         <Pressable accessibilityRole="link" accessibilityLabel={`About ${track.metadata.title}`} onPress={() => navigate(`/track/${track.id}`)}
           style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [styles.open, { backgroundColor: pressed || hovered ? theme.hover : theme.raised, borderColor: theme.border }]}>
           <Text style={{ ...body, fontWeight: '600' }}>about this track</Text>
           <ArrowRight size={16} color={theme.text} />
         </Pressable>
-      </View>
+      </View> : <>
+        {!!track.metadata.tags?.length && <Tags tags={track.metadata.tags} navigate={navigate} />}
+        <Buy track={track} />
+      </>}
       {prose ? <Text style={body}>{prose}</Text> : null}
       <AccessSummary track={track} style={quiet} />
       {chapters.length > 0 && <Text accessibilityRole="header" aria-level={2} style={{ ...body, fontWeight: '700' }}>tracklist <Text style={{ ...body, color: theme.faint }}>{chapters.length}</Text></Text>}
       {chapters.length > 0 && <Chapters chapters={chapters} position={position} playing={playing} seek={seek} />}
     </View>
+  </View>;
+}
+
+/** The track's tags; each opens home filtered to it. */
+function Tags({ tags, navigate }: { tags: string[]; navigate: (target: Href) => void }) {
+  const theme = useAppearance();
+  return <View testID="now-playing-tags" style={styles.tags}>
+    {tags.map(name => {
+      const palette = tagColors(name, theme.background, false);
+      return <Pressable key={name} accessibilityRole="link" accessibilityLabel={`Tracks tagged ${name}`} onPress={() => navigate({ pathname: '/', params: { tag: name } })} style={styles.tagTarget}>
+        <View style={[styles.tag, { borderColor: palette.borderColor }]}>
+          <Text numberOfLines={1} style={{ color: palette.color, fontFamily: theme.fontFamily, fontSize: 13 * theme.scale }}>{name}</Text>
+        </View>
+      </Pressable>;
+    })}
+  </View>;
+}
+
+function Buy({ track }: { track: Track }) {
+  const theme = useAppearance();
+  const { offer } = useTrackSelling(track);
+  if (!offer) return null;
+  return <View style={styles.buy}>
+    <Pill outline role="link" icon={<ArrowSquareOut size={18 * theme.scale} color={theme.accent} />} label={`buy · ${offerLabel(offer)}`}
+      accessibilityLabel={`Buy ${track.metadata.title}, ${offerLabel(offer)}, opens your browser`}
+      onPress={() => void Linking.openURL(offer.url).catch(() => toast.error('couldn’t open that link'))} />
   </View>;
 }
 
@@ -173,6 +207,10 @@ const styles = StyleSheet.create({
   open: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48, borderRadius: 12, borderWidth: 1 },
   album: { alignSelf: 'flex-start', maxWidth: '100%', minHeight: 28, flexDirection: 'row', alignItems: 'center', gap: 8 },
   chapters: { marginTop: -10 },
+  tags: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 6, marginVertical: -8 },
+  tagTarget: { minHeight: 44, maxWidth: '100%', justifyContent: 'center' },
+  tag: { minHeight: 30, borderRadius: 16, borderWidth: 1, paddingHorizontal: 12, justifyContent: 'center' },
+  buy: { flexDirection: 'row', maxWidth: '100%' },
   chapter: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 36, paddingHorizontal: 8, marginHorizontal: -8, borderRadius: 8 },
   stamp: { textAlign: 'right', fontVariant: ['tabular-nums'] },
 });

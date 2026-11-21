@@ -28,6 +28,8 @@ import { artLeft, flightSteps, titleLeft } from './player-flight-path';
 import { ScrubberFaces } from './ScrubberFaces';
 import { CommentComposer } from './CommentComposer';
 import { useTrackComments } from './track-comments';
+import { Sheet } from './Sheet';
+import { TrackComments } from './TrackComments';
 
 const AnimatedSafeAreaView = Animated.createAnimatedComponent(SafeAreaView);
 const titleOriginFade = [0.05, 0.25] as const;
@@ -152,7 +154,8 @@ export function NowPlaying({ track, close: leave, navigate: go }: {
   const plays = usePlayCount(track.id, track.metrics.play_count);
 
   const seek = player.canSeek && !player.live && !error ? player.seek : undefined;
-  const seeAll = { label: comments.comments.length === 1 ? 'See the comment' : `See all ${comments.comments.length} comments`, open: () => navigate(`/track/${encodeURIComponent(track.id)}`) };
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const seeAll = { label: comments.comments.length === 1 ? 'See the comment' : `See all ${comments.comments.length} comments`, open: () => setCommentsOpen(true) };
   const composer = <View><CommentComposer track={track} positionMs={position * 1000} returnTo={returnTo} /></View>;
   const details = <NowPlayingDetails track={track} plays={plays} navigate={navigate} position={position} playing={playing} seek={seek} />;
   const chapters = useMemo(() => parseChapters(track.metadata.description, track.metadata.duration_seconds ?? undefined).chapters, [track.metadata.description, track.metadata.duration_seconds]);
@@ -249,7 +252,7 @@ export function NowPlaying({ track, close: leave, navigate: go }: {
               <View style={styles.utilities}>
                 {!player.privatePlayback && <View><TrackLikes key={track.id} track={track} iconOnly returnTo={returnTo} /></View>}
                 {!player.privatePlayback && <View><ShareLink compact path={`/track/${encodeURIComponent(track.id)}`} /></View>}
-                {commentable && comments.comments.length > 0 && <View><Pressable accessibilityRole="link" accessibilityLabel={seeAll.label} onPress={seeAll.open} style={styles.commentCount}>
+                {commentable && comments.comments.length > 0 && <View><Pressable accessibilityRole="button" accessibilityLabel={seeAll.label} onPress={seeAll.open} style={styles.commentCount}>
                   {({ hovered }: { pressed: boolean; hovered?: boolean }) => <>
                     <ChatCircle size={22} color={hovered ? theme.text : theme.muted} />
                     <Text style={[caption, styles.numeric, hovered && { color: theme.text }]}>{comments.comments.length}</Text>
@@ -282,7 +285,9 @@ export function NowPlaying({ track, close: leave, navigate: go }: {
         </View>
       </AnimatedSafeAreaView></PullDetector>
     </View>;
-  return <Modal visible transparent accessibilityLabel="Now playing" animationType="none" onShow={() => { requestAnimationFrame(() => setShown(true)); }} onRequestClose={close}><PullRoot>{sheet}</PullRoot></Modal>;
+  return <Modal visible transparent accessibilityLabel="Now playing" animationType="none" onShow={() => { requestAnimationFrame(() => setShown(true)); }} onRequestClose={close}><PullRoot>{sheet}</PullRoot>
+    {commentsOpen && <Sheet title="comments" close={() => setCommentsOpen(false)}><TrackComments track={track} heading={false} /></Sheet>}
+  </Modal>;
 }
 
 const styles = StyleSheet.create({

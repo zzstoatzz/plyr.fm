@@ -14,7 +14,7 @@ const tracks = Array.from({ length: 9 }, (_, index) => {
   return {
     object: 'track', id: 'trk_' + Buffer.from(uri).toString('base64url'),
     record: { uri, cid: `bafy${index}`, revision: null, collection: 'fm.plyr.track', rkey: `t${index}` },
-    metadata: { title: `${String(300 + index * 7)} - sketch number ${index + 1}${index ? '' : ', recorded on the porch at dawn with the window open and the dog joining in'}`, description: index ? null : 'A recording made at dawn.\n\nThe dog joined in.', album: null, duration_seconds: 120 + index * 31, created_at: `2026-11-0${index + 1}T00:00:00Z` },
+    metadata: { title: `${String(300 + index * 7)} - sketch number ${index + 1}${index ? '' : ', recorded on the porch at dawn with the window open and the dog joining in'}`, description: index ? null : 'A recording made at dawn.\n\nThe dog joined in.', ...(index ? {} : { tags: ['ambient', 'home recordings'] }), album: null, duration_seconds: 120 + index * 31, created_at: `2026-11-0${index + 1}T00:00:00Z` },
     artist: { did: artistDid, profile: { handle: 'sketches.test', display_name: 'replyomatic', avatar_url: 'https://panel-fixture.invalid/avatar.jpg', bio: 'ambient sketches, one a day, numbered as they come.' } },
     media: { artwork: { url: `https://panel-fixture.invalid/art/${index}.jpg` } }, access: { visibility: 'public' }, metrics: { play_count: 9 - index, like_count: 3 }
   };

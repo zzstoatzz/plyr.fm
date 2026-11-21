@@ -17,6 +17,7 @@
 	import { playerSheet } from './player-sheet';
 	import type { DockPull } from './dock-pull';
 	import CommentComposer from './listening/CommentComposer.svelte';
+	import TrackBuy from './selling/TrackBuy.svelte';
 	import Likers from './listening/Likers.svelte';
 	import { compactCount } from './listening/format';
 
@@ -162,7 +163,14 @@
 					<div class="avatar"><Artwork src={player.current.artist.profile.avatar_url ?? undefined} size={56} /></div>
 					<span><strong>{player.current.artist.profile.display_name || artistName(player.current)}</strong><small>@{player.current.artist.profile.handle}</small></span><Icon name="chevron" size={19} />
 				</a>{/if}
-				<a class="track-link" href={trackHref(player.current)}>about this track <span aria-hidden="true">→</span></a>
+				{#if !player.liveStation}
+					{#if player.current.metadata.tags?.length}
+						<nav class="tags" aria-label="Tags" data-testid="now-playing-tags">
+							{#each player.current.metadata.tags as tag (tag)}<a href={resolve(`/?${new URLSearchParams({ tag })}`)}>{tag}</a>{/each}
+						</nav>
+					{/if}
+					{#key player.current.id}<TrackBuy track={player.current} />{/key}
+				{/if}
 			{/if}
 			{#if chapters.prose}<p class="description">{chapters.prose}</p>{/if}
 			{#if !player.liveStation && chapters.chapters.length}
@@ -212,6 +220,9 @@
 	.avatar { border-radius: 50%; overflow: hidden; }
 	small { display: block; color: var(--muted); }
 	.track-link { display: flex; justify-content: space-between; padding-block: 0.65rem; border-bottom: 1px solid var(--line); }
+	.tags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-block: 0.85rem 0.5rem; }
+	.tags a { display: grid; align-items: center; min-height: 2.75rem; padding-inline: 0.75rem; max-width: 100%; overflow-wrap: anywhere; border-radius: 0.6rem; color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); font-size: 0.85rem; font-weight: 650; }
+	.tags a:hover { text-decoration: underline; }
 	.description { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); margin-top: 1rem; }
 	.chapters { margin-top: 1.25rem; }
 	h2 { font-size: 1rem; }

@@ -131,9 +131,12 @@ async function transition(browser, origin, width, reducedMotion) {
     await page.waitForFunction(sheet => !sheet.style.transform, await panel.elementHandle());
     const destinations = [
       ['replyomatic', `/u/${tracks[0].artist.profile.handle}`],
-      ['Open queue', '/queue'],
-      ['about this track', `/track/${tracks[0].id}`]
+      ['Open queue', '/queue']
     ];
+    // what used to need a detour lives here now
+    assert.deepEqual(await dialog.getByTestId('now-playing-tags').getByRole('link').allTextContents(), ['ambient', 'home recordings']);
+    assert.equal(await dialog.getByTestId('now-playing-tags').getByRole('link', { name: 'ambient' }).getAttribute('href'), '/?tag=ambient');
+    assert.equal(await dialog.getByRole('link', { name: 'about this track' }).count(), 0, 'no detour to the same details');
     for (const [name, destination] of destinations) {
       const source = new URL(page.url()).pathname;
       const link = dialog.getByRole('link', { name, exact: true });
@@ -157,7 +160,7 @@ async function transition(browser, origin, width, reducedMotion) {
         await page.waitForFunction(sheet => !sheet.style.transform, await panel.elementHandle());
       }
     }
-    for (const path of ['/queue', destinations[0][1], '/']) {
+    for (const path of [destinations[0][1], '/']) {
       await page.goBack();
       await page.waitForURL(origin + path);
     }
