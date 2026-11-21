@@ -36,5 +36,27 @@ export function graphemes(text: string): number {
 		for (const _ of new Segmenter(undefined, { granularity: 'grapheme' }).segment(text)) count++;
 		return count;
 	}
-	return Array.from(text).length;
+	return fallbackGraphemes(text);
+}
+
+// Hermes has no Intl.Segmenter: join the pieces emoji and accents are built from, so iOS counts like the web.
+function joins(code: number) {
+	return code === 0x200d || code === 0x20e3 || (code >= 0xfe00 && code <= 0xfe0f) || (code >= 0x1f3fb && code <= 0x1f3ff)
+		|| (code >= 0x0300 && code <= 0x036f) || (code >= 0xe0020 && code <= 0xe007f);
+}
+
+export function fallbackGraphemes(text: string): number {
+	let count = 0;
+	let afterJoiner = false;
+	let openFlag = false;
+	for (const char of text) {
+		const code = char.codePointAt(0)!;
+		const flag = code >= 0x1f1e6 && code <= 0x1f1ff;
+		if (joins(code)) { afterJoiner = code === 0x200d; continue; }
+		if (afterJoiner) { afterJoiner = false; continue; }
+		if (flag && openFlag) { openFlag = false; continue; }
+		openFlag = flag;
+		count++;
+	}
+	return count;
 }

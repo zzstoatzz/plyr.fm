@@ -68,7 +68,7 @@ function AccountProfileEditor({ did, rpc, handle }: { did: NonNullable<Auth['did
   const savedBio = typeof data?.value?.bio === 'string' ? data.value.bio : '';
   // a fresh profile read (after a save) starts a fresh draft
   const draft: Draft = edits?.cid === cid ? edits : { cid, bio: savedBio };
-  const update = (change: Partial<Draft>) => setEdits({ ...draft, ...change });
+  const update = (change: Partial<Draft>) => setEdits(previous => ({ ...(previous?.cid === cid ? previous : { cid, bio: savedBio }), ...change }));
   const stored = typeof data?.value?.avatar === 'string' && data.value.avatar ? data.value.avatar : undefined;
   const shown = shownAvatar({ picked: draft.file?.uri, cleared: draft.file === null, stored, bluesky: face.avatar });
   const name = (typeof data?.value?.displayName === 'string' && data.value.displayName.trim()) || face.name || handle || '';
@@ -92,6 +92,7 @@ function AccountProfileEditor({ did, rpc, handle }: { did: NonNullable<Auth['did
     if (!fallback) return choosePhoto();
     Alert.alert('photo', undefined, [
       { text: 'Choose a photo', onPress: choosePhoto },
+      ...shown.source === 'new' && stored ? [{ text: 'Keep my current photo', onPress: () => { setImageError(undefined); update({ file: undefined }); } }] : [],
       { text: fallback, style: face.avatar ? 'default' : 'destructive', onPress: () => { setImageError(undefined); update({ file: stored ? null : undefined }); } },
       { text: 'Cancel', style: 'cancel' }
     ]);
@@ -130,7 +131,7 @@ function AccountProfileEditor({ did, rpc, handle }: { did: NonNullable<Auth['did
       <Action label="Retry loading profile" onPress={profile.retry} />
     </> : !data ? <WaveLoading label="Loading profile" /> : <>
       <View style={{ borderRadius: 18, overflow: 'hidden', borderWidth: 1, borderColor: theme.line, backgroundColor: theme.surface, paddingHorizontal: 16, paddingTop: 24, paddingBottom: 16, gap: 4, alignItems: 'center' }}>
-        {shown.url && /^https?:/i.test(shown.url) ? <HeroBackdrop uri={shown.url} height={AVATAR + 120} /> : null}
+        {shown.url ? <HeroBackdrop uri={shown.url} height={AVATAR + 120} /> : null}
         <Pressable accessibilityRole="button" accessibilityLabel={shown.url ? 'Change photo' : 'Add a photo'} disabled={disabled} onPress={changePhoto}
           style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1, borderRadius: AVATAR / 2, boxShadow: theme.dark ? '0px 10px 30px #0000008c' : '0px 10px 30px #00000038' })}>
           {shown.url && !/^https?:/i.test(shown.url)

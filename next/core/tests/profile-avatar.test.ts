@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { graphemes, shownAvatar } from '../src/profile-avatar.ts';
+import { fallbackGraphemes, graphemes, shownAvatar } from '../src/profile-avatar.ts';
 
 test('a picked photo wins over everything', () => {
 	assert.deepEqual(shownAvatar({ picked: 'blob:x', cleared: true, stored: 'p', bluesky: 'b' }), { url: 'blob:x', source: 'new' });
@@ -20,4 +20,8 @@ test('the bio counter counts what people see, not code units', () => {
 	assert.equal(graphemes('hi'), 2);
 	assert.equal(graphemes('👩‍👩‍👧'), 1);
 	assert.equal(graphemes('é'), 1);
+});
+
+test('without Intl.Segmenter (Hermes) emoji still count once', () => {
+	for (const text of ['hi', '👩‍👩‍👧', 'é', '👍🏽', '🇺🇸🇫🇷', '1️⃣', 'café ☕️']) assert.equal(fallbackGraphemes(text), graphemes(text), text);
 });

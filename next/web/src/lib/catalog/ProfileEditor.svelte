@@ -33,6 +33,7 @@
   let menu = $state(false);
   let input = $state<HTMLInputElement>();
   let avatarField = $state<HTMLElement>();
+  let avatarButton = $state<HTMLButtonElement>();
   let live = false;
   let generation = 0;
 
@@ -44,7 +45,8 @@
   const used = $derived(graphemes(bio));
   const tooLong = $derived(used > BIO_GRAPHEMES);
   const locked = $derived(busy || !!saved);
-  // the one thing besides uploading: go back to bluesky, or drop the photo when there is no bluesky one
+  // besides uploading: keep the saved photo after picking another, and go back to bluesky (or drop the photo when there is no bluesky one)
+  const keepable = $derived(shown.source === 'new' && !!stored);
   const fallback = $derived(shown.source === 'new' || shown.source === 'plyr' ? (face.avatar ? 'use my bluesky photo' : 'remove photo') : undefined);
   const sourceNote = $derived(
     shown.source === 'new' ? 'new photo, not saved yet'
@@ -90,7 +92,7 @@
   }
 
   function pickPhoto() {
-    menu = false;
+    closeMenu();
     input?.click();
   }
 
@@ -115,8 +117,22 @@
     } finally { if (attempt === generation) pending = false; }
   }
 
-  function dropPhoto() {
+  function keepPhoto() {
+    closeMenu();
+    generation += 1;
+    pending = false;
+    imageError = '';
+    file = undefined;
+  }
+
+  function closeMenu() {
+    if (!menu) return;
     menu = false;
+    avatarButton?.focus();
+  }
+
+  function dropPhoto() {
+    closeMenu();
     generation += 1;
     pending = false;
     imageError = '';
@@ -151,7 +167,7 @@
   }
 </script>
 
-<svelte:window onpointerdown={outside} onkeydown={event => { if (event.key === 'Escape') menu = false; }} />
+<svelte:window onpointerdown={outside} onkeydown={event => { if (event.key === 'Escape') closeMenu(); }} />
 
 <div class="editor">
   <header class="top">
@@ -174,17 +190,18 @@
       <div class="hero">
         {#if shown.url}<div class="backdrop" aria-hidden="true"><img src={shown.url} alt="" /></div>{/if}
         <div class="avatar-field" bind:this={avatarField}>
-          <button type="button" class="avatar" class:empty={!shown.url} disabled={locked || pending}
-            aria-label={shown.url ? 'change avatar' : 'add avatar'} aria-haspopup={fallback ? 'menu' : undefined} aria-expanded={fallback ? menu : undefined}
+          <button type="button" class="avatar" bind:this={avatarButton} class:empty={!shown.url} disabled={locked || pending}
+            aria-label={shown.url ? 'change avatar' : 'add avatar'} aria-controls={fallback ? 'avatar-choices' : undefined} aria-expanded={fallback ? menu : undefined}
             onclick={avatarPress}>
             <Artwork src={shown.url} size={176} eager fallbackIcon="user" />
             {#if pending}<span class="overlay">preparing…</span>{/if}
             {#if !locked}<span class="badge" aria-hidden="true"><Icon name="camera" size={18} /></span>{/if}
           </button>
           {#if menu && fallback}
-            <div class="menu" role="menu">
-              <button type="button" role="menuitem" onclick={pickPhoto}><Icon name="image" size={18} /> upload a photo</button>
-              <button type="button" role="menuitem" class:danger={!face.avatar} onclick={dropPhoto}>
+            <div class="menu" id="avatar-choices">
+              <button type="button" onclick={pickPhoto}><Icon name="image" size={18} /> upload a photo</button>
+              {#if keepable}<button type="button" onclick={keepPhoto}><Icon name="back" size={18} /> keep my current photo</button>{/if}
+              <button type="button" class:danger={!face.avatar} onclick={dropPhoto}>
                 <Icon name={face.avatar ? 'refresh' : 'trash'} size={18} /> {fallback}
               </button>
             </div>
