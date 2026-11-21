@@ -130,3 +130,12 @@ test "state parameters: defaults, both spellings, and bounds" {
     try std.testing.expectError(error.InvalidQuery, parse(a, "/radio/state?catalog_only=maybe", false));
     try std.testing.expectError(error.InvalidQuery, parse(a, "/radio/state?station=a&station=b", false));
 }
+
+test {
+    _ = @import("../internal/radio/station.zig");
+    _ = @import("../internal/radio/sampler.zig");
+    _ = @import("../internal/radio/clock.zig");
+    _ = @import("../internal/radio/live.zig");
+    _ = @import("../internal/radio/service.zig");
+    _ = @import("../internal/radio/postgres_store.zig");
+}

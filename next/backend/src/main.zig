@@ -345,12 +345,6 @@ test {
     _ = @import("api/catalog.zig");
     _ = @import("internal/application/list_track_suggestions.zig");
     _ = @import("api/radio.zig");
-    _ = @import("internal/radio/station.zig");
-    _ = @import("internal/radio/sampler.zig");
-    _ = @import("internal/radio/clock.zig");
-    _ = @import("internal/radio/live.zig");
-    _ = @import("internal/radio/service.zig");
-    _ = @import("internal/radio/postgres_store.zig");
     _ = @import("internal/application/public_catalog.zig");
     _ = @import("internal/index/track_record_json_store.zig");
     _ = @import("internal/application/notifications.zig");

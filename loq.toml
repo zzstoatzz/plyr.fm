@@ -582,3 +582,7 @@ max_lines = 515
 [[rules]]
 path = "next/app/src/playback.tsx"
 max_lines = 507
+
+[[rules]]
+path = "next/backend/src/main.zig"
+max_lines = 515
