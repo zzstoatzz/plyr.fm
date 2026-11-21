@@ -74,9 +74,10 @@ export function SellCard({ did }: { did: string }) {
     if (await save({ supportUrl: url }, url ? `support link saved: ${storeName(url)}` : 'support link removed')) setSupport(url);
   };
 
+  const linkCount = settings && releases ? linkedReleases(releases, settings.buyLinks).length : 0;
   const summary = !settings ? 'buy and support links' : [
     settings.supportUrl ? `support on ${storeName(settings.supportUrl)}` : null,
-    settings.buyLinks.length ? `${settings.buyLinks.length} buy ${settings.buyLinks.length === 1 ? 'link' : 'links'}` : null,
+    linkCount ? `${linkCount} buy ${linkCount === 1 ? 'link' : 'links'}` : null,
   ].filter(Boolean).join(' · ') || 'not set up yet';
   const small = { color: theme.faint, fontFamily: theme.fontFamily, fontSize: 13 * theme.scale, lineHeight: 18 * theme.scale };
 
@@ -118,7 +119,7 @@ export function SellCard({ did }: { did: string }) {
               </View>
             </Pressable>)}
           {!releases.length ? <Copy>upload something first, then add where it's sold.</Copy>
-            : settings.buyLinks.length < releases.length && <View style={[row, { marginTop: 8 }]}>
+            : findReleases(releases, settings.buyLinks, '').length > 0 && <View style={[row, { marginTop: 8 }]}>
               <Pressable accessibilityRole="button" onPress={() => setSheet({ picking: true })}
                 style={({ pressed }) => [styles.add, { borderColor: theme.accent, opacity: pressed ? 0.7 : 1 }]}>
                 <Text style={{ color: theme.accent, fontFamily: theme.fontFamily, fontSize: 15 * theme.scale, fontWeight: '700' }}>+ add a buy link</Text>
@@ -164,7 +165,7 @@ function BuySheet({ releases, links, picking, release, busy, choose, close, save
     {release ? <>
       <View style={[styles.picked, { backgroundColor: theme.hover }]}>
         <ReleaseLine release={release} detail={release.kind} />
-        {picking && !offer && <Action label="change" onPress={() => choose(undefined)} />}
+        {picking && !offer && <Action label="change" disabled={busy} onPress={() => choose(undefined)} />}
       </View>
       <BuyEditor release={release} offer={offer} busy={busy} save={next => save(release, next)} />
     </> : <>
@@ -178,7 +179,7 @@ function BuySheet({ releases, links, picking, release, busy, choose, close, save
           style={({ pressed }) => [styles.release, { borderTopColor: theme.hairline, opacity: pressed ? 0.7 : 1 }]}>
           <ReleaseLine release={item} detail={item.kind} />
         </Pressable>)}
-        {!found.length && <Copy>{query.trim() ? `nothing without a buy link matches "${query.trim()}".` : 'everything here already has a buy link.'}</Copy>}
+        {!found.length && <Copy>{query.trim() ? `nothing without a buy link matches "${query.trim()}".` : group ? `every ${group} already has a buy link.` : 'everything here already has a buy link.'}</Copy>}
         {found.length > SHOWN && <Text style={[small, { marginTop: 8 }]}>showing {SHOWN} of {found.length}. keep typing to narrow it down.</Text>}
       </View>
     </>}

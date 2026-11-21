@@ -94,7 +94,9 @@
     search?.focus();
   }
 
-  function edit(release: Release) {
+  let urlInput = $state<HTMLInputElement>();
+
+  async function edit(release: Release) {
     const existing = settings?.buyLinks.find(link => link.subject === release.uri);
     editing = release;
     editError = '';
@@ -102,6 +104,14 @@
     currency = existing?.currency ?? 'USD';
     priceText = existing?.amount !== undefined && existing.currency ? priceInput(existing.amount, existing.currency) : '';
     sheet.show();
+    await tick();
+    urlInput?.focus();
+  }
+
+  async function change() {
+    editing = undefined;
+    await tick();
+    search?.focus();
   }
 
   async function saveBuy(event: SubmitEvent) {
@@ -174,9 +184,9 @@
       <div class="picked">
         <span class="art"><Artwork src={editing.art} size={44} /></span>
         <span class="names"><span class="title">{editing.title}</span><small>{editing.kind}</small></span>
-        {#if picking && !offer}<button type="button" class="text-button" onclick={() => { editing = undefined; }}>change</button>{/if}
+        {#if picking && !offer}<button type="button" class="text-button" disabled={busy} onclick={change}>change</button>{/if}
       </div>
-      <label class="url"><small>where it's sold</small><input type="url" inputmode="url" placeholder="https://you.bandcamp.com/album/…" bind:value={urlText} aria-invalid={!!editError} /></label>
+      <label class="url"><small>where it's sold</small><input bind:this={urlInput} type="url" inputmode="url" placeholder="https://you.bandcamp.com/album/…" bind:value={urlText} aria-invalid={!!editError} /></label>
       <label class="price"><small>price</small><input inputmode="decimal" placeholder="optional" bind:value={priceText} /></label>
       <label class="currency"><small>currency</small><select bind:value={currency}>{#each CURRENCIES as code (code)}<option value={code}>{code}</option>{/each}</select></label>
       {#if editError}<p class="error" role="alert">{editError}</p>{:else}<p class="hint wide">leave the price empty to just say "buy on Bandcamp".</p>{/if}
@@ -202,7 +212,7 @@
             </button>
           </li>
         {:else}
-          <li class="hint">{query.trim() ? `nothing without a buy link matches "${query.trim()}".` : 'everything here already has a buy link.'}</li>
+          <li class="hint">{query.trim() ? `nothing without a buy link matches "${query.trim()}".` : group ? `every ${group} already has a buy link.` : 'everything here already has a buy link.'}</li>
         {/each}
       </ul>
       {#if found.length > SHOWN}<p class="hint">showing {SHOWN} of {found.length}. keep typing to narrow it down.</p>{/if}
