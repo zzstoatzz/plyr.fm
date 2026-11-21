@@ -57,7 +57,7 @@ async function verify(browser, width, album) {
       await page.getByLabel('audio file', { exact: true }).setInputFiles(wave('single.wav'));
       await page.getByText('selected: single.wav', { exact: true }).waitFor();
     }
-    await page.getByRole('checkbox', { name: 'use plyr storage' }).check();
+    await page.getByRole('checkbox', { name: 'use plyr.fm storage' }).check();
 
     stage = 'checking upload authority from the browser';
     const blocked = page.waitForEvent('requestfailed', { predicate: request => request.method() === 'POST' && /^\/v1\/uploads\/[a-f0-9]{64}\/[a-f0-9-]+$/.test(new URL(request.url()).pathname) }).catch(() => undefined);

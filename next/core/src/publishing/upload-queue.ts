@@ -177,7 +177,7 @@ export function createUploadQueue<Rpc extends RepoRpc>({
     const duration = input.duration ?? await measureAudioDuration(input.file).catch(() => undefined);
     const ready = { ...input, duration };
     const route = uploadRoute(input.file, duration);
-    if (route.kind === 'service' && !auth.uploadStorage) throw new Error('sign in again to allow plyr storage');
+    if (route.kind === 'service' && !auth.uploadStorage) throw new Error('sign in again to allow plyr.fm storage');
     const reservation = await pds.reserveCreate('track', draft.reservedRkey).catch(() => { throw new Error('finish the earlier upload first'); });
     session(job);
     patch(job, { phase: 'uploading', rkey: reservation.rkey });

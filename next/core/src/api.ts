@@ -184,7 +184,7 @@ export function createApi(origin: string, playListenerId: () => string, nsidPref
 				return await request<T>(url.toString(), 20_000, signal);
 			} catch (error) {
 				if (signal?.aborted || error instanceof ApiError) throw error;
-				throw new ApiError(0, "couldn't reach the plyr API, try again in a moment");
+				throw new ApiError(0, "couldn't reach plyr.fm, try again in a moment");
 			}
 		}
 	}

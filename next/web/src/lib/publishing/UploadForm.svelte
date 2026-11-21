@@ -402,10 +402,10 @@
         {#if service}
           <label class="consent">
             <input type="checkbox" bind:checked={consent} />
-            <span><b>use plyr storage</b> plyr keeps the original file and makes an mp3 so it plays everywhere. playback and downloads are public.</span>
+            <span><b>use plyr.fm storage</b> plyr.fm keeps the original file and makes an mp3 so it plays everywhere. playback and downloads are public.</span>
           </label>
           {#if !account.uploadStorage}
-            <p class="problem">sign in again to allow plyr storage. what you typed stays here. <a href="/login?return_to=%2Fupload">sign in again</a></p>
+            <p class="problem">sign in again to allow plyr.fm storage. what you typed stays here. <a href="/login?return_to=%2Fupload">sign in again</a></p>
           {/if}
         {/if}
       </div>

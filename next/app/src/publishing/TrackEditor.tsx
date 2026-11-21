@@ -137,7 +137,7 @@ function TrackForm({ auth, data, reload, feedback }: { auth: Auth; data: Data; r
   }
 
   function confirmDelete() {
-    Alert.alert(`delete "${track.metadata.title}"?`, 'it comes off your profile and plyr, along with its likes and plays. keep your original file: this cannot be undone.', [
+    Alert.alert(`delete "${track.metadata.title}"?`, 'it comes off your profile and plyr.fm, along with its likes and plays. keep your original file: this cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: () => void save(true) }
     ]);

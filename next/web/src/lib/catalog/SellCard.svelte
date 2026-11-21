@@ -105,7 +105,7 @@
 
 <section class="sell" aria-labelledby="sell-title">
   <h2 id="sell-title">sell your music</h2>
-  <p class="subtle">point listeners at wherever you already sell. buttons show up on your artist page and releases. plyr never sees the payment.</p>
+  <p class="subtle">point listeners at wherever you already sell. buttons show up on your artist page and releases. plyr.fm never sees the payment.</p>
   {#if !account.accountSync}
     <p>reconnect to choose where listeners can buy your music.</p>
     <a class="text-button strong" href={`${resolve('/(app)/login')}?${new URLSearchParams({ return_to: '/portal' })}`}>reconnect</a>

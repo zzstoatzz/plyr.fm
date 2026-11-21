@@ -53,7 +53,7 @@
 <Sheet bind:this={sheet} title={`report "${name}"`} {busy} onclose={() => { active?.abort(); onclose?.(); }}>
   {#if !account.reporting}
     <div class="grant">
-      <p>to send reports, let plyr send them for you. you'll come right back here.</p>
+      <p>to send reports, let plyr.fm send them for you. you'll come right back here.</p>
       <button class="hero-pill primary" type="button" disabled={granting} onclick={allowReports}>{granting ? 'opening…' : 'allow reports'}</button>
       {#if error}<p class="error" role="alert">{error}</p>{/if}
     </div>

@@ -337,7 +337,7 @@ async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'reg
     assert.equal(blobWrites, 2);
 
     await audioInput.setInputFiles({ name: 'for conversion.wav', mimeType: 'audio/wav', buffer: wav });
-    const consent = page.getByRole('checkbox', { name: 'use plyr storage' });
+    const consent = page.getByRole('checkbox', { name: 'use plyr.fm storage' });
     await consent.waitFor();
     assert.ok(await submit.isDisabled());
     await consent.check();
