@@ -14,13 +14,21 @@
 
 <script lang="ts">
 	import { audioAccept } from '$lib/media/accept';
-  import { onMount, untrack, type Snippet } from 'svelte';
+  import { onMount, untrack } from 'svelte';
+  import { goto } from '$app/navigation';
+  import { resolve } from '$app/paths';
   import type { CreateOperation } from '@plyr/next-core/publishing/create-operation';
   import { PUBLIC_AUDIO_FORMATS, type UploadOperation } from '@plyr/next-core/publishing/upload-model';
   import { draftInRecovery, type QueuedUploadDraft } from '@plyr/next-core/publishing/queued-upload-draft';
   import { needsPlyrStorage, uploadInProgress } from '@plyr/next-core/publishing/upload-queue-model';
   import { normalizeTrackTags } from '@plyr/next-core/publishing/track-tags';
   import { creditName } from '@plyr/next-core/publishing/credit-name';
+  import { accessFromRules, accessProblem, accessRules, accessSummary, onlyYou, readAccessDraft, type AccessDraft } from '@plyr/next-core/publishing/upload-access';
+  import { memberDid } from '@plyr/next-core/access/policy-read';
+  import { MAX_AUDIO_BYTES, type FeaturedArtist } from '@plyr/next-core/pds';
+  import { toast } from '$lib/toast.svelte';
+  import AccessPicker from './AccessPicker.svelte';
+  import PrivateUploads from './PrivateUploads.svelte';
   import { api } from '$lib/api';
   import { auth } from '$lib/auth';
   import { coverImage } from '$lib/media/cover-image';
@@ -39,9 +47,21 @@
   import LargeUpload from './LargeUpload.svelte';
   import QueuedUpload from './QueuedUpload.svelte';
 
-  let { account, submitting = $bindable(false), audio = $bindable(), cover = $bindable(), title = $bindable(''), description = $bindable(''), tags = $bindable(''), visibility }: {
-    account: ReturnType<typeof auth.getAuth>; submitting: boolean; audio: File | undefined; cover: File | undefined; title: string; description: string; tags: string; visibility?: Snippet;
-  } = $props();
+  let { account, startOnlyYou = false }: { account: ReturnType<typeof auth.getAuth>; startOnlyYou?: boolean } = $props();
+  let submitting = $state(false);
+  let audio = $state<File>();
+  let cover = $state<File>();
+  let title = $state('');
+  let description = $state('');
+  let tags = $state('');
+  let features = $state<FeaturedArtist[]>([]);
+  let explicit = $state(false);
+  let access = $state<AccessDraft>(untrack(() => startOnlyYou) ? { closed: true, ways: [] } : { closed: false, ways: [] });
+  // each way's problem shows once a submit has tried, not while typing
+  let checked = $state(false);
+  let privateUploads = $state<PrivateUploads>();
+  let privateBusy = $state(false);
+  let privateBlocked = $state(false);
 
   const owner = untrack(() => account.did);
   const pds = untrack(() => createPds(account));
@@ -62,7 +82,7 @@
   let album = $state('');
   let consent = $state(false);
   let autoTag = $state(false);
-  let editorDraft = $derived(JSON.stringify({ title, album, description, tags, autoTag, named: !!title && title === autoTitle }));
+  let editorDraft = $derived(JSON.stringify({ title, album, description, tags, autoTag, features, explicit, access, named: !!title && title === autoTitle }));
   let reattach = $state(false);
   let imageBusy = $state(false);
   let imageVersion = 0;
@@ -83,14 +103,21 @@
   let draftsToRecover = $derived(drafts.filter(draft => !draftInRecovery(draft, pending, transfers) && !jobs.some(job => job.id === draft.id && !(draft.reservedRkey && job.phase === 'failed'))));
   let creationsToRecover = $derived(pending.filter(operation => !active.rkeys.has(operation.rkey) && !transfers.some(transfer => transfer.rkey === operation.rkey)));
   let creationBlocksUpload = $derived(creationsToRecover.some(operation => !operation.archived));
-  let service = $derived(!!audio && needsPlyrStorage(audio));
+  let service = $derived(!!audio && needsPlyrStorage(audio, access.closed));
+  let privateTrack = $derived(onlyYou(access));
+  let summary = $derived(accessSummary(access));
+  let tooLargeClosed = $derived(access.closed && !!audio && audio.size > MAX_AUDIO_BYTES);
+  const signInAgain = '/login?return_to=%2Fupload';
+  // a closed track needs this session to be allowed to close music and write who can listen
+  let accessSignIn = $derived(!access.closed ? '' : privateTrack ? (account.privatePublishing ? '' : signInAgain) : (account.closing && account.policyEditing ? '' : signInAgain));
   let tagProblem = $derived.by(() => {
     try { if (tags.trim()) normalizeTrackTags(tags.split('\n')); return ''; }
     catch (failure) { return message(failure, 'check the tags.'); }
   });
 
-  let editing = $derived(!!audio || !!cover || reattach || !!(title || album || description || tags));
-  let blocked = $derived(submitting || !audio || !title.trim() || !artist || !!tagProblem || imageBusy || loading || !!recoveryProblem || creationBlocksUpload || (service && (!consent || !account.uploadStorage)));
+  let editing = $derived(!!audio || !!cover || reattach || !!(title || album || description || tags || features.length));
+  let blocked = $derived(submitting || privateBusy || !audio || !title.trim() || !artist || !!tagProblem || imageBusy || tooLargeClosed || !!accessSignIn
+    || (privateTrack ? privateBlocked : (loading || !!recoveryProblem || creationBlocksUpload || (service && (!consent || !account.uploadStorage)))));
 
   function isImage(file: File) {
     return file.type.startsWith('image/') || /\.(heic|heif|jpe?g|png|webp|gif|avif)$/i.test(file.name);
@@ -130,6 +157,12 @@
       album = draftField(draft, 'album');
       description = draftField(draft, 'description');
       tags = draftField(draft, 'tags');
+      if (draft && typeof draft === 'object') {
+        const saved = draft as Record<string, unknown>;
+        features = Array.isArray(saved.features) ? saved.features.filter((item): item is FeaturedArtist => !!item && typeof item === 'object' && typeof item.did === 'string').slice(0, 10) : [];
+        explicit = saved.explicit === true;
+        if ('access' in saved && !startOnlyYou) access = readAccessDraft(saved.access);
+      }
       reattach = !!(title || album || description || tags);
       consent = localStorage.getItem(consentKey) === 'yes';
       autoTag = draft && typeof draft === 'object' && 'autoTag' in draft && typeof draft.autoTag === 'boolean'
@@ -162,7 +195,7 @@
   $effect(() => {
     if (!hydrated) return;
     try {
-      if (title || album || description || tags) {
+      if (title || album || description || tags || features.length) {
         localStorage.setItem(draftKey, editorDraft);
       } else localStorage.removeItem(draftKey);
       draftProblem = '';
@@ -253,7 +286,7 @@
     const input = await writeEditor(owner, () => uploadQueue.takeBack(id, input => {
       if (!current()) throw new Error('reopen the upload page to edit this draft.');
       const previous = localStorage.getItem(draftKey);
-      const saved = JSON.stringify({ title: input.title, album: input.album, description: input.description, tags: input.tags?.join('\n'), autoTag: !!input.autoTag });
+      const saved = JSON.stringify({ title: input.title, album: input.album, description: input.description, tags: input.tags?.join('\n'), autoTag: !!input.autoTag, features: input.features ?? [], explicit: !!input.explicit, access: accessFromRules(input.waysIn) });
       localStorage.setItem(draftKey, saved);
       return () => {
         if (localStorage.getItem(draftKey) !== saved) return;
@@ -272,19 +305,58 @@
     description = input.description ?? '';
     tags = input.tags?.join('\n') ?? '';
     autoTag = !!input.autoTag;
+    features = input.features ?? [];
+    explicit = !!input.explicit;
+    access = accessFromRules(input.waysIn);
     reattach = false;
     formProblem = '';
     audioProblem = '';
     coverProblem = '';
   }
 
+  function clearEditor() {
+    audio = undefined;
+    cover = undefined;
+    if (audioInput) audioInput.value = '';
+    if (coverInput) coverInput.value = '';
+    title = autoTitle = album = description = tags = formProblem = audioProblem = coverProblem = '';
+    features = [];
+    explicit = false;
+    checked = false;
+  }
+
+  async function savePrivate() {
+    if (!audio || !privateUploads) return;
+    const submittedDraft = editorDraft;
+    submitting = true;
+    try {
+      const saved = await privateUploads.save({ file: audio, artwork: cover, title, artist, description, tags: tags.split('\n') });
+      if (!saved || !current()) return;
+      try { if (localStorage.getItem(draftKey) === submittedDraft) localStorage.removeItem(draftKey); } catch {}
+      clearEditor();
+      toast.add('saved to your library. only you can play it.', 'success');
+      await goto(resolve('/(app)/portal'));
+    } catch (failure) {
+      if (current()) formProblem = message(failure, 'could not save this track.');
+    } finally { submitting = false; }
+  }
+
   async function upload(event: SubmitEvent) {
     event.preventDefault();
-    if (!owner || !hydrated || submitting || !current() || !audio || !title.trim() || !artist || tagProblem || imageBusy || loading || recoveryProblem || creationBlocksUpload || (service && (!consent || !account.uploadStorage))) return;
+    const problem = accessProblem(access);
+    if (problem) { checked = true; formProblem = problem; document.getElementById('who-can-listen')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+    if (!owner || !hydrated || !current() || blocked || !audio) return;
+    formProblem = '';
+    if (privateTrack) return savePrivate();
     submitting = true;
     const submittedDraft = editorDraft;
-    const input = { file: audio, artwork: cover, title, artist, album, description, tags: tags.trim() ? tags.split('\n') : undefined, autoTag };
+    // everything is read before handles resolve, so typing during the lookup can't change what was sent
+    const base = { file: audio, artwork: cover, title, artist, album, description, tags: tags.trim() ? tags.split('\n') : undefined, autoTag,
+      ...(features.length ? { features: [...features] } : {}), ...(explicit ? { explicit: true } : {}) };
+    const submittedAccess = $state.snapshot(access);
     try {
+      const waysIn = await accessRules(submittedAccess, memberDid);
+      const input = { ...base, ...(waysIn.length ? { waysIn } : {}) };
       await writeEditor(owner, async () => {
         await uploadQueue.add(input);
         try {
@@ -294,11 +366,7 @@
         }
       });
       if (!current() || audio !== input.file || cover !== input.artwork || editorDraft !== submittedDraft) return;
-      audio = undefined;
-      cover = undefined;
-      if (audioInput) audioInput.value = '';
-      if (coverInput) coverInput.value = '';
-      title = autoTitle = album = description = tags = formProblem = audioProblem = coverProblem = '';
+      clearEditor();
     } catch (failure) {
       formProblem = message(failure, 'could not start the upload.');
     } finally { submitting = false; }
@@ -306,6 +374,7 @@
 </script>
 
 <UploadJobs jobs={jobs.filter(job => job.owner === owner)} disabled={!hydrated || imageBusy || submitting} edit={editAgain} />
+<PrivateUploads bind:this={privateUploads} {account} bind:busy={privateBusy} bind:blocked={privateBlocked} />
 {#if queuedProblem}
   <p role="alert">{queuedProblem}</p>
   <button class="text-button" onclick={refreshDrafts}>retry queued uploads</button>
@@ -398,6 +467,7 @@
         </div>
         {#if audioProblem}<p class="problem" role="alert">{audioProblem}</p>{/if}
         {#if audio}<AudioPreview file={audio} bind:duration />{/if}
+        {#if tooLargeClosed}<p class="problem" role="alert">closed tracks can be up to 100 MB for now. choose a smaller file or make it open.</p>{/if}
         {#if service}
           <label class="consent">
             <input type="checkbox" bind:checked={consent} />
@@ -410,16 +480,24 @@
       </div>
     </header>
 
-    <UploadDetails bind:album bind:tags bind:description bind:autoTag {tagProblem} />
+    <UploadDetails bind:album bind:tags bind:description bind:autoTag bind:features bind:explicit owner={owner ?? undefined} {tagProblem} onlyYou={privateTrack} />
+    <AccessPicker bind:access {artist} {title} cover={coverPreview} disabled={submitting} {checked} needsSignIn={accessSignIn || undefined} />
   {/if}
 
   {#if draftProblem}<p class="problem" role="alert">{draftProblem}</p>{/if}
   {#if formProblem}<p class="problem" role="alert">{formProblem}</p>{/if}
   <div class="bar">
-    {@render visibility?.()}
-    <span class="hint">{audio ? 'you can keep browsing while it uploads' : ''}</span>
-    <button class="pill primary submit" type="submit" disabled={blocked}><Icon name="upload" size={18} />upload</button>
+    {#if editing}
+      <button type="button" class="summary" aria-label="who can listen: {summary.label}{summary.detail ? `, ${summary.detail}` : ''}. change" onclick={() => document.getElementById('who-can-listen')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>
+        <Icon name={access.closed ? 'lock' : 'globe'} size={17} /><b>{summary.label}</b>{#if summary.detail}<small>· {summary.detail}</small>{/if}<span class="caret"><Icon name="down" size={15} /></span>
+      </button>
+      <span class="hint rights">by uploading you confirm you have the rights to share this.</span>
+    {:else}
+      <span class="hint"></span>
+    {/if}
+    <button class="pill primary submit" type="submit" disabled={blocked}><Icon name="upload" size={18} />{submitting || privateBusy ? 'saving…' : 'upload'}</button>
   </div>
+  {#if editing}<p class="rights-phone">by uploading you confirm you have the rights to share this.</p>{/if}
 </form>
 
 <style>
@@ -475,6 +553,12 @@
   .bar { position: sticky; bottom: calc(1rem + var(--bar-offset, 0px)); z-index: 3; display: flex; align-items: center; gap: 1rem; padding: 0.5rem 0.5rem 0.5rem 0.75rem; border-radius: 999px; background: var(--glass); border: 1px solid var(--line); backdrop-filter: blur(18px); box-shadow: 0 0.6rem 2rem rgb(0 0 0 / 0.14); }
   .hint { flex: 1; text-align: right; color: var(--faint); font-size: 0.85rem; }
   .submit { min-height: 3rem; padding: 0 1.75rem; font-size: 1.02rem; }
+  .summary { display: inline-flex; align-items: center; gap: 0.45rem; min-width: 0; max-width: 24rem; min-height: 2.75rem; padding: 0 0.9rem 0 0.75rem; border-radius: 999px; border: 1px solid var(--line); background: var(--raised); color: var(--text); font-size: 0.92rem; white-space: nowrap; }
+  .summary small { overflow: hidden; text-overflow: ellipsis; color: var(--faint); font-weight: 600; font-size: 0.85rem; }
+  .summary .caret { display: inline-flex; color: var(--faint); transform: rotate(180deg); }
+  .summary:hover { background: var(--hover); }
+  .rights { text-align: left; line-height: 1.3; font-size: 0.8rem; }
+  .rights-phone { display: none; }
 
   summary { cursor: pointer; padding: 0.6rem 0; }
 
@@ -494,6 +578,9 @@
     .consent { text-align: left; }
     .bar { gap: 0.5rem; padding: 0.4rem; }
     .hint { display: none; }
-    .submit { flex: 1; min-width: 0; padding: 0 1rem; }
+    .summary { flex: 1; min-height: 3rem; }
+    .summary small { display: none; }
+    .submit { flex: none; min-width: 0; padding: 0 1.2rem; }
+    .rights-phone { display: block; margin-top: -0.25rem; text-align: center; color: var(--faint); font-size: 0.8rem; }
   }
 </style>

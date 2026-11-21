@@ -1,29 +1,43 @@
 <script lang="ts">
+  import type { FeaturedArtist } from '@plyr/next-core/pds';
+  import FeatureInput from './FeatureInput.svelte';
   import TagInput from './TagInput.svelte';
-  let { album = $bindable(''), tags = $bindable(''), description = $bindable(''), autoTag = $bindable(false), tagProblem }: {
-    album: string; tags: string; description: string; autoTag: boolean; tagProblem: string;
+  let { album = $bindable(''), tags = $bindable(''), description = $bindable(''), autoTag = $bindable(false), features = $bindable([]), explicit = $bindable(false), owner, tagProblem, onlyYou = false }: {
+    album: string; tags: string; description: string; autoTag: boolean; features: FeaturedArtist[]; explicit: boolean; owner?: string; tagProblem: string;
+    /** an only-you track keeps title, cover, description and tags; the rest waits until others can listen */
+    onlyYou?: boolean;
   } = $props();
 </script>
 
 <div class="details">
   <div class="card">
-    <label class="field"><span>album</span><input bind:value={album} maxlength="256" placeholder="optional" /></label>
+    {#if !onlyYou}
+      <label class="field"><span>album</span><input bind:value={album} maxlength="256" placeholder="optional" /></label>
+      <FeatureInput bind:value={features} {owner} />
+    {/if}
     <TagInput bind:value={tags} />
     {#if tagProblem}<p class="problem" role="alert">{tagProblem}</p>{/if}
+    {#if onlyYou}<p class="subtle note">album, featuring, auto-tag and explicit apply once someone else can listen.</p>{:else}
     <label class="switch">
       <span><b>auto-tag with recommended genres</b><small>we listen once it's up and add a few genre tags. you can remove them later.</small></span>
       <input type="checkbox" role="switch" bind:checked={autoTag} />
     </label>
+    {/if}
   </div>
   <div class="card">
     <label class="field"><span>description</span><textarea bind:value={description} maxlength="5000" rows="5" placeholder="liner notes, credits, lyrics…"></textarea></label>
     {#if description.length > 4500}<p class="subtle count">{description.length} / 5000</p>{/if}
+    {#if !onlyYou}<label class="switch">
+      <span><b>explicit lyrics or sounds</b><small>listeners who hide explicit audio won’t hear it until they choose to. the label travels with the track.</small></span>
+      <input type="checkbox" role="switch" bind:checked={explicit} />
+    </label>{/if}
   </div>
 </div>
 
 <style>
   .problem { color: light-dark(#a3271f, #ff8f87); font-size: 0.9rem; }
   .subtle { color: var(--muted); }
+  .note { margin: 0; font-size: 0.85rem; line-height: 1.4; }
   .details { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
   .card { display: grid; gap: 1rem; align-content: start; padding: 1.1rem; background: var(--surface); border: 1px solid var(--line); border-radius: 0.9rem; }
   .field { display: grid; gap: 0.4rem; }

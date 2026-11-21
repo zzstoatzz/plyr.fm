@@ -28,9 +28,14 @@ export function outputBudget(sizeBytes: number, type: string, duration?: number)
 }
 
 /** Where the bytes go: small playable audio to the account's PDS, the rest through plyr storage. */
-export function uploadRoute(file: { name: string; type: string; size: number }, duration?: number): UploadRoute {
+export function uploadRoute(file: { name: string; type: string; size: number }, duration?: number, closed = false): UploadRoute {
   if (!Number.isSafeInteger(file.size) || file.size <= 0) throw new Error('choose a nonempty audio file.');
   if (file.size > MAX_SERVICE_AUDIO_BYTES) throw new Error('audio files are limited to 1.5 GiB.');
+  // closed audio lives in a space on the artist's PDS, never in plyr storage, so it goes as is
+  if (closed) {
+    if (file.size > MAX_AUDIO_BYTES) throw new Error('closed tracks can be up to 100 MB for now.');
+    return { kind: 'pds' };
+  }
   const type = fileType(file.name);
   audioFormat(file.name, file.type, type !== '');
   if (PROCESSED.has(type)) {
@@ -39,8 +44,8 @@ export function uploadRoute(file: { name: string; type: string; size: number }, 
   return file.size > MAX_AUDIO_BYTES ? { kind: 'service' } : { kind: 'pds' };
 }
 
-export function needsPlyrStorage(file: { name: string; size: number }) {
-  return PROCESSED.has(fileType(file.name)) || file.size > MAX_AUDIO_BYTES;
+export function needsPlyrStorage(file: { name: string; size: number }, closed = false) {
+  return !closed && PROCESSED.has(fileType(file.name)) || file.size > MAX_AUDIO_BYTES;
 }
 
 /** One processing poll step: keep waiting, publish, or stop with the reason. */

@@ -78,6 +78,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, summary:focus-visibl
 	outline: 2px solid var(--accent);
 	outline-offset: 3px;
 }
+/* Containers that only take focus from script (route changes, a closed dialog handing focus back, error notices)
+   never draw a ring: on iOS Safari, main's ring ran edge to edge across the top of the player dock. */
+:is(main, section, h1, p, div:not([role]))[tabindex='-1']:focus { outline: none; }
 h1, h2, h3, p { margin: 0; }
 img { display: block; max-width: 100%; }
 /* sliders: a thin rail filled to --fill (set by each slider), with a plain accent dot and no ring */
