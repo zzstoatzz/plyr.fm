@@ -50,6 +50,7 @@ def _prepare(database_url: str, database: str) -> None:
             "0034",
             "0037",
             "0038",
+            "0047",
         ):
             (migration,) = (ROOT / "migrations").glob(f"{prefix}_*.sql")
             connection.execute(migration.read_text())
