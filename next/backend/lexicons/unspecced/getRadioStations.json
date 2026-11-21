@@ -1,0 +1,62 @@
+{
+  "lexicon": 1,
+  "id": "fm.plyr.unspecced.getRadioStations",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "The radio lineup, in display order. Also served at /radio/stations. No auth required.",
+      "parameters": {
+        "type": "params",
+        "properties": {}
+      },
+      "output": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "required": [
+            "default_slug",
+            "stations"
+          ],
+          "properties": {
+            "default_slug": {
+              "type": "string"
+            },
+            "stations": {
+              "type": "array",
+              "items": {
+                "type": "ref",
+                "ref": "#station"
+              }
+            }
+          }
+        }
+      }
+    },
+    "station": {
+      "type": "object",
+      "required": [
+        "slug",
+        "name",
+        "description",
+        "is_default"
+      ],
+      "properties": {
+        "slug": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "source_url": {
+          "type": "string"
+        },
+        "is_default": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

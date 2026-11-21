@@ -6,6 +6,8 @@ const postgres = @import("internal/index/postgres_track_store.zig");
 const postgres_composed_tracks = @import("internal/index/postgres_composed_track_store.zig");
 const postgres_track_charts = @import("internal/index/postgres_track_chart_store.zig");
 const postgres_track_suggestions = @import("internal/index/postgres_track_suggestion_store.zig");
+const postgres_radio = @import("internal/radio/postgres_store.zig");
+const radio_live = @import("internal/radio/live.zig");
 const track_record_json = @import("internal/index/track_record_json_store.zig");
 const postgres_likes = @import("internal/index/postgres_like_query_store.zig");
 const postgres_comments = @import("internal/index/postgres_comment_query_store.zig");
@@ -87,6 +89,11 @@ pub fn main() !void {
     else
         null;
     const track_suggestion_store = if (postgres_track_suggestion_store) |*store| store.store() else null;
+    var postgres_radio_store: ?postgres_radio.PostgresRadioStore = if (postgres_store) |*store|
+        .{ .pool = store.pool }
+    else
+        null;
+    var radio_probe: radio_live.Probe = .{ .io = io, .allocator = allocator };
     var postgres_track_record_json_store: ?track_record_json.PostgresStore = if (postgres_store) |*store|
         .{ .pool = store.pool }
     else
@@ -213,6 +220,15 @@ pub fn main() !void {
                 .track_store = track_store,
                 .track_chart_store = track_chart_store,
                 .track_suggestion_store = track_suggestion_store,
+                .radio = if (postgres_radio_store) |*store| .{
+                    .store = store.store(),
+                    .collections = .{
+                        .track = settings.track_collection,
+                        .profile = settings.profile_collection,
+                        .like = settings.like_collection,
+                    },
+                    .probe = &radio_probe,
+                } else null,
                 .track_record_json_store = track_record_json_store,
                 .like_store = like_store,
                 .comment_store = comment_store,
@@ -328,6 +344,13 @@ test {
     _ = @import("api/notifications.zig");
     _ = @import("api/catalog.zig");
     _ = @import("internal/application/list_track_suggestions.zig");
+    _ = @import("api/radio.zig");
+    _ = @import("internal/radio/station.zig");
+    _ = @import("internal/radio/sampler.zig");
+    _ = @import("internal/radio/clock.zig");
+    _ = @import("internal/radio/live.zig");
+    _ = @import("internal/radio/service.zig");
+    _ = @import("internal/radio/postgres_store.zig");
     _ = @import("internal/application/public_catalog.zig");
     _ = @import("internal/index/track_record_json_store.zig");
     _ = @import("internal/application/notifications.zig");

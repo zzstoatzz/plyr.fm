@@ -8,6 +8,8 @@ const PostgresRestrictions = @import("../internal/space/postgres_restrictions.zi
 const labels = @import("labels.zig");
 const PostgresModerationLog = @import("../internal/moderation/postgres_log.zig").PostgresModerationLog;
 const catalog = @import("catalog.zig");
+const radio = @import("radio.zig");
+const RadioService = @import("../internal/radio/service.zig").Service;
 const xrpc = @import("xrpc.zig");
 const NotificationService = @import("../internal/notification/service.zig").Config;
 const NotificationStore = @import("../internal/notification/store.zig").NotificationStore;
@@ -65,6 +67,7 @@ pub const App = struct {
     moderation_log: ?*PostgresModerationLog = null,
     /// takedowns, asked by checkUserAccess
     space_restrictions: ?*PostgresRestrictions = null,
+    radio: ?RadioService = null,
 };
 
 pub fn handle(
@@ -78,7 +81,7 @@ pub fn handle(
 
     if (request.method == .OPTIONS) {
         var cors = app.cors;
-        if (catalog.match(app.track_collection, path) != null or mem.eql(u8, path, labels.path)) cors.public = true;
+        if (catalog.match(app.track_collection, path) != null or radio.match(app.track_collection, path) != null or mem.eql(u8, path, labels.path)) cors.public = true;
         try response.empty(request, .no_content, request_id, cors);
     } else if (mem.eql(u8, path, "/health")) {
         if (request.method != .GET) {
@@ -130,6 +133,8 @@ pub fn handle(
             .profile = app.profile_collection,
             .like = app.like_collection,
         }, publicCors(app.cors), request_id);
+    } else if (radio.match(app.track_collection, path)) |route| {
+        try radio.handle(request, allocator, app.io, app.radio, route, publicCors(app.cors), request_id);
     } else if (xrpc.match(app.track_collection, path)) |method| {
         try xrpc.handle(request, allocator, app, method, request_id);
     } else if (if (app.notifications) |config| notifications.match(config, path) else null) |method| {
