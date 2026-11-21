@@ -48,7 +48,9 @@ async def scrobble_to_teal(
     duration: int | None,
     album_name: str | None,
 ) -> None:
-    """scrobble a play to teal.fm (creates play record + updates status).
+    """scrobble a play to teal.fm (creates the play record).
+
+    the now-playing status is kept by `teal_status`, from the player heartbeat.
 
     args:
         session_id: the user's session ID for authentication
@@ -58,10 +60,7 @@ async def scrobble_to_teal(
         duration: track duration in seconds
         album_name: album name (optional)
     """
-    from backend._internal.atproto.teal import (
-        create_teal_play_record,
-        update_teal_status,
-    )
+    from backend._internal.atproto.teal import create_teal_play_record
     from backend._internal.auth import get_session
     from backend.config import settings
 
@@ -83,17 +82,6 @@ async def scrobble_to_teal(
             origin_url=origin_url,
         )
         logger.info(f"teal play record created: {play_uri}")
-
-        # update status (now playing)
-        status_uri = await update_teal_status(
-            auth_session=auth_session,
-            track_name=track_title,
-            artist_name=artist_name,
-            duration=duration,
-            album_name=album_name,
-            origin_url=origin_url,
-        )
-        logger.info(f"teal status updated: {status_uri}")
 
     except Exception as e:
         logger.error(f"teal scrobble failed for track {track_id}: {e}", exc_info=True)

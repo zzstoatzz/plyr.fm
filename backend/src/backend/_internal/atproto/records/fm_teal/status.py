@@ -1,6 +1,6 @@
 """fm.teal.actor.status record operations (now playing)."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from backend._internal import Session as AuthSession
@@ -14,6 +14,9 @@ def build_teal_status_record(
     duration: int | None = None,
     album_name: str | None = None,
     origin_url: str | None = None,
+    played_at: datetime | None = None,
+    expiry: datetime | None = None,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     """build a teal.fm actor status record (now playing).
 
@@ -23,13 +26,16 @@ def build_teal_status_record(
         duration: track duration in seconds
         album_name: optional album/release name
         origin_url: optional URL to the track on plyr.fm
+        played_at: when the track started (defaults to now)
+        expiry: when the status stops showing (defaults to 10 minutes from now)
+        now: the record's write time (defaults to the current time)
 
     returns:
         record dict ready for ATProto
     """
-    now = datetime.now(UTC)
-    # expiry defaults to 10 minutes from now
-    expiry = datetime.fromtimestamp(now.timestamp() + 600, UTC)
+    now = now or datetime.now(UTC)
+    played_at = played_at or now
+    expiry = max(expiry or now + timedelta(seconds=600), now)
 
     # build the playView item
     item: dict[str, Any] = {
@@ -37,7 +43,7 @@ def build_teal_status_record(
         "artists": [{"artistName": artist_name}],
         "musicServiceUri": "https://plyr.fm",
         "submissionClientAgent": "plyr.fm/1.0",
-        "playedTime": now.isoformat().replace("+00:00", "Z"),
+        "playedTime": played_at.isoformat().replace("+00:00", "Z"),
     }
 
     if duration:
@@ -64,6 +70,8 @@ async def update_teal_status(
     duration: int | None = None,
     album_name: str | None = None,
     origin_url: str | None = None,
+    played_at: datetime | None = None,
+    expiry: datetime | None = None,
 ) -> str:
     """update the user's teal.fm status (now playing).
 
@@ -76,6 +84,8 @@ async def update_teal_status(
         duration: track duration in seconds
         album_name: optional album/release name
         origin_url: optional URL to the track on plyr.fm
+        played_at: when the track started
+        expiry: when the status stops showing
 
     returns:
         record URI
@@ -90,6 +100,8 @@ async def update_teal_status(
         duration=duration,
         album_name=album_name,
         origin_url=origin_url,
+        played_at=played_at,
+        expiry=expiry,
     )
 
     payload = {

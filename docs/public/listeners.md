@@ -56,7 +56,7 @@ even today, other apps (like [aetheros.computer](https://aetheros.computer)) alr
 
    playlists can be **public** (published to your atmosphere account, readable by any compatible app) or **private** (stays in plyr.fm). private playlists are visible only to you and stay in plyr.fm’s database.
 
-to track and [visualize your listening history](https://teal-appview-production.up.railway.app/), you can [enable teal.fm scrobbling in your settings](https://plyr.fm/settings).
+to track and [visualize your listening history](https://teal-appview-production.up.railway.app/), you can [turn on teal.fm in your settings](https://plyr.fm/settings). it logs each listen as an `fm.teal.feed.play` record and, while a public track plays, sets your `fm.teal.actor.status` so apps like teal.fm and Colibri can show what you're listening to. the status clears when you pause.
 
 ## sensitive content
 
