@@ -408,7 +408,10 @@ export async function oembed(requestUrl, api) {
     html: `<iframe src="${escape(origin + embedPath)}" width="${width}" height="${height}" frameborder="0" allow="autoplay; encrypted-media" style="border-radius: 8px;"></iframe>`,
     cache_age: API_CACHE_SECONDS
   };
-  if (card.image?.width) Object.assign(body, { thumbnail_url: card.image.url, thumbnail_width: card.image.width, thumbnail_height: card.image.height });
+  if (card.image) {
+    const [w, h] = card.image.width ? [card.image.width, card.image.height] : [400, 400];
+    Object.assign(body, { thumbnail_url: card.image.url, thumbnail_width: w, thumbnail_height: h });
+  }
   return { status: 200, body };
 }
 
@@ -442,8 +445,9 @@ export async function ogImage(page, origin, api, fetcher = fetch) {
   try {
     const response = await fetcher(image.source, { cf: { image: cardComposition(image.source, origin) } });
     const type = response.headers.get('content-type') || '';
-    // without cf-resized the transformation didn't run and this is the raw upload
-    if (response.ok && type.startsWith('image/') && response.headers.has('cf-resized')) {
+    // without cf-resized (or with cf-resized: err=…) the transformation didn't run and this is the raw upload
+    const resized = response.headers.get('cf-resized');
+    if (response.ok && type.startsWith('image/') && resized && !/err=/.test(resized)) {
       return new Response(response.body, {
         headers: { 'content-type': type, 'cache-control': 'public, max-age=86400', 'x-plyr-og': 'composed' }
       });

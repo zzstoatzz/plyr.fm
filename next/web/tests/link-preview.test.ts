@@ -216,6 +216,8 @@ test('the card image is composed by the image service, or falls back to the plai
   const raw = await ogImage(page, 'https://plyr.fm', api(), async () => new Response('png', { headers: { 'content-type': 'image/png' } }));
   assert.equal(raw.status, 302);
   assert.match(raw.headers.get('location'), /^https:\/\/images\.plyr\.fm\/cdn-cgi\/image\//);
+  const failed = await ogImage(page, 'https://plyr.fm', api(), async () => new Response('png', { headers: { 'content-type': 'image/png', 'cf-resized': 'err=9413' } }));
+  assert.equal(failed.status, 302, 'a failed transformation is the raw upload, not a card');
   const adult = await ogImage(page, 'https://plyr.fm', api({ track: async () => track({ moderation: { self_labels: ['porn'] } }) }), async () => { throw new Error('not asked'); });
   assert.equal(adult.headers.get('location'), 'https://plyr.fm/icons/icon-512.png');
 });
