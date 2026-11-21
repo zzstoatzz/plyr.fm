@@ -39,7 +39,7 @@ module.exports = async function restoredListening({ page, context, origin, coord
     return route.fallback();
   });
   await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'home', exact: true }).click();
-  const shelf = page.getByRole('region', { name: 'New from people you follow' });
+  const shelf = page.getByRole('region', { name: 'New from people you know' });
   await shelf.getByRole('link', { name: other.metadata.title, exact: true }).waitFor();
   assert.equal(await shelf.getByRole('article').count(), 2, 'one release is shown per followed artist');
   if (process.env.SCREENS_OUTPUT) {
