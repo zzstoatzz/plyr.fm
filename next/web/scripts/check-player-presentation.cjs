@@ -40,7 +40,8 @@ async function verify(browser, origin, width, scheme) {
     const condensed = page.getByTestId('now-playing-condensed');
     const slider = dialog.getByRole('slider', { name: 'Playback position', exact: true });
     const waitAtRest = () => page.waitForFunction(() => !document.querySelector('[data-testid="now-playing-dismiss-region"]')?.style.transform);
-    const open = async () => { await opener.click(); await dialog.waitFor(); await waitAtRest(); };
+    // The mouse leaves the dock after opening, so content scrolling under a parked pointer can't open a hover card.
+    const open = async () => { await opener.click(); await page.mouse.move(1, 1); await dialog.waitFor(); await waitAtRest(); };
     const capture = name => page.screenshot({ path: path.join(output, `${width}-${scheme}-${name}.png`) });
     const drag = await context.newCDPSession(page);
     const touch = (type, points = []) => drag.send('Input.dispatchTouchEvent', {

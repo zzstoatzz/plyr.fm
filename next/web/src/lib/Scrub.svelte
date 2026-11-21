@@ -1,21 +1,17 @@
 <script lang="ts">
 	import { player } from './player.svelte';
 	import { clock } from './tracks';
-	import TimedComments from './listening/TimedComments.svelte';
 	import ChapterWheel from './ChapterWheel.svelte';
 	import type { Chapter } from '@plyr/next-core/chapters';
 
 	let scrub: number | undefined = $state();
-	let { clockLabels = true, stacked = false, chapters = [], chapter = -1, comments = false }: {
-		clockLabels?: boolean; stacked?: boolean; chapters?: Chapter[]; chapter?: number; comments?: boolean;
+	let { clockLabels = true, stacked = false, chapters = [], chapter = -1 }: {
+		clockLabels?: boolean; stacked?: boolean; chapters?: Chapter[]; chapter?: number;
 	} = $props();
 	let preview: number | undefined = $state();
 	const position = $derived(scrub ?? player.position);
 </script>
 
-{#if comments && player.current && !player.privateMode && !player.liveStation}
-	{#key player.current.id}<TimedComments track={player.current} {position} duration={player.duration} seek={seconds => player.seek(seconds)} />{/key}
-{/if}
 
 <div class="scrub" class:clockLabels class:stacked>
 	{#if clockLabels}<span>{clock(position)}</span>{/if}
