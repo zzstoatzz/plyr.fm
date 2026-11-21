@@ -175,7 +175,21 @@ export function createGatedAudio<Key extends SpaceKey, RecordValue extends Recor
 		return blob;
 	}
 
-	return { credentialFor, signedFetch, resolveGatedAudio, openGatedAudio };
+	/** Read one blob of a space record the caller already holds, such as a private track's cover. */
+	async function openSpaceBlob({ space, repo, cid }: { space: string; repo: string; cid: string }, auth: Pick<Auth<unknown>, 'agent'>, transport: SpaceAudioTransport<Key>): Promise<Response> {
+		if (!auth.agent) throw new Error('sign in to see this cover');
+		const authority = space.slice('at://'.length).split('/')[0];
+		if (!isDid(authority) || !isDid(repo) || !/^b[a-z2-7]{20,}$/.test(cid)) throw new Error('invalid space blob');
+		const authorityPds = await pdsEndpoint(authority);
+		const repoPds = repo === authority ? authorityPds : await pdsEndpoint(repo);
+		transport.guard?.();
+		const credential = await credentialFor(auth.agent, space, authorityPds, transport);
+		const response = await signedFetch(transport, credential, `${repoPds}/xrpc/com.atproto.space.getBlob?${new URLSearchParams({ space, repo, cid })}`, repo);
+		if (!response.ok) throw new Error('could not load this cover');
+		return response;
+	}
+
+	return { credentialFor, signedFetch, resolveGatedAudio, openGatedAudio, openSpaceBlob };
 }
 
 /** A PDS that sniffs uploads labels most iPhone .m4a files video/mp4 (an isom/mp42 brand); the audio inside still plays. */

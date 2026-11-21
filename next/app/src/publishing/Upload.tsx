@@ -63,6 +63,7 @@ function tagProblem(tags: string) {
 function TrackUpload({ auth, onlyYou }: { auth: Auth; onlyYou: boolean }) {
   const [restored] = useState(() => readDraft(`plyr-upload-draft:${auth.did}`));
   const [file, setFile] = useState<MediaFile | null>(null);
+  const [artwork, setArtwork] = useState<MediaFile | null>(null);
   const [title, setTitle] = useState(restored?.title ?? '');
   const [description, setDescription] = useState(restored?.description ?? '');
   const [tags, setTags] = useState(restored?.tags ?? '');
@@ -70,7 +71,7 @@ function TrackUpload({ auth, onlyYou }: { auth: Auth; onlyYou: boolean }) {
   const [openBusy, setOpenBusy] = useState(false);
   const [ownerVisited, setOwnerVisited] = useState(onlyYou);
   useEffect(() => { if (onlyYou) setOwnerVisited(true); }, [onlyYou]);
-  const draft = { file, setFile, title, setTitle, description, setDescription, tags, setTags };
+  const draft = { file, setFile, artwork, setArtwork, title, setTitle, description, setDescription, tags, setTags };
   const audience = <AudienceToggle onlyYou={onlyYou} disabled={ownerBusy || openBusy} select={value => router.setParams({ visibility: value ? 'only-you' : undefined })} />;
   return <>
     <View style={onlyYou ? { display: 'none' } : { gap: 16 }}>
@@ -82,10 +83,9 @@ function TrackUpload({ auth, onlyYou }: { auth: Auth; onlyYou: boolean }) {
   </>;
 }
 
-function AccountUpload({ auth, restored, onBusy, audience, file, setFile, title, setTitle, description, setDescription, tags, setTags }: TrackDraftFields & { auth: Auth; restored?: Draft; onBusy: (value: boolean) => void; audience: ReactNode }) {
+function AccountUpload({ auth, restored, onBusy, audience, file, setFile, artwork, setArtwork, title, setTitle, description, setDescription, tags, setTags }: TrackDraftFields & { auth: Auth; restored?: Draft; onBusy: (value: boolean) => void; audience: ReactNode }) {
   const live = useRef(true);
   const draftKey = `plyr-upload-draft:${auth.did}`;
-  const [artwork, setArtwork] = useState<MediaFile | null>(null);
   // The title the last audio file gave, so a later pick may replace it; a typed title is never replaced.
   const autoTitle = useRef<string | undefined>(restored?.named ? restored.title : undefined);
   const [album, setAlbum] = useState(restored?.album ?? '');
