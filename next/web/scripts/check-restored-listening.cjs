@@ -13,6 +13,8 @@ async function verify(browser, origin, width, scheme) {
     page.on('request', request => { if (/getFollows|com.atproto.repo.listRecords/.test(request.url())) accountReads.push(request.url()); });
     await page.route('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.getTrackLikes?**', route => route.fulfill({ json: { object: 'list', data: [{ record: { uri: 'at://did:plc:listener/fm.plyr.like/1' }, actor: { did: 'did:plc:listener', profile: { display_name: 'a listener', handle: 'listener.test' } } }], has_more: false } }));
     await page.goto(origin);
+    // A dialog closing hands focus back to main; on iOS Safari its ring ran across the top of the player dock.
+    assert.equal(await page.locator('main#main').evaluate(main => { main.focus(); return getComputedStyle(main).outlineStyle; }), 'none', 'main draws no focus ring');
     const row = page.getByTestId('home-track-row').first();
     const likeCount = row.getByRole('button', { name: `${tracks[0].metrics.like_count} likes on ${tracks[0].metadata.title}` });
     await likeCount.click();

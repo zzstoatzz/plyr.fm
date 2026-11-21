@@ -46,8 +46,6 @@ async function screen(browser, phone, scheme) {
     await page.goto(origin);
     await page.getByTestId('home-track-row').first().waitFor();
     await page.getByTestId('home-chart').waitFor();
-    assert.equal(await page.locator('main#main').evaluate(main => { main.focus(); return getComputedStyle(main).outlineStyle; }), 'none',
-      'main draws no focus ring when script hands it focus (a closed dialog, a route change)');
     const featured = page.getByTestId('home-featured');
     const artistPath = await featured.getByRole('link').getAttribute('href');
     const expectedCovers = featuredTracks.filter(track => artistPath === '/u/' + track.artist.did).map(track => track.media.artwork.url);
