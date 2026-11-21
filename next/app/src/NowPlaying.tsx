@@ -154,6 +154,8 @@ export function NowPlaying({ track, close: leave, navigate: go }: {
 
   const seek = player.canSeek && !player.live && !error ? player.seek : undefined;
   const [commentsOpen, setCommentsOpen] = useState(false);
+  // While a finger is on the comments list, the list scrolls and the page holds still.
+  const [inComments, setInComments] = useState(false);
   useEffect(() => { setCommentsOpen(false); }, [track.id]);
   const showComments = commentable && comments.enabled;
   const composer = <View><CommentComposer track={track} positionMs={position * 1000} returnTo={returnTo} /></View>;
@@ -200,13 +202,13 @@ export function NowPlaying({ track, close: leave, navigate: go }: {
           </Animated.View> : <View><PlayerControl icon={ChevronDown} label="Close" onPress={close} /></View>}
         </View>
         <Animated.View {...dismiss.contentStartHandlers} onLayout={event => setViewport(event.nativeEvent.layout.height)} style={[styles.scrollRegion, { transform: [{ translateY: motion.lift }] }]}>
-          <PullDetector gesture={pull.scroll}><Animated.ScrollView testID="now-playing-scroll" {...dismiss.scrollProps} scrollEventThrottle={16} scrollEnabled={!dismiss.dragging && !wheelActive} showsVerticalScrollIndicator={!dismiss.dragging}
+          <PullDetector gesture={pull.scroll}><Animated.ScrollView testID="now-playing-scroll" {...dismiss.scrollProps} scrollEventThrottle={16} scrollEnabled={!dismiss.dragging && !wheelActive && !inComments} showsVerticalScrollIndicator={!dismiss.dragging}
             contentContainerStyle={styles.content}>
             <View testID="now-playing-hero" onLayout={event => { titleEnd.current.hero = event.nativeEvent.layout.y; }}
               style={[styles.hero, viewport > 0 && { minHeight: viewport - 36 }]}>
             <Animated.View testID="now-playing-artwork" style={[styles.art, artCarried]}>
               <View ref={artRef}><Cover uri={art} size={artwork} radius={16} onSettle={() => setSettledArt(art)} />
-                {showComments && (commentsOpen ? <View style={StyleSheet.absoluteFill}><CommentsView track={track} comments={comments.comments} art={art} positionMs={position * 1000} size={artwork}
+                {showComments && (commentsOpen ? <View style={StyleSheet.absoluteFill} onTouchStart={() => setInComments(true)} onTouchEnd={() => setInComments(false)} onTouchCancel={() => setInComments(false)}><CommentsView track={track} comments={comments.comments} art={art} positionMs={position * 1000} size={artwork}
                   seek={seek} close={() => setCommentsOpen(false)} returnTo={returnTo} /></View>
                   : playing && !scrub && <CoverComments comments={comments.comments} positionMs={position * 1000} size={artwork} open={() => setCommentsOpen(true)} />)}
               </View>

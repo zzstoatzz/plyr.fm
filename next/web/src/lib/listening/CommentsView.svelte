@@ -56,8 +56,8 @@
   ol { list-style: none; margin: 0; padding: 35% 1.1rem; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; mask-image: linear-gradient(transparent, #000 1.5rem, #000 calc(100% - 3rem), transparent); }
   ol::-webkit-scrollbar { display: none; }
   li { padding-block: 0.55rem; transition: opacity 0.3s; }
-  li.heard { opacity: 0.45; }
-  li.ahead { opacity: 0.32; }
+  li.heard { opacity: 0.5; }
+  li.ahead { opacity: 0.45; }
   li > button { display: flex; gap: 0.75rem; align-items: flex-start; width: 100%; padding: 0; border: 0; background: none; color: var(--text); text-align: start; cursor: pointer; }
   li > button:disabled { cursor: default; }
   li > button:hover:not(:disabled) .say { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 0.2em; }

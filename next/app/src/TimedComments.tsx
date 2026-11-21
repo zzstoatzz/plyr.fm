@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { Animated, Image, PixelRatio, Pressable, ScrollView, StyleSheet, View, type ScrollViewInstance } from 'react-native';
 import type { Track, TrackComment } from '@plyr/next-core/api';
 import { displayUrl } from '@plyr/next-core/artwork';
@@ -85,6 +86,13 @@ export function CommentsView({ track, comments, art, positionMs, size, seek, clo
         <Row comment={item} moment={moment} positionMs={positionMs} seek={seek} />
       </View>) : <Text style={{ color: theme.muted, fontSize: 16 * theme.scale }}>no comments yet.</Text>}
     </ScrollView>
+    <Svg pointerEvents="none" width="100%" height={28} style={styles.fade}>
+      <Defs><LinearGradient id="comments-fade" x1="0" y1="0" x2="0" y2="1">
+        <Stop offset={0} stopColor={theme.background} stopOpacity={0} />
+        <Stop offset={1} stopColor={theme.background} stopOpacity={0.9} />
+      </LinearGradient></Defs>
+      <Rect width="100%" height="100%" fill="url(#comments-fade)" />
+    </Svg>
     <View style={styles.composer}><CommentComposer track={track} positionMs={positionMs} returnTo={returnTo} /></View>
   </View>;
 }
@@ -97,7 +105,7 @@ function Row({ comment, moment, positionMs, seek }: { comment: TrackComment; mom
   const words = emoji ? (now ? 44 : 34) : now ? 25 : 19;
   return <Pressable accessibilityRole="button" accessibilityLabel={`Play from ${stamp}, comment by ${commentAuthor(comment)}: ${comment.text}`}
     accessibilityState={{ disabled: !seek, selected: now }} disabled={!seek} onPress={() => seek?.(comment.timestamp_ms / 1000)}
-    style={[styles.row, { opacity: moment === 'heard' ? 0.45 : moment === 'ahead' ? 0.32 : 1 }]}>
+    style={[styles.row, { opacity: moment === 'heard' ? 0.5 : moment === 'ahead' ? 0.45 : 1 }]}>
     <Cover uri={comment.author.avatar_url} size={now ? 40 : 32} round instant />
     <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
       <View style={styles.meta}>
@@ -121,5 +129,6 @@ const styles = StyleSheet.create({
   close: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   row: { flexDirection: 'row', gap: 12, alignItems: 'flex-start', paddingVertical: 9 },
   meta: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', gap: 8 },
+  fade: { marginTop: -28 },
   composer: { paddingHorizontal: 10, paddingBottom: 10 },
 });
