@@ -23,7 +23,7 @@
   import { needsPlyrStorage, uploadInProgress } from '@plyr/next-core/publishing/upload-queue-model';
   import { normalizeTrackTags } from '@plyr/next-core/publishing/track-tags';
   import { creditName } from '@plyr/next-core/publishing/credit-name';
-  import { accessFromRules, accessProblem, accessRules, accessSummary, onlyYou, readAccessDraft, type AccessDraft } from '@plyr/next-core/publishing/upload-access';
+  import { accessFromRules, accessProblem, accessRules, accessSummary, DEFAULT_OPTIONS, onlyYou, optionsFromInput, optionsInput, readAccessDraft, readUploadOptions, sellProblem, type AccessDraft, type UploadOptions } from '@plyr/next-core/publishing/upload-access';
   import { memberDid } from '@plyr/next-core/access/policy-read';
   import { MAX_AUDIO_BYTES, type FeaturedArtist } from '@plyr/next-core/pds';
   import { toast } from '$lib/toast.svelte';
@@ -56,6 +56,7 @@
   let tags = $state('');
   let features = $state<FeaturedArtist[]>([]);
   let explicit = $state(false);
+  let options = $state<UploadOptions>({ ...DEFAULT_OPTIONS });
   let access = $state<AccessDraft>(untrack(() => startOnlyYou) ? { closed: true, ways: [] } : { closed: false, ways: [] });
   // each way's problem shows once a submit has tried, not while typing
   let checked = $state(false);
@@ -82,7 +83,7 @@
   let album = $state('');
   let consent = $state(false);
   let autoTag = $state(false);
-  let editorDraft = $derived(JSON.stringify({ title, album, description, tags, autoTag, features, explicit, access, named: !!title && title === autoTitle }));
+  let editorDraft = $derived(JSON.stringify({ title, album, description, tags, autoTag, features, explicit, access, options, named: !!title && title === autoTitle }));
   let reattach = $state(false);
   let imageBusy = $state(false);
   let imageVersion = 0;
@@ -116,7 +117,7 @@
   });
 
   let editing = $derived(!!audio || !!cover || reattach || !!(title || album || description || tags || features.length));
-  let blocked = $derived(submitting || privateBusy || !audio || !title.trim() || !artist || !!tagProblem || imageBusy || tooLargeClosed || !!accessSignIn
+  let blocked = $derived(submitting || privateBusy || !audio || !title.trim() || !artist || !!tagProblem || imageBusy || tooLargeClosed || !!accessSignIn || (!privateTrack && !!options.sell && !account.accountSync)
     || (privateTrack ? privateBlocked : (loading || !!recoveryProblem || creationBlocksUpload || (service && (!consent || !account.uploadStorage)))));
 
   function isImage(file: File) {
@@ -161,6 +162,7 @@
         const saved = draft as Record<string, unknown>;
         features = Array.isArray(saved.features) ? saved.features.filter((item): item is FeaturedArtist => !!item && typeof item === 'object' && typeof item.did === 'string').slice(0, 10) : [];
         explicit = saved.explicit === true;
+        options = readUploadOptions(saved.options);
         if ('access' in saved && !startOnlyYou) access = readAccessDraft(saved.access);
       }
       reattach = !!(title || album || description || tags);
@@ -286,7 +288,7 @@
     const input = await writeEditor(owner, () => uploadQueue.takeBack(id, input => {
       if (!current()) throw new Error('reopen the upload page to edit this draft.');
       const previous = localStorage.getItem(draftKey);
-      const saved = JSON.stringify({ title: input.title, album: input.album, description: input.description, tags: input.tags?.join('\n'), autoTag: !!input.autoTag, features: input.features ?? [], explicit: !!input.explicit, access: accessFromRules(input.waysIn) });
+      const saved = JSON.stringify({ title: input.title, album: input.album, description: input.description, tags: input.tags?.join('\n'), autoTag: !!input.autoTag, features: input.features ?? [], explicit: !!input.explicit, access: accessFromRules(input.waysIn), options: optionsFromInput(input) });
       localStorage.setItem(draftKey, saved);
       return () => {
         if (localStorage.getItem(draftKey) !== saved) return;
@@ -308,6 +310,7 @@
     features = input.features ?? [];
     explicit = !!input.explicit;
     access = accessFromRules(input.waysIn);
+    options = optionsFromInput(input);
     reattach = false;
     formProblem = '';
     audioProblem = '';
@@ -322,6 +325,7 @@
     title = autoTitle = album = description = tags = formProblem = audioProblem = coverProblem = '';
     features = [];
     explicit = false;
+    options = { ...DEFAULT_OPTIONS };
     checked = false;
   }
 
@@ -343,7 +347,7 @@
 
   async function upload(event: SubmitEvent) {
     event.preventDefault();
-    const problem = accessProblem(access);
+    const problem = accessProblem(access) ?? (privateTrack ? undefined : sellProblem(options.sell));
     if (problem) { checked = true; formProblem = problem; document.getElementById('who-can-listen')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
     if (!owner || !hydrated || !current() || blocked || !audio) return;
     formProblem = '';
@@ -352,7 +356,7 @@
     const submittedDraft = editorDraft;
     // everything is read before handles resolve, so typing during the lookup can't change what was sent
     const base = { file: audio, artwork: cover, title, artist, album, description, tags: tags.trim() ? tags.split('\n') : undefined, autoTag,
-      ...(features.length ? { features: [...features] } : {}), ...(explicit ? { explicit: true } : {}) };
+      ...(features.length ? { features: [...features] } : {}), ...(explicit ? { explicit: true } : {}), ...optionsInput($state.snapshot(options), access, service) };
     const submittedAccess = $state.snapshot(access);
     try {
       const waysIn = await accessRules(submittedAccess, memberDid);
@@ -481,7 +485,7 @@
     </header>
 
     <UploadDetails bind:album bind:tags bind:description bind:autoTag bind:features bind:explicit owner={owner ?? undefined} {tagProblem} onlyYou={privateTrack} />
-    <AccessPicker bind:access {artist} {title} cover={coverPreview} disabled={submitting} {checked} needsSignIn={accessSignIn || undefined} />
+    <AccessPicker bind:access bind:options plyrStorage={service} needsSettings={options.sell && !privateTrack && !account.accountSync ? signInAgain : undefined} {artist} {title} cover={coverPreview} disabled={submitting} {checked} needsSignIn={accessSignIn || undefined} />
   {/if}
 
   {#if draftProblem}<p class="problem" role="alert">{draftProblem}</p>{/if}

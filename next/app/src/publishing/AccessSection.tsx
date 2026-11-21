@@ -1,16 +1,16 @@
 import { useRef } from 'react';
 import { Image, Pressable, StyleSheet, TextInput, View, type TextInputInstance } from 'react-native';
 import { waysIn } from '@plyr/next-core/access/ways-in';
-import { addWay, previewRules, WAY_KINDS, wayProblem, type AccessDraft, type WayDraft, type WayKind } from '@plyr/next-core/publishing/upload-access';
+import { addWay, buyLinkFor, downloadChoices, downloadsFor, onlyYou, previewRules, sellProblem, WAY_KINDS, wayProblem, type AccessDraft, type UploadOptions, type WayDraft, type WayKind } from '@plyr/next-core/publishing/upload-access';
 import { useAppearance } from '../appearance';
 import { Action, inputFontSize } from '../controls';
-import { Globe, Heart, Info, Lock, MusicNote, Plus, Tag, UserCircle, Users, X, type Icon } from '../icons';
+import { ArrowSquareOut, Globe, Heart, Info, Lock, MusicNote, Plus, Tag, UserCircle, Users, X, type Icon } from '../icons';
 import { Text } from '../Text';
 import { WaysInList } from '../access/WaysIn';
 import type { MediaFile } from '../pds';
 import { usePreviewUri } from './preview-uri';
 import { useRadioGroup } from '../behaviors/use-radio-group';
-import { FieldError } from './UploadPieces';
+import { FieldError, SwitchRow } from './UploadPieces';
 
 const WAYS: Record<WayKind, { icon: Icon; title: string; detail: string; add: string }> = {
   supporter: { icon: Heart, title: 'your supporters', detail: 'anyone with a verified payment to you, any amount', add: 'your supporters' },
@@ -20,16 +20,22 @@ const WAYS: Record<WayKind, { icon: Icon; title: string; detail: string; add: st
 };
 
 /** who can listen to a new track: open, or closed with any number of ways in. closed with none is only you. */
-export function AccessSection({ access, onChange, artist, title, artwork, disabled, checked, needsSignIn }: {
+export function AccessSection({ access, onChange, options, onOptions, plyrStorage, needsSettings, artist, title, artwork, disabled, checked, needsSignIn }: {
   access: AccessDraft; onChange: (access: AccessDraft) => void; artist: string; title: string; artwork: MediaFile | null;
+  options: UploadOptions; onOptions: (options: UploadOptions) => void;
+  /** plyr.fm storage serves the file openly, so downloads stay on */ plyrStorage?: boolean; /** sign in again before buy links can save */ needsSettings?: boolean;
   disabled?: boolean; /** show each way's problem, after a submit tried */ checked?: boolean; /** sign in again before this kind of track can publish */ needsSignIn?: boolean;
 }) {
   const theme = useAppearance();
   const cover = usePreviewUri(artwork);
-  const fields = useRef<Partial<Record<WayKind, TextInputInstance | null>>>({});
+  const fields = useRef<Partial<Record<WayKind | 'sell', TextInputInstance | null>>>({});
   const radio = useRadioGroup({ label: 'who can listen', value: access.closed, disabled, onChange: closed => onChange({ closed, ways: closed ? access.ways : [] }) });
   const missing = WAY_KINDS.filter(kind => !access.ways.some(way => way.kind === kind));
-  const preview = waysIn({ artist, rules: previewRules(access) });
+  const buy = buyLinkFor(options.sell);
+  const preview = waysIn({ artist, rules: previewRules(access), offer: buy && { provider: 'link', subject: '', ...buy } });
+  const downloads = downloadsFor(access, options.downloads, plyrStorage);
+  const downloadRadio = useRadioGroup({ label: 'downloads', value: downloads, disabled: disabled || plyrStorage, onChange: value => onOptions({ ...options, downloads: value }) });
+  const sellIssue = checked ? sellProblem(options.sell) : undefined;
   const type = (size: number, color = theme.text, weight: '400' | '600' | '700' = '400') => ({ color, fontFamily: theme.fontFamily, fontSize: size * theme.scale, fontWeight: weight, lineHeight: size * 1.4 * theme.scale });
   const update = (index: number, way: WayDraft) => onChange({ ...access, ways: access.ways.map((item, at) => at === index ? way : item) });
   function add(kind: WayKind) {
@@ -100,6 +106,54 @@ export function AccessSection({ access, onChange, artist, title, artwork, disabl
         </View>}
         <Text style={type(13, theme.muted)}>{access.ways.length ? 'people who can listen can still record what they hear.' : 'no ways in means only you can play it. it stays in your library and nobody else can find it.'}</Text>
       </> : <Text style={type(13, theme.muted)}>on your profile, in feeds and search, free to play.</Text>}
+      {!onlyYou(access) && <View style={[styles.more, { borderTopColor: theme.line }]}>
+        {options.sell ? <View style={[styles.way, { borderColor: theme.line, backgroundColor: theme.background }]}>
+          <View style={[styles.glyph, { backgroundColor: theme.accent + '29' }]}><ArrowSquareOut size={18} color={theme.accent} /></View>
+          <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
+            <Text style={type(15, theme.text, '700')}>where else you sell it</Text>
+            <TextInput ref={node => { fields.current.sell = node; }} accessibilityLabel="where else you sell it, a link" value={options.sell.url} placeholder="https://you.bandcamp.com/track/…"
+              placeholderTextColor={theme.faint} keyboardType="url" autoCapitalize="none" autoCorrect={false} editable={!disabled}
+              onChangeText={url => onOptions({ ...options, sell: { ...options.sell!, url } })} style={input(!!sellIssue)} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Text style={type(15, theme.muted)}>$</Text>
+              <TextInput accessibilityLabel="its price there, optional, in US dollars" value={options.sell.price} placeholder="price" placeholderTextColor={theme.faint} keyboardType="decimal-pad"
+                editable={!disabled} onChangeText={price => onOptions({ ...options, sell: { ...options.sell!, price } })} style={[input(!!sellIssue && !!options.sell.price.trim()), { width: 100 }]} />
+              <Text style={type(12, theme.faint, '700')}>USD</Text>
+            </View>
+            <Text style={type(13, theme.muted)}>listeners get a buy button. a sale there doesn’t open it here.</Text>
+            {sellIssue && <FieldError>{sellIssue}</FieldError>}
+            {needsSettings && <><FieldError>sign in again to save buy links.</FieldError><Action label="Sign in again" href={{ pathname: '/login', params: { return_to: '/upload' } }} /></>}
+          </View>
+          <Pressable accessibilityRole="button" accessibilityLabel="remove where else you sell it" disabled={disabled} hitSlop={6} onPress={() => onOptions({ ...options, sell: undefined })}
+            style={({ pressed }) => [styles.remove, { backgroundColor: pressed ? theme.hover : 'transparent' }]}>
+            <X size={18} color={theme.muted} />
+          </Pressable>
+        </View> : <View style={styles.adds}>
+          <Pressable accessibilityRole="button" accessibilityLabel="add where else you sell it" disabled={disabled}
+            onPress={() => { onOptions({ ...options, sell: { url: '', price: '' } }); setTimeout(() => fields.current.sell?.focus(), 0); }}
+            style={({ pressed }) => [styles.add, { borderColor: theme.border, backgroundColor: pressed ? theme.hover : 'transparent' }]}>
+            <Plus size={15} color={theme.text} /><Text style={type(14, theme.text, '600')}>where else you sell it</Text>
+          </Pressable>
+        </View>}
+        <SwitchRow label="show in feeds" detail={options.listed ? 'in home, latest and top tracks.' : 'off: still on your profile and in search.'} value={options.listed}
+          onChange={listed => onOptions({ ...options, listed })} disabled={disabled} />
+        <View {...downloadRadio.group} style={{ gap: 8 }}>
+          <Text style={type(12, theme.faint, '700')}>DOWNLOADS</Text>
+          {downloadChoices(access).map(choice => {
+            const on = downloads === choice.value;
+            return <Pressable key={choice.value} {...downloadRadio.option(choice.value)}
+              style={({ pressed }) => [styles.pick, { borderColor: on ? theme.accent : theme.line, backgroundColor: on ? theme.accent + '14' : pressed ? theme.hover : theme.background, opacity: plyrStorage && !on ? 0.6 : 1 }]}>
+              <View style={[styles.dot, { borderColor: on ? theme.accent : theme.border }]}>{on && <View style={[styles.dotFill, { backgroundColor: theme.accent }]} />}</View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={type(15, theme.text, '700')}>{choice.title}</Text>
+                <Text style={type(13, theme.muted)}>{choice.detail}</Text>
+              </View>
+            </Pressable>;
+          })}
+          {plyrStorage ? <Text style={type(13, theme.muted)}>plyr.fm storage serves the file openly, so downloads stay on.</Text>
+            : access.closed ? <Text style={type(13, theme.muted)}>a closed track’s file stays in its space, so only supporters can download it, or no one.</Text> : null}
+        </View>
+      </View>}
       {needsSignIn && <View style={{ gap: 8 }}>
         <FieldError>sign in again to allow this. what you typed stays here.</FieldError>
         <Action label="Sign in again" href={{ pathname: '/login', params: { return_to: '/upload' } }} />
@@ -137,4 +191,8 @@ const styles = StyleSheet.create({
   add: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44, paddingHorizontal: 14, borderRadius: 22, borderWidth: 1, borderStyle: 'dashed' },
   art: { width: 44, height: 44, borderRadius: 8, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
   hidden: { flexDirection: 'row', alignItems: 'center', borderStyle: 'dashed' },
+  more: { gap: 14, paddingTop: 14, borderTopWidth: 1 },
+  pick: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52, padding: 12, borderRadius: 12, borderWidth: 1.5 },
+  dot: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  dotFill: { width: 10, height: 10, borderRadius: 5 },
 });

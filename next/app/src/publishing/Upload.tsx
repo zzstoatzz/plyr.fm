@@ -23,7 +23,7 @@ import { CreateRecovery, EarlierCreates, useCreateRecovery } from './CreateRecov
 import { CheckRow, ChooseTrack, FieldError, FormCard, SwitchRow, TrackHero, UploadBar } from './UploadPieces';
 import { AccessSection } from './AccessSection';
 import { FeatureField } from './FeatureField';
-import { accessFromRules, accessProblem, accessRules, accessSummary, onlyYou, readAccessDraft, OPEN, type AccessDraft } from '@plyr/next-core/publishing/upload-access';
+import { accessFromRules, accessProblem, accessRules, accessSummary, DEFAULT_OPTIONS, onlyYou, optionsFromInput, optionsInput, readAccessDraft, readUploadOptions, sellProblem, OPEN, type AccessDraft, type UploadOptions } from '@plyr/next-core/publishing/upload-access';
 import { memberDid } from '@plyr/next-core/access/policy-read';
 import { MAX_AUDIO_BYTES, type FeaturedArtist } from '@plyr/next-core/pds';
 import { UploadSimple } from '../icons';
@@ -46,7 +46,7 @@ export default function Upload() {
   </Page>;
 }
 
-type Draft = { title: string; album: string; description: string; tags: string; named?: boolean; autoTag?: boolean; features: FeaturedArtist[]; explicit: boolean; access?: AccessDraft };
+type Draft = { title: string; album: string; description: string; tags: string; named?: boolean; autoTag?: boolean; features: FeaturedArtist[]; explicit: boolean; access?: AccessDraft; options: UploadOptions };
 type Problems = { audio?: string; artwork?: string; tags?: string; form?: string };
 
 function readDraft(key: string): Draft | undefined {
@@ -63,6 +63,7 @@ function readDraft(key: string): Draft | undefined {
       autoTag: typeof saved.autoTag === 'boolean' ? saved.autoTag : undefined,
       explicit: saved.explicit === true,
       access: 'access' in saved ? readAccessDraft(saved.access) : undefined,
+      options: readUploadOptions(saved.options),
     } : undefined;
   } catch { return; }
 }
@@ -81,6 +82,7 @@ function TrackUpload({ auth, onlyYou: startOnlyYou, scroll }: { auth: Auth; only
   const [tags, setTags] = useState(restored?.tags ?? '');
   const [features, setFeatures] = useState<FeaturedArtist[]>(restored?.features ?? []);
   const [explicit, setExplicit] = useState(restored?.explicit ?? false);
+  const [options, setOptions] = useState<UploadOptions>(restored?.options ?? { ...DEFAULT_OPTIONS });
   const [access, setAccess] = useState<AccessDraft>(() => startOnlyYou && !restored?.access?.closed ? { closed: true, ways: [] } : restored?.access ?? { ...OPEN });
   // each way's problem shows once a submit has tried, not while typing
   const [checked, setChecked] = useState(false);
@@ -114,6 +116,7 @@ function TrackUpload({ auth, onlyYou: startOnlyYou, scroll }: { auth: Auth; only
   const summary = accessSummary(access);
   const tooLargeClosed = access.closed && !!file && file.size > MAX_AUDIO_BYTES;
   // a closed track needs this session to be allowed to close music and write who can listen
+  const needsSettings = !privateTrack && !!options.sell && !auth.accountSync;
   const accessSignIn = access.closed && !(privateTrack ? auth.privatePublishing : auth.closing && auth.policyEditing);
   useEffect(() => { live.current = true; return () => { live.current = false; }; }, []);
   const settled = queue.filter(job => !uploadInProgress(job.phase)).map(job => job.id).join();
@@ -130,7 +133,7 @@ function TrackUpload({ auth, onlyYou: startOnlyYou, scroll }: { auth: Auth; only
   const linkedDrafts = [...recovery.operations, ...recovery.archived, ...uploads.operations].map(operation => operation.draftId).join();
   useEffect(() => { void refreshDrafts(); }, [refreshDrafts, settled, linkedDrafts]);
   // Everything typed survives a reload, a crash or the sign-in-again round trip; files are chosen again.
-  const editorDraft = JSON.stringify({ title, album, description, tags, autoTag, features, explicit, access, named: !!title && title === autoTitle.current });
+  const editorDraft = JSON.stringify({ title, album, description, tags, autoTag, features, explicit, access, options, named: !!title && title === autoTitle.current });
   const latestDraft = useRef({ file, artwork, editorDraft });
   latestDraft.current = { file, artwork, editorDraft };
   useEffect(() => {
@@ -189,7 +192,7 @@ function TrackUpload({ auth, onlyYou: startOnlyYou, scroll }: { auth: Auth; only
     const input = await uploadQueue.takeBack(id, input => {
       if (!current()) throw new Error('reopen the upload page to edit this draft.');
       const previous = readLocal(draftKey);
-      const saved = JSON.stringify({ title: input.title, album: input.album, description: input.description, tags: input.tags?.join('\n'), autoTag: !!input.autoTag, features: input.features ?? [], explicit: !!input.explicit, access: accessFromRules(input.waysIn) });
+      const saved = JSON.stringify({ title: input.title, album: input.album, description: input.description, tags: input.tags?.join('\n'), autoTag: !!input.autoTag, features: input.features ?? [], explicit: !!input.explicit, access: accessFromRules(input.waysIn), options: optionsFromInput(input) });
       writeLocal(draftKey, saved);
       if (readLocal(draftKey) !== saved) throw new Error('could not save the editor draft.');
       return () => {
@@ -203,21 +206,21 @@ function TrackUpload({ auth, onlyYou: startOnlyYou, scroll }: { auth: Auth; only
     if (!input || !current()) return;
     setFile(input.file); setArtwork(input.artwork ?? null); setTitle(input.title); setAlbum(input.album ?? '');
     setDescription(input.description ?? ''); setTags(input.tags?.join('\n') ?? '');
-    setAutoTag(!!input.autoTag); setFeatures(input.features ?? []); setExplicit(!!input.explicit); setAccess(accessFromRules(input.waysIn));
+    setAutoTag(!!input.autoTag); setFeatures(input.features ?? []); setExplicit(!!input.explicit); setAccess(accessFromRules(input.waysIn)); setOptions(optionsFromInput(input));
     setReattach(false); setChecked(false); setProblems({});
   }
 
   function clearEditor() {
     autoTitle.current = undefined;
     setFile(null); setArtwork(null); setTitle(''); setAlbum(''); setDescription(''); setTags(''); setFeatures([]); setExplicit(false);
-    setAccess({ ...OPEN }); setChecked(false); setProblems({});
+    setAccess({ ...OPEN }); setOptions({ ...DEFAULT_OPTIONS }); setChecked(false); setProblems({});
   }
 
-  const blocked = saving || privateUploads.busy || !file || !title.trim() || !artist || !!tagError || tooLargeClosed || accessSignIn
+  const blocked = saving || needsSettings || privateUploads.busy || !file || !title.trim() || !artist || !!tagError || tooLargeClosed || accessSignIn
     || (privateTrack ? privateUploads.blocked : service && (!serviceConsent || !auth.uploadStorage));
 
   async function upload() {
-    const problem = accessProblem(access);
+    const problem = accessProblem(access) ?? (privateTrack ? undefined : sellProblem(options.sell));
     if (problem) {
       setChecked(true);
       setProblems(previous => ({ ...previous, form: problem }));
@@ -248,7 +251,7 @@ function TrackUpload({ auth, onlyYou: startOnlyYou, scroll }: { auth: Auth; only
       }
       const waysIn = await accessRules(access, memberDid);
       await uploadQueue.add({ file, artwork, title, artist, album, description, tags: list, autoTag,
-        ...(features.length ? { features } : {}), ...(explicit ? { explicit: true } : {}), ...(waysIn.length ? { waysIn } : {}) });
+        ...(features.length ? { features } : {}), ...(explicit ? { explicit: true } : {}), ...(waysIn.length ? { waysIn } : {}), ...optionsInput(options, access, service) });
       clearSaved();
       if (unchanged()) clearEditor();
     } catch (failure) {
@@ -299,7 +302,8 @@ function TrackUpload({ auth, onlyYou: startOnlyYou, scroll }: { auth: Auth; only
       </FormCard>}
       {editing && <View onLayout={event => { accessAt.current = event.nativeEvent.layout.y; }}>
         <AccessSection access={access} onChange={next => { setAccess(next); setProblems(previous => ({ ...previous, form: undefined })); }} artist={artist ?? ''} title={title} artwork={artwork}
-          disabled={saving} checked={checked} needsSignIn={accessSignIn} />
+          disabled={saving} checked={checked} needsSignIn={accessSignIn}
+          options={options} onOptions={setOptions} plyrStorage={service} needsSettings={needsSettings} />
       </View>}
       {tooLargeClosed && <FieldError>closed tracks can be up to 100 MB for now. choose a smaller file, or make it open.</FieldError>}
       {draftProblem && <FieldError>{draftProblem}</FieldError>}

@@ -3,6 +3,7 @@ import type { MediaFile, NewTrack } from '../pds.ts';
 import { isCreateRkey, type CreateOperation } from './create-operation.ts';
 import { canonicalAudioType } from './upload-queue-model.ts';
 import { readRule } from '../access/policy.ts';
+import { sellingLink } from '../selling.ts';
 
 const DID = /^did:[a-z]+:[a-zA-Z0-9._:%-]+$/;
 const optionalText = (value: unknown) => value === undefined || typeof value === 'string';
@@ -13,6 +14,23 @@ function readFeatures(value: unknown) {
     if (!item || typeof item !== 'object' || typeof item.did !== 'string' || !DID.test(item.did) || !optionalText(item.handle) || !optionalText(item.displayName)) throw new Error('could not read a queued upload.');
     return { did: item.did as string, ...(item.handle ? { handle: item.handle as string } : {}), ...(item.displayName ? { displayName: item.displayName as string } : {}) };
   });
+}
+const DOWNLOADS = ['open', 'ask', 'supporters', 'off'];
+// these narrow who gets the track, so an unreadable value fails the draft rather than publishing wider
+function readDownloadPolicy(value: unknown) {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string' || !DOWNLOADS.includes(value)) throw new Error('could not read a queued upload.');
+  return value as NonNullable<NewTrack['downloadPolicy']>;
+}
+function readBuyLink(value: unknown) {
+  if (value === undefined) return undefined;
+  if (!value || typeof value !== 'object') throw new Error('could not read a queued upload.');
+  const { url, amount, currency } = value as Record<string, unknown>;
+  const link = sellingLink(url);
+  if (!link || (amount !== undefined && (!Number.isSafeInteger(amount) || (amount as number) <= 0)) || (currency !== undefined && (typeof currency !== 'string' || !/^[A-Z]{3}$/.test(currency)))) {
+    throw new Error('could not read a queued upload.');
+  }
+  return { url: link, ...(amount !== undefined ? { amount: amount as number, currency: (currency as string | undefined) ?? 'USD' } : {}) };
 }
 // a queued upload that loses its ways in would publish open, so an unreadable rule fails the whole draft
 function readWaysIn(value: unknown) {
@@ -55,12 +73,12 @@ export function queuedUploadDraft(input: NewTrack, owner: Did, id: string, reser
 
 export function readQueuedUploadDraft(value: unknown, owner: Did, key: unknown): QueuedUploadDraft {
   if (!value || typeof value !== 'object') throw new Error('could not read a queued upload.');
-  const { id, title, artist, album, description, tags, autoTag, audio, coverName, reservedRkey, explicit } = value as Record<string, unknown>;
+  const { id, title, artist, album, description, tags, autoTag, audio, coverName, reservedRkey, explicit, unlisted } = value as Record<string, unknown>;
   if (typeof id !== 'string' || key !== queuedUploadKey({ owner, id }) || !('owner' in value) || value.owner !== owner ||
     typeof title !== 'string' || typeof artist !== 'string' ||
     (album !== undefined && typeof album !== 'string') || (description !== undefined && typeof description !== 'string') ||
     (tags !== undefined && (!Array.isArray(tags) || !tags.every(tag => typeof tag === 'string'))) ||
-    (autoTag !== undefined && typeof autoTag !== 'boolean') || (explicit !== undefined && typeof explicit !== 'boolean') || (coverName !== undefined && typeof coverName !== 'string') ||
+    (autoTag !== undefined && typeof autoTag !== 'boolean') || (explicit !== undefined && typeof explicit !== 'boolean') || (unlisted !== undefined && typeof unlisted !== 'boolean') || (coverName !== undefined && typeof coverName !== 'string') ||
     (reservedRkey !== undefined && !isCreateRkey(reservedRkey)) ||
     !audio || typeof audio !== 'object' || !('name' in audio) || typeof audio.name !== 'string' ||
     !('type' in audio) || typeof audio.type !== 'string' || !('size' in audio) || typeof audio.size !== 'number') {
@@ -70,8 +88,11 @@ export function readQueuedUploadDraft(value: unknown, owner: Did, key: unknown):
   canonicalAudioType(file);
   const features = readFeatures((value as Record<string, unknown>).features);
   const waysIn = readWaysIn((value as Record<string, unknown>).waysIn);
+  const downloadPolicy = readDownloadPolicy((value as Record<string, unknown>).downloadPolicy);
+  const buyLink = readBuyLink((value as Record<string, unknown>).buyLink);
   return { owner, id, title, artist, album, description, tags, autoTag, audio: file, coverName, ...(reservedRkey ? { reservedRkey } : {}),
-    ...(features?.length ? { features } : {}), ...(explicit ? { explicit: true } : {}), ...(waysIn?.length ? { waysIn } : {}) };
+    ...(features?.length ? { features } : {}), ...(explicit ? { explicit: true } : {}), ...(waysIn?.length ? { waysIn } : {}),
+    ...(downloadPolicy ? { downloadPolicy } : {}), ...(unlisted ? { unlisted: true } : {}), ...(buyLink ? { buyLink } : {}) };
 }
 
 export function reattachQueuedUpload(draft: QueuedUploadDraft, file: MediaFile, artwork?: MediaFile): NewTrack {
@@ -79,6 +100,6 @@ export function reattachQueuedUpload(draft: QueuedUploadDraft, file: MediaFile, 
     throw new Error('choose the original audio file.');
   }
   if (draft.coverName && !artwork) throw new Error('choose the cover again.');
-  const { title, artist, album, description, tags, autoTag, features, explicit, waysIn } = draft;
-  return { title, artist, album, description, tags, autoTag, file, artwork, features, explicit, waysIn };
+  const { title, artist, album, description, tags, autoTag, features, explicit, waysIn, downloadPolicy, unlisted, buyLink } = draft;
+  return { title, artist, album, description, tags, autoTag, file, artwork, features, explicit, waysIn, downloadPolicy, unlisted, buyLink };
 }
