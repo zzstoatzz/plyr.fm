@@ -133,8 +133,9 @@ async function transition(browser, origin, width, reducedMotion) {
       ['replyomatic', `/u/${tracks[0].artist.profile.handle}`],
       ['Open queue', '/queue']
     ];
-    // what used to need a detour lives here now
-    assert.deepEqual(await dialog.getByTestId('now-playing-tags').getByRole('link').allTextContents(), ['ambient', 'home recordings']);
+    // what used to need a detour lives here now; the list had no tags, so they come from the track read
+    await dialog.getByTestId('now-playing-tags').waitFor();
+    assert.deepEqual(await dialog.getByTestId('now-playing-tags').getByRole('link').allTextContents(), ['ambient', 'home recordings', 'field & nature']);
     assert.equal(await dialog.getByTestId('now-playing-tags').getByRole('link', { name: 'ambient' }).getAttribute('href'), '/?tag=ambient');
     assert.equal(await dialog.getByRole('link', { name: 'about this track' }).count(), 0, 'no detour to the same details');
     for (const [name, destination] of destinations) {
