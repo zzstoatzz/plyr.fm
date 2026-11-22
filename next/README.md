@@ -65,10 +65,10 @@ bun run check:boundaries                         # check workspace imports
 (cd backend && just check)                       # appview and coordinator checks
 ```
 
-Run the Svelte screen checks and deploy to the isolated Pages preview with
-`gh workflow run check-svelte-next.yml --ref main -f target=preview`.
-After verifying the preview, dispatch with `target=live` to update
-`next.plyr.fm`. The live run records the previous deployment ID for rollback
+Every merge to main that touches next web runs the Svelte screen checks and,
+once they pass, deploys `next.plyr.fm`. To redeploy by hand, or to try the
+isolated Pages preview first, dispatch
+`gh workflow run check-svelte-next.yml --ref main -f target=preview` (or `target=live`). The live run records the previous deployment ID for rollback
 in the `plyr-fm-next` Pages project. The frozen Expo release remains available
 via `gh workflow run deploy-web-next.yml --ref next-expo -f target=live`.
 Ship a Next backend change before the client change that depends on it.
