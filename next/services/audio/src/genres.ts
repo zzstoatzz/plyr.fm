@@ -39,7 +39,7 @@ async function json<T>(response: Response): Promise<T> {
   return await response.json() as T;
 }
 
-async function pds(did: string, get: Fetch) {
+export async function pds(did: string, get: Fetch) {
   const url = did.startsWith("did:plc:") ? `https://plc.directory/${did}`
     : did.startsWith("did:web:") ? `https://${did.slice(8)}/.well-known/did.json` : null;
   if (!url) throw new Error("unsupported did");

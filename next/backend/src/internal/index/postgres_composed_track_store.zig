@@ -447,7 +447,7 @@ pub fn decodeRow(allocator: std.mem.Allocator, row: anytype) !track.Track {
     const has_moderation_policy = try row.get(bool, 42);
     const has_metrics = try row.get(bool, 43);
     const account_labels = try parseLabels(allocator, try row.get([]const u8, 46));
-    const artwork_url = try public_media.canonicalOwned(allocator, try duplicateOptional(allocator, try row.get(?[]const u8, 45)));
+    const artwork_url = try public_media.canonicalImageOwned(allocator, try duplicateOptional(allocator, try row.get(?[]const u8, 45)));
     if (artwork_url) |url| if (!lexicon_value.validUri(url)) return error.CorruptArtwork;
     return .{
         .id = id,

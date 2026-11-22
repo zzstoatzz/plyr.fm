@@ -266,7 +266,7 @@ fn decodeSummary(
     if (available_count > member_count) return error.CorruptMetrics;
     const total_plays = try row.get(i64, 20);
     if (total_plays < 0) return error.CorruptMetrics;
-    const cover = try public_media.canonicalOwned(allocator, try duplicateOptional(allocator, try row.get(?[]const u8, 22)));
+    const cover = try public_media.canonicalImageOwned(allocator, try duplicateOptional(allocator, try row.get(?[]const u8, 22)));
     if (cover) |url| if (!lexicon_value.validUri(url)) return error.CorruptArtwork;
     return .{
         .object = kind,
