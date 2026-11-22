@@ -8,6 +8,7 @@
   import { trackHref } from '$lib/tracks';
   import { auth } from '$lib/auth';
   import LikeButton from '$lib/listening/LikeButton.svelte';
+  import Likers from '$lib/listening/Likers.svelte';
   import TrackDownload from '$lib/downloads/TrackDownload.svelte';
   import Icon from '$lib/ui/Icon.svelte';
   import Loading from '$lib/ui/Loading.svelte';
@@ -27,7 +28,7 @@
 </script>
 
 <div class="actions" class:compact>
-  <LikeButton {track} />
+  {#if compact}<span class="like"><LikeButton {track} count={false} /><Likers {track} icon={false} /></span>{:else}<LikeButton {track} />{/if}
   {@render transport()}
 </div>
 {#if !compact && account.ready}
@@ -65,6 +66,8 @@
   .access { justify-items: stretch; text-align: start; width: min(28rem, 100%); margin-inline: auto; }
   .actions { display: flex; align-items: center; justify-content: center; gap: 0.5rem; flex-wrap: wrap; }
   .compact { justify-content: space-between; }
+  .like { display: inline-flex; align-items: center; }
+  .like :global(.likers) { min-height: 2.75rem; margin-left: -0.45rem; padding-inline: 0 0.5rem; font-size: var(--t-13-6); }
   .chip { display: inline-flex; align-items: center; gap: 0.45rem; min-height: 2.75rem; padding: 0 1rem; border: 1px solid var(--line); border-radius: 999px; background: none; color: var(--text); font-size: var(--t-14-4); white-space: nowrap; }
   .chip :global(svg) { color: var(--muted); }
   .chip:hover:not(:disabled) { background: var(--hover); text-decoration: none; }

@@ -128,8 +128,9 @@
 {/snippet}
 
 <article class="page-content artist">
+	{#if artist.avatar_url}<div class="wash" aria-hidden="true"><img src={artist.avatar_url} alt="" /></div>{/if}
+	<div class="profile">
 	<header>
-		{#if artist.avatar_url}<div class="hero-backdrop" aria-hidden="true"><img src={artist.avatar_url} alt="" /></div>{/if}
 		<div class="avatar"><Artwork src={artist.avatar_url ?? undefined} size={176} eager /></div>
 		<div class="identity">
 			<h1>{name}</h1>
@@ -160,7 +161,7 @@
 	</header>
 	{#await visibleMetrics then result}
 		{#if support || result?.top_track}
-			<div class="cards">
+			<div class="cards" class:pair={support && result?.top_track}>
 				{#if support}
 					<a class="card" href={support} target="_blank" rel="noopener noreferrer" aria-label={`Support ${name} at ${supportLabel(support)}`}>
 						<span class="lead heart"><Icon name="heart" size={20} /></span>
@@ -181,6 +182,8 @@
 			</div>
 		{/if}
 	{/await}
+	</div>
+	<div class="catalog">
 	<div class="tabs" role="tablist" aria-label="Artist catalog">
 		{#each tabs as item (item)}
 			<button type="button" id={`${id}-tab-${item}`} role="tab" bind:this={buttons[item]} aria-controls={`${id}-panel-${item}`}
@@ -188,7 +191,7 @@
 		{/each}
 	</div>
 	{#each tabs as item (item)}
-		<div class="panel" id={`${id}-panel-${item}`} role="tabpanel" aria-labelledby={`${id}-tab-${item}`} hidden={item !== tab} tabindex="0">
+		<div class="panel" class:own={item === 'tracks'} id={`${id}-panel-${item}`} role="tabpanel" aria-labelledby={`${id}-tab-${item}`} hidden={item !== tab} tabindex="0">
 			{#if item === tab}
 				{@const view = views[item]}
 				{@const collections = item === 'albums' || item === 'playlists' ? views[item].data.filter(entry => owner || entry.metrics.available_count > 0) : []}
@@ -212,20 +215,28 @@
 			{/if}
 		</div>
 	{/each}
+	</div>
 </article>
 
 <style>
-	.artist { max-width: 69rem; display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.25rem; }
-	header { position: relative; isolation: isolate; display: flex; align-items: center; gap: 2.25rem; padding-block: 1.25rem 0.75rem; }
-	.avatar { width: 11rem; flex: none; border-radius: 50%; overflow: hidden; box-shadow: 0 0.7rem 2rem rgb(0 0 0 / 0.3); }
+	/* the artist's avatar washes the whole content area, edge to edge, not just the header */
+	.artist { --pad: clamp(1rem, 3vw, 2.25rem); position: relative; isolation: isolate; max-width: none; display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.25rem; }
+	.wash { position: absolute; z-index: -1; top: 0; inset-inline: 0; height: min(46rem, 100dvh); overflow: hidden; pointer-events: none;
+		mask-image: linear-gradient(to bottom, black, black 40%, transparent); }
+	/* light mode: a white veil keeps the faint row text readable over a mid-tone avatar */
+	.wash::after { content: ''; position: absolute; inset: 0; background: light-dark(rgb(255 255 255 / 0.45), transparent); }
+	.wash img { width: 100%; height: 100%; object-fit: cover; filter: blur(72px) saturate(1.3); transform: scale(1.4); opacity: 0.6; }
+	.profile { display: grid; gap: 1.25rem; min-width: 0; }
+	header { display: flex; align-items: center; gap: 2.25rem; padding-block: 1.25rem 0.75rem; }
+	.avatar { width: clamp(11rem, 14vw, 15rem); flex: none; border-radius: 50%; overflow: hidden; box-shadow: 0 0.7rem 2rem rgb(0 0 0 / 0.3); }
 	.identity { min-width: 0; display: grid; justify-items: start; gap: 0.35rem; overflow-wrap: anywhere; }
-	h1 { font-size: clamp(1.75rem, 5vw, 3.25rem); line-height: 1.08; letter-spacing: -0.035em; }
+	h1 { font-size: clamp(1.75rem, 5vw, 4rem); line-height: 1.05; letter-spacing: -0.035em; }
 	.handle { color: var(--muted); }
 	.bio { color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; max-width: 44rem; margin-top: 0.35rem; }
 	.chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.6rem; }
 	.actions { display: flex; align-items: center; gap: 0.6rem; margin-top: 1rem; }
-	.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr)); gap: 0.6rem; }
-	.card { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; min-height: 3.75rem; padding: 0.6rem 0.75rem; border-radius: 0.75rem; background: var(--raised); color: var(--text); text-decoration: none; }
+	.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr)); gap: 0.6rem; align-content: center; }
+	.card { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; min-height: 3.75rem; padding: 0.6rem 0.75rem; border-radius: 0.75rem; background: color-mix(in srgb, var(--raised) 82%, transparent); color: var(--text); text-decoration: none; -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
 	.card:hover { background: var(--hover); }
 	.card > :global(svg) { color: var(--faint); flex: none; }
 	.lead { width: 2.5rem; height: 2.5rem; flex: none; border-radius: 0.4rem; overflow: hidden; display: grid; place-items: center; }
@@ -234,13 +245,38 @@
 	.card-copy small { color: var(--faint); font-size: var(--t-11-2); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
 	.card-copy strong { font-weight: 600; }
 	.card .meta { color: var(--muted); font-size: var(--t-13-6); font-variant-numeric: tabular-nums; white-space: nowrap; }
+	.catalog { display: grid; gap: 0.75rem; min-width: 0; }
 	.tabs { display: flex; flex-wrap: wrap; gap: clamp(0.3rem, 2.5vw, 1.25rem); border-bottom: 1px solid var(--line); }
 	.tabs button { min-height: 2.75rem; border: 0; border-bottom: 2px solid transparent; padding-inline: 0.55rem; background: none; color: var(--muted); }
 	.tabs [aria-selected="true"] { color: var(--text); font-weight: 700; border-bottom-color: var(--accent); }
-	.panel { display: grid; gap: 0.55rem; min-width: 0; }
-	.panel :global(.track), .collection { background: var(--surface); border: 1px solid var(--line); border-radius: 0.75rem; padding: 0.55rem; }
+	/* rows sit straight on the page like the home page's latest list, no boxes */
+	.panel { display: grid; gap: 0.15rem; min-width: 0; }
 	.panel[hidden] { display: none; }
-	.collection { display: grid; grid-template-columns: min(3.25rem, 16vw) minmax(0, 1fr) auto; align-items: center; gap: 0.75rem; overflow-wrap: anywhere; }
+	/* every row on the tracks tab is this artist's, so the name under each title says nothing */
+	.panel.own :global(.name > .artist) { display: none; }
+	.collection { display: grid; grid-template-columns: min(3.25rem, 16vw) minmax(0, 1fr) auto; align-items: center; gap: 0.75rem; min-height: 4.65rem; padding-inline: 0.75rem; margin-inline: -0.75rem; border-radius: 0.6rem; color: var(--text); overflow-wrap: anywhere; }
+	.collection:hover { background: var(--hover); text-decoration: none; }
+	.collection > :global(svg) { color: var(--faint); }
+	@media (min-width: 1100px) {
+		/* desktop: a profile column on the left; the catalog takes the rest */
+		.artist { grid-template-columns: clamp(19rem, 24%, 24rem) minmax(0, 1fr); column-gap: 3rem; align-items: start; }
+		/* the profile stays in view while the catalog scrolls, so its column never runs empty */
+		@media (min-height: 760px) { .profile { position: sticky; top: var(--pad); } }
+		header { flex-direction: column; align-items: start; gap: 1.5rem; padding-top: 1rem; }
+		.avatar { width: 100%; max-width: 16rem; }
+		.cards { grid-template-columns: minmax(0, 1fr); }
+		.catalog { padding-top: 1rem; }
+		/* the wash stays behind the whole page as it scrolls */
+		.wash { position: fixed; top: 0; left: var(--sidebar); right: 0; height: 100dvh; mask-image: linear-gradient(to bottom, black, black 30%, rgb(0 0 0 / 0.45)); }
+	}
+	@media (min-width: 1240px) {
+		/* rows go to one line: plays, likes and when line up in columns, as on home */
+		.panel :global(.track) { min-height: 4rem; }
+		.panel :global(.name) { grid-template-columns: minmax(0, 1fr) auto; column-gap: 2rem; align-items: center; }
+		.panel :global(.name > a) { grid-column: 1; }
+		.panel.own :global(.metrics) { grid-row: 1; }
+		.panel :global(.metrics) { grid-column: 2; grid-row: 1 / 3; display: grid; grid-template-columns: 3.25rem 3.25rem 4.5rem; gap: 0.5rem; font-size: var(--t-12-8); }
+	}
 	@media (max-width: 720px) {
 		header { flex-direction: column; text-align: center; gap: 1rem; padding-top: 0.5rem; }
 		.avatar { width: min(7.25rem, 36vw); }
@@ -250,6 +286,7 @@
 		.actions { display: flex; flex-wrap: wrap; width: 100%; }
 		.actions :global(.hero-pill) { flex: 1 1 auto; }
 		.cards { grid-template-columns: minmax(0, 1fr); }
+		.wash { height: 30rem; }
 	}
 	@media (max-width: 520px) {
 		.panel :global(.track) { grid-template-columns: min(3.25rem, 16vw) minmax(0, 1fr) auto; }
