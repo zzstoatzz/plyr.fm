@@ -14,6 +14,8 @@ import { TrackLikes } from './TrackLikes';
 import { NowPlaying } from './NowPlaying';
 import { PlayerControl } from './PlayerControl';
 import { useRadio } from './radio-session';
+import { MiniLip } from './MiniLip';
+import { clock } from '@plyr/next-core/chapters';
 
 export function PlayerBar({ accessory = false }: { accessory?: boolean } = {}) {
   const player = usePlayback();
@@ -24,6 +26,7 @@ export function PlayerBar({ accessory = false }: { accessory?: boolean } = {}) {
   const [expanded, setExpanded] = useState(false);
   useEffect(() => { setExpanded(false); }, [path]);
   const flying = useFlying();
+  const [scrub, setScrub] = useState<number>();
   const dock = useRef<ViewInstance>(null);
   const present = !!player.current;
   useEffect(() => {
@@ -69,20 +72,19 @@ export function PlayerBar({ accessory = false }: { accessory?: boolean } = {}) {
     <View style={{ flex: 1, minWidth: 0 }}>
       <View ref={node => { playerSheet.dock.title = node; }} style={carried}><Text numberOfLines={1} maxFontSizeMultiplier={titleMaxScale}
         style={{ color: theme.text, fontSize: 14 * theme.scale, fontWeight: '700' }}>{compactAccessory && error ? subtitle : track.metadata.title}</Text></View>
-      {!compactAccessory && <Text numberOfLines={1} style={{ color: theme.muted, fontSize: 12 * theme.scale }}>{subtitle}</Text>}
+      {!compactAccessory && (scrub === undefined ? <Text numberOfLines={1} style={{ color: theme.muted, fontSize: 12 * theme.scale }}>{subtitle}</Text>
+        : <Text numberOfLines={1} style={{ color: theme.accent, fontSize: 12 * theme.scale, fontWeight: '700', fontVariant: ['tabular-nums'] }}>{clock(scrub)} / {clock(player.status.duration || track.metadata.duration_seconds || 0)}</Text>)}
     </View>
   </Pressable>;
   return <>
     <View ref={dock} testID="player-dock" style={accessory ? { flex: 1, justifyContent: 'center', paddingHorizontal: 12 } : [glassSurface(theme), {
       borderWidth: 0, borderTopWidth: 1, paddingHorizontal: 12, paddingVertical: 4, overflow: 'hidden'
     }]}>
-      {!accessory && <View pointerEvents="none" accessible={false} testID="playback-status-inlay" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2,
-        opacity: playing ? 0.65 : 0.16, backgroundColor: theme.accent,
-        boxShadow: `0px 0px 5px ${theme.accent}66` }} />}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
         <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center' }}>{identity}{!player.privatePlayback && <TrackLikes key={track.id} track={track} iconOnly returnTo={path} />}</View>
         {play}{player.live ? stopRadio : <PlayerControl label="Next" icon={SkipForward} onPress={() => void player.next()} />}
       </View>
+      {!player.live && <MiniLip key={track.id} capsule={accessory} onScrub={setScrub} />}
     </View>
     {expanded && <NowPlaying track={track} close={() => setExpanded(false)} navigate={target => { setExpanded(false); router.push(target); }} />}
   </>;
