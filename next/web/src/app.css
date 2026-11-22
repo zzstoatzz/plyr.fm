@@ -30,9 +30,11 @@
 	--queue: 26rem;
 	/* phones: the floating tab bar sits in the home-indicator zone like the iOS
 	   one; --tab-gap is its distance from the bottom edge and --tabs is all the
-	   room it takes (gap, bar, and the space above it), safe area included */
-	--tab-gap: max(0.5rem, calc(env(safe-area-inset-bottom, 0px) - 0.75rem));
-	--tabs: calc(var(--tab-gap) + 4.5rem);
+	   room it takes (gap, 4rem bar, 0.25rem above it), safe area included.
+	   iOS Safari reports a 0 inset and keeps its own band above the URL bar, so
+	   only the floor applies there; below 0 Safari clips the bar and takes taps */
+	--tab-gap: max(0.25rem, calc(env(safe-area-inset-bottom, 0px) / 2 - 0.375rem));
+	--tabs: calc(var(--tab-gap) + 4.25rem);
 	--dock: 4rem;
 	--s-md: 0.75rem;
 	--s-lg: 1rem;
