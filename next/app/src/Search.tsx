@@ -59,7 +59,8 @@ export function Search({ onPlay }: { onPlay: Play }) {
   }, [navigation]);
   useFocusEffect(useCallback(() => {
     if (focus) input.current?.focus();
-    return () => { request.current++; setLoadingTrack(undefined); };
+    // Leaving with the field focused would have the stack refocus it, keyboard and all, on the way back.
+    return () => { request.current++; setLoadingTrack(undefined); input.current?.blur(); };
   }, [focus]));
   function change(value: string) {
     request.current++; setLoadingTrack(undefined); setFailure(undefined); setExpanded(undefined); setQuery(Array.from(value).slice(0, 100).join(''));
