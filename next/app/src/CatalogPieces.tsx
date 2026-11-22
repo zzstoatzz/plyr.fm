@@ -227,8 +227,9 @@ export function artistName(track: Track) {
   return track.metadata.artist_name || track.artist.profile.display_name || track.artist.profile.handle;
 }
 
-export function trackMeta(track: Track) {
-  const { play_count: plays, like_count: likes } = track.metrics;
+/** Plays and likes for a row; pass the shared like count (useTrackLike) so a like shows here the moment it is made. */
+export function trackMeta(track: Track, likes = track.metrics.like_count) {
+  const plays = track.metrics.play_count;
   return `${compactCount(plays)} ${plays === 1 ? 'play' : 'plays'}` + (likes > 0 ? ` · ${compactCount(likes)} ${likes === 1 ? 'like' : 'likes'}` : '');
 }
 

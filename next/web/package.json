@@ -25,7 +25,8 @@
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "check:private-audio": "node scripts/check-private-audio.cjs",
     "check:private-audio-zds": "node scripts/check-private-audio-zds.cjs",
-    "check:outbox": "node scripts/check-play-outbox-storage.cjs"
+    "check:outbox": "node scripts/check-play-outbox-storage.cjs",
+    "check:likers": "node scripts/check-likers.cjs"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "^3.0.10",

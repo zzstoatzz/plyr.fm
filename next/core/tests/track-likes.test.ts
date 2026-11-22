@@ -103,3 +103,54 @@ test('a later write in a chain failing keeps what the earlier one saved', async 
   assert.equal(model.snapshot(track).count, 6);
   assert.equal(model.snapshot(track).error, 'offline');
 });
+
+const page = (dids: string[], next?: string) => ({ data: dids.map(did => ({ record: { uri: `at://${did}/fm.plyr.like/1` }, actor: { did, profile: { handle: `${did.slice(8)}.test` } } })), has_more: !!next, next_cursor: next ?? null });
+
+test('liking shows you in who liked it at once, before the appview lists the like, and unliking takes you out', async () => {
+  const account = { did: 'did:plc:me', handle: 'me.test', rpc: {} };
+  let listed: string[] = [];
+  const model = createTrackLikes({ getAuth: () => account, createPds: () => ({
+    myLikes: async () => new Map<string, LikeRef>(), like: async () => 'pending' as const, unlike: async () => 'absent' as const
+  }), fetchLikers: async () => page(listed) as never, fetchViewer: async () => ({ handle: 'me.test', display_name: 'me', avatar_url: 'me.jpg' }) });
+  await model.loadLikers(track);
+  assert.deepEqual(model.likers(track).people, []);
+  const liking = model.toggle(track);
+  assert.deepEqual(model.likers(track).people.map(person => person.did), ['did:plc:me']);
+  await liking;
+  await new Promise(done => setTimeout(done));
+  assert.equal(model.likers(track).people[0]?.profile?.display_name, 'me');
+  listed = ['did:plc:other', 'did:plc:me'];
+  assert.deepEqual(model.likers(track).people.map(person => person.did), ['did:plc:me'], 'a cached page still shows the like');
+  await model.toggle(track);
+  assert.deepEqual(model.likers(track).people, []);
+});
+
+test('an unlike hides you even while the appview still lists the old like', async () => {
+  const account = { did: 'did:plc:me', rpc: {} };
+  const model = createTrackLikes({ getAuth: () => account, createPds: () => ({
+    myLikes: async () => new Map([[track.record.uri, {} as LikeRef]]), like: async () => 'pending' as const, unlike: async () => 'absent' as const
+  }), fetchLikers: async () => page(['did:plc:me', 'did:plc:other']) as never });
+  await model.loadLikers(track);
+  await model.load(track);
+  assert.deepEqual(model.likers(track).people.map(person => person.did), ['did:plc:me', 'did:plc:other']);
+  await model.toggle(track);
+  assert.deepEqual(model.likers(track).people.map(person => person.did), ['did:plc:other']);
+  assert.equal(model.snapshot(track).count, 4);
+});
+
+test('who liked it is read again once it is stale, and pages append without repeats', async () => {
+  let clock = 0;
+  const calls: (string | undefined)[] = [];
+  const model = createTrackLikes({ getAuth: () => ({ did: null, rpc: null }), createPds: () => { throw new Error('signed out'); },
+    fetchLikers: async (_track, cursor) => { calls.push(cursor); return (cursor ? page(['did:plc:b', 'did:plc:c']) : page(['did:plc:a', 'did:plc:b'], 'next')) as never; },
+    now: () => clock });
+  await model.loadLikers(track);
+  await model.loadLikers(track);
+  assert.deepEqual(calls, [undefined]);
+  assert.equal(model.likers(track).more, true);
+  await model.loadLikers(track, { more: true });
+  assert.deepEqual(model.likers(track).people.map(person => person.did), ['did:plc:a', 'did:plc:b', 'did:plc:c']);
+  clock = 60_000;
+  await model.loadLikers(track);
+  assert.deepEqual(calls, [undefined, 'next', undefined]);
+});

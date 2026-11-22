@@ -67,7 +67,10 @@
   .actions { display: flex; align-items: center; justify-content: center; gap: 0.5rem; flex-wrap: wrap; }
   .compact { justify-content: space-between; }
   .like { display: inline-flex; align-items: center; }
-  .like :global(.likers) { min-height: 2.75rem; margin-left: -0.45rem; padding-inline: 0 0.5rem; font-size: var(--t-13-6); }
+  /* the count sits beside the heart, never under its tile, so each pixel belongs to one control */
+  .like :global(.likers) { min-height: 2.75rem; min-width: 1.75rem; justify-content: center; padding-inline: 0.4rem; border-radius: 0.7rem; font-size: var(--t-13-6); }
+  @media (hover: hover) { .like :global(.likers:hover) { background: var(--hover); } }
+  @media (hover: none) { .like :global(.likers:active) { background: var(--hover); } }
   .chip { display: inline-flex; align-items: center; gap: 0.45rem; min-height: 2.75rem; padding: 0 1rem; border: 1px solid var(--line); border-radius: 999px; background: none; color: var(--text); font-size: var(--t-14-4); white-space: nowrap; }
   .chip :global(svg) { color: var(--muted); }
   .chip:hover:not(:disabled) { background: var(--hover); text-decoration: none; }

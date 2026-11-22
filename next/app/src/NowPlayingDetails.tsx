@@ -17,7 +17,7 @@ import { PlayingWave } from './PlayingWave';
 import { AccessSummary } from './access/AccessSummary';
 import { clock, currentChapter, parseChapters, type Chapter } from '@plyr/next-core/chapters';
 import { compactCount } from './home-state';
-import { firstLikers } from './Likers';
+import { likes as likeState, useLikers, useTrackLike } from './likes';
 import { Sheet, type Anchor } from './Sheet';
 import { People } from './TrackLikes';
 import { useAlbumId } from './use-album-id';
@@ -126,7 +126,7 @@ export function AlbumLink({ track, navigate }: { track: Track; navigate: (target
 /** Plays, likes (with who), when it was added and how long it runs, labelled like the columns of a track list. */
 function Facts({ track, plays }: { track: Track; plays: number }) {
   const theme = useAppearance();
-  const likes = track.metrics.like_count;
+  const { count: likes } = useTrackLike(track);
   const added = new Date(track.metadata.created_at);
   const label = { color: theme.faint, fontSize: 11.5 * theme.scale, fontWeight: '700', letterSpacing: 0.7, textTransform: 'uppercase' } as const;
   const value = { color: theme.text, fontFamily: theme.fontFamily, fontSize: 16 * theme.scale, fontWeight: '700', fontVariant: ['tabular-nums'] } as const;
@@ -148,16 +148,10 @@ function Facts({ track, plays }: { track: Track; plays: number }) {
 
 function Likers({ track, count, style }: { track: Track; count: number; style: object }) {
   const theme = useAppearance();
-  const [faces, setFaces] = useState<{ did: string; avatar?: string | null }[]>([]);
   const [open, setOpen] = useState<Anchor>();
   const cell = useRef<ViewInstance>(null);
-  useEffect(() => {
-    setFaces([]);
-    if (!count) return;
-    let live = true;
-    firstLikers(track.id, count).then(people => { if (live) setFaces(people.slice(0, 3)); }, () => {});
-    return () => { live = false; };
-  }, [track.id, count]);
+  const faces = useLikers(track).people.slice(0, 3);
+  useEffect(() => { if (count) void likeState.loadLikers(track); }, [track, count]);
   if (!count) return <Text style={style}>0</Text>;
   return <View ref={cell} >
     <Pressable accessibilityRole="button" accessibilityLabel={`See who liked ${track.metadata.title}, ${count} ${count === 1 ? 'like' : 'likes'}`}
@@ -165,10 +159,10 @@ function Likers({ track, count, style }: { track: Track; count: number; style: o
       {({ hovered }: { pressed: boolean; hovered?: boolean }) => <>
         <Text style={[style, hovered ? { textDecorationLine: 'underline' } : null]}>{compactCount(count)}</Text>
         {faces.length > 0 && <View style={styles.faces}>{faces.map((face, index) =>
-          <View key={face.did} style={[styles.face, { marginLeft: index ? -6 : 0, borderColor: theme.background }]}><Cover uri={face.avatar} size={18} round instant /></View>)}</View>}
+          <View key={face.did} style={[styles.face, { marginLeft: index ? -6 : 0, borderColor: theme.background }]}><Cover uri={face.profile?.avatar_url} size={18} round instant /></View>)}</View>}
       </>}
     </Pressable>
-    {open && <Sheet title="liked by" anchor={open} close={() => setOpen(undefined)}><People id={track.id} close={() => setOpen(undefined)} /></Sheet>}
+    {open && <Sheet title="liked by" anchor={open} close={() => setOpen(undefined)}><People track={track} close={() => setOpen(undefined)} /></Sheet>}
   </View>;
 }
 

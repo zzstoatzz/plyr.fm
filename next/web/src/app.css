@@ -82,7 +82,8 @@
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; }
+/* the browser's own tap flash is a square blue-grey box on every control; controls draw their own pressed state below */
+body { margin: 0; -webkit-tap-highlight-color: transparent; }
 a { color: inherit; text-decoration: none; }
 a:hover { text-decoration: underline; text-underline-offset: 0.2em; }
 button, input, textarea, select { font: inherit; color: inherit; }
@@ -130,7 +131,9 @@ input[type='range']:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 3px colo
 	border-radius: 0.7rem;
 	padding: 0.5rem;
 }
-.icon-button:hover, .text-button:hover { background: var(--hover); }
+/* only where a pointer can hover: on touch, :hover sticks to whatever was last tapped and leaves a grey tile behind it */
+@media (hover: hover) { .icon-button:hover, .text-button:hover { background: var(--hover); } }
+@media (hover: none) { .icon-button:active, .text-button:active { background: var(--hover); } }
 .primary-button { border-radius: 50%; background: var(--accent); color: var(--on-accent); }
 .subtle { color: var(--muted); }
 .truncate { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }

@@ -15,6 +15,7 @@ import { GestureDetector } from 'react-native-gesture-handler';
 import { useTrackPress } from './TrackPress';
 import type { Track } from '@plyr/next-core/api';
 import type { StyleProp, ViewStyle } from 'react-native';
+import { useTrackLike } from './likes';
 
 export function HomeChart({ onPlay, refreshKey = 0 }: { onPlay: Play; refreshKey?: number }) {
   const colors = useAppearance();
@@ -48,6 +49,7 @@ export function HomeChart({ onPlay, refreshKey = 0 }: { onPlay: Play; refreshKey
 }
 
 function ChartTrack({ track, onPlay, card, lines }: { track: Track; onPlay: Play; card: StyleProp<ViewStyle>; lines: number[] }) {
+  const { count: likes } = useTrackLike(track);
   const colors = useAppearance();
   const { playing, toggle } = useTrackPlayback(track);
   const { row, hold, menu } = useTrackPress(track);
@@ -65,7 +67,7 @@ function ChartTrack({ track, onPlay, card, lines }: { track: Track; onPlay: Play
       <Link href={`/u/${encodeURIComponent(track.artist.profile.handle || track.artist.did)}`} asChild><Pressable accessibilityRole="link" hitSlop={{ top: 2, bottom: 6, right: 8 }} style={styles.link}>
         <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 12 * colors.scale, lineHeight: lines[1] }}>{artistName(track)}</Text>
       </Pressable></Link>
-      <View pointerEvents="none"><Text numberOfLines={1} style={{ color: colors.faint, fontSize: 11 * colors.scale, lineHeight: lines[2] }}>{track.metrics.like_count} {track.metrics.like_count === 1 ? 'like' : 'likes'}</Text></View>
+      <View pointerEvents="none"><Text numberOfLines={1} style={{ color: colors.faint, fontSize: 11 * colors.scale, lineHeight: lines[2] }}>{likes} {likes === 1 ? 'like' : 'likes'}</Text></View>
     </View>
     {menu}
   </View></GestureDetector>;
