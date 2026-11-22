@@ -5,10 +5,14 @@ import { getAuth, type Auth } from '../auth-state';
 import { Action, Copy, row } from '../controls';
 import type { privatePds } from './private-pds';
 
-export function PrivateTrackDelete({ track, auth, deletion, deleted }: {
+export function PrivateTrackDelete({ track, auth, deletion, deleted, open = false, cancel }: {
   track: Track; auth: Auth; deletion: ReturnType<typeof privatePds>['deletion']; deleted: () => void;
+  /** start at the confirmation, for a sheet that was opened to delete */
+  open?: boolean;
+  /** where cancelling goes when the confirmation started open */
+  cancel?: () => void;
 }) {
-  const [state, setState] = useState<'closed' | 'confirm' | 'unknown' | 'present'>('closed');
+  const [state, setState] = useState<'closed' | 'confirm' | 'unknown' | 'present'>(open ? 'confirm' : 'closed');
   const [busy, setBusy] = useState(false), [message, setMessage] = useState<string>();
   const live = useRef(true), locked = useRef(false);
   const sameSession = () => getAuth().did === auth.did && getAuth().rpc === auth.rpc;
@@ -35,7 +39,7 @@ export function PrivateTrackDelete({ track, auth, deletion, deleted }: {
       {!auth.privateDeleting ? <Action label="Sign in again to delete" href={{ pathname: '/login', params: { return_to: '/track/' + track.id } }} />
         : state === 'unknown' ? <Action label={busy ? 'Checking deletion…' : 'Check deletion'} disabled={busy} onPress={() => void run(false)} />
           : <Action label={busy ? 'Deleting…' : 'Delete current track'} primary destructive disabled={busy} onPress={() => void run(true)} />}
-      <Action label="Cancel deletion" disabled={busy} onPress={() => { setState('closed'); setMessage(undefined); }} />
+      <Action label="Cancel deletion" disabled={busy} onPress={() => { if (cancel) { cancel(); return; } setState('closed'); setMessage(undefined); }} />
     </View>
   </View>;
 }

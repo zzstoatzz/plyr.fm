@@ -1,5 +1,5 @@
 import { trackArtwork, collectionArtwork } from '@plyr/next-core/artwork';
-import { ArrowsDownUp, CaretRight as ChevronRight, CurrencyCircleDollar, Disc, Globe, LinkSimple, Lock, MagnifyingGlass, PencilSimple as Pencil, ShareNetwork, Tag, Trash, UploadSimple, X, type Icon as IconGlyph } from './icons';
+import { ArrowsDownUp, CaretDown, CaretRight as ChevronRight, Check, CurrencyCircleDollar, Disc, Globe, LinkSimple, Lock, MagnifyingGlass, PencilSimple as Pencil, ShareNetwork, Tag, Trash, UploadSimple, X, type Icon as IconGlyph } from './icons';
 import { Link, useFocusEffect, type Href } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput, View, type ScrollViewProps, type ScrollViewInstance } from 'react-native';
@@ -7,7 +7,7 @@ import { api } from './api-client';
 import { ApiError, type Artist, type ListSummary, type Track } from '@plyr/next-core/api';
 import { accessLabel } from '@plyr/next-core/access/label';
 import { catalogRevision } from '@plyr/next-core/catalog/changes';
-import { catalogDuration, facets, filterAlbums, filterTracks, loadAll, type AccessGroup, type OwnedSort } from '@plyr/next-core/catalog/owned';
+import { accessGroup, accessGroups, catalogDuration, facets, filterAlbums, filterTracks, loadAll, type AccessGroup, type OwnedSort } from '@plyr/next-core/catalog/owned';
 import { artistOffers, storeName, supportLink } from '@plyr/next-core/selling';
 import { isPrivateTrack } from '@plyr/next-core/track-access';
 import { useAuth } from './auth';
@@ -23,6 +23,9 @@ import { shareLink } from './ShareLink';
 import { createPds } from './pds';
 import { toast } from './toast';
 import { confirmTrackDelete } from './publishing/confirm-delete';
+import { PrivateTrackDelete } from './publishing/PrivateTrackDelete';
+import { Sheet } from './Sheet';
+import { usePlayback } from './playback';
 
 const portalTabs = ['tracks', 'albums'] as const;
 /** rows rendered at once; a big catalog grows on request instead of mounting hundreds of rows */
@@ -52,6 +55,7 @@ function PortalPage({ children, scrollRef, ...props }: {
 function AccountPortal({ did, handle }: { did: string; handle: string | null }) {
   const theme = useAppearance();
   const auth = useAuth();
+  const player = usePlayback();
   const [profile, setProfile] = useState<Artist | null>();
   const [tracks, setTracks] = useState<Track[]>();
   const [privateTracks, setPrivateTracks] = useState<Track[]>([]);
@@ -65,6 +69,8 @@ function AccountPortal({ did, handle }: { did: string; handle: string | null }) 
   const [access, setAccess] = useState<AccessGroup>();
   const [album, setAlbum] = useState<string>();
   const [tag, setTag] = useState<string>();
+  const [picker, setPicker] = useState<'access' | 'album' | 'tag'>();
+  const [deleting, setDeleting] = useState<Track>();
   const pds = useMemo(() => auth.did === did && (auth.privatePublishing || auth.privateDeleting) ? privatePds(auth) : undefined,
     [auth.did, auth.rpc, auth.privatePublishing, auth.privateDeleting, did]);
   const generation = useRef(0);
@@ -161,20 +167,36 @@ function AccountPortal({ did, handle }: { did: string; handle: string | null }) 
       {query ? <Pressable accessibilityRole="button" accessibilityLabel="clear search" onPress={() => setQuery('')} hitSlop={8}
         style={{ width: 32, height: 32, alignItems: 'center', justifyContent: 'center' }}><X size={16} color={theme.muted} /></Pressable> : null}
     </View>
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={{ marginHorizontal: -20 }}
-      contentContainerStyle={{ gap: 8, paddingHorizontal: 20, alignItems: 'center' }}>
-      <View {...catalogTabs.list} style={{ flexDirection: 'row', gap: 8 }}>
-        <Chip {...catalogTabs.tab('tracks')} label={`tracks${everything ? ' · ' + everything.length : ''}`} />
-        <Chip {...catalogTabs.tab('albums')} label={`albums${albums ? ' · ' + albums.length : ''}`} />
+    <View style={styles.filters}>
+      <View {...catalogTabs.list} style={[styles.segments, { backgroundColor: theme.surface, borderColor: theme.hairline }]}>
+        <Segment {...catalogTabs.tab('tracks')} label={`tracks${everything ? ' · ' + everything.length : ''}`} />
+        <Segment {...catalogTabs.tab('albums')} label={`albums${albums ? ' · ' + albums.length : ''}`} />
       </View>
       {tab === 'tracks' && <>
         <Chip icon={ArrowsDownUp} label={sortLabel[sort]} accessibilityLabel={`sort: ${sortLabel[sort]}`} onPress={() => setSort(sorts[(sorts.indexOf(sort) + 1) % sorts.length])} />
-        {options.access.length > 1 && options.access.map(group => <Chip key={group.value} label={group.label} selected={access === group.value}
-          icon={group.value === 'everyone' ? Globe : group.value === 'link' ? LinkSimple : Lock} onPress={() => setAccess(access === group.value ? undefined : group.value)} />)}
-        {options.albums.slice(0, 8).map(option => <Chip key={'album:' + option.name} icon={Disc} label={option.name} accessibilityLabel={`album: ${option.name}`} selected={album === option.name} onPress={() => setAlbum(album === option.name ? undefined : option.name)} />)}
-        {options.tags.slice(0, 8).map(option => <Chip key={'tag:' + option.name} icon={Tag} label={option.name} accessibilityLabel={`tag: ${option.name}`} selected={tag === option.name} onPress={() => setTag(tag === option.name ? undefined : option.name)} />)}
+        {options.access.length > 1 && <Chip menu icon={access === 'everyone' || !access ? Globe : access === 'link' ? LinkSimple : Lock}
+          label={access ? accessGroups.find(group => group.value === access)!.label : 'who can listen'} accessibilityLabel={`who can listen: ${access ? accessGroups.find(group => group.value === access)!.label : 'anyone'}`}
+          selected={!!access} onPress={() => setPicker('access')} />}
+        {options.albums.length > 0 && <Chip menu icon={Disc} label={album ?? 'album'} accessibilityLabel={`album: ${album ?? 'any'}`} selected={!!album} onPress={() => setPicker('album')} />}
+        {options.tags.length > 0 && <Chip menu icon={Tag} label={tag ?? 'tag'} accessibilityLabel={`tag: ${tag ?? 'any'}`} selected={!!tag} onPress={() => setPicker('tag')} />}
       </>}
-    </ScrollView>
+    </View>
+    {picker && <Sheet title={picker === 'access' ? 'who can listen' : picker} close={() => setPicker(undefined)}>
+      {[{ value: undefined as string | undefined, name: picker === 'access' ? 'anyone' : picker === 'album' ? 'any album' : 'any tag', count: everything?.length ?? 0 },
+        ...(picker === 'access' ? options.access.map(group => ({ value: group.value as string | undefined, name: group.label, count: (everything ?? []).filter(track => accessGroup(label(track)) === group.value).length }))
+          : (picker === 'album' ? options.albums : options.tags).map(option => ({ value: option.name as string | undefined, name: option.name, count: option.count })))
+      ].map(option => {
+        const current = picker === 'access' ? access : picker === 'album' ? album : tag;
+        return <Option key={option.name} label={option.name} count={option.count} selected={current === option.value} onPress={() => {
+          if (picker === 'access') setAccess(option.value as AccessGroup | undefined);
+          else if (picker === 'album') setAlbum(option.value); else setTag(option.value);
+          setPicker(undefined);
+        }} />;
+      })}
+    </Sheet>}
+    {deleting && pds && <Sheet title={`delete ${deleting.metadata.title}`} close={() => setDeleting(undefined)}>
+      <PrivateTrackDelete open track={deleting} auth={auth} deletion={pds.deletion} cancel={() => setDeleting(undefined)} deleted={() => { player.forgetPrivateTrack(deleting.record.uri); remove(deleting); setDeleting(undefined); toast.success(`deleted "${deleting.metadata.title}"`); }} />
+    </Sheet>}
 
     {tab === 'tracks' ? <View {...catalogTabs.panel('tracks')} style={{ gap: 8 }}>
       {query.trim() && foundAlbums.length > 0 && <>
@@ -188,7 +210,9 @@ function AccountPortal({ did, handle }: { did: string; handle: string | null }) 
         const subtitle = [label(track) === 'anyone with the link' ? 'with the link' : label(track), !hidden && trackMeta(track), track.metadata.album].filter(Boolean).join(' · ');
         return <Row key={track.record.uri} title={track.metadata.title} image={trackArtwork(track)} subtitle={subtitle}
           href={{ pathname: '/track/[id]', params: { id: track.id } }}
-          action={hidden ? undefined : <View style={{ flexDirection: 'row', marginRight: -6 }}>
+          action={hidden ? pds && <Pressable accessibilityRole="button" accessibilityLabel={`delete ${track.metadata.title}`} onPress={() => setDeleting(track)}
+            style={({ pressed }) => ({ width: 44, height: 44, marginRight: -6, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.6 : 1 })}><Trash color={theme.muted} size={18} /></Pressable>
+            : <View style={{ flexDirection: 'row', marginRight: -6 }}>
             <Edit label={`edit ${track.metadata.title}`} href={{ pathname: '/edit-track/[id]', params: { id: track.id } }} />
             <DeleteTrack track={track} deleted={() => remove(track)} />
           </View>} />;
@@ -224,9 +248,12 @@ function Tool({ icon: Glyph, label, accessibilityLabel, href, onPress, primary =
   icon: IconGlyph; label: string; accessibilityLabel?: string; href?: Href; onPress?: () => void; primary?: boolean; dot?: boolean;
 }) {
   const theme = useAppearance();
+  const [pressed, setPressed] = useState(false);
   const ink = primary ? theme.onAccent : theme.text;
+  // `<Link asChild>` drops style functions, so the tile keeps its own pressed state and passes one flat object.
   const body = <Pressable accessibilityRole={href ? 'link' : 'button'} accessibilityLabel={accessibilityLabel ?? label} onPress={onPress}
-    style={({ pressed }) => StyleSheet.flatten([styles.tool, { borderColor: primary ? theme.accent : theme.hairline, backgroundColor: primary ? theme.accent : pressed ? theme.hover : theme.surface, opacity: pressed && primary ? 0.85 : 1 }])}>
+    onPressIn={() => setPressed(true)} onPressOut={() => setPressed(false)}
+    style={StyleSheet.flatten([styles.tool, { borderColor: primary ? theme.accent : theme.hairline, backgroundColor: primary ? theme.accent : pressed ? theme.hover : theme.surface, opacity: pressed && primary ? 0.85 : 1 }])}>
     <Glyph size={22} color={primary ? ink : theme.accent} />
     <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} style={{ color: ink, fontFamily: theme.fontFamily, fontSize: 12.5 * theme.scale, fontWeight: '700' }}>{label}</Text>
     {dot && <View style={styles.dot} />}
@@ -234,17 +261,37 @@ function Tool({ icon: Glyph, label, accessibilityLabel, href, onPress, primary =
   return href ? <Link href={href} asChild>{body}</Link> : body;
 }
 
-function Chip({ label, accessibilityLabel, selected, onPress, icon: Glyph, role, nativeID, 'aria-controls': controls }: {
+function Chip({ label, accessibilityLabel, selected, onPress, icon: Glyph, menu = false }: {
   label: string; accessibilityLabel?: string; selected?: boolean; onPress: () => void; icon?: IconGlyph;
-  /** set by useTabs when the chip is a tab */
-  role?: ReturnType<ReturnType<typeof useTabs>['tab']>['role']; nativeID?: string; 'aria-controls'?: string;
+  /** opens a picker, so it shows a caret and announces itself as a button */
+  menu?: boolean;
 }) {
   const theme = useAppearance();
-  return <Pressable accessibilityRole={role ?? 'button'} nativeID={nativeID} aria-controls={controls} accessibilityLabel={accessibilityLabel ?? label} accessibilityState={selected === undefined ? undefined : { selected }} aria-selected={role ? selected : undefined} aria-pressed={role || selected === undefined ? undefined : selected}
-    onPress={onPress} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 36, paddingHorizontal: 13, borderRadius: 18, borderWidth: 1,
+  return <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? label} accessibilityHint={menu ? 'opens a list to choose from' : undefined}
+    onPress={onPress} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 36, paddingHorizontal: 12, borderRadius: 18, borderWidth: 1,
       borderColor: selected ? theme.accent : theme.line, backgroundColor: selected ? theme.accent + '2e' : pressed ? theme.hover : 'transparent' })}>
     {Glyph && <Glyph size={14} color={selected ? theme.text : theme.muted} />}
-    <Text numberOfLines={1} style={{ color: selected ? theme.text : theme.muted, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale, fontWeight: selected ? '700' : '500', maxWidth: 180 }}>{label}</Text>
+    <Text numberOfLines={1} style={{ color: selected ? theme.text : theme.muted, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale, fontWeight: selected ? '700' : '500', maxWidth: 160 }}>{label}</Text>
+    {menu && <CaretDown size={12} color={theme.muted} />}
+  </Pressable>;
+}
+
+function Segment({ label, selected, onPress, role, nativeID, 'aria-controls': controls }: ReturnType<ReturnType<typeof useTabs>['tab']> & { label: string }) {
+  const theme = useAppearance();
+  return <Pressable role={role} nativeID={nativeID} aria-controls={controls} aria-selected={selected} accessibilityLabel={label} accessibilityState={{ selected }} onPress={onPress}
+    style={{ minHeight: 32, paddingHorizontal: 12, borderRadius: 9, justifyContent: 'center', backgroundColor: selected ? theme.raised : 'transparent' }}>
+    <Text numberOfLines={1} style={{ color: selected ? theme.text : theme.muted, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale, fontWeight: selected ? '700' : '500' }}>{label}</Text>
+  </Pressable>;
+}
+
+function Option({ label, count, selected, onPress }: { label: string; count: number; selected: boolean; onPress: () => void }) {
+  const theme = useAppearance();
+  const [pressed, setPressed] = useState(false);
+  return <Pressable accessibilityRole="button" accessibilityLabel={`${label}, ${count}`} accessibilityState={{ selected }} onPress={onPress} onPressIn={() => setPressed(true)} onPressOut={() => setPressed(false)}
+    style={{ minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: theme.hairline, backgroundColor: pressed ? theme.surface : 'transparent' }}>
+    <Text numberOfLines={1} style={{ flex: 1, color: theme.text, fontFamily: theme.fontFamily, fontSize: 16 * theme.scale, fontWeight: selected ? '700' : '400' }}>{label}</Text>
+    <Text style={{ color: theme.faint, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale, fontVariant: ['tabular-nums'] }}>{count}</Text>
+    <View style={{ width: 20, alignItems: 'center' }}>{selected && <Check size={18} color={theme.accent} />}</View>
   </Pressable>;
 }
 
@@ -252,6 +299,8 @@ const styles = StyleSheet.create({
   numbers: { flexDirection: 'row', borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, overflow: 'hidden' },
   number: { flex: 1, minWidth: 0, paddingVertical: 8, paddingHorizontal: 12 },
   tools: { flexDirection: 'row', gap: 6 },
+  filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
+  segments: { flexDirection: 'row', padding: 2, borderRadius: 11, borderWidth: StyleSheet.hairlineWidth },
   tool: { flex: 1, minWidth: 0, height: 66, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center', gap: 5 },
   dot: { position: 'absolute', top: 8, right: 9, width: 7, height: 7, borderRadius: 4, backgroundColor: '#4fc37a' },
   search: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 12, paddingRight: 6, borderRadius: 12, borderWidth: 1 },
