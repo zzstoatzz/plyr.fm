@@ -222,7 +222,7 @@
 		if (!node || reducedMotion()) { if (node) unswipe(node); player.remove(index); return; }
 		if (leaving.has(node)) return;
 		leaving.add(node);
-		const queue = player.queue;
+		const id = player.queue[index]?.id;
 		const list = node.parentElement;
 		const gap = list ? parseFloat(getComputedStyle(list).rowGap) || 0 : 0;
 		const animations: Animation[] = [];
@@ -241,8 +241,15 @@
 			], { duration: 200, easing: 'cubic-bezier(0.3, 0, 0.2, 1)', fill: 'forwards' });
 			animations.push(collapse);
 			await collapse.finished;
-			if (player.queue === queue) player.remove(index);
-			await tick();
+			// Find the track again: another removal or the next track starting may have shifted it meanwhile.
+			const before = player.queue;
+			const at = before[index]?.id === id && index >= start ? index : before.findIndex((track, position) => position >= start && track.id === id);
+			if (at >= 0) {
+				player.remove(at);
+				await tick();
+				// A jam edit lands when the server echoes it; keep the gap closed until then.
+				for (let waited = 0; player.queue === before && waited < 1500; waited += 50) await new Promise(done => setTimeout(done, 50));
+			}
 		} catch { /* the row left the page mid-animation */ }
 		// Index-keyed rows (the local queue) reuse this node for the next track, so put it back.
 		for (const animation of animations) animation.cancel();

@@ -36,7 +36,7 @@ export function QueueReorder({ queue, start, move, remove, renderTrack, renderHe
   const latest = useRef({ queue, start, move, remove, onDragging });
   latest.current = { queue, start, move, remove, onDragging };
   const [drag, setDrag] = useState<Drag | null>(null);
-  const [leaving, setLeaving] = useState<{ offset: number; height: Animated.Value; queue: Track[] } | null>(null);
+  const [leaving, setLeaving] = useState<{ at: number; id: string; height: Animated.Value; queue: Track[] } | null>(null);
   const leavingNow = useRef(false);
 
   function cancel() {
@@ -63,14 +63,21 @@ export function QueueReorder({ queue, start, move, remove, renderTrack, renderHe
   function dismiss(offset: number) {
     const remove = latest.current.remove;
     if (!remove || leavingNow.current || active.current) return false;
-    const from = latest.current.queue, at = latest.current.start + offset;
+    const from = latest.current.queue, at = latest.current.start + offset, id = from[at]?.id;
+    if (!id) return false;
     if (theme.reduceMotion) { remove(at); return true; }
     leavingNow.current = true;
     const collapse = new Animated.Value(layouts.current.get(offset)?.height ?? 60);
-    setLeaving({ offset, height: collapse, queue: from });
+    setLeaving({ at, id, height: collapse, queue: from });
     Animated.timing(collapse, { toValue: 0, duration: 200, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start(() => {
       leavingNow.current = false;
-      if (latest.current.queue === from) remove(at); else setLeaving(null);
+      // Find the track again: the next track starting, or another edit, may have shifted it meanwhile.
+      const { queue: now, start: first } = latest.current;
+      const index = now[at]?.id === id && at >= first ? at : now.findIndex((track, position) => position >= first && track.id === id);
+      if (index < 0) { setLeaving(null); return; }
+      remove(index);
+      // A removal the queue refuses (a live station, a rejected jam edit) must not leave the row collapsed.
+      setTimeout(() => setLeaving(current => current && current.queue === latest.current.queue ? null : current), 1500);
     });
     return true;
   }
@@ -135,7 +142,7 @@ export function QueueReorder({ queue, start, move, remove, renderTrack, renderHe
     {queue.slice(start).map((track, offset) => {
       const lifted = drag?.from === offset;
       const shift = drag ? rowShift(drag.rows, drag.from, drag.to, offset) : 0;
-      const gone = leaving?.queue === queue && leaving.offset === offset ? leaving : null;
+      const gone = leaving?.queue === queue && leaving.at === start + offset && leaving.id === track.id ? leaving : null;
       return <Fragment key={`${track.id}:${start + offset}`}>{renderHeader?.(start + offset)}<Animated.View onLayout={event => {
         if (!gone) layouts.current.set(offset, { top: event.nativeEvent.layout.y, height: event.nativeEvent.layout.height });
       }} pointerEvents={gone ? 'none' : 'auto'} style={[styles.row, gone && { height: gone.height, minHeight: 0, overflow: 'hidden', opacity: gone.height.interpolate({ inputRange: [0, 24], outputRange: [0, 1], extrapolate: 'clamp' }) }, {
