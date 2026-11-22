@@ -14,6 +14,8 @@ const HOLD = 60;
 const STAGE = 56;
 const KNEE_LOW = 20;
 const KNEE_HIGH = 100;
+/** Under this pull the shift hides the bounce to within a point, so it can be ended. */
+const CUT = 30;
 /** [pull, shift]: the content shows at pull + shift, easing into the gap instead of stopping dead at it. */
 const KNEE: (readonly [number, number])[] = [[0, HOLD], ...Array.from({ length: 9 }, (_, i) => {
   const pull = KNEE_LOW + (KNEE_HIGH - KNEE_LOW) * i / 8;
@@ -62,7 +64,7 @@ export function usePullRefresh(
   const state = useRef({
     pull: 0, dragging: false, engaged: false, gesture: restingPull, phase: 'idle' as Phase,
     wave: Array.from({ length: BARS }, (): Bar => ({ height: 0.12, velocity: 0 })),
-    frame: 0, last: 0, lastPull: 0, lastSpeed: 0, started: 0, cut: false, animation: undefined as Animated.CompositeAnimation | undefined,
+    frame: 0, last: 0, lastPull: 0, lastSpeed: 0, started: 0, cut: false, closeOnRelease: false, animation: undefined as Animated.CompositeAnimation | undefined,
   }).current;
 
   // The level-meter jiggle while pulling runs on JS; the finger is the only thing happening then.
@@ -104,6 +106,13 @@ export function usePullRefresh(
     setMessage('');
   }, [state, waving, visible, run]);
 
+  const close = useCallback(() => {
+    state.phase = 'closing';
+    state.closeOnRelease = false;
+    Animated.timing(holding, { toValue: 0, duration: 280, easing: Easing.out(Easing.cubic), useNativeDriver: true, isInteraction: false })
+      .start(() => settle());
+  }, [state, holding, settle]);
+
   const begin = useCallback(() => {
     state.phase = 'refreshing';
     state.cut = false;
@@ -130,17 +139,17 @@ export function usePullRefresh(
         setMessage(text);
         await new Promise(done => setTimeout(done, hold));
       }
-      state.phase = 'closing';
-      Animated.timing(holding, { toValue: 0, duration: 280, easing: Easing.out(Easing.cubic), useNativeDriver: true, isInteraction: false })
-        .start(() => settle());
+      // closing under a finger fights it; wait for the finger to let go
+      if (state.dragging) state.closeOnRelease = true;
+      else close();
     });
-  }, [state, lights, visible, waving, loop, holding, settle]);
+  }, [state, lights, visible, waving, loop, holding, close]);
 
   const listener = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     onScrolled(event);
     state.pull = -(event.nativeEvent.contentOffset.y + top);
     // under the knee the shift hides the rest of the bounce, but a bouncing scroll view eats taps; end it
-    if (state.phase === 'refreshing' && !state.dragging && !state.cut && state.pull < KNEE_LOW) {
+    if (state.phase === 'refreshing' && !state.dragging && !state.cut && state.pull < CUT) {
       state.cut = true;
       if (state.pull > 0.5) jumpTo(-top);
     }
@@ -167,13 +176,14 @@ export function usePullRefresh(
 
   const onScrollEndDrag = useCallback(() => {
     state.dragging = false;
+    if (state.closeOnRelease) close();
     const fire = state.gesture.armed && state.phase === 'idle';
     state.gesture = { ...state.gesture, armed: false };
     if (fire) {
       feel('release');
       begin();
     } else run();
-  }, [state, run, begin]);
+  }, [state, run, begin, close]);
 
   // gap in points: the pull from the native scroll position, plus the shift that holds it open.
   // The stage sits centred in the gap and shrinks with it, so the wave closes with the gap.
