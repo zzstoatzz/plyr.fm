@@ -60,7 +60,7 @@ async function verify(browser, origin, width, scheme) {
     }
     await view.getByRole('button', { name: 'Show the cover', exact: true }).click();
     await view.waitFor({ state: 'hidden' });
-    await now.getByTestId('now-playing-facts').waitFor();
+    await now.getByTestId(width === 390 ? 'now-playing-facts' : 'now-playing-meta').waitFor();
     await page.screenshot({ path: path.join(output, `${width}-${scheme}-now-playing.png`) });
     await page.keyboard.press('Escape');
     await now.waitFor({ state: 'hidden' });
