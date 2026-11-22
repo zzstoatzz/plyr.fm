@@ -88,12 +88,14 @@
 
 	onMount(() => {
 		if (/Mac|iPhone|iPad/.test(navigator.platform)) searchKey = '⌘K';
-		restorePrefs(account.did, account.agent, account.accountSync);
+		// until auth settles, keep the prefs app.html painted with: applying the signed-out
+		// ones while the session restores flashed a signed-in dark theme to light on reload
+		if (account.ready) restorePrefs(account.did, account.agent, account.accountSync);
 		const stopPrefs = mountPrefs();
 		let resumed = account.rpc;
 		const unsubscribe = auth.subscribe(() => {
 			const next = auth.getAuth();
-			if (account.did !== next.did || account.agent !== next.agent || account.accountSync !== next.accountSync) {
+			if (next.ready && (!account.ready || account.did !== next.did || account.agent !== next.agent || account.accountSync !== next.accountSync)) {
 				restorePrefs(next.did, next.agent, next.accountSync);
 			}
 			account = next;

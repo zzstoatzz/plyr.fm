@@ -91,17 +91,20 @@
 				.wave i:nth-child(3) { clip-path: inset(0 0 round var(--bar)); }
 			}
 
+			/* the page colour (app.css --bg) from the very first paint, so the boot screen and the
+			   canvas around it already match the app it hands over to */
+			:root { background: #fafafa; }
+			:root[data-theme='light'] { color-scheme: light; }
+			:root[data-theme='dark'] { color-scheme: dark; background: #0a0a0a; }
+			@media (prefers-color-scheme: dark) {
+				:root:not([data-theme='light']) { background: #0a0a0a; }
+			}
 			#boot {
 				position: fixed;
 				inset: 0;
 				display: grid;
 				place-items: center;
-				background: #fff;
 			}
-			@media (prefers-color-scheme: dark) {
-				:root:not([data-theme='light']) #boot { background: #000; }
-			}
-			:root[data-theme='dark'] #boot { background: #000; }
 			/* gone the moment the app shell renders; no script needed */
 			body:has(#main) #boot { display: none; }
 		</style>
