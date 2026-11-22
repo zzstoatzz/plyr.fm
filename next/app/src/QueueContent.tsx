@@ -19,6 +19,8 @@ import { Sheet } from './Sheet';
 import { QueueReorder, type ScrollMetrics } from './QueueReorder';
 import { QueueStarters, QueueSuggestionStrips } from './QueueSuggestions';
 import { BLEED, HeroBackdrop, TOP } from './HeroPieces';
+import { Coachmark } from './Coachmark';
+import { markHintSeen, useHintPending } from './hints';
 
 /** Now playing, up next and played tracks: the queue screen on phones and the queue panel on desktop share it. */
 export function QueueContent({ scrollRef, scrollMetrics, onDragging, returnTo = '/queue' }: {
@@ -33,6 +35,9 @@ export function QueueContent({ scrollRef, scrollMetrics, onDragging, returnTo = 
   const upcoming = player.queue.slice(player.index + 1);
   const picks = Math.max(0, (player.tail?.from ?? player.queue.length) - player.index - 1);
   const RepeatIcon = player.repeat === 'one' ? Repeat1 : Repeat;
+  // The reorder hint gets its own room above the list until it is seen, so it never covers a row or shifts one mid-touch.
+  const hintPending = useHintPending('queue.reorder');
+  const learned = () => markHintSeen('queue.reorder');
 
   return <>
     {player.queueError && <Copy>{player.queueError}</Copy>}
@@ -73,9 +78,11 @@ export function QueueContent({ scrollRef, scrollMetrics, onDragging, returnTo = 
             </IconButton>
           </View>
         </View>
-        {upcoming.length > 1 && <Text style={{ color: theme.muted, fontSize: 13 * theme.scale, paddingBottom: 6 }}>hold a track to move it, or swipe it away</Text>}
+        {hintPending && upcoming.length > 1 && <View style={{ minHeight: 60 * theme.scale, justifyContent: 'center', paddingBottom: 6 }}>
+          <Coachmark hint="queue.reorder" />
+        </View>}
         {!upcoming.length && !player.privatePlayback && !player.jam && !player.live ? <QueueStarters />
-          : upcoming.length ? <View style={styles.list}><QueueReorder queue={player.queue} start={player.index + 1} move={player.move} remove={player.remove}
+          : upcoming.length ? <View style={styles.list}><QueueReorder queue={player.queue} start={player.index + 1} move={(from, to) => { player.move(from, to); learned(); }} remove={index => { player.remove(index); learned(); }}
           scrollRef={scrollRef} scrollMetrics={scrollMetrics} onDragging={onDragging}
           renderHeader={index => player.tail && index === Math.max(player.index + 1, player.tail.from)
             ? <View style={{ paddingTop: 10, paddingBottom: 4, paddingHorizontal: 8 }}><Copy>from {player.tail.label}</Copy></View> : null}

@@ -13,7 +13,10 @@
 	import Icon from './ui/Icon.svelte';
 	import PlayingWave from './ui/PlayingWave.svelte';
 	import QueueSuggestions from './QueueSuggestions.svelte';
+	import Coachmark from './Coachmark.svelte';
+	import { oneTimeHint } from './hints.svelte';
 	let { close }: { close?: () => void } = $props();
+	const reorderHint = oneTimeHint('queue.reorder');
 	let account = $state.raw(auth.getAuth());
 	onMount(() => auth.subscribe(() => { account = auth.getAuth(); }));
 	const deviceQueue = $derived(account.did && !account.accountSync && !player.privateMode && !player.jam && !player.liveStation);
@@ -131,7 +134,7 @@
 		suppressClickUntil = performance.now() + 350;
 		if (apply && current.to !== current.from && player.queue === current.queue) {
 			const target = Number(current.nodes[current.to]?.dataset.queueIndex);
-			if (Number.isInteger(target)) player.move(current.index, target);
+			if (Number.isInteger(target)) { player.move(current.index, target); reorderHint.dismiss(); }
 		}
 	}
 
@@ -164,6 +167,7 @@
 		if (distance < 64 || distance <= Math.abs(event.clientY - before.y) * 1.5) return;
 		suppressClickUntil = performance.now() + 350;
 		player.remove(index);
+		reorderHint.dismiss();
 	}
 
 	function suppressSwipeClick(event: MouseEvent) {
@@ -238,7 +242,9 @@
 				<h2 id="queue-picks">up next</h2>
 				<span class="count">{picks.length}</span>
 			</div>
-			{#if picks.length + continuation.length > 1}<p class="hint"><span class="touch">hold a track to move it</span><span class="mouse">drag a track to move it</span></p>{/if}
+			{#if !reorderHint.seen && picks.length + continuation.length > 1}
+				<div class="hint"><Coachmark dismiss={reorderHint.dismiss} testid="queue-hint"><span class="touch">hold a track to move it, or swipe it away</span><span class="mouse">drag a track to move it</span></Coachmark></div>
+			{/if}
 			{#if picks.length}
 				<ol role="list" bind:this={pickList} use:holdScroll>
 					{#each picks as track, offset (key(start + offset))}
@@ -354,7 +360,7 @@
 	/* move up is for keyboards; pointers drag the row or the handle */
 	.move:not(:focus-visible) { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); }
 	.queue-signin { color: var(--accent); text-decoration: underline; text-underline-offset: 0.2em; }
-	.hint { margin: -0.3rem 0 0.5rem; color: var(--faint); font-size: 0.8rem; }
+	.hint { display: grid; min-height: 3rem; margin-bottom: 0.5rem; }
 	.hint .touch { display: none; }
 	@media (pointer: coarse) { .hint .touch { display: inline; } .hint .mouse { display: none; } }
 	.empty { color: var(--muted); margin: 0; font-size: 0.88rem; }
