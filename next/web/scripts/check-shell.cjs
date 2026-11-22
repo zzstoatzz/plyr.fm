@@ -573,6 +573,7 @@ async function keyboard(browser, phone, scheme) {
     assert.equal(await page.evaluate(() => history.length), recentHistory);
     await navigation.getByRole('link', { name: 'search', exact: true }).click();
     await page.waitForURL(origin + '/search');
+    await page.waitForFunction(() => document.activeElement?.id === 'search-query', null, { timeout: 2000 });
     await recent.getByRole('button', { name: 'clear', exact: true }).click();
     await recent.waitFor({ state: 'hidden' });
     assert.ok(await search.evaluate(node => document.activeElement === node));
@@ -585,6 +586,12 @@ async function keyboard(browser, phone, scheme) {
     await press(`${modifier}+k`);
     await page.waitForURL('**/search');
     await press(`${modifier}+k`);
+    await page.waitForURL('**/settings');
+    await page.locator('#search-query').waitFor({ state: 'detached' });
+    await press('/');
+    await page.waitForURL('**/search');
+    await page.waitForFunction(() => document.activeElement?.id === 'search-query', null, { timeout: 2000 });
+    await press('Escape');
     await page.waitForURL('**/settings');
 
     await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'home', exact: true }).click();
