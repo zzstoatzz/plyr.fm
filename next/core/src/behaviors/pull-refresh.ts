@@ -6,6 +6,8 @@ export const BARS = 5;
 /** The wave's resting shape, the same as the loading wave's. */
 export const WAVE_REST = [0.4, 0.72, 1, 0.72, 0.4] as const;
 const FLOOR = 0.12;
+/** One pass of the loading wave, the same as the loading wave's animation. */
+export const WAVE_CYCLE_MS = 1150;
 /** Falling back under this share of the threshold disarms, so jitter at the line can't fire twice. */
 const REARM = 0.8;
 
@@ -36,8 +38,8 @@ export type WavePhase = 'idle' | 'refreshing' | 'settled';
 
 /** Where each bar is headed, as a share of full height. */
 export function waveTarget(index: number, phase: WavePhase, progress: number, armed: boolean, seconds: number) {
-  if (phase === 'refreshing') return 0.32 + 0.68 * (0.5 + 0.5 * Math.sin(2 * Math.PI * seconds / 1.15 - index * 0.5 - Math.PI / 2));
-  if (phase === 'settled') return FLOOR;
+  if (phase === 'refreshing') return 0.32 + 0.68 * (0.5 + 0.5 * Math.sin(2 * Math.PI * seconds * 1000 / WAVE_CYCLE_MS - index * 0.5 - Math.PI / 2));
+  if (phase === 'settled') return WAVE_REST[index];
   if (armed) return WAVE_REST[index] * 1.12;
   return FLOOR + (WAVE_REST[index] - FLOOR) * barLight(index, progress);
 }
@@ -95,4 +97,22 @@ export function refreshMessage(result: RefreshResult) {
   if (!result.ok) return 'could not refresh';
   if (!result.fresh) return 'up to date';
   return result.fresh === 1 ? '1 new track' : `${result.fresh} new tracks`;
+}
+
+/**
+ * How long to keep the wave playing once the refresh has answered after `elapsedMs`: at least one
+ * full pass, and always to the end of the pass it's in, so a fast answer never flashes it.
+ */
+export function waveEndDelay(elapsedMs: number) {
+  const passes = Math.max(1, Math.ceil(elapsedMs / WAVE_CYCLE_MS));
+  return passes * WAVE_CYCLE_MS - elapsedMs;
+}
+
+/**
+ * How long the gap stays open to show the result before it closes. Nothing new needs no words:
+ * the gap just closes.
+ */
+export function resultHold(result: RefreshResult) {
+  if (!result.ok) return 1400;
+  return result.fresh ? 900 : 0;
 }

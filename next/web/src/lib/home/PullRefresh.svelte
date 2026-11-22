@@ -2,7 +2,7 @@
 	import { onMount, type Snippet } from 'svelte';
 	import { pullDirection } from '@plyr/next-core/behaviors/player-pull';
 	import {
-		BARS, armKick, barLight, barStep, pullKick, pullMove, refreshMessage, restingPull, waveTarget,
+		BARS, armKick, barLight, barStep, pullKick, pullMove, refreshMessage, restingPull, resultHold, waveEndDelay, waveTarget,
 		type Bar, type RefreshResult, type WavePhase
 	} from '@plyr/next-core/behaviors/pull-refresh';
 
@@ -13,7 +13,6 @@
 	const THRESHOLD = 72;
 	const HOLD = 56;
 	const STRETCH = 230;
-	const SETTLED_MS = 1250;
 
 	let content: HTMLDivElement;
 	let indicator: HTMLDivElement;
@@ -77,9 +76,10 @@
 			return barStep(dragging ? { ...bar, velocity: bar.velocity + pullKick(index, speedChange) } : bar, target, dt);
 		});
 		bars.forEach((element, index) => {
-			const height = Math.min(1.35, wave[index].height);
+			// closing: the wave rests and shrinks with the gap instead of vanishing
+			const height = Math.min(1.35, wave[index].height) * (phase === 'closing' ? Math.min(1, shown / HOLD) : 1);
 			element.style.clipPath = `inset(${(1 - height / 1.35) * 50}% 0 round 0.375rem)`;
-			element.style.opacity = wavePhase === 'settled' ? '0' : pull.armed || wavePhase === 'refreshing' ? '1' : String(0.45 + 0.55 * barLight(index, progress));
+			element.style.opacity = message ? '0' : pull.armed || phase !== 'idle' ? '1' : String(0.45 + 0.55 * barLight(index, progress));
 		});
 		const resting = phase === 'idle' && !touch && offset === 0 && wave.every(bar => Math.abs(bar.velocity) < 0.01);
 		if (!resting) run();
@@ -95,13 +95,18 @@
 		let result: RefreshResult;
 		try { result = await onrefresh(); }
 		catch { result = { ok: false }; }
-		phase = 'settled';
-		message = refreshMessage(result);
-		announce = message;
+		await new Promise(done => setTimeout(done, waveEndDelay(performance.now() - started)));
+		const text = refreshMessage(result);
+		const shown = resultHold(result);
+		announce = text;
 		buzz(result.ok ? 12 : 24);
-		run();
-		await new Promise(done => setTimeout(done, SETTLED_MS));
-		message = '';
+		if (shown) {
+			phase = 'settled';
+			message = text;
+			run();
+			await new Promise(done => setTimeout(done, shown));
+			message = '';
+		}
 		phase = 'closing';
 		hold = 0;
 		run();

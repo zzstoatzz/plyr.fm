@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { barStep, newAtTop, pullMove, refreshMessage, restingPull, waveTarget, WAVE_REST } from '../src/behaviors/pull-refresh.ts';
+import { barStep, newAtTop, resultHold, waveEndDelay, WAVE_CYCLE_MS, pullMove, refreshMessage, restingPull, waveTarget, WAVE_REST } from '../src/behaviors/pull-refresh.ts';
 
 test('a slow pull ticks once per bar, arms once at the line, and only disarms well under it', () => {
   let state = restingPull;
@@ -47,4 +47,17 @@ test('new tracks are counted above the first one the feed already had', () => {
   assert.equal(refreshMessage({ ok: true, fresh: 1 }), '1 new track');
   assert.equal(refreshMessage({ ok: true, fresh: 3 }), '3 new tracks');
   assert.equal(refreshMessage({ ok: false }), 'could not refresh');
+});
+
+test('the wave plays at least one full pass and ends on a pass boundary', () => {
+  assert.equal(waveEndDelay(250), WAVE_CYCLE_MS - 250);
+  assert.equal(waveEndDelay(0), WAVE_CYCLE_MS);
+  assert.equal(waveEndDelay(1500), 2 * WAVE_CYCLE_MS - 1500);
+  assert.equal(waveEndDelay(2 * WAVE_CYCLE_MS), 0);
+});
+
+test('only news holds the gap open', () => {
+  assert.equal(resultHold({ ok: true, fresh: 0 }), 0);
+  assert.ok(resultHold({ ok: true, fresh: 2 }) > 0);
+  assert.ok(resultHold({ ok: false }) > resultHold({ ok: true, fresh: 2 }));
 });
