@@ -47,6 +47,13 @@ async function verify(browser, origin, width, scheme) {
     const firstRow = page.getByTestId('home-track-row').first();
     const [rowTitle, rowMetrics] = await Promise.all([firstRow.locator('.title'), firstRow.locator('.metrics')].map(part => part.boundingBox()));
     assert.ok(rowMetrics.x > rowTitle.x + rowTitle.width && rowMetrics.y < rowTitle.y + rowTitle.height, 'latest rows put plays, likes and when on the title line');
+    const radioRail = page.getByTestId('home-radio');
+    assert.equal(await radioRail.getByRole('button', { name: /^Listen to .+ radio$/ }).count(), 5, 'the rail ends with every radio station');
+    await page.evaluate(() => window.scrollTo(0, document.scrollingElement.scrollHeight));
+    await page.waitForTimeout(100);
+    const railEnd = await page.getByRole('complementary', { name: 'explore' }).evaluate(node => node.getBoundingClientRect().bottom);
+    assert.ok(railEnd > 0 && railEnd <= height, 'the rail stays on screen when the page scrolls past it');
+    await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({ path: path.join(output, `${width}-${scheme}-home.png`) });
     await page.getByTestId('home-track-row').first().getByRole('button', { name: /^Play / }).click();
     const dock = page.getByTestId('player-dock');
