@@ -10,6 +10,13 @@
 	const position = $derived(dragging ?? player.position);
 	const fill = $derived(player.duration ? Math.min(100, Math.max(0, position / player.duration * 100)) : 0);
 
+	// A track change or lost seek permission mid-drag drops the drag instead of seeking the old position.
+	$effect(() => {
+		void player.current;
+		if (!enabled) cancel();
+		return cancel;
+	});
+
 	function at(x: number) {
 		const box = band!.getBoundingClientRect();
 		return Math.max(0, Math.min(1, (x - box.left) / box.width)) * player.duration;
@@ -23,6 +30,7 @@
 
 	function move(event: PointerEvent) {
 		if (!start || !event.isPrimary) return;
+		if (event.buttons === 0) { cancel(); return; }
 		if (dragging === undefined) {
 			const across = Math.abs(event.clientX - start.x), vertical = Math.abs(event.clientY - start.y);
 			if (vertical > 8 && vertical > across) { start = undefined; return; }
@@ -69,7 +77,7 @@
 		box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent), 0 1px 4px rgb(0 0 0 / 0.3); }
 	.bubble { position: absolute; top: -2.4rem; left: clamp(1.5rem, var(--fill), calc(100% - 1.5rem)); transform: translateX(-50%); padding: 0.2rem 0.55rem; border-radius: 999px;
 		background: var(--text); color: var(--surface); font-size: var(--t-12-8); font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.3; white-space: nowrap; box-shadow: 0 0.25rem 0.8rem rgb(0 0 0 / 0.25); }
-	.band { position: absolute; left: 0; right: 0; bottom: -0.25rem; height: 1rem; pointer-events: auto; touch-action: pan-y; user-select: none; -webkit-user-select: none; cursor: pointer; }
+	.band { position: absolute; left: 0; right: 0; bottom: -0.25rem; height: 0.875rem; pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none; cursor: pointer; }
 	input { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 	.lip:has(input:focus-visible) .edge i { border-bottom-width: 4px; }
 	.lip:has(input:disabled) .band { pointer-events: none; }
