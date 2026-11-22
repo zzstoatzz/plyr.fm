@@ -52,7 +52,7 @@ function PortalPage({ children, scrollRef, ...props }: {
   </ScrollView>;
 }
 
-function AccountPortal({ did, handle }: { did: string; handle: string | null }) {
+export function AccountPortal({ did, handle }: { did: string; handle: string | null }) {
   const theme = useAppearance();
   const auth = useAuth();
   const player = usePlayback();
