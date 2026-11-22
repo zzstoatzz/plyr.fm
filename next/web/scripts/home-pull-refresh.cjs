@@ -25,6 +25,10 @@ async function homePullRefresh(browser, origin, output) {
         reads++;
         return route.fulfill({ json: { data: reads > 1 ? [fresh, ...tracks.slice(0, 3)] : tracks.slice(0, 3), has_more: false } });
       });
+      await page.addInitScript(() => {
+        const NativeAudio = window.Audio;
+        window.Audio = class extends NativeAudio { constructor() { super(); (window.fixtureAudio ??= []).push(this); } };
+      });
       await page.goto(origin);
       const rows = page.getByTestId('home-track-row');
       await rows.first().waitFor();
@@ -50,8 +54,12 @@ async function homePullRefresh(browser, origin, output) {
         return node && !node.style.transform;
       }, undefined, { timeout: 4000 });
 
+      await rows.nth(1).getByRole('button', { name: `Play ${tracks[0].metadata.title}`, exact: true }).click();
+      const playing = () => page.evaluate(() => (window.fixtureAudio ?? []).some(audio => !audio.paused && audio.currentTime > 0.3));
+      await page.waitForFunction(() => (window.fixtureAudio ?? []).some(audio => !audio.paused && audio.currentTime > 0.3));
       await drag(page, cdp, 220);
       await page.getByRole('status').filter({ hasText: 'up to date' }).waitFor();
+      assert.ok(await playing(), 'refreshing keeps the audio playing');
       assert.deepEqual(errors, []);
     } finally { await context.close(); }
   }
