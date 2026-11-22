@@ -17,6 +17,7 @@
 	import Icon from '$lib/ui/Icon.svelte';
 	import LinksMenu from '$lib/LinksMenu.svelte';
 	import Loading from '$lib/ui/Loading.svelte';
+	import RailRadio from '$lib/home/RailRadio.svelte';
 	import TrackRow from '$lib/TrackRow.svelte';
 	import FollowingLatest from '$lib/listening/FollowingLatest.svelte';
 	import PullRefresh from '$lib/home/PullRefresh.svelte';
@@ -24,6 +25,9 @@
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
+	// The rail scrolls with the page until its end reaches the bottom of the screen, then stays there.
+	let railHeight = $state(0);
+	let viewHeight = $state(0);
 	const chartPeriods = ['month', 'week', 'day', 'all_time'] as const;
 	type ChartPeriod = typeof chartPeriods[number];
 	const chartLabels: Record<ChartPeriod, string> = {
@@ -167,6 +171,7 @@
 </script>
 
 <svelte:head><title>plyr.fm</title></svelte:head>
+<svelte:window bind:innerHeight={viewHeight} />
 
 {#snippet rail()}
 <AtlasTile />
@@ -283,7 +288,7 @@
 		{/await}
 	</section>
 	</div>
-	{#if !data.tags.length}<aside class="rail" aria-label="explore">{@render rail()}</aside>{/if}
+	{#if !data.tags.length}<aside class="rail" aria-label="explore" bind:clientHeight={railHeight} style:--pin={`${Math.min(24, viewHeight - railHeight - 24)}px`}>{@render rail()}<RailRadio /></aside>{/if}
 </div>
 </PullRefresh>
 
@@ -339,7 +344,12 @@
 	@media (min-width: 901px) {
 		.main > :global(.following), .rail > :global(.tile) { grid-area: auto; }
 		.home:not(.filtered) .tag-shelf { display: none; }
+		.rail { position: sticky; top: var(--pin); }
 		.chart :global(.track) { gap: 0.7rem; padding-inline: 0.375rem; margin-inline: 0; }
+	}
+	@media (min-width: 901px) and (max-width: 1239px) {
+		/* the narrower rail has room for one tag per row */
+		.tag-list { grid-template-columns: minmax(0, 1fr); }
 	}
 	@media (min-width: 1240px) {
 		.home { grid-template-columns: minmax(0, 1fr) clamp(19rem, 25%, 25rem); column-gap: 2.75rem; }
@@ -352,7 +362,7 @@
 	}
 	@media (max-width: 900px) {
 		.main, .rail { display: contents; }
-		.tags { display: none; }
+		.tags, .rail > :global(.radio) { display: none; }
 		.featured { grid-area: featured; min-height: 17rem; }
 		.chart { grid-area: chart; }
 		.latest { grid-area: latest; }
