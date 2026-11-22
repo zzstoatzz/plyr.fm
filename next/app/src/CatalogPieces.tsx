@@ -128,8 +128,32 @@ export function usePages<T>(load: (cursor?: string) => Promise<Page<T>>) {
       }
     }
   }, [load]);
+  // Swap in a fresh first page without clearing what's shown; resolves to that page, or undefined if it failed.
+  const refresh = useCallback(async (): Promise<T[] | undefined> => {
+    const request = ++generation.current;
+    busy.current = true;
+    try {
+      const page = await load();
+      if (request !== generation.current) return undefined;
+      seen.current.clear();
+      continuation.current = page.has_more ? page.next_cursor ?? undefined : undefined;
+      done.current = !page.has_more;
+      depth.current = 1;
+      setData(page.data);
+      setCursor(continuation.current);
+      setError(undefined);
+      return page.data;
+    } catch {
+      return undefined;
+    } finally {
+      if (request === generation.current) {
+        busy.current = false;
+        setLoading(false);
+      }
+    }
+  }, [load]);
   const more = useCallback(() => { if (!done.current) void fetchPage(continuation.current); }, [fetchPage]);
-  return { data, cursor, error, loading, reload, revalidate, more };
+  return { data, cursor, error, loading, reload, revalidate, refresh, more };
 }
 
 export function Heading({ children, main = false, center = false }: { children: ReactNode; main?: boolean; center?: boolean }) {

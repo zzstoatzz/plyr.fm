@@ -1,4 +1,5 @@
 import { useAppearance } from './appearance';
+import { useEffect, useRef } from 'react';
 import { Link } from 'expo-router';
 import { trackArtwork } from '@plyr/next-core/artwork';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -15,9 +16,15 @@ import { useTrackPress } from './TrackPress';
 import type { Track } from '@plyr/next-core/api';
 import type { StyleProp, ViewStyle } from 'react-native';
 
-export function HomeChart({ onPlay }: { onPlay: Play }) {
+export function HomeChart({ onPlay, refreshKey = 0 }: { onPlay: Play; refreshKey?: number }) {
   const colors = useAppearance();
-  const { period, tracks, loading, error, retry, cycle } = useTopTracks();
+  const { period, tracks, loading, error, retry, refresh, cycle } = useTopTracks();
+  const refreshed = useRef(refreshKey);
+  useEffect(() => {
+    if (refreshed.current === refreshKey) return;
+    refreshed.current = refreshKey;
+    void refresh();
+  }, [refreshKey, refresh]);
   const lines = [14, 12, 11].map(size => Math.ceil(size * colors.scale * 1.3));
   const card = [cardSurface(colors), styles.card, { width: 220 * colors.scale }];
   return <View style={styles.section}>
