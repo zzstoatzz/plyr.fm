@@ -210,8 +210,10 @@ jobs:
           curl -fsS https://plyr.fm/ -o /dev/null
           curl -fsS https://api.plyr.fm/health | jq -e '.status == "ok"'
 
+  # dispatched targets run alone; every deploy from main also runs the signed-out not-found check
   verify-live-browser:
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.target == 'verify-live-upload-consent' || inputs.target == 'verify-live-jam' || inputs.target == 'verify-live-like' || inputs.target == 'verify-live-publish' || inputs.target == 'verify-live-not-found')
+    needs: deploy
+    if: always() && github.ref == 'refs/heads/main' && ((github.event_name == 'push' && needs.deploy.result == 'success') || (github.event_name == 'workflow_dispatch' && (inputs.target == 'verify-live-upload-consent' || inputs.target == 'verify-live-jam' || inputs.target == 'verify-live-like' || inputs.target == 'verify-live-publish' || inputs.target == 'verify-live-not-found')))
     runs-on: ubuntu-latest
     timeout-minutes: 8
     concurrency: next-live-browser
@@ -265,6 +267,6 @@ jobs:
           PLAYWRIGHT_CHANNEL: chrome
         run: node scripts/check-live-publish.mjs
       - name: verify missing pages show the not-found page
-        if: inputs.target == 'verify-live-not-found'
+        if: github.event_name == 'push' || inputs.target == 'verify-live-not-found'
         working-directory: next/web
         run: node scripts/check-live-not-found.mjs
