@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readFollows, resolveFollowArtists } from '../src/home-network.ts';
+import { readFollows, resolveFollowArtists } from '@plyr/next-core/home-network';
 import { nextPopulatedChart, parseSelectedTags, selectedTagsKey } from '../src/home-state.ts';
 
 test('follows traverse all pages and keep oldest follows first', async () => {

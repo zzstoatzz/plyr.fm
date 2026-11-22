@@ -8,6 +8,7 @@ import { setPrefs } from './prefs.svelte';
 import { returnPath } from '@plyr/next-core/return-path';
 import { authConfig } from './auth-config';
 import { completeQueueLogin, prepareQueueLogin } from './storage/queue-login';
+import { forgetShelf, savedShelf } from './listening/saved-shelf';
 
 const { SITE_URL } = authConfig;
 const REGISTERED_SCOPE = registeredScopeParts(authConfig);
@@ -36,7 +37,9 @@ function saveKnownAccounts(accounts: AccountIdentity[]) {
 }
 
 auth.subscribe(() => {
-	const { did, handle } = auth.getAuth();
+	const { did, handle, ready } = auth.getAuth();
+	// signed out, or switched to another account: the saved shelf must not draw for anyone else
+	if (ready && (!did || savedShelf()?.did !== did)) forgetShelf();
 	if (!did) return;
 	const known = knownAccounts();
 	saveKnownAccounts([{ did, handle: handle || known.find(item => item.did === did)?.handle || null }, ...known.filter(item => item.did !== did)]);
