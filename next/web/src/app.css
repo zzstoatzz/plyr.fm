@@ -40,6 +40,7 @@
 	/* The text sizes below headings, named by their size in px at the default scale. Use these,
 	   never a raw size, so neighbours match (scripts/check-type-scale.mjs); headings and
 	   clamp() display titles from 1.2rem up set their own. */
+	--t-10-5: 0.65625rem;
 	--t-11-2: 0.7rem;
 	--t-12: 0.75rem;
 	--t-12-8: 0.8rem;
