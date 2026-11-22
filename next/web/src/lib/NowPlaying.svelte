@@ -7,7 +7,8 @@
 	import { artistName, clock, trackHref } from './tracks';
 	import { trackArtwork } from '@plyr/next-core/artwork';
 	import { parseChapters, currentChapter } from '@plyr/next-core/chapters';
-	import { parseSeen, seenKey } from '@plyr/next-core/behaviors/hints';
+	import { oneTimeHint } from './hints.svelte';
+	import Coachmark from './Coachmark.svelte';
 	import { resolve } from '$app/paths';
 	import Artwork from './ui/Artwork.svelte';
 	import TrackCollections from './collections/TrackCollections.svelte';
@@ -29,9 +30,7 @@
 	let { close, pull }: { close?: () => void; pull?: DockPull } = $props();
 	let motion: ReturnType<typeof playerSheet>;
 	let condensed = $state(false);
-	let hintSeen = $state(true);
-	const hint = 'now-playing.more-below';
-	let hintKey: string | undefined;
+	const moreBelow = oneTimeHint('now-playing.more-below');
 	const chapters = $derived(parseChapters(player.current?.metadata.description, player.current?.metadata.duration_seconds ?? undefined));
 	const chapter = $derived(currentChapter(chapters.chapters, player.position));
 	// Lists carry no tags; the track read does.
@@ -67,31 +66,6 @@
 		field?.focus({ preventScroll: true });
 	}
 
-	onMount(() => {
-		if (!close) return;
-		function readHint() {
-			const account = auth.getAuth();
-			if (!account.ready) return;
-			const key = seenKey(account.did ?? null);
-			if (key === hintKey) return;
-			hintKey = key;
-			try { hintSeen = parseSeen(localStorage.getItem(key)).has(hint); }
-			catch { hintSeen = true; }
-		}
-		readHint();
-		return auth.subscribe(readHint);
-	});
-
-	function dismissHint() {
-		hintSeen = true;
-		if (!hintKey) return;
-		try {
-			const seen = parseSeen(localStorage.getItem(hintKey));
-			seen.add(hint);
-			localStorage.setItem(hintKey, JSON.stringify([...seen]));
-		} catch {}
-	}
-
 	export function dismiss() {
 		if (motion) motion.dismiss();
 		else close?.();
@@ -108,7 +82,7 @@
 		function scroll() {
 			if (!dialog?.open || !title || !header) return;
 			condensed = title.getBoundingClientRect().bottom <= header.getBoundingClientRect().bottom;
-			if (!hintSeen && details && details.getBoundingClientRect().top < dialog.getBoundingClientRect().bottom - 24) dismissHint();
+			if (!moreBelow.seen && details && details.getBoundingClientRect().top < dialog.getBoundingClientRect().bottom - 24) moreBelow.dismiss();
 		}
 		dialog?.addEventListener('scroll', scroll, { passive: true });
 		scroll();
@@ -183,8 +157,8 @@
 				{#if player.liveStation}<button class="text-button stop" onclick={() => { player.stopRadio(); close?.(); }}>leave radio</button>{/if}
 			</div>
 			{#if close && !player.liveStation && !player.privateMode}
-				<div class="hint-slot" class:seen={hintSeen} inert={hintSeen}>
-					<div class="coachmark" data-testid={hintSeen ? undefined : 'coachmark'}><span>scroll down for the artist and track details</span><button type="button" class="text-button" onclick={dismissHint}>got it</button></div>
+				<div class="hint-slot" class:seen={moreBelow.seen} inert={moreBelow.seen}>
+					<Coachmark dismiss={moreBelow.dismiss} testid={moreBelow.seen ? undefined : 'coachmark'}>scroll down for the artist and track details</Coachmark>
 				</div>
 			{/if}
 		</div>
@@ -305,8 +279,6 @@
 		.sheet .commands { margin-block: 0.65rem; }
 		.hint-slot { display: grid; min-height: 3.5rem; padding-block: 0.25rem; }
 		.hint-slot.seen { visibility: hidden; }
-		.coachmark { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; padding-inline: 0.6rem; color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: 0.7rem; font-size: 0.85rem; }
-		.coachmark button { flex: none; color: var(--accent); }
 		.phone-close { display: flex; }
 		.desktop-close { display: none; }
 	}

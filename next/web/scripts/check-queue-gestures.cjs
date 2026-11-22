@@ -17,6 +17,10 @@ async function phone(browser, origin) {
   const queued=page.locator('li.upcoming');
   await queued.nth(1).waitFor();
   assert.deepEqual(await titles(queued), [tracks[1].metadata.title, tracks[2].metadata.title]);
+  // the gestures are taught once, by a hint that goes away for good after the first drag
+  const hint = page.getByTestId('queue-hint');
+  await hint.waitFor();
+  assert.match(await hint.innerText(), /hold a track to move it, or swipe it away/);
 
   const first=await queued.nth(0).locator('.drag-handle').boundingBox();
   const second=await queued.nth(1).boundingBox();
@@ -26,6 +30,8 @@ async function phone(browser, origin) {
   await page.mouse.move(start[0],second.y+second.height*0.8,{steps:8});
   await page.mouse.up();
   await page.waitForFunction(title => document.querySelector('li.upcoming .labels a')?.textContent === title, tracks[2].metadata.title);
+  await hint.waitFor({ state: 'detached' });
+  assert.equal(await page.getByText('drag a track to move it').count(), 0, 'no reorder copy is left on the page once the hint is learned');
 
   // hold anywhere on the row, then drag it below the next one
   const touch=await context.newCDPSession(page);
@@ -77,6 +83,11 @@ async function desktop(browser, origin) {
   const queued = panel.locator('li.upcoming');
   await queued.nth(1).waitFor();
   assert.deepEqual(await titles(queued), [tracks[2].metadata.title, tracks[1].metadata.title], 'play next puts the newest pick first');
+  const hint = panel.getByTestId('queue-hint');
+  assert.match(await hint.innerText(), /^drag a track to move it/, 'a mouse gets the drag hint');
+  await hint.getByRole('button', { name: 'got it' }).click();
+  await hint.waitFor({ state: 'detached' });
+  assert.ok(await page.evaluate(() => Object.keys(localStorage).some(key => key.startsWith('hints:seen:') && localStorage.getItem(key).includes('queue.reorder'))), 'got it is remembered on this device');
 
   // a press released outside the row must not leave a drag armed for the next hover and click
   const stray = await queued.nth(0).locator('.labels .subtle').boundingBox();
