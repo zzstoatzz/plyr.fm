@@ -25,6 +25,8 @@ import { toast } from './toast';
 import { confirmTrackDelete } from './publishing/confirm-delete';
 
 const portalTabs = ['tracks', 'albums'] as const;
+/** rows rendered at once; a big catalog grows on request instead of mounting hundreds of rows */
+const PAGE = 60;
 type PortalTab = typeof portalTabs[number];
 
 export function Portal() {
@@ -54,7 +56,9 @@ function AccountPortal({ did, handle }: { did: string; handle: string | null }) 
   const [tracks, setTracks] = useState<Track[]>();
   const [privateTracks, setPrivateTracks] = useState<Track[]>([]);
   const [albums, setAlbums] = useState<ListSummary[]>();
-  const [errors, setErrors] = useState({ profile: false, catalog: false, private: false });
+  const [errors, setErrors] = useState({ profile: false, catalog: false, albums: false, private: false });
+  const [privateSettled, setPrivateSettled] = useState(false);
+  const [shown, setShown] = useState(PAGE);
   const [tab, setTab] = useState<PortalTab>('tracks');
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<OwnedSort>('recent');
@@ -78,21 +82,30 @@ function AccountPortal({ did, handle }: { did: string; handle: string | null }) 
       loadAll(cursor => api.tracks({ artist_did: did, limit: 100, cursor }))
         .then(value => { if (live()) { setTracks(value); fail('catalog', false); } }, () => fail('catalog', true)),
       loadAll(cursor => api.albums(did, { limit: 100, cursor }))
-        .then(value => { if (live()) setAlbums(value); }, () => fail('catalog', true)),
+        .then(value => { if (live()) { setAlbums(value); fail('albums', false); } }, () => fail('albums', true)),
       (pds ? loadAll(async cursor => {
         const page = await pds.list(cursor);
         return { object: 'list', data: page.tracks, has_more: !!page.cursor, next_cursor: page.cursor };
       }) : Promise.resolve([])).then(value => { if (live()) { setPrivateTracks(value); fail('private', false); } }, () => fail('private', true))
+        .finally(() => { if (live()) setPrivateSettled(true); })
     ]);
   }, [did, pds]);
   useEffect(() => { void load(); }, [load]);
   useFocusEffect(useCallback(() => { if (revisions.current && revisions.current !== revision()) void load(); }, [load]));
 
   const label = useCallback((track: Track) => accessLabel(track, AUDIO_SPACE_TYPE), []);
-  const everything = useMemo(() => tracks ? [...tracks, ...privateTracks] : undefined, [tracks, privateTracks]);
+  const everything = useMemo(() => tracks && privateSettled ? [...tracks, ...privateTracks] : undefined, [tracks, privateTracks, privateSettled]);
   const found = useMemo(() => everything ? filterTracks(everything, { query, sort, access, album, tag }, label) : [], [everything, query, sort, access, album, tag, label]);
   const foundAlbums = useMemo(() => albums ? filterAlbums(albums, query) : [], [albums, query]);
   const options = useMemo(() => facets(everything ?? [], label), [everything, label]);
+  // a deleted or edited track can take the last album or tag with it; drop that filter rather than show nothing
+  useEffect(() => {
+    if (!everything) return;
+    if (album && !options.albums.some(option => option.name === album)) setAlbum(undefined);
+    if (tag && !options.tags.some(option => option.name === tag)) setTag(undefined);
+    if (access && !options.access.some(group => group.value === access)) setAccess(undefined);
+  }, [everything, options, album, tag, access]);
+  useEffect(() => setShown(PAGE), [query, sort, access, album, tag]);
   const plays = everything?.reduce((sum, track) => sum + (isPrivateTrack(track) ? 0 : track.metrics.play_count), 0) ?? 0;
   const seconds = everything?.reduce((sum, track) => sum + (track.metadata.duration_seconds ?? 0), 0) ?? 0;
   const support = supportLink(profile ?? undefined);
@@ -155,7 +168,7 @@ function AccountPortal({ did, handle }: { did: string; handle: string | null }) 
         <Chip {...catalogTabs.tab('albums')} label={`albums${albums ? ' · ' + albums.length : ''}`} />
       </View>
       {tab === 'tracks' && <>
-        <Chip icon={ArrowsDownUp} label={sortLabel[sort]} accessibilityLabel={`sort: ${sortLabel[sort]}`} selected={false} onPress={() => setSort(sorts[(sorts.indexOf(sort) + 1) % sorts.length])} />
+        <Chip icon={ArrowsDownUp} label={sortLabel[sort]} accessibilityLabel={`sort: ${sortLabel[sort]}`} onPress={() => setSort(sorts[(sorts.indexOf(sort) + 1) % sorts.length])} />
         {options.access.length > 1 && options.access.map(group => <Chip key={group.value} label={group.label} selected={access === group.value}
           icon={group.value === 'everyone' ? Globe : group.value === 'link' ? LinkSimple : Lock} onPress={() => setAccess(access === group.value ? undefined : group.value)} />)}
         {options.albums.slice(0, 8).map(option => <Chip key={'album:' + option.name} icon={Disc} label={option.name} accessibilityLabel={`album: ${option.name}`} selected={album === option.name} onPress={() => setAlbum(album === option.name ? undefined : option.name)} />)}
@@ -170,7 +183,7 @@ function AccountPortal({ did, handle }: { did: string; handle: string | null }) 
           subtitle={`album · ${trackCount(list.metrics.member_count)}`} href={{ pathname: '/album/[id]', params: { id: list.id } }} />)}
         {everything && <Text style={[text(13, theme.muted), { marginTop: 6 }]}>tracks · {found.length} of {everything.length}</Text>}
       </>}
-      {found.map(track => {
+      {found.slice(0, shown).map(track => {
         const hidden = isPrivateTrack(track);
         const subtitle = [label(track) === 'anyone with the link' ? 'with the link' : label(track), !hidden && trackMeta(track), track.metadata.album].filter(Boolean).join(' · ');
         return <Row key={track.record.uri} title={track.metadata.title} image={trackArtwork(track)} subtitle={subtitle}
@@ -180,6 +193,7 @@ function AccountPortal({ did, handle }: { did: string; handle: string | null }) 
             <DeleteTrack track={track} deleted={() => remove(track)} />
           </View>} />;
       })}
+      {found.length > shown && <View style={row}><Action label={`show more · ${found.length - shown} left`} onPress={() => setShown(count => count + PAGE)} /></View>}
       {everything && everything.length > 0 && !found.length && <View style={[row, { paddingVertical: 12 }]}>
         <Copy live>nothing matches.</Copy>
         <Action label="clear search and filters" onPress={() => { setQuery(''); setAccess(undefined); setAlbum(undefined); setTag(undefined); }} />
@@ -198,9 +212,11 @@ function AccountPortal({ did, handle }: { did: string; handle: string | null }) 
         <View style={row}><Action label="new album" href="/create-album" /></View>
       </View>}
       {albums && albums.length > 0 && !foundAlbums.length && <Copy live>no albums match “{query.trim()}”.</Copy>}
+      {errors.albums && <View style={row}><Copy live>couldn’t load your albums.</Copy><Action label="retry" onPress={() => void load()} /></View>}
+      {!albums && !errors.albums && <WaveLoading label="Loading your albums" />}
     </View>}
     {errors.catalog ? <View style={{ gap: 10 }}><Copy live>couldn’t load your uploads.</Copy><View style={row}><Action label="retry" onPress={() => void load()} /></View></View>
-      : !everything || (tab === 'albums' && !albums) ? <WaveLoading label="Loading your uploads" /> : null}
+      : tab === 'tracks' && !everything ? <WaveLoading label="Loading your uploads" /> : null}
   </PortalPage>;
 }
 
@@ -212,19 +228,19 @@ function Tool({ icon: Glyph, label, accessibilityLabel, href, onPress, primary =
   const body = <Pressable accessibilityRole={href ? 'link' : 'button'} accessibilityLabel={accessibilityLabel ?? label} onPress={onPress}
     style={({ pressed }) => StyleSheet.flatten([styles.tool, { borderColor: primary ? theme.accent : theme.hairline, backgroundColor: primary ? theme.accent : pressed ? theme.hover : theme.surface, opacity: pressed && primary ? 0.85 : 1 }])}>
     <Glyph size={22} color={primary ? ink : theme.accent} />
-    <Text numberOfLines={1} style={{ color: ink, fontFamily: theme.fontFamily, fontSize: 12.5 * theme.scale, fontWeight: '700' }}>{label}</Text>
+    <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} style={{ color: ink, fontFamily: theme.fontFamily, fontSize: 12.5 * theme.scale, fontWeight: '700' }}>{label}</Text>
     {dot && <View style={styles.dot} />}
   </Pressable>;
   return href ? <Link href={href} asChild>{body}</Link> : body;
 }
 
 function Chip({ label, accessibilityLabel, selected, onPress, icon: Glyph, role, nativeID, 'aria-controls': controls }: {
-  label: string; accessibilityLabel?: string; selected: boolean; onPress: () => void; icon?: IconGlyph;
+  label: string; accessibilityLabel?: string; selected?: boolean; onPress: () => void; icon?: IconGlyph;
   /** set by useTabs when the chip is a tab */
   role?: ReturnType<ReturnType<typeof useTabs>['tab']>['role']; nativeID?: string; 'aria-controls'?: string;
 }) {
   const theme = useAppearance();
-  return <Pressable accessibilityRole={role ?? 'button'} nativeID={nativeID} aria-controls={controls} accessibilityLabel={accessibilityLabel ?? label} accessibilityState={{ selected }} aria-selected={role ? selected : undefined} aria-pressed={role ? undefined : selected}
+  return <Pressable accessibilityRole={role ?? 'button'} nativeID={nativeID} aria-controls={controls} accessibilityLabel={accessibilityLabel ?? label} accessibilityState={selected === undefined ? undefined : { selected }} aria-selected={role ? selected : undefined} aria-pressed={role || selected === undefined ? undefined : selected}
     onPress={onPress} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 36, paddingHorizontal: 13, borderRadius: 18, borderWidth: 1,
       borderColor: selected ? theme.accent : theme.line, backgroundColor: selected ? theme.accent + '2e' : pressed ? theme.hover : 'transparent' })}>
     {Glyph && <Glyph size={14} color={selected ? theme.text : theme.muted} />}

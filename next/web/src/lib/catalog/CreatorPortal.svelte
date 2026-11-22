@@ -3,7 +3,7 @@
   import type { Artist, ListSummary, Track } from '@plyr/next-core/api';
   import { trackArtwork } from '@plyr/next-core/artwork';
   import { accessLabel } from '@plyr/next-core/access/label';
-  import { subscribeCatalogChanges } from '@plyr/next-core/catalog/changes';
+  import { catalogRevision, subscribeCatalogChanges } from '@plyr/next-core/catalog/changes';
   import { accessGroup, catalogDuration, facets, filterAlbums, filterTracks, matchRange, type AccessGroup, type OwnedSort } from '@plyr/next-core/catalog/owned';
   import { isPrivateTrack } from '@plyr/next-core/track-access';
   import { artistOffers, storeName, supportLink } from '@plyr/next-core/selling';
@@ -35,6 +35,8 @@
   let tag = $state(cached.filter.tag ?? '');
   let profileError = $state(false);
   let catalogError = $state(false);
+  let albumsError = $state(false);
+  let privateSettled = $state(untrack(() => cached.tracks !== undefined));
   let privateError = $state(false);
   let loading = $state(false);
   let copied = $state(false);
@@ -47,7 +49,8 @@
   const label = (track: Track) => accessLabel(track, authConfig.AUDIO_SPACE_TYPE);
   const name = $derived(profile?.display_name || account.handle || 'your uploads');
   const publicPath = $derived('/u/' + encodeURIComponent(account.handle || did));
-  const everything = $derived(tracks ? [...tracks, ...privateTracks] : undefined);
+  // private tracks come from your own PDS; wait for them so an all-private catalog never reads as empty
+  const everything = $derived(tracks && privateSettled ? [...tracks, ...privateTracks] : undefined);
   const found = $derived(everything ? filterTracks(everything, { query, sort, access, album: album || undefined, tag: tag || undefined }, label) : []);
   const foundAlbums = $derived(albums ? filterAlbums(albums, query) : []);
   const options = $derived(facets(everything ?? [], label));
@@ -66,15 +69,29 @@
     cached.filter = { query, sort, access, album: album || undefined, tag: tag || undefined };
   });
 
-  const current = () => live && auth.getAuth().rpc === account.rpc;
+  // a filter left over from before an album or tag went away would hide everything with no visible way back
+  $effect(() => {
+    if (!everything) return;
+    if (album && !options.albums.some(option => option.name === album)) album = '';
+    if (tag && !options.tags.some(option => option.name === tag)) tag = '';
+  });
+
+  let generation = 0;
+  let seen = '';
+  const revision = () => (['tracks', 'collections', 'profile'] as const).map(scope => catalogRevision(did, scope)).join('|');
 
   async function load() {
+    const request = ++generation;
+    seen = revision();
+    // only the newest load may write, so a slow older one can't bring back a track you just deleted
+    const current = () => live && request === generation && auth.getAuth().rpc === account.rpc;
     loading = true;
     await Promise.all([
       loadProfile(did).then(value => { if (current()) { profile = cached.profile = value; profileError = false; } }, () => { if (current()) profileError = true; }),
       loadTracks(did).then(value => { if (current()) { tracks = cached.tracks = value; catalogError = false; } }, () => { if (current()) catalogError = true; }),
-      loadAlbums(did).then(value => { if (current()) albums = cached.albums = value; }, () => { if (current()) catalogError = true; }),
+      loadAlbums(did).then(value => { if (current()) { albums = cached.albums = value; albumsError = false; } }, () => { if (current()) albumsError = true; }),
       loadPrivateTracks(account).then(value => { if (current()) { privateTracks = cached.privateTracks = value; privateError = false; } }, () => { if (current()) privateError = true; })
+        .finally(() => { if (current()) privateSettled = true; })
     ]);
     if (current()) loading = false;
   }
@@ -82,7 +99,7 @@
   onMount(() => {
     live = true;
     void load();
-    const stop = subscribeCatalogChanges(did, () => void load());
+    const stop = subscribeCatalogChanges(did, () => { if (revision() !== seen) void load(); });
     return () => { live = false; stop(); };
   });
 
@@ -262,9 +279,9 @@
                 </span>
                 <span class="wide album">{#if track.metadata.album}{@render marked(track.metadata.album)}{:else}<span class="faint">—</span>{/if}</span>
                 <span class="wide access"><Icon name={accessIcon(track)} size={14} />{shortLabel(track)}</span>
-                <span class="wide n">{hidden ? '—' : track.metrics.play_count.toLocaleString()}</span>
-                <span class="wide n">{hidden ? '—' : track.metrics.like_count.toLocaleString()}</span>
-                <span class="wide faint">{added(track)}</span>
+                <span class="wide n"><span class="sr">plays: </span>{hidden ? '—' : track.metrics.play_count.toLocaleString()}</span>
+                <span class="wide n"><span class="sr">likes: </span>{hidden ? '—' : track.metrics.like_count.toLocaleString()}</span>
+                <span class="wide faint"><span class="sr">added </span>{added(track)}</span>
                 <span class="row-actions">{#if !hidden}
                   <a class="icon-button" href={`/edit-track/${track.id}?return_to=%2Fportal`} aria-label={`edit ${track.metadata.title}`}><Icon name="edit" size={17} /></a>
                   <button class="icon-button" type="button" aria-label={`delete ${track.metadata.title}`} onclick={() => deleteSheet.open(track)}><Icon name="trash" size={17} /></button>
@@ -291,8 +308,10 @@
             </a></li>
           {/each}
         </ul>
-        {#if albums && !albums.length}<p class="state">no albums yet. <a href="/create-album">make one</a> from what you've uploaded.</p>
-        {:else if albums && !foundAlbums.length}<p class="state" role="status">no albums match “{query.trim()}”.</p>{/if}
+        {#if albumsError}<p class="state" role="alert">couldn’t load your albums. <button class="text-button" type="button" onclick={load} disabled={loading}>retry</button></p>
+        {:else if !albums}<Loading label="loading your albums" inline />
+        {:else if !albums.length}<p class="state">no albums yet. <a href="/create-album">make one</a> from what you've uploaded.</p>
+        {:else if !foundAlbums.length}<p class="state" role="status">no albums match “{query.trim()}”.</p>{/if}
       </div>
 
       {#if catalogError}
@@ -406,6 +425,7 @@
   .album, .access { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .access { display: inline-flex; align-items: center; gap: 0.35rem; }
   .faint { color: var(--muted); opacity: 0.8; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .narrow { display: none !important; }
   .row-actions { display: flex; justify-content: flex-end; opacity: 0; }
   li.row:hover .row-actions, li.row:focus-within .row-actions { opacity: 1; }
@@ -426,13 +446,13 @@
   .tags { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 
   @container portal (max-width: 64rem) {
-    .row { grid-template-columns: minmax(0, 1fr) 6rem 3.25rem 3rem 4.75rem; }
-    .row > :nth-child(3), .row > :nth-child(6) { display: none; }
+    .row { grid-template-columns: minmax(0, 1fr) 8.5rem 3.25rem 3rem 4.75rem; }
+    .row > :nth-child(2), .row > :nth-child(6) { display: none; }
   }
   @container portal (max-width: 52rem) {
     .body { grid-template-columns: minmax(0, 1fr); }
     .rail { display: none; }
-    .row { grid-template-columns: minmax(0, 1fr) 6rem 3.25rem 3rem 4.75rem; }
+    .row { grid-template-columns: minmax(0, 1fr) 8.5rem 3.25rem 3rem 4.75rem; }
   }
   @container portal (max-width: 40rem) {
     .head { gap: 0.9rem; flex-wrap: wrap; }

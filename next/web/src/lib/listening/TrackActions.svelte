@@ -85,7 +85,7 @@
 
 <button bind:this={trigger} class="icon-button" aria-label={`More actions for ${track.metadata.title}`} aria-controls={id} aria-expanded={open} onclick={() => { if (open) panel.hidePopover(); else { letGo(); show(() => placePopover(panel, trigger)); } }}><Icon name="more" size={20} /></button>
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-<div bind:this={panel} {id} popover="auto" data-player-no-pull role="group" aria-label={`Actions for ${track.metadata.title}`} ontoggle={() => { open = panel.matches(':popover-open'); if (!open) letGo(); }} onkeydown={step} onclick={event => { if ((event.target as Element).closest('a')) panel.hidePopover(); }} class="menu">
+<div bind:this={panel} {id} popover="auto" data-player-no-pull role="group" aria-label={`Actions for ${track.metadata.title}`} ontoggle={(event: ToggleEvent) => { open = event.newState === 'open'; if (!open) letGo(); }} onkeydown={step} onclick={event => { if ((event.target as Element).closest('a')) panel.hidePopover(); }} class="menu">
   <button class="text-button" type="button" disabled={!queueable} onclick={() => pick(() => player.playNext(track))}><Icon name="next" size={18} />play next</button>
   <button class="text-button" type="button" disabled={!queueable} onclick={() => pick(() => player.enqueue(track))}><Icon name="queue" size={18} />add to queue</button>
   <hr>
