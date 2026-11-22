@@ -1,8 +1,9 @@
 import { usePressIntent } from './use-press-intent';
 import { Text } from './Text';
-import { useId, useState, type ReactNode, type Ref } from 'react';
+import { useContext, useEffect, useId, useRef, useState, type ReactNode, type Ref } from 'react';
+import { KeepInViewContext } from './behaviors/keep-in-view';
 import { Link, type Href } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, TextInput, type TextInputProps, type ScrollViewProps, type ScrollViewInstance, View } from 'react-native';
+import { Keyboard, Pressable, ScrollView, StyleSheet, TextInput, type TextInputInstance, type TextInputProps, type ScrollViewProps, type ScrollViewInstance, View } from 'react-native';
 import type { Glyph } from './PlayerGlyph';
 import { useAppearance } from './appearance';
 import { onAccent } from '@plyr/next-core/colors';
@@ -43,17 +44,28 @@ export function Copy({ children, live = false }: { children: ReactNode; live?: b
 /** Typing text never drops below 16px: iOS Safari zooms the page into any smaller field on focus. */
 export const inputFontSize = (scale: number) => Math.max(16, 16 * scale);
 
-export function Field({ label, style, onFocus, onBlur, multiline, ...props }: TextInputProps & { label: string }) {
+export function Field({ label, style, onFocus, onBlur, onContentSizeChange, multiline, ...props }: TextInputProps & { label: string }) {
   const theme = useAppearance();
   const id = useId();
   const [focused, setFocused] = useState(false);
+  const input = useRef<TextInputInstance>(null);
+  const keep = useContext(KeepInViewContext);
+  const follow = focused && multiline ? keep : undefined;
+  useEffect(() => {
+    if (!follow) return;
+    const reveal = () => { if (input.current) follow(input.current); };
+    reveal();
+    const shown = Keyboard.addListener('keyboardDidShow', reveal);
+    return () => shown.remove();
+  }, [follow]);
   return <View style={{ gap: 6, minWidth: 0 }}>
     <Text nativeID={id} style={{ color: theme.text, fontSize: 15 * theme.scale, lineHeight: 22 * theme.scale }}>{label}</Text>
-    <TextInput {...props} accessibilityLabel={label} aria-labelledby={id} placeholderTextColor={theme.muted} multiline={multiline}
+    <TextInput {...props} ref={input} accessibilityLabel={label} aria-labelledby={id} placeholderTextColor={theme.muted} multiline={multiline}
       onFocus={event => { setFocused(true); onFocus?.(event); }} onBlur={event => { setFocused(false); onBlur?.(event); }}
+      onContentSizeChange={event => { if (follow && input.current) follow(input.current); onContentSizeChange?.(event); }}
       style={[styles.input, { color: theme.text, backgroundColor: theme.surface, fontFamily: theme.fontFamily, fontSize: inputFontSize(theme.scale),
         borderColor: focused ? theme.accent : theme.border, opacity: props.editable === false ? 0.6 : 1 },
-        multiline && { minHeight: 112, textAlignVertical: 'top' }, style]} />
+        multiline && { minHeight: 112, maxHeight: 240, textAlignVertical: 'top' }, style]} />
   </View>;
 }
 
