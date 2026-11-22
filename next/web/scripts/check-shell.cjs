@@ -3,7 +3,6 @@ const { mkdir } = require('node:fs/promises');
 const path = require('node:path');
 const { chromium } = require('playwright');
 const homePagination = require('./home-pagination.cjs');
-const homePullRefresh = require('./home-pull-refresh.cjs');
 const { method, names, xrpc } = require('./xrpc-fixture.cjs');
 process.env.PLAYER_DIST ??= path.resolve(__dirname, '../build');
 const { tracks, collectionTracks, setup, serve, close } = require('./fixture-catalog.cjs');
@@ -667,7 +666,7 @@ async function textFields(browser) {
   const browser = await chromium.launch();
   try {
     // Each width and scheme has its own contexts, so they run side by side.
-    await Promise.all([textFields(browser), homePagination(browser, origin), homePullRefresh(browser, origin, output), loginScreen(browser),
+    await Promise.all([textFields(browser), homePagination(browser, origin), require('./home-pull-refresh.cjs')(browser, origin, output), loginScreen(browser),
       ...[true, false].flatMap(phone => ['light', 'dark'].map(async scheme => {
         await screen(browser, phone, scheme);
         await queueGroups(browser, phone, scheme);
