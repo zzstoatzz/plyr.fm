@@ -22,7 +22,7 @@
 
 <span class="like-control" class:liked={snapshot.liked}>
 {#if account.ready && account.rpc}
-  <button class="icon-button" class:liked={snapshot.liked} type="button" aria-label={label} aria-pressed={snapshot.liked} disabled={snapshot.loading || snapshot.busy} onclick={() => likes.toggle(track)}><Icon name={snapshot.liked ? 'heart_f' : 'heart'} />{#if count}{compactCount(snapshot.count)}{/if}</button>
+  <button class="icon-button" class:liked={snapshot.liked} type="button" aria-label={label} aria-pressed={snapshot.liked} disabled={snapshot.loading} onclick={() => likes.toggle(track)}><Icon name={snapshot.liked ? 'heart_f' : 'heart'} />{#if count}{compactCount(snapshot.count)}{/if}</button>
 {:else}
   <a class="icon-button" href={resolve('/(app)/login') + '?' + new URLSearchParams({ return_to: trackHref(track) })} aria-label={named ? `Sign in to like ${track.metadata.title}` : 'Sign in to like'}><Icon name="heart" />{#if count}{compactCount(snapshot.count)}{/if}</a>
 {/if}
