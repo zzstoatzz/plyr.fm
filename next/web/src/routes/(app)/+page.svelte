@@ -166,9 +166,56 @@
 
 <svelte:head><title>plyr.fm</title></svelte:head>
 
+{#snippet rail()}
+<AtlasTile />
+<section class="chart" data-testid="home-chart" aria-labelledby="home-top-tracks">
+	<header>
+		<h2 id="home-top-tracks">top tracks</h2>
+		<button bind:this={periodButton} type="button" class="chart-period" aria-label={`top tracks period: ${chartLabels[period]}. show ${chartLabels[nextPeriod]}`} onclick={() => showChart(nextPeriod)}>
+			{chartLabels[period]} <Icon name="chevron" size={15} />
+		</button>
+	</header>
+	{#await chart}
+		<div class="chart-loading"><Loading label="loading top tracks" inline /></div>
+	{:then entries}
+		{#if entries?.length}
+			{@const tracks = entries.map(item => item.track)}
+			<ol>
+				{#each entries as item (item.track.id)}
+					<li><TrackRow track={item.track} collection={tracks} label="top tracks" /></li>
+				{/each}
+			</ol>
+		{:else if entries}
+			<p class="chart-empty" role="status">no top tracks for this period</p>
+		{:else}
+			<div class="chart-empty">
+				<p role="status">could not load top tracks</p>
+				<button type="button" class="text-button" onclick={event => {
+					if (document.activeElement === event.currentTarget) periodButton?.focus({ preventScroll: true });
+					showChart(period);
+				}}>try again</button>
+			</div>
+		{/if}
+	{/await}
+</section>
+{#await data.discovery then tags}
+	{#if tags.length}
+		<section class="tags" aria-labelledby="home-tags">
+			<header><h2 id="home-tags">browse by tag</h2></header>
+			<nav class="tag-list" aria-label="Browse by tag">
+				{#each tags.filter(tag => !prefs.hiddenTags.includes(tag.name)) as tag (tag.name)}
+					<a style:--dot="light-dark({tagColors(tag.name, palettes.light.background, false).color}, {tagColors(tag.name, palettes.dark.background, false).color})" href={resolve('/(app)/tag/[name]', { name: tag.name })}><i aria-hidden="true"></i><span class="truncate">{tag.name}</span> <small>{tag.track_count}</small></a>
+				{/each}
+			</nav>
+		</section>
+	{/if}
+{/await}
+{/snippet}
+
 <PullRefresh onrefresh={refresh}>
 <div class="page-content home" class:filtered={data.tags.length > 0} bind:this={home}>
 	<header class="mobile-brand"><LinksMenu /><h1>plyr.fm</h1></header>
+	<div class="main">
 	{#await data.featured}
 		<div class="featured" aria-hidden="true"></div>
 	{:then featured}
@@ -194,40 +241,7 @@
 			</section>
 		{/if}
 	{/await}
-	{#if !data.tags.length}
-	<FollowingLatest bind:this={following} />
-	<AtlasTile />
-	<section class="chart" data-testid="home-chart" aria-labelledby="home-top-tracks">
-		<header>
-			<h2 id="home-top-tracks">top tracks</h2>
-			<button bind:this={periodButton} type="button" class="chart-period" aria-label={`top tracks period: ${chartLabels[period]}. show ${chartLabels[nextPeriod]}`} onclick={() => showChart(nextPeriod)}>
-				{chartLabels[period]} <Icon name="chevron" size={15} />
-			</button>
-		</header>
-		{#await chart}
-			<div class="chart-loading"><Loading label="loading top tracks" inline /></div>
-		{:then entries}
-			{#if entries?.length}
-				{@const tracks = entries.map(item => item.track)}
-				<ol>
-					{#each entries as item (item.track.id)}
-						<li><TrackRow track={item.track} collection={tracks} label="top tracks" /></li>
-					{/each}
-				</ol>
-			{:else if entries}
-				<p class="chart-empty" role="status">no top tracks for this period</p>
-			{:else}
-				<div class="chart-empty">
-					<p role="status">could not load top tracks</p>
-					<button type="button" class="text-button" onclick={event => {
-						if (document.activeElement === event.currentTarget) periodButton?.focus({ preventScroll: true });
-						showChart(period);
-					}}>try again</button>
-				</div>
-			{/if}
-		{/await}
-	</section>
-	{/if}
+	{#if !data.tags.length}<FollowingLatest bind:this={following} />{/if}
 	<section class="latest" aria-labelledby="home-latest">
 		<header><h2 id="home-latest" tabindex="-1">{data.tags.length ? data.tags.join(', ') : 'latest'}</h2>{#if data.tags.length}<a href={resolve('/')}>all tracks</a>{:else}<span>newest first</span>{/if}</header>
 		{#await data.discovery then tags}
@@ -269,24 +283,28 @@
 			<button type="button" class="text-button" onclick={() => invalidateAll()}>try again</button>
 		{/await}
 	</section>
-
+	</div>
+	{#if !data.tags.length}<aside class="rail" aria-label="explore">{@render rail()}</aside>{/if}
 </div>
 </PullRefresh>
 
 <style>
-	.home { display: grid; grid-template-columns: minmax(0, 2.6fr) minmax(12rem, 1fr); grid-template-areas: "featured featured" "latest chart"; gap: 2.2rem; }
-	.home:has(:global(.following)) { grid-template-areas: "featured featured" "following following" "latest chart"; }
+	/* desktop: one main column (spotlight, people you know, latest) beside a rail (atlas, top tracks, tags) */
+	.home { max-width: 118rem; display: grid; grid-template-columns: minmax(0, 2.6fr) minmax(12rem, 1fr); gap: 2.2rem; align-items: start; }
+	.main { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2.2rem; min-width: 0; }
+	.rail { display: grid; gap: 1.6rem; min-width: 0; }
+	.home.filtered { grid-template-columns: minmax(0, 1fr); }
 	.mobile-brand { grid-area: brand; display: flex; align-items: center; gap: 0.5rem; margin-bottom: -1rem; }
 	@media (min-width: 721px) { .mobile-brand { display: none; } }
-	.featured { grid-area: featured; position: relative; isolation: isolate; display: grid; align-items: center; min-height: 17rem; overflow: hidden; border: 1px solid var(--line); border-radius: 1.15rem; background: var(--surface); }
+	.featured { position: relative; isolation: isolate; display: grid; align-items: center; min-height: 13rem; overflow: hidden; border: 1px solid var(--line); border-radius: 1.15rem; background: var(--surface); }
 	.wall { position: absolute; inset: -15% -5% -15% 32%; z-index: -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.4rem; align-content: center; transform: rotate(-4deg); mask-image: linear-gradient(90deg, transparent 0%, #000 55%); }
 	.wall.pair { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	.wall.single { inset: 0 0 0 30%; display: block; transform: none; }
 	.wall.single :global(.artwork) { height: 100%; aspect-ratio: auto; }
-	.feature-content { max-width: 65%; padding: clamp(1.2rem, 3vw, 2.5rem); }
+	.feature-content { max-width: 65%; padding: clamp(1.2rem, 2.5vw, 2rem); }
 	.feature-content span { font-weight: 650; color: var(--accent); font-size: var(--t-12-8); }
 	h1 { line-height: 1.1; letter-spacing: -0.035em; }
-	.feature-content h1 { font-size: clamp(1.75rem, 4vw, 3.25rem); margin-block: 0.5rem 1.2rem; }
+	.feature-content h1 { font-size: clamp(1.75rem, 3.2vw, 2.75rem); margin-block: 0.4rem 1rem; }
 	/* the whole card opens the artist; the play button sits above that link */
 	.feature-link::after { content: ''; position: absolute; inset: 0; border-radius: inherit; }
 	.feature-link:focus-visible { outline: none; }
@@ -294,38 +312,57 @@
 	.featured:hover .feature-link { text-decoration: underline; text-decoration-thickness: 0.06em; text-underline-offset: 0.12em; }
 	.feature-content .primary-button { position: relative; z-index: 1; }
 	.more { min-height: 2.75rem; color: var(--muted); }
-	.latest { grid-area: latest; min-width: 0; }
-	.home.filtered { grid-template-columns: minmax(0, 1fr); grid-template-areas: "latest"; }
+	.latest { min-width: 0; }
 	.tag-shelf { display: flex; gap: 0.45rem; overflow-x: auto; padding: 0.2rem 0.15rem 0.75rem; scrollbar-width: none; }
 	.tag-shelf a { display: inline-flex; align-items: center; gap: 0.3rem; min-height: 2.75rem; padding-inline: 0.65rem; border: 1px solid var(--line); border-radius: 1.5rem; white-space: nowrap; color: var(--muted); }
 	.tag-shelf a[aria-current=page] { border-color: var(--accent); color: var(--accent); }
 	.tag-shelf small { font-variant-numeric: tabular-nums; }
-	.chart { grid-area: chart; min-width: 0; }
+	.chart, .tags { min-width: 0; }
 	.chart-loading, .chart-empty { display: grid; align-items: center; min-height: 4.75rem; color: var(--muted); }
 	.chart-empty button { justify-self: start; }
 	.chart-period { display: inline-flex; align-items: center; justify-content: flex-end; gap: 0.2rem; min-height: 2.75rem; padding: 0; border: 0; background: none; color: var(--accent); white-space: nowrap; }
 	.chart-period:hover { text-decoration: underline; text-underline-offset: 0.2em; }
-	.latest header, .chart header { display: flex; justify-content: space-between; align-items: baseline; gap: 0.65rem; padding-bottom: 0.65rem; }
+	.latest header, .chart header, .tags header { display: flex; justify-content: space-between; align-items: baseline; gap: 0.65rem; padding-bottom: 0.65rem; }
+	.tags header { align-items: center; min-height: 2.75rem; padding-bottom: 0.35rem; }
 	h2 { font-size: var(--t-16-8); }
 	header span, header a { color: var(--muted); font-size: var(--t-12-8); }
-	ol { margin: 0; padding-left: 1.6rem; }
-	li::marker { color: var(--faint); font-size: var(--t-12); }
-	@media (min-width: 1240px) {
-		.home { grid-template-columns: minmax(0, 1fr) minmax(16rem, 29%); grid-template-areas: "featured atlas" "latest chart"; }
-		.home:has(:global(.following)) { grid-template-areas: "featured atlas" "following following" "latest chart"; }
-		.home:not(.filtered):not(:has(.featured)):has(:global(.following)) { grid-template-areas: "atlas atlas" "following following" "latest chart"; }
-		.home:not(.filtered):not(:has(.featured)) { grid-template-areas: "atlas atlas" "latest chart"; }
-		.home:not(.filtered):not(:has(.featured)) :global(.tile) { min-height: 4rem; }
-		.home:not(.filtered):not(:has(.featured)) :global(.tile canvas) { display: none; }
-	}
+	/* the rank sits centred beside each cover */
+	ol { margin: 0; padding: 0; list-style: none; counter-reset: rank; }
+	.chart li { display: grid; grid-template-columns: 1.4rem minmax(0, 1fr); align-items: center; gap: 0.35rem; counter-increment: rank; }
+	.chart li::before { content: counter(rank); color: var(--faint); font-size: var(--t-12-8); text-align: end; font-variant-numeric: tabular-nums; }
 	.chart :global(.track) { grid-template-columns: 2.5rem minmax(0, 1fr); min-height: 3.6rem; }
 	.chart :global(.duration), .chart :global(.row-actions), .chart :global(.metrics) { display: none; }
+	.tag-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 0.75rem; }
+	.tag-list a { display: flex; align-items: center; gap: 0.55rem; min-width: 0; min-height: 2.5rem; padding-inline: 0.5rem; border-radius: 0.5rem; color: var(--muted); }
+	.tag-list a:hover { background: var(--hover); color: var(--text); }
+	.tag-list i { flex: none; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--dot); }
+	.tag-list small { margin-left: auto; color: var(--faint); font-size: var(--t-12); font-variant-numeric: tabular-nums; }
+	@media (min-width: 901px) {
+		.main > :global(.following), .rail > :global(.tile) { grid-area: auto; }
+		.home:not(.filtered) .tag-shelf { display: none; }
+		.chart :global(.track) { gap: 0.7rem; padding-inline: 0.375rem; margin-inline: 0; }
+	}
+	@media (min-width: 1240px) {
+		.home { grid-template-columns: minmax(0, 1fr) clamp(19rem, 25%, 25rem); column-gap: 2.75rem; }
+		.rail > :global(.tile) { min-height: 9.5rem; }
+		/* rows go to one line: plays, likes and when line up in columns before the hover actions */
+		.latest :global(.track) { min-height: 4rem; }
+		.latest :global(.name) { grid-template-columns: minmax(0, 1fr) auto; column-gap: 2rem; align-items: center; }
+		.latest :global(.name > a) { grid-column: 1; }
+		.latest :global(.metrics) { grid-column: 2; grid-row: 1 / 3; display: grid; grid-template-columns: 3.25rem 3.25rem 4.5rem; gap: 0.5rem; font-size: var(--t-12-8); }
+	}
 	@media (max-width: 900px) {
+		.main, .rail { display: contents; }
+		.tags { display: none; }
+		.featured { grid-area: featured; min-height: 17rem; }
+		.chart { grid-area: chart; }
+		.latest { grid-area: latest; }
 		.home { grid-template-columns: minmax(0, 1fr); grid-template-areas: "featured" "chart" "latest"; gap: 1.5rem; }
 		.home:has(:global(.following)) { grid-template-areas: "featured" "following" "chart" "latest"; }
+		.home.filtered { grid-template-areas: "latest"; }
 		.chart ol { display: grid; grid-auto-flow: column; grid-auto-columns: min(14rem, 78vw); gap: 0.65rem; min-height: 4.75rem; padding: 0; overflow-x: auto; scrollbar-width: none; }
-		.chart li { display: grid; align-items: center; min-width: 0; padding-inline: 0.7rem; border: 1px solid var(--line); border-radius: 0.6rem; background: var(--surface); }
-		.chart li::marker { content: ''; }
+		.chart li { grid-template-columns: minmax(0, 1fr); align-items: center; min-width: 0; padding-inline: 0.7rem; border: 1px solid var(--line); border-radius: 0.6rem; background: var(--surface); }
+		.chart li::before { display: none; }
 	}
 	@media (max-width: 720px) {
 		.home { grid-template-areas: "brand" "featured" "chart" "latest"; }

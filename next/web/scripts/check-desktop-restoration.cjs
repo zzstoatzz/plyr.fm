@@ -39,12 +39,14 @@ async function verify(browser, origin, width, scheme) {
     assert.equal(await nav.getByRole('button', { name: /keyboard shortcuts/ }).count(), 0, 'keyboard shortcuts is not a nav item');
     const tags = page.getByRole('navigation', { name: 'Browse by tag' }).getByRole('link');
     await tags.first().waitFor();
-    const colors = await tags.evaluateAll(nodes => nodes.map(node => {
-      const style = getComputedStyle(node);
-      return { color: style.color, fill: style.backgroundColor, border: style.borderColor };
-    }));
-    assert.equal(new Set(colors.map(color => color.color)).size, 3, 'tags have distinct deterministic colors');
-    assert.ok(colors.every(color => color.fill !== 'rgba(0, 0, 0, 0)'), 'tags have tinted fills');
+    const dots = await tags.evaluateAll(nodes => nodes.map(node => getComputedStyle(node.querySelector('i')).backgroundColor));
+    assert.equal(new Set(dots).size, 3, 'each tag keeps its own deterministic color as a dot');
+    assert.ok(await tags.evaluateAll(nodes => nodes.every(node => getComputedStyle(node).backgroundColor === 'rgba(0, 0, 0, 0)')), 'desktop tags are a quiet list, not filled pills');
+    const [rail, latest] = await Promise.all([page.getByRole('complementary', { name: 'explore' }), page.getByRole('region', { name: 'latest' })].map(region => region.boundingBox()));
+    assert.ok(rail.x > latest.x + latest.width, 'top tracks, atlas and tags sit in a rail beside latest');
+    const firstRow = page.getByTestId('home-track-row').first();
+    const [rowTitle, rowMetrics] = await Promise.all([firstRow.locator('.title'), firstRow.locator('.metrics')].map(part => part.boundingBox()));
+    assert.ok(rowMetrics.x > rowTitle.x + rowTitle.width && rowMetrics.y < rowTitle.y + rowTitle.height, 'latest rows put plays, likes and when on the title line');
     await page.screenshot({ path: path.join(output, `${width}-${scheme}-home.png`) });
     await page.getByTestId('home-track-row').first().getByRole('button', { name: /^Play / }).click();
     const dock = page.getByTestId('player-dock');
