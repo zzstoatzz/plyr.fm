@@ -2,6 +2,7 @@ import type { Href } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, ArrowSquareOut, CaretDown, CaretRight as ChevronRight, CaretUp, Disc, Play } from './icons';
 import { Linking, Pressable, StyleSheet, View, type ViewInstance } from 'react-native';
+import { shortDate } from '@plyr/next-core/dates';
 import { offerLabel } from '@plyr/next-core/selling';
 import { tagColors } from '@plyr/next-core/tag-colors';
 import { Pill } from './HeroPieces';
@@ -127,11 +128,9 @@ export function AlbumLink({ track, navigate }: { track: Track; navigate: (target
 function Facts({ track, plays }: { track: Track; plays: number }) {
   const theme = useAppearance();
   const { count: likes } = useTrackLike(track);
-  const added = new Date(track.metadata.created_at);
   const label = { color: theme.faint, fontSize: 11.5 * theme.scale, fontWeight: '700', letterSpacing: 0.7, textTransform: 'uppercase' } as const;
   const value = { color: theme.text, fontFamily: theme.fontFamily, fontSize: 16 * theme.scale, fontWeight: '700', fontVariant: ['tabular-nums'] } as const;
-  const sameYear = added.getFullYear() === new Date().getFullYear();
-  const date = Number.isNaN(added.getTime()) ? '' : added.toLocaleDateString(undefined, { month: 'short', day: 'numeric', ...(sameYear ? {} : { year: 'numeric' }) }).toLowerCase();
+  const date = shortDate(track.metadata.created_at);
   const facts = [
     { label: 'plays', value: <Text accessibilityLabel={`${plays} ${plays === 1 ? 'play' : 'plays'}`} style={value}>{compactCount(plays)}</Text> },
     { label: 'likes', value: <Likers track={track} count={likes} style={value} /> },

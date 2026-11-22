@@ -1,3 +1,5 @@
+import { shortDate } from '@plyr/next-core/dates';
+
 export function compactCount(count: number) {
   if (count < 1000) return String(count);
   const unit = count >= 1_000_000_000 ? 1_000_000_000 : count >= 1_000_000 ? 1_000_000 : 1000;
@@ -12,5 +14,5 @@ export function postedAt(value: string, now = Date.now()) {
   if (hours < 1) return 'just now';
   if (hours < 24) return `${hours}h ago`;
   if (hours < 168) return `${Math.floor(hours / 24)}d ago`;
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }).toLowerCase();
+  return shortDate(date, now);
 }

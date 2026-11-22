@@ -2,6 +2,7 @@
   import { onMount, tick, untrack } from 'svelte';
   import type { Artist, ListSummary, Track } from '@plyr/next-core/api';
   import { trackArtwork } from '@plyr/next-core/artwork';
+  import { shortDate } from '@plyr/next-core/dates';
   import { accessLabel } from '@plyr/next-core/access/label';
   import { catalogRevision, subscribeCatalogChanges } from '@plyr/next-core/catalog/changes';
   import { accessGroup, catalogDuration, facets, filterAlbums, filterTracks, matchRange, type AccessGroup, type OwnedSort } from '@plyr/next-core/catalog/owned';
@@ -160,7 +161,7 @@
     const days = Math.floor((Date.now() - date.getTime()) / 86_400_000);
     if (days < 1) return 'today';
     if (days < 7) return days === 1 ? 'yesterday' : `${days} days ago`;
-    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', ...(days > 300 ? { year: 'numeric' } : {}) }).toLocaleLowerCase();
+    return shortDate(date);
   };
   const count = (n: number, word: string) => `${n.toLocaleString()} ${n === 1 ? word : word + 's'}`;
 </script>

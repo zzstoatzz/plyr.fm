@@ -6,6 +6,7 @@
 	import { auth } from './auth';
 	import { artistName, clock, trackHref } from './tracks';
 	import { trackArtwork } from '@plyr/next-core/artwork';
+	import { shortDate } from '@plyr/next-core/dates';
 	import { parseChapters, currentChapter } from '@plyr/next-core/chapters';
 	import { oneTimeHint } from './hints.svelte';
 	import Coachmark from './Coachmark.svelte';
@@ -137,7 +138,7 @@
 				{#if isBroadcast(player.current)}<p class="subtle">{artistName(player.current)}</p>
 				{:else}<a class="subtle" href={resolve('/(app)/u/[actor]', { actor: player.current.artist.profile.handle || player.current.artist.did })}>{artistName(player.current)}</a>{/if}
 				{#if player.current.metadata.album}<p class="subtle">{player.current.metadata.album}</p>{/if}
-				{#if !player.privateMode && !player.liveStation}<p class="meta" data-testid="now-playing-meta">{compactCount(player.current.metrics.play_count)} {player.current.metrics.play_count === 1 ? 'play' : 'plays'} · added {new Date(player.current.metadata.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }).toLowerCase()}</p>{/if}
+				{#if !player.privateMode && !player.liveStation}<p class="meta" data-testid="now-playing-meta">{compactCount(player.current.metrics.play_count)} {player.current.metrics.play_count === 1 ? 'play' : 'plays'} · added {shortDate(player.current.metadata.created_at)}</p>{/if}
 				<div class="position">{#if player.liveStation}<LiveProgress />{:else}<Scrub stacked chapters={chapters.chapters} {chapter} />{/if}</div>
 				<div class="commands" class:live={!!player.liveStation}>
 					{#if !player.liveStation}<button class="icon-button flank" type="button" aria-label="Shuffle queue" onclick={() => player.shuffle()}><Icon name="shuffle" size={20} /></button>{/if}
@@ -170,7 +171,7 @@
 				{/if}
 
 			{#if !player.privateMode && !player.liveStation}
-				<div class="facts" data-testid="now-playing-facts"><div><small>plays</small><strong>{compactCount(player.current.metrics.play_count)}</strong></div><div><small>added</small><strong>{new Date(player.current.metadata.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }).toLowerCase()}</strong></div><div><small>length</small><strong>{clock(player.current.metadata.duration_seconds ?? 0)}</strong></div></div>
+				<div class="facts" data-testid="now-playing-facts"><div><small>plays</small><strong>{compactCount(player.current.metrics.play_count)}</strong></div><div><small>added</small><strong>{shortDate(player.current.metadata.created_at)}</strong></div><div><small>length</small><strong>{clock(player.current.metadata.duration_seconds ?? 0)}</strong></div></div>
 			{/if}
 			{#if !player.liveStation}
 				<div class="options">

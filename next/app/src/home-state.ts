@@ -1,3 +1,5 @@
+import { shortDate } from '@plyr/next-core/dates';
+
 export const HOME_PAGE_SIZE = 24;
 export const periods = ['all_time', 'month', 'week', 'day'] as const;
 export type ChartPeriod = typeof periods[number];
@@ -30,7 +32,6 @@ export function parseSelectedTags(value: string | null): string[] {
 }
 
 const MINUTE = 60_000, HOUR = 60 * MINUTE, DAY = 24 * HOUR;
-const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 
 function localDay(time: number): number {
   const date = new Date(time);
@@ -46,8 +47,7 @@ export function timeAgo(iso: string, now = Date.now()): string {
   if (age < HOUR) return `${Math.floor(age / MINUTE)}m`;
   if (age < DAY) return `${Math.floor(age / HOUR)}h`;
   if (age < 7 * DAY) return `${Math.floor(age / DAY)}d`;
-  const date = new Date(time);
-  return `${MONTHS[date.getMonth()]} ${date.getDate()}${date.getFullYear() === new Date(now).getFullYear() ? '' : `, ${date.getFullYear()}`}`;
+  return shortDate(time, now);
 }
 
 /** The heading a track sits under in a chronological list, by the viewer's calendar day. */
