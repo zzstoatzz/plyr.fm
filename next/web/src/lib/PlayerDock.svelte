@@ -36,7 +36,7 @@
 			{#if player.liveStation}
 				<button type="button" class="icon-button" aria-label="Stop radio" onclick={() => player.stopRadio()}><Icon name="x" /></button>
 			{:else}
-				<button type="button" class="icon-button" aria-label="Queue" aria-pressed={queuePage || player.queueOpen} disabled={queuePage} onclick={onQueue}><Icon name="queue" /></button>
+				<button type="button" class="icon-button" aria-label="Queue" class:active={queuePage || player.queueOpen} aria-pressed={queuePage || player.queueOpen} onclick={onQueue}><Icon name="queue" /></button>
 			{/if}
 		</div>
 	</div>
@@ -52,6 +52,7 @@
 	.description span { color: var(--muted); font-size: var(--t-12-8); }
 	.controls { min-width: 0; display: flex; align-items: center; gap: 0.8rem; }
 	.desktop-progress { flex: 1; min-width: 0; }
+	.active { color: var(--accent); }
 	.extras { display: flex; align-items: center; justify-content: flex-end; }
 	.volume { display: flex; align-items: center; gap: 0.5rem; width: 7.5rem; }
 	.mobile-progress { display: none; }
