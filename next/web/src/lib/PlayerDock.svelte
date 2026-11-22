@@ -6,6 +6,7 @@
 	import Icon from './ui/Icon.svelte';
 	import Transport from './Transport.svelte';
 	import Scrub from './Scrub.svelte';
+	import MiniScrub from './MiniScrub.svelte';
 	import type { DockPull } from './dock-pull';
 
 	let { onQueue, queuePage, pull }: { onQueue: () => void; queuePage: boolean; pull: DockPull } = $props();
@@ -13,7 +14,7 @@
 
 {#if player.current}
 	<div class="dock" data-testid="player-dock">
-		{#if !player.liveStation}<div class="mobile-progress"><Scrub clockLabels={false} /></div>{/if}
+		{#if !player.liveStation}<MiniScrub />{/if}
 		<button type="button" class="song" aria-label="Open now playing" {@attach pull.attach} onclick={event => player.openNowPlaying(event.detail === 0)}>
 			<span class="cover"><Artwork src={trackArtwork(player.current)} size={48} /></span>
 			<span class="description">
@@ -55,13 +56,10 @@
 	.active { color: var(--accent); }
 	.extras { display: flex; align-items: center; justify-content: flex-end; }
 	.volume { display: flex; align-items: center; gap: 0.5rem; width: 7.5rem; }
-	.mobile-progress { display: none; }
 	@media (max-width: 720px) {
 		.mobile-time { display: inline; }
 		.song { touch-action: pan-x; }
 		.dock { grid-template-columns: minmax(0, 1fr) auto auto; inset: auto 0.75rem var(--tabs); gap: 0.25rem; padding: 0.3rem 0.75rem; border: 1px solid color-mix(in srgb, var(--line) 80%, transparent); border-radius: 1.25rem; background: color-mix(in srgb, var(--surface) 78%, transparent); -webkit-backdrop-filter: blur(22px) saturate(1.7); backdrop-filter: blur(22px) saturate(1.7); box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 0.14); }
 		.volume, .desktop-progress { display: none; }
-		.mobile-progress { position: absolute; inset: -0.42rem 1rem auto; display: block; }
-		.mobile-progress :global(input) { height: 0.65rem; }
 	}
 </style>
