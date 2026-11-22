@@ -11,6 +11,14 @@ workers_dev = true
 binding = "AUDIO"
 bucket_name = "plyr-next-audio"
 
+# cover art copied off artists' PDSes (src/images.ts)
+[[r2_buckets]]
+binding = "IMAGES"
+bucket_name = "plyr-next-images"
+
+[images]
+binding = "IMAGES_API"
+
 [vars]
 UPLOAD_INSPECT_URL = "https://jams.next.plyr.fm/internal/uploads/inspect"
 UPLOAD_ALLOWED_ORIGINS = "https://next.plyr.fm,https://plyr-fm-next-svelte.pages.dev,http://127.0.0.1:5174"

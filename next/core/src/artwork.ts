@@ -13,6 +13,8 @@ export const THUMBNAIL_MAX_SIZE = 96;
 
 const plyrImage = /^(https:\/\/images\.plyr\.fm\/images\/(?![A-Za-z0-9_-]*_thumb\.)[A-Za-z0-9_-]+)\.(?:jpe?g|png|webp|gif)$/i;
 const bskyAvatar = /^(https:\/\/cdn\.bsky\.app\/img\/)avatar(\/plain\/.+)$/;
+// next's cover copier (services/audio images.ts) serves sized WebP variants with `&w=`
+const mirrored = /^https:\/\/plyr-next-audio\.n8-3e9\.workers\.dev\/images\/b[a-z2-7]{58}\?did=[A-Za-z0-9:.-]+$/;
 
 /**
  * A small rendition of artwork for list-sized covers. Uploaded artwork can be a
@@ -24,6 +26,7 @@ const bskyAvatar = /^(https:\/\/cdn\.bsky\.app\/img\/)avatar(\/plain\/.+)$/;
 export function thumbnailUrl(uri: string): string {
   const image = plyrImage.exec(uri);
   if (image) return `${image[1]}_thumb.webp`;
+  if (mirrored.test(uri)) return `${uri}&w=${THUMBNAIL_MAX_SIZE}`;
   const avatar = bskyAvatar.exec(uri);
   if (avatar) return `${avatar[1]}avatar_thumbnail${avatar[2]}`;
   return uri;
@@ -47,8 +50,9 @@ export function displayUrl(uri: string, size: number, density: number): string {
     const thumbnail = thumbnailUrl(canonical);
     if (thumbnail !== canonical) return thumbnail;
   }
+  const width = widths.find(candidate => candidate >= size * density) ?? widths[widths.length - 1];
+  if (mirrored.test(canonical)) return `${canonical}&w=${width}`;
   const image = resizable.exec(canonical);
   if (!image) return canonical;
-  const width = widths.find(candidate => candidate >= size * density) ?? widths[widths.length - 1];
   return `${image[1]}/cdn-cgi/image/width=${width},quality=82,format=auto${image[2]}`;
 }

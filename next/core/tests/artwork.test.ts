@@ -38,3 +38,12 @@ test('other hosts and transformed urls are unchanged', () => {
   for (const uri of ['https://cdn.bsky.app/img/avatar/plain/did:plc:abc/bafkrei', 'https://images.plyr.fm/cdn-cgi/image/width=320/images/a.jpg', 'https://example.com/cover.jpg'])
     assert.equal(displayUrl(uri, 300, 3), uri);
 });
+
+test('covers copied to next\'s image worker load in its fixed sizes', () => {
+  const mirrored = 'https://plyr-next-audio.n8-3e9.workers.dev/images/bafkreifbec5sqkptigb5akdpouwbpw3loe44blnlsquk3spgt6ezeefyuq?did=did:plc:aaaaaaaaaaaaaaaaaaaaaaaa';
+  assert.equal(thumbnailUrl(mirrored), `${mirrored}&w=96`);
+  assert.equal(displayUrl(mirrored, 48, 3), `${mirrored}&w=96`);
+  assert.equal(displayUrl(mirrored, 160, 2), `${mirrored}&w=320`);
+  assert.equal(displayUrl(mirrored, 372, 3), `${mirrored}&w=1280`);
+  assert.equal(displayUrl(`${mirrored}&w=320`, 372, 3), `${mirrored}&w=320`);
+});

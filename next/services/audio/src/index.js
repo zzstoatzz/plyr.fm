@@ -1,9 +1,10 @@
 import { routeUpload } from "./upload-worker.ts";
 import { routeGenres } from "./genres.ts";
+import { routeImages, cidDigestHex } from "./images.ts";
 import { verifyCapability } from "./upload-capability.ts";
 export { OwnerUploads } from "./upload-worker.ts";
 
-// Content-addressed audio for next.plyr.fm.
+// Content-addressed audio for next.plyr.fm (cover art: images.ts).
 //
 //   GET/HEAD /audio/{cid}  public, Range-capable, immutable
 //   PUT      /audio/{cid}  bearer UPLOAD_TOKEN (the backend mirror) or an upload
@@ -24,7 +25,7 @@ const CORS = {
 
 export default {
   async fetch(request, env) {
-    const upload = await routeUpload(request, env) ?? await routeGenres(request, env);
+    const upload = await routeUpload(request, env) ?? await routeGenres(request, env) ?? await routeImages(request, env);
     if (upload) return upload;
     const key = new URL(request.url).pathname.slice(1);
     const match = KEY.exec(key);
@@ -152,31 +153,6 @@ async function authorized(request, token) {
     ),
   );
   return crypto.subtle.timingSafeEqual(given, expected);
-}
-
-// "b" + base32(0x01 0x55 0x12 0x20 || digest) -> hex digest, or null
-function cidDigestHex(cid) {
-  const alphabet = "abcdefghijklmnopqrstuvwxyz234567";
-  const bytes = [];
-  let buffer = 0;
-  let bits = 0;
-  for (const char of cid.slice(1)) {
-    if (!alphabet.includes(char)) return null;
-    buffer = (buffer << 5) | alphabet.indexOf(char);
-    bits += 5;
-    if (bits >= 8) {
-      bits -= 8;
-      bytes.push((buffer >> bits) & 0xff);
-      buffer &= (1 << bits) - 1;
-    }
-  }
-  if (bytes.length !== 36) return null;
-  if (bytes[0] !== 0x01 || bytes[1] !== 0x55) return null;
-  if (bytes[2] !== 0x12 || bytes[3] !== 0x20) return null;
-  return bytes
-    .slice(4)
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
 }
 
 function text(status, body, extra = {}) {

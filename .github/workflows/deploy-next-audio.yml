@@ -74,6 +74,16 @@ jobs:
         run: node --experimental-strip-types --test scripts/*node-check.mjs
       - name: validate worker bundle
         run: npx --no-install wrangler deploy --dry-run
+      - name: ensure the cover art bucket exists
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && !inputs.diagnose_upload && !inputs.verify_prepublication
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          if ! npx --no-install wrangler r2 bucket info plyr-next-images >/dev/null 2>&1; then
+            npx --no-install wrangler r2 bucket create plyr-next-images
+          fi
       - name: deploy existing next audio service
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && !inputs.diagnose_upload && !inputs.verify_prepublication
         env:
