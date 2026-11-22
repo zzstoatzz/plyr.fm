@@ -17,6 +17,8 @@
 	import Loading from '$lib/ui/Loading.svelte';
 	import TrackRow from '$lib/TrackRow.svelte';
 	import FollowingLatest from '$lib/listening/FollowingLatest.svelte';
+	import PullRefresh from '$lib/home/PullRefresh.svelte';
+	import { newAtTop, type RefreshResult } from '@plyr/next-core/behaviors/pull-refresh';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -39,16 +41,21 @@
 		selectedChart = api.chart(value, 10, chartRequest.signal).then(result => result.data, () => null);
 	}
 
+	// A pull-to-refresh swaps in a fresh first page without reloading the route, so nothing flashes.
+	let refreshed = $state.raw<{ source: typeof data.latest; value: typeof data.latest }>();
+	const latest = $derived(refreshed?.source === data.latest ? refreshed.value : data.latest);
+	let following = $state<FollowingLatest>();
+
 	let home: HTMLDivElement;
 	let extra: Track[] = $state.raw([]);
 	let nextCursor: string | undefined = $state();
 	let loading = $state(false);
 	let error = $state('');
-	let restoring = $state<typeof data.latest>();
+	let restoring = $state<typeof latest>();
 	let pending: AbortController | undefined;
 	const completed = new Set<string>();
 	$effect(() => {
-		data.latest;
+		latest;
 		pending?.abort();
 		pending = undefined;
 		completed.clear();
@@ -64,29 +71,29 @@
 		restore: ({ y, tracks, cursor, period: savedPeriod }) => {
 			if (savedPeriod && savedPeriod !== period) showChart(savedPeriod);
 			const position = window.scrollY;
-			const request = data.latest;
+			const request = latest;
 			restoring = request;
 			pending?.abort();
 			pending = undefined;
 			loading = false;
 			void Promise.allSettled([request, chart, data.featured, data.discovery]).then(async ([first]) => {
 				await tick();
-				if (!home?.isConnected || data.latest !== request) return;
+				if (!home?.isConnected || latest !== request) return;
 				const firstIds = new Set(first.status === 'fulfilled' ? first.value.data.map(track => track.id) : []);
 				extra = tracks.filter(track => !firstIds.has(track.id));
 				nextCursor = cursor;
 				// The browser can clamp the saved scroll before the streamed rows render.
 				await tick();
-				if (home.isConnected && data.latest === request && window.scrollY === position) window.scrollTo(0, y);
+				if (home.isConnected && latest === request && window.scrollY === position) window.scrollTo(0, y);
 			}).finally(() => { if (restoring === request) restoring = undefined; });
 		}
 	};
 
 	function observeMore(node: HTMLElement, cursor: string) {
-		const request = data.latest;
+		const request = latest;
 		if (typeof IntersectionObserver === 'undefined') return;
 		const observer = new IntersectionObserver(entries => {
-			if (entries.some(entry => entry.isIntersecting) && restoring !== request && data.latest === request && !error) void more(cursor);
+			if (entries.some(entry => entry.isIntersecting) && restoring !== request && latest === request && !error) void more(cursor);
 		}, { rootMargin: '0px 0px 200px' });
 		observer.observe(node);
 		return () => observer.disconnect();
@@ -95,12 +102,12 @@
 	async function more(cursor: string, retry?: HTMLButtonElement) {
 		if (pending || completed.has(cursor)) return;
 		const controller = new AbortController();
-		const request = data.latest;
+		const request = latest;
 		pending = controller;
 		loading = true;
 		try {
 			const [page, first] = await Promise.all([api.tracks({ cursor, tag: data.tags, hidden_tag: data.hidden, limit: 24 }, controller.signal), request]);
-			if (controller.signal.aborted || request !== data.latest) return;
+			if (controller.signal.aborted || request !== latest) return;
 			const known = new Set([...first.data, ...extra].map(track => track.id));
 			const added = page.data.filter(track => {
 				if (known.has(track.id)) return false;
@@ -114,12 +121,12 @@
 			nextCursor = page.next_cursor && !completed.has(page.next_cursor) ? page.next_cursor : '';
 			if (restoreFocus) {
 				await tick();
-				if (controller.signal.aborted || request !== data.latest || document.activeElement !== document.body) return;
+				if (controller.signal.aborted || request !== latest || document.activeElement !== document.body) return;
 				const row = added[0] && home.querySelector(`[data-track-id="${CSS.escape(added[0].id)}"][data-testid="home-track-row"] .title`);
 				(row instanceof HTMLElement ? row : home.querySelector<HTMLElement>('#home-latest'))?.focus();
 			}
 		} catch {
-			if (!controller.signal.aborted && request === data.latest) error = 'could not load more tracks.';
+			if (!controller.signal.aborted && request === latest) error = 'could not load more tracks.';
 		} finally {
 			if (pending === controller) {
 				pending = undefined;
@@ -127,10 +134,39 @@
 			}
 		}
 	}
+
+	async function refresh(): Promise<RefreshResult> {
+		const source = data.latest;
+		const before = await latest.then(page => page.data, () => []);
+		chartRequest?.abort();
+		const [page, entries] = await Promise.all([
+			api.tracks({ limit: 24, tag: data.tags, hidden_tag: data.hidden }),
+			data.tags.length ? Promise.resolve(null) : api.chart(period, 10).then(result => result.data, () => undefined),
+			following?.reload()
+		]);
+		if (source !== data.latest) return { ok: false };
+		refreshed = { source, value: Promise.resolve(page) };
+		if (entries !== undefined && entries !== null) selectedChart = Promise.resolve(entries);
+		const fresh = newAtTop(before, page.data);
+		if (fresh) void tick().then(() => highlight(page.data.slice(0, fresh).map(track => track.id)));
+		return { ok: true, fresh };
+	}
+
+	function highlight(ids: string[]) {
+		if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+		const tint = getComputedStyle(home).getPropertyValue('--accent').trim();
+		for (const id of ids) {
+			home.querySelector(`[data-testid="home-track-row"][data-track-id="${CSS.escape(id)}"]`)?.animate(
+				[{ backgroundColor: `color-mix(in srgb, ${tint} 18%, transparent)` }, { backgroundColor: 'transparent' }],
+				{ duration: 1600, easing: 'ease-out' }
+			);
+		}
+	}
 </script>
 
 <svelte:head><title>plyr.fm</title></svelte:head>
 
+<PullRefresh onrefresh={refresh}>
 <div class="page-content home" class:filtered={data.tags.length > 0} bind:this={home}>
 	<header class="mobile-brand"><LinksMenu /><h1>plyr.fm</h1></header>
 	{#await data.featured}
@@ -159,7 +195,7 @@
 		{/if}
 	{/await}
 	{#if !data.tags.length}
-	<FollowingLatest />
+	<FollowingLatest bind:this={following} />
 	<AtlasTile />
 	<section class="chart" data-testid="home-chart" aria-labelledby="home-top-tracks">
 		<header>
@@ -206,7 +242,7 @@
 				</nav>
 			{/if}
 		{/await}
-		{#await data.latest}
+		{#await latest}
 			<Loading label="loading the latest tracks" />
 		{:then first}
 			{#each [...first.data, ...extra] as track (track.id)}
@@ -215,7 +251,7 @@
 				<p class="state">no tracks found.</p>
 			{/each}
 			{@const cursor = nextCursor ?? first.next_cursor}
-			{#if cursor && restoring !== data.latest}
+			{#if cursor && restoring !== latest}
 				{#key cursor}
 					<div class="more" {@attach node => observeMore(node, cursor)}>
 						{#if error}
@@ -235,6 +271,7 @@
 	</section>
 
 </div>
+</PullRefresh>
 
 <style>
 	.home { display: grid; grid-template-columns: minmax(0, 2.6fr) minmax(12rem, 1fr); grid-template-areas: "featured featured" "latest chart"; gap: 2.2rem; }

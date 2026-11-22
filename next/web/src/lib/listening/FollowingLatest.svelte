@@ -36,6 +36,15 @@
     }, () => { if (current()) failed = true; }).finally(() => { if (current()) pending = false; });
     return () => controller.abort();
   });
+  /** Fetch again in place, keeping what's shown until the new list arrives. */
+  export async function reload() {
+    const { did, ready, rpc } = account;
+    if (!did || !ready) return;
+    try {
+      const result = await newFromFollows(did, new AbortController().signal, true);
+      if (auth.getAuth().rpc === rpc) { tracks = result.tracks; failed = result.failed > 0; }
+    } catch {}
+  }
   const label = 'new from people you know';
   const current = (track: Track) => !player.liveStation && canToggleTrack(player.current, track, !!player.jam);
   const playing = (track: Track) => current(track) && player.playing && !player.outputElsewhere;

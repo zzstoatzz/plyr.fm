@@ -29,5 +29,5 @@ export function useTopTracks(initial: ChartPeriod = 'month', limit = 10) {
     }
   }, [limit]);
   useEffect(() => { void load(initial); return () => { generation.current++; pending.current = false; }; }, [load, initial]);
-  return { period, tracks, loading, error, retry: () => void load(period), cycle: () => void load(period, true) };
+  return { period, tracks, loading, error, retry: () => void load(period), refresh: () => load(period), cycle: () => void load(period, true) };
 }

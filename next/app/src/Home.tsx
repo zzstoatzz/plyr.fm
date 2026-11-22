@@ -15,6 +15,8 @@ import { WaveLoading } from './WaveLoading';
 import { useAppPreferences } from './preference-context';
 import { useLatestFeed } from './use-latest-feed';
 import { HomeTagBar } from './HomeTagBar';
+import { usePullRefresh } from './PullRefresh';
+import { newAtTop, type RefreshResult } from '@plyr/next-core/behaviors/pull-refresh';
 
 export function Home({ onPlay }: { onPlay: Play }) {
   const { preferences } = useAppPreferences();
@@ -44,8 +46,15 @@ function HomeFeed({ onPlay, hiddenTags }: { onPlay: Play; hiddenTags: string[] }
   }, [latest.cursor, latest.loading, latest.error, latest.more]);
   const [listHeight, setListHeight] = useState(0);
   const network = useNetworkArtists(did, ready);
+  const [chartKey, setChartKey] = useState(0);
+  const pull = usePullRefresh(useCallback(async (): Promise<RefreshResult> => {
+    const before = tracks;
+    setChartKey(key => key + 1);
+    const page = await latest.refresh();
+    return page ? { ok: true, fresh: newAtTop(before, page) } : { ok: false };
+  }, [tracks, latest.refresh]));
   const header = <View style={styles.home} onLayout={event => setHeaderHeight(event.nativeEvent.layout.height)}>
-    <HomeChart onPlay={onPlay} />
+    <HomeChart onPlay={onPlay} refreshKey={chartKey} />
     {(network.loading || network.artists.length > 0) && <HomeArtists artists={network.artists} loading={network.loading} onPlay={onPlay} />}
     <Status error={network.error} retry={network.retry} />
     <View style={styles.section} onLayout={event => setLatestTop(event.nativeEvent.layout.y)}>
@@ -55,11 +64,12 @@ function HomeFeed({ onPlay, hiddenTags }: { onPlay: Play; hiddenTags: string[] }
       <HomeTagBar feed={feed} hiddenTags={hiddenTags} />
     </View>
   </View>;
-  return <FlatList ref={list} testID="home-feed" data={tracks} keyExtractor={track => track.id} contentInsetAdjustmentBehavior="automatic"
+  return <View style={{ flex: 1, backgroundColor: colors.background }}><FlatList ref={list} refreshControl={pull.refreshControl}
+    onScrollBeginDrag={pull.onScrollBeginDrag} onScrollEndDrag={pull.onScrollEndDrag} testID="home-feed" data={tracks} keyExtractor={track => track.id} contentInsetAdjustmentBehavior="automatic"
     style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ ...pageFrame, paddingTop: 16, paddingBottom: 24 }}
     onLayout={event => { setListHeight(event.nativeEvent.layout.height); viewport.current.height = event.nativeEvent.layout.height; fillViewport(); }}
     onContentSizeChange={(_, height) => { viewport.current.content = height; fillViewport(); }}
-    onScroll={event => { viewport.current.offset = event.nativeEvent.contentOffset.y; fillViewport(); }} scrollEventThrottle={32}
+    onScroll={event => { viewport.current.offset = event.nativeEvent.contentOffset.y; fillViewport(); pull.onScroll(event); }} scrollEventThrottle={16}
     accessibilityState={{ busy: latest.loading }} keyboardShouldPersistTaps="handled" ListHeaderComponent={header} onEndReachedThreshold={1.5}
     onEndReached={() => { if (latest.cursor && !latest.loading && !latest.error) latest.more(); }}
     getItemLayout={(_, index) => ({ length: rowHeight, offset: 16 + headerHeight + index * rowHeight, index })}
@@ -70,7 +80,7 @@ function HomeFeed({ onPlay, hiddenTags }: { onPlay: Play; hiddenTags: string[] }
         <Status error={latest.error} retry={tracks.length ? undefined : latest.more} empty={!tracks.length ? selected.length ? 'no tracks match these tags' : 'no tracks yet' : undefined} />}
       {tracks.length > 0 && latest.error && <Pressable accessibilityRole="button" onPress={latest.more} style={styles.more}><Text style={{ color: colors.accent }}>retry loading tracks</Text></Pressable>}
       <Text accessibilityLiveRegion="polite" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', color: 'transparent' }}>{tracks.length} tracks loaded</Text>
-    </View></View>} />;
+    </View></View>} />{pull.indicator}</View>;
 }
 
 const styles = StyleSheet.create({
