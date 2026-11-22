@@ -1,11 +1,11 @@
+import { createLatestWriter } from '@plyr/next-core/latest-write';
 import { useSyncExternalStore } from 'react';
 import type { Auth } from './auth-state';
 
 type Rpc = NonNullable<Auth['rpc']>;
 type Interaction = { liked: boolean; busy: boolean };
-type Sync = { wanted: boolean; written: boolean };
 const sessions = new WeakMap<Rpc, Map<string, Interaction>>();
-const syncing = new WeakMap<Rpc, Map<string, Sync>>();
+const writers = new WeakMap<Rpc, ReturnType<typeof createLatestWriter>>();
 const listeners = new Set<() => void>();
 
 function set(rpc: Rpc, uri: string, state: Interaction) {
@@ -15,33 +15,15 @@ function set(rpc: Rpc, uri: string, state: Interaction) {
   for (const listener of listeners) listener();
 }
 
-/**
- * Shows `liked` at once and writes it in the background. Taps that land while a write is in flight only move the target:
- * the writer catches up to the last one, so rapid like/unlike never waits on the network or drops a tap.
- * Resolves for the tap that started the writer, with where it settled; later taps resolve undefined.
- */
+/** Shows `liked` at once and writes it in the background (see createLatestWriter). */
 export async function wantLike(rpc: Rpc, uri: string, from: boolean, liked: boolean, write: (liked: boolean) => Promise<unknown>) {
-  let pending = syncing.get(rpc);
-  if (!pending) { pending = new Map(); syncing.set(rpc, pending); }
+  let writer = writers.get(rpc);
+  if (!writer) { writer = createLatestWriter(); writers.set(rpc, writer); }
   set(rpc, uri, { liked, busy: true });
-  const running = pending.get(uri);
-  if (running) { running.wanted = liked; return undefined; }
-  const sync: Sync = { wanted: liked, written: from };
-  pending.set(uri, sync);
-  let failed = false;
-  try {
-    while (sync.wanted !== sync.written) {
-      const target = sync.wanted;
-      await write(target);
-      sync.written = target;
-    }
-  } catch {
-    failed = true;
-  } finally {
-    pending.delete(uri);
-    set(rpc, uri, { liked: sync.written, busy: false });
-  }
-  return { liked: sync.written, changed: sync.written !== from, failed };
+  const outcome = await writer.want(uri, from, liked, write);
+  if (!outcome) return undefined;
+  set(rpc, uri, { liked: outcome.value, busy: false });
+  return { liked: outcome.value, changed: outcome.changed, failed: outcome.failed };
 }
 
 export function useLikeInteraction(rpc: Auth['rpc'], uri: string) {

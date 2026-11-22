@@ -1,4 +1,5 @@
 import type { Track } from './api.ts';
+import { createLatestWriter } from './latest-write.ts';
 import type { createPublicPds } from './pds.ts';
 
 type Account = { did: string | null; rpc: unknown };
@@ -12,8 +13,18 @@ export function createTrackLikes<Session extends Account>({ getAuth, createPds }
   const entries = new Map<string, LikeSnapshot>();
   const listeners = new Set<() => void>();
   let session = getAuth().rpc;
+  let writer = createLatestWriter();
   function emit() { for (const listener of listeners) listener(); }
-  function reset() { session = getAuth().rpc; entries.clear(); emit(); }
+  function reset() { session = getAuth().rpc; entries.clear(); writer = createLatestWriter(); emit(); }
+  // The unclamped count, so taking back a change the appview never counted can't drift.
+  const raw = new WeakMap<LikeSnapshot, number>();
+  function show(state: LikeSnapshot, liked: boolean) {
+    if (state.liked === liked) return;
+    const count = (raw.get(state) ?? state.count) + (liked ? 1 : -1);
+    raw.set(state, count);
+    state.count = Math.max(0, count);
+    state.liked = liked;
+  }
   function entry(track: Track) {
     if (session !== getAuth().rpc) reset();
     let found = entries.get(track.record.uri);
@@ -38,24 +49,29 @@ export function createTrackLikes<Session extends Account>({ getAuth, createPds }
       if (current()) state.error = 'could not load your like. try again.';
     } finally { if (current()) { state.loading = false; emit(); } }
   }
+  /** Shows the change at once; the write follows, and a failed write puts back what was last saved. */
   async function toggle(track: Track) {
     const account = getAuth();
-    const state = entry(track);
-    if (!account.rpc || state.busy || state.loading) return;
-    if (!state.known) { await load(track); if (!state.known) return; }
-    const current = () => getAuth().rpc === account.rpc && entries.get(track.record.uri) === state;
+    let state = entry(track);
+    if (!account.rpc || state.loading) return;
+    if (!state.known) { await load(track); state = entry(track); if (!state.known) return; }
+    const uri = track.record.uri;
+    const current = () => getAuth().rpc === account.rpc && entries.get(uri) === state;
     if (!current()) return;
+    const from = state.liked;
+    show(state, !from);
     state.busy = true;
     state.error = '';
     emit();
-    try {
-      const writer = createPds(account);
-      if (state.liked) await writer.unlike(track, { waitForIndex: false });
-      else await writer.like(track, { waitForIndex: false });
-      if (current()) { state.count = Math.max(0, state.count + (state.liked ? -1 : 1)); state.liked = !state.liked; }
-    } catch (failure) {
-      if (current()) state.error = failure instanceof Error ? failure.message : 'could not update this like.';
-    } finally { if (current()) { state.busy = false; emit(); } }
+    const outcome = await writer.want(uri, from, state.liked, liked => {
+      const pds = createPds(account);
+      return liked ? pds.like(track, { waitForIndex: false }) : pds.unlike(track, { waitForIndex: false });
+    });
+    if (!outcome || !current()) return;
+    show(state, outcome.value);
+    state.busy = false;
+    if (outcome.failed) state.error = outcome.error instanceof Error ? outcome.error.message : 'could not update this like.';
+    emit();
   }
   return { snapshot: (track: Track) => ({ ...entry(track) }), load, toggle, reset,
     subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; } };
