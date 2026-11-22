@@ -9,7 +9,7 @@ table has one writing module; everything else reads.
 | --- | --- | --- |
 | ingester | `internal/projection` | `plyr_index.track_records`, `track_tag_records`, `list_records`, `list_members`, `like_records`, `profile_records`, `comment_records`, `repo_heads`, `record_rejections` |
 | ingester | `internal/ingest` | `plyr_index.relay_cursors` (stream sources) |
-| ingester (side thread) / mirror | `internal/delivery` | `plyr_index.track_delivery_origins`, `track_mirror_attempts` |
+| ingester (side thread) / mirror | `internal/delivery` | `plyr_index.track_delivery_origins`, `track_mirror_attempts`, `track_measured_durations` (duration prober) |
 | ingester (side thread) | `internal/identity` | `plyr_index.actor_identities` |
 | ingester (side thread) | `internal/moderation` | `plyr_index.track_policies`, `account_label_policies`, the labeler's `relay_cursors` row |
 | space_consumer | `internal/space` (`postgres_sync_store`) | `plyr_index.space_records`, `space_cursors` |

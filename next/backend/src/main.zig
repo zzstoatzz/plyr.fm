@@ -27,6 +27,7 @@ const stream_runner = @import("internal/ingest/stream_runner.zig");
 const catalog_reconcile_runner = @import("internal/ingest/catalog_reconcile_runner.zig");
 const account_reconciler = @import("internal/account/reconciler.zig");
 const blob_mirror = @import("internal/delivery/blob_mirror.zig");
+const duration_probe = @import("internal/delivery/duration_probe.zig");
 const label_sync = @import("internal/moderation/label_sync.zig");
 const moderation_api = @import("api/moderation.zig");
 const postgres_moderation = @import("internal/moderation/postgres_log.zig");
@@ -311,6 +312,7 @@ pub fn main() !void {
         .ingester => {
             const store = if (postgres_store) |*value| value else return error.IngesterDatabaseRequired;
             blob_mirror.spawnBeside(io, allocator, store.pool);
+            duration_probe.spawnBeside(io, allocator, store.pool);
             actor_identity_refresher.spawnBeside(io, allocator, store.pool);
             label_sync.spawnBeside(io, allocator, store.pool, settings.track_collection);
             try stream_runner.run(io, allocator, store.pool, settings.stream_hosts, .{
@@ -436,6 +438,7 @@ test {
     _ = @import("internal/ingest/cached_signing_key_resolver.zig");
     _ = @import("internal/ingest/catalog_reconciler.zig");
     _ = @import("internal/delivery/blob_mirror.zig");
+    _ = @import("internal/delivery/duration_probe.zig");
     _ = @import("internal/moderation/label_sync.zig");
     _ = @import("internal/moderation/log.zig");
     _ = @import("internal/moderation/postgres_log.zig");

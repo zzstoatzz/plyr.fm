@@ -1,5 +1,6 @@
 const std = @import("std");
 const pg = @import("pg");
+const duration_store = @import("../delivery/postgres_duration_store.zig");
 const platform = @import("platform_stats_store.zig");
 
 pub const PostgresPlatformStatsStore = struct {
@@ -53,7 +54,7 @@ pub const PostgresPlatformStatsStore = struct {
 
 const query =
     \\SELECT count(*)::bigint, count(DISTINCT v.owner_did)::bigint,
-    \\  COALESCE(sum(v.duration_seconds), 0)::bigint,
+++ "\n  COALESCE(sum(" ++ duration_store.effectiveDuration("v") ++ "), 0)::bigint,\n" ++
     \\  COALESCE(sum(metrics.play_count), 0)::bigint
     \\FROM plyr_index.track_records AS v
     \\JOIN plyr_index.account_availability AS aa ON aa.repo_did = v.owner_did AND aa.available
@@ -86,9 +87,10 @@ test "platform stats exclude unavailable and non-discoverable records and cache 
     _ = try pool.exec("DROP SCHEMA IF EXISTS plyr_index CASCADE", .{});
     _ = try pool.exec("CREATE SCHEMA plyr_index", .{});
     _ = try pool.exec("CREATE TABLE plyr_index.account_availability (repo_did text PRIMARY KEY, available boolean)", .{});
-    _ = try pool.exec("CREATE TABLE plyr_index.track_records (record_uri text PRIMARY KEY, owner_did text, collection text, duration_seconds bigint, support_gate_type text, deleted boolean DEFAULT false, self_labels text[] DEFAULT '{}')", .{});
+    _ = try pool.exec("CREATE TABLE plyr_index.track_records (record_uri text PRIMARY KEY, record_cid text, owner_did text, collection text, duration_seconds bigint, support_gate_type text, deleted boolean DEFAULT false, self_labels text[] DEFAULT '{}')", .{});
     _ = try pool.exec("CREATE TABLE plyr_index.track_policies (record_uri text PRIMARY KEY, visibility text, moderation_decision text, operator_labels jsonb DEFAULT '[]')", .{});
     _ = try pool.exec("CREATE TABLE plyr_index.track_metrics (record_uri text PRIMARY KEY, play_count bigint)", .{});
+    try duration_store.createTestTable(pool);
     _ = try pool.exec("INSERT INTO plyr_index.account_availability VALUES ('a',true),('b',true),('c',false)", .{});
     _ = try pool.exec(
         \\INSERT INTO plyr_index.track_records (record_uri,owner_did,collection,duration_seconds,deleted,self_labels) VALUES

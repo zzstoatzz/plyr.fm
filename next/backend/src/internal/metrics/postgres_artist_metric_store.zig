@@ -6,6 +6,7 @@
 
 const std = @import("std");
 const pg = @import("pg");
+const duration_store = @import("../delivery/postgres_duration_store.zig");
 const zat = @import("zat");
 const artist_metrics = @import("../domain/artist_metrics.zig");
 const track_id = @import("../identity/track_id.zig");
@@ -118,7 +119,7 @@ const metrics_query =
     \\    v.record_uri,
     \\    v.record_cid,
     \\    v.title,
-    \\    COALESCE(v.duration_seconds, 0)::bigint AS duration_seconds,
+++ "\n    COALESCE(" ++ duration_store.effectiveDuration("v") ++ ", 0)::bigint AS duration_seconds,\n" ++
     \\    COALESCE(metrics.play_count, 0)::bigint AS play_count,
     \\    v.record_created_at
     \\  FROM plyr_index.track_records AS v
@@ -236,6 +237,7 @@ test "PostgreSQL artist metrics aggregate only admitted canonical tracks" {
         \\  play_count bigint NOT NULL
         \\)
     , .{});
+    try duration_store.createTestTable(postgres.pool);
     _ = try postgres.pool.exec(
         "INSERT INTO plyr_index.account_availability VALUES ($1, true)",
         .{"did:plc:artist"},
@@ -268,6 +270,10 @@ test "PostgreSQL artist metrics aggregate only admitted canonical tracks" {
     _ = try postgres.pool.exec("INSERT INTO plyr_index.track_policies VALUES ($1, 'public', 'allow', '[]')", .{allowed_uri});
     _ = try postgres.pool.exec("INSERT INTO plyr_index.track_policies VALUES ($1, 'private', NULL, '[]')", .{private_uri});
     _ = try postgres.pool.exec("INSERT INTO plyr_index.track_metrics VALUES ($1, 7), ($2, 11), ($3, 3), ($4, 100), ($5, 200)", .{ public_uri, supporters_uri, allowed_uri, private_uri, blocked_uri });
+    // a record with no duration counts the one the prober measured for it
+    const unmeasured_uri = "at://did:plc:artist/fm.plyr.dev.track/unmeasured";
+    _ = try postgres.pool.exec(insert_record, .{ unmeasured_uri, cid, "did:plc:artist", "fm.plyr.dev.track", "Unmeasured", @as(?i64, null), "2026-08-08T00:00:00Z", &[_][]const u8{} });
+    _ = try postgres.pool.exec("INSERT INTO plyr_index.track_measured_durations (record_uri, record_cid, duration_seconds, observed_at_us) VALUES ($1, $2, 25, 1)", .{ unmeasured_uri, cid });
 
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -276,8 +282,8 @@ test "PostgreSQL artist metrics aggregate only admitted canonical tracks" {
         "did:plc:artist",
         "fm.plyr.dev.track",
     );
-    try std.testing.expectEqual(@as(i64, 3), value.totals.tracks);
-    try std.testing.expectEqual(@as(i64, 350), value.totals.duration_seconds);
+    try std.testing.expectEqual(@as(i64, 4), value.totals.tracks);
+    try std.testing.expectEqual(@as(i64, 375), value.totals.duration_seconds);
     try std.testing.expectEqual(@as(i64, 21), value.totals.plays);
     try std.testing.expectEqualStrings(supporters_uri, value.top_track.?.record.uri);
     try std.testing.expectEqual(@as(i64, 11), value.top_track.?.play_count);

@@ -10,6 +10,7 @@
 const tag_cursor = @import("../identity/tag_cursor.zig");
 const std = @import("std");
 const public_media = @import("../delivery/public_media.zig");
+const duration_store = @import("../delivery/postgres_duration_store.zig");
 const pg = @import("pg");
 const postgres_read = @import("postgres_read.zig");
 const zat = @import("zat");
@@ -551,7 +552,7 @@ pub const projected_columns =
     \\  v.artist_name,
     \\  v.description,
     \\  v.album,
-    \\  v.duration_seconds,
+++ "\n  " ++ duration_store.effectiveDuration("v") ++ ",\n" ++
     \\  v.record_created_at,
     \\  v.audio_blob_cid,
     \\  v.audio_blob_media_type,

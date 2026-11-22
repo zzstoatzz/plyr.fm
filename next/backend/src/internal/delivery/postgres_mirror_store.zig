@@ -194,8 +194,10 @@ const failure_query =
     \\  last_error = EXCLUDED.last_error
 ;
 
-/// The delivery tables, for tests whose queries read a track's copy state.
+/// The delivery tables (copies and measured durations), for tests whose
+/// queries read a track's copy state or running time.
 pub fn createTestTables(pool: *pg.Pool) !void {
+    try @import("postgres_duration_store.zig").createTestTable(pool);
     _ = try pool.exec(
         \\CREATE TABLE IF NOT EXISTS plyr_index.track_delivery_origins (
         \\  record_uri text NOT NULL, service text NOT NULL, record_cid text NOT NULL,
