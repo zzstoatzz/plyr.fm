@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { X } from './icons';
-import { Animated, Modal, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Animated, Modal, Platform, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { SafeAreaProvider, initialWindowMetrics, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeepInViewContext, useKeepInView } from './behaviors/keep-in-view';
 import { useKeyboardInset } from './behaviors/use-keyboard-inset';
@@ -48,7 +48,8 @@ function SheetBody({ title, close, children, notice, anchor, lift, bar }: SheetP
   const keeper = useKeepInView();
   const wide = width >= 800;
   const form = !!bar && !wide;
-  const keyboard = useKeyboardInset(!lift && !(anchor && wide) && !form);
+  // iOS form sheets leave the keyboard to their scroll view's native inset, which Android doesn't have.
+  const keyboard = useKeyboardInset(!lift && !(anchor && wide) && (!form || Platform.OS !== 'ios'));
   if (lift) return <LiftedMenu title={title} close={close} lift={lift} notice={notice}>{children}</LiftedMenu>;
   if (anchor && wide) {
     const left = anchor.x - MENU_WIDTH - 6 >= 8 ? anchor.x - MENU_WIDTH - 6 : Math.min(anchor.x + anchor.width + 6, width - MENU_WIDTH - 8);
@@ -77,7 +78,7 @@ function SheetBody({ title, close, children, notice, anchor, lift, bar }: SheetP
       width: '100%', maxWidth: 520, borderTopLeftRadius: 22, borderTopRightRadius: 22, overflow: 'hidden',
       borderBottomLeftRadius: wide ? 22 : 0, borderBottomRightRadius: wide ? 22 : 0,
       backgroundColor: theme.surface, borderWidth: 1, borderBottomWidth: wide ? 1 : 0, borderColor: theme.hairline,
-      ...(form ? { height: height - Math.max(insets.top, initialWindowMetrics?.insets.top ?? 0) - 10 }
+      ...(form ? { height: height - keyboard - Math.max(insets.top, initialWindowMetrics?.insets.top ?? 0) - 10 }
         : { maxHeight: height - keyboard - Math.max(insets.top, initialWindowMetrics?.insets.top ?? 0) - 10, paddingBottom: wide || keyboard ? 12 : insets.bottom })
     }}>
       {bar ? <View style={{ paddingHorizontal: 8, paddingVertical: 6, flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderColor: theme.hairline }}>

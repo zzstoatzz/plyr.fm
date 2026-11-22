@@ -7,6 +7,7 @@ const fields = 'input:not([type=checkbox]):not([type=radio]):not([type=file]), t
  * Browsers skip the focus scroll for a field already inside the viewport, even when an overlay covers it.
  */
 export const focusClear: Action<HTMLElement> = node => {
+  node.dataset.focusClear = '';
   let field: HTMLElement | undefined;
   const reveal = () => requestAnimationFrame(() => { if (field && document.activeElement === field) field.scrollIntoView({ block: 'nearest' }); });
   const focusin = (event: FocusEvent) => {

@@ -194,7 +194,7 @@
           {/if}
         </button>
         {#if cover}
-          <button type="button" class="remove" disabled={locked} aria-label="remove cover" onclick={() => { artwork = null; if (artworkInput) artworkInput.value = ''; }}><Icon name="x" size={16} /></button>
+          <button type="button" class="remove" disabled={locked} aria-label="remove cover" onclick={() => { artwork = track?.media.artwork ? null : undefined; if (artworkInput) artworkInput.value = ''; }}><Icon name="x" size={16} /></button>
         {:else if artwork === null}
           <button type="button" class="chip action keep" disabled={locked} onclick={() => { artwork = undefined; }}>keep current cover</button>
         {/if}
