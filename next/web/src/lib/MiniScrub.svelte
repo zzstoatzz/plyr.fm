@@ -68,7 +68,7 @@
 	.knob { position: absolute; top: calc(100% - 2px); left: var(--fill); width: 14px; height: 14px; border-radius: 50%; background: var(--accent); transform: translate(-50%, -50%);
 		box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent), 0 1px 4px rgb(0 0 0 / 0.3); }
 	.bubble { position: absolute; top: -2.4rem; left: clamp(1.5rem, var(--fill), calc(100% - 1.5rem)); transform: translateX(-50%); padding: 0.2rem 0.55rem; border-radius: 999px;
-		background: var(--text); color: var(--surface); font-size: 0.8rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.3; white-space: nowrap; box-shadow: 0 0.25rem 0.8rem rgb(0 0 0 / 0.25); }
+		background: var(--text); color: var(--surface); font-size: var(--t-12-8); font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.3; white-space: nowrap; box-shadow: 0 0.25rem 0.8rem rgb(0 0 0 / 0.25); }
 	.band { position: absolute; left: 0; right: 0; bottom: -0.25rem; height: 1rem; pointer-events: auto; touch-action: pan-y; user-select: none; -webkit-user-select: none; cursor: pointer; }
 	input { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 	.lip:has(input:focus-visible) .edge i { border-bottom-width: 4px; }
