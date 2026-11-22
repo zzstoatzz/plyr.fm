@@ -30,7 +30,13 @@ pub const image_origin = "https://plyr-next-audio.n8-3e9.workers.dev/images/";
 /// Only for image fields: audio keeps its own delivery path.
 pub fn canonicalImage(allocator: std.mem.Allocator, url: []const u8) std.mem.Allocator.Error![]const u8 {
     const blob = getBlob(url) orelse return canonical(allocator, url);
-    return std.fmt.allocPrint(allocator, "{s}{s}?did={s}", .{ image_origin, blob.cid, blob.did });
+    // PDSes write the DID either plain or with its colons escaped
+    const did = try std.mem.replaceOwned(u8, allocator, blob.did, "%3A", ":");
+    defer allocator.free(did);
+    const plain = try std.mem.replaceOwned(u8, allocator, did, "%3a", ":");
+    defer allocator.free(plain);
+    if (!plainDid(plain)) return canonical(allocator, url);
+    return std.fmt.allocPrint(allocator, "{s}{s}?did={s}", .{ image_origin, blob.cid, plain });
 }
 
 /// Like `canonicalImage` for a URL the caller allocated with `allocator`.
@@ -58,7 +64,7 @@ fn getBlob(url: []const u8) ?Blob {
     }
     const d = did orelse return null;
     const c = cid orelse return null;
-    if (!plainDid(d) or !rawCid(c)) return null;
+    if (d.len == 0 or !rawCid(c)) return null;
     return .{ .did = d, .cid = c };
 }
 
@@ -122,6 +128,10 @@ test "PDS getBlob covers move to next's image worker" {
     try std.testing.expectEqualStrings(
         image_origin ++ cid ++ "?did=did:web:artist.example",
         try canonicalImage(allocator, "https://pds.example/xrpc/com.atproto.sync.getBlob?cid=" ++ cid ++ "&did=did:web:artist.example"),
+    );
+    try std.testing.expectEqualStrings(
+        image_origin ++ cid ++ "?did=did:plc:aaaaaaaaaaaaaaaaaaaaaaaa",
+        try canonicalImage(allocator, "https://zds.example/xrpc/com.atproto.sync.getBlob?did=did%3Aplc%3Aaaaaaaaaaaaaaaaaaaaaaaaa&cid=" ++ cid),
     );
     try std.testing.expectEqualStrings(
         "https://images.plyr.fm/images/a.png",

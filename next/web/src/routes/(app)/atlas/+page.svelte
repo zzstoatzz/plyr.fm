@@ -18,11 +18,17 @@
 	let starting = $state('');
 	let playbackError = $state('');
 	let tooltip = $state<{ x: number; y: number; name: string; detail: string }>();
+	let headerHeight = $state(0);
+	let underChrome = $state(0);
 	let pending: AbortController | undefined;
 	const summary = $derived(data ? atlasSummary(data) : '');
 	const moves = new Map<string, [number, number]>([
 		['ArrowLeft', [60, 0]], ['ArrowRight', [-60, 0]], ['ArrowUp', [0, 60]], ['ArrowDown', [0, -60]]
 	]);
+
+	$effect(() => {
+		if (data) map?.renderer.setInsets(headerHeight, underChrome + 64);
+	});
 
 	onMount(() => {
 		void refresh();
@@ -101,12 +107,8 @@
 
 <svelte:head><title>atlas · plyr.fm</title></svelte:head>
 
-<section class="page-content atlas">
-	<header>
-		<h1>atlas</h1>
-		<p id="atlas-help">the catalog, mapped by sound. zoom in and select a track to play it.</p>
-		{#if summary}<p class="summary">{summary}</p>{/if}
-	</header>
+<section class="atlas">
+	<div class="under" aria-hidden="true" bind:clientHeight={underChrome}></div>
 	<div class="stage">
 		<canvas bind:this={canvas} tabindex={data ? 0 : -1} aria-label="Catalog atlas" aria-describedby="atlas-help" onkeydown={keys}></canvas>
 		{#if !data}
@@ -125,20 +127,30 @@
 		{#if tooltip}<div class="tooltip" style:left={tooltip.x + 'px'} style:top={tooltip.y + 'px'}><strong>{tooltip.name}</strong><p>{tooltip.detail}</p></div>{/if}
 		{#if starting || playbackError}<p class="playback-status" role="status">{starting ? `starting ${starting}…` : playbackError}</p>{/if}
 	</div>
+	<header bind:clientHeight={headerHeight}>
+		<h1>atlas</h1>
+		<p id="atlas-help">the catalog, mapped by sound. zoom in and select a track to play it.</p>
+		{#if summary}<p class="summary">{summary}</p>{/if}
+	</header>
 </section>
 
 <style>
-	.atlas { display: grid; gap: 1rem; }
-	header { display: grid; gap: 0.25rem; }
-	header p, .tooltip p { color: var(--muted); }
-	.summary { font-size: var(--t-14); }
-	.stage { position: relative; min-height: min(30rem, 65dvh); height: calc(100dvh - 14rem); overflow: hidden; border: 1px solid var(--line); border-radius: 0.9rem; background: var(--surface); }
+	/* fills everything between the nav and the player; on phones it runs under the floating tabs and dock, so overlays lift by --under */
+	.atlas { --pad: clamp(1rem, 3vw, 2.25rem); --under: 0px; position: relative; height: calc(100dvh - var(--chrome-bottom, 0px)); overflow: hidden; background: var(--bg); }
+	.stage { position: absolute; inset: 0; }
+	.under { position: absolute; bottom: 0; height: var(--under); width: 1px; visibility: hidden; }
 	canvas { position: absolute; inset: 0; display: block; touch-action: none; }
 	canvas:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-	.zoom { position: absolute; right: 0.75rem; bottom: 0.75rem; display: flex; gap: 0.15rem; }
-	.zoom, .tooltip, .playback-status { border: 1px solid var(--line); border-radius: 0.65rem; background: var(--surface); }
+	header { position: absolute; top: 0; left: 0; display: grid; gap: 0.25rem; max-width: min(36rem, 100%); padding: max(var(--pad), env(safe-area-inset-top)) var(--pad) var(--pad); pointer-events: none; text-shadow: 0 0 0.5rem var(--bg), 0 0 1rem var(--bg), 0 0 1.5rem var(--bg); }
+	header p, .tooltip p { color: var(--muted); }
+	.summary { font-size: var(--t-14); }
+	.zoom { position: absolute; right: var(--pad); bottom: calc(var(--under) + var(--pad)); display: flex; gap: 0.15rem; }
+	.zoom, .tooltip, .playback-status { border: 1px solid var(--line); border-radius: 0.65rem; background: color-mix(in srgb, var(--surface) 82%, transparent); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
 	.zoom button { font-size: 1.35rem; }
 	.notice { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; }
 	.tooltip { position: absolute; width: min(244px, calc(100% - 16px)); padding: 0.55rem 0.65rem; overflow-wrap: anywhere; pointer-events: none; }
-	.playback-status { position: absolute; left: 0.65rem; bottom: 0.75rem; max-width: calc(100% - 8rem); padding: 0.4rem 0.65rem; pointer-events: none; }
+	.playback-status { position: absolute; left: var(--pad); bottom: calc(var(--under) + var(--pad)); max-width: calc(100% - 8rem - 2 * var(--pad)); padding: 0.4rem 0.65rem; pointer-events: none; }
+	@media (max-width: 720px) {
+		.atlas { --under: var(--chrome-bottom, 0px); height: 100dvh; margin-bottom: calc(-1 * var(--chrome-bottom, 0px)); }
+	}
 </style>

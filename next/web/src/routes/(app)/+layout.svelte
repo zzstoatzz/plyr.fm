@@ -321,8 +321,9 @@
 
 <style>
 	.keyboard-proxy { position: fixed; top: 0; left: 0; width: 1px; height: 1px; padding: 0; border: 0; opacity: 0; font-size: 16px; pointer-events: none; }
-	.frame { min-height: 100dvh; display: grid; grid-template-columns: var(--sidebar) minmax(0, 1fr); }
-	.frame.hasPlayer { padding-bottom: var(--dock); }
+	/* --chrome-bottom is the fixed chrome below the page (player dock, phone tabs); a page that fills the viewport sizes itself to 100dvh minus it. */
+	.frame { --chrome-bottom: 0px; min-height: 100dvh; display: grid; grid-template-columns: var(--sidebar) minmax(0, 1fr); padding-bottom: var(--chrome-bottom); }
+	.frame.hasPlayer { --chrome-bottom: var(--dock); }
 	:global(body:has(.frame.hasPlayer)) { --toast-dock: var(--dock); }
 	.frame.docked { grid-template-columns: var(--sidebar) minmax(0, 1fr) var(--queue); }
 	nav { position: sticky; top: 0; align-self: start; min-height: 100dvh; display: flex; flex-direction: column; gap: 0.125rem; padding: 0.9rem; background: var(--bg); border-right: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
@@ -373,8 +374,8 @@
 		aside { position: fixed; z-index: 8; right: 0; bottom: var(--dock); top: auto; height: auto; max-height: calc(100dvh - var(--dock)); width: min(var(--queue), calc(100vw - var(--sidebar))); box-shadow: 0 0 2rem rgb(0 0 0 / 0.15); }
 	}
 	@media (max-width: 720px) {
-		.frame, .frame.docked { display: block; padding-bottom: var(--tabs); }
-		.frame.hasPlayer { padding-bottom: calc(var(--tabs) + var(--dock)); }
+		.frame, .frame.docked { display: block; --chrome-bottom: var(--tabs); }
+		.frame.hasPlayer { --chrome-bottom: calc(var(--tabs) + var(--dock)); }
 		.brand-row, .nav-spacer, aside, nav .desktop-only { display: none; }
 		nav { z-index: 9; position: fixed; inset: auto 0.75rem var(--tab-gap); min-height: 0; height: 4rem; flex-direction: row; align-items: center; gap: 0; padding: 0 0.375rem; border: 1px solid color-mix(in srgb, var(--line) 80%, transparent); border-radius: 2rem; background: color-mix(in srgb, var(--surface) 72%, transparent); -webkit-backdrop-filter: blur(22px) saturate(1.7); backdrop-filter: blur(22px) saturate(1.7); box-shadow: 0 0.625rem 1.875rem rgb(0 0 0 / 0.18); }
 		nav :is(a, button) { flex: 1; min-width: 0; flex-direction: column; justify-content: center; gap: 0.125rem; height: 3.375rem; min-height: 0; padding: 0.125rem; border-radius: 1.6875rem; font: 600 var(--t-10-5)/1.2 system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }

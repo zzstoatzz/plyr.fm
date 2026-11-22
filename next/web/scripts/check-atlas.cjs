@@ -52,7 +52,15 @@ async function verify(browser, origin, width) {
     await page.getByText('1 track · 1 region · 1 cluster', { exact: true }).waitFor();
     const box = await canvas.boundingBox();
     assert.ok(box && box.width > 300 && box.height > 400);
-    const position = { x: box.width / 2, y: box.height / 2 };
+    // the fit keeps the catalog clear of the floating title and the bottom controls (and phone tabs/dock)
+    const [top, under] = await page.evaluate(() => [document.querySelector('.atlas header').clientHeight, document.querySelector('.atlas .under').clientHeight]);
+    const cap = px => Math.min(px, box.height / 3);
+    const position = { x: box.width / 2, y: box.height / 2 + (cap(top) - cap(under + 64)) / 2 };
+    const frame = await page.getByTestId('app-frame').boundingBox();
+    const nav = await page.getByRole('navigation', { name: 'Main navigation' }).boundingBox();
+    assert.ok(Math.abs(box.y) < 1, 'the atlas starts at the top of the page');
+    if (phone) assert.ok(Math.abs(box.width - width) < 1 && Math.abs(box.height - 844) < 1, 'phones get the whole screen under the floating chrome');
+    else assert.ok(Math.abs(box.x - (nav.x + nav.width)) < 1 && Math.abs(box.x + box.width - (frame.x + frame.width)) < 1, 'the atlas runs from the nav to the window edge');
     if (phone) {
       await canvas.tap({ position });
       await canvas.tap({ position });
