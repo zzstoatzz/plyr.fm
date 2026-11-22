@@ -109,8 +109,6 @@
                   <input class="people" id="{id}-sell" type="url" inputmode="url" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="https://you.bandcamp.com/track/…" value={options.sell.url} {disabled}
                     aria-invalid={!!sellIssue} aria-describedby={sellIssue ? `${id}-sell-problem` : undefined}
                     oninput={event => { options = { ...options, sell: { ...options.sell!, url: event.currentTarget.value } }; }} />
-                  <span class="money"><span aria-hidden="true">$</span><input aria-label="its price there, optional" aria-invalid={!!sellIssue && !!options.sell.price.trim()} inputmode="decimal" autocomplete="off" placeholder="price" value={options.sell.price} {disabled}
-                    oninput={event => { options = { ...options, sell: { ...options.sell!, price: event.currentTarget.value } }; }} /><small>USD</small></span>
                 </div>
                 <small>listeners get a buy button. a sale there doesn’t open it here.</small>
                 {#if sellIssue}<p class="problem" id="{id}-sell-problem" role="alert">{sellIssue}</p>{/if}
@@ -119,7 +117,7 @@
               <button type="button" class="remove" aria-label="remove where else you sell it" {disabled} onclick={() => { options = { ...options, sell: undefined }; }}><Icon name="x" size={18} /></button>
             </div>
           {:else}
-            <div class="adds"><button type="button" class="add" {disabled} onclick={() => { options = { ...options, sell: { url: '', price: '' } }; queueMicrotask(() => document.getElementById(`${id}-sell`)?.focus()); }}><Icon name="plus" size={15} />where else you sell it</button></div>
+            <div class="adds"><button type="button" class="add" {disabled} onclick={() => { options = { ...options, sell: { url: '' } }; queueMicrotask(() => document.getElementById(`${id}-sell`)?.focus()); }}><Icon name="plus" size={15} />where else you sell it</button></div>
           {/if}
           <label class="switch">
             <span><b>show in feeds</b><small>{options.listed ? 'in home, latest and top tracks.' : 'off: still on your profile and in search.'}</small></span>

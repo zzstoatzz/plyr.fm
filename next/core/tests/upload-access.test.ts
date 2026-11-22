@@ -169,11 +169,10 @@ test('the form keeps downloads on for plyr.fm storage and closes them by default
   assert.equal(downloadsFor({ closed: true, ways: [{ kind: 'supporter' }] }, 'supporters'), 'supporters');
   assert.deepEqual(downloadChoices({ closed: true, ways: [] }).map(choice => choice.value), ['supporters', 'off']);
   assert.equal(downloadsFor({ closed: false, ways: [] }, 'off', true), 'open');
-  assert.equal(sellProblem({ url: 'nope', price: '' })?.includes('full link'), true);
-  assert.equal(sellProblem({ url: 'me.bandcamp.com/x', price: 'lots' })?.includes('price'), true);
-  assert.deepEqual(buyLinkFor({ url: 'me.bandcamp.com/x', price: '' }), { url: 'https://me.bandcamp.com/x' });
-  assert.deepEqual(buyLinkFor({ url: 'https://me.bandcamp.com/x', price: '8' }), { url: 'https://me.bandcamp.com/x', amount: 800, currency: 'USD' });
-  assert.deepEqual(sellFromLink({ url: 'https://me.bandcamp.com/x', amount: 800, currency: 'USD' }), { url: 'https://me.bandcamp.com/x', price: '8' });
+  assert.equal(sellProblem({ url: 'nope' })?.includes('full link'), true);
+  assert.equal(sellProblem({ url: 'me.bandcamp.com/x' }), undefined);
+  assert.deepEqual(buyLinkFor({ url: 'me.bandcamp.com/x' }), { url: 'https://me.bandcamp.com/x' });
+  assert.deepEqual(sellFromLink({ url: 'https://me.bandcamp.com/x', amount: 800, currency: 'USD' }), { url: 'https://me.bandcamp.com/x' });
 });
 
 test('a buy link saved for an upload that fails before publishing is taken back', async () => {

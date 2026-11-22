@@ -137,31 +137,29 @@ export function downloadsFor(access: AccessDraft, picked: DownloadPolicy | undef
 }
 
 /** "where else you sell it": a link listeners can open; a sale there never opens the track here */
-export interface SellDraft { url: string; price: string }
+/** where else a track is sold: a link only. plyr.fm can't check a price there, so it asks for none. */
+export interface SellDraft { url: string }
 
-export function sellProblem(sell: SellDraft | undefined, currency = UPLOAD_CURRENCY): string | undefined {
+export function sellProblem(sell: SellDraft | undefined): string | undefined {
   if (!sell) return undefined;
   if (!normalizeLink(sell.url)) return 'use a full link, like https://you.bandcamp.com/track/name.';
-  if (sell.price.trim() && !parsePrice(sell.price, currency)) return 'enter a price, like 8 or 7.99, or leave it empty.';
   return undefined;
 }
 
-export function buyLinkFor(sell: SellDraft | undefined, currency = UPLOAD_CURRENCY): BuyLink | undefined {
-  if (!sell || sellProblem(sell, currency)) return undefined;
-  const amount = sell.price.trim() ? parsePrice(sell.price, currency) : undefined;
-  return { url: normalizeLink(sell.url)!, ...(amount ? { amount, currency } : {}) };
+export function buyLinkFor(sell: SellDraft | undefined): BuyLink | undefined {
+  if (!sell || sellProblem(sell)) return undefined;
+  return { url: normalizeLink(sell.url)! };
 }
 
 /** a saved draft's sell row, or none */
 export function readSellDraft(value: unknown): SellDraft | undefined {
   if (!value || typeof value !== 'object') return undefined;
-  const { url, price } = value as Record<string, unknown>;
-  return typeof url === 'string' && typeof price === 'string' ? { url, price } : undefined;
+  const { url } = value as Record<string, unknown>;
+  return typeof url === 'string' ? { url } : undefined;
 }
 
-export function sellFromLink(link: BuyLink | undefined, currency = UPLOAD_CURRENCY): SellDraft | undefined {
-  if (!link) return undefined;
-  return { url: link.url, price: link.amount && (link.currency ?? currency) === currency ? priceText(link.amount, currency) : '' };
+export function sellFromLink(link: BuyLink | undefined): SellDraft | undefined {
+  return link ? { url: link.url } : undefined;
 }
 
 /** the rest of who gets the track: downloads, feeds, and where else it's sold */
@@ -179,7 +177,7 @@ export function readUploadOptions(value: unknown): UploadOptions {
 /** what an upload sends for these options; an only-you track has none of them */
 export function optionsInput(options: UploadOptions, access: AccessDraft, plyrStorage: boolean, currency = UPLOAD_CURRENCY): { downloadPolicy?: DownloadPolicy; unlisted?: true; buyLink?: BuyLink } {
   if (onlyYou(access)) return {};
-  const buyLink = buyLinkFor(options.sell, currency);
+  const buyLink = buyLinkFor(options.sell);
   const downloadPolicy = options.downloads === undefined && !access.closed ? undefined : downloadsFor(access, options.downloads, plyrStorage);
   return { ...(downloadPolicy ? { downloadPolicy } : {}), ...(options.listed ? {} : { unlisted: true as const }), ...(buyLink ? { buyLink } : {}) };
 }

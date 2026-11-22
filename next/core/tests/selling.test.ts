@@ -19,8 +19,8 @@ test('stores read as the thing itself', () => {
   assert.equal(storeName('https://dawn.bandcamp.com/album/tide'), 'Bandcamp');
   assert.equal(storeName('https://www.ko-fi.com/dawn'), 'ko-fi');
   assert.equal(storeName('https://shop.example.org/x'), 'shop.example.org');
-  assert.equal(offerLabel({ url: 'https://dawn.bandcamp.com/x', amount: 800, currency: 'USD' }).endsWith('on Bandcamp'), true);
-  assert.match(offerLabel({ url: 'https://dawn.bandcamp.com/x', amount: 800, currency: 'USD' }), /8/);
+  // a price saved by an older build is never shown: plyr.fm can't check it
+  assert.equal(offerLabel({ url: 'https://dawn.bandcamp.com/x', amount: 800, currency: 'USD' } as never), 'on Bandcamp');
   assert.equal(offerLabel({ url: 'https://ko-fi.com/dawn' }), 'on ko-fi');
 });
 
