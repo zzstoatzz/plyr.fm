@@ -57,6 +57,9 @@ pub fn build(b: *std.Build) void {
     root_module.addAnonymousImport("migration_0048", .{
         .root_source_file = b.path("migrations/0048_add_moderation_log.sql"),
     });
+    root_module.addAnonymousImport("migration_0055_measured_durations", .{
+        .root_source_file = b.path("migrations/0055_add_track_measured_durations.sql"),
+    });
     root_module.addAnonymousImport("migration_0049", .{
         .root_source_file = b.path("migrations/0049_add_moderation_labels.sql"),
     });
