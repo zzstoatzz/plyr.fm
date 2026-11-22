@@ -34,6 +34,8 @@ class Player {
 	current = $derived(this.queue[this.index]);
 	playing = $state(false);
 	loading = $state(false);
+	#wantsPlay = $state(false); // a press asked for sound and none came yet; a queue load or restore alone does not count
+	get starting() { return this.#wantsPlay && !this.error && (this.loading || this.snapshot.waiting); }
 	/** the track's audio is still being copied to the streaming origin */
 	preparing = $state(false);
 	time = $state(0);
@@ -199,6 +201,7 @@ class Player {
 	}
 
 	play(track: Track, collection?: Track[], label?: string) {
+		this.#wantsPlay = true;
 		this.#startAt = undefined;
 		this.#audioElement();
 		if (this.#embedded) {
@@ -260,9 +263,9 @@ class Player {
 	}
 
 	#startLocal(tracks: Track[], at: number) {
-		this.queue = tracks;
-		this.index = at;
-		void this.#load(tracks, at).then(ready => { if (ready) this.#playMedia(); });
+		this.#wantsPlay = true;
+		[this.queue, this.index] = [tracks, at];
+		void this.#load(tracks, at).then(ready => { if (ready && this.#wantsPlay) this.#playMedia(); });
 	}
 
 	#resetOutput() {
@@ -457,7 +460,8 @@ class Player {
 		if (this.#jam?.toggle()) return;
 		if (this.liveStation) { this.setRadioListening(!this.liveListening); return; }
 		if (!this.current) return;
-		const pause = this.playing && !this.outputElsewhere;
+		const pause = this.playing && !this.outputElsewhere || this.starting;
+		this.#wantsPlay = !pause;
 		if (this.privateMode || this.#embedded) {
 			if (pause) this.#audio?.pause();
 			else if (this.#mediaTrack && this.#audio?.src) this.#playMedia();
@@ -625,7 +629,7 @@ class Player {
 		for (const event of ['timeupdate', 'durationchange', 'play', 'pause', 'playing', 'waiting', 'ended']) {
 			audio.addEventListener(event, observe);
 		}
-		audio.addEventListener('playing', () => { this.#seekToStart(); this.loading = false; this.error = undefined; this.#updateMediaStatus(); });
+		audio.addEventListener('playing', () => { this.#seekToStart(); this.#wantsPlay = false; this.loading = false; this.error = undefined; this.#updateMediaStatus(); });
 		audio.addEventListener('pause', () => { this.#updateMediaStatus(); });
 		audio.addEventListener('waiting', () => { if (!audio.paused) this.loading = true; });
 		audio.addEventListener('timeupdate', () => this.#setMediaPosition(audio));

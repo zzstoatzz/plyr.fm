@@ -9,7 +9,7 @@ import { PlayingArtworkOverlay } from './PlayingWave';
 import { GestureDetector } from 'react-native-gesture-handler';
 import { useTrackPress } from './TrackPress';
 import { useTrackPlayback, useTrackPlaybackState } from './playback-context';
-import { canToggleTrack } from '@plyr/next-core/track-revision';
+import { holdsCurrent, tracksContext } from '@plyr/next-core/play-context';
 import { shuffled } from '@plyr/next-core/queue-state';
 import { followingShelfSize } from '@plyr/next-core/following-latest';
 import { Cover, type Play } from './CatalogPieces';
@@ -59,7 +59,7 @@ export function PlayOneFromEach({ tracks, onPlay, compact }: { tracks: Track[]; 
   const player = useTrackPlaybackState();
   if (tracks.length < 2) return null;
   return <Pressable accessibilityRole="button" accessibilityLabel="play one from each"
-    onPress={() => { const order = shuffled(tracks, track => canToggleTrack(player.current, track, player.inJam)); onPlay(order[0], order, followingLabel); }} style={styles.each}>
+    onPress={() => { const order = shuffled(tracks, track => holdsCurrent(tracksContext([track]), player)); onPlay(order[0], order, followingLabel); }} style={styles.each}>
     {({ hovered, pressed }: { pressed: boolean; hovered?: boolean }) => compact
       ? <View style={[styles.round, { backgroundColor: pressed ? theme.hover : theme.raised }]}><Shuffle size={16} color={theme.text} /></View>
       : <>

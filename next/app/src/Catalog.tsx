@@ -6,7 +6,7 @@ import { useAuth } from './auth';
 import { getAuth } from './auth-state';
 import { privatePds } from './publishing/private-pds';
 import { PrivateTrackDelete } from './publishing/PrivateTrackDelete';
-import { canToggleTrack } from '@plyr/next-core/track-revision';
+import { tracksContext } from '@plyr/next-core/play-context';
 import { router, useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
@@ -24,6 +24,7 @@ import { TrackPresentation } from './TrackPresentation';
 import { TrackComments } from './TrackComments';
 import { PlayerControl } from './PlayerControl';
 import { usePlayback } from './playback';
+import { usePlayContext } from './playback-context';
 import { TrackLikes } from './TrackLikes';
 import { InlineLink, pageFrame, Copy } from './controls';
 import { ArtistProfile } from './ArtistProfile';
@@ -57,6 +58,7 @@ function TrackDetail({ id, onPlay, onEnqueue, trackActions }: {
     return pds ? (await pds.track(rkey)) ?? null : null;
   }, [id, rkey, pds]);
   const result = useResource(load);
+  const { state, pause: playing, press } = usePlayContext(tracksContext(result.data ? [result.data] : []));
   const loadPending = useCallback(async () => pds ? await pds.pending() : [], [pds]);
   const pending = useResource(loadPending);
   const loadCollection = useCallback(async () => pds ? (await pds.list()).tracks : [], [pds]);
@@ -69,15 +71,13 @@ function TrackDetail({ id, onPlay, onEnqueue, trackActions }: {
     return account.ready ? <Status error="couldn't find this track." /> : <Status loading />;
   }
   if (!track) return <Status loading={!result.error} error={result.gone ? "this track isn't on plyr.fm anymore. it may have been deleted." : result.error} retry={result.gone ? undefined : result.retry} />;
-  const active = canToggleTrack(player.current, track, !!player.jam);
-  const playing = active && player.status.playing;
   if (pds) {
     const loaded = collection.data ?? [];
     const queue = loaded.some(item => item.record.uri === track.record.uri) ? loaded : [track, ...loaded];
     const waiting = !!pending.data?.some(upload => upload.uri === track.record.uri);
     return <TrackPresentation track={track}
       controls={<PlayerControl primary large glow={playing} icon={playing ? PauseIcon : PlayIcon} label={playing ? 'Pause' : 'Play'}
-        busy={active ? player.loading : !collection.data && !collection.error} onPress={() => active ? player.setPlaying(!player.status.playing) : onPlay(track, queue)} />}
+        busy={state === 'starting' || state === 'idle' && !collection.data && !collection.error} onPress={() => press(() => onPlay(track, queue))} />}
       stats={<Copy>only you</Copy>}
       utilities={waiting
         ? <InlineLink href={{ pathname: '/upload', params: { visibility: 'only-you' } }}>finish upload</InlineLink>
@@ -94,8 +94,8 @@ function TrackDetail({ id, onPlay, onEnqueue, trackActions }: {
         <View style={{ flex: 1, alignItems: 'center' }}><TrackLikes compact track={track} /></View>
         <View style={{ flex: 1, alignItems: 'center' }}><PlayerControl primary large glow={playing} icon={playing ? PauseIcon : PlayIcon}
           label={playing ? 'Pause' : 'Play'}
-          busy={active && player.loading}
-          onPress={() => active ? player.setPlaying(!player.status.playing) : onPlay(track)} /></View>
+          busy={state === 'starting'}
+          onPress={() => press(() => onPlay(track))} /></View>
         <View style={{ flex: 1, alignItems: 'center' }}><PlayerControl icon={ListPlus} label="Add to queue" onPress={() => onEnqueue(track)} /></View>
       </>}
       stats={<TrackPlayCount track={track} />}
@@ -124,13 +124,11 @@ function Collection({ id, album, onPlay }: { id: string; album: boolean; onPlay:
   if (!list) return <Status loading={!result.error} error={result.error} retry={result.gone ? undefined : result.retry} />;
   const tracks = list.members.flatMap((member) => member.track ? [member.track] : []);
   const title = list.metadata.name ?? (album ? 'album' : 'playlist');
-  const active = tracks.some(track => canToggleTrack(player.current, track, !!player.jam));
   const missing = list.metrics.member_count - tracks.length;
   return <>
-    <CollectionHero list={list} tracks={tracks} title={title} playing={active && player.status.playing}
+    <CollectionHero list={list} tracks={tracks} title={title}
       offer={offerFor(seller, [list.record.uri])}
-      onPlay={(track, queue) => active && queue === tracks ? player.setPlaying(true) : onPlay(track, queue, title)}
-      onPause={() => player.setPlaying(false)}
+      onPlay={(track, queue) => onPlay(track, queue, title)}
       onEnqueue={() => player.enqueueAll(tracks, title)}
       onShare={() => void shareLink(`/${album ? 'album' : 'playlist'}/${encodeURIComponent(id)}`)} />
     {missing > 0 && <Copy>{!tracks.length

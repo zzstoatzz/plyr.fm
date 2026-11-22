@@ -3,7 +3,7 @@ import { MagnifyingGlass as SearchIcon, X, CaretRight as ChevronRight } from './
 import { useCallback, useEffect, useRef, useState, type ComponentRef } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { api } from './api-client';
-import { canToggleTrack } from '@plyr/next-core/track-revision';
+import { playState, showsPause, tracksContext } from '@plyr/next-core/play-context';
 import { PlayingWave } from './PlayingWave';
 import { type SearchHit } from '@plyr/next-core/api';
 import { Cover, Heading, Status, errorMessage, useResource, type Play } from './CatalogPieces';
@@ -68,9 +68,10 @@ export function Search({ onPlay }: { onPlay: Play }) {
   async function play(hit: SearchHit) {
     const attempt = ++request.current;
     setFailure(undefined);
-    if (canToggleTrack(player.current, hit, player.inJam)) {
+    const state = playState(tracksContext([hit]), player);
+    if (state !== 'idle') {
       setLoadingTrack(undefined);
-      player.setPlaying(!player.playing);
+      player.setPlaying(!showsPause(state));
       return;
     }
     setLoadingTrack(hit.id);
@@ -95,8 +96,9 @@ export function Search({ onPlay }: { onPlay: Play }) {
       <Status error={results.error} retry={results.retry} empty={results.data?.length === 0 ? `no results for “${term}”` : undefined} />
       <View testID="search-results">
         {results.data?.map(hit => {
-          const current = hit.type === 'track' && canToggleTrack(player.current, hit, player.inJam);
-          const playing = current && player.playing;
+          const state = hit.type === 'track' ? playState(tracksContext([hit]), player) : 'idle';
+          const current = state !== 'idle';
+          const playing = showsPause(state);
           const content = <>
             <Cover uri={hit.image_url} size={48} round={hit.type === 'artist'} />
             <View style={{ flex: 1, minWidth: 0, gap: 4 }}>

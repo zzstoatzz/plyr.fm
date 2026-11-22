@@ -3,11 +3,12 @@ import { Linking, Pressable, StyleSheet, View, useWindowDimensions } from 'react
 import type { ListDetail, Track } from '@plyr/next-core/api';
 import { collectionArtwork, trackArtwork } from '@plyr/next-core/artwork';
 import { useAppearance } from './appearance';
-import { BLEED, Chip, HeroBackdrop, Pill, Round, TOP, shuffled } from './HeroPieces';
+import { BLEED, Chip, HeroBackdrop, Pill, PlayPill, Round, TOP, shuffled } from './HeroPieces';
 import { Cover } from './CatalogPieces';
 import { catalogRuntime } from '@plyr/next-core/catalog/runtime';
 import { compactCount } from './home-state';
-import { ArrowSquareOut, ListPlus, Pause as PauseIcon, Play as PlayIcon, ShareNetwork, Shuffle } from './icons';
+import { ArrowSquareOut, ListPlus, ShareNetwork, Shuffle } from './icons';
+import { tracksContext } from '@plyr/next-core/play-context';
 import { offerLabel, type Offer } from '@plyr/next-core/selling';
 import { toast } from './toast';
 import { Text } from './Text';
@@ -21,9 +22,9 @@ function collage(list: ListDetail, tracks: Track[]) {
   return covers.length >= 4 ? covers.slice(0, 4) : null;
 }
 
-export function CollectionHero({ list, tracks, title, playing, offer, onPlay, onPause, onEnqueue, onShare }: {
-  list: ListDetail; tracks: Track[]; title: string; playing: boolean; offer?: Offer;
-  onPlay: (track: Track, queue: Track[]) => void; onPause: () => void; onEnqueue: () => void; onShare: () => void;
+export function CollectionHero({ list, tracks, title, offer, onPlay, onEnqueue, onShare }: {
+  list: ListDetail; tracks: Track[]; title: string; offer?: Offer;
+  onPlay: (track: Track, queue: Track[]) => void; onEnqueue: () => void; onShare: () => void;
 }) {
   const theme = useAppearance();
   const { width, fontScale } = useWindowDimensions();
@@ -66,9 +67,7 @@ export function CollectionHero({ list, tracks, title, playing, offer, onPlay, on
     </View>
 
     {tracks.length ? <View style={styles.controls}>
-      <Pill primary icon={playing ? <PauseIcon size={icon(18)} color={theme.onAccent} fill={theme.onAccent} /> : <PlayIcon size={icon(18)} color={theme.onAccent} fill={theme.onAccent} />}
-        label={playing ? 'Pause' : 'Play'} accessibilityLabel={`${playing ? 'Pause' : 'Play'} ${title}`}
-        onPress={() => playing ? onPause() : onPlay(tracks[0], tracks)} />
+      <PlayPill context={tracksContext(tracks)} name={title} iconSize={icon(18)} start={() => onPlay(tracks[0], tracks)} />
       <Pill icon={<ListPlus size={icon(19)} color={theme.text} />} label="Queue" accessibilityLabel={`Add ${title} to queue`} onPress={onEnqueue} />
       {tracks.length > 1 ? <Round label={`Shuffle ${title}`} onPress={() => { const order = shuffled(tracks); onPlay(order[0], order); }}>
         <Shuffle size={icon(20)} color={theme.text} />

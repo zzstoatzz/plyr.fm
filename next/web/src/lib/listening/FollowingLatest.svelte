@@ -3,10 +3,11 @@
   import { resolve } from '$app/paths';
   import type { Track } from '@plyr/next-core/api';
   import { trackArtwork } from '@plyr/next-core/artwork';
-  import { canToggleTrack } from '@plyr/next-core/track-revision';
+  import { showsPause, tracksContext } from '@plyr/next-core/play-context';
   import { shuffled } from '@plyr/next-core/queue-state';
   import { auth } from '$lib/auth';
   import { player } from '$lib/player.svelte';
+  import { contextState, pressContext } from '$lib/play-control.svelte';
   import { artistName, clock, trackHref } from '$lib/tracks';
   import Icon from '$lib/ui/Icon.svelte';
   import Artwork from '$lib/ui/Artwork.svelte';
@@ -58,11 +59,10 @@
     } catch {}
   }
   const label = 'new from people you know';
-  const current = (track: Track) => !player.liveStation && canToggleTrack(player.current, track, !!player.jam);
-  const playing = (track: Track) => current(track) && player.playing && !player.outputElsewhere;
+  const current = (track: Track) => contextState(tracksContext([track])) !== 'idle';
+  const playing = (track: Track) => showsPause(contextState(tracksContext([track])));
   function play(track: Track) {
-    if (current(track)) player.toggle();
-    else player.play(track, tracks, label);
+    pressContext(tracksContext([track]), () => player.play(track, tracks, label));
   }
   function shuffle() {
     const order = shuffled(tracks, track => current(track));

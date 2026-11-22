@@ -4,12 +4,13 @@ import { Linking, Pressable, StyleSheet, View, useWindowDimensions } from 'react
 import type { Artist, ArtistMetrics, Track } from '@plyr/next-core/api';
 import { trackArtwork } from '@plyr/next-core/artwork';
 import { useAppearance } from './appearance';
-import { BLEED, Chip, HeroBackdrop, Pill, Round, TOP, shuffled } from './HeroPieces';
+import { BLEED, Chip, HeroBackdrop, Pill, PlayPill, Round, TOP, shuffled } from './HeroPieces';
+import { artistContext } from '@plyr/next-core/play-context';
 import { Cover } from './CatalogPieces';
 import { ListeningNowStatus } from './ListeningNow';
 import { catalogRuntime } from '@plyr/next-core/catalog/runtime';
 import { compactCount } from './home-state';
-import { CaretRight, Heart, PencilSimple, Play as PlayIcon, ShareNetwork, Shuffle } from './icons';
+import { CaretRight, Heart, PencilSimple, ShareNetwork, Shuffle } from './icons';
 import { Text } from './Text';
 import { toast } from './toast';
 
@@ -54,8 +55,7 @@ export function ArtistHero({ artist, tracks, metrics, owner, onPlay, onShare, fo
     </View> : null}
 
     <View style={styles.controls}>
-      {tracks[0] ? <Pill primary icon={<PlayIcon size={icon(18)} color={theme.onAccent} fill={theme.onAccent} />} label="Play"
-        accessibilityLabel={`Play ${name}`} onPress={() => onPlay(tracks[0], tracks)} /> : null}
+      {tracks[0] ? <PlayPill context={artistContext(artist.did)} name={name} iconSize={icon(18)} start={() => onPlay(tracks[0], tracks)} /> : null}
       {tracks.length > 1 ? <Pill icon={<Shuffle size={icon(19)} color={theme.text} />} label="Shuffle"
         accessibilityLabel={`Shuffle ${name}`} onPress={() => { const order = shuffled(tracks); onPlay(order[0], order); }} /> : null}
       {owner ? <Round label="Edit profile" href="/edit-profile"><PencilSimple size={icon(20)} color={theme.text} /></Round> : null}

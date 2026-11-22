@@ -7,6 +7,8 @@
 	import { trackArtwork } from '@plyr/next-core/artwork';
 	import { auth } from './auth';
 	import { player } from './player.svelte';
+	import { tracksContext } from '@plyr/next-core/play-context';
+	import PlayButton from './ui/PlayButton.svelte';
 	import Artwork from './ui/Artwork.svelte';
 	import CollectionArtwork from './collections/CollectionArtwork.svelte';
 	import Icon from './ui/Icon.svelte';
@@ -57,10 +59,6 @@
 	}
 	const title = $derived(list.metadata.name || (list.object === 'album' ? 'untitled album' : 'untitled playlist'));
 	const tracks = $derived(list.members.flatMap(member => member.track ? [member.track] : []));
-	const active = $derived(player.canEditPublicQueue && tracks.some(track =>
-		track.record.uri === player.current?.record.uri && track.record.cid === player.current.record.cid
-	));
-	const playing = $derived(active && player.playing && !player.outputElsewhere);
 	const seconds = $derived(tracks.reduce((total, track) => total + (track.metadata.duration_seconds ?? 0), 0));
 	const year = $derived(list.object === 'album' ? new Date(list.metadata.created_at).getFullYear() : NaN);
 	const owner = $derived(list.owner.profile);
@@ -74,10 +72,6 @@
 			if (navigator.share) await navigator.share({ title, url: location.href });
 			else { await navigator.clipboard.writeText(location.href); copied = true; }
 		} catch {}
-	}
-	function playAll() {
-		if (active) player.toggle();
-		else if (tracks[0]) player.play(tracks[0], tracks, title);
 	}
 	function shuffle() {
 		const order = [...tracks];
@@ -119,7 +113,7 @@
 				{#if list.metrics.member_count > tracks.length}<span class="hero-chip">{list.metrics.member_count - tracks.length} unavailable</span>{/if}
 			</div>
 			<div class="actions">
-				<button type="button" class="hero-pill primary" aria-label={`${playing ? 'Pause' : 'Play'} ${title}`} disabled={!tracks.length || active && !playing && player.snapshot.waiting} onclick={playAll}><Icon name={playing ? 'pause' : 'play'} /> {playing ? 'Pause' : 'Play'}</button>
+				<PlayButton class="hero-pill primary" text name={title} context={tracksContext(tracks)} disabled={!tracks.length} start={() => player.play(tracks[0], tracks, title)} />
 				{#if offer}<a class="hero-pill buy" href={offer.url} target="_blank" rel="noopener noreferrer" aria-label={`Buy ${title}, ${offerLabel(offer)} (opens in a new tab)`}><Icon name="external" /> <span>buy · {offerLabel(offer)}</span></a>{/if}
 				<button type="button" class="hero-pill" aria-label={`Add ${title} to queue`} disabled={!tracks.length || !player.canEditPublicQueue} title={!player.canEditPublicQueue ? "play a public track to change queues" : undefined} onclick={addToQueue}><Icon name="queue" /> <span class="long">Add to queue</span><span class="short">Queue</span></button>
 				{#if tracks.length > 1}<button type="button" class="hero-round" aria-label={`Shuffle ${title}`} onclick={shuffle}><Icon name="shuffle" /></button>{/if}

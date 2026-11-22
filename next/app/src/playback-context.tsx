@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import type { useAudioPlayerStatus } from 'expo-audio';
 import type { Track } from '@plyr/next-core/api';
-import { canToggleTrack } from '@plyr/next-core/track-revision';
+import { playState, pressPlay, showsPause, tracksContext, type PlayContext } from '@plyr/next-core/play-context';
 import type { JamIntent } from '@plyr/next-core/jam-connection';
 import type { RadioStation } from '@plyr/next-core/radio';
 import type { ActiveJam } from '@plyr/next-core/jam-playback';
@@ -59,17 +59,20 @@ const PlaybackContext = createContext<Playback | null>(null);
 const TrackPlaybackContext = createContext<{
   current: Track | undefined;
   playing: boolean;
+  starting: boolean;
+  station: string | undefined;
   inJam: boolean;
   setPlaying: Playback['setPlaying'];
 } | null>(null);
 
 export function PlaybackScope({ value, children }: { value: Playback; children: ReactNode }) {
-  const { current, status: { playing } } = value;
+  const { current, status: { playing }, loading: starting } = value;
+  const station = value.live?.station.slug;
   const inJam = !!value.jam;
   const latestSetPlaying = useRef(value.setPlaying);
   useLayoutEffect(() => { latestSetPlaying.current = value.setPlaying; }, [value.setPlaying]);
   const setPlaying = useCallback((playing: boolean) => latestSetPlaying.current(playing), []);
-  const trackPlayback = useMemo(() => ({ current, playing, inJam, setPlaying }), [current, playing, inJam, setPlaying]);
+  const trackPlayback = useMemo(() => ({ current, playing, starting, station, inJam, setPlaying }), [current, playing, starting, station, inJam, setPlaying]);
   return <PlaybackContext.Provider value={value}>
     <TrackPlaybackContext.Provider value={trackPlayback}>{children}</TrackPlaybackContext.Provider>
   </PlaybackContext.Provider>;
@@ -81,15 +84,22 @@ export function useTrackPlaybackState() {
   return value;
 }
 
-export function useTrackPlayback(track: Track) {
+/** Every play affordance goes through here: the context on air pauses or resumes, anything else starts. */
+export function usePlayContext(context: PlayContext) {
   const player = useTrackPlaybackState();
-  const current = canToggleTrack(player.current, track, player.inJam);
-  const playing = current && player.playing;
+  const state = playState(context, player);
+  const pause = showsPause(state);
   return {
-    current,
-    playing,
-    toggle: (start: () => void) => current ? player.setPlaying(!playing) : start()
+    state,
+    /** show pause: this context is playing, or its start is in flight */
+    pause,
+    press: (start: () => void) => pressPlay(state, { toggle: () => player.setPlaying(!pause), start }),
   };
+}
+
+export function useTrackPlayback(track: Track) {
+  const { state, pause, press } = usePlayContext(tracksContext([track]));
+  return { current: state !== 'idle', playing: pause, toggle: press };
 }
 
 export function usePlayback(): Playback {

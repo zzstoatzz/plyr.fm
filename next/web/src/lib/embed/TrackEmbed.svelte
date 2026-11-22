@@ -1,8 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import type { Track } from '@plyr/next-core/api';
-  import { canToggleTrack } from '@plyr/next-core/track-revision';
+  import { showsPause, tracksContext } from '@plyr/next-core/play-context';
   import { player } from '$lib/player.svelte';
+  import { contextState, pressContext } from '$lib/play-control.svelte';
   import Scrub from '$lib/Scrub.svelte';
   import { artistName, trackHref } from '$lib/tracks';
   import Artwork from '$lib/ui/Artwork.svelte';
@@ -10,9 +11,11 @@
   import { canEmbed, embedArtwork } from './catalog';
 
   let { track, autoplay }: { track: Track; autoplay: boolean } = $props();
-  let active = $derived(canToggleTrack(player.current, track));
+  let context = $derived(tracksContext([track]));
+  let playState = $derived(contextState(context));
+  let active = $derived(playState !== 'idle');
   let allowed = $derived(canEmbed(track));
-  let playing = $derived(active && player.playing);
+  let playing = $derived(showsPause(playState));
   let problem = $derived(active && player.error);
 
   onMount(() => {
@@ -23,8 +26,8 @@
 
   function toggle() {
     if (!allowed) return;
-    if (active && !problem) player.toggle();
-    else player.play(track);
+    if (problem) player.play(track);
+    else pressContext(context, () => player.play(track));
   }
 </script>
 

@@ -10,6 +10,8 @@
 	import { api } from '$lib/api';
 	import { auth } from '$lib/auth';
 	import { player } from '$lib/player.svelte';
+	import { artistContext } from '@plyr/next-core/play-context';
+	import PlayButton from '$lib/ui/PlayButton.svelte';
 	import TrackRow from '$lib/TrackRow.svelte';
 	import Artwork from '$lib/ui/Artwork.svelte';
 	import { trackArtwork } from '@plyr/next-core/artwork';
@@ -148,7 +150,7 @@
 			{/await}
 			<div class="actions">
 				{#if views.tracks.data[0]}
-					<button class="hero-pill primary" type="button" aria-label={`Play ${name}`} onclick={() => player.play(views.tracks.data[0], views.tracks.data, name)}><Icon name="play" /> Play</button>
+					<PlayButton class="hero-pill primary" text {name} context={artistContext(artist.did)} start={() => player.play(views.tracks.data[0], views.tracks.data, name)} />
 					{#if views.tracks.data.length > 1}<button class="hero-pill" type="button" aria-label={`Shuffle ${name}`} onclick={shuffle}><Icon name="shuffle" /> Shuffle</button>{/if}
 				{/if}
 				{#if owner}<a class="hero-round" href={resolve('/(app)/edit-profile')} aria-label="edit profile"><Icon name="edit" /></a>{/if}
@@ -282,7 +284,7 @@
 		h1 { font-size: 1.85rem; }
 		.chips { justify-content: center; }
 		.actions { display: flex; flex-wrap: wrap; width: 100%; }
-		.actions .hero-pill { flex: 1 1 auto; }
+		.actions :global(.hero-pill) { flex: 1 1 auto; }
 		.cards { grid-template-columns: minmax(0, 1fr); }
 		.wash { height: 30rem; }
 	}

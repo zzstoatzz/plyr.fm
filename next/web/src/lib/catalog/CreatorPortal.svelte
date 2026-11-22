@@ -17,6 +17,8 @@
   import Loading from '$lib/ui/Loading.svelte';
   import DeleteTrackSheet from './DeleteTrackSheet.svelte';
   import { loadAlbums, loadPrivateTracks, loadProfile, loadTracks, portalFor } from './portal';
+  import { tracksContext } from '@plyr/next-core/play-context';
+  import PlayButton from '$lib/ui/PlayButton.svelte';
 
   type Account = ReturnType<typeof auth.getAuth> & { did: string };
   let { account }: { account: Account } = $props();
@@ -329,7 +331,7 @@
         <div class="card top">
           <a class="thumb" href={trackHref(top)} tabindex="-1" aria-hidden="true"><Artwork src={trackArtwork(top)} size={56} /></a>
           <span class="names"><a href={trackHref(top)}>{top.metadata.title}</a><small>{count(top.metrics.play_count, 'play')} · {count(top.metrics.like_count, 'like')}</small></span>
-          <button class="play" type="button" aria-label={`play ${top.metadata.title}`} onclick={() => player.play(top, [top], name)}><Icon name="play" size={16} /></button>
+          <PlayButton class="play" size={16} name={top.metadata.title} context={tracksContext([top])} start={() => player.play(top, [top], name)} />
         </div>
       {/if}
       {#if albums?.length}
@@ -436,7 +438,7 @@
   .card { border: 1px solid var(--line); border-radius: 0.9rem; background: var(--surface); padding: 0.65rem; margin: 0 0 1.25rem; }
   .top { display: flex; align-items: center; gap: 0.7rem; }
   .top .thumb { width: 3.5rem; flex-basis: 3.5rem; }
-  .play { display: grid; place-items: center; width: 2.4rem; height: 2.4rem; flex: none; border: 0; border-radius: 50%; background: var(--accent); color: var(--on-accent); }
+  .top :global(.play) { display: grid; place-items: center; width: 2.4rem; height: 2.4rem; flex: none; border: 0; border-radius: 50%; background: var(--accent); color: var(--on-accent); }
   .list { list-style: none; padding-block: 0.3rem; }
   .list a { display: flex; align-items: center; gap: 0.65rem; padding: 0.35rem 0; color: var(--text); }
   .list a:hover { text-decoration: none; }

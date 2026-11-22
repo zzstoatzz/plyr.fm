@@ -25,6 +25,7 @@ on:
       - "next/vendor/**"
       - "next/scripts/check-boundaries.mjs"
       - "next/scripts/check-type-scale.mjs"
+      - "next/scripts/check-play-controls.mjs"
       - ".github/workflows/check-svelte-next.yml"
   # a merge to main ships next web live, like the next api; next has no users to protect
   push:
@@ -37,6 +38,7 @@ on:
       - "next/vendor/**"
       - "next/scripts/check-boundaries.mjs"
       - "next/scripts/check-type-scale.mjs"
+      - "next/scripts/check-play-controls.mjs"
       - ".github/workflows/check-svelte-next.yml"
 
 permissions:
@@ -64,7 +66,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
         working-directory: next
-      - run: bun run check:boundaries && bun run check:type-scale
+      - run: bun run check:boundaries && bun run check:type-scale && bun run check:play-controls
         working-directory: next
       - run: bun run check && bun run test
         working-directory: next/core

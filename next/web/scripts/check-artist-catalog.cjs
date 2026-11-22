@@ -108,6 +108,15 @@ async function verify(browser, origin, width, scheme) {
     await page.getByRole('button', { name: `Play ${artistName}`, exact: true }).click();
     await page.waitForFunction(() => window.createdAudio.some(audio => audio.currentTime > 0 && !audio.paused));
     await page.evaluate(() => { window.catalogAudio = window.createdAudio.find(audio => !audio.paused); });
+    // the artist's own Play knows the artist is on: it reads Pause, pauses, and resumes the same audio
+    const heroPause = page.getByRole('button', { name: `Pause ${artistName}`, exact: true });
+    await heroPause.waitFor();
+    assert.equal(await heroPause.getAttribute('data-play-state'), 'playing');
+    await heroPause.click();
+    await page.waitForFunction(() => window.catalogAudio.paused);
+    await page.getByRole('button', { name: `Play ${artistName}`, exact: true }).click();
+    await page.waitForFunction(() => !window.catalogAudio.paused);
+    await heroPause.waitFor();
     const continuity = async () => {
       const position = await page.evaluate(() => window.catalogAudio.currentTime);
       await page.waitForFunction(before => window.catalogAudio.currentTime > before && !window.catalogAudio.paused, position);

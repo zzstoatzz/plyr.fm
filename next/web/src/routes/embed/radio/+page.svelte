@@ -5,6 +5,8 @@
   import type { RadioFeedState } from '@plyr/next-core/radio-feed';
   import { feeds, tuneRadio } from '$lib/radio/station';
   import { player } from '$lib/player.svelte';
+  import { showsPause, stationContext } from '@plyr/next-core/play-context';
+  import { contextState, pressContext } from '$lib/play-control.svelte';
   import Artwork from '$lib/ui/Artwork.svelte';
   import Icon from '$lib/ui/Icon.svelte';
 
@@ -12,7 +14,7 @@
   let feedState = $state.raw<RadioFeedState>();
   let active = $state(false);
   let song = $derived(feedState?.snapshot?.currentSong);
-  let playing = $derived(player.liveStation === station && player.liveListening);
+  let playing = $derived(showsPause(contextState(stationContext(station.slug))));
 
   onMount(() => {
     active = true;
@@ -38,8 +40,7 @@
   });
 
   function toggle() {
-    if (player.liveStation === station) player.toggle();
-    else tuneRadio(station);
+    pressContext(stationContext(station.slug), () => tuneRadio(station));
   }
 </script>
 
