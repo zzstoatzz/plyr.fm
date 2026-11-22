@@ -117,8 +117,8 @@
 	.explore { display: grid; gap: 1.75rem; margin-top: 1.45rem; min-width: 0; }
 	section { min-width: 0; }
 	header { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.65rem; }
-	h2 { font-size: 1.12rem; letter-spacing: -0.02em; }
-	header span, small { color: var(--muted); font-size: 0.85rem; }
+	h2 { font-size: var(--t-18); letter-spacing: -0.02em; }
+	header span, small { color: var(--muted); font-size: var(--t-13-6); }
 	ul { list-style: none; padding: 0; margin: 0; }
 	.covers, .people { display: grid; gap: 0.85rem; grid-template-columns: repeat(4, minmax(0, 1fr)); }
 	.people { grid-template-columns: repeat(6, minmax(0, 1fr)); }
@@ -126,7 +126,7 @@
 	.tile-art { display: block; overflow: hidden; border-radius: 0.7rem; outline: 1px solid var(--line); outline-offset: -1px; margin-bottom: 0.25rem; }
 	.people .tile-art { width: min(100%, 5.5rem); border-radius: 50%; }
 	strong, small { display: block; overflow-wrap: anywhere; }
-	strong { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 0.94rem; line-height: 1.25; font-weight: 650; }
+	strong { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: var(--t-15); line-height: 1.25; font-weight: 650; }
 	small { line-height: 1.3; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 	.recent { display: flex; flex-wrap: wrap; gap: 0.45rem; }
 	.recent a { display: flex; align-items: center; gap: 0.4rem; min-height: 2.75rem; padding-inline: 0.7rem; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); }

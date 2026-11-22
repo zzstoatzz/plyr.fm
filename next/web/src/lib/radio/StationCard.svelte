@@ -43,7 +43,7 @@
   strong { display: flex; align-items: center; gap: 0.35rem; }
   .dot { width: 0.4rem; height: 0.4rem; border-radius: 50%; background: var(--faint); }
   .dot.on { background: var(--accent); }
-  .subtle { font-size: 0.82rem; }
+  .subtle { font-size: var(--t-12-8); }
   .featured { grid-column: 1 / -1; grid-template-columns: max(7rem, min(23%, 11rem)) minmax(0, 1fr); align-items: center; gap: 1rem; border: 1px solid var(--line); background: var(--surface); overflow: hidden; }
   .featured .cover { border-radius: 0; }
   .featured .info { padding-inline-end: 0.45rem; }

@@ -51,7 +51,7 @@
   .body { display: flex; gap: 0.6rem; align-items: center; padding: 0.65rem; min-width: 0; }
   .meta { display: grid; gap: 0.25rem; flex: 1; min-width: 0; }
   .title { font-weight: 700; }
-  .meta > span, .brand { font-size: 0.78rem; }
+  .meta > span, .brand { font-size: var(--t-12-8); }
   .brand { align-self: end; white-space: nowrap; }
   .play { flex: none; }
   @media (orientation: portrait) and (min-height: 200px) {

@@ -35,20 +35,20 @@
 </div>
 
 <style>
-  .problem { color: light-dark(#a3271f, #ff8f87); font-size: 0.9rem; }
+  .problem { color: light-dark(#a3271f, #ff8f87); font-size: var(--t-14-4); }
   .subtle { color: var(--muted); }
-  .note { margin: 0; font-size: 0.85rem; line-height: 1.4; }
+  .note { margin: 0; font-size: var(--t-13-6); line-height: 1.4; }
   .details { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
   .card { display: grid; gap: 1rem; align-content: start; padding: 1.1rem; background: var(--surface); border: 1px solid var(--line); border-radius: 0.9rem; }
   .field { display: grid; gap: 0.4rem; }
-  .field > span { font-size: 0.8rem; font-weight: 700; color: var(--faint); letter-spacing: 0.04em; }
+  .field > span { font-size: var(--t-12-8); font-weight: 700; color: var(--faint); letter-spacing: 0.04em; }
   .field :is(input, textarea) { width: 100%; min-width: 0; padding: 0.65rem 0.8rem; border: 1px solid var(--line); border-radius: 0.65rem; background: var(--bg); color: inherit; line-height: 1.4; }
   .field textarea { resize: vertical; }
   .field :is(input, textarea):focus { outline: 2px solid var(--accent); outline-offset: 1px; }
-  .count { font-size: 0.8rem; text-align: right; }
+  .count { font-size: var(--t-12-8); text-align: right; }
   .switch { display: flex; align-items: center; justify-content: space-between; gap: 1rem; cursor: pointer; }
   .switch span { display: grid; gap: 0.15rem; }
-  .switch small { color: var(--muted); font-size: 0.85rem; line-height: 1.35; }
+  .switch small { color: var(--muted); font-size: var(--t-13-6); line-height: 1.35; }
   .switch input { appearance: none; flex: none; position: relative; width: 2.6rem; height: 1.5rem; margin: 0; border-radius: 999px; background: var(--hover); cursor: pointer; transition: background 0.15s; }
   .switch input::after { content: ''; position: absolute; left: 0.2rem; top: 0.2rem; width: 1.1rem; height: 1.1rem; border-radius: 50%; background: var(--faint); transition: transform 0.15s; }
   .switch input:checked { background: var(--accent); }

@@ -59,5 +59,5 @@
   .radio-card { width: min(calc(100% - 1rem), 21.5rem); display: flex; align-items: center; gap: 0.55rem; margin: 0.5rem; padding: 0.5rem; background: var(--bg); border-radius: 0.75rem; }
   .cover { flex: 0 0 3rem; border-radius: 0.35rem; }
   .meta { display: grid; gap: 0.1rem; flex: 1; min-width: 0; }
-  .meta span { font-size: 0.78rem; }
+  .meta span { font-size: var(--t-12-8); }
 </style>

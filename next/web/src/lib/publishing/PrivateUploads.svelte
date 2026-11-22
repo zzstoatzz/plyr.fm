@@ -116,7 +116,7 @@
 
 <style>
 	.recovery { background: var(--surface); border: 1px solid var(--line); padding: 1.1rem; border-radius: 0.9rem; }
-	h2 { font-size: 1rem; overflow-wrap: anywhere; }
-	h2 small { margin-left: 0.4rem; color: var(--faint); font-size: 0.8rem; font-weight: 600; }
+	h2 { font-size: var(--t-16); overflow-wrap: anywhere; }
+	h2 small { margin-left: 0.4rem; color: var(--faint); font-size: var(--t-12-8); font-weight: 600; }
 	.subtle { color: var(--muted); }
 </style>

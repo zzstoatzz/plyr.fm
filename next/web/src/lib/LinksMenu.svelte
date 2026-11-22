@@ -59,12 +59,12 @@
 	dialog::backdrop { background: rgb(0 0 0 / 0.35); }
 	header, nav a { display: flex; align-items: center; }
 	header { justify-content: space-between; padding-left: 0.65rem; }
-	h2 { font-size: 1rem; }
+	h2 { font-size: var(--t-16); }
 	nav :is(a, button) { display: flex; align-items: center; width: 100%; border: 0; background: none; text-align: start; font: inherit; color: inherit; cursor: pointer; }
 	nav a, nav button { min-height: 2.75rem; gap: 0.85rem; padding: 0.55rem 0.65rem; border-radius: 0.65rem; }
 	nav :is(a, button):hover { background: var(--raised); text-decoration: none; }
 	small { display: block; color: var(--muted); }
-	.totals { padding: 0.7rem 0.65rem 0.3rem; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.86rem; }
+	.totals { padding: 0.7rem 0.65rem 0.3rem; border-top: 1px solid var(--line); color: var(--muted); font-size: var(--t-13-6); }
 	@media (max-width: 720px), (hover: none) { .keys { display: none !important; } }
 	/* the desktop sidebar lists these itself */
 	@media (min-width: 721px) { .in-nav { display: none !important; } }

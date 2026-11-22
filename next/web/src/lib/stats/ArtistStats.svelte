@@ -122,8 +122,8 @@
 	h2 { font-size: 1.2rem; margin-bottom: 0.8rem; }
 	.find, .artist-result { background: var(--surface); border: 1px solid var(--line); border-radius: 1rem; }
 	.find { padding: 1rem; }
-	label { display: block; margin-bottom: 0.4rem; color: var(--muted); font-size: 0.875rem; }
-	#stat-artist-help { margin-top: 0.45rem; color: var(--muted); font-size: 0.8rem; }
+	label { display: block; margin-bottom: 0.4rem; color: var(--muted); font-size: var(--t-14); }
+	#stat-artist-help { margin-top: 0.45rem; color: var(--muted); font-size: var(--t-12-8); }
 	.search-field { position: relative; }
 	.search-field > span { position: absolute; inset-inline-start: 0.75rem; inset-block: 0; display: grid; place-items: center; color: var(--muted); pointer-events: none; }
 	input { display: block; width: 100%; min-height: 2.75rem; padding: 0.55rem 0.75rem 0.55rem 2.4rem; background: var(--bg); border: 1px solid var(--line); border-radius: 0.6rem; }
@@ -144,7 +144,7 @@
 	dl div:first-child { background: color-mix(in srgb, var(--accent) 9%, var(--surface)); border-end-end-radius: 0; }
 	dl div:nth-child(2) { border-radius: 0; }
 	dl div:last-child { border-end-start-radius: 0; }
-	dt { color: var(--muted); font-size: 0.82rem; }
+	dt { color: var(--muted); font-size: var(--t-12-8); }
 	dd { margin: 0; line-height: 1.1; font-weight: 700; font-size: clamp(1.25rem, 4.5vw, 2rem); letter-spacing: -0.045em; font-variant-numeric: tabular-nums; }
 	dl div:first-child dd { color: var(--accent); }
 	@container (max-width: 17rem) {

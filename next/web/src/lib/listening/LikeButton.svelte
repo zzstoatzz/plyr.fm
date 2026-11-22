@@ -32,5 +32,5 @@
 <style>
   .like-control { position: relative; display: inline-flex; flex: none; }
   .liked { color: var(--accent); }
-  .state { position: absolute; z-index: 5; top: 100%; right: 0; width: min(18rem, calc(100vw - 2rem)); background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 0.6rem; padding: 0.6rem; font-size: 0.875rem; }
+  .state { position: absolute; z-index: 5; top: 100%; right: 0; width: min(18rem, calc(100vw - 2rem)); background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 0.6rem; padding: 0.6rem; font-size: var(--t-14); }
 </style>

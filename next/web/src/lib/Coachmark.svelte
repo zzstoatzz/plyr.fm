@@ -7,6 +7,6 @@
 <div class="coachmark" role="status" data-testid={testid}><span>{@render children()}</span><button type="button" class="text-button" onclick={dismiss}>got it</button></div>
 
 <style>
-	.coachmark { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; padding-inline: 0.6rem; color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: 0.7rem; font-size: 0.85rem; }
+	.coachmark { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; padding-inline: 0.6rem; color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: 0.7rem; font-size: var(--t-13-6); }
 	.coachmark button { flex: none; color: var(--accent); }
 </style>

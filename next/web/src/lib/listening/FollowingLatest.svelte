@@ -95,8 +95,8 @@
 <style>
   .following { grid-area: following; min-width: 0; }
   header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.65rem; min-height: 2.75rem; }
-  h2 { font-size: 1.07rem; margin-right: auto; }
-  .each { display: inline-flex; align-items: center; gap: 0.4rem; color: var(--muted); font-size: 0.8rem; padding-inline: 0; }
+  h2 { font-size: var(--t-16-8); margin-right: auto; }
+  .each { display: inline-flex; align-items: center; gap: 0.4rem; color: var(--muted); font-size: var(--t-12-8); padding-inline: 0; }
   .each:hover { color: var(--text); }
   .pager { display: flex; color: var(--muted); }
   .pager button:disabled { opacity: 0.35; }
@@ -115,9 +115,9 @@
   .copy a { position: relative; z-index: 2; max-width: 100%; }
   .title { font-weight: 650; justify-self: start; }
   .current .title { color: var(--accent); }
-  .meta { font-size: 0.875rem; color: var(--faint); }
+  .meta { font-size: var(--t-14); color: var(--faint); }
   .who { color: var(--muted); }
-  .duration { color: var(--faint); font-size: 0.78rem; font-variant-numeric: tabular-nums; }
+  .duration { color: var(--faint); font-size: var(--t-12-8); font-variant-numeric: tabular-nums; }
   @media (hover: none), (max-width: 720px) { .pager { display: none; } }
   @media (max-width: 900px) {
     /* exactly the top tracks shelf below it: same card width, height, padding, cover and type */

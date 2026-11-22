@@ -24,7 +24,7 @@
 		padding: var(--s-lg);
 	}
 	.label {
-		font-size: var(--t-sm);
+		font-size: var(--t-14);
 		color: var(--c-600);
 		letter-spacing: 0.01em;
 		animation: wave-in 0.4s 0.3s ease-out both;

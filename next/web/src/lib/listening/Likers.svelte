@@ -89,10 +89,10 @@
   .likers:hover, .likers[aria-expanded=true] { color: var(--text); }
   .people { position: fixed; inset: auto; margin: 0; width: min(17rem, calc(100vw - 1rem)); max-height: min(25rem, calc(100dvh - 1rem)); overflow-y: auto; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 0.8rem; padding: 0.6rem; box-shadow: 0 0.4rem 1.4rem rgb(0 0 0 / 0.13); }
   header, a { display: flex; align-items: center; justify-content: space-between; }
-  header { padding-left: 0.4rem; font-size: 0.875rem; }
+  header { padding-left: 0.4rem; font-size: var(--t-14); }
   a { justify-content: start; gap: 0.6rem; min-height: 2.75rem; border-radius: 0.5rem; padding: 0.35rem; }
   a:hover { background: var(--raised); text-decoration: none; }
   .avatar { width: 2rem; border-radius: 50%; flex: none; }
-  p { padding: 0.4rem; color: var(--muted); font-size: 0.875rem; }
+  p { padding: 0.4rem; color: var(--muted); font-size: var(--t-14); }
   @media (pointer: coarse) { .likers { min-height: 2.75rem; padding-inline: 0.25rem; } }
 </style>

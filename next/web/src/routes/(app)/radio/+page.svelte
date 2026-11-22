@@ -32,6 +32,6 @@
   details { margin-block: 1.3rem 0.8rem; border-block: 1px solid var(--line); }
   summary { cursor: pointer; padding-block: 0.85rem; }
   details a, .credits a { text-decoration: underline; text-underline-offset: 0.2em; }
-  .credits { font-size: 0.85rem; }
+  .credits { font-size: var(--t-13-6); }
   @media (max-width: 600px) { .stations { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 </style>

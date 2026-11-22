@@ -131,7 +131,7 @@
 	.atlas { display: grid; gap: 1rem; }
 	header { display: grid; gap: 0.25rem; }
 	header p, .tooltip p { color: var(--muted); }
-	.summary { font-size: 0.875rem; }
+	.summary { font-size: var(--t-14); }
 	.stage { position: relative; min-height: min(30rem, 65dvh); height: calc(100dvh - 14rem); overflow: hidden; border: 1px solid var(--line); border-radius: 0.9rem; background: var(--surface); }
 	canvas { position: absolute; inset: 0; display: block; touch-action: none; }
 	canvas:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }

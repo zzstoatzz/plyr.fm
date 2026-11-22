@@ -193,12 +193,12 @@
 
 <style>
 	.result-types { display: flex; gap: 0.25rem; overflow-x: auto; scrollbar-width: none; margin-block-end: 0.5rem; max-width: 40rem; }
-	.result-types a { flex: none; display: inline-grid; place-items: center; min-width: 2.75rem; min-height: 2.75rem; padding-inline: 0.75rem; border-radius: 2rem; color: var(--muted); font-size: 0.875rem; }
+	.result-types a { flex: none; display: inline-grid; place-items: center; min-width: 2.75rem; min-height: 2.75rem; padding-inline: 0.75rem; border-radius: 2rem; color: var(--muted); font-size: var(--t-14); }
 	.result-types a:hover { background: var(--hover); text-decoration: none; }
 	.result-types a[aria-current] { text-decoration: none; }
 	.result-types a[aria-current='page'] { background: var(--surface); color: var(--text); font-weight: 700; border: 1px solid var(--line); }
 	.search-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-block-start: 1rem; }
-	.search-tags h2 { flex-basis: 100%; font-size: 1rem; }
+	.search-tags h2 { flex-basis: 100%; font-size: var(--t-16); }
 	.search-tags a { display: inline-flex; align-items: center; gap: 0.3rem; min-height: 2.75rem; border: 1px solid var(--line); border-radius: 2rem; padding-inline: 0.7rem; }
 	.search-tags small { color: var(--muted); }
 	.search-page { max-width: 66rem; }
@@ -211,7 +211,7 @@
 	li a:hover { background: var(--hover); text-decoration: none; }
 	.result-name { flex: 1; display: grid; min-width: 0; gap: 0.12rem; overflow-wrap: anywhere; }
 	.result-name strong { display: -webkit-box; overflow: hidden; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
-	.result-name .subtle, .result-type { font-size: 0.84rem; }
+	.result-name .subtle, .result-type { font-size: var(--t-13-6); }
 	.result-type { color: var(--muted); }
 	.result-art { width: 3rem; flex: none; border-radius: 0.45rem; overflow: hidden; }
 	.result-art.avatar { border-radius: 50%; }

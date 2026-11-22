@@ -52,5 +52,5 @@
   audio { width: 100%; }
   label { display: inline-flex; gap: 0.5rem; align-items: center; margin-right: 0.5rem; }
   select, button { font-size: 16px; min-height: 44px; }
-  p { font-size: 0.85rem; color: var(--muted); }
+  p { font-size: var(--t-13-6); color: var(--muted); }
 </style>

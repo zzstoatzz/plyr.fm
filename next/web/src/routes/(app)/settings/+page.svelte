@@ -170,7 +170,7 @@
 
 <style>
 	.settings { max-width: 44rem; display: grid; gap: 1.4rem; }
-	h2 { font-size: 1.125rem; margin-bottom: 0.55rem; }
+	h2 { font-size: var(--t-18); margin-bottom: 0.55rem; }
 	.card { background: var(--surface); border: 1px solid var(--line); border-radius: 0.85rem; padding-inline: 1rem; }
 	fieldset { display: flex; align-items: center; position: relative; min-inline-size: 0; border: 0; margin: 0; padding: 2.25rem 0 0.75rem; }
 	fieldset + fieldset, .toggle + .toggle { border-top: 1px solid var(--line); }

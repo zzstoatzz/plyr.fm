@@ -211,9 +211,9 @@
 
 <style>
 	.now { max-width: 33rem; margin: auto; padding: 0 1rem 2rem; background: var(--bg); }
-	header { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; height: 3.5rem; color: var(--muted); font-size: 0.875rem; background: var(--bg); }
+	header { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; height: 3.5rem; color: var(--muted); font-size: var(--t-14); background: var(--bg); }
 	.cover { position: relative; border-radius: 0.95rem; width: 100%; transform-origin: top left; }
-	.comment-toggle { display: inline-flex; gap: 0.3rem; width: auto; padding-inline: 0.5rem; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+	.comment-toggle { display: inline-flex; gap: 0.3rem; width: auto; padding-inline: 0.5rem; font-size: var(--t-13-6); font-variant-numeric: tabular-nums; }
 	.comment-toggle[aria-pressed='true'] { color: var(--accent); }
 	.copy { padding-top: 1.25rem; }
 	h1 { font-size: clamp(1.35rem, 4vw, 2rem); line-height: 1.18; overflow-wrap: anywhere; margin-bottom: 0.35rem; transform-origin: top left; }
@@ -233,20 +233,20 @@
 	.options { justify-content: center; }
 	.composer { margin-top: 0.75rem; }
 	.composer:not(:has(*)) { display: none; }
-	.facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.5rem; padding-block: 1rem; border-block: 1px solid var(--line); font-size: 0.875rem; }
+	.facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.5rem; padding-block: 1rem; border-block: 1px solid var(--line); font-size: var(--t-14); }
 	.facts strong { font-weight: 650; }
-	.facts small { font-size: 0.7rem; color: var(--faint); }
+	.facts small { font-size: var(--t-11-2); color: var(--faint); }
 	.details { padding-block: 0.5rem 1rem; }
 	.artist-card { display: grid; grid-template-columns: 3.5rem minmax(0, 1fr) auto; align-items: center; gap: 0.7rem; padding: 0.65rem; border: 1px solid var(--line); border-radius: 0.85rem; background: var(--surface); overflow-wrap: anywhere; }
 	.avatar { border-radius: 50%; overflow: hidden; }
 	small { display: block; color: var(--muted); }
 	.track-link { display: flex; justify-content: space-between; padding-block: 0.65rem; border-bottom: 1px solid var(--line); }
 	.tags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-block: 0.85rem 0.5rem; }
-	.tags a { display: grid; align-items: center; min-height: 2.75rem; padding-inline: 0.75rem; max-width: 100%; overflow-wrap: anywhere; border-radius: 0.6rem; color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); font-size: 0.85rem; font-weight: 650; }
+	.tags a { display: grid; align-items: center; min-height: 2.75rem; padding-inline: 0.75rem; max-width: 100%; overflow-wrap: anywhere; border-radius: 0.6rem; color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); font-size: var(--t-13-6); font-weight: 650; }
 	.tags a:hover { text-decoration: underline; }
 	.description { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); margin-top: 1rem; }
 	.chapters { margin-top: 1.25rem; }
-	h2 { font-size: 1rem; }
+	h2 { font-size: var(--t-16); }
 	.chapters button { display: flex; justify-content: start; text-align: start; width: 100%; gap: 0.8rem; }
 	.chapters button span, .chapters [aria-current] { color: var(--accent); }
 	@media (min-width: 800px) {

@@ -320,7 +320,7 @@
 	nav .brand:hover { background: none; }
 	.profile-avatar { width: 1.375rem; flex: none; border-radius: 50%; overflow: hidden; }
 	.profile-avatar :global(svg) { width: 1.375rem; height: 1.375rem; }
-	.group-label { padding: 1.1rem 0.75rem 0.35rem; color: var(--faint); font: 600 0.8125rem/1 system-ui, sans-serif; }
+	.group-label { padding: 1.1rem 0.75rem 0.35rem; color: var(--faint); font: 600 var(--t-12-8)/1 system-ui, sans-serif; }
 	.who, .who-chevron { display: none; }
 	main { min-width: 0; }
 	aside { position: sticky; top: 0; align-self: start; min-width: 0; height: calc(100dvh - var(--dock)); overflow-y: auto; border-left: 1px solid var(--line); background: var(--surface); }
@@ -330,10 +330,10 @@
 	@media (min-width: 721px) {
 		nav { height: calc(100dvh - var(--nav-dock, 0px)); min-height: 0; overflow-y: auto; padding: 0.875rem; }
 		.frame.hasPlayer { --nav-dock: var(--dock); }
-		nav :is(a, button) { font-size: 0.96875rem; font-weight: 500; }
+		nav :is(a, button) { font-size: var(--t-15-5); font-weight: 500; }
 		nav .phone-only { display: none; }
-		nav .search-field { gap: 0.625rem; margin: 0 0 0.75rem; height: 2.5rem; padding: 0 0.625rem 0 0.75rem; background: var(--raised); border: 1px solid color-mix(in srgb, var(--line) 80%, transparent); color: var(--muted); font-size: 0.875rem; }
-		nav .search-field kbd { margin-left: auto; padding: 0.2rem 0.375rem; border: 1px solid var(--line); border-radius: 0.375rem; color: var(--muted); font: 500 0.6875rem/1 system-ui, sans-serif; }
+		nav .search-field { gap: 0.625rem; margin: 0 0 0.75rem; height: 2.5rem; padding: 0 0.625rem 0 0.75rem; background: var(--raised); border: 1px solid color-mix(in srgb, var(--line) 80%, transparent); color: var(--muted); font-size: var(--t-14); }
+		nav .search-field kbd { margin-left: auto; padding: 0.2rem 0.375rem; border: 1px solid var(--line); border-radius: 0.375rem; color: var(--muted); font: 500 var(--t-11-2)/1 system-ui, sans-serif; }
 		nav .search-field:hover { background: var(--hover); }
 		nav .search-field.active { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); font-weight: 500; }
 		.nav-spacer { flex: 1; min-height: 1.5rem; }
@@ -342,8 +342,8 @@
 		nav .account .profile-avatar, nav .account .profile-avatar :global(svg) { width: 2.125rem; height: 2.125rem; }
 		nav .account .tab-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 		.who { display: grid; min-width: 0; flex: 1; line-height: 1.2; }
-		.who strong { color: var(--text); font-size: 0.875rem; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-		.who small { color: var(--faint); font: 0.75rem system-ui, sans-serif; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+		.who strong { color: var(--text); font-size: var(--t-14); font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+		.who small { color: var(--faint); font: var(--t-12) system-ui, sans-serif; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 		.who-chevron { display: flex; color: var(--faint); }
 	}
 	.shortcuts { width: min(30rem, calc(100% - 2rem)); height: fit-content; max-height: calc(100dvh - 2rem); margin: auto; padding: 1rem 1.25rem; border: 1px solid var(--line); border-radius: 1rem; background: var(--surface); }
@@ -352,7 +352,7 @@
 	.shortcuts dl { margin: 0.45rem 0; }
 	.shortcuts dl div { border-top: 1px solid var(--line); padding: 0.45rem 0; }
 	.shortcuts dd { margin: 0; display: flex; gap: 0.25rem; flex-shrink: 0; }
-	.shortcuts kbd { background: var(--raised); border: 1px solid var(--line); border-radius: 0.35rem; padding: 0.15rem 0.4rem; text-align: center; min-width: 1.65rem; font-size: 0.8rem; }
+	.shortcuts kbd { background: var(--raised); border: 1px solid var(--line); border-radius: 0.35rem; padding: 0.15rem 0.4rem; text-align: center; min-width: 1.65rem; font-size: var(--t-12-8); }
 	@media (min-width: 721px) and (max-width: 1199px) {
 		.frame.docked { grid-template-columns: var(--sidebar) minmax(0, 1fr); }
 		aside { position: fixed; z-index: 8; right: 0; bottom: var(--dock); top: auto; height: auto; max-height: calc(100dvh - var(--dock)); width: min(var(--queue), calc(100vw - var(--sidebar))); box-shadow: 0 0 2rem rgb(0 0 0 / 0.15); }
@@ -362,7 +362,7 @@
 		.frame.hasPlayer { padding-bottom: calc(var(--tabs) + var(--dock)); }
 		.brand-row, .nav-spacer, aside, nav .desktop-only { display: none; }
 		nav { z-index: 9; position: fixed; inset: auto 0.75rem var(--tab-gap); min-height: 0; height: 4rem; flex-direction: row; align-items: center; gap: 0; padding: 0 0.375rem; border: 1px solid color-mix(in srgb, var(--line) 80%, transparent); border-radius: 2rem; background: color-mix(in srgb, var(--surface) 72%, transparent); -webkit-backdrop-filter: blur(22px) saturate(1.7); backdrop-filter: blur(22px) saturate(1.7); box-shadow: 0 0.625rem 1.875rem rgb(0 0 0 / 0.18); }
-		nav :is(a, button) { flex: 1; min-width: 0; flex-direction: column; justify-content: center; gap: 0.125rem; height: 3.375rem; min-height: 0; padding: 0.125rem; border-radius: 1.6875rem; font: 600 0.65625rem/1.2 system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
+		nav :is(a, button) { flex: 1; min-width: 0; flex-direction: column; justify-content: center; gap: 0.125rem; height: 3.375rem; min-height: 0; padding: 0.125rem; border-radius: 1.6875rem; font: 600 var(--t-10-5)/1.2 system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
 		nav :is(a, button) :global(svg) { width: 1.5rem; height: 1.5rem; }
 		nav :is(a, button) span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 		nav :is(a, button):hover { background: none; }

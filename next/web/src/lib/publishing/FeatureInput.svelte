@@ -112,12 +112,12 @@
 
 <style>
   .feature-input { display: grid; gap: 0.4rem; min-width: 0; }
-  .label { font-size: 0.8rem; font-weight: 700; color: var(--faint); letter-spacing: 0.04em; }
+  .label { font-size: var(--t-12-8); font-weight: 700; color: var(--faint); letter-spacing: 0.04em; }
   .box { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; min-height: 2.75rem; padding: 0.35rem 0.45rem; border: 1px solid var(--line); border-radius: 0.65rem; background: var(--bg); }
   .box:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
   .box.disabled { opacity: 0.6; }
-  .chip { display: inline-flex; align-items: center; gap: 0.15rem; padding: 0.15rem 0.2rem 0.15rem 0.6rem; border-radius: 999px; background: var(--raised); border: 1px solid var(--line); font-size: 0.9rem; font-weight: 650; line-height: 1.3; }
-  .chip button { position: relative; display: grid; place-items: center; width: 1.4rem; height: 1.4rem; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--muted); font-size: 1rem; line-height: 1; cursor: pointer; }
+  .chip { display: inline-flex; align-items: center; gap: 0.15rem; padding: 0.15rem 0.2rem 0.15rem 0.6rem; border-radius: 999px; background: var(--raised); border: 1px solid var(--line); font-size: var(--t-14-4); font-weight: 650; line-height: 1.3; }
+  .chip button { position: relative; display: grid; place-items: center; width: 1.4rem; height: 1.4rem; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--muted); font-size: var(--t-16); line-height: 1; cursor: pointer; }
   /* a 44px target around the small glyph */
   .chip button::after { content: ''; position: absolute; inset: -0.6rem; }
   .chip button:hover { background: var(--hover); color: inherit; }
@@ -127,7 +127,7 @@
   ul button { display: flex; width: 100%; align-items: center; gap: 0.6rem; min-height: 2.75rem; padding: 0 0.7rem; border: 0; border-radius: 0.45rem; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
   ul button span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   ul button:hover, ul button.active { background: var(--hover); }
-  ul small { color: var(--muted); font-size: 0.8rem; white-space: nowrap; }
-  .hint { margin: 0; color: var(--muted); font-size: 0.8rem; }
-  .problem { margin: 0; color: light-dark(#a3271f, #ff8f87); font-size: 0.85rem; }
+  ul small { color: var(--muted); font-size: var(--t-12-8); white-space: nowrap; }
+  .hint { margin: 0; color: var(--muted); font-size: var(--t-12-8); }
+  .problem { margin: 0; color: light-dark(#a3271f, #ff8f87); font-size: var(--t-13-6); }
 </style>

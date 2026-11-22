@@ -36,5 +36,5 @@
 	.stacked .ghost { grid-area: 1 / 1 / 2 / 4; }
 	.stacked span:last-child { justify-self: end; }
 	input { margin: 0; }
-	span { color: var(--muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+	span { color: var(--muted); font-size: var(--t-12); font-variant-numeric: tabular-nums; }
 </style>

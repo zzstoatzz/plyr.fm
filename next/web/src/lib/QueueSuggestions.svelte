@@ -167,15 +167,15 @@
 {/snippet}
 
 <style>
-	h2 { color: var(--muted); font-size: 0.87rem; font-weight: 650; margin: 0; }
+	h2 { color: var(--muted); font-size: var(--t-14); font-weight: 650; margin: 0; }
 	.strip-head { display: flex; justify-content: space-between; align-items: center; min-height: 2.25rem; margin-block-end: 0.35rem; gap: 0.5rem; }
 	.cards { display: flex; gap: 0.65rem; margin: 0; padding: 0 0 0.25rem; list-style: none; overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: none; }
 	.cards::-webkit-scrollbar { display: none; }
 	.card { flex: none; width: 7.4rem; display: grid; gap: 0.1rem; scroll-snap-align: start; min-width: 0; }
 	.art { position: relative; border-radius: 0.6rem; margin-block-end: 0.3rem; }
 	.art a { display: block; border-radius: inherit; }
-	.title { font-size: 0.84rem; font-weight: 650; }
-	.subtle { font-size: 0.75rem; color: var(--faint); }
+	.title { font-size: var(--t-13-6); font-weight: 650; }
+	.subtle { font-size: var(--t-12); color: var(--faint); }
 	.plus { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; flex: none; border-radius: 50%; border: 0; padding: 0; color: var(--text); background: var(--surface); box-shadow: 0 0.25rem 0.7rem rgb(0 0 0 / 0.28); cursor: pointer; }
 	.art .plus { position: absolute; z-index: 1; right: 0.35rem; bottom: 0.35rem; }
 	.plus.done { background: var(--accent); color: var(--on-accent); }
@@ -183,8 +183,8 @@
 	.starters { display: grid; gap: 0.75rem; }
 	.glass { background: color-mix(in srgb, var(--surface) 62%, transparent); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); border: 1px solid color-mix(in srgb, var(--line) 70%, transparent); border-radius: 0.9rem; }
 	.note { padding: 0.85rem 0.95rem; }
-	.note h2 { color: var(--text); font-size: 1rem; }
-	.note p { margin: 0.2rem 0 0; color: var(--muted); font-size: 0.87rem; }
+	.note h2 { color: var(--text); font-size: var(--t-16); }
+	.note p { margin: 0.2rem 0 0; color: var(--muted); font-size: var(--t-14); }
 	.tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 0.65rem; }
 	.tile { display: grid; gap: 0.5rem; padding: 0.6rem; min-width: 0; border-radius: 0.9rem; border: 1px solid var(--line); background: var(--raised); }
 	.tile.big, .tile:not(.big):nth-child(2):last-child { grid-column: 1 / -1; }
@@ -193,8 +193,8 @@
 	.cell { display: block; aspect-ratio: 1; background: var(--hover); }
 	.tile-row { display: flex; align-items: center; gap: 0.35rem; min-width: 0; }
 	.labels { flex: 1; min-width: 0; display: grid; gap: 0.05rem; }
-	.labels strong { font-size: 0.9rem; }
-	.labels span { font-size: 0.74rem; }
+	.labels strong { font-size: var(--t-14-4); }
+	.labels span { font-size: var(--t-12); }
 	.tile:not(.big) .labels span { display: none; }
 	.tile .plus { box-shadow: none; border: 1.5px solid var(--line); background: transparent; }
 	.tile .plus.done { border-color: var(--accent); background: var(--accent); }

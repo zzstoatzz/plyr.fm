@@ -242,22 +242,22 @@
 	.item:hover { background: var(--hover); }
 	.item.current { border-color: var(--accent); }
 	.what { display: flex; flex-direction: column; flex: 1; min-width: 0; }
-	.meta { display: flex; flex-direction: column; align-items: end; flex: none; font-size: 0.8rem; }
-	small { color: var(--faint); font-size: 0.8rem; }
+	.meta { display: flex; flex-direction: column; align-items: end; flex: none; font-size: var(--t-12-8); }
+	small { color: var(--faint); font-size: var(--t-12-8); }
 	.detail { display: flex; flex-direction: column; gap: 0.7rem; padding: 1rem; border: 1px solid var(--line); border-radius: 1rem; background: var(--surface); }
 	.detail header { display: flex; flex-direction: column; gap: 0.2rem; }
-	.detail header a { color: var(--accent); font-size: 0.9rem; }
+	.detail header a { color: var(--accent); font-size: var(--t-14-4); }
 	h2 { font-size: 1.2rem; }
-	h3 { font-size: 0.85rem; color: var(--muted); font-weight: 600; margin-top: 0.4rem; }
+	h3 { font-size: var(--t-13-6); color: var(--muted); font-weight: 600; margin-top: 0.4rem; }
 	.history { display: flex; flex-direction: column; gap: 0.5rem; }
 	.history li { display: grid; grid-template-columns: 1fr auto; gap: 0.15rem 0.75rem; }
-	.history q { grid-column: 1 / -1; color: var(--muted); font-size: 0.9rem; }
+	.history q { grid-column: 1 / -1; color: var(--muted); font-size: var(--t-14-4); }
 	.choices { display: grid; gap: 0.4rem; }
 	.choice { display: flex; flex-direction: column; align-items: start; gap: 0.1rem; min-height: 3rem; padding: 0.6rem 0.8rem; border: 1px solid var(--line); border-radius: 0.8rem; background: var(--raised); text-align: start; }
 	.choice:hover:not(:disabled) { border-color: var(--accent); }
-	.note { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.85rem; color: var(--muted); }
+	.note { display: flex; flex-direction: column; gap: 0.3rem; font-size: var(--t-13-6); color: var(--muted); }
 	textarea { width: 100%; font: inherit; font-size: 16px; padding: 0.55rem 0.7rem; border: 1px solid var(--line); border-radius: 0.65rem; background: var(--bg); color: var(--text); resize: vertical; }
-	.error { color: light-dark(#b42318, #ff8a80); font-size: 0.85rem; }
+	.error { color: light-dark(#b42318, #ff8a80); font-size: var(--t-13-6); }
 	.back { align-self: start; }
 	@media (min-width: 900px) { .back { display: none; } }
 </style>

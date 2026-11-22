@@ -61,8 +61,8 @@
 
 <style>
   .recovery-card { background: var(--surface); border: 1px solid var(--line); border-radius: 0.75rem; padding: 0.9rem; }
-  h3 { font-size: 1rem; overflow-wrap: anywhere; }
+  h3 { font-size: var(--t-16); overflow-wrap: anywhere; }
   p, label { margin-block: 0.4rem; overflow-wrap: anywhere; }
   label, input { display: block; max-width: 100%; }
-  input { font-size: 1rem; }
+  input { font-size: var(--t-16); }
 </style>

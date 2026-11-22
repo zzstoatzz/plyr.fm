@@ -49,7 +49,7 @@
 	form { width: min(100%, 27rem); margin-inline: auto; display: grid; gap: 0.65rem; padding: clamp(1rem, 4vw, 1.65rem); background: var(--surface); border: 1px solid var(--line); border-radius: 0.9rem; }
 	h1 { font-size: 1.55rem; margin-bottom: 0.5rem; }
 	label { font-weight: 600; }
-	.hint, .failure { font-size: 0.9rem; }
+	.hint, .failure { font-size: var(--t-14-4); }
 	.failure { color: var(--danger, #bd2727); }
 	.submit { width: 100%; background: var(--accent); color: var(--on-accent); padding: 0.6rem; min-height: 2.75rem; border-radius: 0.55rem; border: 0; font-weight: 650; }
 </style>

@@ -246,7 +246,7 @@
 <style>
   .editor { --danger: light-dark(#c0392b, #ff8f8f); max-width: 69rem; margin: 0 auto; display: grid; gap: 1rem; }
   .top { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
-  h1 { font-size: 1.1rem; color: var(--muted); }
+  h1 { font-size: var(--t-17-6); color: var(--muted); }
   form { display: grid; gap: 1rem; }
   .hero { position: relative; isolation: isolate; display: flex; align-items: flex-start; gap: 2.25rem; padding: clamp(1.25rem, 3vw, 2rem); border: 1px solid var(--line); border-radius: 1.1rem; background: var(--surface); }
   .backdrop { position: absolute; inset: 0; z-index: -1; overflow: hidden; border-radius: inherit; pointer-events: none; }
@@ -266,15 +266,15 @@
   .name { font-size: clamp(1.75rem, 5vw, 3.25rem); font-weight: 800; line-height: 1.08; letter-spacing: -0.035em; overflow-wrap: anywhere; }
   .handle { color: var(--muted); }
   label.bio { display: block; margin-top: 0.6rem; max-width: 44rem; }
-  textarea { width: 100%; min-height: 6rem; padding: 0.7rem 0.8rem; border: 1px dashed color-mix(in srgb, var(--text) 35%, transparent); border-radius: 0.75rem; background: color-mix(in srgb, var(--bg) 55%, transparent); color: var(--text); font-size: 1rem; line-height: 1.4; resize: vertical; }
+  textarea { width: 100%; min-height: 6rem; padding: 0.7rem 0.8rem; border: 1px dashed color-mix(in srgb, var(--text) 35%, transparent); border-radius: 0.75rem; background: color-mix(in srgb, var(--bg) 55%, transparent); color: var(--text); font-size: var(--t-16); line-height: 1.4; resize: vertical; }
   textarea:focus { outline: none; border-style: solid; border-color: var(--accent); }
   textarea[aria-invalid="true"] { border-color: var(--danger); border-style: solid; }
-  .count { max-width: 44rem; text-align: right; color: var(--faint); font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+  .count { max-width: 44rem; text-align: right; color: var(--faint); font-size: var(--t-12-8); font-variant-numeric: tabular-nums; }
   .count.over { color: var(--danger); }
   .discard { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; padding: 0.75rem; border: 1px solid var(--line); border-radius: 0.7rem; background: var(--raised); }
   .discard p { flex: 1 1 100%; }
   footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; }
-  .source { padding: 0.3rem 0.75rem; border-radius: 999px; background: var(--raised); color: var(--muted); font-size: 0.85rem; }
+  .source { padding: 0.3rem 0.75rem; border-radius: 999px; background: var(--raised); color: var(--muted); font-size: var(--t-13-6); }
   .source.fresh { color: var(--text); background: color-mix(in srgb, var(--accent) 16%, var(--raised)); }
   .buttons { display: flex; align-items: center; gap: 0.75rem; margin-left: auto; }
   .error { margin: 0.25rem 0; color: var(--danger); }

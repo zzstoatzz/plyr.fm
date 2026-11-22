@@ -47,7 +47,7 @@
   .top { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
   h1 { font-size: 1.5rem; letter-spacing: -0.02em; }
   nav { display: inline-flex; gap: 0.15rem; padding: 0.25rem; border-radius: 999px; background: var(--raised); border: 1px solid var(--line); }
-  nav :is(a, span) { display: inline-flex; align-items: center; gap: 0.4rem; min-height: 2.25rem; padding: 0 0.95rem; border-radius: 999px; color: var(--muted); font-size: 0.9rem; font-weight: 600; }
+  nav :is(a, span) { display: inline-flex; align-items: center; gap: 0.4rem; min-height: 2.25rem; padding: 0 0.95rem; border-radius: 999px; color: var(--muted); font-size: var(--t-14-4); font-weight: 600; }
   nav a:hover { text-decoration: none; color: var(--text); }
   nav span { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgb(0 0 0 / 0.14); }
   :global(.frame.hasPlayer) .upload { --bar-offset: var(--dock); }

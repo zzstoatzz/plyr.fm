@@ -129,13 +129,13 @@
   .row:disabled { opacity: 0.6; }
   .thumb { width: 2.75rem; height: 2.75rem; flex: none; border-radius: 0.45rem; overflow: hidden; display: grid; place-items: center; background: var(--raised); }
   .name { flex: 1; min-width: 0; display: grid; color: var(--text); }
-  small { color: var(--faint); font-size: 0.8rem; }
+  small { color: var(--faint); font-size: var(--t-12-8); }
   .new .thumb { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
   .new .name { color: var(--accent); font-weight: 620; }
   .create { display: flex; gap: 0.5rem; padding: 0.45rem 1.25rem; }
   .create input { flex: 1; min-width: 0; height: 2.75rem; padding: 0 0.75rem; border: 1px solid var(--accent); border-radius: 0.6rem; background: var(--bg); }
   .go { flex: none; height: 2.75rem; padding: 0 0.95rem; border: 0; border-radius: 0.6rem; background: var(--accent); color: var(--on-accent); font-weight: 650; white-space: nowrap; }
-  .error { color: var(--text); font-size: 0.875rem; padding: 0.3rem 0; }
+  .error { color: var(--text); font-size: var(--t-14); padding: 0.3rem 0; }
   .spin { width: 1rem; height: 1rem; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) { .spin { animation-duration: 2.4s; } }

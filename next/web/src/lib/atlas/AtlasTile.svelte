@@ -52,6 +52,6 @@
 		.tile { display: flex; grid-area: atlas; position: relative; isolation: isolate; align-items: end; min-height: 17rem; overflow: hidden; border: 1px solid var(--line); border-radius: 1.15rem; background: var(--surface); }
 		canvas { position: absolute; inset: 0; z-index: -1; pointer-events: none; }
 		.caption { display: flex; align-items: end; justify-content: space-between; gap: 0.5rem; width: 100%; padding: 1.2rem 1rem 0.85rem; background: linear-gradient(transparent, var(--surface) 52%); }
-		small { display: block; color: var(--muted); font-size: 0.78rem; }
+		small { display: block; color: var(--muted); font-size: var(--t-12-8); }
 	}
 </style>

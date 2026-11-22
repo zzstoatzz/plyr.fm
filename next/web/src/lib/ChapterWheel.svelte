@@ -177,7 +177,7 @@
 
 <style>
 	.anchor { position: relative; display: flex; justify-content: center; min-width: 0; }
-	.line { max-width: 100%; color: var(--accent); font-size: 0.75rem; padding: 0 0.55rem; border-radius: 99px; touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; }
+	.line { max-width: 100%; color: var(--accent); font-size: var(--t-12); padding: 0 0.55rem; border-radius: 99px; touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; }
 	.line:hover:not(.disabled), .line.open { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 	.line.disabled { cursor: default; }
 	.wheel { position: absolute; z-index: 20; top: 50%; left: 50%; width: min(24rem, calc(100vw - 2rem)); height: calc(38px * 5); transform: translate(-50%, -50%);
@@ -188,12 +188,12 @@
 	@keyframes bloom { from { transform: translate(-50%, -50%) scale(0.6, 0.2); opacity: 0; } }
 	.band { position: absolute; left: 10px; right: 10px; top: 50%; height: 38px; margin-top: -19px; border-radius: 12px; background: color-mix(in srgb, var(--accent) 12%, transparent); }
 	.rows { position: absolute; left: 0; right: 0; top: 50%; }
-	.row { height: 38px; display: grid; grid-template-columns: 3rem minmax(0, 1fr) 0.5rem; gap: 0.6rem; align-items: center; padding: 0 1.25rem; font-size: 0.9375rem; color: var(--text); cursor: pointer; }
-	.row .time { color: var(--faint); font-size: 0.8125rem; font-variant-numeric: tabular-nums; }
-	.row small { color: var(--muted); font-size: 0.8125rem; font-weight: 400; }
+	.row { height: 38px; display: grid; grid-template-columns: 3rem minmax(0, 1fr) 0.5rem; gap: 0.6rem; align-items: center; padding: 0 1.25rem; font-size: var(--t-15); color: var(--text); cursor: pointer; }
+	.row .time { color: var(--faint); font-size: var(--t-12-8); font-variant-numeric: tabular-nums; }
+	.row small { color: var(--muted); font-size: var(--t-12-8); font-weight: 400; }
 	.row.selected .name, .row.selected .time { color: var(--accent); font-weight: 600; }
 	.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); opacity: 0; }
 	.dot.on { opacity: 1; }
-	.hint { position: absolute; left: 0; right: 0; bottom: 0; pointer-events: none; padding: 0.2rem 0; text-align: center; font-size: 0.75rem; color: var(--muted); background: var(--surface); }
+	.hint { position: absolute; left: 0; right: 0; bottom: 0; pointer-events: none; padding: 0.2rem 0; text-align: center; font-size: var(--t-12); color: var(--muted); background: var(--surface); }
 	@media (prefers-reduced-motion: reduce) { .wheel { animation: none; } }
 </style>

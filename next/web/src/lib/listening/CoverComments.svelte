@@ -33,17 +33,17 @@
   .chip.earlier { opacity: 0.55; transform: scale(0.94); }
   .face { flex: none; width: 2rem; height: 2rem; border-radius: 50%; overflow: hidden; }
   .body { display: grid; min-width: 0; }
-  .who { display: flex; gap: 0.45rem; align-items: baseline; font-size: 0.78rem; color: rgb(255 255 255 / 0.72); font-variant-numeric: tabular-nums; }
+  .who { display: flex; gap: 0.45rem; align-items: baseline; font-size: var(--t-12-8); color: rgb(255 255 255 / 0.72); font-variant-numeric: tabular-nums; }
   .who strong { color: #fff; font-weight: 650; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .say { font-size: 0.95rem; line-height: 1.3; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+  .say { font-size: var(--t-15); line-height: 1.3; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
   .say.emoji { font-size: 1.6rem; line-height: 1.1; }
   .chip:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
   @media (min-width: 800px) {
     .cover-comments { inset: auto 1.1rem 1.1rem; gap: 0.5rem; }
     .chip { gap: 0.75rem; padding: 0.55rem 1.2rem 0.55rem 0.55rem; border-radius: 1.4rem; }
     .face { width: 2.5rem; height: 2.5rem; }
-    .who { font-size: 0.85rem; }
-    .say { font-size: 1.15rem; }
+    .who { font-size: var(--t-13-6); }
+    .say { font-size: var(--t-18-4); }
     .say.emoji { font-size: 2rem; }
   }
 </style>

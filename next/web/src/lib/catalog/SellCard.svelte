@@ -226,24 +226,24 @@
   .card { display: grid; gap: 0.35rem; border: 1px solid var(--line); border-radius: 0.9rem; background: var(--surface); padding: 1rem; justify-items: start; }
   .card > * { justify-self: stretch; }
   label { display: grid; gap: 0.15rem; }
-  small, .hint { color: var(--faint); font-size: 0.82rem; }
+  small, .hint { color: var(--faint); font-size: var(--t-12-8); }
   .line { display: flex; gap: 0.5rem; margin-top: 0.4rem; }
-  input, select { min-height: 2.75rem; min-width: 0; padding-inline: 0.7rem; border-radius: 0.6rem; border: 1px solid var(--line); background: var(--bg); color: var(--text); font-size: 1rem; }
+  input, select { min-height: 2.75rem; min-width: 0; padding-inline: 0.7rem; border-radius: 0.6rem; border: 1px solid var(--line); background: var(--bg); color: var(--text); font-size: var(--t-16); }
   .line input { flex: 1; }
-  .error { color: var(--danger, var(--text)); font-size: 0.85rem; }
+  .error { color: var(--danger, var(--text)); font-size: var(--t-13-6); }
   ul { list-style: none; padding: 0; margin: 0.4rem 0 0; }
   li { border-top: 1px solid var(--line); }
   .release { display: flex; align-items: center; gap: 0.7rem; width: 100%; min-height: 3.5rem; padding: 0.45rem 0; border: 0; background: none; color: inherit; text-align: start; font: inherit; }
   .art { width: 2.75rem; flex: none; border-radius: 0.4rem; overflow: hidden; }
   .names { flex: 1; min-width: 0; display: grid; }
   .title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .tag { flex: none; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0.4rem 0.8rem; border: 1px solid var(--accent); border-radius: 999px; color: var(--accent); font-size: 0.85rem; font-weight: 650; }
-  .pill { min-height: 2.75rem; padding: 0 1rem; border-radius: 999px; border: 1px solid var(--line); background: none; color: var(--muted); font-size: 0.9rem; white-space: nowrap; }
+  .tag { flex: none; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0.4rem 0.8rem; border: 1px solid var(--accent); border-radius: 999px; color: var(--accent); font-size: var(--t-13-6); font-weight: 650; }
+  .pill { min-height: 2.75rem; padding: 0 1rem; border-radius: 999px; border: 1px solid var(--line); background: none; color: var(--muted); font-size: var(--t-14-4); white-space: nowrap; }
   .pill.add { justify-self: start; margin-top: 0.5rem; border-color: var(--accent); color: var(--accent); font-weight: 650; }
   .picker { display: grid; gap: 0.6rem; padding: 0 1rem 0.5rem; min-height: 0; }
   .picker input { width: 100%; }
   .groups { display: flex; gap: 0.4rem; }
-  .chip { min-height: 2.25rem; padding: 0 0.85rem; border-radius: 999px; border: 1px solid var(--line); background: none; color: var(--muted); font-size: 0.85rem; }
+  .chip { min-height: 2.25rem; padding: 0 0.85rem; border-radius: 999px; border: 1px solid var(--line); background: none; color: var(--muted); font-size: var(--t-13-6); }
   .chip[aria-pressed='true'] { border-color: var(--accent); color: var(--accent); font-weight: 650; }
   .found { margin: 0; overflow-y: auto; max-height: min(24rem, 50dvh); }
   .found .hint { padding: 0.75rem 0; }

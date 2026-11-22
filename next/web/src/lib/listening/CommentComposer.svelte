@@ -82,7 +82,7 @@
   .compact textarea { border: 0; padding: 0.5rem 0; flex: 1; min-width: 0; min-height: 2.5rem; max-height: 8rem; resize: vertical; background: transparent; }
   .compact .form-actions { flex: none; }
   .compact .submit { min-width: 2.75rem; }
-  .compact .time { padding-inline: 0.35rem; font-size: 0.75rem; white-space: nowrap; }
-  .sign-in { display: block; padding: 0.65rem 0.8rem; font-size: 0.875rem; }
+  .compact .time { padding-inline: 0.35rem; font-size: var(--t-12); white-space: nowrap; }
+  .sign-in { display: block; padding: 0.65rem 0.8rem; font-size: var(--t-14); }
   .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 </style>
