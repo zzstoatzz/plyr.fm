@@ -34,8 +34,7 @@ class Player {
 	current = $derived(this.queue[this.index]);
 	playing = $state(false);
 	loading = $state(false);
-	/** a press asked for sound and none has come yet; a queue load or restore alone does not count */
-	#wantsPlay = $state(false);
+	#wantsPlay = $state(false); // a press asked for sound and none came yet; a queue load or restore alone does not count
 	get starting() { return this.#wantsPlay && !this.error && (this.loading || this.snapshot.waiting); }
 	/** the track's audio is still being copied to the streaming origin */
 	preparing = $state(false);
@@ -265,8 +264,7 @@ class Player {
 
 	#startLocal(tracks: Track[], at: number) {
 		this.#wantsPlay = true;
-		this.queue = tracks;
-		this.index = at;
+		[this.queue, this.index] = [tracks, at];
 		void this.#load(tracks, at).then(ready => { if (ready && this.#wantsPlay) this.#playMedia(); });
 	}
 
