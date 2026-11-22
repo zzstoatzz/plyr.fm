@@ -3,7 +3,7 @@ import { AccessibilityInfo, Animated, RefreshControl, View, type NativeScrollEve
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import {
-  BARS, armKick, barLight, barStep, pullKick, pullMove, refreshMessage, restingPull, waveTarget,
+  BARS, armKick, barLight, barStep, pullKick, pullMove, refreshMessage, restingPull, resultHold, waveEndDelay, waveTarget,
   type Bar, type RefreshResult, type WavePhase,
 } from '@plyr/next-core/behaviors/pull-refresh';
 import { useAppearance } from './appearance';
@@ -13,7 +13,6 @@ import { Text } from './Text';
 // wave arms sooner and letting go armed starts the refresh itself. HOLD is the gap it keeps open.
 const THRESHOLD = 120;
 const HOLD = 60;
-const SETTLED_MS = 1250;
 
 function feel(event: 'tick' | 'arm' | 'release' | 'success' | 'warning') {
   const played = event === 'tick' ? Haptics.selectionAsync()
@@ -68,8 +67,8 @@ export function usePullRefresh(onRefresh: () => Promise<RefreshResult>) {
       return barStep(kicking ? { ...bar, velocity: bar.velocity + pullKick(index, speedChange) } : bar, target, dt);
     });
     state.wave.forEach((bar, index) => {
-      heights[index].setValue(bar.height);
-      lights[index].setValue(state.phase === 'settled' ? 0 : state.gesture.armed || state.phase === 'refreshing' ? 1 : 0.45 + 0.55 * barLight(index, progress));
+      heights[index].setValue(state.phase === 'settled' ? bar.height * Math.min(1, pull / HOLD) : bar.height);
+      lights[index].setValue(state.gesture.armed || state.phase !== 'idle' ? 1 : 0.45 + 0.55 * barLight(index, progress));
     });
     const resting = !live && pull < 0.5 && !state.dragging && state.wave.every(bar => Math.abs(bar.velocity) < 0.01);
     if (resting) state.last = 0;
@@ -85,14 +84,19 @@ export function usePullRefresh(onRefresh: () => Promise<RefreshResult>) {
     state.started = performance.now();
     AccessibilityInfo.announceForAccessibility('refreshing');
     run();
-    void latest.current().catch((): RefreshResult => ({ ok: false })).then(result => {
+    void latest.current().catch((): RefreshResult => ({ ok: false })).then(async result => {
+      await new Promise(done => setTimeout(done, waveEndDelay(performance.now() - state.started)));
       state.phase = 'settled';
       const text = refreshMessage(result);
-      setMessage(text);
+      const hold = resultHold(result);
       feel(result.ok ? 'success' : 'warning');
       AccessibilityInfo.announceForAccessibility(text);
       run();
-      setTimeout(() => setHolding(false), SETTLED_MS);
+      if (hold) {
+        setMessage(text);
+        await new Promise(done => setTimeout(done, hold));
+      }
+      setHolding(false);
     });
   }, [state, run]);
 
