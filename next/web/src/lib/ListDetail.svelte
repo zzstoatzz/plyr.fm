@@ -14,6 +14,7 @@
 	import Icon from './ui/Icon.svelte';
 	import Loading from './ui/Loading.svelte';
 	import TrackRow from './TrackRow.svelte';
+	import ImmersiveWash from './ui/ImmersiveWash.svelte';
 	import { catalogRuntime } from '@plyr/next-core/catalog/runtime';
 	import { compactCount } from './listening/format';
 	import { api } from './api';
@@ -90,10 +91,8 @@
 <svelte:head><title>{title} · plyr.fm</title></svelte:head>
 
 <article class="page-content" class:playlist={list.object === 'playlist'} class:album={list.object === 'album'}>
+	{#if covers[0] || list.media?.artwork}<ImmersiveWash src={list.media?.artwork?.url ?? covers[0]} />{/if}
 	<header>
-		{#if covers[0] || list.media?.artwork}
-			<div class="hero-backdrop" aria-hidden="true"><img src={list.media?.artwork?.url ?? covers[0]} alt="" /></div>
-		{/if}
 		<div class="cover" class:collage>
 			{#if collage}
 				{#each covers as cover (cover)}<Artwork src={cover} size={112} eager />{/each}
@@ -124,6 +123,7 @@
 			{#if queueRequest === list.record.uri && player.snapshot.queueError}<p role="status" class="state">{player.snapshot.queueError}</p>{/if}
 		</div>
 	</header>
+	<div class="body">
 	{#if accepted}
 		<p class="state" role="status">{accepted.status === 'rejected' ? 'saved to your account. the catalog could not apply it.' : 'saved to your account. the catalog is catching up.'}</p>
 	{/if}
@@ -148,10 +148,12 @@
 			{/each}
 		</section>
 	{/if}
+	</div>
 </article>
 
 <style>
-	header { position: relative; isolation: isolate; display: flex; align-items: flex-end; gap: 2rem; padding-block: 1.25rem 2rem; }
+	article { position: relative; isolation: isolate; max-width: none; }
+	header { display: flex; align-items: flex-end; gap: 2rem; padding-block: 1.25rem 2rem; }
 	.cover { width: min(14.5rem, 38vw); flex: none; border-radius: 0.75rem; overflow: hidden; box-shadow: 0 1.1rem 2.5rem rgb(0 0 0 / 0.3); }
 	.collage { display: grid; grid-template-columns: 1fr 1fr; aspect-ratio: 1; }
 	.collage :global(.artwork) { border-radius: 0; }
@@ -167,13 +169,36 @@
 	.buy span { overflow: hidden; text-overflow: ellipsis; }
 	.buy:hover { text-decoration: none; }
 	.edit { margin-top: 0.5rem; margin-left: -0.5rem; color: var(--accent); }
+	.body { min-width: 0; }
 	.members { display: grid; }
-	.playlist .members { gap: 0.5rem; }
-	.playlist .members :global(.track), .playlist .unavailable { background: var(--surface); border: 1px solid var(--line); padding: 0.55rem; border-radius: 0.65rem; margin: 0; }
+	/* rows sit straight on the page, as on home and artist pages */
+	.playlist .members { gap: 0.15rem; }
+	.playlist .unavailable { min-height: 4.65rem; display: flex; align-items: center; margin: 0; }
 	.album .members :global(.track) { border-bottom: 1px solid var(--line); }
 	.album .members :global(.track:last-child) { border-bottom: 0; }
 	.album .unavailable { display: flex; align-items: center; gap: 0.75rem; min-height: 3.5rem; margin: 0 -0.5rem; padding-inline: 0.5rem; border-bottom: 1px solid var(--line); }
 	.album .number { width: 2.25rem; text-align: center; color: var(--faint); font-variant-numeric: tabular-nums; }
+	@media (min-width: 1100px) {
+		/* desktop: cover, title and controls in a left column that stays put; the tracks take the rest */
+		article { display: grid; grid-template-columns: clamp(19rem, 24%, 24rem) minmax(0, 1fr); column-gap: 3rem; align-items: start; }
+		header { flex-direction: column; align-items: start; gap: 1.5rem; padding-block: 1rem 0; }
+		@media (min-height: 760px) { header { position: sticky; top: clamp(1rem, 3vw, 2.25rem); } }
+		.cover { width: 100%; max-width: 16rem; }
+		/* the controls fill the column as one even row, as on phones */
+		.actions { display: grid; grid-template-columns: 1fr 1fr auto auto; width: 100%; }
+		.actions .buy { grid-column: 1 / -1; order: 1; justify-content: center; }
+		.long { display: none; }
+		.short { display: inline; }
+		.body { padding-top: 1rem; }
+	}
+	@media (min-width: 1240px) {
+		/* rows go to one line: plays, likes and when line up in columns, as on home */
+		.members :global(.track) { min-height: 4rem; }
+		.members :global(.name) { grid-template-columns: minmax(0, 1fr) auto; column-gap: 2rem; align-items: center; }
+		.members :global(.name > a) { grid-column: 1; }
+		.members :global(.numbered .metrics) { grid-row: 1; }
+		.members :global(.metrics) { grid-column: 2; grid-row: 1 / 3; display: grid; grid-template-columns: 3.25rem 3.25rem 4.5rem; gap: 0.5rem; font-size: var(--t-12-8); }
+	}
 	@media (max-width: 720px) {
 		header { flex-direction: column; align-items: center; text-align: center; gap: 1.1rem; padding-top: 0.5rem; }
 		.cover { width: min(13rem, 56vw); }

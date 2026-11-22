@@ -16,6 +16,7 @@
 	import Artwork from '$lib/ui/Artwork.svelte';
 	import { trackArtwork } from '@plyr/next-core/artwork';
 	import Icon from '$lib/ui/Icon.svelte';
+	import ImmersiveWash from '$lib/ui/ImmersiveWash.svelte';
 	import Loading from '$lib/ui/Loading.svelte';
 	import { artistCatalogFor } from './artist-catalog';
 	import ListeningNow from './ListeningNow.svelte';
@@ -128,7 +129,7 @@
 {/snippet}
 
 <article class="page-content artist">
-	{#if artist.avatar_url}<div class="wash" aria-hidden="true"><img src={artist.avatar_url} alt="" /></div>{/if}
+	{#if artist.avatar_url}<ImmersiveWash src={artist.avatar_url} />{/if}
 	<div class="profile">
 	<header>
 		<div class="avatar"><Artwork src={artist.avatar_url ?? undefined} size={176} eager /></div>
@@ -219,13 +220,8 @@
 </article>
 
 <style>
-	/* the artist's avatar washes the whole content area, edge to edge, not just the header */
+	/* the avatar washes the whole content area (ImmersiveWash), not just the header */
 	.artist { --pad: clamp(1rem, 3vw, 2.25rem); position: relative; isolation: isolate; max-width: none; display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.25rem; }
-	.wash { position: absolute; z-index: -1; top: 0; inset-inline: 0; height: min(46rem, 100dvh); overflow: hidden; pointer-events: none;
-		mask-image: linear-gradient(to bottom, black, black 40%, transparent); }
-	/* light mode: a white veil keeps the faint row text readable over a mid-tone avatar */
-	.wash::after { content: ''; position: absolute; inset: 0; background: light-dark(rgb(255 255 255 / 0.45), transparent); }
-	.wash img { width: 100%; height: 100%; object-fit: cover; filter: blur(72px) saturate(1.3); transform: scale(1.4); opacity: 0.6; }
 	.profile { display: grid; gap: 1.25rem; min-width: 0; }
 	header { display: flex; align-items: center; gap: 2.25rem; padding-block: 1.25rem 0.75rem; }
 	.avatar { width: clamp(11rem, 14vw, 15rem); flex: none; border-radius: 50%; overflow: hidden; box-shadow: 0 0.7rem 2rem rgb(0 0 0 / 0.3); }
@@ -266,8 +262,6 @@
 		.avatar { width: 100%; max-width: 16rem; }
 		.cards { grid-template-columns: minmax(0, 1fr); }
 		.catalog { padding-top: 1rem; }
-		/* the wash stays behind the whole page as it scrolls */
-		.wash { position: fixed; top: 0; left: var(--sidebar); right: 0; height: 100dvh; mask-image: linear-gradient(to bottom, black, black 30%, rgb(0 0 0 / 0.45)); }
 	}
 	@media (min-width: 1240px) {
 		/* rows go to one line: plays, likes and when line up in columns, as on home */
@@ -286,7 +280,6 @@
 		.actions { display: flex; flex-wrap: wrap; width: 100%; }
 		.actions :global(.hero-pill) { flex: 1 1 auto; }
 		.cards { grid-template-columns: minmax(0, 1fr); }
-		.wash { height: 30rem; }
 	}
 	@media (max-width: 520px) {
 		.panel :global(.track) { grid-template-columns: min(3.25rem, 16vw) minmax(0, 1fr) auto; }
