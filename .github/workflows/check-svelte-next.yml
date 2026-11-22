@@ -14,6 +14,7 @@ on:
             verify-live-jam,
             verify-live-like,
             verify-live-publish,
+            verify-live-not-found,
           ]
         default: preview
   pull_request:
@@ -210,7 +211,7 @@ jobs:
           curl -fsS https://api.plyr.fm/health | jq -e '.status == "ok"'
 
   verify-live-browser:
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.target == 'verify-live-upload-consent' || inputs.target == 'verify-live-jam' || inputs.target == 'verify-live-like' || inputs.target == 'verify-live-publish')
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.target == 'verify-live-upload-consent' || inputs.target == 'verify-live-jam' || inputs.target == 'verify-live-like' || inputs.target == 'verify-live-publish' || inputs.target == 'verify-live-not-found')
     runs-on: ubuntu-latest
     timeout-minutes: 8
     concurrency: next-live-browser
@@ -263,3 +264,7 @@ jobs:
           ZAT_TEST_PDS: ${{ secrets.ZAT_TEST_PDS }}
           PLAYWRIGHT_CHANNEL: chrome
         run: node scripts/check-live-publish.mjs
+      - name: verify missing pages show the not-found page
+        if: inputs.target == 'verify-live-not-found'
+        working-directory: next/web
+        run: node scripts/check-live-not-found.mjs
