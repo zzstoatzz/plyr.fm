@@ -74,7 +74,9 @@
 	];
 
 	beforeNavigate(() => cancelFocusRestore?.());
+	let arrivedInApp = false;
 	afterNavigate(({ from, to }) => {
+		arrivedInApp = !!from;
 		if (from && dialog?.open) nowPlayingView?.dismiss();
 		if (to?.url.pathname !== resolve('/search')) {
 			if (searchReturn && searchReturn.url.href === to?.url.href) searchReturn.restoreFocus();
@@ -184,11 +186,10 @@
 		untrack(() => { if (!queuePage && !player.queueOpen) toggleQueue(); });
 	});
 
-	function toggleQueue(fromShortcut = false) {
+	function toggleQueue() {
 		if (queuePage) {
-			if (!fromShortcut) return;
 			player.queueOpen = false;
-			if (page.state.toggledQueue) history.back();
+			if (page.state.toggledQueue || arrivedInApp) history.back();
 			else void goto(resolve('/'), { replaceState: true });
 		} else if (matchMedia('(max-width: 720px)').matches) {
 			void goto(resolve('/queue'), { state: { toggledQueue: true } });
@@ -216,7 +217,7 @@
 		const focused = target instanceof Element && !target.closest('dialog:not([open])') ? target : undefined;
 		if (focused?.closest('input, select, textarea, [role="slider"], [contenteditable]:not([contenteditable=false])')) return;
 		if (key === '?') { event.preventDefault(); openShortcuts(); return; }
-		if (key === 'q') { event.preventDefault(); toggleQueue(true); return; }
+		if (key === 'q') { event.preventDefault(); toggleQueue(); return; }
 		if (!player.current && !player.liveStation) return;
 		if (event.code === 'Space' || key === ' ') {
 			if (!focused?.closest('button, a, summary')) { event.preventDefault(); player.toggle(); }

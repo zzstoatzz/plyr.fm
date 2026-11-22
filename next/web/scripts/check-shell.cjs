@@ -152,6 +152,8 @@ async function screen(browser, phone, scheme) {
     await capture('queue');
     await remove.click();
     await remove.waitFor({ state: 'detached' });
+    const queueButton = dock.getByRole('button', { name: 'Queue', exact: true }); assert.equal(await queueButton.getAttribute('aria-pressed'), 'true', 'the dock queue button shows the open queue');
+    await queueButton.click(); await queue.waitFor({ state: 'hidden' }); assert.equal(await queueButton.getAttribute('aria-pressed'), 'false'); if (phone) assert.equal(new URL(page.url()).pathname, '/library', 'tapping queue again goes back to where you were');
     await page.reload();
     await dock.getByRole('button', { name: 'Open now playing' }).waitFor();
     await dock.getByRole('button', { name: 'Play', exact: true }).waitFor();
@@ -631,13 +633,10 @@ async function keyboard(browser, phone, scheme) {
     await press('j');
     await dock.getByText(tracks[0].metadata.title, { exact: true }).waitFor();
     if (!phone) {
-      await dock.getByRole('button', { name: 'Open now playing' }).click();
+      const before = new URL(page.url()).pathname; await dock.getByRole('button', { name: 'Open now playing' }).click();
       await page.getByRole('dialog', { name: 'Now playing' }).getByRole('link', { name: 'Open queue' }).click();
-      await page.waitForURL('**/queue');
-      const dockQueue = dock.getByRole('button', { name: 'Queue', exact: true, pressed: true });
-      await dockQueue.waitFor({ timeout: 3000 });
-      assert.equal(await dockQueue.isDisabled(), true);
-      assert.equal(new URL(page.url()).pathname, '/queue');
+      await page.waitForURL('**/queue'); const dockQueue = dock.getByRole('button', { name: 'Queue', exact: true, pressed: true });
+      await dockQueue.waitFor({ timeout: 3000 }); assert.equal(new URL(page.url()).pathname, '/queue'); await dockQueue.click(); await page.waitForURL(url => url.pathname === before); await dock.getByRole('button', { name: 'Queue', exact: true, pressed: false }).waitFor({ timeout: 3000 });
     }
     assert.deepEqual(errors, []);
   } finally { await context.close(); }
