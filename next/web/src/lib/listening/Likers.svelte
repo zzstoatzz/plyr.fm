@@ -9,7 +9,7 @@
   import { compactCount } from './format';
   import { placePopover } from './popover';
 
-  let { track }: { track: Track } = $props();
+  let { track, icon = true }: { track: Track; icon?: boolean } = $props();
   let snapshot = $state.raw(untrack(() => likes.snapshot(track)));
   let panel: HTMLDivElement;
   let trigger: HTMLButtonElement;
@@ -74,7 +74,7 @@
 </script>
 
 <button bind:this={trigger} class="likers" type="button" aria-label={`${snapshot.count} ${snapshot.count === 1 ? 'like' : 'likes'} on ${track.metadata.title}`} aria-expanded={open} aria-controls={id}
-  onpointerenter={event => { if (event.pointerType === 'mouse') show(); }} onpointerleave={leave} onfocus={() => show()} onblur={leave} onclick={() => show(true)}><Icon name="heart" size={11} /><span>{compactCount(snapshot.count)}</span></button>
+  onpointerenter={event => { if (event.pointerType === 'mouse') show(); }} onpointerleave={leave} onfocus={() => show()} onblur={leave} onclick={() => show(true)}>{#if icon}<Icon name="heart" size={11} />{/if}<span>{compactCount(snapshot.count)}</span></button>
 <div bind:this={panel} {id} popover="auto" data-player-no-pull role="group" aria-label="People who liked this track" class="people" ontoggle={(event: ToggleEvent) => { open = event.newState === 'open'; if (!open) pinned = false; }} onpointerenter={() => clearTimeout(timer)} onpointerleave={leave} onfocusout={leave}>
   <header><strong>liked by</strong><button class="icon-button" type="button" aria-label="Close likes" onclick={() => panel.hidePopover()}><Icon name="x" size={16} /></button></header>
   {#each people as person (person.actor.did)}

@@ -40,6 +40,11 @@
     if (!comments.hasLoaded(id)) comments.loadComments(id);
     return unsubscribe;
   });
+  // Grow with the text instead of showing a resize grip.
+  function grow(field: HTMLTextAreaElement) {
+    const fit = () => { field.style.height = 'auto'; field.style.height = `${field.scrollHeight + field.offsetHeight - field.clientHeight}px`; };
+    $effect(() => { draft; fit(); });
+  }
   async function post() {
     if (!account.commenting || !draft.trim() || busy || tooLong) return;
     const session = account.rpc;
@@ -58,7 +63,7 @@
 {#if enabled && account.commenting && track.record.cid}
   <form class:compact onsubmit={event => { event.preventDefault(); void post(); }}>
     <label for={id} class:sr-only={compact}>add a comment</label>
-    <textarea {id} rows={compact ? 1 : 2} placeholder={compact ? 'say something about this moment…' : undefined} maxlength={MAX_COMMENT_BYTES} bind:value={draft} disabled={busy} oninput={event => { if (event.currentTarget.value.trim()) pinned ??= position; else pinned = undefined; error = ''; }}></textarea>
+    <textarea {@attach grow} {id} rows={compact ? 1 : 2} placeholder={compact ? 'say something about this moment…' : undefined} maxlength={MAX_COMMENT_BYTES} bind:value={draft} disabled={busy} oninput={event => { if (event.currentTarget.value.trim()) pinned ??= position; else pinned = undefined; error = ''; }}></textarea>
     <div class="form-actions">
       <button type="button" class="text-button time" title="use the current playback position" onclick={() => { pinned = draft.trim() ? position : undefined; }}>at {clock(seconds)}</button>
       <button type="submit" class="text-button submit" aria-label={compact ? 'Post comment' : undefined} disabled={busy || !draft.trim() || tooLong}>{#if compact}<Icon name={busy ? 'clock' : 'upload'} size={18} />{:else}{busy ? 'posting…' : 'post comment'}{/if}</button>
@@ -71,15 +76,17 @@
 
 <style>
   form { display: grid; gap: 0.35rem; }
-  textarea { width: 100%; min-height: 4rem; resize: vertical; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 0.65rem; padding: 0.55rem; }
+  textarea { width: 100%; min-height: 4rem; resize: none; overflow-y: auto; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 0.65rem; padding: 0.55rem; }
   .form-actions { display: flex; align-items: center; gap: 0.35rem; justify-content: space-between; }
   .time, .sign-in { color: var(--accent); }
   .time { font-variant-numeric: tabular-nums; }
   .submit { background: var(--accent); color: var(--on-accent); font-weight: 650; }
   .submit:disabled { background: var(--raised); color: var(--muted); }
   .compact { border: 1px solid var(--line); border-radius: 1.5rem; padding: 0.15rem 0.3rem 0.15rem 0.75rem; }
+  form.compact:focus-within { border-color: var(--accent); }
+  .compact textarea:focus-visible { outline: none; }
   form.compact { display: flex; align-items: center; gap: 0.25rem; }
-  .compact textarea { border: 0; padding: 0.5rem 0; flex: 1; min-width: 0; min-height: 2.5rem; max-height: 8rem; resize: vertical; background: transparent; }
+  .compact textarea { border: 0; padding: 0.5rem 0; flex: 1; min-width: 0; min-height: 2.5rem; max-height: 8rem; resize: none; background: transparent; }
   .compact .form-actions { flex: none; }
   .compact .submit { min-width: 2.75rem; }
   .compact .time { padding-inline: 0.35rem; font-size: var(--t-12); white-space: nowrap; }
