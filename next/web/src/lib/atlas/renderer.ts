@@ -218,12 +218,11 @@ export class AtlasRenderer {
   // --- geometry ---
 
   private interacted = false;
-  private insets = { top: 0, bottom: 0 };
+  private insets = [0, 0];
 
   /** Keeps the initial fit clear of overlays along the top and bottom edges. */
   setInsets(top: number, bottom: number): void {
-    if (top === this.insets.top && bottom === this.insets.bottom) return;
-    this.insets = { top, bottom };
+    this.insets = [top, bottom];
     if (this.data && !this.interacted) this.fitToData();
   }
 
@@ -242,8 +241,7 @@ export class AtlasRenderer {
     const spanX = Math.max(0.01, xMax - xMin);
     const spanY = Math.max(0.01, yMax - yMin);
     const base = Math.min(this.W, this.H) * 0.42;
-    const top = Math.min(this.insets.top, this.H / 3);
-    const bottom = Math.min(this.insets.bottom, this.H / 3);
+    const [top, bottom] = this.insets.map(px => Math.min(px, this.H / 3));
     const zoom = Math.min((0.9 * this.W) / (spanX * base), (0.86 * (this.H - top - bottom)) / (spanY * base));
     this.view.zoom = Math.max(this.view.minZoom, Math.min(4, zoom));
     this.view.panX = -(xMin + xMax) / 2;
