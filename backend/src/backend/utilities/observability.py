@@ -39,6 +39,7 @@ def configure_observability(settings: Settings) -> ModuleType | None:
             service_name="plyr-api",
             token=settings.observability.write_token,
             environment=settings.observability.environment,
+            metrics=False,
         )
 
         # configure logging with logfire handler
