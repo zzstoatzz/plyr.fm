@@ -228,11 +228,13 @@ export class AtlasRenderer {
 
   private fitToData(): void {
     if (!this.px.length || !this.W || !this.H) return;
-    // frame the main body of the catalog: the outer 3% on each side (a far-off cluster) can sit off-screen
+    // frame the main body of the catalog: points past Tukey's fences (a far-off cluster) start off-screen
     const range = (values: Float32Array) => {
       const sorted = values.slice().sort();
       const at = (f: number) => sorted[Math.round(f * (sorted.length - 1))];
-      return [at(0.03), at(0.97)];
+      const reach = 1.5 * (at(0.75) - at(0.25));
+      const inside = sorted.filter(v => v >= at(0.25) - reach && v <= at(0.75) + reach);
+      return [inside[0], inside[inside.length - 1]];
     };
     const [xMin, xMax] = range(this.px);
     const [yMin, yMax] = range(this.py);
