@@ -26,7 +26,8 @@ type Phase = 'idle' | 'refreshing' | 'closing';
 /**
  * Pull-to-refresh with plyr.fm's wave in the gap. No UIRefreshControl: it misses fast pulls, and
  * starting it from code jumps the content by its own height. Letting go past the line refreshes;
- * a top content inset holds the gap, so the bounce settles into it. Everything that moves while
+ * a top content inset holds the gap, so the bounce settles into it. The inset only drops once the
+ * content is back at rest: dropping it with the gap open makes UIKit shift the content. Everything that moves while
  * the refresh runs is on the native driver, so a busy JS thread can't freeze it.
  */
 export function usePullRefresh(
@@ -52,7 +53,7 @@ export function usePullRefresh(
   const state = useRef({
     pull: 0, dragging: false, engaged: false, gesture: restingPull, phase: 'idle' as Phase,
     wave: Array.from({ length: BARS }, (): Bar => ({ height: 0.12, velocity: 0 })),
-    frame: 0, last: 0, lastPull: 0, lastSpeed: 0, started: 0, animation: undefined as Animated.CompositeAnimation | undefined,
+    frame: 0, last: 0, lastPull: 0, lastSpeed: 0, started: 0, seated: false, animation: undefined as Animated.CompositeAnimation | undefined,
   }).current;
 
   // The level-meter jiggle while pulling runs on JS; the finger is the only thing happening then.
@@ -86,6 +87,7 @@ export function usePullRefresh(
   const settle = useCallback(() => {
     state.phase = 'idle';
     state.engaged = false;
+    setInset(0);
     state.animation?.stop();
     waving.setValue(0);
     visible.setValue(0);
@@ -94,6 +96,7 @@ export function usePullRefresh(
 
   const begin = useCallback(() => {
     state.phase = 'refreshing';
+    state.seated = false;
     state.started = performance.now();
     cancelAnimationFrame(state.frame);
     state.frame = 0;
@@ -119,14 +122,26 @@ export function usePullRefresh(
       }
       state.phase = 'closing';
       scrollToRest(-top);
-      setInset(0);
     });
   }, [state, lights, visible, waving, loop, scrollToRest, top]);
+
+  // a bounce that began before the inset landed heads for the old rest; send it to the gap
+  const seat = useCallback(() => {
+    if (state.phase !== 'refreshing' || state.dragging || state.seated) return;
+    state.seated = true;
+    if (state.pull < HOLD - 1) scrollToRest(-top - HOLD);
+  }, [state, top, scrollToRest]);
+  useEffect(() => {
+    if (inset !== HOLD) return;
+    const timer = setTimeout(seat, 80);
+    return () => clearTimeout(timer);
+  }, [inset, seat]);
 
   const listener = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     onScrolled(event);
     state.pull = -(event.nativeEvent.contentOffset.y + top);
     if (state.phase === 'closing' && state.pull <= 0.5) settle();
+    if ((event.nativeEvent.contentInset?.top ?? 0) >= HOLD) seat();
     if (state.phase !== 'idle') return;
     if (state.pull > 0.5) run();
     if (!state.dragging || !state.engaged) return;
@@ -137,16 +152,17 @@ export function usePullRefresh(
       feel('arm');
       if (!reduced.current) state.wave = state.wave.map((bar, index) => ({ ...bar, velocity: bar.velocity + armKick(index) }));
     }
-  }, [state, top, run, settle, onScrolled]);
+  }, [state, top, run, settle, seat, onScrolled]);
   const onScroll = useMemo(() => Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true, listener }), [scrollY, listener]);
 
   const onScrollBeginDrag = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     state.dragging = true;
+    if (state.phase === 'closing') settle();
     if (state.phase !== 'idle') return;
     state.engaged = event.nativeEvent.contentOffset.y + top <= 1;
     state.gesture = restingPull;
     visible.setValue(state.engaged ? 1 : 0);
-  }, [state, top, visible]);
+  }, [state, top, visible, settle]);
 
   const onScrollEndDrag = useCallback(() => {
     state.dragging = false;
