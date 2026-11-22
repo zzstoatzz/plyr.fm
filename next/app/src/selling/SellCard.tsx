@@ -20,10 +20,11 @@ const SHOWN = 50;
 const GROUPS = [{ label: 'all', value: undefined }, { label: 'albums', value: 'album' }, { label: 'tracks', value: 'track' }] as const;
 
 /** portal: where listeners can pay you: a support link, and buy links on the releases you pick. plyr.fm links out, never takes the payment. */
-export function SellCard({ did }: { did: string }) {
+export function SellCard({ did, alwaysOpen = false }: { did: string; alwaysOpen?: boolean }) {
   const theme = useAppearance();
   const auth = useAuth();
-  const [open, setOpen] = useState(false);
+  const [expanded, setOpen] = useState(false);
+  const open = alwaysOpen || expanded;
   const [settings, setSettings] = useState<SellingSettings>();
   const [releases, setReleases] = useState<Release[]>();
   const [loadError, setLoadError] = useState('');
@@ -82,19 +83,19 @@ export function SellCard({ did }: { did: string }) {
   const small = { color: theme.faint, fontFamily: theme.fontFamily, fontSize: 13 * theme.scale, lineHeight: 18 * theme.scale };
 
   return <View style={[styles.card, { borderColor: theme.line, backgroundColor: theme.surface }]}>
-    <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} accessibilityLabel={`get paid, ${summary}`}
+    {!alwaysOpen && <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} accessibilityLabel={`get paid, ${summary}`}
       onPress={() => setOpen(value => !value)} style={styles.header}>
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={{ color: theme.text, fontFamily: theme.fontFamily, fontSize: 17 * theme.scale, fontWeight: '700' }}>get paid</Text>
         <Text numberOfLines={1} style={small}>{summary}</Text>
       </View>
       {open ? <CaretUp size={18} color={theme.muted} /> : <CaretDown size={18} color={theme.muted} />}
-    </Pressable>
+    </Pressable>}
     {open && <View style={{ gap: 14 }}>
       <Copy>point listeners to wherever you already sell or take tips. buttons show up on your artist page and on what you've uploaded. plyr.fm never sees the payment.</Copy>
       {!auth.accountSync ? <View style={{ gap: 8 }}>
         <Copy>reconnect to choose where listeners can pay you.</Copy>
-        <View style={row}><Action primary label="reconnect" href={{ pathname: '/login', params: { return_to: '/portal' } }} /></View>
+        <View style={row}><Action primary label="reconnect" href={{ pathname: '/login', params: { return_to: alwaysOpen ? '/get-paid' : '/portal' } }} /></View>
       </View> : loadError ? <View style={{ gap: 8 }}>
         <Copy live>{loadError}</Copy>
         <View style={row}><Action label="try again" onPress={() => void load()} /></View>

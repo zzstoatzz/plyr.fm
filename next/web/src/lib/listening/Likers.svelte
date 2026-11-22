@@ -75,7 +75,7 @@
 
 <button bind:this={trigger} class="likers" type="button" aria-label={`${snapshot.count} ${snapshot.count === 1 ? 'like' : 'likes'} on ${track.metadata.title}`} aria-expanded={open} aria-controls={id}
   onpointerenter={event => { if (event.pointerType === 'mouse') show(); }} onpointerleave={leave} onfocus={() => show()} onblur={leave} onclick={() => show(true)}><Icon name="heart" size={11} /><span>{compactCount(snapshot.count)}</span></button>
-<div bind:this={panel} {id} popover="auto" data-player-no-pull role="group" aria-label="People who liked this track" class="people" ontoggle={() => { open = panel.matches(':popover-open'); if (!open) pinned = false; }} onpointerenter={() => clearTimeout(timer)} onpointerleave={leave} onfocusout={leave}>
+<div bind:this={panel} {id} popover="auto" data-player-no-pull role="group" aria-label="People who liked this track" class="people" ontoggle={(event: ToggleEvent) => { open = event.newState === 'open'; if (!open) pinned = false; }} onpointerenter={() => clearTimeout(timer)} onpointerleave={leave} onfocusout={leave}>
   <header><strong>liked by</strong><button class="icon-button" type="button" aria-label="Close likes" onclick={() => panel.hidePopover()}><Icon name="x" size={16} /></button></header>
   {#each people as person (person.actor.did)}
     <a href={resolve('/(app)/u/[actor]', { actor: person.actor.profile?.handle || person.actor.did })}><span class="avatar"><Artwork src={person.actor.profile?.avatar_url ?? undefined} size={32} fallbackIcon="user" /></span><span>{person.actor.profile?.display_name || person.actor.profile?.handle || 'listener'}</span></a>
