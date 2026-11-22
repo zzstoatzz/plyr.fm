@@ -12,6 +12,14 @@ import { Text } from './Text';
 const THRESHOLD = 120;
 const HOLD = 60;
 const STAGE = 56;
+const KNEE_LOW = 20;
+const KNEE_HIGH = 100;
+/** [pull, shift]: the content shows at pull + shift, easing into the gap instead of stopping dead at it. */
+const KNEE: (readonly [number, number])[] = [[0, HOLD], ...Array.from({ length: 9 }, (_, i) => {
+  const pull = KNEE_LOW + (KNEE_HIGH - KNEE_LOW) * i / 8;
+  const shown = HOLD + (pull - KNEE_LOW) ** 2 / (2 * (KNEE_HIGH - KNEE_LOW));
+  return [pull, Math.max(0, shown - pull)] as const;
+})];
 
 function feel(event: 'tick' | 'arm' | 'release' | 'success' | 'warning') {
   const played = event === 'tick' ? Haptics.selectionAsync()
@@ -33,6 +41,7 @@ type Phase = 'idle' | 'refreshing' | 'closing';
  */
 export function usePullRefresh(
   onRefresh: () => Promise<RefreshResult>,
+  jumpTo: (offset: number) => void,
   onScrolled: (event: NativeSyntheticEvent<NativeScrollEvent>) => void,
 ) {
   const colors = useAppearance();
@@ -53,7 +62,7 @@ export function usePullRefresh(
   const state = useRef({
     pull: 0, dragging: false, engaged: false, gesture: restingPull, phase: 'idle' as Phase,
     wave: Array.from({ length: BARS }, (): Bar => ({ height: 0.12, velocity: 0 })),
-    frame: 0, last: 0, lastPull: 0, lastSpeed: 0, started: 0, animation: undefined as Animated.CompositeAnimation | undefined,
+    frame: 0, last: 0, lastPull: 0, lastSpeed: 0, started: 0, cut: false, animation: undefined as Animated.CompositeAnimation | undefined,
   }).current;
 
   // The level-meter jiggle while pulling runs on JS; the finger is the only thing happening then.
@@ -89,12 +98,15 @@ export function usePullRefresh(
     state.engaged = false;
     state.animation?.stop();
     waving.setValue(0);
-    visible.setValue(0);
+    // a finger still holding the gap open keeps the bars until it lets the gap close
+    if (state.dragging || state.pull > 0.5) run();
+    else visible.setValue(0);
     setMessage('');
-  }, [state, waving, visible]);
+  }, [state, waving, visible, run]);
 
   const begin = useCallback(() => {
     state.phase = 'refreshing';
+    state.cut = false;
     state.started = performance.now();
     cancelAnimationFrame(state.frame);
     state.frame = 0;
@@ -127,6 +139,11 @@ export function usePullRefresh(
   const listener = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     onScrolled(event);
     state.pull = -(event.nativeEvent.contentOffset.y + top);
+    // under the knee the shift hides the rest of the bounce, but a bouncing scroll view eats taps; end it
+    if (state.phase === 'refreshing' && !state.dragging && !state.cut && state.pull < KNEE_LOW) {
+      state.cut = true;
+      if (state.pull > 0.5) jumpTo(-top);
+    }
     if (state.phase !== 'idle') return;
     if (state.pull > 0.5) run();
     if (!state.dragging || !state.engaged) return;
@@ -137,7 +154,7 @@ export function usePullRefresh(
       feel('arm');
       if (!reduced.current) state.wave = state.wave.map((bar, index) => ({ ...bar, velocity: bar.velocity + armKick(index) }));
     }
-  }, [state, top, run, onScrolled]);
+  }, [state, top, run, jumpTo, onScrolled]);
   const onScroll = useMemo(() => Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true, listener }), [scrollY, listener]);
 
   const onScrollBeginDrag = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -161,7 +178,7 @@ export function usePullRefresh(
   // gap in points: the pull from the native scroll position, plus the shift that holds it open.
   // The stage sits centred in the gap and shrinks with it, so the wave closes with the gap.
   const pull = useMemo(() => Animated.multiply(Animated.add(scrollY, top), -1), [scrollY, top]);
-  const shift = useMemo(() => Animated.multiply(holding, pull.interpolate({ inputRange: [0, HOLD], outputRange: [HOLD, 0], extrapolate: 'clamp' })), [holding, pull]);
+  const shift = useMemo(() => Animated.multiply(holding, pull.interpolate({ inputRange: KNEE.map(([p]) => p), outputRange: KNEE.map(([, s]) => s), extrapolate: 'clamp' })), [holding, pull]);
   const gap = useMemo(() => Animated.add(pull, shift), [pull, shift]);
   const listStyle = useMemo(() => ({ transform: [{ translateY: shift }] }), [shift]);
   const stage = useMemo(() => ({

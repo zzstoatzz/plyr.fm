@@ -52,7 +52,7 @@ function HomeFeed({ onPlay, hiddenTags }: { onPlay: Play; hiddenTags: string[] }
     setChartKey(key => key + 1);
     const page = await latest.refresh();
     return page ? { ok: true, fresh: newAtTop(before, page) } : { ok: false };
-  }, [tracks, latest.refresh]), useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+  }, [tracks, latest.refresh]), useCallback((offset: number) => list.current?.scrollToOffset({ offset, animated: false }), []), useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     viewport.current.offset = event.nativeEvent.contentOffset.y;
     fillViewport();
   }, [fillViewport]));
