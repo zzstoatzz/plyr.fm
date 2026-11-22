@@ -16,9 +16,13 @@ export function createTrackLikes<Session extends Account>({ getAuth, createPds }
   let writer = createLatestWriter();
   function emit() { for (const listener of listeners) listener(); }
   function reset() { session = getAuth().rpc; entries.clear(); writer = createLatestWriter(); emit(); }
+  // The unclamped count, so taking back a change the appview never counted can't drift.
+  const raw = new WeakMap<LikeSnapshot, number>();
   function show(state: LikeSnapshot, liked: boolean) {
     if (state.liked === liked) return;
-    state.count = Math.max(0, state.count + (liked ? 1 : -1));
+    const count = (raw.get(state) ?? state.count) + (liked ? 1 : -1);
+    raw.set(state, count);
+    state.count = Math.max(0, count);
     state.liked = liked;
   }
   function entry(track: Track) {

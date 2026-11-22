@@ -73,3 +73,33 @@ test('a failed write puts back the saved like and count, and a retry works', asy
   assert.equal(model.snapshot(track).count, 6);
   assert.equal(model.snapshot(track).error, '');
 });
+
+test('a failed unlike on a stale zero count comes back to the same count', async () => {
+  const account = { did: 'did:plc:me', rpc: {} };
+  const model = createTrackLikes({ getAuth: () => account, createPds: () => ({
+    myLikes: async () => new Map([[track.record.uri, {} as LikeRef]]), like: async () => 'pending' as const,
+    unlike: async () => { throw new Error('offline'); }
+  }) });
+  const stale = { ...track, metrics: { ...track.metrics, like_count: 0 } };
+  await model.load(stale);
+  await model.toggle(stale);
+  assert.equal(model.snapshot(stale).liked, true);
+  assert.equal(model.snapshot(stale).count, 0);
+});
+
+test('a later write in a chain failing keeps what the earlier one saved', async () => {
+  const receipt = deferred<'pending'>();
+  const account = { did: 'did:plc:me', rpc: {} };
+  const model = createTrackLikes({ getAuth: () => account, createPds: () => ({
+    myLikes: async () => new Map<string, LikeRef>(), like: () => receipt.promise,
+    unlike: async () => { throw new Error('offline'); }
+  }) });
+  await model.load(track);
+  const first = model.toggle(track);
+  await model.toggle(track);
+  receipt.resolve('pending');
+  await first;
+  assert.equal(model.snapshot(track).liked, true);
+  assert.equal(model.snapshot(track).count, 6);
+  assert.equal(model.snapshot(track).error, 'offline');
+});
