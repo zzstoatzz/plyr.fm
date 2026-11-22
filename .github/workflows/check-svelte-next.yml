@@ -26,6 +26,18 @@ on:
       - "next/scripts/check-boundaries.mjs"
       - "next/scripts/check-type-scale.mjs"
       - ".github/workflows/check-svelte-next.yml"
+  # a merge to main ships next web live, like the next api; next has no users to protect
+  push:
+    branches: [main]
+    paths:
+      - "next/web/**"
+      - "next/core/**"
+      - "next/package.json"
+      - "next/bun.lock"
+      - "next/vendor/**"
+      - "next/scripts/check-boundaries.mjs"
+      - "next/scripts/check-type-scale.mjs"
+      - ".github/workflows/check-svelte-next.yml"
 
 permissions:
   contents: read
@@ -117,11 +129,11 @@ jobs:
           if-no-files-found: ignore
 
   deploy:
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.target == 'preview' || inputs.target == 'live')
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || inputs.target == 'preview' || inputs.target == 'live')
     needs: [check, browser]
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    concurrency: next-svelte-web-pages-${{ inputs.target }}
+    concurrency: next-svelte-web-pages-${{ inputs.target || 'live' }}
     env:
       PUBLIC_SITE_URL: ${{ inputs.target == 'preview' && 'https://plyr-fm-next-svelte.pages.dev' || 'https://next.plyr.fm' }}
     defaults:
@@ -148,7 +160,7 @@ jobs:
       - name: select Next Pages deployment
         id: pages
         env:
-          TARGET: ${{ inputs.target }}
+          TARGET: ${{ inputs.target || 'live' }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
@@ -190,7 +202,7 @@ jobs:
             jq -S . "build/$client" | diff - "$RUNNER_TEMP/$client"
           done
       - name: recheck production
-        if: always() && inputs.target == 'live' && steps.pages.outcome == 'success'
+        if: always() && (inputs.target || 'live') == 'live' && steps.pages.outcome == 'success'
         run: |
           curl -fsS https://plyr.fm/ -o /dev/null
           curl -fsS https://api.plyr.fm/health | jq -e '.status == "ok"'
