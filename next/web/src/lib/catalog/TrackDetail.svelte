@@ -28,6 +28,7 @@
 	const active = $derived(!player.liveStation && canToggleTrack(player.current, track, !!player.jam));
 	const canDiscuss = $derived(!isPrivateTrack(track));
 	let sharedTrack = $state<string>();
+	let detailsOpen = $state(false);
 	let account = $state.raw(auth.getAuth());
 	onMount(() => auth.subscribe(() => { account = auth.getAuth(); }));
 	const reportable = $derived(!!account.agent && account.did !== track.artist.did);
@@ -145,8 +146,8 @@
 		<div class="info">
 			<p>{canDiscuss ? `${track.metrics.play_count} ${track.metrics.play_count === 1 ? 'listen' : 'listens'}` : accessLabel(track, authConfig.AUDIO_SPACE_TYPE)}</p>
 			{#if track.metadata.description}
-				<details>
-					<summary>details</summary>
+				<details bind:open={detailsOpen}>
+					<summary aria-label={detailsOpen ? 'Hide details' : 'Show details'} title={detailsOpen ? 'hide details' : 'show details'}><span class="info-mark" aria-hidden="true">i</span></summary>
 					{#if chapterList.prose}<p class="description">{chapterList.prose}</p>{/if}
 					{#if chapterList.chapters.length}
 						<ol class="chapters" aria-label="Tracklist">
@@ -215,7 +216,12 @@
 	.buy:hover { text-decoration: none; background: color-mix(in srgb, var(--accent) 10%, transparent); }
 	.info { font-size: var(--t-14-4); width: 100%; }
 	.info > p, details, summary { display: inline; }
-	summary { display: inline-flex; align-items: center; min-height: 2.75rem; padding-inline: 0.5rem; color: var(--accent); cursor: pointer; font-weight: 650; }
+	summary { display: inline-flex; align-items: center; justify-content: center; min-width: 2.75rem; min-height: 2.75rem; vertical-align: middle; cursor: pointer; list-style: none; }
+	summary::-webkit-details-marker { display: none; }
+	.info-mark { display: grid; place-items: center; width: 1.15rem; height: 1.15rem; border: 1px solid var(--faint); border-radius: 50%; color: var(--faint); font-weight: 600; font-size: var(--t-10-5); line-height: 1; }
+	summary:hover .info-mark, details[open] .info-mark { color: var(--accent); border-color: var(--accent); }
+	summary:focus-visible { outline: none; }
+	summary:focus-visible .info-mark { outline: 2px solid var(--accent); outline-offset: 2px; }
 	.description { max-width: 40rem; border-top: 1px solid var(--line); margin: 0 auto; padding: 0.85rem 0; white-space: pre-wrap; text-align: start; overflow-wrap: anywhere; }
 	.chapters { list-style: none; margin: 0.5rem auto; max-width: 40rem; padding: 0; text-align: start; }
 	.comments-panel { inset: auto 1rem 1rem auto; margin: 0; width: min(27rem, calc(100% - 2rem)); max-height: min(42rem, calc(100dvh - 2rem)); height: fit-content; padding: 1rem; background: var(--surface); border: 1px solid var(--line); border-radius: 0.9rem; color: var(--text); }
