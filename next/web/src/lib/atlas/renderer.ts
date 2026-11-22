@@ -228,16 +228,14 @@ export class AtlasRenderer {
 
   private fitToData(): void {
     if (!this.px.length || !this.W || !this.H) return;
-    let xMin = Infinity;
-    let xMax = -Infinity;
-    let yMin = Infinity;
-    let yMax = -Infinity;
-    for (let i = 0; i < this.px.length; i++) {
-      if (this.px[i] < xMin) xMin = this.px[i];
-      if (this.px[i] > xMax) xMax = this.px[i];
-      if (this.py[i] < yMin) yMin = this.py[i];
-      if (this.py[i] > yMax) yMax = this.py[i];
-    }
+    // frame the main body of the catalog: the outer 3% on each side (a far-off cluster) can sit off-screen
+    const range = (values: Float32Array) => {
+      const sorted = values.slice().sort();
+      const at = (f: number) => sorted[Math.round(f * (sorted.length - 1))];
+      return [at(0.03), at(0.97)];
+    };
+    const [xMin, xMax] = range(this.px);
+    const [yMin, yMax] = range(this.py);
     const spanX = Math.max(0.01, xMax - xMin);
     const spanY = Math.max(0.01, yMax - yMin);
     const base = Math.min(this.W, this.H) * 0.42;
