@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { DotsSix as GripHorizontal } from './icons';
-import { Animated, PanResponder, StyleSheet, useWindowDimensions, View, type ScrollViewInstance, type ViewInstance } from 'react-native';
+import { Animated, Easing, PanResponder, StyleSheet, useWindowDimensions, View, type ScrollViewInstance, type ViewInstance } from 'react-native';
 import type { Track } from '@plyr/next-core/api';
 import * as Haptics from 'expo-haptics';
 import { GestureDetector, useCompetingGestures, usePanGesture } from 'react-native-gesture-handler';
@@ -18,7 +18,8 @@ interface Drag {
 
 export function QueueReorder({ queue, start, move, remove, renderTrack, renderHeader, scrollRef, scrollMetrics, onDragging }: {
   queue: Track[]; start: number; move(from: number, to: number): void; remove?(index: number): void;
-  renderTrack(track: Track, index: number): ReactNode;
+  /** dismiss collapses the row out of the list before it is removed. */
+  renderTrack(track: Track, index: number, dismiss: () => void): ReactNode;
   /** Content above a row that stays put while that row is dragged, such as a section label. */
   renderHeader?(index: number): ReactNode;
   scrollRef: RefObject<ScrollViewInstance | null>; scrollMetrics: RefObject<ScrollMetrics>;
@@ -32,9 +33,11 @@ export function QueueReorder({ queue, start, move, remove, renderTrack, renderHe
   const handles = useRef(new Map<number, ViewInstance>());
   const focusTarget = useRef<number | null>(null);
   const frame = useRef<number | undefined>(undefined);
-  const latest = useRef({ queue, start, move, onDragging });
-  latest.current = { queue, start, move, onDragging };
+  const latest = useRef({ queue, start, move, remove, onDragging });
+  latest.current = { queue, start, move, remove, onDragging };
   const [drag, setDrag] = useState<Drag | null>(null);
+  const [leaving, setLeaving] = useState<{ offset: number; height: Animated.Value; queue: Track[] } | null>(null);
+  const leavingNow = useRef(false);
 
   function cancel() {
     pickup.current++;
@@ -53,6 +56,24 @@ export function QueueReorder({ queue, start, move, remove, renderTrack, renderHe
     }
   }, [queue, start]);
   useEffect(() => { if (active.current) cancel(); }, [width, height]);
+  // The collapsed row is gone once the queue it was removed from changes.
+  useEffect(() => { setLeaving(current => current && current.queue !== queue ? null : current); }, [queue]);
+
+  /** Collapses a row (already slid out by a swipe, or still in place from its x) and removes it once the gap has closed. */
+  function dismiss(offset: number) {
+    const remove = latest.current.remove;
+    if (!remove || leavingNow.current || active.current) return false;
+    const from = latest.current.queue, at = latest.current.start + offset;
+    if (theme.reduceMotion) { remove(at); return true; }
+    leavingNow.current = true;
+    const collapse = new Animated.Value(layouts.current.get(offset)?.height ?? 60);
+    setLeaving({ offset, height: collapse, queue: from });
+    Animated.timing(collapse, { toValue: 0, duration: 200, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start(() => {
+      leavingNow.current = false;
+      if (latest.current.queue === from) remove(at); else setLeaving(null);
+    });
+    return true;
+  }
   useEffect(() => () => {
     pickup.current++;
     if (frame.current !== undefined) cancelAnimationFrame(frame.current);
@@ -114,38 +135,42 @@ export function QueueReorder({ queue, start, move, remove, renderTrack, renderHe
     {queue.slice(start).map((track, offset) => {
       const lifted = drag?.from === offset;
       const shift = drag ? rowShift(drag.rows, drag.from, drag.to, offset) : 0;
-      return <Fragment key={`${track.id}:${start + offset}`}>{renderHeader?.(start + offset)}<View onLayout={event => {
-        layouts.current.set(offset, { top: event.nativeEvent.layout.y, height: event.nativeEvent.layout.height });
-      }} style={[styles.row, {
+      const gone = leaving?.queue === queue && leaving.offset === offset ? leaving : null;
+      return <Fragment key={`${track.id}:${start + offset}`}>{renderHeader?.(start + offset)}<Animated.View onLayout={event => {
+        if (!gone) layouts.current.set(offset, { top: event.nativeEvent.layout.y, height: event.nativeEvent.layout.height });
+      }} pointerEvents={gone ? 'none' : 'auto'} style={[styles.row, gone && { height: gone.height, minHeight: 0, overflow: 'hidden', opacity: gone.height.interpolate({ inputRange: [0, 24], outputRange: [0, 1], extrapolate: 'clamp' }) }, {
         zIndex: lifted ? 2 : 0, backgroundColor: lifted ? theme.surface : 'transparent',
         borderColor: lifted ? theme.accent : 'transparent',
         transform: [{ translateY: lifted ? drag.offset : shift }, { scale: lifted ? 1.015 : 1 }],
         shadowColor: '#000', shadowOpacity: lifted ? (theme.dark ? 0.3 : 0.12) : 0,
         shadowRadius: 10, shadowOffset: { width: 0, height: 5 }, elevation: lifted ? 5 : 0
       }]}>
-        <RowHold begin={pointerY => begin(offset, pointerY)} update={update} finish={finish} cancel={cancel}
-          remove={remove && !drag ? () => remove(start + offset) : undefined}>
-          <View pointerEvents={drag ? 'none' : 'auto'} style={{ flex: 1, minWidth: 0 }}>{renderTrack(track, start + offset)}</View>
+        <RowHold begin={pointerY => begin(offset, pointerY)} update={update} finish={finish} cancel={cancel} gone={!!gone}
+          remove={remove && !drag ? () => dismiss(offset) : undefined}>
+          <View pointerEvents={drag ? 'none' : 'auto'} style={{ flex: 1, minWidth: 0 }}>{renderTrack(track, start + offset, () => dismiss(offset))}</View>
         </RowHold>
         <DragHandle register={node => { if (node) handles.current.set(offset, node); else handles.current.delete(offset); }}
           position={offset + 1} total={queue.length - start} label={track.metadata.title} active={!!lifted}
           begin={pointerY => begin(offset, pointerY)} update={update} finish={finish} cancel={cancel}
           move={delta => { if (!active.current) { focusTarget.current = offset + delta; move(start + offset, start + offset + delta); } }} />
-      </View></Fragment>;
+      </Animated.View></Fragment>;
     })}
   </View>;
 }
 
 /** Hold anywhere on a row, then drag: a quick tap still plays it and a quick swipe still scrolls. */
-function RowHold({ begin, update, finish, cancel, remove, children }: {
-  begin(y: number): void; update(y: number): void; finish(): void; cancel(): void; remove?: () => void; children: ReactNode;
+function RowHold({ begin, update, finish, cancel, remove, gone, children }: {
+  begin(y: number): void; update(y: number): void; finish(): void; cancel(): void; remove?: () => boolean; gone: boolean; children: ReactNode;
 }) {
   const theme = useAppearance();
+  const { width } = useWindowDimensions();
   const latest = useRef({ begin, update, finish, cancel, remove });
   latest.current = { begin, update, finish, cancel, remove };
   const held = useRef(false);
   const slide = useRef(new Animated.Value(0)).current;
   const swiped = useRef(0);
+  // A row that stays mounted after its collapse (the next track has the same key) slides back in.
+  useEffect(() => { if (!gone) slide.setValue(0); }, [gone, slide]);
   const hold = usePanGesture({
     runOnJS: true, activateAfterLongPress: 320,
     onActivate: event => {
@@ -167,8 +192,12 @@ function RowHold({ begin, update, finish, cancel, remove, children }: {
     onFinalize: event => {
       if (!event.canceled && swiped.current < -96 && latest.current.remove) {
         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-        latest.current.remove();
-        slide.setValue(0);
+        const remove = latest.current.remove;
+        // slide the rest of the way out, red strip filling the row, then the list collapses the gap
+        if (theme.reduceMotion) { remove(); slide.setValue(0); }
+        else Animated.timing(slide, { toValue: -width, duration: 160, easing: Easing.in(Easing.quad), useNativeDriver: true }).start(() => {
+          if (!remove()) Animated.spring(slide, { toValue: 0, useNativeDriver: true }).start();
+        });
       } else Animated.spring(slide, { toValue: 0, useNativeDriver: true }).start();
     },
   });

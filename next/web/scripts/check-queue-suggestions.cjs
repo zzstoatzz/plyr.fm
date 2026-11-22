@@ -48,8 +48,10 @@ async function queueSuggestions(browser, phone, scheme) {
     await add.waitFor({ timeout: 5000 });
     assert.ok(seen.at(-1).seeds.includes(tracks[0].record.uri), 'suggestions are seeded by the playing track');
     await add.click();
-    await suggested.getByRole('button', { name: `${tracks[5].metadata.title} added to queue`, exact: true }).waitFor();
-    assert.equal(await suggested.getByRole('listitem').count(), 4, 'adding keeps the row in place');
+    // the added card leaves the strip instead of staying as a checkmark, and the rest of the row closes up
+    await add.waitFor({ state: 'detached', timeout: 2000 });
+    assert.equal(await suggested.getByRole('listitem').count(), 3, 'only the added card leaves');
+    assert.equal(await suggested.getByRole('button', { name: /added to queue$/ }).count(), 0, 'no checkmark is left behind');
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'suggestions fit the window');
     await page.screenshot({ path: path.join(output, `${width}-${scheme}-queue-suggestions.png`) });
     assert.deepEqual(errors, []);

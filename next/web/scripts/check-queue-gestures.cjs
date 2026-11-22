@@ -49,7 +49,13 @@ async function phone(browser, origin) {
   const row=await queued.nth(0).boundingBox();
   await touch.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:row.x+180,y:row.y+2}]});
   for(const delta of [18,40,72,108]) await touch.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:row.x+180-delta,y:row.y+2}]});
+  // the row follows the finger, with the red remove strip behind it
+  const slid = await queued.nth(0).evaluate(node => ({ swiping: node.classList.contains('swiping'), x: new DOMMatrix(getComputedStyle(node).transform).m41, strip: getComputedStyle(node, '::after').content }));
+  assert.ok(slid.swiping && slid.x < -60, `the swiped row follows the finger (${JSON.stringify(slid)})`);
+  assert.equal(slid.strip, '"remove"');
   await touch.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+  // it slides out and collapses before it leaves the list
+  await page.waitForFunction(()=>document.querySelector('li.upcoming.leaving'), null, { timeout: 500 });
   await page.waitForFunction(()=>document.querySelectorAll('li.upcoming').length===1);
   assert.deepEqual(await titles(queued), [tracks[2].metadata.title]);
   await context.close();
