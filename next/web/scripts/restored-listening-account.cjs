@@ -93,6 +93,16 @@ module.exports = async function restoredListening({ page, context, origin, coord
   await comments.getByRole('button', { name: 'delete', exact: true }).click();
   await comments.getByText('no comments yet.').waitFor();
   await comments.getByRole('button', { name: 'Close comments', exact: true }).click();
+  // a return visit draws the last shelf while the follow graph is still loading
+  let release;
+  const held = new Promise(resolve => { release = resolve; });
+  const hold = async route => { await held; await route.fallback(); };
+  const follows = 'https://public.api.bsky.app/xrpc/app.bsky.graph.getFollows?**';
+  await context.route(follows, hold);
+  await page.goto(origin);
+  await shelf.getByRole('link', { name: other.metadata.title, exact: true }).waitFor();
+  release();
+  await context.unroute(follows, hold);
   await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('button', { name: /^you\b/ }).click();
   await page.getByRole('dialog', { name: 'account', exact: true }).getByRole('link', { name: /^settings/ }).click();
 };

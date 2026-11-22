@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { resolve } from '$app/paths';
   import type { Track } from '@plyr/next-core/api';
   import { trackArtwork } from '@plyr/next-core/artwork';
@@ -14,8 +14,11 @@
   import PlayingWave from '$lib/ui/PlayingWave.svelte';
   import { postedAt } from './format';
   import { newFromFollows } from './following';
+  import { savedShelf } from './saved-shelf';
   let account = $state.raw(auth.getAuth());
   let tracks = $state.raw<Track[]>([]);
+  /** Whose shelf is showing: the signed-in account, or before sign-in restores, the account this browser last showed. */
+  let owner = $state<string | null>(null);
   let pending = $state(false);
   let failed = $state(false);
   let attempt = $state(0);
@@ -23,26 +26,35 @@
   let edges = $state({ start: true, end: true });
   onMount(() => auth.subscribe(() => { account = auth.getAuth(); }));
   $effect(() => {
-    const { did, ready, rpc } = account;
+    const { did, ready } = account;
     const refresh = attempt;
-    tracks = [];
+    const saved = savedShelf();
+    const who = did ?? (ready ? null : saved?.did ?? null);
     failed = false;
-    if (!did || !ready) { pending = false; return; }
-    const controller = new AbortController();
-    const current = () => !controller.signal.aborted && auth.getAuth().rpc === rpc;
-    pending = true;
-    void newFromFollows(did, controller.signal, refresh > 0).then(result => {
-      if (current()) { tracks = result.tracks; failed = result.failed > 0; }
-    }, () => { if (current()) failed = true; }).finally(() => { if (current()) pending = false; });
-    return () => controller.abort();
+    if (!who) {
+      owner = null;
+      tracks = [];
+      pending = false;
+      return;
+    }
+    if (untrack(() => owner) !== who) {
+      owner = who;
+      tracks = saved?.did === who ? saved.tracks : [];
+    }
+    pending = !untrack(() => tracks.length);
+    let live = true;
+    void newFromFollows(who, refresh > 0).then(result => {
+      if (live) { tracks = result.tracks; failed = result.failed > 0; }
+    }, () => { if (live) failed = true; }).finally(() => { if (live) pending = false; });
+    return () => { live = false; };
   });
   /** Fetch again in place, keeping what's shown until the new list arrives. */
   export async function reload() {
-    const { did, ready, rpc } = account;
-    if (!did || !ready) return;
+    const { did } = account;
+    if (!did) return;
     try {
-      const result = await newFromFollows(did, new AbortController().signal, true);
-      if (auth.getAuth().rpc === rpc) { tracks = result.tracks; failed = result.failed > 0; }
+      const result = await newFromFollows(did, true);
+      if (auth.getAuth().did === did) { tracks = result.tracks; failed = result.failed > 0; }
     } catch {}
   }
   const label = 'new from people you know';
@@ -72,7 +84,7 @@
   });
 </script>
 
-{#if account.did && (pending || failed || tracks.length)}
+{#if owner && (pending || failed || tracks.length)}
   <section class="following" aria-label="New from people you know" data-testid="following-latest">
     <header>
       <h2>{label}</h2>

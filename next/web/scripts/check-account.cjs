@@ -265,6 +265,7 @@ const coordinator = 'https://jams.next.plyr.fm';
     await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'sign in' }).waitFor();
     await revoked;
     await dock.waitFor({ state: 'detached' });
+    assert.equal(await page.evaluate(() => localStorage.getItem('plyr-next:following-latest')), null, 'signing out forgets the saved shelf');
     assert.deepEqual(errors, []);
     console.log('Svelte OAuth, queue restoration, timed PDS comment and sign-out passed');
   } finally { await browser.close(); }

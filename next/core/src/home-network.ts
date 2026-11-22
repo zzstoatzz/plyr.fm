@@ -17,7 +17,7 @@ function parseFollows(value: unknown): { follows: Follow[]; cursor?: string } {
   return { follows, cursor: 'cursor' in value && typeof value.cursor === 'string' ? value.cursor : undefined };
 }
 
-export async function readFollows(actor: string, signal: AbortSignal, request: typeof fetch = fetch): Promise<Follow[]> {
+export async function readFollows(actor: string, signal: AbortSignal, request: typeof fetch = fetch, onPage?: (page: Follow[]) => void): Promise<Follow[]> {
   const controller = new AbortController();
   const abort = () => controller.abort();
   signal.addEventListener('abort', abort, { once: true });
@@ -36,6 +36,7 @@ export async function readFollows(actor: string, signal: AbortSignal, request: t
       if (!response.ok) throw new Error('could not load artists you know.');
       const result = parseFollows(await response.json());
       for (const follow of result.follows) follows.set(follow.did, follow);
+      onPage?.(result.follows);
       cursor = result.cursor;
       if (!cursor) return [...follows.values()].reverse();
       if (cursors.has(cursor)) throw new Error('follows pagination did not advance.');
@@ -76,5 +77,30 @@ export async function resolveFollowArtists<T extends { did: string; avatar_url: 
   return follows.flatMap((follow) => {
     const artist = artists.get(follow.did);
     return artist ? [{ ...artist, avatar_url: follow.avatar ?? artist.avatar_url }] : [];
+  });
+}
+
+/**
+ * The plyr.fm artists among the accounts `actor` follows, in follow order (oldest first).
+ * Each page of the graph is looked up while the next page loads, so the lookups add
+ * one round trip instead of one after the whole graph.
+ */
+export async function readFollowArtists<T extends { did: string; avatar_url: string | null }>(
+  actor: string, resolve: (dids: string[], signal: AbortSignal) => Promise<T[]>, signal: AbortSignal, request: typeof fetch = fetch,
+): Promise<T[]> {
+  const lookups: Promise<T[]>[] = [];
+  const follows = await readFollows(actor, signal, request, (page) => {
+    const lookup = resolveFollowArtists(page, resolve, signal);
+    lookup.catch(() => undefined);
+    lookups.push(lookup);
+  }).catch(async (error: unknown) => {
+    await Promise.allSettled(lookups);
+    throw error;
+  });
+  const artists = new Map<string, T>();
+  for (const found of await Promise.all(lookups)) for (const artist of found) artists.set(artist.did, artist);
+  return follows.flatMap((follow) => {
+    const artist = artists.get(follow.did);
+    return artist ? [artist] : [];
   });
 }
