@@ -54,8 +54,8 @@ export default function Settings() {
         <Switch accessibilityLabel="timed comments" disabled={!auth.accountSync} value={preferences.allowComments} thumbColor={theme.background} trackColor={{ false: theme.border, true: theme.accent }} ios_backgroundColor={theme.border} onValueChange={value => { setPreferences({ allowComments: value }); refreshComments(); }} />
       </SettingsRow>
     </SettingsSection>}
-    <TealSettings key={auth.did ?? 'anonymous'} />
-    <DiscoverySettings key={auth.did ?? 'anonymous'} />
+    <TealSettings key={'teal:' + (auth.did ?? 'anonymous')} />
+    <DiscoverySettings key={'discovery:' + (auth.did ?? 'anonymous')} />
     <SettingsSection title="account" icon={UserRound}>
       {auth.did ? <>
         <SettingsRow label={auth.handle ? `@${auth.handle}` : auth.did} detail={status === 'synced' ? 'your settings are saved with your account.' : status === 'syncing' ? 'saving your settings…' : status === 'error' ? 'couldn’t save settings with your account. your changes are kept on this device.' : 'your settings are saved on this device.'} />
