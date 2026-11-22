@@ -42,7 +42,9 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
   function privateOutput(value: boolean) { privateMode.current = value; setPrivatePlayback(value); }
   const [resolving, setResolving] = useState(false);
   const [starting, setStarting] = useState<number | null>(null);
+  // `starting` holds the loading state from a source being ready until its audio is heard, so play never shows in between.
   const loading = resolving || starting !== null;
+  const startupOver = useRef(0), handoff = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [ready, setReady] = useState(false);
   const [lockScreenSuspended, setLockScreenSuspended] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,8 +82,8 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     load: (tracks, at) => privateMode.current ? Promise.resolve(false) : load(tracks, at, false),
     loaded: waitForMedia,
     seek: seconds => privateMode.current ? Promise.resolve() : accounting.seekTo(seconds),
-    play: () => { if (!privateMode.current) player.play(); },
-    pause: () => { if (!privateMode.current) player.pause(); },
+    play: () => { if (!privateMode.current) startAudio(); },
+    pause: () => { if (!privateMode.current) stopAudio(); },
     setQueue: (tracks, at) => { if (privateMode.current) return; setQueue(previous => previous.length === tracks.length && previous.every((track, index) => track === tracks[index]) ? previous : tracks); setIndex(at); },
     clear: () => { if (privateMode.current) return; accounting.stop(); sourceEvents.current?.remove(); sequence.current++; player.pause(); player.replace(null); if (objectUrl.current) releaseGatedAudioUrl(objectUrl.current); objectUrl.current = null; setQueue([]); setIndex(-1); setReady(false); setResolving(false); setStarting(null); setError(null); }
   }, auth.did);
@@ -90,7 +92,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     current, ready, duration: () => player.duration,
     position: () => player.currentTime, playing: () => player.playing,
     load: (tracks, at) => privateMode.current ? Promise.resolve(false) : load(tracks, at, false), loaded: waitForMedia,
-    seek: seconds => privateMode.current ? Promise.resolve() : accounting.seekTo(seconds), play: () => { if (!privateMode.current) player.play(); }, pause: () => { if (!privateMode.current) player.pause(); },
+    seek: seconds => privateMode.current ? Promise.resolve() : accounting.seekTo(seconds), play: () => { if (!privateMode.current) startAudio(); }, pause: () => { if (!privateMode.current) stopAudio(); },
     setQueue: (tracks, at) => { if (privateMode.current) return; setQueue(previous => previous.length === tracks.length && previous.every((track, index) => track === tracks[index]) ? previous : tracks); setIndex(at); },
     suspended: !!jam.jam || privatePlayback, repeat, keepPlaying, setRepeat, error: setError,
   });
@@ -99,6 +101,8 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     if (pendingSeek && !pendingSeek.local && personal.remote && Math.abs(personal.remote.positionMs / 1000 - pendingSeek.seconds) < 0.5) setPendingSeek(null);
   }, [personal.remote, pendingSeek]);
 
+  function startAudio() { clearTimeout(handoff.current); if (startupOver.current !== sequence.current && player.isLoaded) setStarting(sequence.current); player.play(); }
+  function stopAudio() { clearTimeout(handoff.current); setStarting(null); player.pause(); }
   async function waitForMedia() {
     if (player.isLoaded) return;
     const request = sequence.current;
@@ -205,21 +209,25 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
       if (previousSource) releaseGatedAudioUrl(previousSource);
       const scrobbles = availability === 'available';
       if (!privateTrack) accounting.begin(track.id, track.metadata.duration_seconds, play => { if (scrobbles) void scrobble(track, play, auth.did, confirmScrobblingConsent); });
-      let settled = false;
+      let settled = false, rolling = false;
       sourceEvents.current = player.addListener('playbackStatusUpdate', (event) => {
         if (request !== sequence.current) return;
         showNowPlaying(scrobbles ? track : null, event.playing, player.currentTime, auth.did, confirmScrobblingConsent);
         if (event.error) {
           recordPlayback("player error", { request, error: String(event.error), elapsedMs: Date.now() - startedAt });
+          startupOver.current = request;
           setStarting((pending) => pending === request ? null : pending);
           setReady(false);
           setError(event.error);
+        } else if (!settled && rolling && !event.playing && !event.isBuffering) { // paused outside the app before it was heard
+          rolling = false; setStarting((pending) => pending === request ? null : pending);
         } else if (!settled && ((event.playing && player.currentTime > 0) || event.didJustFinish)) {
           settled = true;
+          startupOver.current = request;
           if (!privateTrack) console.info('[playback] startup settled', { request, track: track.id, position: player.currentTime, finished: event.didJustFinish });
           recordPlayback("started", { request, elapsedMs: Date.now() - startedAt });
           setStarting((pending) => pending === request ? null : pending);
-        }
+        } else if (event.playing) rolling = true;
       });
       if (Platform.OS === 'android') {
         player.setActiveForLockScreen(true, {
@@ -235,8 +243,10 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
       if (request !== sequence.current) return false;
       setReady(true);
       recordPlayback("media ready", { request, elapsedMs: Date.now() - startedAt });
-      if (start) {
-        setStarting(request);
+      setStarting(request);
+      // A queue that loaded without starting plays or pauses next; this only covers one that never says.
+      if (!start) handoff.current = setTimeout(() => setStarting(pending => pending === request ? null : pending), 8_000);
+      else {
         player.play();
         // Startup holds the loading state until the player reports progress; note when that hasn't happened.
         setTimeout(() => {
@@ -330,13 +340,12 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
   function setPlaying(playing: boolean) {
     if (playing) setLockScreenSuspended(false);
     if (!privateMode.current && jam.setPlaying(playing, jam.jam?.state)) return;
-    if (!playing) { if (!privateMode.current) personal.checkpoint(); player.pause(); }
+    if (!playing) { if (!privateMode.current) personal.checkpoint(); stopAudio(); }
     if (!privateMode.current && personal.command({ action: playing ? 'play' : 'pause' })) return;
     if (loading || !current) return;
     if (!privateMode.current && playing && !ready && personal.resume()) return;
     if (playing && (!ready || status.error || error)) void load(queue, index);
-    else if (playing && !player.playing) player.play();
-    else if (!playing && player.playing) player.pause();
+    else if (playing && !player.playing) startAudio();
   }
 
   function toggle() {
@@ -428,7 +437,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     jamCommand: intent => intent.action === 'play' || intent.action === 'pause' ? jam.setPlaying(intent.action === 'play', jam.jam?.state) : jam.command(intent),
     play, queue: accountVisible ? queue : [], current: accountVisible ? current : undefined, index: accountVisible ? index : -1, loading: shownLoading, preparing, error, status: presentationStatus, tail: privatePlayback || jam.jam || !accountVisible ? undefined : personal.state.tail, outputElsewhere: !privatePlayback && !jam.jam && personal.outputElsewhere, deviceQueue: !privatePlayback && personal.deviceOnly, queueError: privatePlayback || jam.jam ? undefined : personal.queueError, keepPlaying: !privatePlayback && personal.keepPlaying, setKeepPlaying: value => { if (!privateMode.current) personal.setKeepPlaying(value); }, repeat: jam.jam ? 'off' : repeat, setRepeat: value => { if (privateMode.current) setRepeat(value); else if (!jam.active()) personal.setRepeat(value); }, toggle, setPlaying, next,
     isPlaying: () => player.playing,
-    pauseLocal: () => { setLockScreenSuspended(true); personal.suspend(); player.pause(); },
+    pauseLocal: () => { setLockScreenSuspended(true); personal.suspend(); stopAudio(); },
     previous: () => {
       if (privateMode.current) { if (player.currentTime > 3 || index === 0) seek(0); else void load(queue, index - 1); return; }
       const room = jam.state();

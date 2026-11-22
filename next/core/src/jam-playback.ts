@@ -175,7 +175,7 @@ export function createJamPlayback(options: JamPlaybackOptions) {
           if (preview !== undefined && Math.abs(state.positionMs - preview) < 100) update({ pendingSeekMs: undefined });
           const desired = optimisticPlaying ?? connection.state!.playing;
           if (desired && !target().playing()) target().play();
-          else if (!desired && target().playing()) target().pause();
+          else if (!desired) target().pause();
           void hydrateQueue(connection.state!, work.version, connection);
         } catch (failure) {
           if (request === generation && connection === session) update({ error: failure instanceof Error ? failure.message : 'could not play this jam', pendingSeekMs: undefined });
@@ -211,7 +211,7 @@ export function createJamPlayback(options: JamPlaybackOptions) {
       void target().load(solo.queue, solo.index).then(async loaded => {
         if (!loaded || session || request !== generation) return;
         await target().loaded();
-        if (!session && request === generation) await target().seek(solo.position);
+        if (!session && request === generation) { await target().seek(solo.position); target().pause(); }
       }).catch(() => undefined);
     } else target().clear();
   }
