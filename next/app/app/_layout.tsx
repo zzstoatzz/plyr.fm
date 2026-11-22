@@ -63,7 +63,7 @@ function Shell() {
   ];
   const showBack = !['/', '/search', '/library', '/portal', '/oauth/callback'].includes(path) && !(tab === '(publish)' && path === '/upload');
   const detail = /^\/(track|u|album|playlist|edit-track)\//.test(path);
-  const tabTitle = path === '/' ? 'plyr.fm' : path === '/search' ? 'search' : path === '/library' ? 'library' : path === '/portal' && auth.did ? 'your uploads' : undefined;
+  const tabTitle = path === '/' ? 'plyr.fm' : path === '/search' ? 'search' : path === '/library' ? 'library' : path === '/portal' && auth.did ? 'you' : undefined;
   const detailTitle = path.startsWith('/u/') ? 'artist' : path.startsWith('/edit-track/') ? 'edit track'
     : path.startsWith('/album/') ? 'album' : path.startsWith('/playlist/') ? 'playlist' : 'track';
   const nav = !usesLiquidTabs && <SafeAreaView edges={['bottom']} role="navigation" accessibilityLabel="Main navigation" style={{
