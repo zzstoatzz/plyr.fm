@@ -3,6 +3,9 @@ import { readFollows } from './home-network.ts';
 
 export const followingShelfSize = 12;
 
+// the appview refuses a whole batch for one malformed DID, so leave those out
+const didSyntax = /^did:[a-z]+:[a-zA-Z0-9._:%-]*[a-zA-Z0-9._-]$/;
+
 /**
  * The newest track from each person `actor` follows, newest first: each page of
  * the follow graph asks the appview for its people's newest tracks while the
@@ -14,7 +17,9 @@ export async function followingLatest(actor: string, api: {
   let failed = 0;
   const lookups: Promise<Track[]>[] = [];
   const follows = await readFollows(actor, signal, request, (page) => {
-    lookups.push(api.latestTracks(page.map(follow => follow.did), followingShelfSize, signal).catch(() => {
+    const dids = page.map(follow => follow.did).filter(did => did.length <= 2048 && didSyntax.test(did));
+    if (!dids.length) return;
+    lookups.push(api.latestTracks(dids, followingShelfSize, signal).catch(() => {
       if (!signal.aborted) failed++;
       return [];
     }));

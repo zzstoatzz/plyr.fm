@@ -30,7 +30,7 @@ function latestFrom(key: string) {
     load = Promise.all(batches.map(batch => api.latestTracks(batch, followingShelfSize))).then(found => found.flat()
       .sort((a, b) => Date.parse(b.metadata.created_at) - Date.parse(a.metadata.created_at))
       .slice(0, followingShelfSize));
-    load.catch(() => newest.delete(key));
+    load.catch(() => { if (newest.get(key) === load) newest.delete(key); });
     newest.set(key, load);
     if (newest.size > 4) { const first = newest.keys().next().value; if (first) newest.delete(first); }
   }

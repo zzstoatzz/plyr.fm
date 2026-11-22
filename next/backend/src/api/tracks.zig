@@ -451,3 +451,7 @@ pub fn resolve(request: *Exchange, allocator: std.mem.Allocator, store: ?TrackSt
         .internal_error => try response.apiError(request, .internal_error, request_id, response_cors),
     }
 }
+
+test {
+    _ = latest_by_artists;
+}
