@@ -24,7 +24,6 @@
 	import CommentsView from './listening/CommentsView.svelte';
 	import { comments } from './listening/comments';
 	import TrackBuy from './selling/TrackBuy.svelte';
-	import Likers from './listening/Likers.svelte';
 	import { compactCount } from './listening/format';
 
 	let { close, pull }: { close?: () => void; pull?: DockPull } = $props();
@@ -168,7 +167,7 @@
 				{/if}
 
 			{#if !player.privateMode && !player.liveStation}
-				<div class="facts" data-testid="now-playing-facts"><div><small>plays</small><strong>{compactCount(player.current.metrics.play_count)}</strong></div><div><small>likes</small><Likers track={player.current} /></div><div><small>added</small><strong>{new Date(player.current.metadata.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }).toLowerCase()}</strong></div><div><small>length</small><strong>{clock(player.current.metadata.duration_seconds ?? 0)}</strong></div></div>
+				<div class="facts" data-testid="now-playing-facts"><div><small>plays</small><strong>{compactCount(player.current.metrics.play_count)}</strong></div><div><small>added</small><strong>{new Date(player.current.metadata.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }).toLowerCase()}</strong></div><div><small>length</small><strong>{clock(player.current.metadata.duration_seconds ?? 0)}</strong></div></div>
 			{/if}
 			{#if !player.liveStation}
 				<div class="options">
@@ -231,9 +230,9 @@
 	.commands.live { justify-content: center; }
 	.stop { display: flex; margin-inline: auto; }
 	.options { justify-content: center; }
-	.composer { margin-top: 0.75rem; }
+	.composer { margin-block: 0.75rem; }
 	.composer:not(:has(*)) { display: none; }
-	.facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.5rem; padding-block: 1rem; border-block: 1px solid var(--line); font-size: var(--t-14); }
+	.facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; padding-block: 1rem; border-block: 1px solid var(--line); font-size: var(--t-14); }
 	.facts strong { font-weight: 650; }
 	.facts small { font-size: var(--t-11-2); color: var(--faint); }
 	.details { padding-block: 0.5rem 1rem; }
