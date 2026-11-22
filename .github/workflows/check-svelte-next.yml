@@ -79,8 +79,10 @@ jobs:
             run: bun run check:embed-live && bun run check:embed
           - name: radio
             run: bun run check:radio
-          - name: player
-            run: bun run check:player-transition && bun run check:player-presentation
+          - name: player-transition
+            run: bun run check:player-transition
+          - name: player-presentation
+            run: bun run check:player-presentation
           - name: catalog
             run: bun run check:artist-catalog && bun run check:atlas
     defaults:
@@ -103,8 +105,6 @@ jobs:
           key: playwright-shell-${{ runner.os }}-${{ steps.playwright.outputs.version }}
       - run: bun run playwright install --with-deps --only-shell chromium
         if: steps.browsers.outputs.cache-hit != 'true'
-      - run: bun run playwright install-deps chromium
-        if: steps.browsers.outputs.cache-hit == 'true'
       - run: bun run build
       - run: ${{ matrix.run }}
         env:
