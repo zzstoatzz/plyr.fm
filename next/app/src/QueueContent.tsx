@@ -86,7 +86,7 @@ export function QueueContent({ scrollRef, scrollMetrics, onDragging, returnTo = 
           scrollRef={scrollRef} scrollMetrics={scrollMetrics} onDragging={onDragging}
           renderHeader={index => player.tail && index === Math.max(player.index + 1, player.tail.from)
             ? <View style={{ paddingTop: 10, paddingBottom: 4, paddingHorizontal: 8 }}><Copy>from {player.tail.label}</Copy></View> : null}
-          renderTrack={(track, index) => <QueueTrack track={track} play={() => player.jump(index)} remove={() => player.remove(index)} />} /></View>
+          renderTrack={(track, index, dismiss) => <QueueTrack track={track} play={() => player.jump(index)} remove={dismiss} />} /></View>
           : <Copy>nothing queued. add tracks from their menus.</Copy>}
       </View>
       {upcoming.length > 0 && !player.privatePlayback && !player.jam && !player.live && <QueueSuggestionStrips />}

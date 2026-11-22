@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, untrack } from 'svelte';
+	import { cubicOut } from 'svelte/easing';
 	import { resolve } from '$app/paths';
 	import type { Track } from '@plyr/next-core/api';
 	import { trackArtwork } from '@plyr/next-core/artwork';
@@ -53,9 +54,29 @@
 		return () => controller.abort();
 	});
 
-	function add(track: Track) {
+	// An added card leaves the strip (in both strips, if it sits in both) instead of staying as a checkmark.
+	const shownPicks = $derived(picks.filter(track => !added.has(track.id)));
+	const shownMore = $derived(more.filter(track => !added.has(track.id)));
+	const leaving = new Set<string>();
+
+	function add(track: Track, button: HTMLButtonElement) {
 		player.enqueue(track, true);
+		leaving.add(track.id);
+		// Keep a keyboard user in the strip: focus moves to the card that slides into this one's place.
+		if (document.activeElement === button) {
+			const card = button.closest('li');
+			const next = card?.nextElementSibling ?? card?.previousElementSibling;
+			next?.querySelector<HTMLButtonElement>('.plus')?.focus();
+		}
 		added = new Set([...added, track.id]);
+	}
+
+	/** The added card shrinks away and its neighbours close the gap; any other card that leaves (a refresh) just goes. */
+	function leave(node: HTMLElement, id: string) {
+		if (!leaving.has(id) || matchMedia('(prefers-reduced-motion: reduce)').matches) return { duration: 0 };
+		const width = node.offsetWidth;
+		const gap = parseFloat(getComputedStyle(node.parentElement ?? node).columnGap) || 0;
+		return { duration: 240, easing: cubicOut, css: (t: number, u: number) => `overflow: hidden; width: ${t * width}px; margin-inline-end: ${-u * gap}px; opacity: ${t}; transform: scale(${0.85 + 0.15 * t});` };
 	}
 
 	// Starters: each stack loads its tracks up front so the tile shows real covers.
@@ -131,19 +152,19 @@
 		</div>
 	</section>
 {:else}
-	{#if picks.length}
+	{#if shownPicks.length}
 		<section aria-labelledby="queue-suggested">
 			<div class="strip-head">
 				<h2 id="queue-suggested">add to your queue</h2>
-				<button class="icon-button" type="button" aria-label="Show other suggestions" title="show other suggestions" onclick={() => { added = new Set(); refresh++; }}><Icon name="refresh" size={16} /></button>
+				<button class="icon-button" type="button" aria-label="Show other suggestions" title="show other suggestions" onclick={() => { refresh++; }}><Icon name="refresh" size={16} /></button>
 			</div>
-			{@render strip(picks)}
+			{@render strip(shownPicks)}
 		</section>
 	{/if}
-	{#if more.length > 1}
+	{#if more.length > 1 && shownMore.length}
 		<section aria-labelledby="queue-more">
 			<div class="strip-head"><h2 id="queue-more" class="truncate">more from {moreName}</h2></div>
-			{@render strip(more)}
+			{@render strip(shownMore)}
 		</section>
 	{/if}
 {/if}
@@ -151,12 +172,11 @@
 {#snippet strip(tracks: Track[])}
 	<ul class="cards" role="list">
 		{#each tracks as track (track.id)}
-			{@const done = added.has(track.id)}
-			<li class="card">
+			<li class="card" out:leave={track.id}>
 				<div class="art">
 					<a href={trackHref(track)} tabindex="-1" aria-hidden="true"><Artwork src={trackArtwork(track)} size={120} /></a>
-					<button class="plus" class:done type="button" disabled={done} aria-label={done ? `${track.metadata.title} added to queue` : `Add ${track.metadata.title} to queue`} title={done ? 'added' : 'add to queue'} onclick={() => add(track)}>
-						<Icon name={done ? 'check' : 'plus'} size={16} />
+					<button class="plus" type="button" aria-label={`Add ${track.metadata.title} to queue`} title="add to queue" onclick={event => add(track, event.currentTarget)}>
+						<Icon name="plus" size={16} />
 					</button>
 				</div>
 				<a class="truncate title" href={trackHref(track)}>{track.metadata.title}</a>

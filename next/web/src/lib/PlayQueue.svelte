@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import { auth } from './auth';
@@ -52,7 +52,8 @@
 	let drag = $state.raw<Drag>();
 	let press: Press | undefined;
 	let suppressClickUntil = 0;
-	let swipe: { index: number; pointer: number; queue: typeof player.queue; x: number; y: number } | undefined;
+	let swipe: { index: number; pointer: number; queue: typeof player.queue; x: number; y: number; node: HTMLElement; offset?: number } | undefined;
+	const leaving = new Set<HTMLElement>();
 
 	function scrollerOf(node: HTMLElement) {
 		return node.closest<HTMLElement>('aside') ?? document.scrollingElement as HTMLElement;
@@ -155,19 +156,106 @@
 
 	function swipeStart(event: PointerEvent, index: number) {
 		if (event.pointerType !== 'touch' || drag || (event.target as Element)?.closest('button, .drag-handle')) return;
-		swipe = { index, pointer: event.pointerId, queue: player.queue, x: event.clientX, y: event.clientY };
+		const node = event.currentTarget as HTMLElement;
+		if (leaving.has(node)) return;
+		swipe = { index, pointer: event.pointerId, queue: player.queue, x: event.clientX, y: event.clientY, node };
+	}
+
+	// The row follows the finger left with a red remove strip behind it, like iOS.
+	function swipeMove(event: PointerEvent) {
+		const current = swipe;
+		if (current?.pointer !== event.pointerId || drag) return;
+		const dx = event.clientX - current.x, dy = event.clientY - current.y;
+		if (current.offset === undefined) {
+			if (Math.abs(dy) > 10 && Math.abs(dy) >= Math.abs(dx)) { swipe = undefined; return; }
+			if (dx > -10 || Math.abs(dx) <= Math.abs(dy) * 1.5) return;
+			if (press) { clearTimeout(press.timer); press = undefined; }
+			try { current.node.setPointerCapture(current.pointer); } catch { /* the pointer already ended */ }
+			current.node.classList.add('swiping');
+			current.node.parentElement?.classList.add('swiping');
+		}
+		current.offset = Math.min(0, dx);
+		slideTo(current.node, current.offset);
+	}
+
+	function slideTo(node: HTMLElement, offset: number) {
+		node.style.setProperty('--swipe', `${offset}px`);
+		node.style.setProperty('--reveal', `${Math.min(1, Math.max(0, (-offset - 24) / 72))}`);
+	}
+
+	function unswipe(node: HTMLElement) {
+		node.classList.remove('swiping');
+		node.parentElement?.classList.remove('swiping');
+		node.style.removeProperty('--swipe');
+		node.style.removeProperty('--reveal');
+	}
+
+	function settle(node: HTMLElement, offset: number) {
+		unswipe(node);
+		if (offset && !reducedMotion()) node.animate([{ transform: `translateX(${offset}px)` }, { transform: 'translateX(0)' }], { duration: 200, easing: 'cubic-bezier(0.2, 0.9, 0.3, 1.2)' });
 	}
 
 	function swipeEnd(event: PointerEvent, index: number) {
 		const before = swipe;
 		if (before?.pointer !== event.pointerId || drag) { swipe = undefined; return; }
 		swipe = undefined;
-		if (before.index !== index || index < start || before.queue !== player.queue) return;
-		const distance = before.x - event.clientX;
-		if (distance < 64 || distance <= Math.abs(event.clientY - before.y) * 1.5) return;
+		const offset = before.offset ?? 0;
+		if (before.index !== index || index < start || before.queue !== player.queue || offset > -64) { settle(before.node, offset); return; }
 		suppressClickUntil = performance.now() + 350;
-		player.remove(index);
+		void dismiss(index, before.node, offset);
 		reorderHint.dismiss();
+	}
+
+	function swipeCancel(event: PointerEvent) {
+		const before = swipe;
+		if (before?.pointer !== event.pointerId) return;
+		swipe = undefined;
+		settle(before.node, before.offset ?? 0);
+	}
+
+	function reducedMotion() {
+		return matchMedia('(prefers-reduced-motion: reduce)').matches;
+	}
+
+	/** Slides a swiped row the rest of the way out, collapses the gap it leaves, and only then removes it. */
+	async function dismiss(index: number, node: HTMLElement | null | undefined, offset = 0) {
+		if (!node || reducedMotion()) { if (node) unswipe(node); player.remove(index); return; }
+		if (leaving.has(node)) return;
+		leaving.add(node);
+		const id = player.queue[index]?.id;
+		const list = node.parentElement;
+		const gap = list ? parseFloat(getComputedStyle(list).rowGap) || 0 : 0;
+		const animations: Animation[] = [];
+		node.classList.add('leaving');
+		try {
+			if (offset) {
+				slideTo(node, -node.offsetWidth);
+				const out = node.animate([{ transform: `translateX(${offset}px)` }, { transform: `translateX(${-node.offsetWidth - 8}px)` }], { duration: 160, easing: 'ease-in', fill: 'forwards' });
+				animations.push(out);
+				await out.finished;
+			}
+			const style = getComputedStyle(node);
+			const collapse = node.animate([
+				{ height: `${node.offsetHeight}px`, paddingBlock: style.paddingBlock, borderBlockWidth: style.borderBlockWidth, marginBottom: '0px', opacity: 1 },
+				{ height: '0px', paddingBlock: '0px', borderBlockWidth: '0px', marginBottom: `${-gap}px`, opacity: offset ? 1 : 0 }
+			], { duration: 200, easing: 'cubic-bezier(0.3, 0, 0.2, 1)', fill: 'forwards' });
+			animations.push(collapse);
+			await collapse.finished;
+			// Find the track again: another removal or the next track starting may have shifted it meanwhile.
+			const before = player.queue;
+			const at = before[index]?.id === id && index >= start ? index : before.findIndex((track, position) => position >= start && track.id === id);
+			if (at >= 0) {
+				player.remove(at);
+				await tick();
+				// A jam edit lands when the server echoes it; keep the gap closed until then.
+				for (let waited = 0; player.queue === before && waited < 1500; waited += 50) await new Promise(done => setTimeout(done, 50));
+			}
+		} catch { /* the row left the page mid-animation */ }
+		// Index-keyed rows (the local queue) reuse this node for the next track, so put it back.
+		for (const animation of animations) animation.cancel();
+		node.classList.remove('leaving');
+		unswipe(node);
+		leaving.delete(node);
 	}
 
 	function suppressSwipeClick(event: MouseEvent) {
@@ -284,8 +372,8 @@
 {#snippet upcoming(track: NonNullable<typeof player.current>, index: number)}
 	<li class="row upcoming" class:lifted={drag?.index === index} class:dragging={!!drag} style={shift(index)} data-queue-key={key(index)} data-queue-index={index}
 		onclickcapture={suppressSwipeClick} oncontextmenu={event => { if (press?.touch || drag) event.preventDefault(); }}
-		onpointerdown={event => { swipeStart(event, index); pressStart(event, index); }} onpointermove={pressMove}
-		onpointerup={event => { pressEnd(event, true); swipeEnd(event, index); }} onpointercancel={event => { swipe = undefined; pressEnd(event, false); }}>
+		onpointerdown={event => { swipeStart(event, index); pressStart(event, index); }} onpointermove={event => { pressMove(event); swipeMove(event); }}
+		onpointerup={event => { pressEnd(event, true); swipeEnd(event, index); }} onpointercancel={event => { swipeCancel(event); pressEnd(event, false); }}>
 		{@render row(track, index)}
 	</li>
 {/snippet}
@@ -304,7 +392,7 @@
 		<div class="actions">
 			<span class="drag-handle" aria-hidden="true" onpointerdown={event => { event.stopPropagation(); pressStart(event, index, true); }}>⠿</span>
 			<button class="icon-button move" type="button" aria-label={promote ? `Move ${track.metadata.title} into up next` : `Move ${track.metadata.title} up`} title={promote ? 'move into up next' : 'move up'} disabled={index === start} onclick={event => moveUp(index, event.currentTarget)}><Icon name="down" size={16} /></button>
-			<button class="icon-button" type="button" aria-label={`Remove ${track.metadata.title}`} onclick={() => player.remove(index)}><Icon name="x" size={16} /></button>
+			<button class="icon-button" type="button" aria-label={`Remove ${track.metadata.title}`} onclick={event => dismiss(index, event.currentTarget.closest('li'))}><Icon name="x" size={16} /></button>
 		</div>
 {/snippet}
 
@@ -342,7 +430,14 @@
 	.count { margin-block-end: 0.55rem; font-variant-numeric: tabular-nums; }
 	ol { display: grid; gap: 0.38rem; margin: 0; padding: 0; list-style: none; }
 	.row { display: flex; align-items: center; gap: 0.6rem; padding: 0.45rem; min-width: 0; border: 1px solid var(--line); border-radius: 0.7rem; background: var(--raised); }
-	.upcoming { touch-action: pan-y pinch-zoom; }
+	.upcoming { position: relative; touch-action: pan-y pinch-zoom; }
+	/* a swiped row follows the finger; the red strip rides in from its right edge, and the list clips it sideways only */
+	ol:global(.swiping) { overflow-x: clip; }
+	.upcoming:global(.swiping) { transform: translateX(var(--swipe, 0px)); }
+	.upcoming:global(.swiping)::after { content: 'remove'; position: absolute; inset-block: -1px; left: calc(100% + 1px); width: 100%; display: flex; align-items: center; padding-inline-start: 1rem;
+		border-radius: 0.7rem; background: light-dark(#dc2626, #ef4444); color: rgb(255 255 255 / var(--reveal, 0)); font-weight: 700; font-size: var(--t-13-6); }
+	.upcoming:global(.leaving) { pointer-events: none; overflow: hidden; }
+	.upcoming:global(.leaving.swiping) { overflow: visible; }
 	.upcoming { -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; cursor: grab; }
 	.upcoming.dragging { transition: transform 160ms ease; cursor: grabbing; }
 	.upcoming.lifted { position: relative; z-index: 2; transition: none; border-color: var(--accent); box-shadow: 0 0.6rem 1.4rem rgb(0 0 0 / 0.25); }

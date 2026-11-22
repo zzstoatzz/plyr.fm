@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Animated, Easing, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import type { Track } from '@plyr/next-core/api';
 import { trackArtwork } from '@plyr/next-core/artwork';
 import { loadStarter, starters, suggestionRequest, type Starter } from '@plyr/next-core/queue-suggestions';
@@ -13,6 +13,7 @@ import { usePlayback } from './playback';
 import { Text } from './Text';
 
 const CARD = 118;
+const GAP = 10;
 
 /** Suggested tracks under a queue that has something in it: + adds one without reshuffling the row. */
 export function QueueSuggestionStrips() {
@@ -23,7 +24,9 @@ export function QueueSuggestionStrips() {
   const [round, setRound] = useState(0);
   const [picks, setPicks] = useState<Track[]>([]);
   const [more, setMore] = useState<{ name: string; tracks: Track[] }>({ name: '', tracks: [] });
-  const [added, setAdded] = useState<Set<string>>(new Set());
+  // An added card shrinks out of its strip (both strips, if it sits in both) instead of staying as a checkmark.
+  const [leaving, setLeaving] = useState<Set<string>>(new Set());
+  const [gone, setGone] = useState<Set<string>>(new Set());
   const shown = useRef<string[]>([]);
   const latest = useRef(player);
   latest.current = player;
@@ -54,47 +57,64 @@ export function QueueSuggestionStrips() {
     return () => controller.abort();
   }, [artistDid]);
 
-  const add = (track: Track) => { player.enqueue(track, true); setAdded(previous => new Set([...previous, track.id])); };
+  const add = (track: Track) => { player.enqueue(track, true); setLeaving(previous => new Set([...previous, track.id])); };
+  const leave = (id: string) => setGone(previous => previous.has(id) ? previous : new Set([...previous, id]));
+  const shownPicks = picks.filter(track => !gone.has(track.id));
+  const shownMore = more.tracks.filter(track => !gone.has(track.id));
 
   return <>
-    {picks.length > 0 && <View style={styles.section}>
+    {shownPicks.length > 0 && <View style={styles.section}>
       <View style={styles.head}>
         <Text accessibilityRole="header" style={[styles.heading, { color: theme.muted, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale }]}>add to your queue</Text>
-        <Pressable accessibilityRole="button" accessibilityLabel="Show other suggestions" onPress={() => { setAdded(new Set()); setRound(value => value + 1); }} hitSlop={4}
+        <Pressable accessibilityRole="button" accessibilityLabel="Show other suggestions" onPress={() => setRound(value => value + 1)} hitSlop={4}
           style={({ pressed }) => [styles.icon, { opacity: pressed ? 0.6 : 1 }]}>
           <ArrowClockwise size={18} color={theme.muted} />
         </Pressable>
       </View>
-      <Strip tracks={picks} added={added} add={add} />
+      <Strip tracks={shownPicks} leaving={leaving} add={add} leave={leave} />
     </View>}
-    {more.tracks.length > 1 && <View style={styles.section}>
+    {more.tracks.length > 1 && shownMore.length > 0 && <View style={styles.section}>
       <Text accessibilityRole="header" numberOfLines={1} style={[styles.heading, { color: theme.muted, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale, paddingVertical: 10 }]}>more from {more.name}</Text>
-      <Strip tracks={more.tracks} added={added} add={add} />
+      <Strip tracks={shownMore} leaving={leaving} add={add} leave={leave} />
     </View>}
   </>;
 }
 
-function Strip({ tracks, added, add }: { tracks: Track[]; added: Set<string>; add: (track: Track) => void }) {
-  const theme = useAppearance();
-  return <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -20 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 10 }}
-    snapToInterval={CARD + 10} decelerationRate="fast">
-    {tracks.map(track => {
-      const done = added.has(track.id);
-      const title = track.metadata.title;
-      return <View key={track.id} style={{ width: CARD, gap: 2 }}>
-        <Pressable accessibilityRole="link" accessibilityLabel={`${title} by ${artistName(track)}`} onPress={() => router.push({ pathname: '/track/[id]', params: { id: track.id } })}>
-          <Cover uri={trackArtwork(track)} size={CARD} radius={10} />
-        </Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel={done ? `${title} added to queue` : `Add ${title} to queue`} accessibilityState={{ disabled: done }} disabled={done}
-          onPress={() => add(track)} hitSlop={6}
-          style={({ pressed }) => [styles.plus, { top: CARD - 42, backgroundColor: done ? theme.accent : theme.surface, opacity: pressed ? 0.7 : 1 }]}>
-          {done ? <Check size={16} color={theme.onAccent} weight="bold" /> : <Plus size={16} color={theme.text} weight="bold" />}
-        </Pressable>
-        <Text numberOfLines={1} style={{ marginTop: 4, color: theme.text, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale, fontWeight: '600' }}>{title}</Text>
-        <Text numberOfLines={1} style={{ color: theme.muted, fontFamily: theme.fontFamily, fontSize: 12.5 * theme.scale }}>{artistName(track)}</Text>
-      </View>;
-    })}
+function Strip({ tracks, leaving, add, leave }: { tracks: Track[]; leaving: Set<string>; add: (track: Track) => void; leave: (id: string) => void }) {
+  return <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -20 }} contentContainerStyle={{ paddingHorizontal: 20, gap: GAP }}
+    snapToInterval={CARD + GAP} decelerationRate="fast">
+    {tracks.map(track => <SuggestionCard key={track.id} track={track} leaving={leaving.has(track.id)} add={add} leave={leave} />)}
   </ScrollView>;
+}
+
+function SuggestionCard({ track, leaving, add, leave }: { track: Track; leaving: boolean; add: (track: Track) => void; leave: (id: string) => void }) {
+  const theme = useAppearance();
+  const reduceMotion = theme.reduceMotion;
+  const life = useRef(new Animated.Value(1)).current;
+  const latest = useRef(leave);
+  latest.current = leave;
+  useEffect(() => {
+    if (!leaving) return;
+    if (reduceMotion) { latest.current(track.id); return; }
+    // the card shrinks away and its neighbours close the gap it leaves
+    Animated.timing(life, { toValue: 0, duration: 240, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start(() => latest.current(track.id));
+  }, [leaving, reduceMotion, life, track.id]);
+  const title = track.metadata.title;
+  return <Animated.View pointerEvents={leaving ? 'none' : 'auto'} style={{ width: life.interpolate({ inputRange: [0, 1], outputRange: [0, CARD] }), marginRight: life.interpolate({ inputRange: [0, 1], outputRange: [-GAP, 0] }),
+    opacity: life, transform: [{ scale: life.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1] }) }], overflow: 'hidden' }}>
+    <View style={{ width: CARD, gap: 2 }}>
+      <Pressable accessibilityRole="link" accessibilityLabel={`${title} by ${artistName(track)}`} onPress={() => router.push({ pathname: '/track/[id]', params: { id: track.id } })}>
+        <Cover uri={trackArtwork(track)} size={CARD} radius={10} />
+      </Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Add ${title} to queue`} disabled={leaving}
+        onPress={() => add(track)} hitSlop={6}
+        style={({ pressed }) => [styles.plus, { top: CARD - 42, backgroundColor: theme.surface, opacity: pressed ? 0.7 : 1 }]}>
+        <Plus size={16} color={theme.text} weight="bold" />
+      </Pressable>
+      <Text numberOfLines={1} style={{ marginTop: 4, color: theme.text, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale, fontWeight: '600' }}>{title}</Text>
+      <Text numberOfLines={1} style={{ color: theme.muted, fontFamily: theme.fontFamily, fontSize: 12.5 * theme.scale }}>{artistName(track)}</Text>
+    </View>
+  </Animated.View>;
 }
 
 type Loaded = { tracks: Track[]; label: string } | 'loading' | 'failed';
