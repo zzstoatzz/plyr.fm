@@ -157,6 +157,7 @@ async function screen(browser, phone, scheme) {
     await dock.getByRole('button', { name: 'Play', exact: true }).waitFor();
     const position = Number(await dock.getByRole('slider', { name: 'Playback position' }).inputValue());
     assert.ok(position >= 11 && position < 18, 'reload restores the seek position without autoplay');
+    await page.goto(origin); const hero = page.getByTestId('home-featured'), heroPlay = hero.getByRole('button', { name: /^Play all \d+ by / }), heroPause = hero.getByRole('button', { name: /^Pause / }); await heroPlay.click(); await heroPause.click(); await heroPlay.waitFor({ timeout: 5000 }); const heroBox = await hero.boundingBox(); await page.mouse.click(heroBox.x + heroBox.width - 24, heroBox.y + heroBox.height - 24); await page.waitForURL(url => url.pathname.startsWith('/u/'));
     await page.goto(origin + '/track/missing-track');
     await page.getByRole('heading', { name: '404', exact: true }).waitFor();
     await page.getByText("we couldn't find what you're looking for").waitFor();
