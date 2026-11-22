@@ -137,9 +137,12 @@
 				{#if isBroadcast(player.current)}<p class="subtle">{artistName(player.current)}</p>
 				{:else}<a class="subtle" href={resolve('/(app)/u/[actor]', { actor: player.current.artist.profile.handle || player.current.artist.did })}>{artistName(player.current)}</a>{/if}
 				{#if player.current.metadata.album}<p class="subtle">{player.current.metadata.album}</p>{/if}
+				{#if !player.privateMode && !player.liveStation}<p class="meta" data-testid="now-playing-meta">{compactCount(player.current.metrics.play_count)} {player.current.metrics.play_count === 1 ? 'play' : 'plays'} · added {new Date(player.current.metadata.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }).toLowerCase()}</p>{/if}
 				<div class="position">{#if player.liveStation}<LiveProgress />{:else}<Scrub stacked chapters={chapters.chapters} {chapter} />{/if}</div>
 				<div class="commands" class:live={!!player.liveStation}>
+					{#if !player.liveStation}<button class="icon-button flank" type="button" aria-label="Shuffle queue" onclick={() => player.shuffle()}><Icon name="shuffle" size={20} /></button>{/if}
 					<Transport />
+					{#if !player.liveStation}<button class="icon-button flank" type="button" aria-label={`Repeat ${player.repeat}`} aria-pressed={player.repeat !== 'off'} onclick={() => player.cycleRepeat()}><Icon name="repeat" size={20} /></button>{/if}
 				</div>
 				<div class="utilities">
 				{#if !player.liveStation && !player.privateMode}
@@ -222,7 +225,10 @@
 	.mini { border-radius: 0.35rem; overflow: hidden; }
 	.mini-copy { display: grid; min-width: 0; }
 	.mini-copy strong { color: var(--text); }
-	.hint-slot, .volume { display: none; }
+	.hint-slot, .volume, .meta, .flank { display: none; }
+	.meta { color: var(--faint); font-size: var(--t-13-6); margin-top: 0.15rem; font-variant-numeric: tabular-nums; }
+	.flank { color: var(--muted); }
+	.flank[aria-pressed='true'] { color: var(--accent); }
 	.position { position: relative; z-index: 2; margin-top: 1.65rem; }
 	.commands, .options { display: flex; justify-content: space-between; gap: 0.4rem; align-items: center; margin-block: 0.85rem; }
 	.commands :global(.transport) { width: 100%; justify-content: space-evenly; }
@@ -262,6 +268,13 @@
 		.sheet .commands :global(.transport) { justify-content: center; gap: clamp(0.5rem, 3vw, 2.25rem); }
 		.sheet .commands :global(.toggle) { width: 4.5rem; height: 4.5rem; }
 		.sheet .details { grid-column: 2; padding-bottom: 0; align-self: start; }
+		/* one quiet stack: shuffle/repeat beside the transport, plays + date under the artist, length lives on the scrubber */
+		.sheet .meta { display: block; }
+		.sheet .flank { display: inline-flex; }
+		.sheet .commands :global(.transport) { width: auto; }
+		.sheet .commands { justify-content: center; gap: clamp(0.5rem, 2vw, 1.5rem); }
+		.sheet .facts, .sheet .options { display: none; }
+		.sheet .composer { margin-block: 0.25rem 0.75rem; }
 		.sheet .utilities { display: flex; gap: 0.5rem; align-items: center; }
 		.utilities :global(.actions) { flex: 1; justify-content: flex-start; }
 		.sheet .volume { display: flex; gap: 0.5rem; justify-content: center; align-items: center; color: var(--muted); margin-left: auto; }
