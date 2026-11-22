@@ -160,9 +160,10 @@ async function screen(browser, phone, scheme) {
     const position = Number(await dock.getByRole('slider', { name: 'Playback position' }).inputValue());
     assert.ok(position >= 11 && position < 18, 'reload restores the seek position without autoplay');
     await page.goto(origin); const hero = page.getByTestId('home-featured'), heroPlay = hero.getByRole('button', { name: /^Play / }), heroPause = hero.getByRole('button', { name: /^Pause / }); await heroPlay.click(); await heroPause.click(); await heroPlay.waitFor({ timeout: 5000 }); const heroBox = await hero.boundingBox(); await page.mouse.click(heroBox.x + heroBox.width - 24, heroBox.y + heroBox.height - 24); await page.waitForURL(url => url.pathname.startsWith('/u/'));
-    await page.goto(origin + '/track/missing-track');
-    await page.getByRole('heading', { name: '404', exact: true }).waitFor();
-    await page.getByText("we couldn't find what you're looking for").waitFor();
+    for (const [path, thing] of [['/u/missing.example', 'artist'], ['/album/alb_missing', 'album'], ['/playlist/pls_missing', 'playlist'], ['/track/missing-track', 'track']]) {
+      await page.goto(origin + path); await page.getByRole('heading', { name: '404', exact: true }).waitFor();
+      await page.getByText(`we couldn't find that ${thing}`, { exact: true }).waitFor(); await page.getByRole('link', { name: 'search plyr.fm', exact: true }).waitFor();
+    }
     const backHome = page.getByRole('link', { name: 'go home', exact: true });
     await backHome.click();
     await page.waitForURL(origin + '/');
