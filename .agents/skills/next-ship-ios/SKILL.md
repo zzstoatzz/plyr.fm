@@ -105,3 +105,20 @@ One message: the build number, what's in it, and that it's in TestFlight for "Te
 `wait`'s timestamp. Then remove the worktree and `build.ipa`, and stop any simulator, Metro or log
 stream you started. `node scripts/testflight.mjs status` answers "what's actually in TestFlight"
 any time.
+
+## outside testers (external groups, public link)
+
+"Team (Expo)" is internal: only App Store Connect team members, who see every app on the account.
+Anyone who should get plyr.fm only goes in an external group, and external groups only get builds
+that passed Apple's beta app review (the first one can take a day or more, later ones are usually
+quick). External groups do not pick up new builds on their own.
+
+```
+node scripts/testflight.mjs external [n]      # build n (default newest VALID) into Friends + Public,
+                                              # submit for beta review, turn on + print the public link
+node scripts/testflight.mjs invite <email>    # add to Friends (plyr.fm only), invite if installable
+```
+
+Run `external` after `wait` for any build outside testers should get. Never add an outside tester
+to an internal group or as an App Store Connect user. find bufo (com.find-bufo.app) has the same
+setup, already working.

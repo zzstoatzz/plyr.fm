@@ -4,6 +4,16 @@
 //   node scripts/testflight.mjs status [count]   newest builds as App Store Connect sees them
 //   node scripts/testflight.mjs upload <ipa>     validate, then upload straight to Apple with altool
 //   node scripts/testflight.mjs wait <build>     poll until the build is available to internal testers
+//   node scripts/testflight.mjs external [build] outside testers: add the build (default newest VALID) to
+//                                                every external group, submit it for beta review, make sure
+//                                                the "Public" group exists with its public link on, print state
+//   node scripts/testflight.mjs invite <email>   add an outside tester to the external "Friends" group (this app
+//                                                only, never an internal group) and send the invite if a build
+//                                                is installable
+//
+// Outside testers (external groups) only get builds that passed Apple's beta app review. Internal groups
+// ("Team (Expo)") are App Store Connect team members and see every app on the account, so testers who
+// should only get plyr.fm always go in an external group.
 //
 // "wait" exits 0 only when the build is processingState VALID and internalBuildState
 // IN_BETA_TESTING, which is the only state in which it is on a tester's phone. It exits 1 on
@@ -145,12 +155,129 @@ async function wait(version, timeoutMinutes) {
   }
 }
 
+async function api(key, method, route, body) {
+  const response = await fetch(`https://api.appstoreconnect.apple.com${route}`, {
+    method,
+    headers: { authorization: `Bearer ${jwt(key)}`, ...(body ? { 'content-type': 'application/json' } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const text = await response.text();
+  const json = text ? JSON.parse(text) : {};
+  if (!response.ok) {
+    const error = new Error(`${method} ${route} -> ${response.status}: ${JSON.stringify(json.errors ?? json)}`);
+    error.status = response.status;
+    error.codes = (json.errors ?? []).map(e => e.code);
+    throw error;
+  }
+  return json;
+}
+
+const PUBLIC_GROUP = 'Public';
+const FRIENDS_GROUP = 'Friends';
+
+async function externalGroups(key) {
+  const { data } = await api(key, 'GET', `/v1/apps/${ascAppId}/betaGroups?limit=50`);
+  return data.filter(group => !group.attributes.isInternalGroup);
+}
+
+async function buildReview(key, version) {
+  const query = new URLSearchParams({ 'filter[app]': ascAppId, sort: '-uploadedDate', limit: '10', include: 'buildBetaDetail,betaAppReviewSubmission' });
+  if (version) query.set('filter[version]', String(version));
+  const body = await api(key, 'GET', `/v1/builds?${query}`);
+  const included = new Map((body.included ?? []).map(item => [`${item.type}:${item.id}`, item.attributes]));
+  return body.data
+    .map(b => ({
+      id: b.id,
+      build: b.attributes.version,
+      processing: b.attributes.processingState,
+      expired: b.attributes.expired,
+      external: included.get(`buildBetaDetails:${b.relationships.buildBetaDetail?.data?.id}`)?.externalBuildState,
+      review: included.get(`betaAppReviewSubmissions:${b.relationships.betaAppReviewSubmission?.data?.id}`)?.betaReviewState ?? null,
+    }))
+    .find(b => b.processing === 'VALID' && !b.expired);
+}
+
+async function external(version) {
+  const key = await ascKey();
+  const build = await buildReview(key, version);
+  if (!build) throw new Error(`no VALID unexpired build${version ? ` ${version}` : ''}`);
+  let groups = await externalGroups(key);
+  if (!groups.some(g => g.attributes.name === PUBLIC_GROUP)) {
+    const { data } = await api(key, 'POST', '/v1/betaGroups', {
+      data: { type: 'betaGroups', attributes: { name: PUBLIC_GROUP, feedbackEnabled: true },
+        relationships: { app: { data: { type: 'apps', id: ascAppId } } } },
+    });
+    console.log(`created external group ${PUBLIC_GROUP}`);
+    groups = [...groups, data];
+  }
+  for (const group of groups) {
+    await api(key, 'POST', `/v1/betaGroups/${group.id}/relationships/builds`, { data: [{ type: 'builds', id: build.id }] });
+    console.log(`build ${build.build} is in ${group.attributes.name}`);
+  }
+  if (!build.review) {
+    const { data } = await api(key, 'POST', '/v1/betaAppReviewSubmissions', {
+      data: { type: 'betaAppReviewSubmissions', relationships: { build: { data: { type: 'builds', id: build.id } } } },
+    });
+    build.review = data.attributes.betaReviewState;
+    console.log(`submitted build ${build.build} for beta review`);
+  }
+  console.log(`build ${build.build}: beta review ${build.review}, external ${build.external}`);
+  const pub = groups.find(g => g.attributes.name === PUBLIC_GROUP);
+  if (!pub.attributes.publicLinkEnabled) {
+    try {
+      await api(key, 'PATCH', `/v1/betaGroups/${pub.id}`, {
+        data: { type: 'betaGroups', id: pub.id, attributes: { publicLinkEnabled: true, publicLinkLimitEnabled: false } },
+      });
+    } catch (error) {
+      console.log(`public link not on yet (Apple turns it on only once a build passed review): ${error.message}`);
+    }
+  }
+  const { data: fresh } = await api(key, 'GET', `/v1/betaGroups/${pub.id}`);
+  console.log(`public link: ${fresh.attributes.publicLinkEnabled ? fresh.attributes.publicLink : 'off'}`);
+}
+
+async function invite(email) {
+  if (!email) throw new Error('usage: invite <email>');
+  const key = await ascKey();
+  const friends = (await externalGroups(key)).find(g => g.attributes.name === FRIENDS_GROUP);
+  if (!friends) throw new Error(`no external ${FRIENDS_GROUP} group`);
+  const found = await api(key, 'GET', `/v1/betaTesters?${new URLSearchParams({ 'filter[email]': email, limit: '1' })}`);
+  let tester = found.data[0];
+  if (!tester) {
+    tester = (await api(key, 'POST', '/v1/betaTesters', {
+      data: { type: 'betaTesters', attributes: { email }, relationships: { betaGroups: { data: [{ type: 'betaGroups', id: friends.id }] } } },
+    })).data;
+  } else {
+    await api(key, 'POST', `/v1/betaGroups/${friends.id}/relationships/betaTesters`, { data: [{ type: 'betaTesters', id: tester.id }] });
+  }
+  console.log(`${email} is in ${FRIENDS_GROUP}`);
+  try {
+    await api(key, 'POST', '/v1/betaTesterInvitations', {
+      data: { type: 'betaTesterInvitations', relationships: { app: { data: { type: 'apps', id: ascAppId } }, betaTester: { data: { type: 'betaTesters', id: tester.id } } } },
+    });
+    console.log('invite sent');
+  } catch (error) {
+    if (!error.codes?.some(code => /NO_INSTALLABLE_BUILDS/.test(code)) && error.status !== 409) throw error;
+    console.log('no build has passed beta review yet: Apple emails the invite once one does');
+  }
+  const state = (await api(key, 'GET', `/v1/betaTesters/${tester.id}`)).data.attributes.state ?? 'NOT_INVITED';
+  const apps = (await api(key, 'GET', `/v1/betaTesters/${tester.id}/apps?limit=50`)).data.map(a => a.attributes.bundleId);
+  console.log(`${email}: ${state}; apps: ${apps.join(', ')}`);
+  if (apps.some(bundle => bundle !== expo.ios.bundleIdentifier)) throw new Error(`${email} can see other apps: ${apps.join(', ')}`);
+}
+
 const [command, argument] = process.argv.slice(2);
 const timeoutFlag = process.argv.indexOf('--timeout');
 const timeout = timeoutFlag > 0 ? Number(process.argv[timeoutFlag + 1]) : 45;
-const commands = { status: () => status(argument), upload: () => upload(argument), wait: () => wait(argument, timeout) };
+const commands = {
+  status: () => status(argument),
+  upload: () => upload(argument),
+  wait: () => wait(argument, timeout),
+  external: () => external(argument),
+  invite: () => invite(argument),
+};
 if (!commands[command]) {
-  console.error('usage: testflight.mjs status [count] | upload <ipa> | wait <build> [--timeout minutes]');
+  console.error('usage: testflight.mjs status [count] | upload <ipa> | wait <build> [--timeout minutes] | external [build] | invite <email>');
   process.exit(2);
 }
 commands[command]().catch(error => {
