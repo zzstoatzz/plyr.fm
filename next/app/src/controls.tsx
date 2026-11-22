@@ -29,7 +29,7 @@ export function Action({ label, onPress, href, disabled, selected, primary, dest
 
 export function Page({ title, children, scrollRef, ...scrollProps }: { title: string; children: ReactNode; scrollRef?: Ref<ScrollViewInstance> } & Pick<ScrollViewProps, 'scrollEnabled' | 'onScroll' | 'onContentSizeChange' | 'onLayout'>) {
   const theme = useAppearance();
-  return <ScrollView ref={scrollRef} {...scrollProps} scrollEventThrottle={16} contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled" style={{ backgroundColor: theme.background }} contentContainerStyle={styles.page}>
+  return <ScrollView ref={scrollRef} {...scrollProps} scrollEventThrottle={16} contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets style={{ backgroundColor: theme.background }} contentContainerStyle={styles.page}>
     <Text accessibilityRole="header" aria-level={1} style={{ color: theme.text, fontSize: 28 * theme.scale, fontFamily: theme.fontFamily, fontWeight: '700', textTransform: 'lowercase' }}>{title}</Text>
     {children}
   </ScrollView>;

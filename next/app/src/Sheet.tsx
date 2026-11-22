@@ -49,15 +49,19 @@ export function Sheet({ title, close, children, notice, visible = true, onDismis
       </View>
     </Modal>;
   }
+  // A form sheet on a phone keeps its height and lets the keyboard cover its lower part; its scroll view
+  // insets for the keyboard and brings the focused field into view. Lifting it as well would count the keyboard twice.
+  const form = !!bar && !wide;
   return <Modal transparent accessibilityLabel={title} animationType={theme.reduceMotion ? 'none' : 'fade'} visible={visible} onDismiss={onDismiss} onRequestClose={close}>
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' && !form ? 'padding' : undefined}
       style={{ flex: 1, justifyContent: wide ? 'center' : 'flex-end', alignItems: 'center' }}>
       <Pressable accessible={false} focusable={false} tabIndex={-1} aria-hidden onPress={close}
         style={[StyleSheet.absoluteFill, { backgroundColor: '#0008' }]} />
       <View accessibilityViewIsModal={true} style={{
-        width: '100%', maxWidth: 520, maxHeight: '88%', borderTopLeftRadius: 22, borderTopRightRadius: 22,
+        width: '100%', maxWidth: 520, borderTopLeftRadius: 22, borderTopRightRadius: 22, overflow: 'hidden',
         borderBottomLeftRadius: wide ? 22 : 0, borderBottomRightRadius: wide ? 22 : 0,
-        backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.hairline, paddingBottom: wide ? 12 : insets.bottom
+        backgroundColor: theme.surface, borderWidth: 1, borderBottomWidth: wide ? 1 : 0, borderColor: theme.hairline,
+        ...(form ? { height: height - insets.top - 10 } : { maxHeight: '88%', paddingBottom: wide ? 12 : insets.bottom })
       }}>
         {bar ? <View style={{ paddingHorizontal: 8, paddingVertical: 6, flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderColor: theme.hairline }}>
           <View style={{ flex: 1, alignItems: 'flex-start' }}>{bar.leading}</View>
@@ -67,8 +71,10 @@ export function Sheet({ title, close, children, notice, visible = true, onDismis
           <View style={{ flex: 1, minWidth: 0 }}><Heading>{title}</Heading></View>
           <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={close} style={{ padding: 12 }}><X size={22} color={theme.text} /></Pressable>
         </View>}
-        {notice && <View style={{ paddingHorizontal: 20, paddingBottom: 12, gap: 12 }}>{notice}</View>}
-        <ScrollView keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets={!!bar} contentContainerStyle={{ padding: 20, paddingTop: bar ? 16 : 4, gap: 12 }}>
+        {notice && <View style={{ paddingHorizontal: 20, paddingTop: bar ? 12 : 0, paddingBottom: 12, gap: 12, borderBottomWidth: bar ? StyleSheet.hairlineWidth : 0, borderColor: theme.hairline }}>{notice}</View>}
+        <ScrollView style={form ? { flex: 1 } : undefined} keyboardShouldPersistTaps="handled" keyboardDismissMode={form ? 'interactive' : 'none'}
+          automaticallyAdjustKeyboardInsets={form}
+          contentContainerStyle={{ padding: 20, paddingTop: bar ? 16 : 4, paddingBottom: form ? 20 + insets.bottom : 20, gap: 12 }}>
           {children}
         </ScrollView>
       </View>

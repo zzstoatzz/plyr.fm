@@ -167,7 +167,7 @@ export function Catalog({
     content = <Collection key={id} id={id} album={screen === 'album'} onPlay={onPlay} />;
   } else if (screen === 'artist' && handle) content = <ArtistProfile key={handle} handle={handle} onPlay={onPlay} />;
   else content = <Copy>this catalog link is incomplete.</Copy>;
-  return <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled" keyboardDismissMode={screen === 'search' ? 'on-drag' : undefined} automaticallyAdjustKeyboardInsets={screen === 'search'}>
+  return <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled" keyboardDismissMode={screen === 'search' ? 'on-drag' : undefined} automaticallyAdjustKeyboardInsets>
     <View style={styles.page}>{content}</View>
   </ScrollView>;
 }
