@@ -186,3 +186,8 @@ test "the endpoint resolved is the audio URL's own origin" {
     try std.testing.expectError(error.InvalidAudioUrl, origin("http://audio.plyr.fm/a.mp3"));
     try std.testing.expectError(error.InvalidAudioUrl, origin("https:///a.mp3"));
 }
+
+test {
+    _ = audio_duration;
+    _ = store_module;
+}

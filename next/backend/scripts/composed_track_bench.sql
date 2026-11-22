@@ -79,6 +79,15 @@ CREATE TABLE plyr_index.track_delivery_origins (
     observed_at_us bigint NOT NULL,
     PRIMARY KEY (record_uri, service)
 );
+CREATE TABLE plyr_index.track_measured_durations (
+    record_uri text PRIMARY KEY,
+    record_cid text NOT NULL,
+    duration_seconds bigint,
+    attempts integer NOT NULL DEFAULT 0,
+    next_attempt_us bigint NOT NULL DEFAULT 0,
+    last_error text,
+    observed_at_us bigint NOT NULL
+);
 CREATE TABLE plyr_index.track_policies (
     record_uri text PRIMARY KEY,
     visibility text,

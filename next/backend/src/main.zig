@@ -439,8 +439,6 @@ test {
     _ = @import("internal/ingest/catalog_reconciler.zig");
     _ = @import("internal/delivery/blob_mirror.zig");
     _ = @import("internal/delivery/duration_probe.zig");
-    _ = @import("internal/delivery/audio_duration.zig");
-    _ = @import("internal/delivery/postgres_duration_store.zig");
     _ = @import("internal/moderation/label_sync.zig");
     _ = @import("internal/moderation/log.zig");
     _ = @import("internal/moderation/postgres_log.zig");
