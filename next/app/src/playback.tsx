@@ -42,7 +42,10 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
   function privateOutput(value: boolean) { privateMode.current = value; setPrivatePlayback(value); }
   const [resolving, setResolving] = useState(false);
   const [starting, setStarting] = useState<number | null>(null);
+  // `starting` holds the loading state from a source being ready until its audio is heard, so play never shows in between.
   const loading = resolving || starting !== null;
+  const heard = useRef(0);
+  const handoff = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [ready, setReady] = useState(false);
   const [lockScreenSuspended, setLockScreenSuspended] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,8 +83,8 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     load: (tracks, at) => privateMode.current ? Promise.resolve(false) : load(tracks, at, false),
     loaded: waitForMedia,
     seek: seconds => privateMode.current ? Promise.resolve() : accounting.seekTo(seconds),
-    play: () => { if (!privateMode.current) player.play(); },
-    pause: () => { if (!privateMode.current) player.pause(); },
+    play: () => { if (!privateMode.current) startAudio(); },
+    pause: () => { if (!privateMode.current) stopAudio(); },
     setQueue: (tracks, at) => { if (privateMode.current) return; setQueue(previous => previous.length === tracks.length && previous.every((track, index) => track === tracks[index]) ? previous : tracks); setIndex(at); },
     clear: () => { if (privateMode.current) return; accounting.stop(); sourceEvents.current?.remove(); sequence.current++; player.pause(); player.replace(null); if (objectUrl.current) releaseGatedAudioUrl(objectUrl.current); objectUrl.current = null; setQueue([]); setIndex(-1); setReady(false); setResolving(false); setStarting(null); setError(null); }
   }, auth.did);
@@ -90,7 +93,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     current, ready, duration: () => player.duration,
     position: () => player.currentTime, playing: () => player.playing,
     load: (tracks, at) => privateMode.current ? Promise.resolve(false) : load(tracks, at, false), loaded: waitForMedia,
-    seek: seconds => privateMode.current ? Promise.resolve() : accounting.seekTo(seconds), play: () => { if (!privateMode.current) player.play(); }, pause: () => { if (!privateMode.current) player.pause(); },
+    seek: seconds => privateMode.current ? Promise.resolve() : accounting.seekTo(seconds), play: () => { if (!privateMode.current) startAudio(); }, pause: () => { if (!privateMode.current) stopAudio(); },
     setQueue: (tracks, at) => { if (privateMode.current) return; setQueue(previous => previous.length === tracks.length && previous.every((track, index) => track === tracks[index]) ? previous : tracks); setIndex(at); },
     suspended: !!jam.jam || privatePlayback, repeat, keepPlaying, setRepeat, error: setError,
   });
@@ -98,6 +101,9 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
   useEffect(() => {
     if (pendingSeek && !pendingSeek.local && personal.remote && Math.abs(personal.remote.positionMs / 1000 - pendingSeek.seconds) < 0.5) setPendingSeek(null);
   }, [personal.remote, pendingSeek]);
+
+  function startAudio() { clearTimeout(handoff.current); if (heard.current !== sequence.current) setStarting(sequence.current); player.play(); }
+  function stopAudio() { clearTimeout(handoff.current); setStarting(null); player.pause(); }
 
   async function waitForMedia() {
     if (player.isLoaded) return;
@@ -216,6 +222,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
           setError(event.error);
         } else if (!settled && ((event.playing && player.currentTime > 0) || event.didJustFinish)) {
           settled = true;
+          heard.current = request;
           if (!privateTrack) console.info('[playback] startup settled', { request, track: track.id, position: player.currentTime, finished: event.didJustFinish });
           recordPlayback("started", { request, elapsedMs: Date.now() - startedAt });
           setStarting((pending) => pending === request ? null : pending);
@@ -235,8 +242,10 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
       if (request !== sequence.current) return false;
       setReady(true);
       recordPlayback("media ready", { request, elapsedMs: Date.now() - startedAt });
-      if (start) {
-        setStarting(request);
+      setStarting(request);
+      // A queue that loaded without starting decides next; give it a moment before showing the paused state.
+      if (!start) handoff.current = setTimeout(() => setStarting(pending => pending === request ? null : pending), 1_500);
+      else {
         player.play();
         // Startup holds the loading state until the player reports progress; note when that hasn't happened.
         setTimeout(() => {
@@ -330,13 +339,12 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
   function setPlaying(playing: boolean) {
     if (playing) setLockScreenSuspended(false);
     if (!privateMode.current && jam.setPlaying(playing, jam.jam?.state)) return;
-    if (!playing) { if (!privateMode.current) personal.checkpoint(); player.pause(); }
+    if (!playing) { if (!privateMode.current) personal.checkpoint(); stopAudio(); }
     if (!privateMode.current && personal.command({ action: playing ? 'play' : 'pause' })) return;
     if (loading || !current) return;
     if (!privateMode.current && playing && !ready && personal.resume()) return;
     if (playing && (!ready || status.error || error)) void load(queue, index);
-    else if (playing && !player.playing) player.play();
-    else if (!playing && player.playing) player.pause();
+    else if (playing && !player.playing) startAudio();
   }
 
   function toggle() {
