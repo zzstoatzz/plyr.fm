@@ -141,6 +141,8 @@
 			{@const byArtist = featured.filter(track => track.artist.did === top.artist.did)}
 			{@const covers = [...new Set(byArtist.flatMap(track => track.media.artwork?.url ? [track.media.artwork.url] : []))].slice(0, 6)}
 			{@const artwork = covers.length ? covers : top.artist.profile.avatar_url ? [top.artist.profile.avatar_url] : []}
+			{@const active = player.canEditPublicQueue && byArtist.some(track => track.record.uri === player.current?.record.uri && track.record.cid === player.current.record.cid)}
+			{@const playing = active && player.playing && !player.outputElsewhere}
 			<section class="featured" data-testid="home-featured" aria-label="artist of the week">
 				<div class="wall" class:single={artwork.length === 1} class:pair={artwork.length === 2} aria-hidden="true">
 					{#each artwork as src (src)}
@@ -149,8 +151,9 @@
 				</div>
 				<div class="feature-content">
 					<span>artist of the week</span>
-					<h1><a href={`/u/${top.artist.did}`}>{artistName(top)}</a></h1>
-					<button class="primary-button" aria-label={`Play all ${byArtist.length} by ${artistName(top)}`} onclick={() => player.play(top, byArtist, artistName(top))}><Icon name="play" /></button>
+					<h1><a class="feature-link" href={`/u/${top.artist.did}`}>{artistName(top)}</a></h1>
+					<button class="primary-button" aria-label={playing ? `Pause ${artistName(top)}` : `Play all ${byArtist.length} by ${artistName(top)}`} disabled={active && !playing && player.snapshot.waiting}
+						onclick={() => active ? player.toggle() : player.play(byArtist[0], byArtist, artistName(top))}><Icon name={playing ? 'pause' : 'play'} /></button>
 				</div>
 			</section>
 		{/if}
@@ -247,6 +250,12 @@
 	.feature-content span { font-weight: 650; color: var(--accent); font-size: var(--t-12-8); }
 	h1 { line-height: 1.1; letter-spacing: -0.035em; }
 	.feature-content h1 { font-size: clamp(1.75rem, 4vw, 3.25rem); margin-block: 0.5rem 1.2rem; }
+	/* the whole card opens the artist; the play button sits above that link */
+	.feature-link::after { content: ''; position: absolute; inset: 0; border-radius: inherit; }
+	.feature-link:focus-visible { outline: none; }
+	.featured:has(.feature-link:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+	.featured:hover .feature-link { text-decoration: underline; text-decoration-thickness: 0.06em; text-underline-offset: 0.12em; }
+	.feature-content .primary-button { position: relative; z-index: 1; }
 	.more { min-height: 2.75rem; color: var(--muted); }
 	.latest { grid-area: latest; min-width: 0; }
 	.home.filtered { grid-template-columns: minmax(0, 1fr); grid-template-areas: "latest"; }
