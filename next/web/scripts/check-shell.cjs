@@ -665,17 +665,19 @@ async function textFields(browser) {
   if (staticBuild) origin = await serve();
   const browser = await chromium.launch();
   try {
-    await Promise.all([textFields(browser), homePagination(browser, origin)]);
-    for (const phone of [true, false]) {
-      for (const scheme of ['light', 'dark']) {
+    // Each width and scheme has its own contexts, so they run side by side.
+    await Promise.all([
+      textFields(browser),
+      homePagination(browser, origin),
+      loginScreen(browser),
+      ...[true, false].flatMap(phone => ['light', 'dark'].map(async scheme => {
         await screen(browser, phone, scheme);
         await queueGroups(browser, phone, scheme);
         await collectionControls(browser, phone, scheme);
         await keyboard(browser, phone, scheme);
         await statsScreen(browser, phone, scheme);
-      }
-    }
-    await loginScreen(browser);
+      }))
+    ]);
     console.log(`Svelte shell, queue, shortcuts and sign-in passed at phone and desktop widths → ${output}`);
   } finally { await browser.close(); if (staticBuild) close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
