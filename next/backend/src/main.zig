@@ -328,6 +328,7 @@ test {
     _ = @import("internal/projection/collection_proof.zig");
     _ = @import("internal/redis/connection_config.zig");
     _ = @import("internal/application/resolve_viewer_likes.zig");
+    _ = @import("internal/application/latest_by_artists.zig");
     _ = @import("internal/application/list_viewer_liked_tracks.zig");
     _ = @import("internal/application/verified_track_subject.zig");
     _ = @import("internal/account/availability.zig");

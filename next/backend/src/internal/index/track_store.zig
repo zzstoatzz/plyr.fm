@@ -41,6 +41,13 @@ pub const TrackStore = struct {
 
     tags_fn: ?*const fn (*anyopaque, std.mem.Allocator, []const u8, usize, ?tag_cursor.Cursor) Error![]const Tag = null,
 
+    latest_by_artists_fn: ?*const fn (*anyopaque, std.mem.Allocator, []const u8, []const []const u8, usize) Error![]const track.Track = null,
+
+    /// Each artist's newest listed track, newest first, at most `limit` of them.
+    pub fn latestByArtists(self: TrackStore, allocator: std.mem.Allocator, collection: []const u8, dids: []const []const u8, limit: usize) Error![]const track.Track {
+        return (self.latest_by_artists_fn orelse return error.IndexUnavailable)(self.context, allocator, collection, dids, limit);
+    }
+
     pub fn resolve(self: TrackStore, allocator: std.mem.Allocator, uris: []const []const u8) Error![]const track.Track {
         return (self.resolve_fn orelse return error.IndexUnavailable)(self.context, allocator, uris);
     }

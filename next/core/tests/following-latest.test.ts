@@ -4,60 +4,59 @@ import type { Track } from '../src/api.ts';
 import { followingLatest } from '../src/following-latest.ts';
 
 const track = (did: string, when: string): Track => ({
-  object: 'track', id: did, record: { uri: `at://${did}/fm.plyr.track/1`, cid: null, revision: null, collection: 'fm.plyr.track', rkey: '1' },
+  object: 'track', id: did + when, record: { uri: `at://${did}/fm.plyr.track/${when}`, cid: null, revision: null, collection: 'fm.plyr.track', rkey: when },
   metadata: { title: did, description: null, album: null, duration_seconds: 10, created_at: when },
-  artist: { did, profile: { handle: 'artist.test', display_name: 'artist', avatar_url: null } }, media: {}, access: { visibility: 'public' }, metrics: { play_count: 0, like_count: 0 }
+  artist: { did, profile: { handle: 'artist.test', display_name: 'artist', avatar_url: 'appview.jpg' } }, media: {}, access: { visibility: 'public' }, metrics: { play_count: 0, like_count: 0 }
 });
 
-test('followed releases are one per artist, newest first, fetched together, with a partial-failure result', async () => {
-  let active = 0;
-  let peak = 0;
+const graph = (pages: Record<string, { follows: { did: string; avatar?: string }[]; cursor?: string }>, wait?: Promise<void>) => async (input: RequestInfo | URL) => {
+  const cursor = new URL(String(input)).searchParams.get('cursor') ?? '';
+  if (cursor && wait) await wait;
+  return Response.json(pages[cursor]);
+};
+
+test('the shelf is the newest track per followed person, newest first, across pages, with a partial-failure count', async () => {
   const result = await followingLatest('did:plc:me', {
-    resolveArtists: async dids => dids.map(did => ({ did, handle: 'artist.test', display_name: 'artist', avatar_url: null, track_count: 1 })),
-    tracks: async ({ artist_did }) => {
-      active++; peak = Math.max(peak, active);
-      await new Promise(resolve => setTimeout(resolve, 1));
-      active--;
-      if (artist_did === 'did:plc:bad') throw new Error('offline');
-      return { object: 'list', data: [track(artist_did, artist_did === 'did:plc:new' ? '2026-11-16' : '2026-11-15')], has_more: false };
+    latestTracks: async dids => {
+      if (dids.includes('did:plc:bad')) throw new Error('offline');
+      return dids.map(did => track(did, did === 'did:plc:new' ? '2026-11-16' : '2026-11-15'));
     }
-  }, new AbortController().signal, async () => Response.json({ follows: ['did:plc:old', 'did:plc:bad', 'did:plc:new', 'did:plc:other'].map(did => ({ did })) }));
+  }, new AbortController().signal, graph({
+    '': { follows: [{ did: 'did:plc:old', avatar: 'bsky.jpg' }, { did: 'did:plc:new' }], cursor: 'two' },
+    two: { follows: [{ did: 'did:plc:bad' }] },
+  }));
   assert.equal(result.failed, 1);
-  assert.equal(result.tracks[0].artist.did, 'did:plc:new');
-  assert.equal(result.tracks.length, 3);
-  assert.equal(peak, 4);
+  assert.deepEqual(result.tracks.map(item => item.artist.did), ['did:plc:new', 'did:plc:old']);
+  assert.equal(result.tracks[1].artist.profile.avatar_url, 'bsky.jpg', 'the followed account\'s own avatar wins');
+  assert.equal(result.tracks[0].artist.profile.avatar_url, 'appview.jpg');
 });
 
-test('cancellation prevents a completed graph from starting release requests', async () => {
-  const controller = new AbortController();
-  let requested = false;
-  await assert.rejects(followingLatest('did:plc:me', {
-    resolveArtists: async () => { controller.abort(); return [{ did: 'did:plc:artist', handle: '', display_name: '', avatar_url: null, track_count: 1 }]; },
-    tracks: async () => { requested = true; return { object: 'list', data: [], has_more: false }; }
-  }, controller.signal, async () => Response.json({ follows: [{ did: 'did:plc:artist' }] })));
-  assert.equal(requested, false);
+test('the shelf keeps the twelve newest, not the first twelve followed', async () => {
+  const follows = Array.from({ length: 20 }, (_, index) => ({ did: `did:plc:a${index}` }));
+  const result = await followingLatest('did:plc:me', {
+    latestTracks: async (dids, limit) => dids.map((did, index) => track(did, `2026-11-${String(index + 1).padStart(2, '0')}`)).reverse().slice(0, limit),
+  }, new AbortController().signal, graph({ '': { follows } }));
+  assert.equal(result.tracks.length, 12);
+  assert.equal(result.tracks[0].artist.did, 'did:plc:a19');
 });
 
 test('each page of follows is looked up while the next page loads', async () => {
   const events: string[] = [];
   let release: () => void = () => undefined;
   const second = new Promise<void>(resolve => { release = resolve; });
-  const pages: Record<string, { follows: { did: string }[]; cursor?: string }> = {
-    '': { follows: [{ did: 'did:plc:b' }, { did: 'did:plc:a' }], cursor: 'next' },
-    next: { follows: [{ did: 'did:plc:c' }] },
-  };
-  const result = await followingLatest('did:plc:me', {
-    resolveArtists: async dids => {
-      events.push('resolve ' + dids.join(' '));
-      if (dids.includes('did:plc:b')) release();
-      return dids.filter(did => did !== 'did:plc:a').map(did => ({ did, handle: 'artist.test', display_name: 'artist', avatar_url: null, track_count: 1 }));
-    },
-    tracks: async ({ artist_did }) => ({ object: 'list', data: [track(artist_did, '2026-11-15')], has_more: false }),
+  await followingLatest('did:plc:me', {
+    latestTracks: async dids => { events.push('lookup ' + dids.join(' ')); release(); return []; },
   }, new AbortController().signal, async input => {
-    const cursor = new URL(String(input)).searchParams.get('cursor') ?? '';
-    if (cursor) { await second; events.push('page 2'); }
-    return Response.json(pages[cursor]);
+    const response = await graph({ '': { follows: [{ did: 'did:plc:a' }], cursor: 'two' }, two: { follows: [{ did: 'did:plc:b' }] } }, second)(input);
+    if (new URL(String(input)).searchParams.get('cursor')) events.push('page 2');
+    return response;
   });
-  assert.deepEqual(events, ['resolve did:plc:b did:plc:a', 'page 2', 'resolve did:plc:c']);
-  assert.deepEqual(result.tracks.map(item => item.artist.did).sort(), ['did:plc:b', 'did:plc:c']);
+  assert.deepEqual(events, ['lookup did:plc:a', 'page 2', 'lookup did:plc:b']);
+});
+
+test('cancellation stops the shelf', async () => {
+  const controller = new AbortController();
+  await assert.rejects(followingLatest('did:plc:me', {
+    latestTracks: async () => { controller.abort(); return []; },
+  }, controller.signal, graph({ '': { follows: [{ did: 'did:plc:artist' }] } })));
 });
