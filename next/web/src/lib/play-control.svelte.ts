@@ -7,7 +7,7 @@ function now(): PlayerNow {
 		station: player.liveStation?.slug,
 		inJam: !!player.jam,
 		playing: player.liveStation ? player.liveListening : player.playing && !player.outputElsewhere,
-		starting: player.loading || player.snapshot.waiting
+		starting: player.starting
 	};
 }
 
