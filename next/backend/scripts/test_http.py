@@ -311,6 +311,22 @@ def main() -> None:
         _expect(base_url, "resolveArtists", 503, method="POST", data=artist_body)
         _expect(base_url, "resolveArtists", 405)
 
+        status, _, empty_latest = _request(
+            base_url, X + "resolveLatestTracks", method="POST", data=b'{"dids":[]}'
+        )
+        assert status == 200 and empty_latest["data"] == []
+        for payload in (
+            b'{"dids":["invalid"]}',
+            b'{"dids":[],"extra":true}',
+            b'{"dids":["did:plc:artist"],"limit":0}',
+            b'{"dids":["did:plc:artist"],"limit":51}',
+            json.dumps({"dids": ["did:plc:artist"] * 501}).encode(),
+            b"x" * 65537,
+        ):
+            _expect(base_url, "resolveLatestTracks", 400, method="POST", data=payload)
+        _expect(base_url, "resolveLatestTracks", 503, method="POST", data=artist_body)
+        _expect(base_url, "resolveLatestTracks", 405)
+
         for invalid in (
             "getTrackChart?period=year",
             "getTrackChart?period=week&period=day",

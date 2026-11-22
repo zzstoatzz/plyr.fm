@@ -49,12 +49,13 @@ pub const Method = enum {
     getArtist,
     getArtistMetrics,
     resolveArtists,
+    resolveLatestTracks,
     getActorLikes,
     getIngestStatus,
 
     fn isProcedure(self: Method) bool {
         return switch (self) {
-            .resolveTracks, .recordPlay, .resolveArtists => true,
+            .resolveTracks, .recordPlay, .resolveArtists, .resolveLatestTracks => true,
             else => false,
         };
     }
@@ -169,6 +170,7 @@ pub fn handle(
         .getArtist => try artists.get(request, allocator, app.artist_store, app.cors, id, request_id),
         .getArtistMetrics => try artists.getMetrics(request, allocator, app.artist_store, app.artist_metric_store, app.track_collection, app.cors, id, request_id),
         .resolveArtists => try artists.resolve(request, allocator, app.artist_store, app.track_collection, app.cors, request_id),
+        .resolveLatestTracks => try tracks.latestByArtists(request, allocator, app.track_store, app.track_collection, app.cors, request_id),
         .getActorLikes => {
             if (!std.mem.startsWith(u8, id, "did:")) return response.apiError(request, .invalid_request, request_id, app.cors);
             try actors.listLikes(request, allocator, app.liked_track_store, id, app.track_collection, app.cors, request_id);

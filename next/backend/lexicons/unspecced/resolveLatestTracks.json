@@ -1,0 +1,38 @@
+{
+  "lexicon": 1,
+  "id": "fm.plyr.unspecced.resolveLatestTracks",
+  "defs": {
+    "main": {
+      "type": "procedure",
+      "description": "The newest listed track from each of up to 500 artists, newest first, at most `limit` tracks. The response body is the appview's own JSON shape, not yet specified here.",
+      "input": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "required": [
+            "dids"
+          ],
+          "properties": {
+            "dids": {
+              "type": "array",
+              "maxLength": 500,
+              "items": {
+                "type": "string",
+                "format": "did"
+              }
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 12
+            }
+          }
+        }
+      },
+      "output": {
+        "encoding": "application/json"
+      }
+    }
+  }
+}
