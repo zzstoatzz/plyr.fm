@@ -1,10 +1,11 @@
 <script lang="ts">
 	import type { Track } from '@plyr/next-core/api';
 	import { trackArtwork } from '@plyr/next-core/artwork';
-	import { canToggleTrack } from '@plyr/next-core/track-revision';
+	import { showsPause, tracksContext } from '@plyr/next-core/play-context';
 	import { resolve } from '$app/paths';
 	import { prefs } from './prefs.svelte';
 	import { player } from './player.svelte';
+	import { contextState, pressContext } from './play-control.svelte';
 	import { artistName, clock, trackHref } from './tracks';
 	import Artwork from './ui/Artwork.svelte';
 	import Icon from './ui/Icon.svelte';
@@ -20,14 +21,14 @@
 		/** an album's position, shown in place of the cover its tracks all share */
 		number?: number;
 	} = $props();
-	const currentTrack = $derived(!player.liveStation && canToggleTrack(player.current, track, !!player.jam));
-	const playing = $derived(currentTrack && player.playing && !player.outputElsewhere);
+	const context = $derived(tracksContext([track]));
+	const playState = $derived(contextState(context));
+	const currentTrack = $derived(playState !== 'idle');
+	const playing = $derived(showsPause(playState));
 	const title = $derived(track.metadata.title || 'untitled');
 	let actions: ReturnType<typeof TrackActions> | undefined = $state();
 	function toggle() {
-		if (currentTrack) player.toggle();
-		else if (prefs.playThrough) player.play(track, collection, label);
-		else player.play(track);
+		pressContext(context, () => prefs.playThrough ? player.play(track, collection, label) : player.play(track));
 	}
 </script>
 

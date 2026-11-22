@@ -7,12 +7,13 @@
 	import { accessLabel } from '@plyr/next-core/access/label';
 	import { authConfig } from '$lib/auth-config';
 	import { isPrivateTrack } from '@plyr/next-core/track-access';
-	import { canToggleTrack } from '@plyr/next-core/track-revision';
+	import { showsPause, tracksContext } from '@plyr/next-core/play-context';
 	import { trackArtwork } from '@plyr/next-core/artwork';
 	import { api } from '$lib/api';
 	import { comments as trackComments } from '$lib/listening/comments';
 	import { parseChapters, clock } from '@plyr/next-core/chapters';
 	import { player } from '$lib/player.svelte';
+	import { contextState, pressContext } from '$lib/play-control.svelte';
 	import { artistName, trackHref } from '$lib/tracks';
 	import Artwork from '$lib/ui/Artwork.svelte';
 	import Icon from '$lib/ui/Icon.svelte';
@@ -25,7 +26,10 @@
 	import { offerFor, offerLabel, supportLink } from '@plyr/next-core/selling';
 	import type { Artist } from '@plyr/next-core/api';
 	let { track, ownerActions, playTrack = player.play.bind(player) }: { track: Track; ownerActions?: Snippet; playTrack?: (track: Track) => void } = $props();
-	const active = $derived(!player.liveStation && canToggleTrack(player.current, track, !!player.jam));
+	const context = $derived(tracksContext([track]));
+	const playState = $derived(contextState(context));
+	const active = $derived(playState !== 'idle');
+	const pause = $derived(showsPause(playState));
 	const canDiscuss = $derived(!isPrivateTrack(track));
 	let sharedTrack = $state<string>();
 	let account = $state.raw(auth.getAuth());
@@ -77,11 +81,10 @@
 	function play() {
 		const timestamp = page.url.searchParams.get('t');
 		const address = page.url.href;
-		if (canDiscuss && !(active && player.playing) && address !== openedAt && timestamp && /^\d{1,8}$/.test(timestamp) && player.canPlayFrom(track)) {
+		if (canDiscuss && !pause && address !== openedAt && timestamp && /^\d{1,8}$/.test(timestamp) && player.canPlayFrom(track)) {
 			openedAt = address;
 			playFrom(Number(timestamp));
-		} else if (active) player.toggle();
-		else playTrack(track);
+		} else pressContext(context, () => playTrack(track));
 	}
 
 	function playFrom(seconds: number) {
@@ -116,7 +119,7 @@
 </header>
 
 {#snippet transport()}
-	<button class="primary-button" type="button" aria-label={active && player.playing ? 'Pause' : 'Play'} onclick={play}><Icon name={active && player.playing ? 'pause' : 'play'} size={25} /></button>
+	<button class="primary-button" type="button" data-play-state={playState} aria-label={pause ? 'Pause' : 'Play'} onclick={play}><Icon name={pause ? 'pause' : 'play'} size={25} /></button>
 	{#if offer && (!closedToMe || waysAdmitted)}<a class="buy" href={offer.url} target="_blank" rel="noopener noreferrer" aria-label={`Buy ${track.metadata.title}, ${offerLabel(offer)} (opens in a new tab)`}><Icon name="external" size={16} /> <span>buy · {offerLabel(offer)}</span></a>{/if}
 	{#if canDiscuss}<button class="icon-button" type="button" aria-label="Add to queue" disabled={!player.canEditPublicQueue} title={!player.canEditPublicQueue ? "play a public track to change queues" : undefined} onclick={() => player.enqueue(track)}><Icon name="queue" /></button>{/if}
 {/snippet}

@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { canToggleTrack } from '@plyr/next-core/track-revision';
+  import { showsPause, tracksContext } from '@plyr/next-core/play-context';
   import { player } from '$lib/player.svelte';
+  import { contextState, pressContext } from '$lib/play-control.svelte';
   import { artistName, trackHref } from '$lib/tracks';
   import Artwork from '$lib/ui/Artwork.svelte';
 
@@ -17,10 +18,10 @@
     <div><h1>{data.title}</h1>{#if data.subtitle}<p class="subtle">{data.subtitle}</p>{/if}</div>
   </header>
   {#each data.tracks as track}
-    {@const current = canToggleTrack(player.current, track)}
+    {@const playState = contextState(tracksContext([track]))}
     <div class="row">
-      <button class="icon-button cover" type="button" aria-label={`${current && player.playing ? 'Pause' : 'Play'} ${track.metadata.title}`} disabled={!canEmbed(track)}
-        onclick={() => current ? player.toggle() : player.play(track, playable, data.title)}>
+      <button class="icon-button cover" type="button" data-play-state={playState} aria-label={`${showsPause(playState) ? 'Pause' : 'Play'} ${track.metadata.title}`} disabled={!canEmbed(track)}
+        onclick={() => pressContext(tracksContext([track]), () => player.play(track, playable, data.title))}>
         <Artwork src={embedArtwork(track)} size={42} />
       </button>
       <div class="name">

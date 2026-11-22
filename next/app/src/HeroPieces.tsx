@@ -3,7 +3,10 @@ import { useState, type ReactNode } from 'react';
 import { Image, PixelRatio, Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { displayUrl } from '@plyr/next-core/artwork';
+import type { PlayContext } from '@plyr/next-core/play-context';
 import { useAppearance } from './appearance';
+import { Pause as PauseIcon, Play as PlayIcon } from './icons';
+import { usePlayContext } from './playback-context';
 import { Text } from './Text';
 
 /** The page column pads 20 on each side and 16 on top; a hero bleeds past that. */
@@ -58,12 +61,22 @@ export function Chip({ value, label }: { value: string; label?: string }) {
   </View>;
 }
 
-export function Pill({ icon, label, accessibilityLabel, onPress, primary, outline, role = 'button' }: {
+/** The hero's primary Play, which turns to Pause while its artist, album or playlist is on. */
+export function PlayPill({ context, name, start, iconSize }: { context: PlayContext; name: string; start: () => void; iconSize: number }) {
+  const theme = useAppearance();
+  const { pause, press } = usePlayContext(context);
+  const Glyph = pause ? PauseIcon : PlayIcon;
+  return <Pill primary testID="hero-play" icon={<Glyph size={iconSize} color={theme.onAccent} fill={theme.onAccent} />} label={pause ? 'Pause' : 'Play'}
+    accessibilityLabel={`${pause ? 'Pause' : 'Play'} ${name}`} onPress={() => press(start)} />;
+}
+
+export function Pill({ icon, label, accessibilityLabel, onPress, primary, outline, role = 'button', testID }: {
   icon: ReactNode; label: string; accessibilityLabel: string; onPress: () => void; primary?: boolean; outline?: boolean; role?: 'button' | 'link';
+  testID?: string;
 }) {
   const theme = useAppearance();
   const color = primary ? theme.onAccent : outline ? theme.accent : theme.text;
-  return <Pressable accessibilityRole={role} accessibilityLabel={accessibilityLabel} onPress={onPress}
+  return <Pressable accessibilityRole={role} accessibilityLabel={accessibilityLabel} onPress={onPress} testID={testID}
     style={({ pressed }) => [styles.pill, outline ? { borderWidth: 1.5, borderColor: theme.accent, flexShrink: 1 } : null,
       { backgroundColor: primary ? theme.accent : outline ? 'transparent' : theme.raised, opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] }]}>
     {icon}

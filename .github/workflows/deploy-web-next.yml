@@ -7,6 +7,7 @@ on:
       - "next/app/**"
       - "next/core/**"
       - "next/scripts/check-boundaries.mjs"
+      - "next/scripts/check-play-controls.mjs"
       - "next/package.json"
       - "next/bun.lock"
       - "next/vendor/**"
@@ -29,7 +30,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
         working-directory: next
-      - run: bun run check:boundaries
+      - run: bun run check:boundaries && bun run check:play-controls
         working-directory: next
       - name: check native app
         working-directory: next/app

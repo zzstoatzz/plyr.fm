@@ -8,6 +8,8 @@
 	import type { Track } from '@plyr/next-core/api';
 	import { api } from '$lib/api';
 	import { player } from '$lib/player.svelte';
+	import { artistContext } from '@plyr/next-core/play-context';
+	import PlayButton from '$lib/ui/PlayButton.svelte';
 	import { prefs } from '$lib/prefs.svelte';
 	import { artistName } from '$lib/tracks';
 	import Artwork from '$lib/ui/Artwork.svelte';
@@ -224,8 +226,6 @@
 			{@const byArtist = featured.filter(track => track.artist.did === top.artist.did)}
 			{@const covers = [...new Set(byArtist.flatMap(track => track.media.artwork?.url ? [track.media.artwork.url] : []))].slice(0, 6)}
 			{@const artwork = covers.length ? covers : top.artist.profile.avatar_url ? [top.artist.profile.avatar_url] : []}
-			{@const active = player.canEditPublicQueue && byArtist.some(track => track.record.uri === player.current?.record.uri && track.record.cid === player.current.record.cid)}
-			{@const playing = active && player.playing && !player.outputElsewhere}
 			<section class="featured" data-testid="home-featured" aria-label="artist of the week">
 				<div class="wall" class:single={artwork.length === 1} class:pair={artwork.length === 2} aria-hidden="true">
 					{#each artwork as src (src)}
@@ -235,8 +235,7 @@
 				<div class="feature-content">
 					<span>artist of the week</span>
 					<h1><a class="feature-link" href={`/u/${top.artist.did}`}>{artistName(top)}</a></h1>
-					<button class="primary-button" aria-label={playing ? `Pause ${artistName(top)}` : `Play all ${byArtist.length} by ${artistName(top)}`} disabled={active && !playing && player.snapshot.waiting}
-						onclick={() => active ? player.toggle() : player.play(byArtist[0], byArtist, artistName(top))}><Icon name={playing ? 'pause' : 'play'} /></button>
+					<PlayButton name={artistName(top)} context={artistContext(top.artist.did)} start={() => player.play(byArtist[0], byArtist, artistName(top))} />
 				</div>
 			</section>
 		{/if}
@@ -310,7 +309,7 @@
 	.feature-link:focus-visible { outline: none; }
 	.featured:has(.feature-link:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
 	.featured:hover .feature-link { text-decoration: underline; text-decoration-thickness: 0.06em; text-underline-offset: 0.12em; }
-	.feature-content .primary-button { position: relative; z-index: 1; }
+	.feature-content :global(.primary-button) { position: relative; z-index: 1; }
 	.more { min-height: 2.75rem; color: var(--muted); }
 	.latest { min-width: 0; }
 	.tag-shelf { display: flex; gap: 0.45rem; overflow-x: auto; padding: 0.2rem 0.15rem 0.75rem; scrollbar-width: none; }

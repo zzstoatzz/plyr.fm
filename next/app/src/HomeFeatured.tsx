@@ -9,8 +9,9 @@ import { trackArtwork } from '@plyr/next-core/artwork';
 import { Cover, type Play } from './CatalogPieces';
 import { Action } from './controls';
 import { compactCount, distinctTracks, formatDuration, rankedArtists, weekNumber } from './home-state';
+import { artistContext } from '@plyr/next-core/play-context';
 import { Play as PlayIcon, Shuffle } from './icons';
-import { usePlayback } from './playback';
+import { usePlayContext } from './playback-context';
 import { PauseGlyph } from './PlayerGlyph';
 import { cardSurface } from './materials';
 import { Text } from './Text';
@@ -68,7 +69,7 @@ const GAP = 14;
 
 export function HomeFeatured({ featured, onPlay }: { featured: Featured; onPlay: Play }) {
   const theme = useAppearance();
-  const player = usePlayback();
+  const { pause: playing, press } = usePlayContext(artistContext(featured.status === 'ready' ? featured.tracks[0].artist.did : ''));
   const { width, ref, onLayout } = useWidth();
   if (featured.status === 'empty') return null;
   const tile = width ? Math.floor((width - GAP * (TILES - 1)) / TILES) : 0;
@@ -91,8 +92,6 @@ export function HomeFeatured({ featured, onPlay }: { featured: Featured; onPlay:
   const profile = { pathname: '/u/[handle]' as const, params: { handle: artist.profile.handle || artist.did } };
   const art = [...new Set(tracks.map(track => trackArtwork(track)).filter((uri): uri is string => !!uri && uri !== artist.profile.avatar_url))];
   const total = tracks.reduce((sum, track) => sum + (track.metadata.duration_seconds ?? 0), 0);
-  const current = tracks.some(track => track.id === player.current?.id);
-  const playing = current && player.status.playing;
   const wall = art.length ? Array.from({ length: WALL }, (_, index) => art[index % art.length]) : [];
   const fade = theme.background;
   // Too narrow for covers beside the copy (e.g. the queue panel is docked): the covers run along the top instead.
@@ -122,7 +121,7 @@ export function HomeFeatured({ featured, onPlay }: { featured: Featured; onPlay:
       {artist.profile.bio ? <Text numberOfLines={2} style={{ color: theme.muted, fontFamily: theme.fontFamily, fontSize: 14.5 * theme.scale, lineHeight: 21 * theme.scale }}>{artist.profile.bio}</Text> : null}
       <View style={styles.play}>
         <Pressable accessibilityRole="button" accessibilityLabel={playing ? `Pause ${name}` : `Play ${tracks.length === 1 ? '' : 'all '}${tracks.length} by ${name}`}
-          onPress={() => current ? player.setPlaying(!player.status.playing) : onPlay(tracks[0], tracks, name)} style={[styles.bigPlay, { backgroundColor: theme.accent }]}>
+          testID="hero-play" onPress={() => press(() => onPlay(tracks[0], tracks, name))} style={[styles.bigPlay, { backgroundColor: theme.accent }]}>
           {playing ? <PauseGlyph size={22} color={theme.onAccent} /> : <PlayIcon size={22} color={theme.onAccent} fill={theme.onAccent} />}
         </Pressable>
         {tracks.length > 1 && <Pressable accessibilityRole="button" accessibilityLabel={`Shuffle ${name}`} onPress={() => { const order = shuffled(tracks); onPlay(order[0], order, name); }} style={[styles.shuffle, { borderColor: theme.border }]}>
