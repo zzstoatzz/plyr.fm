@@ -92,6 +92,10 @@ async function setup(browser, width, height = 900, options = {}) {
       await route.fulfill({ status: 400, json: { error: 'InvalidRequest', message: 'The request is invalid.' } });
       return;
     }
+    else if (['getArtist', 'getAlbum', 'getPlaylist'].includes(call) && /missing/.test(url.searchParams.get('actor') ?? url.searchParams.get('uri') ?? '')) {
+      await route.fulfill({ status: 404, json: { error: 'NotFound', message: 'The requested resource was not found.' } });
+      return;
+    }
     else if (call === 'getStats') body = { object: 'platform_stats', tracks: 9, artists: 1, duration_seconds: 2000, plays: 9, updated_at_ms: 1794651020000 };
     else if (call === 'listTracks') body = { object: 'list', data: tracks, has_more: false };
     else if ((call === 'getAlbum' || call === 'getPlaylist') && url.searchParams.get('uri') === 'fixture') {
