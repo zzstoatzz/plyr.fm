@@ -666,10 +666,7 @@ async function textFields(browser) {
   const browser = await chromium.launch();
   try {
     // Each width and scheme has its own contexts, so they run side by side.
-    await Promise.all([
-      textFields(browser),
-      homePagination(browser, origin),
-      loginScreen(browser),
+    await Promise.all([textFields(browser), homePagination(browser, origin), loginScreen(browser),
       ...[true, false].flatMap(phone => ['light', 'dark'].map(async scheme => {
         await screen(browser, phone, scheme);
         await queueGroups(browser, phone, scheme);
