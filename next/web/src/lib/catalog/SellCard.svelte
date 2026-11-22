@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import { preferenceTransport } from '@plyr/next-core/preference-transport';
-  import { parsePrice, priceText as priceInput } from '@plyr/next-core/access/policy';
   import { findReleases, linkedReleases, normalizeLink, offerLabel, readSelling, sellableReleases, storeName, withBuyLink, type Release, type SellingSettings } from '@plyr/next-core/selling';
   import { api } from '$lib/api';
   import { auth } from '$lib/auth';
@@ -12,7 +11,6 @@
   import { resolve } from '$app/paths';
 
   let { did }: { did: string } = $props();
-  const CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY'];
   const SHOWN = 50;
   const GROUPS = [{ label: 'all', value: undefined }, { label: 'albums', value: 'album' }, { label: 'tracks', value: 'track' }] as const;
 
@@ -29,8 +27,6 @@
   let group = $state<Release['group']>();
   let editing = $state.raw<Release>();
   let urlText = $state('');
-  let priceText = $state('');
-  let currency = $state('USD');
   let editError = $state('');
   let busy = $state(false);
   let controller: AbortController | undefined;
@@ -101,8 +97,6 @@
     editing = release;
     editError = '';
     urlText = existing?.url ?? '';
-    currency = existing?.currency ?? 'USD';
-    priceText = existing?.amount !== undefined && existing.currency ? priceInput(existing.amount, existing.currency) : '';
     sheet.show();
     await tick();
     urlInput?.focus();
@@ -120,12 +114,7 @@
     editError = '';
     const url = normalizeLink(urlText);
     if (!url) { editError = 'paste the full link to where you sell it.'; return; }
-    let amount: number | undefined;
-    if (priceText.trim()) {
-      amount = parsePrice(priceText, currency);
-      if (amount === undefined) { editError = 'enter a price like 8 or 7.50, or leave it empty.'; return; }
-    }
-    const next = { subject: editing.uri, url, ...(amount !== undefined ? { amount, currency } : {}) };
+    const next = { subject: editing.uri, url };
     if (await save({ buyLinks: withBuyLink(settings.buyLinks, next) }, `${editing.title}: buy ${offerLabel(next)}`)) sheet.close();
   }
 
@@ -186,9 +175,7 @@
         {#if picking && !offer}<button type="button" class="text-button" disabled={busy} onclick={change}>change</button>{/if}
       </div>
       <label class="url"><small>where it's sold</small><input bind:this={urlInput} type="url" inputmode="url" placeholder="https://you.bandcamp.com/album/…" bind:value={urlText} aria-invalid={!!editError} /></label>
-      <label class="price"><small>price</small><input inputmode="decimal" placeholder="optional" bind:value={priceText} /></label>
-      <label class="currency"><small>currency</small><select bind:value={currency}>{#each CURRENCIES as code (code)}<option value={code}>{code}</option>{/each}</select></label>
-      {#if editError}<p class="error" role="alert">{editError}</p>{:else}<p class="hint wide">leave the price empty to just say "buy on Bandcamp".</p>{/if}
+      {#if editError}<p class="error" role="alert">{editError}</p>{:else}<p class="hint wide">listeners get a buy button that opens this link.</p>{/if}
       <div class="buttons">
         <button class="text-button strong" type="submit" disabled={busy}>save buy link</button>
         {#if offer}<button class="text-button" type="button" disabled={busy} onclick={removeBuy}>remove</button>{/if}
@@ -226,7 +213,7 @@
   label { display: grid; gap: 0.15rem; }
   small, .hint { color: var(--faint); font-size: var(--t-12-8); }
   .line { display: flex; gap: 0.5rem; margin-top: 0.4rem; }
-  input, select { min-height: 2.75rem; min-width: 0; padding-inline: 0.7rem; border-radius: 0.6rem; border: 1px solid var(--line); background: var(--bg); color: var(--text); font-size: var(--t-16); }
+  input { min-height: 2.75rem; min-width: 0; padding-inline: 0.7rem; border-radius: 0.6rem; border: 1px solid var(--line); background: var(--bg); color: var(--text); font-size: var(--t-16); }
   .line input { flex: 1; }
   .error { color: var(--danger, var(--text)); font-size: var(--t-13-6); }
   ul { list-style: none; padding: 0; margin: 0.4rem 0 0; }
@@ -245,9 +232,8 @@
   .chip[aria-pressed='true'] { border-color: var(--accent); color: var(--accent); font-weight: 650; }
   .found { margin: 0; overflow-y: auto; max-height: min(24rem, 50dvh); }
   .found .hint { padding: 0.75rem 0; }
-  .edit { display: grid; grid-template-columns: 1fr 7rem 6rem; gap: 0.6rem; align-items: end; padding: 0 1rem 0.5rem; }
+  .edit { display: grid; grid-template-columns: 1fr; gap: 0.6rem; align-items: end; padding: 0 1rem 0.5rem; }
   .picked { grid-column: 1 / -1; display: flex; align-items: center; gap: 0.7rem; padding: 0.5rem; border-radius: 0.75rem; background: var(--raised); }
   .edit .error, .edit .wide, .buttons { grid-column: 1 / -1; }
   .buttons { display: flex; gap: 0.4rem; }
-  @media (max-width: 560px) { .edit { grid-template-columns: 1fr 1fr; } .url { grid-column: 1 / -1; } }
 </style>

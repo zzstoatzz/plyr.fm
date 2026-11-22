@@ -114,12 +114,6 @@ export function AccessSection({ access, onChange, options, onOptions, plyrStorag
             <TextInput ref={node => { fields.current.sell = node; }} accessibilityLabel="where else you sell it, a link" value={options.sell.url} placeholder="https://you.bandcamp.com/track/…"
               placeholderTextColor={theme.faint} keyboardType="url" autoCapitalize="none" autoCorrect={false} editable={!disabled}
               onChangeText={url => onOptions({ ...options, sell: { ...options.sell!, url } })} style={input(!!sellIssue)} />
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Text style={type(15, theme.muted)}>$</Text>
-              <TextInput accessibilityLabel="its price there, optional, in US dollars" value={options.sell.price} placeholder="price" placeholderTextColor={theme.faint} keyboardType="decimal-pad"
-                editable={!disabled} onChangeText={price => onOptions({ ...options, sell: { ...options.sell!, price } })} style={[input(!!sellIssue && !!options.sell.price.trim()), { width: 100 }]} />
-              <Text style={type(12, theme.faint, '700')}>USD</Text>
-            </View>
             <Text style={type(13, theme.muted)}>listeners get a buy button. a sale there doesn’t open it here.</Text>
             {sellIssue && <FieldError>{sellIssue}</FieldError>}
             {needsSettings && <><FieldError>sign in again to save buy links.</FieldError><Action label="Sign in again" href={{ pathname: '/login', params: { return_to: '/upload' } }} /></>}
@@ -130,7 +124,7 @@ export function AccessSection({ access, onChange, options, onOptions, plyrStorag
           </Pressable>
         </View> : <View style={styles.adds}>
           <Pressable accessibilityRole="button" accessibilityLabel="add where else you sell it" disabled={disabled}
-            onPress={() => { onOptions({ ...options, sell: { url: '', price: '' } }); setTimeout(() => fields.current.sell?.focus(), 0); }}
+            onPress={() => { onOptions({ ...options, sell: { url: '' } }); setTimeout(() => fields.current.sell?.focus(), 0); }}
             style={({ pressed }) => [styles.add, { borderColor: theme.border, backgroundColor: pressed ? theme.hover : 'transparent' }]}>
             <Plus size={15} color={theme.text} /><Text style={type(14, theme.text, '600')}>where else you sell it</Text>
           </Pressable>

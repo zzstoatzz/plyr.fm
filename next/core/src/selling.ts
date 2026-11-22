@@ -1,5 +1,4 @@
 import type { Artist, ListSummary, Page, Track } from './api.ts';
-import { formatPrice } from './access/policy.ts';
 import { isPrivateTrack } from './track-access.ts';
 
 // "sell your music" for now: the artist points listeners at wherever they
@@ -66,10 +65,9 @@ export function storeName(url: string): string {
   return STORES.find(([pattern]) => pattern.test(host))?.[1] ?? host;
 }
 
-/** "$8 on Bandcamp", or "on Bandcamp" without a price */
-export function offerLabel(offer: Pick<Offer, 'url' | 'amount' | 'currency'>): string {
-  const where = `on ${storeName(offer.url)}`;
-  return offer.amount !== undefined && offer.currency ? `${formatPrice(offer.amount, offer.currency)} ${where}` : where;
+/** "on Bandcamp". a price stored by older builds isn't shown: plyr.fm can't check it, so it would go stale. */
+export function offerLabel(offer: Pick<Offer, 'url'>): string {
+  return `on ${storeName(offer.url)}`;
 }
 
 const CURRENCY = /^[A-Z]{3}$/;

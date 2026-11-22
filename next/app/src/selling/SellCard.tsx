@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
-import { parsePrice, priceText } from '@plyr/next-core/access/policy';
 import { findReleases, linkedReleases, normalizeLink, offerLabel, readSelling, sellableReleases, storeName, withBuyLink, type Release, type SellingSettings, type StoredOffer } from '@plyr/next-core/selling';
 import { api } from '../api-client';
 import { useAuth } from '../auth';
@@ -15,7 +14,6 @@ import { accountSettings } from '../preference-sync';
 import { Text } from '../Text';
 import { toast } from '../toast';
 
-const CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY'];
 const SHOWN = 50;
 const GROUPS = [{ label: 'all', value: undefined }, { label: 'albums', value: 'album' }, { label: 'tracks', value: 'track' }] as const;
 
@@ -193,30 +191,18 @@ function BuyEditor({ release, offer, busy, save }: {
 }) {
   const theme = useAppearance();
   const [url, setUrl] = useState(offer?.url ?? '');
-  const [currency, setCurrency] = useState(offer?.currency ?? 'USD');
-  const [price, setPrice] = useState(offer?.amount !== undefined && offer.currency ? priceText(offer.amount, offer.currency) : '');
   const [error, setError] = useState('');
   const submit = () => {
     setError('');
     const link = normalizeLink(url);
     if (!link) { setError('paste the full link to where you sell it.'); return; }
-    let amount: number | undefined;
-    if (price.trim()) {
-      amount = parsePrice(price, currency);
-      if (amount === undefined) { setError('enter a price like 8 or 7.50, or leave it empty.'); return; }
-    }
-    void save({ subject: release.uri, url: link, ...(amount !== undefined ? { amount, currency } : {}) });
+    void save({ subject: release.uri, url: link });
   };
   return <View style={{ gap: 10, paddingTop: 8 }}>
     <Field label="where it's sold" value={url} onChangeText={setUrl} placeholder="https://you.bandcamp.com/album/…"
       autoCapitalize="none" autoCorrect={false} keyboardType="url" textContentType="URL" />
-    <Field label="price (optional)" value={price} onChangeText={setPrice} placeholder="8" keyboardType="decimal-pad" />
-    <Text style={{ color: theme.text, fontSize: 15 * theme.scale }}>currency</Text>
-    <View style={[row, { marginTop: -4 }]}>
-      {CURRENCIES.map(code => <Choice key={code} label={code} selected={currency === code} onPress={() => setCurrency(code)} />)}
-    </View>
     {error ? <Text accessibilityLiveRegion="polite" style={{ color: theme.danger, fontSize: 14 * theme.scale }}>{error}</Text>
-      : <Text style={{ color: theme.faint, fontFamily: theme.fontFamily, fontSize: 13 * theme.scale }}>leave the price empty to just say "buy on Bandcamp".</Text>}
+      : <Text style={{ color: theme.faint, fontFamily: theme.fontFamily, fontSize: 13 * theme.scale }}>listeners get a buy button that opens this link.</Text>}
     <View style={row}>
       <Action primary label="save buy link" disabled={busy} onPress={submit} />
       {offer && <Action label="remove" destructive disabled={busy} onPress={() => void save({ subject: release.uri })} />}
