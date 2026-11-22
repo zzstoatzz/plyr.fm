@@ -44,8 +44,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
   const [starting, setStarting] = useState<number | null>(null);
   // `starting` holds the loading state from a source being ready until its audio is heard, so play never shows in between.
   const loading = resolving || starting !== null;
-  const heard = useRef(0);
-  const handoff = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const startupOver = useRef(0), handoff = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [ready, setReady] = useState(false);
   const [lockScreenSuspended, setLockScreenSuspended] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -102,9 +101,8 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     if (pendingSeek && !pendingSeek.local && personal.remote && Math.abs(personal.remote.positionMs / 1000 - pendingSeek.seconds) < 0.5) setPendingSeek(null);
   }, [personal.remote, pendingSeek]);
 
-  function startAudio() { clearTimeout(handoff.current); if (heard.current !== sequence.current) setStarting(sequence.current); player.play(); }
+  function startAudio() { clearTimeout(handoff.current); if (startupOver.current !== sequence.current && player.isLoaded) setStarting(sequence.current); player.play(); }
   function stopAudio() { clearTimeout(handoff.current); setStarting(null); player.pause(); }
-
   async function waitForMedia() {
     if (player.isLoaded) return;
     const request = sequence.current;
@@ -211,22 +209,25 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
       if (previousSource) releaseGatedAudioUrl(previousSource);
       const scrobbles = availability === 'available';
       if (!privateTrack) accounting.begin(track.id, track.metadata.duration_seconds, play => { if (scrobbles) void scrobble(track, play, auth.did, confirmScrobblingConsent); });
-      let settled = false;
+      let settled = false, rolling = false;
       sourceEvents.current = player.addListener('playbackStatusUpdate', (event) => {
         if (request !== sequence.current) return;
         showNowPlaying(scrobbles ? track : null, event.playing, player.currentTime, auth.did, confirmScrobblingConsent);
         if (event.error) {
           recordPlayback("player error", { request, error: String(event.error), elapsedMs: Date.now() - startedAt });
+          startupOver.current = request;
           setStarting((pending) => pending === request ? null : pending);
           setReady(false);
           setError(event.error);
+        } else if (!settled && rolling && !event.playing && !event.isBuffering) { // paused outside the app before it was heard
+          rolling = false; setStarting((pending) => pending === request ? null : pending);
         } else if (!settled && ((event.playing && player.currentTime > 0) || event.didJustFinish)) {
           settled = true;
-          heard.current = request;
+          startupOver.current = request;
           if (!privateTrack) console.info('[playback] startup settled', { request, track: track.id, position: player.currentTime, finished: event.didJustFinish });
           recordPlayback("started", { request, elapsedMs: Date.now() - startedAt });
           setStarting((pending) => pending === request ? null : pending);
-        }
+        } else if (event.playing) rolling = true;
       });
       if (Platform.OS === 'android') {
         player.setActiveForLockScreen(true, {
@@ -243,8 +244,8 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
       setReady(true);
       recordPlayback("media ready", { request, elapsedMs: Date.now() - startedAt });
       setStarting(request);
-      // A queue that loaded without starting decides next; give it a moment before showing the paused state.
-      if (!start) handoff.current = setTimeout(() => setStarting(pending => pending === request ? null : pending), 1_500);
+      // A queue that loaded without starting plays or pauses next; this only covers one that never says.
+      if (!start) handoff.current = setTimeout(() => setStarting(pending => pending === request ? null : pending), 8_000);
       else {
         player.play();
         // Startup holds the loading state until the player reports progress; note when that hasn't happened.
@@ -436,7 +437,7 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     jamCommand: intent => intent.action === 'play' || intent.action === 'pause' ? jam.setPlaying(intent.action === 'play', jam.jam?.state) : jam.command(intent),
     play, queue: accountVisible ? queue : [], current: accountVisible ? current : undefined, index: accountVisible ? index : -1, loading: shownLoading, preparing, error, status: presentationStatus, tail: privatePlayback || jam.jam || !accountVisible ? undefined : personal.state.tail, outputElsewhere: !privatePlayback && !jam.jam && personal.outputElsewhere, deviceQueue: !privatePlayback && personal.deviceOnly, queueError: privatePlayback || jam.jam ? undefined : personal.queueError, keepPlaying: !privatePlayback && personal.keepPlaying, setKeepPlaying: value => { if (!privateMode.current) personal.setKeepPlaying(value); }, repeat: jam.jam ? 'off' : repeat, setRepeat: value => { if (privateMode.current) setRepeat(value); else if (!jam.active()) personal.setRepeat(value); }, toggle, setPlaying, next,
     isPlaying: () => player.playing,
-    pauseLocal: () => { setLockScreenSuspended(true); personal.suspend(); player.pause(); },
+    pauseLocal: () => { setLockScreenSuspended(true); personal.suspend(); stopAudio(); },
     previous: () => {
       if (privateMode.current) { if (player.currentTime > 3 || index === 0) seek(0); else void load(queue, index - 1); return; }
       const room = jam.state();

@@ -350,6 +350,7 @@ export function createPersonalPlayback(options: Options) {
       if (!active()) return;
       forget();
       if (!pausedHere) playback().play();
+      else playback().pause();
     }).catch(() => playback().error('could not restore playback'));
     return true;
   }
