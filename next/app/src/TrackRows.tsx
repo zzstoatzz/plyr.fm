@@ -11,6 +11,7 @@ import { PlayingWave } from './PlayingWave';
 import { useTrackPlayback } from './playback-context';
 import { Text } from './Text';
 import { useTrackPress } from './TrackPress';
+import { useTrackLike } from './likes';
 
 export function TrackRows({ tracks, onPlay }: { tracks: Track[]; onPlay: Play }) {
   return <View style={styles.rows}>{tracks.map((track, index) => <TrackRow key={`${track.id}:${index}`} track={track} onPlay={() => onPlay(track, tracks)} />)}</View>;
@@ -18,12 +19,13 @@ export function TrackRows({ tracks, onPlay }: { tracks: Track[]; onPlay: Play })
 
 function TrackRow({ track, onPlay }: { track: Track; onPlay: () => void }) {
   const { row, hold, menu } = useTrackPress(track);
+  const { count } = useTrackLike(track);
   return <>
     <GestureDetector gesture={hold}><View collapsable={false}><Row rowRef={row}
       href={{ pathname: '/track/[id]', params: { id: track.id } }}
       title={track.metadata.title}
       subtitle={artistName(track)}
-      meta={trackMeta(track)}
+      meta={trackMeta(track, count)}
       image={trackArtwork(track)}
       action={<RowPlay track={track} onPress={onPlay} />}
     /></View></GestureDetector>

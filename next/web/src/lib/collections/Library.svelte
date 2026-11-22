@@ -1,6 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { onMount } from 'svelte';
+  import { catalogRevision, subscribeCatalogChanges } from '@plyr/next-core/catalog/changes';
   import type { ListSummary, Track } from '@plyr/next-core/api';
   import { api } from '$lib/api';
   import { auth } from '$lib/auth';
@@ -15,6 +16,12 @@
   let account = $state.raw(auth.getAuth());
   let wide = $state(false);
   let version = $state(0);
+  // what this account wrote elsewhere (a like on now playing, a playlist edited in a sheet) re-reads the lists in place
+  let written = $state(0);
+  // re-read only when that scope changed, not on every write of this account
+  const revision = (scope: 'likes' | 'collections') => { written; return account.did ? catalogRevision(account.did, scope) : 0; };
+  const likedVersion = $derived(revision('likes'));
+  const listsVersion = $derived(revision('collections'));
 
   const heading = $derived(likesOnly ? 'liked tracks' : 'library');
 
@@ -25,6 +32,11 @@
     media.addEventListener('change', match);
     const stop = auth.subscribe(() => { account = auth.getAuth(); });
     return () => { media.removeEventListener('change', match); stop(); };
+  });
+  $effect(() => {
+    const did = account.did;
+    if (!did) return;
+    return subscribeCatalogChanges(did, () => { written++; });
   });
 </script>
 
@@ -53,7 +65,7 @@
           {#if !likesOnly}<h2>liked tracks</h2>{/if}
           {#key likesOnly || wide}
             <PagedListing load={cursor => api.actorLikes(did, { limit: likesOnly ? 30 : wide ? 10 : 5, cursor })} label="liked tracks"
-              empty="no liked tracks yet." more={likesOnly ? 'more liked tracks' : undefined}>
+              empty="no liked tracks yet." more={likesOnly ? 'more liked tracks' : undefined} version={likedVersion}>
               {#snippet items(tracks: Track[])}
                 {#each tracks as track (track.id)}<TrackRow {track} collection={tracks} label="liked tracks" />{/each}
               {/snippet}
@@ -65,7 +77,7 @@
           <section class="playlists">
             <h2>your playlists</h2>
             <PagedListing load={cursor => api.playlists({ owner_did: did, cursor, limit: 30 })} label="playlists"
-              empty="no playlists yet." more="more playlists" {version}>
+              empty="no playlists yet." more="more playlists" version={version + listsVersion}>
               {#snippet items(lists: ListSummary[])}<ListCards {lists} />{/snippet}
             </PagedListing>
           </section>

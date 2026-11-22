@@ -1,21 +1,16 @@
 import { usePathname } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Pressable, StyleSheet, View, type ViewInstance } from 'react-native';
+import { Animated, Pressable, StyleSheet } from 'react-native';
 import { api } from './api-client';
 import { type Track } from '@plyr/next-core/api';
 import { useAppearance } from './appearance';
 import { useAuth } from './auth';
-import { Cover } from './CatalogPieces';
-import { compactCount } from './home-state';
 import { Heart, ListPlus } from './icons';
-import { wantLike } from './like-interactions';
 import { usePlayback } from './playback';
-import { createPds } from './pds';
-import { Sheet, type Anchor } from './Sheet';
 import { readLocal, removeLocal, writeLocal } from './storage';
 import { Text } from './Text';
 import { toast } from './toast';
-import { LikeButton, People, type Viewer } from './TrackLikes';
+import { likes } from './likes';
 
 const pendingKey = 'plyr-next:pending-like';
 const pendingFor = 30 * 60_000;
@@ -61,11 +56,10 @@ export function useFinishPendingLike() {
     let pending: { id?: unknown; at?: unknown };
     try { pending = JSON.parse(saved); } catch { return; }
     if (typeof pending.id !== 'string' || typeof pending.at !== 'number' || Date.now() - pending.at > pendingFor) return;
-    const pds = createPds({ did, rpc });
     void api.track(pending.id).then(async track => {
-      const liked = (await pds.myLikes()).has(track.record.uri);
-      if (liked) return;
-      const outcome = await wantLike(rpc, track.record.uri, false, true, () => pds.like(track, { waitForIndex: false }));
+      await likes.load(track);
+      if (likes.snapshot(track).liked) return;
+      const outcome = await likes.toggle(track);
       if (outcome?.failed) toast.error(`couldn't like ${track.metadata.title}`);
       else if (outcome?.changed) toast.success(`liked ${track.metadata.title}`);
     }, () => toast.error("couldn't finish that like"));

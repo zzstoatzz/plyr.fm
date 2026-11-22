@@ -10,6 +10,7 @@ import { cardSurface } from './materials';
 import { Text } from './Text';
 import { TrackMenu } from './TrackMenu';
 import type { Anchor } from './Sheet';
+import { useTrackLike } from './likes';
 
 /**
  * Long press on any track row: a haptic tick, then the row lifts with its menu beside it.
@@ -32,12 +33,13 @@ export function useTrackPress(track: Track, returnTo?: string) {
 
 function TrackPreview({ track, height }: { track: Track; height: number }) {
   const theme = useAppearance();
+  const { count } = useTrackLike(track);
   return <View style={[styles.row, cardSurface(theme), { minHeight: height, backgroundColor: theme.raised }]}>
     <Cover uri={trackArtwork(track)} size={Math.min(48, height - 12)} />
     <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
       <Text numberOfLines={1} style={{ color: theme.text, fontFamily: theme.fontFamily, fontSize: 15 * theme.scale, fontWeight: '600' }}>{track.metadata.title}</Text>
       <Text numberOfLines={1} style={{ color: theme.muted, fontFamily: theme.fontFamily, fontSize: 13 * theme.scale }}>{artistName(track)}</Text>
-      <Text numberOfLines={1} style={{ color: theme.faint, fontFamily: theme.fontFamily, fontSize: 12 * theme.scale }}>{trackMeta(track)}</Text>
+      <Text numberOfLines={1} style={{ color: theme.faint, fontFamily: theme.fontFamily, fontSize: 12 * theme.scale }}>{trackMeta(track, count)}</Text>
     </View>
   </View>;
 }

@@ -29,6 +29,7 @@
   "scripts": {
     "check:boundaries": "node scripts/check-boundaries.mjs",
     "check:type-scale": "node scripts/check-type-scale.mjs",
-    "check:play-controls": "node scripts/check-play-controls.mjs"
+    "check:play-controls": "node scripts/check-play-controls.mjs",
+    "check:like-state": "node scripts/check-like-state.mjs"
   }
 }

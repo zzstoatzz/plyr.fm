@@ -67,7 +67,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
         working-directory: next
-      - run: bun run check:boundaries && bun run check:type-scale && bun run check:play-controls
+      - run: bun run check:boundaries && bun run check:type-scale && bun run check:play-controls && bun run check:like-state
         working-directory: next
       - run: bun run check && bun run test
         working-directory: next/core
@@ -97,7 +97,7 @@ jobs:
           - name: player-transition
             run: bun run check:player-transition
           - name: player-presentation
-            run: bun run check:player-presentation
+            run: bun run check:player-presentation && bun run check:likers
           - name: catalog
             run: bun run check:artist-catalog && bun run check:atlas
     defaults:

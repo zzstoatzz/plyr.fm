@@ -8,7 +8,7 @@ export { resolveHandle } from '@plyr/next-core/auth-state';
 
 export type Auth = SharedAuth<Client>;
 const { subscribe, initial, clearAuth, getAuth, setAuth, scopeFor } = createAuthState(config, handler => new Client({ handler }));
-export { clearAuth, getAuth, setAuth, scopeFor };
+export { clearAuth, getAuth, setAuth, scopeFor, subscribe as subscribeAuth };
 
 export function useAuth(): Auth {
 	return useSyncExternalStore(subscribe, getAuth, () => initial);

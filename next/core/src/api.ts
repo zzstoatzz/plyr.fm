@@ -139,10 +139,11 @@ async function request<T>(url: string, timeout: number, signal?: AbortSignal, in
 	}
 }
 
-interface TrackLike {
+export interface TrackLike {
 	record: { uri: string };
-	actor: { did: string; profile?: { handle?: string; display_name?: string; avatar_url?: string | null } | null };
+	actor: LikeActor;
 }
+export type LikeActor = { did: string; profile?: { handle?: string; display_name?: string; avatar_url?: string | null } | null };
 
 /** A track's comments; `comments_enabled` is false when the artist hasn't opted in, and then `data` is empty. */
 export interface TrackCommentPage extends Page<TrackComment> {
