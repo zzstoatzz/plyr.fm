@@ -26,18 +26,17 @@ type Phase = 'idle' | 'refreshing' | 'closing';
 /**
  * Pull-to-refresh with plyr.fm's wave in the gap. No UIRefreshControl: it misses fast pulls, and
  * starting it from code jumps the content by its own height. Letting go past the line refreshes;
- * a top content inset holds the gap, so the bounce settles into it. The inset only drops once the
- * content is back at rest: dropping it with the gap open makes UIKit shift the content. Everything that moves while
- * the refresh runs is on the native driver, so a busy JS thread can't freeze it.
+ * the list is shifted down by whatever the bounce gives back under the gap, so it settles into the
+ * gap without touching the scroll view (a content inset that lands mid-bounce makes UIKit jump).
+ * Everything that moves while the refresh runs is on the native driver, so a busy JS thread
+ * can't freeze it.
  */
 export function usePullRefresh(
   onRefresh: () => Promise<RefreshResult>,
-  scrollToRest: (offset: number) => void,
   onScrolled: (event: NativeSyntheticEvent<NativeScrollEvent>) => void,
 ) {
   const colors = useAppearance();
   const top = useSafeAreaInsets().top;
-  const [inset, setInset] = useState(0);
   const latest = useRef(onRefresh);
   useEffect(() => { latest.current = onRefresh; });
   const reduced = useRef(colors.reduceMotion);
@@ -47,13 +46,14 @@ export function usePullRefresh(
   const loop = useRef(new Animated.Value(0)).current;
   const waving = useRef(new Animated.Value(0)).current;
   const visible = useRef(new Animated.Value(0)).current;
+  const holding = useRef(new Animated.Value(0)).current;
   const pulled = useRef(Array.from({ length: BARS }, () => new Animated.Value(0.12))).current;
   const lights = useRef(Array.from({ length: BARS }, () => new Animated.Value(0.45))).current;
   const [message, setMessage] = useState('');
   const state = useRef({
     pull: 0, dragging: false, engaged: false, gesture: restingPull, phase: 'idle' as Phase,
     wave: Array.from({ length: BARS }, (): Bar => ({ height: 0.12, velocity: 0 })),
-    frame: 0, last: 0, lastPull: 0, lastSpeed: 0, started: 0, seated: false, animation: undefined as Animated.CompositeAnimation | undefined,
+    frame: 0, last: 0, lastPull: 0, lastSpeed: 0, started: 0, animation: undefined as Animated.CompositeAnimation | undefined,
   }).current;
 
   // The level-meter jiggle while pulling runs on JS; the finger is the only thing happening then.
@@ -82,12 +82,11 @@ export function usePullRefresh(
     else state.frame = requestAnimationFrame(step);
   }, [state, pulled, lights]);
   const run = useCallback(() => { if (!state.frame && state.phase === 'idle') state.frame = requestAnimationFrame(step); }, [state, step]);
-  useEffect(() => () => { cancelAnimationFrame(state.frame); state.animation?.stop(); }, [state]);
+  useEffect(() => () => { cancelAnimationFrame(state.frame); state.animation?.stop(); holding.stopAnimation(); }, [state, holding]);
 
   const settle = useCallback(() => {
     state.phase = 'idle';
     state.engaged = false;
-    setInset(0);
     state.animation?.stop();
     waving.setValue(0);
     visible.setValue(0);
@@ -96,7 +95,6 @@ export function usePullRefresh(
 
   const begin = useCallback(() => {
     state.phase = 'refreshing';
-    state.seated = false;
     state.started = performance.now();
     cancelAnimationFrame(state.frame);
     state.frame = 0;
@@ -108,7 +106,7 @@ export function usePullRefresh(
       state.animation = Animated.loop(Animated.timing(loop, { toValue: 1, duration: WAVE_CYCLE_MS, easing: Easing.linear, useNativeDriver: true, isInteraction: false }));
       state.animation.start();
     }
-    setInset(HOLD);
+    holding.setValue(1);
     AccessibilityInfo.announceForAccessibility('refreshing');
     void latest.current().catch((): RefreshResult => ({ ok: false })).then(async result => {
       await new Promise(done => setTimeout(done, waveEndDelay(performance.now() - state.started)));
@@ -121,27 +119,14 @@ export function usePullRefresh(
         await new Promise(done => setTimeout(done, hold));
       }
       state.phase = 'closing';
-      scrollToRest(-top);
+      Animated.timing(holding, { toValue: 0, duration: 280, easing: Easing.out(Easing.cubic), useNativeDriver: true, isInteraction: false })
+        .start(() => settle());
     });
-  }, [state, lights, visible, waving, loop, scrollToRest, top]);
-
-  // a bounce that began before the inset landed heads for the old rest; send it to the gap
-  const seat = useCallback(() => {
-    if (state.phase !== 'refreshing' || state.dragging || state.seated) return;
-    state.seated = true;
-    if (state.pull < HOLD - 1) scrollToRest(-top - HOLD);
-  }, [state, top, scrollToRest]);
-  useEffect(() => {
-    if (inset !== HOLD) return;
-    const timer = setTimeout(seat, 80);
-    return () => clearTimeout(timer);
-  }, [inset, seat]);
+  }, [state, lights, visible, waving, loop, holding, settle]);
 
   const listener = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     onScrolled(event);
     state.pull = -(event.nativeEvent.contentOffset.y + top);
-    if (state.phase === 'closing' && state.pull <= 0.5) settle();
-    if ((event.nativeEvent.contentInset?.top ?? 0) >= HOLD) seat();
     if (state.phase !== 'idle') return;
     if (state.pull > 0.5) run();
     if (!state.dragging || !state.engaged) return;
@@ -152,17 +137,16 @@ export function usePullRefresh(
       feel('arm');
       if (!reduced.current) state.wave = state.wave.map((bar, index) => ({ ...bar, velocity: bar.velocity + armKick(index) }));
     }
-  }, [state, top, run, settle, seat, onScrolled]);
+  }, [state, top, run, onScrolled]);
   const onScroll = useMemo(() => Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true, listener }), [scrollY, listener]);
 
   const onScrollBeginDrag = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     state.dragging = true;
-    if (state.phase === 'closing') settle();
     if (state.phase !== 'idle') return;
     state.engaged = event.nativeEvent.contentOffset.y + top <= 1;
     state.gesture = restingPull;
     visible.setValue(state.engaged ? 1 : 0);
-  }, [state, top, visible, settle]);
+  }, [state, top, visible]);
 
   const onScrollEndDrag = useCallback(() => {
     state.dragging = false;
@@ -174,16 +158,19 @@ export function usePullRefresh(
     } else run();
   }, [state, run, begin]);
 
-  // pull in points, from the native scroll position; the stage sits centred in the gap and
-  // shrinks with it, so the wave closes with the gap instead of vanishing
+  // gap in points: the pull from the native scroll position, plus the shift that holds it open.
+  // The stage sits centred in the gap and shrinks with it, so the wave closes with the gap.
   const pull = useMemo(() => Animated.multiply(Animated.add(scrollY, top), -1), [scrollY, top]);
+  const shift = useMemo(() => Animated.multiply(holding, pull.interpolate({ inputRange: [0, HOLD], outputRange: [HOLD, 0], extrapolate: 'clamp' })), [holding, pull]);
+  const gap = useMemo(() => Animated.add(pull, shift), [pull, shift]);
+  const listStyle = useMemo(() => ({ transform: [{ translateY: shift }] }), [shift]);
   const stage = useMemo(() => ({
-    opacity: Animated.multiply(visible, pull.interpolate({ inputRange: [12, 44], outputRange: [0, 1], extrapolate: 'clamp' })),
+    opacity: Animated.multiply(visible, gap.interpolate({ inputRange: [12, 44], outputRange: [0, 1], extrapolate: 'clamp' })),
     transform: [
-      { translateY: Animated.add(Animated.multiply(pull, 0.5), -STAGE / 2) },
-      { scale: pull.interpolate({ inputRange: [0, 50], outputRange: [0, 1], extrapolate: 'clamp' }) },
+      { translateY: Animated.add(Animated.multiply(gap, 0.5), -STAGE / 2) },
+      { scale: gap.interpolate({ inputRange: [0, 50], outputRange: [0, 1], extrapolate: 'clamp' }) },
     ],
-  }), [visible, pull]);
+  }), [visible, gap]);
   const heights = useMemo(() => pulled.map((value, index) => {
     const samples = Array.from({ length: 13 }, (_, i) => i / 12);
     const wave = loop.interpolate({ inputRange: samples, outputRange: samples.map(t => 0.32 + 0.68 * (0.5 + 0.5 * Math.sin(2 * Math.PI * t - index * 0.5 - Math.PI / 2))) });
@@ -202,5 +189,5 @@ export function usePullRefresh(
     </Animated.View>
   </View>;
 
-  return { onScroll, onScrollBeginDrag, onScrollEndDrag, contentInset: inset, indicator };
+  return { onScroll, onScrollBeginDrag, onScrollEndDrag, listStyle, indicator };
 }

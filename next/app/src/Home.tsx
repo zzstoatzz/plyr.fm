@@ -52,7 +52,7 @@ function HomeFeed({ onPlay, hiddenTags }: { onPlay: Play; hiddenTags: string[] }
     setChartKey(key => key + 1);
     const page = await latest.refresh();
     return page ? { ok: true, fresh: newAtTop(before, page) } : { ok: false };
-  }, [tracks, latest.refresh]), useCallback((offset: number) => list.current?.scrollToOffset({ offset, animated: true }), []), useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+  }, [tracks, latest.refresh]), useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     viewport.current.offset = event.nativeEvent.contentOffset.y;
     fillViewport();
   }, [fillViewport]));
@@ -68,9 +68,9 @@ function HomeFeed({ onPlay, hiddenTags }: { onPlay: Play; hiddenTags: string[] }
     </View>
   </View>, [onPlay, chartKey, network, feed, hiddenTags, latest.reload]);
   const renderItem = useCallback(({ item }: { item: Track }) => <View style={{ opacity: pending ? 0.5 : 1 }}><HomeTrackRow height={rowHeight} track={item} tracks={tracks} onPlay={onPlay} /></View>, [pending, rowHeight, tracks, onPlay]);
-  return <View style={{ flex: 1, backgroundColor: colors.background }}><Animated.FlatList ref={list} contentInset={{ top: pull.contentInset }}
+  return <View style={{ flex: 1, backgroundColor: colors.background }}><Animated.FlatList ref={list}
     onScrollBeginDrag={pull.onScrollBeginDrag} onScrollEndDrag={pull.onScrollEndDrag} testID="home-feed" data={tracks} keyExtractor={track => track.id} contentInsetAdjustmentBehavior="automatic"
-    style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ ...pageFrame, paddingTop: 16, paddingBottom: 24 }}
+    style={[{ flex: 1, backgroundColor: colors.background }, pull.listStyle]} contentContainerStyle={{ ...pageFrame, paddingTop: 16, paddingBottom: 24 }}
     onLayout={event => { setListHeight(event.nativeEvent.layout.height); viewport.current.height = event.nativeEvent.layout.height; fillViewport(); }}
     onContentSizeChange={(_, height) => { viewport.current.content = height; fillViewport(); }}
     onScroll={pull.onScroll} scrollEventThrottle={16}
