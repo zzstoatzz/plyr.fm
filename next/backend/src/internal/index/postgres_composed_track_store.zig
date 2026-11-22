@@ -22,6 +22,7 @@ const store_module = @import("track_store.zig");
 const resolve_tracks = @import("../application/resolve_tracks.zig");
 const track_tag_sql = @import("track_tag_sql.zig");
 const mirror_store = @import("../delivery/postgres_mirror_store.zig");
+const batches = @import("postgres_track_batches.zig");
 
 const TrackStore = store_module.TrackStore;
 const TrackLookup = union(enum) {
@@ -43,32 +44,13 @@ pub const PostgresComposedTrackStore = struct {
             .list_public_fn = listPublicOpaque,
             .ready_fn = readyOpaque,
             .tags_fn = tagsOpaque,
-            .resolve_fn = resolveOpaque,
+            .resolve_fn = batches.resolve,
+            .latest_by_artists_fn = batches.latestByArtists,
         };
     }
 
     pub fn likedStore(self: *PostgresComposedTrackStore) liked_track_store.Store {
         return .{ .context = self, .list_fn = listLikedOpaque };
-    }
-
-    fn resolveOpaque(context: *anyopaque, allocator: std.mem.Allocator, uris: []const []const u8) TrackStore.Error![]const track.Track {
-        return postgres_read.run(TrackStore.Error![]const track.Track, resolveOnce, .{ context, allocator, uris });
-    }
-
-    fn resolveOnce(context: *anyopaque, allocator: std.mem.Allocator, uris: []const []const u8) postgres_read.Error![]const track.Track {
-        const self: *PostgresComposedTrackStore = @ptrCast(@alignCast(context));
-        if (uris.len == 0) return &.{};
-        const conn = self.pool.acquire() catch return error.IndexUnavailable;
-        defer self.pool.release(conn);
-        var result = conn.queryOpts(resolve_query, .{ uris, self.profile_collection, self.like_collection }, .{ .cache_name = "plyr_resolve_query" }) catch |err| return postgres_read.failure(conn, err);
-        defer result.deinit();
-        var values: std.ArrayList(track.Track) = .empty;
-        errdefer values.deinit(allocator);
-        while (result.next() catch |err| return postgres_read.failure(conn, err)) |row| {
-            const value = decodeRow(allocator, row) catch |err| return if (err == error.OutOfMemory) error.OutOfMemory else error.CorruptProjection;
-            values.append(allocator, value) catch return error.OutOfMemory;
-        }
-        return values.toOwnedSlice(allocator) catch return error.OutOfMemory;
     }
 
     fn tagsOpaque(context: *anyopaque, allocator: std.mem.Allocator, collection: []const u8, limit: usize, after: ?tag_cursor.Cursor) TrackStore.Error![]const store_module.Tag {
@@ -336,7 +318,7 @@ fn decodeLookup(allocator: std.mem.Allocator, row: *pg.Row, include_tags: bool) 
     return value;
 }
 
-fn logQueryError(conn: *pg.Conn, message: []const u8, err: anyerror) void {
+pub fn logQueryError(conn: *pg.Conn, message: []const u8, err: anyerror) void {
     if (conn.err) |pg_err|
         std.log.err("{s}: {}: {s}", .{ message, err, pg_err.message })
     else
@@ -636,9 +618,9 @@ pub const projected_joins =
     \\  AND p.rkey = 'self' AND NOT p.deleted
 ;
 
-const joined_projection = "SELECT\n" ++ projected_columns ++ "\n" ++ projected_from;
+pub const joined_projection = "SELECT\n" ++ projected_columns ++ "\n" ++ projected_from;
 
-const common_policy =
+pub const common_policy =
     \\  AND NOT v.deleted
     \\  AND v.support_gate_type IS DISTINCT FROM 'owner'
     \\  AND pol.moderation_decision IS DISTINCT FROM 'exclude'
@@ -664,13 +646,8 @@ const legacy_detail_query = detail_projection ++
     "\nWHERE v.record_uri = (SELECT links.record_uri FROM plyr_index.legacy_track_links AS links WHERE links.legacy_id = $1)" ++
     "\n  AND v.collection = $4\n" ++ lookup_policy;
 
-const resolve_query = joined_projection ++ "\n" ++
-    \\WHERE v.record_uri = ANY($1::text[])
-    \\  AND COALESCE(pol.visibility, 'public') <> 'private'
-++ common_policy;
-
 // listings show only tracks that can play now
-const published_policy = "  AND NOT " ++ mirror_store.awaitingCopy("v") ++ "\n";
+pub const published_policy = "  AND NOT " ++ mirror_store.awaitingCopy("v") ++ "\n";
 
 pub const discovery_policy = common_policy ++ published_policy ++
     \\  AND v.collection = $1
@@ -695,7 +672,7 @@ pub const page_from =
     \\LEFT JOIN plyr_index.track_policies AS pol ON pol.record_uri = v.record_uri
 ;
 
-const page_order = "ORDER BY v.record_created_at_us DESC, v.record_uri DESC";
+pub const page_order = "ORDER BY v.record_created_at_us DESC, v.record_uri DESC";
 
 /// Filters, sorts, and limits on the cheap columns first, so the like-count
 /// subquery and the other per-track joins run for one page, not the catalog.
@@ -1340,6 +1317,10 @@ test "composed PostgreSQL reads use verified records and authoritative account s
         .limit = 2,
         .after = null,
     })).len);
+    // the newest track per artist is the first row of that artist's own listing
+    const latest = try implementation.store().latestByArtists(a, "fm.plyr.dev.track", &.{ did, "did:plc:nobodyhere" }, 12);
+    try std.testing.expectEqual(@as(usize, 1), latest.len);
+    try std.testing.expectEqualStrings((try implementation.store().listPublic(a, .{ .collection = "fm.plyr.dev.track", .scope = .{ .artist = did }, .limit = 1, .after = null }))[0].value.record.uri, latest[0].record.uri);
 
     _ = try pool.exec(
         "UPDATE plyr_index.track_policies SET visibility = 'private' WHERE record_uri = $1",

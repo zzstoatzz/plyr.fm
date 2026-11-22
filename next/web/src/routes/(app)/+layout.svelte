@@ -18,6 +18,7 @@
 
 	let { children } = $props();
 	let dialog: HTMLDialogElement;
+	let keyboardProxy: HTMLInputElement;
 	let shortcutsDialog: HTMLDialogElement;
 	let accountMenu = $state<{ open: (trigger: HTMLButtonElement) => void }>();
 	let searchReturn: { url: URL; restoreFocus: () => void } | undefined;
@@ -64,6 +65,7 @@
 	function openShortcuts() { shortcutsDialog.showModal(); }
 	const keyboardGuide = [
 		{ action: 'search', keys: ['⌘ or Ctrl', 'K'] },
+		{ action: 'jump to search', keys: ['/'] },
 		{ action: 'settings', keys: ['⌘ or Ctrl', ','] },
 		{ action: 'queue', keys: ['Q'] },
 		{ action: 'play or pause', keys: ['Space'] },
@@ -86,12 +88,14 @@
 
 	onMount(() => {
 		if (/Mac|iPhone|iPad/.test(navigator.platform)) searchKey = '⌘K';
-		restorePrefs(account.did, account.agent, account.accountSync);
+		// until auth settles, keep the prefs app.html painted with: applying the signed-out
+		// ones while the session restores flashed a signed-in dark theme to light on reload
+		if (account.ready) restorePrefs(account.did, account.agent, account.accountSync);
 		const stopPrefs = mountPrefs();
 		let resumed = account.rpc;
 		const unsubscribe = auth.subscribe(() => {
 			const next = auth.getAuth();
-			if (account.did !== next.did || account.agent !== next.agent || account.accountSync !== next.accountSync) {
+			if (next.ready && (!account.ready || account.did !== next.did || account.agent !== next.agent || account.accountSync !== next.accountSync)) {
 				restorePrefs(next.did, next.agent, next.accountSync);
 			}
 			account = next;
@@ -166,9 +170,9 @@
 		};
 	}
 
-	async function toggleSearch() {
+	async function toggleSearch(close = true) {
 		if (page.url.pathname === resolve('/search')) {
-			if (page.state.shortcutSearch) {
+			if (close && page.state.shortcutSearch) {
 				history.back();
 				return;
 			}
@@ -185,6 +189,13 @@
 		queueRequest = player.queueRequest;
 		untrack(() => { if (!queuePage && !player.queueOpen) toggleQueue(); });
 	});
+
+	// iOS Safari opens the keyboard only for a focus() inside the tap, and the search field
+	// mounts after navigation. Focus a stand-in now; the field's autofocus takes it over.
+	function holdKeyboard(event: MouseEvent) {
+		if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+		keyboardProxy.focus({ preventScroll: true });
+	}
 
 	function toggleQueue() {
 		if (queuePage) {
@@ -218,6 +229,7 @@
 		if (focused?.closest('input, select, textarea, [role="slider"], [contenteditable]:not([contenteditable=false])')) return;
 		if (key === '?') { event.preventDefault(); openShortcuts(); return; }
 		if (key === 'q') { event.preventDefault(); toggleQueue(); return; }
+		if (key === '/') { event.preventDefault(); void toggleSearch(false); return; }
 		if (!player.current && !player.liveStation) return;
 		if (event.code === 'Space' || key === ' ') {
 			if (!focused?.closest('button, a, summary')) { event.preventDefault(); player.toggle(); }
@@ -236,16 +248,17 @@
 
 <svelte:window onkeydown={shortcuts} />
 <a class="skip" href="#main">skip to content</a>
+<input bind:this={keyboardProxy} class="keyboard-proxy" type="search" tabindex="-1" aria-hidden="true" autocomplete="off" />
 
 <div data-testid="app-frame" class="frame" class:hasPlayer={!!player.current} class:docked={queuePanelOpen}>
 	<nav aria-label="Main navigation">
 		<div class="brand-row"><LinksMenu onShortcuts={openShortcuts} /><a class="brand" aria-label="plyr.fm home" href="/">plyr.fm</a></div>
-		<a class="search-field desktop-only" href="/search" class:active={page.url.pathname === '/search'} aria-current={page.url.pathname === '/search' ? 'page' : undefined}>
+		<a class="search-field desktop-only" href="/search" onclick={holdKeyboard} class:active={page.url.pathname === '/search'} aria-current={page.url.pathname === '/search' ? 'page' : undefined}>
 			<Icon name="ph_search" size={18} /><span>search</span><kbd aria-hidden="true">{searchKey}</kbd>
 		</a>
 		{#each links as link (link.path)}
 			{@const active = page.url.pathname === link.path}
-			<a href={link.path} class:phone-only={link.path === '/search'} class:active aria-current={active ? 'page' : undefined}>
+			<a href={link.path} onclick={link.path === '/search' ? holdKeyboard : undefined} class:phone-only={link.path === '/search'} class:active aria-current={active ? 'page' : undefined}>
 				<Icon name={active ? link.filled : link.icon} size={22} /> <span>{link.label}</span>
 			</a>
 		{/each}
@@ -307,6 +320,7 @@
 </dialog>
 
 <style>
+	.keyboard-proxy { position: fixed; top: 0; left: 0; width: 1px; height: 1px; padding: 0; border: 0; opacity: 0; font-size: 16px; pointer-events: none; }
 	.frame { min-height: 100dvh; display: grid; grid-template-columns: var(--sidebar) minmax(0, 1fr); }
 	.frame.hasPlayer { padding-bottom: var(--dock); }
 	:global(body:has(.frame.hasPlayer)) { --toast-dock: var(--dock); }

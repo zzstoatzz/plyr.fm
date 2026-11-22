@@ -349,7 +349,7 @@ export function createPersonalPlayback(options: Options) {
       await playback().seek((deferred?.key === pending.key ? deferred : pending).position);
       if (!active()) return;
       forget();
-      if (!pausedHere) playback().play();
+      if (pausedHere) playback().pause(); else playback().play();
     }).catch(() => playback().error('could not restore playback'));
     return true;
   }

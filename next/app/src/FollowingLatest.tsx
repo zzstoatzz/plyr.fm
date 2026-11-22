@@ -11,6 +11,7 @@ import { useTrackPress } from './TrackPress';
 import { useTrackPlayback, useTrackPlaybackState } from './playback-context';
 import { canToggleTrack } from '@plyr/next-core/track-revision';
 import { shuffled } from '@plyr/next-core/queue-state';
+import { followingShelfSize } from '@plyr/next-core/following-latest';
 import { Cover, type Play } from './CatalogPieces';
 import type { NetworkArtist } from './home-api';
 import { formatDuration, timeAgo } from './home-state';
@@ -18,31 +19,32 @@ import { Shuffle } from './icons';
 import { cardSurface } from './materials';
 import { Text } from './Text';
 
-const MOST = 12;
-const newest = new Map<string, Promise<Track | undefined>>();
+const newest = new Map<string, Promise<Track[]>>();
 
-function latestBy(did: string) {
-  let load = newest.get(did);
+/** One read for everyone's newest track; artists past the endpoint's 500 go in further reads. */
+function latestFrom(key: string) {
+  let load = newest.get(key);
   if (!load) {
-    load = api.tracks({ artist_did: did, limit: 1 }).then(page => page.data[0], () => { newest.delete(did); return undefined; });
-    newest.set(did, load);
+    const dids = key.split(',');
+    const batches = Array.from({ length: Math.ceil(dids.length / 500) }, (_, index) => dids.slice(index * 500, index * 500 + 500));
+    load = Promise.all(batches.map(batch => api.latestTracks(batch, followingShelfSize))).then(found => found.flat()
+      .sort((a, b) => Date.parse(b.metadata.created_at) - Date.parse(a.metadata.created_at))
+      .slice(0, followingShelfSize));
+    load.catch(() => { if (newest.get(key) === load) newest.delete(key); });
+    newest.set(key, load);
+    if (newest.size > 4) { const first = newest.keys().next().value; if (first) newest.delete(first); }
   }
   return load;
 }
 
-/** The newest track from each artist you follow, newest first. Artists whose track can't be loaded are left out. */
+/** The newest track from each artist you follow, newest first. */
 export function useFollowingLatest(artists: NetworkArtist[]) {
   const [tracks, setTracks] = useState<{ key: string; data: Track[] }>({ key: '', data: [] });
-  const key = artists.slice(0, MOST).map(artist => artist.did).join(',');
+  const key = artists.map(artist => artist.did).join(',');
   useEffect(() => {
     if (!key) return;
     let live = true;
-    void Promise.all(key.split(',').map(latestBy)).then(found => {
-      if (!live) return;
-      const data = found.filter((track): track is Track => !!track)
-        .sort((a, b) => Date.parse(b.metadata.created_at) - Date.parse(a.metadata.created_at));
-      setTracks({ key, data });
-    });
+    void latestFrom(key).then(data => { if (live) setTracks({ key, data }); }, () => { if (live) setTracks({ key, data: [] }); });
     return () => { live = false; };
   }, [key]);
   return { tracks: tracks.key === key ? tracks.data : [], loading: !!key && tracks.key !== key };

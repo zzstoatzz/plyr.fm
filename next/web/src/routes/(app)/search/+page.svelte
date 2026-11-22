@@ -144,7 +144,8 @@
 <section class="page-content search-page">
 	<h1>search</h1>
 	<form action="/search" onsubmit={event => { event.preventDefault(); submitSearch(term); }}>
-		<input id="search-query" aria-label="Search tracks, artists, albums and playlists" type="search" name="q"
+		<!-- svelte-ignore a11y_autofocus -->
+		<input id="search-query" autofocus={!data.query} aria-label="Search tracks, artists, albums and playlists" type="search" name="q"
 			bind:this={input} bind:value={query} autocomplete="off" maxlength="100" placeholder="tracks, artists, albums and playlists"
 			onkeydown={event => moveFocus(event, -1)} />
 		<button class="icon-button" type="submit" aria-label="Search"><Icon name="search" /></button>

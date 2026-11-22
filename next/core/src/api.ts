@@ -193,6 +193,9 @@ export function createApi(origin: string, playListenerId: () => string, nsidPref
 	return {
 		resolveArtists: (dids: string[], signal?: AbortSignal) => request<{ object: 'list'; data: NetworkArtist[] }>(origin + xrpc('resolveArtists'), 15_000, signal,
 			{ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dids }) }).then(page => page.data),
+		/** The newest listed track from each of up to 500 artists, newest first. */
+		latestTracks: (dids: string[], limit: number, signal?: AbortSignal) => request<{ object: 'list'; data: Track[] }>(origin + xrpc('resolveLatestTracks'), 15_000, signal,
+			{ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dids, limit }) }).then(page => page.data),
 		resolveTracks: (ids: string[], signal?: AbortSignal) => request<{ object: 'list'; data: Track[]; missing: string[] }>(origin + xrpc('resolveTracks'), 15_000, signal,
 			{ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ uris: ids.map(uriFromId) }) }),
 		stats: (signal?: AbortSignal) => get<{ object: 'platform_stats'; tracks: number; artists: number; duration_seconds: number; plays: number; updated_at_ms: number }>(xrpc('getStats'), undefined, signal),

@@ -22,9 +22,10 @@ module.exports = async function restoredListening({ page, context, origin, coord
   } }));
   await page.route('https://api.next.plyr.fm/**', route => {
     const url = new URL(route.request().url());
-    if (method(url) === 'resolveArtists') return route.fulfill({ json: { object: 'list', data: catalog.map(item => ({
-      did: item.artist.did, handle: item.artist.profile.handle, display_name: item.artist.profile.display_name, avatar_url: item.artist.profile.avatar_url, track_count: 1
-    })) } });
+    if (method(url) === 'resolveLatestTracks') {
+      const dids = route.request().postDataJSON().dids;
+      return route.fulfill({ json: { object: 'list', data: catalog.filter(item => dids.includes(item.artist.did)) } });
+    }
     if (method(url) === 'resolveTracks') {
       const ids = route.request().postDataJSON().uris.map(trackIdFromUri);
       return route.fulfill({ json: { object: 'list', data: catalog.filter(item => ids.includes(item.id)), missing: [] } });
