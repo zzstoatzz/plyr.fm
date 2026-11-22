@@ -30,14 +30,17 @@ on:
 permissions:
   contents: read
 
+# A newer push to a PR replaces the run for the older one.
+concurrency:
+  group: next-svelte-web-${{ github.event_name == 'workflow_dispatch' && inputs.target || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  # The gate: types, boundaries, unit tests and the build. Fast, so a PR knows within about 30s.
   check:
     if: github.event_name != 'workflow_dispatch' || inputs.target == 'preview' || inputs.target == 'live'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    concurrency: next-svelte-web-${{ github.event_name == 'workflow_dispatch' && format('pages-{0}', inputs.target) || github.ref }}
-    env:
-      PUBLIC_SITE_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.target == 'preview' && 'https://plyr-fm-next-svelte.pages.dev' || 'https://next.plyr.fm' }}
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: next/web
@@ -56,35 +59,84 @@ jobs:
       - run: bun run check
       - run: bun run build
       - run: bun run test
+
+  # The browser checks, side by side instead of one after another.
+  browser:
+    if: github.event_name != 'workflow_dispatch' || inputs.target == 'preview' || inputs.target == 'live'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: shell
+            run: node scripts/check-shell.cjs
+          - name: queue
+            run: node scripts/check-queue-gestures.cjs && node scripts/check-queue-suggestions.cjs
+          - name: restoration
+            run: node scripts/check-desktop-restoration.cjs && node scripts/check-restored-listening.cjs
+          - name: embed
+            run: bun run check:embed-live && bun run check:embed
+          - name: radio
+            run: bun run check:radio
+          - name: player
+            run: bun run check:player-transition && bun run check:player-presentation
+          - name: catalog
+            run: bun run check:artist-catalog && bun run check:atlas
+    defaults:
+      run:
+        working-directory: next/web
+    env:
+      SCREENS_OUTPUT: ${{ runner.temp }}/next-svelte-screens/${{ matrix.name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+        working-directory: next
+      - id: playwright
+        run: echo "version=$(node -p "require('playwright/package.json').version")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        id: browsers
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-shell-${{ runner.os }}-${{ steps.playwright.outputs.version }}
       - run: bun run playwright install --with-deps --only-shell chromium
-      - run: bun run check:browser
-        env:
-          SCREENS_OUTPUT: ${{ runner.temp }}/next-svelte-screens
-      - run: bun run check:embed-live
-      - run: bun run check:embed
-        env:
-          SCREENS_OUTPUT: ${{ runner.temp }}/next-svelte-screens/embed
-      - run: bun run check:radio
-        env:
-          SCREENS_OUTPUT: ${{ runner.temp }}/next-svelte-screens/radio
-      - run: bun run check:player-transition
-      - run: bun run check:player-presentation
-        env:
-          SCREENS_OUTPUT: ${{ runner.temp }}/next-svelte-screens/player
-      - run: bun run check:artist-catalog
-        env:
-          SCREENS_OUTPUT: ${{ runner.temp }}/next-svelte-screens/artist
-      - run: bun run check:atlas
-        env:
-          SCREENS_OUTPUT: ${{ runner.temp }}/next-svelte-screens/atlas
+        if: steps.browsers.outputs.cache-hit != 'true'
+      - run: bun run playwright install-deps chromium
+        if: steps.browsers.outputs.cache-hit == 'true'
+      - run: bun run build
+      - run: ${{ matrix.run }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: next-svelte-screens
-          path: ${{ runner.temp }}/next-svelte-screens
+          name: next-svelte-screens-${{ matrix.name }}
+          path: ${{ runner.temp }}/next-svelte-screens/${{ matrix.name }}
           if-no-files-found: ignore
+
+  deploy:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.target == 'preview' || inputs.target == 'live')
+    needs: [check, browser]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency: next-svelte-web-pages-${{ inputs.target }}
+    env:
+      PUBLIC_SITE_URL: ${{ inputs.target == 'preview' && 'https://plyr-fm-next-svelte.pages.dev' || 'https://next.plyr.fm' }}
+    defaults:
+      run:
+        working-directory: next/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+        working-directory: next
+      - run: bun run build
       - name: check browser access to Next
-        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
         run: |
           check_origin() {
             curl -fsS -D - -o /dev/null -H "Origin: $PUBLIC_SITE_URL" "$@" |
@@ -95,7 +147,6 @@ jobs:
           check_origin -X OPTIONS -H 'Access-Control-Request-Method: POST' https://plyr-next-audio.n8-3e9.workers.dev/v1/genres
       - name: select Next Pages deployment
         id: pages
-        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
         env:
           TARGET: ${{ inputs.target }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -119,7 +170,6 @@ jobs:
           printf 'project=%s\nbranch=%s\n' "$project" "$branch" >> "$GITHUB_OUTPUT"
           printf 'Previous Next Pages deployment: `%s`\n' "$rollback" >> "$GITHUB_STEP_SUMMARY"
       - name: deploy Svelte to Next Pages
-        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
         uses: cloudflare/wrangler-action@v3
         with:
           wranglerVersion: "4.158.0"
@@ -127,7 +177,6 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy next/web/build --project-name ${{ steps.pages.outputs.project }} --branch ${{ steps.pages.outputs.branch }} --commit-hash ${{ github.sha }}
       - name: verify deployed clients and callback
-        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
         run: |
           for attempt in {1..12}; do
             if curl -fsS "$PUBLIC_SITE_URL/oauth/callback?commit=$GITHUB_SHA" -o "$RUNNER_TEMP/next-callback.html" &&
@@ -141,7 +190,7 @@ jobs:
             jq -S . "build/$client" | diff - "$RUNNER_TEMP/$client"
           done
       - name: recheck production
-        if: always() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.target == 'live' && steps.pages.outcome == 'success'
+        if: always() && inputs.target == 'live' && steps.pages.outcome == 'success'
         run: |
           curl -fsS https://plyr.fm/ -o /dev/null
           curl -fsS https://api.plyr.fm/health | jq -e '.status == "ok"'
