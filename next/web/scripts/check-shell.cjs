@@ -78,7 +78,7 @@ async function screen(browser, phone, scheme) {
     const tag = tags.getByRole('link', { name: 'field & nature', exact: true });
     assert.equal(new URL(await tag.getAttribute('href'), origin).searchParams.get('tag'), 'field & nature');
     assert.equal(await page.getByText('A recording made at dawn.', { exact: false }).isVisible(), false);
-    await page.getByText('details', { exact: true }).click();
+    await page.getByLabel('Show details', { exact: true }).click();
     await page.getByText('A recording made at dawn.', { exact: false }).waitFor();
     await capture('track');
     const opener = page.getByRole('button', { name: 'comments', exact: true });
