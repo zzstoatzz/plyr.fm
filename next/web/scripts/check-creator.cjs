@@ -211,10 +211,11 @@ async function run(browser, accounts, width, theme, mp3) {
     assert.equal(await main.getByRole('textbox', { name: 'description' }).inputValue(), 'edited elsewhere');
     await title.fill('recording after edit');
     const cover = await fs.readFile(path.join(__dirname, 'fixtures/cover.heic'));
-    await main.getByLabel('change cover', { exact: true }).setInputFiles({ name: 'edited.heif', mimeType: '', buffer: cover });
-    await main.getByRole('img', { name: 'selected cover preview', exact: true }).waitFor();
-    const replacement = main.getByLabel('replace audio', { exact: true });
-    await replacement.waitFor({ timeout: 5000 });
+    await main.getByLabel('cover image', { exact: true }).setInputFiles({ name: 'edited.heif', mimeType: '', buffer: cover });
+    await main.getByRole('button', { name: 'remove cover', exact: true }).waitFor();
+    await main.locator('.cover img[src^="blob:"]').waitFor();
+    const replacement = main.getByLabel('replacement audio', { exact: true });
+    await replacement.waitFor({ state: 'attached', timeout: 5000 });
     await replacement.setInputFiles({ name: 'replacement.mp3', mimeType: 'audio/mpeg', buffer: mp3 });
     await capture('track-replacement');
     if (gateAfterAudioUpload) {
@@ -297,11 +298,11 @@ async function run(browser, accounts, width, theme, mp3) {
     await page.goBack();
     await page.waitForURL(origin + '/portal');
     await main.getByRole('link', { name: 'edit recording after edit' }).click();
-    await main.getByRole('button', { name: 'delete track', exact: true }).click();
-    await main.getByRole('button', { name: 'cancel delete' }).click();
+    await main.getByRole('button', { name: 'delete', exact: true }).click();
+    await main.getByRole('button', { name: 'keep it' }).click();
     assert.equal((await pdsRecord(collection, rkey)).uri, uri);
+    await main.getByRole('button', { name: 'delete', exact: true }).click();
     await main.getByRole('button', { name: 'delete track', exact: true }).click();
-    await main.getByRole('button', { name: 'confirm delete' }).click();
     await page.waitForURL(origin + '/portal');
     await page.getByText('deleted "recording after edit"', { exact: true }).waitFor();
     await main.getByRole('link', { name: 'edit recording after edit' }).waitFor({ state: 'detached' });

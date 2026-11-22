@@ -4,6 +4,7 @@
   import AlbumUpload from '$lib/publishing/AlbumUpload.svelte';
   import { onMount } from 'svelte';
   import { auth } from '$lib/auth';
+  import { focusClear } from '$lib/ui/focus-clear';
   import Icon from '$lib/ui/Icon.svelte';
   import Loading from '$lib/ui/Loading.svelte';
   import TrackUpload from '$lib/publishing/TrackUpload.svelte';
@@ -17,7 +18,7 @@
 
 <svelte:head><title>upload · plyr.fm</title></svelte:head>
 
-<section class="page-content">
+<section class="page-content" use:focusClear>
   <div class="upload" class:album={albumMode}>
     <div class="top">
       <h1>{albumMode ? 'upload album' : 'upload'}</h1>

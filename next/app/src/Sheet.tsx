@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { X } from './icons';
-import { Animated, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Animated, Modal, Platform, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { SafeAreaProvider, initialWindowMetrics, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { KeepInViewContext, useKeepInView } from './behaviors/keep-in-view';
+import { useKeyboardInset } from './behaviors/use-keyboard-inset';
 import { useAppearance } from './appearance';
 import { Heading } from './CatalogPieces';
 import { useLayer } from './behaviors/use-layer';
@@ -18,24 +20,41 @@ export type Lift = { anchor: Anchor; preview: ReactNode };
 /** A form sheet's navigation bar: a way out on the left and its one action on the right, both always in view. */
 export type SheetBar = { leading: ReactNode; trailing: ReactNode };
 
-export function Sheet({ title, close, children, notice, visible = true, onDismiss, anchor, lift, bar }: {
+type SheetProps = {
   title: string; close: () => void; children: ReactNode; notice?: ReactNode; visible?: boolean; onDismiss?: () => void;
   bar?: SheetBar;
   /** On a wide window, open as a dropdown beside this control instead of a centered sheet. */
   anchor?: Anchor;
   lift?: Lift;
-}) {
+};
+
+export function Sheet(props: SheetProps) {
+  const { title, close, visible = true, onDismiss, anchor, lift } = props;
+  const theme = useAppearance();
+  const { width } = useWindowDimensions();
+  useLayer(visible);
+  const dropdown = !lift && !!anchor && width >= 800;
+  // A Modal is its own native window; the app's safe area provider reports no insets inside it.
+  return <Modal transparent accessibilityLabel={title} animationType={dropdown || theme.reduceMotion ? 'none' : 'fade'} visible={visible} onDismiss={onDismiss} onRequestClose={close}>
+    <SafeAreaProvider><SheetBody {...props} /></SafeAreaProvider>
+  </Modal>;
+}
+
+function SheetBody({ title, close, children, notice, anchor, lift, bar }: SheetProps) {
   const theme = useAppearance();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [panel, setPanel] = useState(0);
+  const keeper = useKeepInView();
   const wide = width >= 800;
-  useLayer(visible);
-  if (lift) return <LiftedMenu title={title} close={close} visible={visible} onDismiss={onDismiss} lift={lift} notice={notice}>{children}</LiftedMenu>;
+  const form = !!bar && !wide;
+  // iOS form sheets leave the keyboard to their scroll view's native inset, which Android doesn't have.
+  const keyboard = useKeyboardInset(!lift && !(anchor && wide) && (!form || Platform.OS !== 'ios'));
+  if (lift) return <LiftedMenu title={title} close={close} lift={lift} notice={notice}>{children}</LiftedMenu>;
   if (anchor && wide) {
     const left = anchor.x - MENU_WIDTH - 6 >= 8 ? anchor.x - MENU_WIDTH - 6 : Math.min(anchor.x + anchor.width + 6, width - MENU_WIDTH - 8);
     const top = Math.max(8, Math.min(anchor.y + anchor.height / 2 - panel / 2, height - panel - 8));
-    return <Modal transparent accessibilityLabel={title} animationType="none" visible={visible} onDismiss={onDismiss} onRequestClose={close}>
+    return <>
       <Pressable accessible={false} focusable={false} tabIndex={-1} aria-hidden onPress={close} style={StyleSheet.absoluteFill} />
       <View aria-label={title} onLayout={event => setPanel(event.nativeEvent.layout.height)} style={{
         position: 'absolute', left, top, width: MENU_WIDTH, maxHeight: height - 16, opacity: panel ? 1 : 0,
@@ -47,37 +66,41 @@ export function Sheet({ title, close, children, notice, visible = true, onDismis
           <ScrollView keyboardShouldPersistTaps="handled">{children}</ScrollView>
         </CompactRows.Provider>
       </View>
-    </Modal>;
+    </>;
   }
-  return <Modal transparent accessibilityLabel={title} animationType={theme.reduceMotion ? 'none' : 'fade'} visible={visible} onDismiss={onDismiss} onRequestClose={close}>
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={{ flex: 1, justifyContent: wide ? 'center' : 'flex-end', alignItems: 'center' }}>
-      <Pressable accessible={false} focusable={false} tabIndex={-1} aria-hidden onPress={close}
-        style={[StyleSheet.absoluteFill, { backgroundColor: '#0008' }]} />
-      <View accessibilityViewIsModal={true} style={{
-        width: '100%', maxWidth: 520, maxHeight: '88%', borderTopLeftRadius: 22, borderTopRightRadius: 22,
-        borderBottomLeftRadius: wide ? 22 : 0, borderBottomRightRadius: wide ? 22 : 0,
-        backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.hairline, paddingBottom: wide ? 12 : insets.bottom
-      }}>
-        {bar ? <View style={{ paddingHorizontal: 8, paddingVertical: 6, flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderColor: theme.hairline }}>
-          <View style={{ flex: 1, alignItems: 'flex-start' }}>{bar.leading}</View>
-          <Heading>{title}</Heading>
-          <View style={{ flex: 1, alignItems: 'flex-end' }}>{bar.trailing}</View>
-        </View> : <View style={{ paddingHorizontal: 20, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <View style={{ flex: 1, minWidth: 0 }}><Heading>{title}</Heading></View>
-          <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={close} style={{ padding: 12 }}><X size={22} color={theme.text} /></Pressable>
-        </View>}
-        {notice && <View style={{ paddingHorizontal: 20, paddingBottom: 12, gap: 12 }}>{notice}</View>}
-        <ScrollView keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets={!!bar} contentContainerStyle={{ padding: 20, paddingTop: bar ? 16 : 4, gap: 12 }}>
-          {children}
-        </ScrollView>
-      </View>
-    </KeyboardAvoidingView>
-  </Modal>;
+  // A form sheet on a phone keeps its height and lets the keyboard cover its lower part; its scroll view
+  // insets for the keyboard and brings the focused field into view. Lifting it as well would count the keyboard twice.
+  // Any other sheet rises to sit on the keyboard.
+  return <View style={{ flex: 1, justifyContent: wide ? 'center' : 'flex-end', alignItems: 'center', paddingBottom: keyboard }}>
+    <Pressable accessible={false} focusable={false} tabIndex={-1} aria-hidden onPress={close}
+      style={[StyleSheet.absoluteFill, { backgroundColor: '#0008' }]} />
+    <View accessibilityViewIsModal={true} style={{
+      width: '100%', maxWidth: 520, borderTopLeftRadius: 22, borderTopRightRadius: 22, overflow: 'hidden',
+      borderBottomLeftRadius: wide ? 22 : 0, borderBottomRightRadius: wide ? 22 : 0,
+      backgroundColor: theme.surface, borderWidth: 1, borderBottomWidth: wide ? 1 : 0, borderColor: theme.hairline,
+      ...(form ? { height: height - keyboard - Math.max(insets.top, initialWindowMetrics?.insets.top ?? 0) - 10 }
+        : { maxHeight: height - keyboard - Math.max(insets.top, initialWindowMetrics?.insets.top ?? 0) - 10, paddingBottom: wide || keyboard ? 12 : insets.bottom })
+    }}>
+      {bar ? <View style={{ paddingHorizontal: 8, paddingVertical: 6, flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderColor: theme.hairline }}>
+        <View style={{ flex: 1, alignItems: 'flex-start' }}>{bar.leading}</View>
+        <Heading>{title}</Heading>
+        <View style={{ flex: 1, alignItems: 'flex-end' }}>{bar.trailing}</View>
+      </View> : <View style={{ paddingHorizontal: 20, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <View style={{ flex: 1, minWidth: 0 }}><Heading>{title}</Heading></View>
+        <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={close} style={{ padding: 12 }}><X size={22} color={theme.text} /></Pressable>
+      </View>}
+      {notice && <View style={{ paddingHorizontal: 20, paddingTop: bar ? 12 : 0, paddingBottom: 12, gap: 12, borderBottomWidth: bar ? StyleSheet.hairlineWidth : 0, borderColor: theme.hairline }}>{notice}</View>}
+      <ScrollView ref={keeper.scroll} onScroll={keeper.onScroll} scrollEventThrottle={16} style={form ? { flex: 1 } : undefined}
+        keyboardShouldPersistTaps="handled" keyboardDismissMode={form ? 'interactive' : 'none'} automaticallyAdjustKeyboardInsets={form}
+        contentContainerStyle={{ padding: 20, paddingTop: bar ? 16 : 4, paddingBottom: form ? 20 + insets.bottom : 20, gap: 12 }}>
+        <KeepInViewContext.Provider value={form ? keeper.keep : undefined}>{children}</KeepInViewContext.Provider>
+      </ScrollView>
+    </View>
+  </View>;
 }
 
-function LiftedMenu({ title, close, visible, onDismiss, lift: { anchor, preview }, notice, children }: {
-  title: string; close: () => void; visible: boolean; onDismiss?: () => void; lift: Lift; notice?: ReactNode; children: ReactNode;
+function LiftedMenu({ title, close, lift: { anchor, preview }, notice, children }: {
+  title: string; close: () => void; lift: Lift; notice?: ReactNode; children: ReactNode;
 }) {
   const theme = useAppearance();
   const { width, height } = useWindowDimensions();
@@ -98,7 +121,7 @@ function LiftedMenu({ title, close, visible, onDismiss, lift: { anchor, preview 
   const menuWidth = Math.min(MENU_WIDTH + 24, width - 16);
   const left = Math.max(8, Math.min(anchor.x + 8, width - menuWidth - 8));
   const scale = shown.interpolate({ inputRange: [0, 1], outputRange: [1, 1.03] });
-  return <Modal transparent accessibilityLabel={title} animationType={theme.reduceMotion ? 'none' : 'fade'} visible={visible} onDismiss={onDismiss} onRequestClose={close}>
+  return <>
     <Pressable accessibilityRole="button" accessibilityLabel="Close menu" onPress={close} style={[StyleSheet.absoluteFill, { backgroundColor: theme.dark ? '#000000b8' : '#00000066' }]} />
     <Animated.View pointerEvents="none" style={{ position: 'absolute', left: anchor.x, top: rowTop, width: anchor.width, opacity: panel ? 1 : 0,
       transform: [{ scale }], boxShadow: theme.dark ? '0px 14px 30px #000000b0' : '0px 14px 30px #00000038', borderRadius: 12 }}>
@@ -115,7 +138,7 @@ function LiftedMenu({ title, close, visible, onDismiss, lift: { anchor, preview 
         <ScrollView keyboardShouldPersistTaps="handled" bounces={false}>{children}</ScrollView>
       </CompactRows.Provider>
     </Animated.View>
-  </Modal>;
+  </>;
 }
 
 /** A text button for a form sheet's bar. */
