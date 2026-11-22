@@ -21,6 +21,10 @@ instead. Add one when something bites.
 
 ## platform
 
+- **`<Link asChild>` drops a style function on its child** and throws on a style
+  array in dev. A tile shipped as dark-on-dark this way (#2866). Give the child
+  one `StyleSheet.flatten`ed object and keep pressed state with
+  `onPressIn`/`onPressOut`.
 - **An app-level bottom inset stops content above Liquid Glass.** On iOS 26
   put the tabs and player accessory in the native tab controller and let it
   own the insets. The fallback tab bar still owns its own bottom inset.
