@@ -135,12 +135,11 @@
   }
 </script>
 
-<section class="sell" aria-labelledby="sell-title">
-  <h2 id="sell-title">get paid</h2>
+<section class="sell" aria-label="get paid">
   <p class="subtle">point listeners to wherever you already sell or take tips. buttons show up on your artist page and on what you've uploaded. plyr.fm never sees the payment.</p>
   {#if !account.accountSync}
     <p>reconnect to choose where listeners can pay you.</p>
-    <a class="text-button strong" href={`${resolve('/(app)/login')}?${new URLSearchParams({ return_to: '/portal' })}`}>reconnect</a>
+    <a class="text-button strong" href={`${resolve('/(app)/login')}?${new URLSearchParams({ return_to: '/get-paid' })}`}>reconnect</a>
   {:else if loadError}
     <p role="alert">{loadError}</p>
     <button class="text-button" type="button" onclick={load}>try again</button>
@@ -222,7 +221,6 @@
 
 <style>
   .sell { display: grid; gap: 0.75rem; margin: 0.5rem 0 1.5rem; }
-  h2 { font-size: 1.2rem; }
   .card { display: grid; gap: 0.35rem; border: 1px solid var(--line); border-radius: 0.9rem; background: var(--surface); padding: 1rem; justify-items: start; }
   .card > * { justify-self: stretch; }
   label { display: grid; gap: 0.15rem; }

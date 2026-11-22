@@ -160,23 +160,26 @@ async function run(browser, accounts, width, theme, mp3) {
     await authorizeFixture(page, accounts, handle);
     await page.waitForURL(origin + '/portal');
     await main.getByRole('heading', { name: author }).waitFor();
+    // the portal loads every page so search covers the whole catalog; a failed page fails the load until retried
     await main.getByRole('button', { name: 'retry', exact: true }).click();
-    await main.getByRole('link', { name: 'edit recording 24' }).waitFor();
+    await main.getByRole('button', { name: 'retry', exact: true }).click();
+    await main.getByRole('link', { name: 'edit late recording' }).waitFor();
+    assert.equal(await main.getByRole('link', { name: 'edit recording 24' }).count(), 1);
     await capture('portal');
-    assert.equal(albumRequests.length, 0, 'inactive albums stay unloaded');
+
+    const search = main.getByRole('searchbox', { name: 'search your tracks and albums' });
+    await search.fill('LATE');
+    await main.getByRole('link', { name: 'edit late recording' }).waitFor();
+    assert.equal(await main.getByRole('link', { name: 'edit recording 24' }).count(), 0);
+    await search.fill('');
 
     const tracksTab = main.getByRole('tab', { name: 'tracks' });
     const albumsTab = main.getByRole('tab', { name: 'albums' });
     await tracksTab.focus();
     await tracksTab.press('ArrowRight');
-    await main.getByRole('link', { name: 'demo album' }).waitFor();
+    await main.getByRole('tabpanel', { name: 'albums' }).getByRole('link', { name: 'demo album' }).waitFor();
     assert.equal(await albumsTab.getAttribute('aria-selected'), 'true');
     await albumsTab.press('ArrowLeft');
-    const more = main.getByRole('button', { name: 'more tracks' });
-    await more.click();
-    await main.getByRole('button', { name: 'retry', exact: true }).click();
-    await main.getByRole('link', { name: 'edit late recording' }).waitFor();
-    assert.equal(await main.getByRole('link', { name: 'edit recording 24' }).count(), 1);
 
     const editTrack = main.getByRole('link', { name: 'edit late recording' });
     await editTrack.scrollIntoViewIfNeeded();

@@ -59,7 +59,7 @@
 		{ path: '/atlas', label: 'atlas', icon: 'ph_atlas', filled: 'ph_atlas_f' },
 		{ path: '/stats', label: 'stats', icon: 'ph_stats', filled: 'ph_stats_f' }
 	] as const;
-	const accountPaths = [resolve('/(app)/settings'), resolve('/(app)/portal')] as string[];
+	const accountPaths = [resolve('/(app)/settings'), resolve('/(app)/portal'), resolve('/(app)/get-paid')] as string[];
 	let searchKey = $state('Ctrl K');
 	function openShortcuts() { shortcutsDialog.showModal(); }
 	const keyboardGuide = [

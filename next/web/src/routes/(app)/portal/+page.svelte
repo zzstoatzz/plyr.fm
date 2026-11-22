@@ -8,7 +8,7 @@
   onMount(() => auth.subscribe(() => { account = auth.getAuth(); }));
 </script>
 
-<svelte:head><title>your uploads · plyr.fm</title></svelte:head>
+<svelte:head><title>you · plyr.fm</title></svelte:head>
 
 <section class="page-content">
   {#if !account.ready}
