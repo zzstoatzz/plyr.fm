@@ -18,6 +18,10 @@
   let version = $state(0);
   // what this account wrote elsewhere (a like on now playing, a playlist edited in a sheet) re-reads the lists in place
   let written = $state(0);
+  // re-read only when that scope changed, not on every write of this account
+  const revision = (scope: 'likes' | 'collections') => { written; return account.did ? catalogRevision(account.did, scope) : 0; };
+  const likedVersion = $derived(revision('likes'));
+  const listsVersion = $derived(revision('collections'));
 
   const heading = $derived(likesOnly ? 'liked tracks' : 'library');
 
@@ -61,7 +65,7 @@
           {#if !likesOnly}<h2>liked tracks</h2>{/if}
           {#key likesOnly || wide}
             <PagedListing load={cursor => api.actorLikes(did, { limit: likesOnly ? 30 : wide ? 10 : 5, cursor })} label="liked tracks"
-              empty="no liked tracks yet." more={likesOnly ? 'more liked tracks' : undefined} version={written && catalogRevision(did, 'likes')}>
+              empty="no liked tracks yet." more={likesOnly ? 'more liked tracks' : undefined} version={likedVersion}>
               {#snippet items(tracks: Track[])}
                 {#each tracks as track (track.id)}<TrackRow {track} collection={tracks} label="liked tracks" />{/each}
               {/snippet}
@@ -73,7 +77,7 @@
           <section class="playlists">
             <h2>your playlists</h2>
             <PagedListing load={cursor => api.playlists({ owner_did: did, cursor, limit: 30 })} label="playlists"
-              empty="no playlists yet." more="more playlists" version={version + (written && catalogRevision(did, 'collections'))}>
+              empty="no playlists yet." more="more playlists" version={version + listsVersion}>
               {#snippet items(lists: ListSummary[])}<ListCards {lists} />{/snippet}
             </PagedListing>
           </section>

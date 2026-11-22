@@ -43,7 +43,6 @@ function AlbumRow({ track, number, onPlay, last }: { track: Track; number: numbe
   const colors = useAppearance();
   const { current } = useTrackPlayback(track);
   const { row, hold, menu } = useTrackPress(track);
-  const { count } = useTrackLike(track);
   return <>
     <GestureDetector gesture={hold}><View ref={row} collapsable={false}
       style={[styles.albumRow, !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.hairline }]}>

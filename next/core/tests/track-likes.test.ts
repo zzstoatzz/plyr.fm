@@ -154,3 +154,33 @@ test('who liked it is read again once it is stale, and pages append without repe
   await model.loadLikers(track);
   assert.deepEqual(calls, [undefined, 'next', undefined]);
 });
+
+test('a newer appview count replaces the first one once your own change has had time to be counted', async () => {
+  let clock = 0;
+  const account = { did: 'did:plc:me', rpc: {} };
+  const model = createTrackLikes({ getAuth: () => account, now: () => clock, createPds: () => ({
+    myLikes: async () => new Map<string, LikeRef>(), like: async () => 'pending' as const, unlike: async () => 'absent' as const
+  }) });
+  const read = (like_count: number) => ({ ...track, metrics: { ...track.metrics, like_count } });
+  assert.equal(model.snapshot(read(5)).count, 5);
+  assert.equal(model.snapshot(read(7)).count, 7, 'someone else liked it');
+  await model.load(track);
+  await model.toggle(read(7));
+  assert.equal(model.snapshot(read(7)).count, 8);
+  clock = 5_000;
+  assert.equal(model.snapshot(read(7)).count, 8, 'a read from before your like was indexed keeps your like');
+  clock = 60_000;
+  assert.equal(model.snapshot(read(8)).count, 8);
+  assert.equal(model.snapshot(read(9)).count, 9);
+});
+
+test('a likers read during render never fetches your profile', async () => {
+  let asked = 0;
+  const account = { did: 'did:plc:me', handle: 'me.test', rpc: {} };
+  const model = createTrackLikes({ getAuth: () => account, createPds: () => ({
+    myLikes: async () => new Map([[track.record.uri, {} as LikeRef]]), like: async () => 'pending' as const, unlike: async () => 'absent' as const
+  }), fetchViewer: async () => { asked++; return { handle: 'me.test' }; } });
+  await model.load(track);
+  assert.equal(model.likers(track).people[0]?.profile?.handle, 'me.test');
+  assert.equal(asked, 0);
+});

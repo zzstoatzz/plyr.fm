@@ -39,7 +39,8 @@ export function TrackLikes({ track, compact = false, returnTo, menu = false, ico
 /** Likes or unlikes at once and toasts where the write settled; a tap before your like has loaded loads it and retries. */
 export async function toggleLike(track: Track) {
   const before = likes.snapshot(track);
-  if (!before.known && before.error) toast.error('failed to load like — retrying');
+  // "retry like status" only reads it again; it never flips a like the label didn't offer
+  if (!before.known && before.error) { toast.error('failed to load like — retrying'); await likes.load(track); return; }
   const outcome = await likes.toggle(track);
   if (!outcome) return;
   const key = `like:${track.record.uri}`;
