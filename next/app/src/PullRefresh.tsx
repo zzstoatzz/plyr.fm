@@ -9,9 +9,9 @@ import {
 import { useAppearance } from './appearance';
 import { Text } from './Text';
 
-// Where UIRefreshControl starts a refresh on iOS 26 in a slow drag, and the gap it holds open
-// while one runs (measured for noti's pull-to-refresh).
-const THRESHOLD = 168;
+// UIRefreshControl only fires on a slow drag past ~186pt of pull and misses fast ones, so the
+// wave arms sooner and letting go armed starts the refresh itself. HOLD is the gap it keeps open.
+const THRESHOLD = 120;
 const HOLD = 60;
 const SETTLED_MS = 1250;
 
@@ -79,6 +79,7 @@ export function usePullRefresh(onRefresh: () => Promise<RefreshResult>) {
   useEffect(() => () => cancelAnimationFrame(state.frame), [state]);
 
   const begin = useCallback(() => {
+    if (state.phase !== 'idle') return;
     setHolding(true);
     state.phase = 'refreshing';
     state.started = performance.now();
@@ -91,7 +92,7 @@ export function usePullRefresh(onRefresh: () => Promise<RefreshResult>) {
       feel(result.ok ? 'success' : 'warning');
       AccessibilityInfo.announceForAccessibility(text);
       run();
-      setTimeout(() => { setHolding(false); setMessage(''); }, SETTLED_MS);
+      setTimeout(() => setHolding(false), SETTLED_MS);
     });
   }, [state, run]);
 
@@ -100,6 +101,7 @@ export function usePullRefresh(onRefresh: () => Promise<RefreshResult>) {
     if (state.phase === 'settled' && !holding && state.pull <= 0.5) {
       state.phase = 'idle';
       state.engaged = false;
+      setMessage('');
     }
     if (state.pull > 0.5 || state.phase !== 'idle') run();
     if (state.phase !== 'idle' || !state.dragging || !state.engaged) return;
@@ -121,10 +123,14 @@ export function usePullRefresh(onRefresh: () => Promise<RefreshResult>) {
 
   const onScrollEndDrag = useCallback(() => {
     state.dragging = false;
-    if (state.gesture.armed && state.phase === 'idle') feel('release');
+    const fire = state.gesture.armed && state.phase === 'idle';
     state.gesture = { ...state.gesture, armed: false };
+    if (fire) {
+      feel('release');
+      begin();
+    }
     run();
-  }, [state, run]);
+  }, [state, run, begin]);
 
   const refreshControl = <RefreshControl refreshing={holding} onRefresh={begin} tintColor="transparent" />;
 
