@@ -5,6 +5,7 @@
   import EditorPanel from '$lib/catalog/EditorPanel.svelte';
   import TrackEditor from '$lib/catalog/TrackEditor.svelte';
   import Loading from '$lib/ui/Loading.svelte';
+  import { focusClear } from '$lib/ui/focus-clear';
 
   let account = $state.raw(auth.getAuth());
   const id = $derived(page.params.id ?? '');
@@ -14,7 +15,7 @@
 
 <svelte:head><title>edit track · plyr.fm</title></svelte:head>
 
-<section class="page-content">
+<section class="page-content edit-track" use:focusClear>
   {#key id}
     {#if account.did && account.rpc}
       {#key account.rpc}<TrackEditor {account} {id} {returnTo} />{/key}
@@ -30,3 +31,12 @@
     {/if}
   {/key}
 </section>
+
+<style>
+  .edit-track { --glass: light-dark(rgb(255 255 255 / 0.72), rgb(20 20 20 / 0.66)); }
+  :global(.frame.hasPlayer) .edit-track { --bar-offset: var(--dock); }
+  @media (max-width: 720px) {
+    .edit-track { --bar-offset: var(--tabs); }
+    :global(.frame.hasPlayer) .edit-track { --bar-offset: calc(var(--tabs) + var(--dock)); }
+  }
+</style>

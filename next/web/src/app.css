@@ -72,6 +72,8 @@ textarea, select, input:not([type]),
 input:is([type='text'], [type='search'], [type='email'], [type='url'], [type='tel'], [type='password'], [type='number']) {
 	font-size: max(1rem, 16px);
 }
+/* A focused field scrolls clear of a page's sticky action bar and the phone tab bar. */
+input, textarea, select { scroll-margin-bottom: calc(var(--bar-offset, 0px) + 6.5rem); }
 button { cursor: pointer; }
 button:disabled { opacity: 0.5; cursor: default; }
 button:focus-visible, a:focus-visible, input:focus-visible, summary:focus-visible {
