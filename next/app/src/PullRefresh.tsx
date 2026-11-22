@@ -1,18 +1,17 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, RefreshControl, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AccessibilityInfo, Animated, Easing, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import {
-  BARS, armKick, barLight, barStep, pullKick, pullMove, refreshMessage, restingPull, resultHold, waveEndDelay, waveTarget,
-  type Bar, type RefreshResult, type WavePhase,
+  BARS, WAVE_CYCLE_MS, armKick, barLight, barStep, pullKick, pullMove, refreshMessage, restingPull, resultHold, waveEndDelay, waveTarget,
+  type Bar, type RefreshResult,
 } from '@plyr/next-core/behaviors/pull-refresh';
 import { useAppearance } from './appearance';
 import { Text } from './Text';
 
-// UIRefreshControl only fires on a slow drag past ~186pt of pull and misses fast ones, so the
-// wave arms sooner and letting go armed starts the refresh itself. HOLD is the gap it keeps open.
 const THRESHOLD = 120;
 const HOLD = 60;
+const STAGE = 56;
 
 function feel(event: 'tick' | 'arm' | 'release' | 'success' | 'warning') {
   const played = event === 'tick' ? Haptics.selectionAsync()
@@ -22,31 +21,41 @@ function feel(event: 'tick' | 'arm' | 'release' | 'success' | 'warning') {
   played.catch(() => {});
 }
 
+type Phase = 'idle' | 'refreshing' | 'closing';
+
 /**
- * Pull-to-refresh with UIRefreshControl's mechanics and plyr.fm's wave. The system control keeps
- * the rubber band, fires the refresh and holds the gap; its spinner is tinted clear and the wave
- * tunes in inside the gap instead.
+ * Pull-to-refresh with plyr.fm's wave in the gap. No UIRefreshControl: it misses fast pulls, and
+ * starting it from code jumps the content by its own height. Letting go past the line refreshes;
+ * a top content inset holds the gap, so the bounce settles into it. Everything that moves while
+ * the refresh runs is on the native driver, so a busy JS thread can't freeze it.
  */
-export function usePullRefresh(onRefresh: () => Promise<RefreshResult>) {
+export function usePullRefresh(
+  onRefresh: () => Promise<RefreshResult>,
+  scrollToRest: (offset: number) => void,
+  onScrolled: (event: NativeSyntheticEvent<NativeScrollEvent>) => void,
+) {
   const colors = useAppearance();
   const top = useSafeAreaInsets().top;
-  const [holding, setHolding] = useState(false);
-  const [message, setMessage] = useState('');
+  const [inset, setInset] = useState(0);
   const latest = useRef(onRefresh);
   useEffect(() => { latest.current = onRefresh; });
   const reduced = useRef(colors.reduceMotion);
   reduced.current = colors.reduceMotion;
 
-  const gap = useRef(new Animated.Value(0)).current;
-  const shown = useRef(new Animated.Value(0)).current;
-  const heights = useRef(Array.from({ length: BARS }, () => new Animated.Value(0.12))).current;
+  const scrollY = useRef(new Animated.Value(-top)).current;
+  const loop = useRef(new Animated.Value(0)).current;
+  const waving = useRef(new Animated.Value(0)).current;
+  const visible = useRef(new Animated.Value(0)).current;
+  const pulled = useRef(Array.from({ length: BARS }, () => new Animated.Value(0.12))).current;
   const lights = useRef(Array.from({ length: BARS }, () => new Animated.Value(0.45))).current;
+  const [message, setMessage] = useState('');
   const state = useRef({
-    pull: 0, dragging: false, engaged: false, gesture: restingPull, phase: 'idle' as WavePhase,
+    pull: 0, dragging: false, engaged: false, gesture: restingPull, phase: 'idle' as Phase,
     wave: Array.from({ length: BARS }, (): Bar => ({ height: 0.12, velocity: 0 })),
-    frame: 0, last: 0, lastPull: 0, lastSpeed: 0, started: 0,
+    frame: 0, last: 0, lastPull: 0, lastSpeed: 0, started: 0, animation: undefined as Animated.CompositeAnimation | undefined,
   }).current;
 
+  // The level-meter jiggle while pulling runs on JS; the finger is the only thing happening then.
   const step = useCallback((now: number) => {
     state.frame = 0;
     const dt = state.last ? Math.min(0.05, (now - state.last) / 1000) : 1 / 60;
@@ -56,59 +65,71 @@ export function usePullRefresh(onRefresh: () => Promise<RefreshResult>) {
     const speedChange = speed - state.lastSpeed;
     state.lastPull = pull;
     state.lastSpeed = speed;
-    const live = state.phase !== 'idle';
-    gap.setValue(pull);
-    shown.setValue(live ? Math.min(1, Math.max(0, (pull - 14) / 34)) : state.engaged ? Math.min(1, Math.max(0, (pull - 12) / 48)) : 0);
     const progress = pull / THRESHOLD;
-    const kicking = state.dragging && state.engaged && state.phase === 'idle' && !reduced.current;
+    const kicking = state.dragging && state.engaged && !reduced.current;
     state.wave = state.wave.map((bar, index) => {
-      const target = waveTarget(index, state.phase, progress, state.gesture.armed, (now - state.started) / 1000);
+      const target = waveTarget(index, 'idle', progress, state.gesture.armed, 0);
       if (reduced.current) return { height: target, velocity: 0 };
       return barStep(kicking ? { ...bar, velocity: bar.velocity + pullKick(index, speedChange) } : bar, target, dt);
     });
     state.wave.forEach((bar, index) => {
-      heights[index].setValue(state.phase === 'settled' ? bar.height * Math.min(1, pull / HOLD) : bar.height);
-      lights[index].setValue(state.gesture.armed || state.phase !== 'idle' ? 1 : 0.45 + 0.55 * barLight(index, progress));
+      pulled[index].setValue(bar.height);
+      lights[index].setValue(state.gesture.armed ? 1 : 0.45 + 0.55 * barLight(index, progress));
     });
-    const resting = !live && pull < 0.5 && !state.dragging && state.wave.every(bar => Math.abs(bar.velocity) < 0.01);
+    const resting = state.phase !== 'idle' || (!state.dragging && pull < 0.5 && state.wave.every(bar => Math.abs(bar.velocity) < 0.01));
     if (resting) state.last = 0;
     else state.frame = requestAnimationFrame(step);
-  }, [state, gap, shown, heights, lights]);
-  const run = useCallback(() => { if (!state.frame) state.frame = requestAnimationFrame(step); }, [state, step]);
-  useEffect(() => () => cancelAnimationFrame(state.frame), [state]);
+  }, [state, pulled, lights]);
+  const run = useCallback(() => { if (!state.frame && state.phase === 'idle') state.frame = requestAnimationFrame(step); }, [state, step]);
+  useEffect(() => () => { cancelAnimationFrame(state.frame); state.animation?.stop(); }, [state]);
+
+  const settle = useCallback(() => {
+    state.phase = 'idle';
+    state.engaged = false;
+    state.animation?.stop();
+    waving.setValue(0);
+    visible.setValue(0);
+    setMessage('');
+  }, [state, waving, visible]);
 
   const begin = useCallback(() => {
-    if (state.phase !== 'idle') return;
-    setHolding(true);
     state.phase = 'refreshing';
     state.started = performance.now();
+    cancelAnimationFrame(state.frame);
+    state.frame = 0;
+    lights.forEach(light => light.setValue(1));
+    visible.setValue(1);
+    waving.setValue(1);
+    loop.setValue(0);
+    if (!reduced.current) {
+      state.animation = Animated.loop(Animated.timing(loop, { toValue: 1, duration: WAVE_CYCLE_MS, easing: Easing.linear, useNativeDriver: true, isInteraction: false }));
+      state.animation.start();
+    }
+    setInset(HOLD);
     AccessibilityInfo.announceForAccessibility('refreshing');
-    run();
     void latest.current().catch((): RefreshResult => ({ ok: false })).then(async result => {
       await new Promise(done => setTimeout(done, waveEndDelay(performance.now() - state.started)));
-      state.phase = 'settled';
       const text = refreshMessage(result);
       const hold = resultHold(result);
       feel(result.ok ? 'success' : 'warning');
       AccessibilityInfo.announceForAccessibility(text);
-      run();
       if (hold) {
         setMessage(text);
         await new Promise(done => setTimeout(done, hold));
       }
-      setHolding(false);
+      state.phase = 'closing';
+      scrollToRest(-top);
+      setInset(0);
     });
-  }, [state, run]);
+  }, [state, lights, visible, waving, loop, scrollToRest, top]);
 
-  const onScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+  const listener = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    onScrolled(event);
     state.pull = -(event.nativeEvent.contentOffset.y + top);
-    if (state.phase === 'settled' && !holding && state.pull <= 0.5) {
-      state.phase = 'idle';
-      state.engaged = false;
-      setMessage('');
-    }
-    if (state.pull > 0.5 || state.phase !== 'idle') run();
-    if (state.phase !== 'idle' || !state.dragging || !state.engaged) return;
+    if (state.phase === 'closing' && state.pull <= 0.5) settle();
+    if (state.phase !== 'idle') return;
+    if (state.pull > 0.5) run();
+    if (!state.dragging || !state.engaged) return;
     const next = pullMove(state.gesture, state.pull, THRESHOLD);
     state.gesture = next.state;
     if (next.event === 'tick') feel('tick');
@@ -116,14 +137,16 @@ export function usePullRefresh(onRefresh: () => Promise<RefreshResult>) {
       feel('arm');
       if (!reduced.current) state.wave = state.wave.map((bar, index) => ({ ...bar, velocity: bar.velocity + armKick(index) }));
     }
-  }, [state, top, run, holding]);
+  }, [state, top, run, settle, onScrolled]);
+  const onScroll = useMemo(() => Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true, listener }), [scrollY, listener]);
 
   const onScrollBeginDrag = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     state.dragging = true;
     if (state.phase !== 'idle') return;
     state.engaged = event.nativeEvent.contentOffset.y + top <= 1;
     state.gesture = restingPull;
-  }, [state, top]);
+    visible.setValue(state.engaged ? 1 : 0);
+  }, [state, top, visible]);
 
   const onScrollEndDrag = useCallback(() => {
     state.dragging = false;
@@ -132,15 +155,28 @@ export function usePullRefresh(onRefresh: () => Promise<RefreshResult>) {
     if (fire) {
       feel('release');
       begin();
-    }
-    run();
+    } else run();
   }, [state, run, begin]);
 
-  const refreshControl = <RefreshControl refreshing={holding} onRefresh={begin} tintColor="transparent" />;
+  // pull in points, from the native scroll position; the stage sits centred in the gap and
+  // shrinks with it, so the wave closes with the gap instead of vanishing
+  const pull = useMemo(() => Animated.multiply(Animated.add(scrollY, top), -1), [scrollY, top]);
+  const stage = useMemo(() => ({
+    opacity: Animated.multiply(visible, pull.interpolate({ inputRange: [12, 44], outputRange: [0, 1], extrapolate: 'clamp' })),
+    transform: [
+      { translateY: Animated.add(Animated.multiply(pull, 0.5), -STAGE / 2) },
+      { scale: pull.interpolate({ inputRange: [0, 50], outputRange: [0, 1], extrapolate: 'clamp' }) },
+    ],
+  }), [visible, pull]);
+  const heights = useMemo(() => pulled.map((value, index) => {
+    const samples = Array.from({ length: 13 }, (_, i) => i / 12);
+    const wave = loop.interpolate({ inputRange: samples, outputRange: samples.map(t => 0.32 + 0.68 * (0.5 + 0.5 * Math.sin(2 * Math.PI * t - index * 0.5 - Math.PI / 2))) });
+    return Animated.add(Animated.multiply(value, Animated.add(1, Animated.multiply(waving, -1))), Animated.multiply(wave, waving));
+  }), [pulled, loop, waving]);
 
   const barHeight = 34 * colors.scale;
   const indicator = <View pointerEvents="none" style={{ position: 'absolute', top, left: 0, right: 0, alignItems: 'center' }}>
-    <Animated.View style={{ height: gap, alignSelf: 'stretch', overflow: 'hidden', alignItems: 'center', justifyContent: 'center', opacity: shown }}>
+    <Animated.View style={[{ height: STAGE, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' }, stage]}>
       {message ? <Text style={{ color: colors.accent, fontWeight: '700', fontSize: 14 * colors.scale }}>{message}</Text>
         : <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, height: barHeight * 1.35 }}>
           {heights.map((height, index) => <Animated.View key={index} style={{
@@ -150,5 +186,5 @@ export function usePullRefresh(onRefresh: () => Promise<RefreshResult>) {
     </Animated.View>
   </View>;
 
-  return { refreshControl, indicator, onScroll, onScrollBeginDrag, onScrollEndDrag };
+  return { onScroll, onScrollBeginDrag, onScrollEndDrag, contentInset: inset, indicator };
 }

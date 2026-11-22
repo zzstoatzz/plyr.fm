@@ -1,7 +1,7 @@
 import { useAppearance } from './appearance';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
-import { FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { Animated, FlatList, Pressable, StyleSheet, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { HomeTrackRow } from './HomeTrackRow';
 import { HomeChart } from './HomeChart';
 import { HomeArtists } from './HomeArtists';
@@ -52,8 +52,11 @@ function HomeFeed({ onPlay, hiddenTags }: { onPlay: Play; hiddenTags: string[] }
     setChartKey(key => key + 1);
     const page = await latest.refresh();
     return page ? { ok: true, fresh: newAtTop(before, page) } : { ok: false };
-  }, [tracks, latest.refresh]));
-  const header = <View style={styles.home} onLayout={event => setHeaderHeight(event.nativeEvent.layout.height)}>
+  }, [tracks, latest.refresh]), useCallback((offset: number) => list.current?.scrollToOffset({ offset, animated: true }), []), useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    viewport.current.offset = event.nativeEvent.contentOffset.y;
+    fillViewport();
+  }, [fillViewport]));
+  const header = useMemo(() => <View style={styles.home} onLayout={event => setHeaderHeight(event.nativeEvent.layout.height)}>
     <HomeChart onPlay={onPlay} refreshKey={chartKey} />
     {(network.loading || network.artists.length > 0) && <HomeArtists artists={network.artists} loading={network.loading} onPlay={onPlay} />}
     <Status error={network.error} retry={network.retry} />
@@ -63,18 +66,19 @@ function HomeFeed({ onPlay, hiddenTags }: { onPlay: Play; hiddenTags: string[] }
       </View>
       <HomeTagBar feed={feed} hiddenTags={hiddenTags} />
     </View>
-  </View>;
-  return <View style={{ flex: 1, backgroundColor: colors.background }}><FlatList ref={list} refreshControl={pull.refreshControl}
+  </View>, [onPlay, chartKey, network, feed, hiddenTags, latest.reload]);
+  const renderItem = useCallback(({ item }: { item: Track }) => <View style={{ opacity: pending ? 0.5 : 1 }}><HomeTrackRow height={rowHeight} track={item} tracks={tracks} onPlay={onPlay} /></View>, [pending, rowHeight, tracks, onPlay]);
+  return <View style={{ flex: 1, backgroundColor: colors.background }}><Animated.FlatList ref={list} contentInset={{ top: pull.contentInset }}
     onScrollBeginDrag={pull.onScrollBeginDrag} onScrollEndDrag={pull.onScrollEndDrag} testID="home-feed" data={tracks} keyExtractor={track => track.id} contentInsetAdjustmentBehavior="automatic"
     style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ ...pageFrame, paddingTop: 16, paddingBottom: 24 }}
     onLayout={event => { setListHeight(event.nativeEvent.layout.height); viewport.current.height = event.nativeEvent.layout.height; fillViewport(); }}
     onContentSizeChange={(_, height) => { viewport.current.content = height; fillViewport(); }}
-    onScroll={event => { viewport.current.offset = event.nativeEvent.contentOffset.y; fillViewport(); pull.onScroll(event); }} scrollEventThrottle={16}
+    onScroll={pull.onScroll} scrollEventThrottle={16}
     accessibilityState={{ busy: latest.loading }} keyboardShouldPersistTaps="handled" ListHeaderComponent={header} onEndReachedThreshold={1.5}
     onEndReached={() => { if (latest.cursor && !latest.loading && !latest.error) latest.more(); }}
     getItemLayout={(_, index) => ({ length: rowHeight, offset: 16 + headerHeight + index * rowHeight, index })}
     initialNumToRender={24} maxToRenderPerBatch={24} updateCellsBatchingPeriod={16} windowSize={11}
-    renderItem={({ item }) => <View style={{ opacity: pending ? 0.5 : 1 }}><HomeTrackRow height={rowHeight} track={item} tracks={tracks} onPlay={onPlay} /></View>}
+    renderItem={renderItem}
     ListFooterComponent={<View style={{ minHeight: listHeight - tracks.length * rowHeight }}><View testID="home-feed-footer" style={{ height: 112, justifyContent: 'center' }}>
       {latest.loading ? <WaveLoading label={tracks.length ? 'loading more...' : 'loading tracks...'} /> :
         <Status error={latest.error} retry={tracks.length ? undefined : latest.more} empty={!tracks.length ? selected.length ? 'no tracks match these tags' : 'no tracks yet' : undefined} />}
