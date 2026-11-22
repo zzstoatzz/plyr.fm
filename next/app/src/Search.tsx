@@ -1,4 +1,4 @@
-import { Link, useFocusEffect, useLocalSearchParams, type Href } from 'expo-router';
+import { Link, useFocusEffect, useLocalSearchParams, useNavigation, type Href } from 'expo-router';
 import { MagnifyingGlass as SearchIcon, X, CaretRight as ChevronRight } from './icons';
 import { useCallback, useEffect, useRef, useState, type ComponentRef } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
@@ -46,6 +46,17 @@ export function Search({ onPlay }: { onPlay: Play }) {
   const limit = expanded === key ? 50 : 20;
   const results = useSearch(term, filter === 'all' ? undefined : filter, limit);
   useEffect(() => { request.current++; setQuery(routeQuery); setLoadingTrack(undefined); setFailure(undefined); }, [routeQuery]);
+  const navigation = useNavigation();
+  const empty = useRef(!routeQuery);
+  empty.current = !query;
+  // Switching to the search tab should be ready to type; results you left stay in view,
+  // and coming back from a page opened here does not raise the keyboard.
+  useEffect(() => {
+    if (empty.current) input.current?.focus();
+    return navigation.getParent()?.addListener('focus', () => {
+      if (navigation.isFocused() && empty.current) input.current?.focus();
+    });
+  }, [navigation]);
   useFocusEffect(useCallback(() => {
     if (focus) input.current?.focus();
     return () => { request.current++; setLoadingTrack(undefined); };
