@@ -95,19 +95,19 @@
 	.stats { max-width: 72rem; }
 	.intro { display: flex; align-items: end; justify-content: space-between; flex-wrap: wrap; gap: 0.55rem 1rem; margin-bottom: 1.25rem; }
 	h1 { font-size: clamp(2.4rem, 5vw, 3.3rem); font-weight: 730; line-height: 1; letter-spacing: -0.065em; }
-	h2 { font-size: 1rem; }
+	h2 { font-size: var(--t-16); }
 	nav { display: flex; gap: 0 0.95rem; flex-wrap: wrap; color: var(--muted); }
-	nav a { display: inline-flex; align-items: center; gap: 0.4rem; min-height: 2.75rem; font-size: 0.875rem; }
+	nav a { display: inline-flex; align-items: center; gap: 0.4rem; min-height: 2.75rem; font-size: var(--t-14); }
 	.overview { container-type: inline-size; margin-bottom: 1.35rem; background: var(--surface); border: 1px solid var(--line); border-radius: 1rem; overflow: hidden; }
 	.overview-heading, .overview-actions { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem 0.8rem; flex-wrap: wrap; padding-inline: 1rem; }
 	.overview-heading { min-height: 3.4rem; }
 	.totals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; margin: 0; background: var(--line); border-block: 1px solid var(--line); }
 	.totals div { display: grid; align-content: start; gap: 0.45rem; min-width: 0; background: var(--surface); padding: 0.9rem 1rem 1.05rem; }
 	.totals .lead { background: color-mix(in srgb, var(--accent) 9%, var(--surface)); }
-	dt { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; color: var(--muted); font-size: 0.85rem; }
+	dt { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; color: var(--muted); font-size: var(--t-13-6); }
 	dd { margin: 0; line-height: 1.05; font-weight: 700; letter-spacing: -0.045em; font-size: clamp(1.25rem, 3.2vw, 2.2rem); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 	.lead dd { color: var(--accent); }
-	.overview-actions { align-items: start; color: var(--muted); font-size: 0.8rem; }
+	.overview-actions { align-items: start; color: var(--muted); font-size: var(--t-12-8); }
 	.overview-actions > p { padding-block: 0.85rem; }
 	details p { max-width: 41ch; padding-bottom: 0.85rem; }
 	summary { display: list-item; min-height: 2.75rem; padding-block: 0.8rem; cursor: pointer; }

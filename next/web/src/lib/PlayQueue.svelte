@@ -317,10 +317,10 @@
 	@media (hover: hover) { .hero-cover:not(:hover, :focus-visible) .hero-play { opacity: 0; } }
 	@media (hover: none) { .hero-cover.playing .hero-play { opacity: 0; } }
 	.hero-meta { min-width: 0; display: grid; gap: 0.15rem; }
-	.hero-meta h2 { display: flex; align-items: center; gap: 0.4rem; margin: 0; font-size: 0.75rem; color: var(--faint); font-weight: 600; }
+	.hero-meta h2 { display: flex; align-items: center; gap: 0.4rem; margin: 0; font-size: var(--t-12); color: var(--faint); font-weight: 600; }
 	.hero-meta h2 :global(*) { color: var(--accent); }
 	.hero-title { font-size: 1.3rem; font-weight: 700; line-height: 1.15; letter-spacing: -0.02em; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-	.hero-artist { color: var(--muted); font-size: 0.92rem; }
+	.hero-artist { color: var(--muted); font-size: var(--t-14-4); }
 	/* the list sits straight on the wash, no card: rows pull out by their padding so covers line up with the hero */
 	.upcoming-list { display: grid; gap: 0.9rem; }
 	.upcoming-list ol { margin-inline: -0.45rem; }
@@ -331,7 +331,7 @@
 	header, .queue-head { display: flex; justify-content: space-between; align-items: center; }
 	.actions { display: flex; align-items: center; }
 	h1 { font-size: 1.45rem; letter-spacing: -0.03em; }
-	h2, .count { color: var(--muted); font-size: 0.87rem; font-weight: 650; }
+	h2, .count { color: var(--muted); font-size: var(--t-14); font-weight: 650; }
 	h2 { margin-block-end: 0.55rem; overflow-wrap: anywhere; }
 	.count { margin-block-end: 0.55rem; font-variant-numeric: tabular-nums; }
 	ol { display: grid; gap: 0.38rem; margin: 0; padding: 0; list-style: none; }
@@ -346,16 +346,16 @@
 	.cover { border: 0; padding: 0; width: 2.75rem; flex: none; border-radius: 0.35rem; background: none; position: relative; }
 	.play { position: absolute; inset: 0; display: grid; place-items: center; background: rgb(0 0 0 / 0.48); color: white; border-radius: inherit; }
 	.cover:not(:hover, :focus-visible) .play { opacity: 0; }
-	.labels { min-width: 0; flex: 1; display: grid; gap: 0.12rem; font-size: 0.9rem; }
+	.labels { min-width: 0; flex: 1; display: grid; gap: 0.12rem; font-size: var(--t-14-4); }
 	.labels > :first-child { font-weight: 650; }
-	.labels span, .time { font-size: 0.75rem; }
+	.labels span, .time { font-size: var(--t-12); }
 	.time { font-variant-numeric: tabular-nums; }
 	.move :global(svg) { transform: rotate(180deg); }
 	/* move up is for keyboards; pointers drag the row or the handle */
 	.move:not(:focus-visible) { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); }
 	.queue-signin { color: var(--accent); text-decoration: underline; text-underline-offset: 0.2em; }
-	.hint { margin: -0.3rem 0 0.5rem; color: var(--faint); font-size: 0.8rem; }
+	.hint { margin: -0.3rem 0 0.5rem; color: var(--faint); font-size: var(--t-12-8); }
 	.hint .touch { display: none; }
 	@media (pointer: coarse) { .hint .touch { display: inline; } .hint .mouse { display: none; } }
-	.empty { color: var(--muted); margin: 0; font-size: 0.88rem; }
+	.empty { color: var(--muted); margin: 0; font-size: var(--t-14); }
 </style>

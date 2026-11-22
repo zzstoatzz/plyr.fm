@@ -87,16 +87,16 @@
 
 <style>
   form, .grant { display: flex; flex-direction: column; gap: 0.6rem; padding: 0 1.25rem; overflow-y: auto; }
-  .lead, .grant p { color: var(--muted); font-size: 0.9rem; }
+  .lead, .grant p { color: var(--muted); font-size: var(--t-14-4); }
   fieldset { display: flex; flex-direction: column; gap: 0.35rem; border: 0; padding: 0; margin: 0; }
   .reason { display: flex; align-items: center; gap: 0.75rem; min-height: 2.9rem; padding: 0.5rem 0.75rem; border: 1px solid var(--line); border-radius: 0.7rem; cursor: pointer; }
   .reason.picked { border-color: var(--accent); background: var(--raised); }
   .reason input { accent-color: var(--accent); width: 1.1rem; height: 1.1rem; flex: none; }
   .reason span { display: flex; flex-direction: column; min-width: 0; }
-  .reason strong { font-weight: 550; font-size: 0.92rem; }
-  .reason small, footer small { color: var(--faint); font-size: 0.8rem; }
+  .reason strong { font-weight: 550; font-size: var(--t-14-4); }
+  .reason small, footer small { color: var(--faint); font-size: var(--t-12-8); }
   textarea { width: 100%; font: inherit; font-size: 16px; padding: 0.6rem 0.75rem; border: 1px solid var(--line); border-radius: 0.7rem; background: var(--bg); color: var(--text); resize: vertical; }
-  .error { color: light-dark(#b42318, #ff8a80); font-size: 0.85rem; }
+  .error { color: light-dark(#b42318, #ff8a80); font-size: var(--t-13-6); }
   footer { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding-top: 0.25rem; }
   footer .hero-pill { margin-inline-start: auto; }
   .grant .hero-pill { align-self: start; }

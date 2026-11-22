@@ -252,9 +252,9 @@
 
 <style>
   .editor { --danger: light-dark(#a3271f, #ff8f87); max-width: 69rem; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
-  .problem { color: var(--danger); font-size: 0.9rem; }
+  .problem { color: var(--danger); font-size: var(--t-14-4); }
   .subtle { color: var(--muted); }
-  .note { font-size: 0.85rem; line-height: 1.4; }
+  .note { font-size: var(--t-13-6); line-height: 1.4; }
   .danger-zone { scroll-margin-bottom: calc(var(--bar-offset, 0px) + 6.5rem); }
   .notice { display: grid; gap: 0.6rem; padding: 0.9rem 1rem; border: 1px solid var(--line); border-radius: 0.9rem; background: var(--surface); }
   .notice:focus { outline: none; }
@@ -274,20 +274,20 @@
   .cover.empty { box-shadow: none; border: 2px dashed var(--line); background: var(--surface); }
   .cover.empty:hover:not(:disabled) { border-color: var(--accent); }
   .cover img { width: 100%; height: 100%; object-fit: cover; }
-  .cover-chip { position: absolute; left: 0.6rem; bottom: 0.6rem; display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.7rem; border-radius: 999px; background: rgb(0 0 0 / 0.55); color: white; font-size: 0.8rem; font-weight: 700; backdrop-filter: blur(8px); }
+  .cover-chip { position: absolute; left: 0.6rem; bottom: 0.6rem; display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.7rem; border-radius: 999px; background: rgb(0 0 0 / 0.55); color: white; font-size: var(--t-12-8); font-weight: 700; backdrop-filter: blur(8px); }
   .cover-empty { height: 100%; display: grid; place-items: center; align-content: center; gap: 0.4rem; padding: 1rem; color: var(--faint); }
   .cover-empty b { color: var(--text); }
-  .cover-empty small { font-size: 0.8rem; }
+  .cover-empty small { font-size: var(--t-12-8); }
   .remove { position: absolute; top: 0.5rem; right: 0.5rem; width: 2rem; height: 2rem; display: grid; place-items: center; border: 0; border-radius: 50%; background: rgb(0 0 0 / 0.55); color: white; backdrop-filter: blur(8px); }
   .copy { flex: 1; min-width: 0; display: grid; gap: 0.6rem; }
   .copy > * { max-width: 100%; min-width: 0; }
-  .kind { color: var(--faint); font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+  .kind { color: var(--faint); font-size: var(--t-12); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
   .title { display: flex; align-items: center; gap: 0.5rem; border-bottom: 2px dashed color-mix(in srgb, var(--text) 25%, transparent); color: var(--faint); }
   .title:focus-within { border-bottom-color: var(--accent); border-bottom-style: solid; }
   .title input { flex: 1; min-width: 0; padding: 0.1rem 0; border: 0; outline: 0; background: none; color: var(--text); font-size: clamp(1.75rem, 4.5vw, 3.1rem); font-weight: 700; letter-spacing: -0.03em; line-height: 1.15; }
   .title input::placeholder { color: var(--faint); opacity: 0.7; }
   .meta { display: flex; flex-wrap: wrap; gap: 0.45rem; }
-  .chip { display: inline-flex; align-items: center; gap: 0.35rem; min-height: 2rem; max-width: 100%; padding: 0.3rem 0.8rem; border: 0; border-radius: 999px; background: color-mix(in srgb, var(--raised) 85%, transparent); color: var(--muted); font-size: 0.85rem; }
+  .chip { display: inline-flex; align-items: center; gap: 0.35rem; min-height: 2rem; max-width: 100%; padding: 0.3rem 0.8rem; border: 0; border-radius: 999px; background: color-mix(in srgb, var(--raised) 85%, transparent); color: var(--muted); font-size: var(--t-13-6); }
   .chip.strong { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
   .chip.file { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; line-height: 1.4rem; }
   .chip.action { color: var(--text); font-weight: 700; }
@@ -296,11 +296,11 @@
   .details { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
   .card { display: grid; gap: 1rem; align-content: start; padding: 1.1rem; background: var(--surface); border: 1px solid var(--line); border-radius: 0.9rem; }
   .field { display: grid; gap: 0.4rem; }
-  .field > span { font-size: 0.8rem; font-weight: 700; color: var(--faint); letter-spacing: 0.04em; }
+  .field > span { font-size: var(--t-12-8); font-weight: 700; color: var(--faint); letter-spacing: 0.04em; }
   .field :is(input, textarea) { width: 100%; min-width: 0; padding: 0.65rem 0.8rem; border: 1px solid var(--line); border-radius: 0.65rem; background: var(--bg); color: inherit; line-height: 1.4; }
   .field textarea { resize: vertical; }
   .field :is(input, textarea):focus { outline: 2px solid var(--accent); outline-offset: 1px; }
-  .count { font-size: 0.8rem; text-align: right; }
+  .count { font-size: var(--t-12-8); text-align: right; }
 
   .bar { position: sticky; bottom: calc(1rem + var(--bar-offset, 0px)); z-index: 3; display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem; border-radius: 999px; background: var(--glass); border: 1px solid var(--line); backdrop-filter: blur(18px); box-shadow: 0 0.6rem 2rem rgb(0 0 0 / 0.14); }
   .spacer { flex: 1; }
@@ -308,7 +308,7 @@
   .delete:hover:not(:disabled) { background: var(--hover); }
   .cancel { display: inline-flex; align-items: center; min-height: 2.75rem; padding: 0 0.9rem; border-radius: 999px; color: var(--muted); font-weight: 600; }
   .cancel:hover { background: var(--hover); text-decoration: none; }
-  .submit { min-height: 3rem; padding: 0 1.75rem; font-size: 1.02rem; }
+  .submit { min-height: 3rem; padding: 0 1.75rem; font-size: var(--t-16); }
 
   @media (max-width: 720px) {
     .hero { flex-direction: column; align-items: center; text-align: center; gap: 1rem; padding-top: 0; }

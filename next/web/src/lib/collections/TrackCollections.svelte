@@ -65,7 +65,7 @@
   .access { justify-items: stretch; text-align: start; width: min(28rem, 100%); margin-inline: auto; }
   .actions { display: flex; align-items: center; justify-content: center; gap: 0.5rem; flex-wrap: wrap; }
   .compact { justify-content: space-between; }
-  .chip { display: inline-flex; align-items: center; gap: 0.45rem; min-height: 2.75rem; padding: 0 1rem; border: 1px solid var(--line); border-radius: 999px; background: none; color: var(--text); font-size: 0.9rem; white-space: nowrap; }
+  .chip { display: inline-flex; align-items: center; gap: 0.45rem; min-height: 2.75rem; padding: 0 1rem; border: 1px solid var(--line); border-radius: 999px; background: none; color: var(--text); font-size: var(--t-14-4); white-space: nowrap; }
   .chip :global(svg) { color: var(--muted); }
   .chip:hover:not(:disabled) { background: var(--hover); text-decoration: none; }
   .chip:disabled { opacity: 1; color: var(--muted); }

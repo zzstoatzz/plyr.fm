@@ -28,7 +28,7 @@
 
 <style>
   .jobs { display: grid; gap: 0.35rem; }
-  .jobs h2 { font-size: 0.95rem; color: var(--muted); }
+  .jobs h2 { font-size: var(--t-15); color: var(--muted); }
   .jobs ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 0.25rem; }
   .jobs li { display: flex; align-items: center; gap: 0.75rem; min-height: 3rem; padding: 0.35rem 0.5rem; border-radius: 0.7rem; background: var(--surface); border: 1px solid var(--line); }
   .jobs li.failed .job-icon { color: light-dark(#a3271f, #ff8f87); }

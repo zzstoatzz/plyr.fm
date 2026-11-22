@@ -27,6 +27,7 @@
     "expo-audio@58.0.11": "patches/expo-audio+58.0.11.patch"
   },
   "scripts": {
-    "check:boundaries": "node scripts/check-boundaries.mjs"
+    "check:boundaries": "node scripts/check-boundaries.mjs",
+    "check:type-scale": "node scripts/check-type-scale.mjs"
   }
 }

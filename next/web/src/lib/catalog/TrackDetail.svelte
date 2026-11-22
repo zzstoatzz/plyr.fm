@@ -207,13 +207,13 @@
 	.artist:hover { text-decoration: underline; }
 	.actions, .tags { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0.4rem; }
 	.tags { margin: 0.2rem 0 0.65rem; }
-	.tags a { display: grid; align-items: center; min-height: 2.75rem; padding-inline: 0.65rem; max-width: 100%; overflow-wrap: anywhere; border-radius: 0.6rem; color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); font-size: 0.85rem; font-weight: 650; }
+	.tags a { display: grid; align-items: center; min-height: 2.75rem; padding-inline: 0.65rem; max-width: 100%; overflow-wrap: anywhere; border-radius: 0.6rem; color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); font-size: var(--t-13-6); font-weight: 650; }
 	.tags a:hover { text-decoration: underline; }
 	.primary-button { width: 3.5rem; height: 3.5rem; }
 	.buy { display: inline-flex; align-items: center; gap: 0.45rem; height: 2.75rem; padding: 0 1.1rem; border: 1.5px solid var(--accent); border-radius: 999px; color: var(--accent); font-weight: 700; max-width: 100%; }
 	.buy span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.buy:hover { text-decoration: none; background: color-mix(in srgb, var(--accent) 10%, transparent); }
-	.info { font-size: 0.9rem; width: 100%; }
+	.info { font-size: var(--t-14-4); width: 100%; }
 	.info > p, details, summary { display: inline; }
 	summary { display: inline-flex; align-items: center; min-height: 2.75rem; padding-inline: 0.5rem; color: var(--accent); cursor: pointer; font-weight: 650; }
 	.description { max-width: 40rem; border-top: 1px solid var(--line); margin: 0 auto; padding: 0.85rem 0; white-space: pre-wrap; text-align: start; overflow-wrap: anywhere; }
@@ -221,7 +221,7 @@
 	.comments-panel { inset: auto 1rem 1rem auto; margin: 0; width: min(27rem, calc(100% - 2rem)); max-height: min(42rem, calc(100dvh - 2rem)); height: fit-content; padding: 1rem; background: var(--surface); border: 1px solid var(--line); border-radius: 0.9rem; color: var(--text); }
 	.comments-panel::backdrop { background: rgb(0 0 0 / 0.48); }
 	.comments-panel header { display: flex; align-items: center; justify-content: space-between; }
-	h2 { font-size: 1.15rem; }
+	h2 { font-size: var(--t-18-4); }
 	@media (max-width: 720px) {
 		.cover { width: min(11rem, 52vw); }
 		.comments-panel { inset: auto 0 0; width: 100%; max-width: none; max-height: 80dvh; padding-bottom: max(1rem, env(safe-area-inset-bottom)); border-radius: 0.9rem 0.9rem 0 0; }

@@ -49,7 +49,7 @@
 	.description { display: grid; min-width: 0; }
 	.subtitle { display: flex; gap: 0.25rem; }
 	.mobile-time { display: none; flex-shrink: 0; font-variant-numeric: tabular-nums; }
-	.description span { color: var(--muted); font-size: 0.8rem; }
+	.description span { color: var(--muted); font-size: var(--t-12-8); }
 	.controls { min-width: 0; display: flex; align-items: center; gap: 0.8rem; }
 	.desktop-progress { flex: 1; min-width: 0; }
 	.extras { display: flex; align-items: center; justify-content: flex-end; }

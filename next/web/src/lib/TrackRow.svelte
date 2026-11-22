@@ -65,8 +65,8 @@
 	.name { display: grid; justify-items: start; min-width: 0; }
 	.name a { position: relative; z-index: 2; max-width: 100%; }
 	.title { font-weight: 650; }
-	.artist, .duration { color: var(--muted); font-size: 0.875rem; }
-	.metrics { position: relative; z-index: 2; display: flex; align-items: center; gap: 0.8rem; color: var(--faint); font-size: 0.75rem; min-height: 1.4rem; }
+	.artist, .duration { color: var(--muted); font-size: var(--t-14); }
+	.metrics { position: relative; z-index: 2; display: flex; align-items: center; gap: 0.8rem; color: var(--faint); font-size: var(--t-12); min-height: 1.4rem; }
 	.metrics time { white-space: nowrap; }
 	.metrics > span { display: flex; align-items: center; gap: 0.3rem; }
 	.row-actions { position: relative; z-index: 2; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; }

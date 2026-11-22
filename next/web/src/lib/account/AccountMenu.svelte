@@ -80,7 +80,7 @@
 	dialog { width: min(21.25rem, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); margin: auto; padding: 0; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 1rem; box-shadow: 0 0.5rem 2rem rgb(0 0 0 / 0.26); }
 	dialog::backdrop { background: rgb(0 0 0 / 0.52); }
 	header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.6rem 0.75rem 0.6rem 1.2rem; border-bottom: 1px solid var(--line); }
-	h2 { font-size: 0.875rem; font-weight: 650; text-transform: uppercase; letter-spacing: 0.065em; }
+	h2 { font-size: var(--t-14); font-weight: 650; text-transform: uppercase; letter-spacing: 0.065em; }
 	nav { display: grid; padding: 0.45rem; }
 	nav :is(a, button) { display: flex; align-items: center; gap: 0.9rem; padding: 0.75rem 0.9rem; min-height: 3.5rem; color: var(--muted); background: none; border: 0; border-radius: 0.65rem; text-align: start; }
 	nav :is(a, button):hover { background: var(--hover); text-decoration: none; }

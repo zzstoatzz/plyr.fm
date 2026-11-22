@@ -30,7 +30,7 @@
 
 <style>
 	.toasts { position: fixed; z-index: 20; left: calc(var(--sidebar) + 1rem); bottom: calc(var(--toast-dock, 0px) + 1rem); display: grid; justify-items: start; gap: 0.5rem; pointer-events: none; max-width: calc(100vw - var(--sidebar) - 2rem); }
-	.toast { pointer-events: auto; max-width: 100%; border: 1px solid var(--line); border-radius: 0.7rem; background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(12px); box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 0.18); color: var(--text); font-size: 0.875rem; }
+	.toast { pointer-events: auto; max-width: 100%; border: 1px solid var(--line); border-radius: 0.7rem; background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(12px); box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 0.18); color: var(--text); font-size: var(--t-14); }
 	.toast button, .row { display: flex; align-items: center; gap: 0.6rem; min-height: 2.75rem; padding: 0.55rem 0.9rem; width: 100%; border: 0; background: none; color: inherit; font: inherit; text-align: start; border-radius: inherit; }
 	.toast button { cursor: pointer; }
 	.toast button:hover { background: var(--hover); }

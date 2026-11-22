@@ -125,7 +125,7 @@
   .picker::backdrop { background: rgb(0 0 0 / 0.5); }
   header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 0.5rem; }
   .menu { position: fixed; inset: auto; margin: 0; width: min(15rem, calc(100vw - 1rem)); background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 0.8rem; padding: 0.4rem; box-shadow: 0 0.4rem 1.4rem rgb(0 0 0 / 0.13); }
-  .menu :is(button, a) { width: 100%; justify-content: start; gap: 0.6rem; font-size: 0.875rem; }
+  .menu :is(button, a) { width: 100%; justify-content: start; gap: 0.6rem; font-size: var(--t-14); }
   hr { border: 0; border-top: 1px solid var(--line); margin: 0.3rem 0.2rem; }
-  p { padding: 0.4rem; font-size: 0.875rem; color: var(--muted); }
+  p { padding: 0.4rem; font-size: var(--t-14); color: var(--muted); }
 </style>

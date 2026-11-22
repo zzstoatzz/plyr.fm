@@ -161,8 +161,8 @@
 
 <style>
   .access { display: grid; gap: 0.25rem; scroll-margin-top: 1rem; }
-  h2 { font-size: 1.1rem; }
-  .lead { color: var(--muted); font-size: 0.9rem; line-height: 1.4; margin-bottom: 0.6rem; }
+  h2 { font-size: var(--t-17-6); }
+  .lead { color: var(--muted); font-size: var(--t-14-4); line-height: 1.4; margin-bottom: 0.6rem; }
   .layout { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.75fr); gap: 1rem; align-items: start; }
   .layout.solo { grid-template-columns: minmax(0, 1fr); }
   .card { display: grid; gap: 0.9rem; min-width: 0; padding: 1.1rem; background: var(--surface); border: 1px solid var(--line); border-radius: 0.9rem; }
@@ -173,10 +173,10 @@
   .tile:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
   .tile input { margin-left: auto; width: 1.2rem; height: 1.2rem; accent-color: var(--accent); flex: none; }
   .copy { display: grid; gap: 0.1rem; min-width: 0; flex: 1; }
-  .copy small { color: var(--faint); font-size: 0.83rem; line-height: 1.35; }
+  .copy small { color: var(--faint); font-size: var(--t-13-6); line-height: 1.35; }
   .icon { width: 2.4rem; height: 2.4rem; display: grid; place-items: center; border-radius: 0.7rem; background: var(--raised); color: var(--muted); flex: none; }
   .tile.on .icon, .icon.on { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
-  .label { display: flex; justify-content: space-between; font-size: 0.8rem; font-weight: 700; color: var(--faint); letter-spacing: 0.04em; }
+  .label { display: flex; justify-content: space-between; font-size: var(--t-12-8); font-weight: 700; color: var(--faint); letter-spacing: 0.04em; }
   .way { display: flex; align-items: flex-start; gap: 0.75rem; padding: 0.7rem 0.5rem 0.7rem 0.8rem; border-radius: 0.8rem; background: var(--raised); }
   .way > .icon { background: color-mix(in srgb, var(--accent) 16%, transparent); }
   .remove { width: 2.75rem; height: 2.75rem; display: grid; place-items: center; flex: none; margin-top: -0.15rem; border: 0; border-radius: 50%; background: none; color: var(--faint); }
@@ -186,41 +186,41 @@
   .money:focus-within { border-color: var(--accent); }
   .money.bad { border-color: light-dark(#a3271f, #ff8f87); }
   .money input { width: 4.5rem; border: 0; outline: 0; background: none; color: inherit; font: inherit; font-size: max(16px, 1rem); }
-  .money small { color: var(--faint); font-weight: 600; font-size: 0.8rem; }
+  .money small { color: var(--faint); font-weight: 600; font-size: var(--t-12-8); }
   .people { width: 100%; min-width: 0; margin: 0.3rem 0 0.15rem; padding: 0.55rem 0.75rem; border: 1px solid var(--line); border-radius: 0.6rem; background: var(--bg); color: inherit; font-size: max(16px, 1rem); }
   .people:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
-  .soon { display: inline-flex; align-items: center; height: 1.25rem; padding: 0 0.45rem; margin-left: 0.2rem; border-radius: 999px; background: var(--hover); color: var(--faint); font-size: 0.7rem; font-weight: 800; white-space: nowrap; }
+  .soon { display: inline-flex; align-items: center; height: 1.25rem; padding: 0 0.45rem; margin-left: 0.2rem; border-radius: 999px; background: var(--hover); color: var(--faint); font-size: var(--t-11-2); font-weight: 800; white-space: nowrap; }
   .adds { display: flex; flex-wrap: wrap; gap: 0.45rem; }
-  .add { display: inline-flex; align-items: center; gap: 0.35rem; min-height: 2.75rem; padding: 0 0.9rem; border-radius: 999px; border: 1.5px dashed var(--line); background: none; color: var(--muted); font-size: 0.88rem; font-weight: 700; }
+  .add { display: inline-flex; align-items: center; gap: 0.35rem; min-height: 2.75rem; padding: 0 0.9rem; border-radius: 999px; border: 1.5px dashed var(--line); background: none; color: var(--muted); font-size: var(--t-14); font-weight: 700; }
   .add:hover { border-color: var(--accent); color: var(--text); }
-  .note { color: var(--faint); font-size: 0.85rem; line-height: 1.4; }
-  .problem { color: light-dark(#a3271f, #ff8f87); font-size: 0.85rem; margin-top: 0.2rem; }
+  .note { color: var(--faint); font-size: var(--t-13-6); line-height: 1.4; }
+  .problem { color: light-dark(#a3271f, #ff8f87); font-size: var(--t-13-6); margin-top: 0.2rem; }
   .problem a { color: inherit; text-decoration: underline; }
   .more { display: grid; gap: 0.9rem; min-width: 0; padding-top: 0.9rem; border-top: 1px solid var(--line); }
   .sell-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; min-width: 0; margin: 0.3rem 0 0.15rem; }
   .sell-row .people { flex: 1 1 10rem; width: auto; min-width: 0; margin: 0; }
   .switch { display: flex; align-items: center; justify-content: space-between; gap: 1rem; cursor: pointer; }
   .switch span { display: grid; gap: 0.15rem; }
-  .switch small { color: var(--faint); font-size: 0.83rem; line-height: 1.35; }
+  .switch small { color: var(--faint); font-size: var(--t-13-6); line-height: 1.35; }
   .switch input { appearance: none; flex: none; position: relative; width: 2.6rem; height: 1.5rem; margin: 0; border-radius: 999px; background: var(--hover); cursor: pointer; transition: background 0.15s; }
   .switch input::after { content: ''; position: absolute; left: 0.2rem; top: 0.2rem; width: 1.1rem; height: 1.1rem; border-radius: 50%; background: var(--faint); transition: transform 0.15s; }
   .switch input:checked { background: var(--accent); }
   .switch input:checked::after { transform: translateX(1.1rem); background: var(--on-accent); }
   .switch input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .downloads { display: grid; gap: 0.4rem; margin: 0; padding: 0; border: 0; min-width: 0; }
-  .downloads legend { padding: 0; margin-bottom: 0.4rem; font-size: 0.8rem; font-weight: 700; color: var(--faint); letter-spacing: 0.04em; }
+  .downloads legend { padding: 0; margin-bottom: 0.4rem; font-size: var(--t-12-8); font-weight: 700; color: var(--faint); letter-spacing: 0.04em; }
   .downloads:disabled .pick { opacity: 0.6; cursor: default; }
   .pick { display: flex; align-items: center; gap: 0.7rem; min-height: 2.75rem; padding: 0.55rem 0.75rem; border: 1.5px solid var(--line); border-radius: 0.7rem; cursor: pointer; }
   .pick.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, transparent); }
   .pick:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
   .pick input { width: 1.1rem; height: 1.1rem; margin: 0; accent-color: var(--accent); flex: none; }
   .preview { display: grid; gap: 0.55rem; }
-  .cap { display: flex; align-items: center; gap: 0.4rem; font-size: 0.75rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
+  .cap { display: flex; align-items: center; gap: 0.4rem; font-size: var(--t-12); font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
   .locked { display: grid; gap: 0.6rem; padding: 1rem; border-radius: 0.9rem; background: var(--surface); border: 1px solid var(--line); }
-  .locked.hidden { display: flex; align-items: center; gap: 0.6rem; color: var(--muted); font-size: 0.9rem; line-height: 1.4; }
+  .locked.hidden { display: flex; align-items: center; gap: 0.6rem; color: var(--muted); font-size: var(--t-14-4); line-height: 1.4; }
   .head { display: flex; align-items: center; gap: 0.7rem; }
   .head b { display: block; overflow-wrap: anywhere; }
-  .head small { color: var(--faint); font-size: 0.82rem; }
+  .head small { color: var(--faint); font-size: var(--t-12-8); }
   .art { width: 3rem; height: 3rem; flex: none; display: grid; place-items: center; overflow: hidden; border-radius: 0.45rem; background: var(--raised); color: var(--faint); }
   .art img { width: 100%; height: 100%; object-fit: cover; }
   @media (max-width: 720px) {

@@ -51,7 +51,7 @@
   .comments-view { position: absolute; inset: 0; z-index: 1; display: grid; grid-template-rows: auto minmax(0, 1fr); border-radius: inherit; overflow: hidden; background: var(--surface); isolation: isolate; }
   .wash { position: absolute; inset: -25%; width: 150%; height: 150%; object-fit: cover; filter: blur(46px) saturate(1.3); z-index: -2; }
   .comments-view::before { content: ''; position: absolute; inset: 0; z-index: -1; background: color-mix(in srgb, var(--bg) 62%, transparent); }
-  header { display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0.5rem 0 1.1rem; font-size: 0.95rem; }
+  header { display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0.5rem 0 1.1rem; font-size: var(--t-15); }
   .count { margin-left: 0.35rem; color: var(--muted); font-weight: 400; }
   ol { list-style: none; margin: 0; padding: 35% 1.1rem; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; mask-image: linear-gradient(transparent, #000 1.5rem, #000 calc(100% - 3rem), transparent); }
   ol::-webkit-scrollbar { display: none; }
@@ -64,7 +64,7 @@
   .face { flex: none; width: 2rem; height: 2rem; margin-top: 0.1rem; border-radius: 50%; overflow: hidden; transition: width 0.3s, height 0.3s; }
   .now .face { width: 2.5rem; height: 2.5rem; }
   .body { display: grid; gap: 0.2rem; min-width: 0; }
-  .meta { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: baseline; font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .meta { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: baseline; font-size: var(--t-12-8); color: var(--muted); font-variant-numeric: tabular-nums; }
   .meta strong { color: var(--text); font-weight: 650; }
   .now .time { color: var(--accent); font-weight: 700; }
   .soon { color: var(--faint); }
@@ -72,7 +72,7 @@
   .now .say { font-size: 1.6rem; }
   .say.emoji { font-size: 2.2rem; line-height: 1.05; font-weight: 400; }
   .now .say.emoji { font-size: 2.75rem; }
-  .empty { color: var(--muted); font-size: 1.05rem; padding-top: 1.5rem; }
-  .yours button { min-height: 2.75rem; padding: 0; border: 0; background: none; color: var(--accent); font-size: 1.05rem; font-weight: 700; cursor: pointer; }
+  .empty { color: var(--muted); font-size: var(--t-16-8); padding-top: 1.5rem; }
+  .yours button { min-height: 2.75rem; padding: 0; border: 0; background: none; color: var(--accent); font-size: var(--t-16-8); font-weight: 700; cursor: pointer; }
   @media (prefers-reduced-motion: reduce) { li, .face, .say { transition: none; } }
 </style>

@@ -330,9 +330,9 @@
 	@media (min-width: 721px) {
 		nav { height: calc(100dvh - var(--nav-dock, 0px)); min-height: 0; overflow-y: auto; padding: 0.875rem; }
 		.frame.hasPlayer { --nav-dock: var(--dock); }
-		nav :is(a, button) { font-size: 0.96875rem; font-weight: 500; }
+		nav :is(a, button) { font-size: var(--t-15-5); font-weight: 500; }
 		nav .phone-only { display: none; }
-		nav .search-field { gap: 0.625rem; margin: 0 0 0.75rem; height: 2.5rem; padding: 0 0.625rem 0 0.75rem; background: var(--raised); border: 1px solid color-mix(in srgb, var(--line) 80%, transparent); color: var(--muted); font-size: 0.875rem; }
+		nav .search-field { gap: 0.625rem; margin: 0 0 0.75rem; height: 2.5rem; padding: 0 0.625rem 0 0.75rem; background: var(--raised); border: 1px solid color-mix(in srgb, var(--line) 80%, transparent); color: var(--muted); font-size: var(--t-14); }
 		nav .search-field kbd { margin-left: auto; padding: 0.2rem 0.375rem; border: 1px solid var(--line); border-radius: 0.375rem; color: var(--muted); font: 500 0.6875rem/1 system-ui, sans-serif; }
 		nav .search-field:hover { background: var(--hover); }
 		nav .search-field.active { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); font-weight: 500; }
@@ -342,7 +342,7 @@
 		nav .account .profile-avatar, nav .account .profile-avatar :global(svg) { width: 2.125rem; height: 2.125rem; }
 		nav .account .tab-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 		.who { display: grid; min-width: 0; flex: 1; line-height: 1.2; }
-		.who strong { color: var(--text); font-size: 0.875rem; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+		.who strong { color: var(--text); font-size: var(--t-14); font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 		.who small { color: var(--faint); font: 0.75rem system-ui, sans-serif; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 		.who-chevron { display: flex; color: var(--faint); }
 	}
@@ -352,7 +352,7 @@
 	.shortcuts dl { margin: 0.45rem 0; }
 	.shortcuts dl div { border-top: 1px solid var(--line); padding: 0.45rem 0; }
 	.shortcuts dd { margin: 0; display: flex; gap: 0.25rem; flex-shrink: 0; }
-	.shortcuts kbd { background: var(--raised); border: 1px solid var(--line); border-radius: 0.35rem; padding: 0.15rem 0.4rem; text-align: center; min-width: 1.65rem; font-size: 0.8rem; }
+	.shortcuts kbd { background: var(--raised); border: 1px solid var(--line); border-radius: 0.35rem; padding: 0.15rem 0.4rem; text-align: center; min-width: 1.65rem; font-size: var(--t-12-8); }
 	@media (min-width: 721px) and (max-width: 1199px) {
 		.frame.docked { grid-template-columns: var(--sidebar) minmax(0, 1fr); }
 		aside { position: fixed; z-index: 8; right: 0; bottom: var(--dock); top: auto; height: auto; max-height: calc(100dvh - var(--dock)); width: min(var(--queue), calc(100vw - var(--sidebar))); box-shadow: 0 0 2rem rgb(0 0 0 / 0.15); }

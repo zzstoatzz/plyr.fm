@@ -45,7 +45,7 @@
 {/if}
 
 <style>
-	.listening { display: inline-flex; align-items: center; gap: 0.45rem; max-width: 100%; min-width: 0; color: var(--muted); font-size: 0.875rem; text-decoration: none; }
+	.listening { display: inline-flex; align-items: center; gap: 0.45rem; max-width: 100%; min-width: 0; color: var(--muted); font-size: var(--t-14); text-decoration: none; }
 	.listening b { color: var(--text); font-weight: 600; }
 	.listening :global(.playing-wave) { width: 0.8rem; height: 0.8rem; color: var(--accent); }
 	a.listening:hover b { text-decoration: underline; }

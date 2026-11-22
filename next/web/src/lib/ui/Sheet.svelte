@@ -31,8 +31,8 @@
   .body { display: flex; flex-direction: column; max-height: inherit; padding: 0.4rem 0 0.75rem; text-align: start; }
   header { display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0.6rem 0.5rem 1.25rem; }
   .titles { flex: 1; min-width: 0; }
-  h2 { font-size: 1.05rem; font-weight: 650; }
-  header p { color: var(--faint); font-size: 0.85rem; }
+  h2 { font-size: var(--t-16-8); font-weight: 650; }
+  header p { color: var(--faint); font-size: var(--t-13-6); }
   @media (max-width: 720px) {
     .sheet { width: 100%; max-width: 100%; margin: auto 0 0; border-width: 1px 0 0; border-radius: 1.25rem 1.25rem 0 0; max-height: 85dvh; }
     .body { padding-bottom: max(0.75rem, env(safe-area-inset-bottom)); }

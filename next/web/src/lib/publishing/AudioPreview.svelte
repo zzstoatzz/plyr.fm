@@ -99,7 +99,7 @@
 	.wave i { flex: 1; min-width: 1px; border-radius: 2px; background: color-mix(in srgb, var(--text) 24%, transparent); transition: height 0.25s ease; }
 	.wave i.played { background: var(--accent); }
 	.wave.pending i { opacity: 0.6; }
-	.time { flex: none; font-size: 0.8rem; color: var(--faint); font-variant-numeric: tabular-nums; }
+	.time { flex: none; font-size: var(--t-12-8); color: var(--faint); font-variant-numeric: tabular-nums; }
 	@media (max-width: 30rem) { .time { display: none; } }
 	@media (prefers-reduced-motion: reduce) { .wave i { transition: none; } }
 </style>

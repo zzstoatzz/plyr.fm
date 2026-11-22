@@ -162,10 +162,10 @@
 	.collage { display: grid; grid-template-columns: 1fr 1fr; aspect-ratio: 1; }
 	.collage :global(.artwork) { border-radius: 0; }
 	.copy { min-width: 0; display: grid; justify-items: start; }
-	.kind { color: var(--faint); font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+	.kind { color: var(--faint); font-size: var(--t-12); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
 	h1 { overflow-wrap: anywhere; line-height: 1.08; font-size: clamp(1.6rem, 4.5vw, 3.25rem); letter-spacing: -0.03em; margin-top: 0.3rem; }
-	.meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.85rem; color: var(--muted); font-size: 0.875rem; }
-	.owner { display: inline-flex; align-items: center; gap: 0.45rem; min-height: 2rem; margin-right: 0.25rem; color: var(--text); font-weight: 600; font-size: 1rem; }
+	.meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.85rem; color: var(--muted); font-size: var(--t-14); }
+	.owner { display: inline-flex; align-items: center; gap: 0.45rem; min-height: 2rem; margin-right: 0.25rem; color: var(--text); font-weight: 600; font-size: var(--t-16); }
 	.owner :global(.artwork) { width: 1.375rem; border-radius: 50%; }
 	.actions { display: flex; align-items: center; gap: 0.6rem; margin-top: 1.25rem; }
 	.short { display: none; }

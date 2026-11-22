@@ -37,10 +37,10 @@
   header, .row { display: flex; gap: 0.7rem; align-items: center; }
   header { margin-bottom: 0.75rem; }
   header .cover { width: 4rem; }
-  h1 { font-size: 1.15rem; overflow-wrap: anywhere; }
+  h1 { font-size: var(--t-18-4); overflow-wrap: anywhere; }
   .row { padding-block: 0.3rem; border-top: 1px solid var(--line); }
   .row .cover { width: 2.75rem; padding: 0; }
   .cover { border-radius: 0.4rem; overflow: hidden; flex: none; }
   .name { display: grid; min-width: 0; }
-  .name span { font-size: 0.8rem; }
+  .name span { font-size: var(--t-12-8); }
 </style>

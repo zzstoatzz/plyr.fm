@@ -156,7 +156,7 @@
   ul { list-style: none; margin: 0; padding: 0; width: 100%; }
   li { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; min-height: 2.75rem; border-bottom: 1px solid var(--line); }
   form { display: grid; gap: 0.5rem; width: 100%; }
-  label { display: grid; gap: 0.3rem; color: var(--muted); font-size: 0.9rem; }
+  label { display: grid; gap: 0.3rem; color: var(--muted); font-size: var(--t-14-4); }
   input { min-height: 2.75rem; padding: 0 0.75rem; border: 1px solid var(--line); border-radius: 0.55rem; background: var(--raised); color: var(--text); }
   input[aria-invalid='true'] { border-color: #ef4444; }
   .row { display: flex; flex-wrap: wrap; gap: 0.4rem; }

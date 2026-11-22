@@ -124,8 +124,8 @@
   .option:hover:not(:disabled) { background: var(--hover); }
   .option span:first-child { display: grid; }
   b { color: var(--text); font-weight: 600; }
-  small { color: var(--faint); font-size: 0.82rem; }
-  .error { color: var(--text); font-size: 0.875rem; }
+  small { color: var(--faint); font-size: var(--t-12-8); }
+  .error { color: var(--text); font-size: var(--t-14); }
   .spin { width: 1.1rem; height: 1.1rem; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 </style>

@@ -90,20 +90,20 @@
 	.ranges button[aria-pressed='true'] { background: color-mix(in srgb, var(--accent) 9%, var(--raised)); color: var(--accent); box-shadow: inset 0 0 0 1px var(--line); }
 	.ranking { list-style: none; padding: 0; margin: 0; }
 	.ranking li { display: grid; grid-template-columns: 1.25rem 2.625rem minmax(0, 1fr) auto; gap: 0.65rem; align-items: center; padding: 0.75rem 1rem; border-top: 1px solid var(--line); }
-	.rank { color: var(--muted); font-size: 0.85rem; text-align: center; font-variant-numeric: tabular-nums; }
+	.rank { color: var(--muted); font-size: var(--t-13-6); text-align: center; font-variant-numeric: tabular-nums; }
 	.cover { border-radius: 0.4rem; overflow: hidden; }
 	.track { display: grid; justify-items: start; min-width: 0; overflow-wrap: anywhere; }
 	.track-title { font-weight: 650; }
-	.artist { color: var(--muted); font-size: 0.875rem; }
+	.artist { color: var(--muted); font-size: var(--t-14); }
 	.likes { display: grid; text-align: right; line-height: 1.25; font-variant-numeric: tabular-nums; }
 	.likes strong { font-size: 1.2rem; }
-	.likes span { color: var(--muted); font-size: 0.75rem; }
+	.likes span { color: var(--muted); font-size: var(--t-12); }
 	.bar { width: 100%; height: 3px; border-radius: 3px; background: var(--raised); margin-top: 0.45rem; }
 	.bar span { display: block; height: 100%; background: var(--accent); border-radius: inherit; }
 	.state { margin: 0; padding: 0.8rem 1rem; }
 	section > button { margin: 0 1rem 1rem; }
 	@media (max-width: 395px) {
-		.ranges button { font-size: 0.875rem; padding-inline: 0.55rem; }
+		.ranges button { font-size: var(--t-14); padding-inline: 0.55rem; }
 		.ranking li { gap: 0.45rem; padding-inline: 0.65rem; }
 	}
 </style>

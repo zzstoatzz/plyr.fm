@@ -229,9 +229,9 @@
 	.lead { width: 2.5rem; height: 2.5rem; flex: none; border-radius: 0.4rem; overflow: hidden; display: grid; place-items: center; }
 	.lead.heart { border-radius: 50%; background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
 	.card-copy { flex: 1 1 8rem; min-width: 0; display: grid; overflow-wrap: anywhere; }
-	.card-copy small { color: var(--faint); font-size: 0.72rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+	.card-copy small { color: var(--faint); font-size: var(--t-11-2); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
 	.card-copy strong { font-weight: 600; }
-	.card .meta { color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+	.card .meta { color: var(--muted); font-size: var(--t-13-6); font-variant-numeric: tabular-nums; white-space: nowrap; }
 	.tabs { display: flex; flex-wrap: wrap; gap: clamp(0.3rem, 2.5vw, 1.25rem); border-bottom: 1px solid var(--line); }
 	.tabs button { min-height: 2.75rem; border: 0; border-bottom: 2px solid transparent; padding-inline: 0.55rem; background: none; color: var(--muted); }
 	.tabs [aria-selected="true"] { color: var(--text); font-weight: 700; border-bottom-color: var(--accent); }

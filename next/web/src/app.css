@@ -37,7 +37,22 @@
 	--s-md: 0.75rem;
 	--s-lg: 1rem;
 	--s-5xl: 3rem;
-	--t-sm: 0.875rem;
+	/* The text sizes below headings, named by their size in px at the default scale. Use these,
+	   never a raw size, so neighbours match (scripts/check-type-scale.mjs); headings and
+	   clamp() display titles from 1.2rem up set their own. */
+	--t-11-2: 0.7rem;
+	--t-12: 0.75rem;
+	--t-12-8: 0.8rem;
+	--t-13-6: 0.85rem;
+	--t-14: 0.875rem;
+	--t-14-4: 0.9rem;
+	--t-15: 0.9375rem;
+	--t-15-5: 0.96875rem;
+	--t-16: 1rem;
+	--t-16-8: 1.05rem;
+	--t-17-6: 1.1rem;
+	--t-18: 1.125rem;
+	--t-18-4: 1.15rem;
 	--c-600: var(--muted);
 	background: var(--bg);
 	color: var(--text);
@@ -122,7 +137,7 @@ input[type='range']:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 3px colo
 .hero-backdrop { position: absolute; z-index: -1; inset: calc(-1 * clamp(1rem, 3vw, 2.25rem)) calc(-1 * clamp(1rem, 3vw, 2.25rem)) -2rem; overflow: hidden; pointer-events: none;
 	mask-image: linear-gradient(to bottom, transparent, black 25%, black 45%, transparent); }
 .hero-backdrop img { width: 100%; height: 100%; object-fit: cover; filter: blur(48px) saturate(1.2); transform: scale(1.3); opacity: 0.55; }
-.hero-chip { padding: 0.3rem 0.75rem; border-radius: 999px; background: color-mix(in srgb, var(--raised) 85%, transparent); color: var(--muted); font-size: 0.875rem; font-variant-numeric: tabular-nums; }
+.hero-chip { padding: 0.3rem 0.75rem; border-radius: 999px; background: color-mix(in srgb, var(--raised) 85%, transparent); color: var(--muted); font-size: var(--t-14); font-variant-numeric: tabular-nums; }
 .hero-chip b { color: var(--text); font-weight: 700; }
 .hero-pill, .hero-round { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; height: 2.75rem; border: 0; border-radius: 999px; background: var(--raised); color: var(--text); font-weight: 700; }
 .hero-pill { padding: 0 1.25rem; white-space: nowrap; overflow-wrap: normal; }
@@ -131,6 +146,6 @@ input[type='range']:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 3px colo
 .hero-pill:hover:not(:disabled), .hero-round:hover { filter: brightness(0.96); }
 .hero-pill:disabled { opacity: 0.5; }
 @media (max-width: 720px) {
-	.hero-pill, .hero-round { height: 3rem; font-size: 1.05rem; }
+	.hero-pill, .hero-round { height: 3rem; font-size: var(--t-16-8); }
 	.hero-round { width: 3rem; }
 }

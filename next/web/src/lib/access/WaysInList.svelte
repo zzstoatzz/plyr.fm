@@ -29,14 +29,14 @@
 
 <style>
   .ways { width: min(26rem, 100%); text-align: start; display: grid; gap: 0.6rem; margin-top: 0.5rem; }
-  .lead { display: flex; align-items: center; justify-content: center; gap: 0.4rem; color: var(--muted); font-size: 0.9rem; }
+  .lead { display: flex; align-items: center; justify-content: center; gap: 0.4rem; color: var(--muted); font-size: var(--t-14-4); }
   ul { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 0.9rem; background: var(--surface); overflow: hidden; }
   li { display: flex; align-items: center; gap: 0.75rem; padding: 0.8rem 0.9rem; border-bottom: 1px solid var(--line); color: var(--muted); }
   li:last-child { border-bottom: 0; }
   .copy { flex: 1; min-width: 0; display: grid; color: var(--text); }
-  small { color: var(--faint); font-size: 0.8rem; }
-  .go { display: inline-flex; align-items: center; gap: 0.3rem; min-height: 2.75rem; padding-inline: 0.4rem; color: var(--accent); font-weight: 650; font-size: 0.9rem; white-space: nowrap; }
-  .note, .muted { color: var(--faint); font-size: 0.82rem; margin: 0 0.15rem; }
+  small { color: var(--faint); font-size: var(--t-12-8); }
+  .go { display: inline-flex; align-items: center; gap: 0.3rem; min-height: 2.75rem; padding-inline: 0.4rem; color: var(--accent); font-weight: 650; font-size: var(--t-14-4); white-space: nowrap; }
+  .note, .muted { color: var(--faint); font-size: var(--t-12-8); margin: 0 0.15rem; }
   .preview { width: 100%; margin-top: 0; }
   .preview .lead { justify-content: flex-start; }
 </style>

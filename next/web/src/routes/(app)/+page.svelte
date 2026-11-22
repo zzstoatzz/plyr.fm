@@ -244,7 +244,7 @@
 	.wall.single { inset: 0 0 0 30%; display: block; transform: none; }
 	.wall.single :global(.artwork) { height: 100%; aspect-ratio: auto; }
 	.feature-content { max-width: 65%; padding: clamp(1.2rem, 3vw, 2.5rem); }
-	.feature-content span { font-weight: 650; color: var(--accent); font-size: 0.8rem; }
+	.feature-content span { font-weight: 650; color: var(--accent); font-size: var(--t-12-8); }
 	h1 { line-height: 1.1; letter-spacing: -0.035em; }
 	.feature-content h1 { font-size: clamp(1.75rem, 4vw, 3.25rem); margin-block: 0.5rem 1.2rem; }
 	.more { min-height: 2.75rem; color: var(--muted); }
@@ -260,10 +260,10 @@
 	.chart-period { display: inline-flex; align-items: center; justify-content: flex-end; gap: 0.2rem; min-height: 2.75rem; padding: 0; border: 0; background: none; color: var(--accent); white-space: nowrap; }
 	.chart-period:hover { text-decoration: underline; text-underline-offset: 0.2em; }
 	.latest header, .chart header { display: flex; justify-content: space-between; align-items: baseline; gap: 0.65rem; padding-bottom: 0.65rem; }
-	h2 { font-size: 1.07rem; }
-	header span, header a { color: var(--muted); font-size: 0.8rem; }
+	h2 { font-size: var(--t-16-8); }
+	header span, header a { color: var(--muted); font-size: var(--t-12-8); }
 	ol { margin: 0; padding-left: 1.6rem; }
-	li::marker { color: var(--faint); font-size: 0.75rem; }
+	li::marker { color: var(--faint); font-size: var(--t-12); }
 	@media (min-width: 1240px) {
 		.home { grid-template-columns: minmax(0, 1fr) minmax(16rem, 29%); grid-template-areas: "featured atlas" "latest chart"; }
 		.home:has(:global(.following)) { grid-template-areas: "featured atlas" "following following" "latest chart"; }
