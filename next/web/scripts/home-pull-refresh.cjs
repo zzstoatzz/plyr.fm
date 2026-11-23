@@ -37,7 +37,13 @@ async function homePullRefresh(browser, origin, output) {
       const shift = () => content.evaluate(node => new DOMMatrix(getComputedStyle(node).transform).m42);
 
       await drag(page, cdp, 40);
-      await page.waitForTimeout(500);
+      // the spring back is animated; on a slow runner it can still be a pixel or two out after a fixed wait
+      await content.evaluate(node => new Promise((resolve, reject) => {
+        const started = performance.now();
+        const check = () => new DOMMatrix(getComputedStyle(node).transform).m42 === 0 ? resolve()
+          : performance.now() - started > 3000 ? reject(new Error('still pulled down')) : requestAnimationFrame(check);
+        check();
+      })).catch(() => {});
       assert.equal(reads, 1, 'a short pull springs back without refreshing');
       assert.equal(await shift(), 0, 'the page settles back to the top');
 
