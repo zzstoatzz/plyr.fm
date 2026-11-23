@@ -212,14 +212,11 @@
   }
 
   function addFiles(list: File[]) {
-    const additions: Selected[] = [];
-    const rejected: string[] = [];
+    const additions: Selected[] = [], rejected: string[] = [];
     const titles = albumTitles(list.map(file => file.name));
     for (const [index, file] of list.entries()) {
       try {
-        const audio = canonicalAudioFile(file);
-        const title = titles[index];
-        additions.push({ key: crypto.randomUUID(), file: audio, title, explicit: false, features: [], open: false });
+        additions.push({ key: crypto.randomUUID(), file: canonicalAudioFile(file), title: titles[index], explicit: false, features: [], open: false });
       } catch (failure) { rejected.push(`${file.name}: ${message(failure, 'could not open the file.')}`); }
     }
     if (selections.length + additions.length > 500) {
