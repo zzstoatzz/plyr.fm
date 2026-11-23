@@ -1,12 +1,12 @@
-import { useCallback, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, TextInput, View } from 'react-native';
 import { collectionArtwork } from '@plyr/next-core/artwork';
 import { playlistIdFromUri, type ListSummary, type Track } from '@plyr/next-core/api';
 import { playlistAddNotice, playlistName, playlistTrackCount, type PlaylistAddStatus } from '@plyr/next-core/collections/playlist-add';
-import { api } from '../api-client';
 import { useAuth } from '../auth';
 import { getAuth } from '../auth-state';
-import { Cover, errorMessage, usePages } from '../CatalogPieces';
+import { Cover, errorMessage } from '../CatalogPieces';
+import { ownPlaylists, useOwnPlaylists } from './own-playlists';
 import { Copy, inputFontSize } from '../controls';
 import { ArrowsClockwise, ListPlus, Plus } from '../icons';
 import { ActionRow } from '../ActionRow';
@@ -22,8 +22,7 @@ export function TrackPlaylistPicker({ track, done }: { track: Track; done: () =>
   const theme = useAppearance();
   const recovery = useCreateRecovery(auth, 'playlist');
   const pds = recovery.pds;
-  const load = useCallback((cursor?: string) => api.playlists({ owner_did: auth.did ?? undefined, limit: 30, cursor }), [auth.did]);
-  const lists = usePages(load);
+  const lists = useOwnPlaylists(auth.did);
   const locked = useRef(false);
   const [adding, setAdding] = useState<string>();
   const [busy, setBusy] = useState(false);
@@ -56,6 +55,7 @@ export function TrackPlaylistPicker({ track, done }: { track: Track; done: () =>
   const add = (list: ListSummary) => run(async () => {
     setAdding(list.id);
     const status = await pds.addToPlaylist(list.record.uri, track);
+    if (auth.did && (status === 'indexed' || status === 'pending')) ownPlaylists.added(auth.did, list.record.uri, track);
     if (current()) announce(playlistName(list), status, list.id);
   });
 
@@ -64,6 +64,7 @@ export function TrackPlaylistPicker({ track, done }: { track: Track; done: () =>
     if (!label || blocked) return;
     try {
       const result = await pds.createPlaylist(label, track);
+      if (auth.did) ownPlaylists.created(auth.did, result.uri, label, track);
       if (!current() || result.status !== 'indexed') return;
       const accepted = (await recovery.refresh()).find(operation => operation.uri === result.uri && operation.cid);
       if (accepted) await pds.dismissCreate(accepted).catch(() => {});
@@ -106,8 +107,8 @@ export function TrackPlaylistPicker({ track, done }: { track: Track; done: () =>
       {adding === list.id ? <ActivityIndicator color={theme.accent} /> : <Plus size={18} color={theme.faint} />}
     </Pressable>)}
     {lists.loading && <WaveLoading label="Loading playlists" />}
-    {lists.error && <><Copy>{lists.error}</Copy><ActionRow icon={ArrowsClockwise} label="retry" onPress={lists.more} /></>}
+    {lists.error && <><Copy>{lists.error}</Copy><ActionRow icon={ArrowsClockwise} label="retry" onPress={() => auth.did && ownPlaylists.retry(auth.did)} /></>}
     {!lists.loading && !lists.error && !lists.data.length && <Copy>no playlists yet. start one above.</Copy>}
-    {lists.cursor && !lists.loading && !lists.error && <ActionRow icon={ListPlus} label="more playlists" onPress={lists.more} />}
+    {lists.cursor && !lists.loading && !lists.error && <ActionRow icon={ListPlus} label="more playlists" onPress={() => auth.did && ownPlaylists.more(auth.did)} />}
   </View>;
 }
