@@ -13,8 +13,8 @@ import { glassSurface } from '../materials';
 import { Text } from '../Text';
 import { AtlasLayers } from './AtlasLayers';
 import { AtlasSelection } from './AtlasSelection';
-import { between, panBy, pinchBy, settle, still, strayed, type Live } from './camera';
-import { buildScene, hitTest, prepareAtlas, type PreparedAtlas } from './scene';
+import { between, keepOnMap, panBy, pinchBy, settle, still, strayed, type Live } from './camera';
+import { buildScene, hitTest, prepareAtlas, type PreparedAtlas, type Rect } from './scene';
 
 const OVERSCAN = 0.3;
 
@@ -24,8 +24,8 @@ export default function Atlas() {
   const atlas = useMemo(() => result.data && prepareAtlas(result.data), [result.data]);
   const [size, setSize] = useState<{ width: number; height: number }>();
   const [free, setFree] = useState<{ y: number; height: number }>();
-  const [headerHeight, setHeaderHeight] = useState<number>();
-  const clear = useMemo(() => size && free && headerHeight ? { top: headerHeight + 8, bottom: Math.max(0, size.height - free.y - free.height) } : undefined, [size, free, headerHeight]);
+  const [header, setHeader] = useState<Rect>();
+  const clear = useMemo(() => size && free && header ? { top: header.y + header.h, bottom: Math.max(0, size.height - free.y - free.height), header } : undefined, [size, free, header]);
   const onLayout = (event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
     setSize(old => old?.width === width && old.height === height ? old : { width, height });
@@ -40,7 +40,11 @@ export default function Atlas() {
         setFree(old => old?.y === y && old.height === height ? old : { y, height });
       }} />
     </SafeAreaView>
-    <View pointerEvents="none" style={[styles.header, { backgroundColor: theme.glass }]} onLayout={event => setHeaderHeight(event.nativeEvent.layout.height)}>
+    <View pointerEvents="none" style={styles.header} onLayout={event => {
+      const { x, y, width: w, height: h } = event.nativeEvent.layout;
+      setHeader(old => old?.x === x && old.y === y && old.w === w && old.h === h ? old : { x, y, w, h });
+    }}>
+      <View style={[StyleSheet.absoluteFill, styles.chip, { backgroundColor: theme.background }]} />
       <Text accessibilityRole="header" aria-level={1} style={[styles.title, { color: theme.text, fontSize: 28 * theme.scale, textShadowColor: theme.background }]}>atlas</Text>
       <Text style={{ color: theme.muted, fontSize: 13 * theme.scale, textShadowColor: theme.background, textShadowRadius: 8 }}>
         {result.data ? atlasSummary(result.data) : 'the catalog, mapped by sound'}
@@ -49,7 +53,7 @@ export default function Atlas() {
   </View>;
 }
 
-function AtlasMap({ atlas, width, height, clear }: { atlas: PreparedAtlas; width: number; height: number; clear: { top: number; bottom: number } }) {
+function AtlasMap({ atlas, width, height, clear }: { atlas: PreparedAtlas; width: number; height: number; clear: { top: number; bottom: number; header: Rect } }) {
   const theme = useAppearance();
   const [view, setView] = useState<AtlasView>(() => fitView(atlas.xs, atlas.ys, width, height, clear.top, clear.bottom + 64));
   const moved = useRef(false);
@@ -62,7 +66,10 @@ function AtlasMap({ atlas, width, height, clear }: { atlas: PreparedAtlas; width
   const state = useRef<{ view: AtlasView; live: Live; frame: number; glide: number; drawn: number; aim?: Live }>({ view, live, frame: 0, glide: 0, drawn: 0 });
   state.current.view = view;
 
-  const scene = useMemo(() => buildScene(atlas, { width, height, view, dark: theme.dark, overscan: OVERSCAN, selected }), [atlas, width, height, view, theme.dark, selected]);
+  const [pill, setPill] = useState({ w: 0, h: 0 });
+  // labels keep out from under the title chip and the zoom pill
+  const keepOut = useMemo(() => [clear.header, { x: width - 12 - pill.w, y: height - clear.bottom - 12 - pill.h, w: pill.w, h: pill.h }], [clear, width, height, pill]);
+  const scene = useMemo(() => buildScene(atlas, { width, height, view, dark: theme.dark, overscan: OVERSCAN, selected, keepOut }), [atlas, width, height, view, theme.dark, selected, keepOut]);
 
   /** draw the moved map again at rest, in the same render that drops the move */
   const commit = useCallback(() => {
@@ -70,11 +77,11 @@ function AtlasMap({ atlas, width, height, clear }: { atlas: PreparedAtlas; width
     if (s.live === still) return;
     moved.current = true;
     s.drawn = Date.now();
-    s.view = settle(s.view, s.live, width, height);
+    s.view = keepOnMap(settle(s.view, s.live, width, height), atlas.bounds);
     s.live = still;
     setView(s.view);
     setLive(still);
-  }, [width, height]);
+  }, [atlas, width, height]);
 
   const move = useCallback((next: Live) => {
     moved.current = true;
@@ -122,11 +129,13 @@ function AtlasMap({ atlas, width, height, clear }: { atlas: PreparedAtlas; width
       vx *= decay;
       vy *= decay;
       move(panBy(state.current.live, vx * dt, vy * dt));
+      const at = settle(state.current.view, state.current.live, width, height);
+      if (keepOnMap(at, atlas.bounds) !== at) vx = vy = 0;
       if (Math.hypot(vx, vy) > 20) state.current.glide = requestAnimationFrame(step);
       else { state.current.glide = 0; commit(); }
     };
     state.current.glide = requestAnimationFrame(step);
-  }, [theme.reduceMotion, move, commit, stopGlide]);
+  }, [atlas, width, height, theme.reduceMotion, move, commit, stopGlide]);
 
   /** zoom by `factor` about (x, y); a press while one is easing builds on where that one was heading */
   const zoomAt = useCallback((factor: number, x = width / 2, y = height / 2) => {
@@ -199,7 +208,10 @@ function AtlasMap({ atlas, width, height, clear }: { atlas: PreparedAtlas; width
     <View pointerEvents="box-none" style={[styles.controls, { bottom: clear.bottom + 12 }]}>
       {selected >= 0 ? <AtlasSelection key={selected} point={atlas.data.points[selected]} onClose={() => setSelected(-1)} />
         : <View style={styles.flex} />}
-      <View style={[styles.zoom, glassSurface(theme)]}>
+      <View style={[styles.zoom, glassSurface(theme)]} onLayout={event => {
+        const { width: w, height: h } = event.nativeEvent.layout;
+        setPill(old => old.w === w && old.h === h ? old : { w, h });
+      }}>
         <Round label="Zoom in" onPress={() => zoomAt(1.5)}><Plus size={20} color={theme.text} /></Round>
         <Round label="Zoom out" onPress={() => zoomAt(1 / 1.5)}><Minus size={20} color={theme.text} /></Round>
       </View>
@@ -211,7 +223,8 @@ const styles = StyleSheet.create({
   fill: { flex: 1, overflow: 'hidden' },
   flex: { flex: 1 },
   notice: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  header: { position: 'absolute', top: 8, left: 12, alignSelf: 'flex-start', maxWidth: '80%', gap: 2, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16 },
+  header: { position: 'absolute', top: 8, left: 12, alignSelf: 'flex-start', maxWidth: '80%', gap: 2, paddingHorizontal: 12, paddingVertical: 8 },
+  chip: { borderRadius: 16, opacity: 0.88 },
   title: { fontWeight: '800', letterSpacing: -0.8, textShadowRadius: 10 },
   controls: { position: 'absolute', left: 12, right: 12, flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
   zoom: { borderRadius: 28, padding: 4, gap: 4 }

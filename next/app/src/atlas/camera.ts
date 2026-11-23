@@ -43,3 +43,10 @@ export function between(from: Live, to: Live, t: number): Live {
   const e = 1 - (1 - t) ** 3;
   return { s: from.s + (to.s - from.s) * e, tx: from.tx + (to.tx - from.tx) * e, ty: from.ty + (to.ty - from.ty) * e };
 }
+
+/** the view, moved so the middle of the screen stays over the catalog; the same object when it already does */
+export function keepOnMap(view: AtlasView, bounds: { x0: number; x1: number; y0: number; y1: number }): AtlasView {
+  const panX = Math.max(-bounds.x1, Math.min(-bounds.x0, view.panX));
+  const panY = Math.max(-bounds.y1, Math.min(-bounds.y0, view.panY));
+  return panX === view.panX && panY === view.panY ? view : { ...view, panX, panY };
+}

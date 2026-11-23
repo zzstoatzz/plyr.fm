@@ -14,6 +14,8 @@ export interface PreparedAtlas {
   clusters: Neighborhood[];
   links: Uint32Array;
   grid: PointGrid;
+  /** the catalog's extent, which the middle of the screen stays over */
+  bounds: { x0: number; x1: number; y0: number; y1: number };
 }
 
 export function prepareAtlas(data: AtlasData): PreparedAtlas {
@@ -36,12 +38,14 @@ export function prepareAtlas(data: AtlasData): PreparedAtlas {
     regions: neighborhoods(data.clusters.coarse, xs, ys, data.points.map(p => p.clusterCoarse), core, steps),
     clusters: neighborhoods(data.clusters.fine, xs, ys, fine, core, steps),
     links: neighborLinks(xs, ys, fine),
-    grid: new PointGrid(xs, ys)
+    grid: new PointGrid(xs, ys),
+    bounds: { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) }
   };
 }
 
 /** One frame of the map, in screen pixels. Shapes reach `overscan` of a screen past each edge so a pan has something to reveal. */
-export interface Frame { width: number; height: number; view: AtlasView; dark: boolean; overscan: number; selected: number }
+export interface Rect { x: number; y: number; w: number; h: number }
+export interface Frame { width: number; height: number; view: AtlasView; dark: boolean; overscan: number; selected: number; keepOut?: Rect[] }
 
 export interface Glow { key: number; x: number; y: number; r: number; step: number; opacity: number }
 export interface Label { key: string; text: string; x: number; y: number; size: number; weight: '500' | '600' | '700'; alpha: number }
@@ -213,7 +217,8 @@ function placeLabels(atlas: PreparedAtlas, frame: Frame, at: { scale: number; cx
   const PAD = 2;
   const MARGIN = 8;
   const placed = [...faces.map(f => ({ x: f.x, y: f.y, hw: f.r + 2, hh: f.r + 2 })),
-    ...covers.map(c => ({ x: c.x, y: c.y, hw: c.size / 2 + 2, hh: c.size / 2 + 2 }))];
+    ...covers.map(c => ({ x: c.x, y: c.y, hw: c.size / 2 + 2, hh: c.size / 2 + 2 })),
+    ...(frame.keepOut ?? []).map(r => ({ x: r.x + r.w / 2, y: r.y + r.h / 2, hw: r.w / 2, hh: r.h / 2 }))];
   const labels: Label[] = [];
   const fits = (x: number, halfW: number) => x - halfW >= MARGIN && x + halfW <= W - MARGIN;
   const place = (x: number, y: number, w: number, h: number) => {

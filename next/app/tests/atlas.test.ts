@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { AtlasData } from '@plyr/next-core/atlas/types';
 import { fitView, viewScale } from '@plyr/next-core/atlas/view';
-import { between, panBy, pinchBy, settle, still, strayed } from '../src/atlas/camera.ts';
+import { between, keepOnMap, panBy, pinchBy, settle, still, strayed } from '../src/atlas/camera.ts';
 import { buildScene, hitTest, prepareAtlas, project } from '../src/atlas/scene.ts';
 
 function fixture(): AtlasData {
@@ -90,4 +90,20 @@ test('a tap finds the artist face first, then the nearest track, then nothing', 
   const hit = hitTest(atlas, { ...size, view }, px + 2, py + 2);
   assert.ok(hit && 'point' in hit);
   assert.equal(hitTest(atlas, { ...size, view }, ...at.toScreen(3, 3)), null);
+});
+
+test('a hard flick can never throw the catalog off screen', () => {
+  const view = { zoom: 2, panX: 0, panY: 0 };
+  assert.equal(keepOnMap(view, atlas.bounds), view);
+  const thrown = keepOnMap({ zoom: 2, panX: -40, panY: 30 }, atlas.bounds);
+  assert.equal(-thrown.panX, atlas.bounds.x1);
+  assert.equal(-thrown.panY, atlas.bounds.y0);
+});
+
+test('labels keep out from under the title chip and the zoom pill', () => {
+  const view = fitView(atlas.xs, atlas.ys, size.width, size.height);
+  const keepOut = [{ x: 0, y: 0, w: size.width, h: 340 }];
+  const scene = buildScene(atlas, { ...size, view, dark: false, overscan: 0.25, selected: -1, keepOut });
+  assert.ok(scene.labels.length > 0);
+  for (const l of scene.labels) assert.ok(l.y - l.size / 2 >= 340, `${l.text} sits under the chip`);
 });
