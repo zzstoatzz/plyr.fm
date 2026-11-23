@@ -330,7 +330,7 @@
 </div>
 
 {#if account.did}
-	<AccountMenu bind:this={accountMenu} identity={account.handle ? '@' + account.handle : account.did} uploads={uploading} onShortcuts={openShortcuts} />
+	<AccountMenu bind:this={accountMenu} handle={account.handle} name={identity?.did === did ? identity?.name : undefined} avatar={identity?.did === did ? identity?.avatar : undefined} uploads={uploading} onShortcuts={openShortcuts} />
 	<PdsAudioSheet />
 {/if}
 

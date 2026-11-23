@@ -49,6 +49,8 @@ export type OtherAccount = AccountIdentity & { signedIn: boolean };
 
 /** dids this browser still holds a session for: the SDK's own store, read without refreshing anything */
 async function storedSessions(): Promise<Set<string>> {
+	// opening a database that doesn't exist yet would create it empty, under the SDK's own name and version
+	if (!await mayHaveSession()) return new Set();
 	try {
 		const db = await new Promise<IDBDatabase>((resolve, reject) => {
 			const request = indexedDB.open('@atproto-oauth-client');
