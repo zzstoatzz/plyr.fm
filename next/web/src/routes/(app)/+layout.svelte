@@ -265,7 +265,7 @@
 		<div class="brand-row">
 			<LinksMenu onShortcuts={openShortcuts} /><a class="brand" aria-label="plyr.fm home" href="/">plyr.fm</a>
 			<button type="button" class="sidebar-toggle" aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-expanded={!collapsed} onclick={toggleSidebar}>
-				<Icon name="ph_sidebar" size={20} /><span class="label">{collapsed ? 'expand' : 'collapse'} <kbd>{sidebarKey}</kbd></span>
+				<Icon name="sidebar" size={20} stroke={1.6} /><span class="label">{collapsed ? 'expand' : 'collapse'} <kbd>{sidebarKey}</kbd></span>
 			</button>
 		</div>
 		<a class="search-field desktop-only" href="/search" onclick={holdKeyboard} class:active={page.url.pathname === '/search'} aria-current={page.url.pathname === '/search' ? 'page' : undefined}>
@@ -392,7 +392,11 @@
 		.collapsed .sidebar-toggle { margin-left: 0; width: 100%; height: 2.5rem; }
 		.collapsed nav .search-field { justify-content: center; padding: 0; background: none; border-color: transparent; }
 		.collapsed nav .search-field:hover { background: var(--raised); }
-		.collapsed nav .account { justify-content: center; padding: 0.375rem 0; }
+		/* collapsed, the account is just the avatar circle */
+		.collapsed nav .account, .collapsed nav .account:hover { justify-content: center; min-height: 2.75rem; padding: 0; border: 0; background: none; }
+		.collapsed nav .account .profile-avatar { box-shadow: 0 0 0 2px transparent; transition: box-shadow 0.15s; }
+		.collapsed nav .account:hover .profile-avatar { box-shadow: 0 0 0 2px var(--line); }
+		.collapsed nav .account.active .profile-avatar { box-shadow: 0 0 0 2px var(--accent); }
 		.collapsed nav .account .tab-label { width: auto; height: auto; overflow: visible; clip-path: none; }
 		.collapsed .group-label { height: 1px; margin: 0.9rem 0.6rem; padding: 0; overflow: hidden; color: transparent; background: var(--line); }
 	}
