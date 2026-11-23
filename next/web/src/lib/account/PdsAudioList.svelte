@@ -3,22 +3,20 @@
   import { trackIdFromUri } from '@plyr/next-core/record-ids';
   import Artwork from '$lib/ui/Artwork.svelte';
   import Icon from '$lib/ui/Icon.svelte';
+  import { gapReason, gapSize } from '@plyr/next-core/publishing/pds-audio-store';
   import { pdsAudio } from './pds-audio.svelte';
 
   let { gaps }: { gaps: AudioGap[] } = $props();
-
-  const size = (bytes?: number) => bytes === undefined ? '' : bytes >= 1_000_000_000 ? `${(bytes / 1_000_000_000).toFixed(1)} GB` : `${Math.max(1, Math.round(bytes / 1_000_000))} MB`;
-  const why = (gap: AudioGap) => gap.tooBig ? 'too big for your PDS' : gap.kind === 'lost' ? 'your PDS lost this file' : 'only on plyr.fm';
 </script>
 
 <ul class="gaps">
   {#each gaps as gap (gap.uri)}
-    {@const row = pdsAudio.rows[gap.uri]}
+    {@const row = pdsAudio.state.rows[gap.uri]}
     <li>
       <span class="thumb"><Artwork src={gap.imageUrl} size={36} /></span>
       <span class="names">
         <b>{gap.title}</b>
-        <small>{why(gap)}{#if gap.sizeBytes !== undefined}{' · '}{size(gap.sizeBytes)}{/if}</small>
+        <small>{gapReason(gap)}{#if gap.sizeBytes !== undefined}{' · '}{gapSize(gap.sizeBytes)}{/if}</small>
       </span>
       {#if gap.tooBig || row?.state === 'too-big'}
         <span class="state">stays on plyr.fm</span>

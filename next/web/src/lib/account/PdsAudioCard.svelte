@@ -1,28 +1,29 @@
 <script lang="ts">
+  import { apology, movingCopy, offerCopy, resultCopy } from '@plyr/next-core/publishing/pds-audio-store';
   import Icon from '$lib/ui/Icon.svelte';
   import PdsAudioList from './PdsAudioList.svelte';
   import { pdsAudio } from './pds-audio.svelte';
-  import { offerCopy, resultCopy } from './pds-audio-copy';
 
   // On the you page while something of yours isn't on your PDS, then the move's progress and outcome.
   let whyOpen = $state(false);
-  const offer = $derived(offerCopy(pdsAudio.fixable.length));
-  const result = $derived(resultCopy(pdsAudio.gaps, pdsAudio.rows));
+  const audio = $derived(pdsAudio.state);
+  const offer = $derived(offerCopy(audio.fixable.length));
+  const progress = $derived(movingCopy(audio));
+  const result = $derived(resultCopy(audio));
 </script>
 
-{#if pdsAudio.showCard}
+{#if audio.showCard}
   <section class="gap-card" aria-label="audio not on your PDS" aria-live="polite">
-    {#if pdsAudio.moving}
-      {@const done = pdsAudio.fixable.filter(gap => pdsAudio.rows[gap.uri]?.state === 'moved').length}
+    {#if audio.moving}
       <div class="top">
         <span class="ico" aria-hidden="true"><span class="spin"></span></span>
         <div class="words">
-          <h2>moving {pdsAudio.fixable.length === 1 ? 'your track' : `${pdsAudio.fixable.length} tracks`} to your PDS</h2>
-          <p>{done} of {pdsAudio.fixable.length} done. you can leave this page, it keeps going.</p>
+          <h2>{progress.title}</h2>
+          <p>{progress.detail}</p>
         </div>
       </div>
-      <PdsAudioList gaps={pdsAudio.gaps} />
-    {:else if pdsAudio.finished}
+      <PdsAudioList gaps={audio.gaps} />
+    {:else if audio.finished}
       <div class="top">
         <span class="ico" class:ok={result.allMoved} aria-hidden="true"><Icon name={result.allMoved ? 'check' : 'cloud_up'} size={21} /></span>
         <div class="words">
@@ -32,7 +33,7 @@
         {#if result.allMoved}<button class="text-button" type="button" aria-label="close" onclick={pdsAudio.close}><Icon name="x" size={16} /></button>{/if}
       </div>
       {#if !result.allMoved}
-        <PdsAudioList gaps={pdsAudio.gaps} />
+        <PdsAudioList gaps={audio.gaps} />
         <div class="end">
           {#if result.retry}<button class="text-button" type="button" onclick={pdsAudio.moveAll}>try again</button>{/if}
           <button class="text-button" type="button" onclick={pdsAudio.close}>done</button>
@@ -47,13 +48,13 @@
         </div>
         <div class="buttons">
           <button class="text-button later" type="button" onclick={pdsAudio.dismiss}>not now</button>
-          <button class="go" type="button" onclick={pdsAudio.moveAll}><Icon name="upload" size={17} /><span>move {pdsAudio.fixable.length === 1 ? 'it' : 'them'}<span class="long"> to your PDS</span></span></button>
+          <button class="go" type="button" onclick={pdsAudio.moveAll}><Icon name="upload" size={17} /><span>move {audio.fixable.length === 1 ? 'it' : 'them'}<span class="long"> to your PDS</span></span></button>
         </div>
       </div>
       <button class="why" type="button" aria-expanded={whyOpen} onclick={() => { whyOpen = !whyOpen; }}>
-        <Icon name="info" size={15} /><span>{#if whyOpen}sometimes a bug on our side or a hiccup at your PDS host leaves audio behind. sorry about that.{:else}<u>why did this happen?</u>{/if}</span>
+        <Icon name="info" size={15} /><span>{#if whyOpen}{apology}{:else}<u>why did this happen?</u>{/if}</span>
       </button>
-      <div class="list"><PdsAudioList gaps={pdsAudio.gaps} /></div>
+      <div class="list"><PdsAudioList gaps={audio.gaps} /></div>
     {/if}
   </section>
 {/if}

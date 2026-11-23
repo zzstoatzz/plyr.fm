@@ -1,6 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
+  import { apology, sheetCopy } from '@plyr/next-core/publishing/pds-audio-store';
   import Icon from '$lib/ui/Icon.svelte';
   import Sheet from '$lib/ui/Sheet.svelte';
   import PdsAudioList from './PdsAudioList.svelte';
@@ -10,10 +11,11 @@
   // After that the card on the you page carries it.
   let sheet: Sheet;
   let shown = false;
-  const count = $derived(pdsAudio.fixable.length);
+  const count = $derived(pdsAudio.state.fixable.length);
+  const copy = $derived(sheetCopy(count));
 
   $effect(() => {
-    if (pdsAudio.showSheet && !shown) { shown = true; sheet.show(); }
+    if (pdsAudio.state.showSheet && !shown) { shown = true; sheet.show(); }
   });
 
   function move() {
@@ -25,11 +27,11 @@
   }
 </script>
 
-<Sheet bind:this={sheet} title="some of your audio isn't on your PDS" onclose={() => { if (shown) pdsAudio.markAsked(); }}>
+<Sheet bind:this={sheet} title={copy.title} onclose={() => { if (shown) pdsAudio.markAsked(); }}>
   <div class="body">
-    <p>{count === 1 ? "one of your tracks isn't" : `${count} of your tracks aren't`} on your PDS right now. plyr.fm can put {count === 1 ? 'it' : 'them'} there, where the rest of your stuff lives. {count === 1 ? 'it keeps' : 'they keep'} playing the whole time.</p>
-    <p class="why"><Icon name="info" size={15} /><span>sometimes a bug on our side or a hiccup at your PDS host leaves audio behind. sorry about that.</span></p>
-    <div class="list"><PdsAudioList gaps={pdsAudio.gaps} /></div>
+    <p>{copy.detail}</p>
+    <p class="why"><Icon name="info" size={15} /><span>{apology}</span></p>
+    <div class="list"><PdsAudioList gaps={pdsAudio.state.gaps} /></div>
     <button class="go" type="button" onclick={move}><Icon name="upload" size={18} />move {count === 1 ? 'it' : 'them'} to your PDS</button>
     <button class="text-button later" type="button" onclick={() => { pdsAudio.markAsked(); sheet.close(); }}>not now</button>
   </div>

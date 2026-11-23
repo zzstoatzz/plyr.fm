@@ -152,3 +152,40 @@ test('a file over 100 MB stays with plyr.fm instead of failing', async () => {
   assert.equal(fixture.uploads.length, 0);
   assert.ok(!calls.includes('GET https://audio.plyr.fm/audio/big.wav'));
 });
+
+test('the store asks once per account, "not now" lasts until the tracks change, and a move reports each track', async () => {
+  const { createPdsAudioStore } = await import('../src/publishing/pds-audio-store.ts');
+  const fixture = repo({ a: { title: 'bog bender', audioUrl: media }, d: { title: 'huge', audioUrl: 'https://audio.plyr.fm/audio/big.wav' } });
+  const { fetcher } = network();
+  const saved = new Map<string, string>();
+  let account = { did: did as `did:${string}:${string}`, rpc: fixture.rpc, ready: true };
+  const authListeners = new Set<() => void>();
+  const make = () => createPdsAudioStore({ getAuth: () => account, subscribeAuth: listener => authListeners.add(listener), collection, fetcher,
+    pdsEndpoint: async () => pds, storage: { read: key => saved.get(key) ?? null, write: (key, value) => { saved.set(key, value); } } });
+  let store = make();
+  await store.check();
+  assert.equal(store.snapshot.fixable.length, 1);
+  assert.equal(store.snapshot.gaps.length, 2);
+  assert.ok(store.snapshot.showSheet && store.snapshot.showCard);
+  store.dismiss();
+  assert.ok(!store.snapshot.showSheet && !store.snapshot.showCard);
+  // a fresh session on the same device remembers both
+  store = make();
+  await store.check();
+  assert.ok(!store.snapshot.showSheet && !store.snapshot.showCard);
+  // a new gap brings the card back, but the sign-in ask was already used
+  fixture.records.e = { title: 'new', audioUrl: media };
+  fixture.cids.set('e', 'bafyreie0');
+  store = make();
+  await store.check();
+  assert.ok(store.snapshot.showCard && !store.snapshot.showSheet);
+  await store.moveAll();
+  assert.deepEqual(Object.values(store.snapshot.rows).map(row => row.state).sort(), ['moved', 'moved', 'too-big']);
+  assert.ok(store.snapshot.finished && store.snapshot.showCard);
+  store.close();
+  assert.ok(!store.snapshot.showCard);
+  // signing out clears it
+  account = { did: null as any, rpc: null as any, ready: true };
+  for (const listener of authListeners) listener();
+  assert.equal(store.snapshot.gaps.length, 0);
+});
