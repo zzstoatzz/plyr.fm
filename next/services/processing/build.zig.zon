@@ -1,0 +1,23 @@
+.{
+    .name = .next_processing,
+    .version = "0.1.0",
+    .fingerprint = 0x37fb40e8a81d1f2a,
+    .dependencies = .{
+        // the backend's pin (next/backend/build.zig.zon)
+        .httpz = .{
+            .url = "https://tangled.org/zzstoatzz.io/http.zig/archive/32df781d1a28743436ab5f2620d294d3287a5b0f.tar.gz",
+            .hash = "httpz-0.0.0-PNVzrIybCQDv1ZMj9sPAWoQYDc7d_peS_kGV-LaBP69N",
+        },
+        .hegel = .{
+            .url = "https://tangled.org/zzstoatzz.io/hegel-zig/archive/619a904f55fdfafc7b31fee763f732ce60c6cb73.tar.gz",
+            .hash = "hegel-0.0.0-1OMgSbDLmwDlvaT4eqcrRtiYuV06ftNfj09JEMYtVKmo",
+            .lazy = true,
+        },
+    },
+    .minimum_zig_version = "0.17.0",
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}

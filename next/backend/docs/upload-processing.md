@@ -1,7 +1,7 @@
 # upload processing
 
 This contract extends the Next public/open upload journey to retain an original
-and publish an MP3 playback rendition. Implementation is staged: the Rust
+and publish an MP3 playback rendition. Implementation is staged: the
 execution seam and audio Worker owner-state integration precede the client.
 It is not enabled by deploying source alone.
 
@@ -9,8 +9,8 @@ It is not enabled by deploying source alone.
 
 The client reserves one canonical record URI before uploading, and alone writes
 that record. The audio owner's Durable Object retains the immutable source,
-processing recipe, output reservation, attempts and receipts. The existing Rust
-staging transcoder executes disposable attempts; it owns no PDS credentials.
+processing recipe, output reservation, attempts and receipts. The zig executor
+(`next/services/processing`) runs disposable attempts; it owns no PDS credentials.
 The exact-CID mirror remains unchanged.
 
 Source admission remains 1.5 GiB. Processing uses `mp3-320k-44100-v1`.
@@ -37,21 +37,21 @@ generation's source, heartbeat, output parts and completion; it is never logged
 or sent to the client. The transcoder callback origin is configured, never
 supplied as an arbitrary request URL.
 
-Rust pulls the source into a temporary file, encodes to a second temporary file,
+The executor pulls the source into a temporary file, encodes to a second temporary file,
 and uploads sequential 10 MiB output parts. It never buffers a whole file.
 Part sizes and hashes are checked before R2 receipts become authoritative.
 Completion includes exact output size, integer duration and the complete ordered
-part set. Rust probes only its generated MP3, with a separate 15-second deadline
+part set. It probes only its generated MP3, with a separate 15-second deadline
 and at most 64 bytes of stdout. Duration rounds to seconds for the existing track
 field; it is service metadata until the client writes the canonical record.
 The DO reconciles lost part/completion replies through persisted digests and
 R2 object metadata before making the rendition ready.
 
-One execution slot bounds Rust resource use. Duplicate active dispatches are
+One execution slot bounds executor resource use. Duplicate active dispatches are
 idempotent; other attempts receive a retryable busy response. Heartbeats extend
 the DO lease. Loss of authority stops the attempt and kills ffmpeg. An expired
 lease permits a fresh generation; stale callbacks cannot change that generation.
-Rust restarts can require re-encoding, but never a new canonical record key.
+Executor restarts can require re-encoding, but never a new canonical record key.
 Automatic attempts are bounded, followed by explicit retry. Alarms do short
 lease/reconciliation/dispatch work, never wait for an encode.
 
@@ -91,7 +91,7 @@ exists. A fixture can retain its exact private rendition key
 capability. Published manifests distinguish processed uploads with
 `processed: true`; raw uploads report false and need no original/rendition choice.
 
-Rust's individual attempt deadline is two hours, with 20-second heartbeats and
+The executor's individual attempt deadline is two hours, with 20-second heartbeats and
 a 15-second heartbeat request timeout. The owner must fence expired generations
 and reject heartbeats after completion. Cloud full-size tests must establish
 whether this execution budget is sufficient before enabling the journey.
@@ -122,7 +122,7 @@ does not enable them. [FFmpeg documents these defaults](https://ffmpeg.org/ffmpe
 The regression verifies an HTTP-referencing manifest makes zero requests and a
 local concat manifest cannot read another file. These restrictions are specific
 to this new execution path; legacy transcoding is unchanged.
-The Docker build runs the executor tests with its pinned Rust 1.85 and static
+The Docker build runs the executor tests with its pinned Zig 0.17.0 and static
 ffmpeg 7.0.2, so host-toolchain results alone cannot satisfy the release check.
 
 ## runtime constraints
@@ -133,7 +133,7 @@ path obtains output length from file metadata and sends bounded multipart parts;
 the legacy endpoint and its response remain unchanged.
 
 Cloudflare documents a default 100 MiB outbound DO request-body limit, which
-streaming and multipart form encoding do not bypass. Therefore Rust pulls the
+streaming and multipart form encoding do not bypass. Therefore the executor pulls the
 source rather than receiving a 1.5 GiB DO POST. DO alarms have a 15-minute wall
 limit; `waitUntil` only adds 30 seconds after disconnect. R2 multipart streams
 require known lengths, with uniform parts except the final part.
@@ -143,6 +143,14 @@ require known lengths, with uniform parts except the final part.
 - [R2 multipart API](https://developers.cloudflare.com/r2/api/workers/workers-api-reference/)
 
 ## executor and isolation
+
+The executor is Zig 0.17 on httpz, like the backend. Losing the lease, a
+stalled source (60 seconds with no bytes) or the two-hour deadline cancels the
+transfer through `std.Io` cancellation, which interrupts blocked socket reads
+and kills ffmpeg; per-callback deadlines work the same way. `zig build test`
+runs the format, lease, budget and manifest fixtures against the real ffmpeg,
+and `zig build fuzz -Dhegel` runs property harnesses over the start request,
+the callback origin and ffprobe output.
 
 The executor is `next/services/processing`, deployed as the Next-owned Fly app
 `plyr-next-processing` by `deploy-next-processing.yml`. It shares no source,
@@ -165,18 +173,33 @@ The app keeps one machine running with auto-stop off: after its single inbound
 dispatch an attempt has only outbound callback traffic, which does not keep a
 Fly machine alive.
 
+## paid processing seam
+
+Processing may become a paid feature. Two places carry it without changing
+the executor:
+
+- Entitlement or quota: `authorize` in `next/backend/src/internal/uploads/admission.zig`
+  verifies the owner's DID before it signs a claim carrying the recipe and
+  output budget. A per-owner check belongs right after that verification; an
+  owner without the entitlement gets no processing claim, so no attempt is ever
+  dispatched for them. The executor knows no user identity by design.
+- Metering: each finished attempt logs one `processing usage` line (upload ID,
+  generation, recipe, source and output bytes, duration, download/encode/total
+  milliseconds), and the owner DO keeps the rendition's size and duration per
+  job. Billing would read the DO's records keyed by owner, not executor logs.
+
 ## acceptance
 
 Local owner fixtures exercise actual workerd/R2-emulator admission, retained
 source, rendition parts/completion, eviction, publication gates, range downloads,
 lease fencing, a held stale part, lost part/completion replies and ambiguous
-abort recovery. They use a stub executor dispatch, not a deployed Rust/R2 pair.
+abort recovery. They use a stub executor dispatch, not a deployed executor/R2 pair.
 Executor fixtures independently cover format compatibility, source authority,
 mid-flight lease loss, output bounds and multipart completion. Full owner/executor
 integration must still verify duplicate dispatch, source mismatch, stale
 completion and cleanup against the deployed services.
 Cloud acceptance must exercise a synthetic 1.5 GiB source through the actual
-staging Rust service and R2 multipart path, verify bounded memory and both
+staging executor and R2 multipart path, verify bounded memory and both
 original and rendition downloads after fixture publication, then clean up exact
 fixture objects and records. Run only while shared staging integration is idle.
 An HTTP sink or emulator alone does not establish deployed R2 acceptance.
