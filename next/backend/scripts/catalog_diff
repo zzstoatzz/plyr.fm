@@ -62,8 +62,37 @@ SELECT bucket, uri, plays, gate FROM bucketed
 WHERE bucket <> 'indexed' AND uri <> ''
 ORDER BY bucket, plays DESC, uri LIMIT 400;
 
+\copy (SELECT uri FROM bucketed WHERE bucket LIKE 'missing:%' ORDER BY uri) TO '$work/missing.txt'
+
 \echo '## prod-only rows per artist'
 SELECT artist_did, count(*) AS tracks, sum(plays) AS plays FROM bucketed
 WHERE bucket = 'no PDS record (prod-only row)' GROUP BY artist_did ORDER BY tracks DESC LIMIT 50;
 ROLLBACK;
 SQL
+
+# Each missing record, asked of its own PDS: still there means next has to
+# pick it up; gone means prod's row outlived the record.
+echo '## missing records on their PDS'
+declare -A pds_of
+while IFS= read -r uri; do
+    did="$(cut -d/ -f3 <<< "$uri")"; rkey="$(cut -d/ -f5 <<< "$uri")"
+    if [[ -z "${pds_of[$did]+x}" ]]; then
+        case "$did" in
+            did:plc:*) doc="$(curl -sf --max-time 10 "https://plc.directory/$did" || true)" ;;
+            did:web:*) doc="$(curl -sf --max-time 10 "https://${did#did:web:}/.well-known/did.json" || true)" ;;
+            *) doc="" ;;
+        esac
+        [[ -n "$doc" ]] || doc='{}'
+        pds_of[$did]="$(jq -r --arg d "$did" '[.service[]? | select(.id == "#atproto_pds" or .id == ($d + "#atproto_pds")) | .serviceEndpoint][0] // ""' <<< "$doc" 2>/dev/null || true)"
+    fi
+    pds="${pds_of[$did]}"
+    if [[ -z "$pds" ]]; then echo "no PDS in DID doc  $uri"; continue; fi
+    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$pds/xrpc/com.atproto.repo.getRecord?repo=$did&collection=fm.plyr.track&rkey=$rkey" || true)"
+    case "$code" in
+        200) echo "on PDS ($pds)  $uri" ;;
+        400) echo "gone from PDS  $uri" ;;
+        *) echo "PDS answered $code ($pds)  $uri" ;;
+    esac
+done < "$work/missing.txt" | sort | tee "$work/pds.txt"
+echo '## missing records on their PDS, counted'
+sed -E 's/ +at:.*//; s/ \(https?:[^)]*\)//' "$work/pds.txt" | sort | uniq -c
