@@ -14,11 +14,13 @@ on:
       - "next/backend/migrations/0048_add_moderation_log.sql"
       - "next/backend/migrations/0050_add_moderation_rules_state.sql"
       - "next/backend/migrations/0056_add_image_scans.sql"
+      - "next/backend/migrations/0058_backfill_cover_checks.sql"
       - ".github/workflows/next-osprey.yml"
   push:
     branches: [main]
     paths:
       - "next/services/osprey/**"
+      - "next/backend/migrations/0058_backfill_cover_checks.sql"
       - ".github/workflows/next-osprey.yml"
   schedule:
     - cron: "*/10 * * * *"
@@ -64,7 +66,8 @@ jobs:
     # a push runs it once the tests pass; the schedule and a manual run skip the tests
     if: always() && github.ref == 'refs/heads/main' && !inputs.check_direct_pds && (needs.test.result == 'success' || needs.test.result == 'skipped')
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # a backfill can take more than one run; each record's result is kept as it goes
+    timeout-minutes: 60
     concurrency:
       group: next-osprey-run
       cancel-in-progress: false

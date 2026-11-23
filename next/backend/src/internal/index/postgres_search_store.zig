@@ -321,6 +321,8 @@ const search_query =
     \\  FROM plyr_index.list_records AS records
     \\  JOIN plyr_index.account_availability AS aa
     \\    ON aa.repo_did = records.owner_did AND aa.available
+    \\    AND NOT EXISTS (SELECT 1 FROM plyr_index.list_policies AS list_pol
+    \\      WHERE list_pol.record_uri = records.record_uri AND list_pol.moderation_decision = 'exclude')
     \\  JOIN plyr_index.actor_identities AS a ON a.did = records.owner_did
     \\  WHERE records.collection = $3 AND NOT records.deleted AND records.name IS NOT NULL
     \\    AND ((records.list_type = 'album' AND $7::boolean)

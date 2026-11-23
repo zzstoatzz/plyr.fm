@@ -49,6 +49,8 @@ pub const QueueItem = struct {
     trackTitle: ?[]const u8,
     trackOwner: ?[]const u8,
     decision: ?[]const u8,
+    /// `album` or `playlist` when the subject is a list
+    listType: ?[]const u8 = null,
 };
 
 /// `unknown`: the subject is not a track, comment or account plyr has seen.
@@ -115,7 +117,10 @@ pub const PostgresModerationLog = struct {
         try exec(conn, "SELECT pg_advisory_xact_lock(hashtext('moderation-subject:' || $1))", .{entry.subject});
         const id = try insert(conn, entry);
         if (entry.action.decision()) |decision| {
-            if (log.isTrack(entry.subject, self.track_collection)) try project(conn, entry.subject, decision);
+            if (log.isTrack(entry.subject, self.track_collection))
+                try project(conn, entry.subject, decision)
+            else if (log.isList(entry.subject, self.track_collection))
+                try projectList(conn, entry.subject, decision);
         }
         if (signed) |label| {
             try labels.insert(conn, label, id);
@@ -146,6 +151,7 @@ pub const PostgresModerationLog = struct {
                 .trackTitle = try dupeOptional(allocator, row.get(?[]const u8, 4) catch return error.Corrupt),
                 .trackOwner = try dupeOptional(allocator, row.get(?[]const u8, 5) catch return error.Corrupt),
                 .decision = try dupeOptional(allocator, row.get(?[]const u8, 6) catch return error.Corrupt),
+                .listType = try dupeOptional(allocator, row.get(?[]const u8, 8) catch return error.Corrupt),
             }) catch return error.OutOfMemory;
         }
         return items.toOwnedSlice(allocator) catch return error.OutOfMemory;
@@ -205,6 +211,14 @@ fn project(conn: *pg.Conn, record_uri: []const u8, decision: ?[]const u8) Error!
         logQueryError(conn, err);
         return error.Unavailable;
     };
+}
+
+/// An album or playlist carries only a decision, so clearing drops its row.
+fn projectList(conn: *pg.Conn, record_uri: []const u8, decision: ?[]const u8) Error!void {
+    if (decision) |value|
+        try exec(conn, set_list_decision, .{ record_uri, value })
+    else
+        try exec(conn, "DELETE FROM plyr_index.list_policies WHERE record_uri = $1", .{record_uri});
 }
 
 fn exec(conn: *pg.Conn, sql: []const u8, args: anytype) Error!void {
@@ -298,6 +312,16 @@ const set_decision =
     \\  moderation_observed_at_us = EXCLUDED.moderation_observed_at_us
 ;
 
+const set_list_decision =
+    \\INSERT INTO plyr_index.list_policies
+    \\  (record_uri, moderation_decision, moderation_write_source, moderation_observed_at_us)
+    \\VALUES ($1, $2, 'moderation_log', (extract(epoch FROM clock_timestamp()) * 1000000)::bigint)
+    \\ON CONFLICT (record_uri) DO UPDATE SET
+    \\  moderation_decision = EXCLUDED.moderation_decision,
+    \\  moderation_write_source = 'moderation_log',
+    \\  moderation_observed_at_us = EXCLUDED.moderation_observed_at_us
+;
+
 const clear_decision =
     \\UPDATE plyr_index.track_policies SET
     \\  moderation_decision = NULL,
@@ -333,12 +357,14 @@ const queue_query =
     \\  GROUP BY e.subject_uri
     \\)
     \\SELECT o.subject_uri, o.opened_at_ms, o.open_count, o.reasons,
-    \\       coalesce(t.title, l.name), coalesce(t.owner_did, l.owner_did), p.moderation_decision, o.first_id
+    \\       coalesce(t.title, l.name), coalesce(t.owner_did, l.owner_did),
+    \\       coalesce(p.moderation_decision, lp.moderation_decision), o.first_id, l.list_type
     \\FROM open o
     \\LEFT JOIN plyr_index.track_records t ON t.record_uri = o.subject_uri AND NOT t.deleted
     \\-- an album or playlist can be flagged too (its cover), so it gets a title
     \\LEFT JOIN plyr_index.list_records l ON l.record_uri = o.subject_uri AND NOT l.deleted
     \\LEFT JOIN plyr_index.track_policies p ON p.record_uri = o.subject_uri
+    \\LEFT JOIN plyr_index.list_policies lp ON lp.record_uri = o.subject_uri
     \\WHERE o.first_id > $2
     \\ORDER BY o.first_id
     \\LIMIT $1
@@ -443,7 +469,25 @@ test "the log derives the queue and projects decisions onto track policies" {
     try std.testing.expectEqual(@as(?[]const u8, null), try still.get(?[]const u8, 1));
     try still.deinit();
 
-    // non-track subjects are logged without touching track policies
+    // an album flagged for its cover is listed by name; a decision on it
+    // projects onto list policies, and clearing drops the row
+    const album = "at://did:plc:artist/fm.plyr.list/album";
+    _ = try pool.exec("INSERT INTO plyr_index.list_records VALUES ($1,'did:plc:artist','an album',false,'album')", .{album});
+    _ = try moderation.record(.{ .subject = album, .action = .flagged_by_scan, .actor = "scan:cover", .reason = "high: sexual: nudity" }, 0);
+    open = try moderation.queue(arena, 50, 0);
+    try std.testing.expectEqualStrings(album, open[open.len - 1].subject);
+    try std.testing.expectEqualStrings("an album", open[open.len - 1].trackTitle.?);
+    try std.testing.expectEqualStrings("album", open[open.len - 1].listType.?);
+    _ = try moderation.record(.{ .subject = album, .action = .override_exclude, .actor = "did:plc:operator" }, 0);
+    var excluded = (try pool.row("SELECT moderation_decision FROM plyr_index.list_policies WHERE record_uri=$1", .{album})).?;
+    try std.testing.expectEqualStrings("exclude", try excluded.get([]const u8, 0));
+    try excluded.deinit();
+    _ = try moderation.record(.{ .subject = album, .action = .override_clear, .actor = "did:plc:operator" }, 0);
+    var cleared = try pool.row("SELECT 1 FROM plyr_index.list_policies WHERE record_uri=$1", .{album});
+    try std.testing.expect(cleared == null);
+    if (cleared) |*row| try row.deinit();
+
+    // other subjects are logged without touching any policy
     _ = try moderation.record(.{ .subject = "did:plc:spammer", .action = .override_exclude, .actor = "did:plc:operator" }, 0);
     const entries = try moderation.history(arena, cover);
     try std.testing.expectEqual(@as(usize, 5), entries.len);
@@ -466,7 +510,8 @@ pub fn resetTestSchema(pool: *pg.Pool) !void {
         \\  moderation_write_source text, moderation_observed_at_us bigint,
         \\  CONSTRAINT ck_track_policies_nonempty CHECK (visibility IS NOT NULL OR jsonb_array_length(operator_labels) > 0 OR moderation_decision IS NOT NULL))
     , .{});
-    _ = try pool.exec("CREATE TABLE plyr_index.list_records (record_uri text PRIMARY KEY, owner_did text, name text, deleted boolean NOT NULL DEFAULT false)", .{});
+    _ = try pool.exec("CREATE TABLE plyr_index.list_records (record_uri text PRIMARY KEY, owner_did text, name text, deleted boolean NOT NULL DEFAULT false, list_type text)", .{});
+    _ = try pool.exec("CREATE TABLE plyr_index.list_policies (record_uri text PRIMARY KEY, moderation_decision text NOT NULL, moderation_write_source text NOT NULL, moderation_observed_at_us bigint NOT NULL)", .{});
     _ = try pool.exec("CREATE TABLE plyr_index.comment_records (record_uri text PRIMARY KEY, deleted boolean NOT NULL DEFAULT false)", .{});
     _ = try pool.exec("CREATE TABLE plyr_index.actor_identities (did text PRIMARY KEY)", .{});
     _ = try pool.exec("INSERT INTO plyr_index.actor_identities VALUES ('did:plc:listener')", .{});

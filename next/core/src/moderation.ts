@@ -30,6 +30,8 @@ export type QueueItem = {
 	trackTitle: string | null;
 	trackOwner: string | null;
 	decision: string | null;
+	/** set when the subject is an album or playlist */
+	listType?: 'album' | 'playlist' | null;
 };
 
 export type SubjectEvent = {

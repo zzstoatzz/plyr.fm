@@ -463,6 +463,15 @@ pub fn createTestTables(pool: *pg.Pool) !void {
         \\  PRIMARY KEY (list_uri, position)
         \\)
     , .{});
+    // migrations/0057: moderators' decisions, which list reads honour
+    _ = try pool.exec(
+        \\CREATE TABLE plyr_index.list_policies (
+        \\  record_uri text PRIMARY KEY,
+        \\  moderation_decision text NOT NULL,
+        \\  moderation_write_source text NOT NULL,
+        \\  moderation_observed_at_us bigint NOT NULL
+        \\)
+    , .{});
     try created_at_us.addTestColumn(pool, "list_records");
 }
 
