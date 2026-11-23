@@ -262,3 +262,50 @@ test('the card image is composed by the image service, or falls back to the plai
   const adult = await ogImage(page, 'https://plyr.fm', api({ track: async () => track({ moderation: { self_labels: ['porn'] } }) }), async () => { throw new Error('not asked'); });
   assert.equal(adult.headers.get('location'), 'https://plyr.fm/icons/icon-512.png');
 });
+
+test('old production pages move to the page that does their job now', () => {
+	assert.equal(edge.movedPath('/u/zzstoatzz.io/liked'), '/u/zzstoatzz.io');
+	assert.equal(edge.movedPath('/liked/zzstoatzz.io/'), '/u/zzstoatzz.io');
+	assert.equal(edge.movedPath('/for-you'), '/');
+	assert.equal(edge.movedPath('/activity'), '/');
+	assert.equal(edge.movedPath('/record'), '/upload');
+	assert.equal(edge.movedPath('/costs'), '/stats');
+	assert.equal(edge.movedPath('/profile/setup'), '/edit-profile');
+	assert.equal(edge.movedPath('/portal/manage'), '/portal');
+	assert.equal(edge.movedPath('/portal'), null);
+	assert.equal(edge.movedPath('/u/zzstoatzz.io'), null);
+	assert.equal(edge.movedPath('/track/12'), null);
+});
+
+test('an at-uri link opens the record it names', async () => {
+	const did = 'did:plc:abc';
+	const api = { album: async (id: string) => (id.startsWith('alb_') && edge.uriFromId(id).endsWith('/album1') ? {} : null) };
+	assert.equal(await edge.atUriPath(`/at/${did}/fm.plyr.track/t1`, api), `/track/${edge.idFromUri('trk_', `at://${did}/fm.plyr.track/t1`)}`);
+	assert.equal(await edge.atUriPath(`/at/://${did}/fm.plyr.track/t1`, api), `/track/${edge.idFromUri('trk_', `at://${did}/fm.plyr.track/t1`)}`);
+	assert.equal(await edge.atUriPath(`/at/${did}/fm.plyr.list/album1`, api), `/album/${edge.idFromUri('alb_', `at://${did}/fm.plyr.list/album1`)}`);
+	assert.equal(await edge.atUriPath(`/at/${did}/fm.plyr.list/mix`, api), `/playlist/${edge.idFromUri('pls_', `at://${did}/fm.plyr.list/mix`)}`);
+	assert.equal(await edge.atUriPath(`/at/${did}`, api), `/u/${did}`);
+	assert.equal(await edge.atUriPath('/at/nonsense', api), '/');
+});
+
+test('only plyr.fm itself is open to search engines', () => {
+	assert.equal(edge.robots('https://next.plyr.fm'), 'User-agent: *\nDisallow: /\n');
+	const live = edge.robots('https://plyr.fm');
+	assert.match(live, /User-agent: GPTBot\nDisallow: \//);
+	assert.match(live, /Disallow: \/settings/);
+	assert.match(live, /Sitemap: https:\/\/plyr\.fm\/sitemap\.xml/);
+});
+
+test('the sitemap lists public tracks and their artists across pages', async () => {
+	const track = (id: string, handle: string, visibility = 'public') => ({ id, access: { visibility }, metadata: { created_at: '2026-11-20T10:00:00Z' }, artist: { did: 'did:plc:x', profile: { handle } } });
+	const pages: Record<string, unknown> = {
+		'': { data: [track('trk_a', 'a.test'), track('trk_hidden', 'b.test', 'unlisted')], has_more: true, next_cursor: 'c1' },
+		c1: { data: [track('trk_b', 'a.test')], has_more: false }
+	};
+	const xml = await edge.sitemap('https://plyr.fm', { tracks: async (cursor?: string) => pages[cursor ?? ''] });
+	assert.match(xml, /<loc>https:\/\/plyr\.fm\/track\/trk_a<\/loc><lastmod>2026-11-20<\/lastmod>/);
+	assert.match(xml, /<loc>https:\/\/plyr\.fm\/track\/trk_b<\/loc>/);
+	assert.doesNotMatch(xml, /trk_hidden/);
+	assert.equal(xml.match(/\/u\/a\.test/g)?.length, 1);
+	assert.match(xml, /<loc>https:\/\/plyr\.fm\/terms<\/loc>/);
+});
