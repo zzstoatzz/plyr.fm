@@ -424,6 +424,21 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 		return publishCreate(reservation, record, draft && { ...draft, autoTag: input.autoTag });
 	}
 
+	/**
+	 * Puts an open upload's original on the artist's own PDS before plyr.fm storage makes its playable copy,
+	 * so every track that fits a blob is held by its artist, whatever its format. The record names it as
+	 * `audioBlob` beside the copy's `audioUrl`; playback keeps preferring the copy.
+	 */
+	async function uploadOriginalAudio(file: MediaFile, contentType: string): Promise<Record<string, unknown> | undefined> {
+		if (file.size > MAX_AUDIO_BYTES) return;
+		const { rpc } = session();
+		const bytes = await file.arrayBuffer();
+		assertSession();
+		const uploaded = await ok(uploadRepoBlob(rpc, { input: bytes, headers: { 'content-type': contentType } }));
+		assertSession();
+		return uploaded.blob as unknown as Record<string, unknown>;
+	}
+
 	async function prepareTrackRecord(input: NewTrack) {
 		assertSession();
 		const tags = input.tags === undefined ? undefined : normalizeTrackTags(input.tags);
@@ -565,5 +580,5 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 		await access.addWaysIn(trackUri, rules);
 	}
 
-	return { addWaysIn, albumOrganization, collectionOrder, myLikes, like, unlike, newCommentAttempt, comment, deleteComment, createPlaylist, addToPlaylist, removeFromPlaylist, renameCollection, deleteCollection, deletePlaylist, uploadTrack, myProfile, saveProfile, myTrack, editTrack, deleteTrack, reserveCreate, pendingCreates, recoverCreate, dismissCreate, archiveCreate, prepareTrackRecord, uploadedTrack, archiveUploadedTrack };
+	return { addWaysIn, albumOrganization, collectionOrder, myLikes, like, unlike, newCommentAttempt, comment, deleteComment, createPlaylist, addToPlaylist, removeFromPlaylist, renameCollection, deleteCollection, deletePlaylist, uploadTrack, myProfile, saveProfile, myTrack, editTrack, deleteTrack, reserveCreate, pendingCreates, recoverCreate, dismissCreate, archiveCreate, prepareTrackRecord, uploadOriginalAudio, uploadedTrack, archiveUploadedTrack };
 }

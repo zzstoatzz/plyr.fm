@@ -189,8 +189,9 @@ export function createUploadQueue<Rpc extends RepoRpc>({
     if (input.buyLink) { await withRetries(job, () => saveBuyLink!(() => session(job), reservation.uri, input.buyLink!)); job.buyLinkFor = reservation.uri; }
     if (route.kind === 'pds') return runPds(job, ready, reservation, draft);
     const format = audioFormat(input.file.name, input.file.type, !!route.processing);
+    const original = await withRetries(job, () => pds.uploadOriginalAudio(input.file, format.contentType));
     const record = await pds.prepareTrackRecord(ready);
-    const operation: UploadOperation = { ...reservation, draftId: draft.id, record: { ...record, fileType: format.fileType }, uploadId: randomUUID(),
+    const operation: UploadOperation = { ...reservation, draftId: draft.id, record: { ...record, fileType: format.fileType, ...(original ? { audioBlob: original } : {}) }, uploadId: randomUUID(),
       name: input.file.name, sizeBytes: input.file.size, ...format, ...(route.processing ? { processing: route.processing } : {}), ...(input.autoTag ? { autoTag: true } : {}) };
     await uploadStorage.put(operation);
     job.handedOff = true;

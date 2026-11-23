@@ -105,7 +105,8 @@ pub fn publicRecord(a: std.mem.Allocator, value: zat.cbor.Value, url: []const u8
     if (!std.mem.eql(u8, value.getString("$type") orelse "", collection) or
         !std.mem.eql(u8, value.getString("audioUrl") orelse "", url) or
         !std.mem.eql(u8, value.getString("downloadPolicy") orelse "", "open")) return false;
-    for ([_][]const u8{ "audioBlob", "audioSpace", "audioFileId", "supportGate", "audioPayload", "privateAudio", "originalAudioBlob" }) |field| {
+    // an `audioBlob` beside the URL is the original the artist keeps on their PDS; it stays public
+    for ([_][]const u8{ "audioSpace", "audioFileId", "supportGate", "audioPayload", "privateAudio", "originalAudioBlob" }) |field| {
         if (value.get(field)) |present| if (present != .null) return false;
     }
     return true;
@@ -135,6 +136,17 @@ test "publication requires a valid public open track and exact reserved URL" {
     fields[6].value = .{ .text = "open" };
     fields[7] = .{ .key = "supportGate", .value = .{ .text = "supporters" } };
     try std.testing.expect(!try publicRecord(a, value, url, collection));
+    fields[7] = .{ .key = "audioSpace", .value = .{ .text = "at://did:plc:artist/space/x/supporters" } };
+    try std.testing.expect(!try publicRecord(a, value, url, collection));
+    const blob_cid = try zat.Cid.create(a, 1, zat.cbor.Codec.raw, zat.cbor.HashFn.sha2_256, "audio");
+    var blob = [_]zat.cbor.Value.MapEntry{
+        .{ .key = "$type", .value = .{ .text = "blob" } },
+        .{ .key = "ref", .value = .{ .cid = blob_cid } },
+        .{ .key = "mimeType", .value = .{ .text = "audio/wav" } },
+        .{ .key = "size", .value = .{ .unsigned = 1024 } },
+    };
+    fields[7] = .{ .key = "audioBlob", .value = .{ .map = &blob } };
+    try std.testing.expect(try publicRecord(a, value, url, collection));
     fields[7].value = .null;
     fields[1].value = .{ .text = "" };
     try std.testing.expect(!try publicRecord(a, value, url, collection));

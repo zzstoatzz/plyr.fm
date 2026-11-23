@@ -1,4 +1,5 @@
 import { createOperation, type CreateOperation } from './create-operation.ts';
+import { MAX_AUDIO_BYTES } from './track-audio.ts';
 
 export const UPLOAD_PART_BYTES = 10_485_760;
 export const MAX_SERVICE_AUDIO_BYTES = 1_610_612_736;
@@ -29,9 +30,19 @@ export type ChunkReader = { size: number; read(offset: number, length: number): 
 export function assertPublicUploadRecord(record: Record<string, unknown>): void {
   if ((Object.hasOwn(record, 'downloadPolicy') && record.downloadPolicy !== 'open')
     || (Object.hasOwn(record, 'visibility') && record.visibility !== 'public' && record.visibility !== 'unlisted')
-    || ['audioBlob', 'audioSpace', 'audioFileId', 'supportGate', 'audioPayload', 'privateAudio', 'originalAudioBlob', 'originalFileId', 'originalFileType'].some(field => Object.hasOwn(record, field))) {
+    || (Object.hasOwn(record, 'audioBlob') && !originalBlob(record.audioBlob))
+    || ['audioSpace', 'audioFileId', 'supportGate', 'audioPayload', 'privateAudio', 'originalAudioBlob', 'originalFileId', 'originalFileType'].some(field => Object.hasOwn(record, field))) {
     throw new Error('large uploads support public, open audio only.');
   }
+}
+
+/** The original audio kept on the artist's PDS beside plyr.fm's playable copy: a plain public blob. */
+function originalBlob(value: unknown) {
+  if (!value || typeof value !== 'object') return false;
+  const blob = value as { $type?: unknown; ref?: unknown; mimeType?: unknown; size?: unknown };
+  const link = blob.ref && typeof blob.ref === 'object' ? (blob.ref as { $link?: unknown }).$link : undefined;
+  return blob.$type === 'blob' && typeof link === 'string' && typeof blob.mimeType === 'string' && blob.mimeType.startsWith('audio/')
+    && typeof blob.size === 'number' && Number.isSafeInteger(blob.size) && blob.size > 0 && blob.size <= MAX_AUDIO_BYTES;
 }
 
 export function audioFormat(name: string, type: string, processing = false) {

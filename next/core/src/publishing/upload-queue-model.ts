@@ -48,6 +48,15 @@ export function needsPlyrStorage(file: { name: string; size: number }, closed = 
   return !closed && PROCESSED.has(fileType(file.name)) || file.size > MAX_AUDIO_BYTES;
 }
 
+/**
+ * Whether an open upload's original can live on the artist's PDS. It can up to the track lexicon's
+ * `audioBlob` limit; plyr.fm storage then only adds the playable mp3. Past it, plyr.fm holds the
+ * only copy, which is what the artist is asked to agree to.
+ */
+export function originalOnPds(file: { size: number }) {
+  return file.size <= MAX_AUDIO_BYTES;
+}
+
 /** One processing poll step: keep waiting, publish, or stop with the reason. */
 export function processingStep(status: UploadStatus): 'wait' | 'publish' | 'retry' | 'stop' {
   if (status.state === 'complete' || status.state === 'published') return 'publish';

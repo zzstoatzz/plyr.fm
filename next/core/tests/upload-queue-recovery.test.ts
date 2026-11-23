@@ -8,6 +8,7 @@ import type { CreateOperation } from '../src/publishing/create-operation.ts';
 import { UPLOAD_PART_BYTES, type UploadOperation, type UploadStatus } from '../src/publishing/upload-model.ts';
 import { createUploadQueue } from '../src/publishing/upload-queue.ts';
 import { jobLine, uploadInProgress } from '../src/publishing/upload-queue-model.ts';
+import { MAX_AUDIO_BYTES } from '../src/publishing/track-audio.ts';
 import { queuedUploadKey, readQueuedUploadDraft, type QueuedUploadDraft } from '../src/publishing/queued-upload-draft.ts';
 import type { UploadTransport } from '../src/publishing/upload-transport.ts';
 
@@ -35,6 +36,7 @@ function fixture({ statusGate, reserve = async () => record, beforeSaveTransfer,
   let tags = 0;
   let published = false;
   let saved: UploadOperation[] = [];
+  const originals: string[] = [];
   const drafts = new Map<string, QueuedUploadDraft>();
   const status = (): UploadStatus => ({
     state: published ? 'published' : 'complete', recoveryRequired: false, reservedBytes: 1,
@@ -45,6 +47,10 @@ function fixture({ statusGate, reserve = async () => record, beforeSaveTransfer,
     reserveCreate: reserve,
     uploadTrack: async () => { throw new Error('host rejected the upload'); },
     prepareTrackRecord: async () => record.record,
+    uploadOriginalAudio: async (file: { size: number }, mimeType: string) => {
+      originals.push(mimeType);
+      return file.size > MAX_AUDIO_BYTES ? undefined : { $type: 'blob', ref: { $link: 'bafkreioriginal' }, mimeType, size: file.size };
+    },
     pendingCreates: async () => saved.length ? [record] : [],
     recoverCreate: async () => ({ state: 'different' }),
     uploadedTrack: async () => { publicationAttempts++; return { state: 'accepted' }; },
@@ -81,7 +87,7 @@ function fixture({ statusGate, reserve = async () => record, beforeSaveTransfer,
     model, recordForRecovery: () => saved,
     confirmations: () => confirmations, dismissals: () => dismissed, publications: () => publicationAttempts,
     seed: (entry = operation) => { saved = [entry]; }, confirm: () => { published = true; }, tags: () => tags,
-    drafts,
+    drafts, originals,
   };
 }
 
@@ -122,6 +128,26 @@ test('processed upload keeps its draft until the transfer is durable', async () 
   await setImmediate();
   assert.equal(f.drafts.size, 0);
   assert.equal(f.model.snapshot()[0].phase, 'done');
+});
+
+test('a processed upload keeps its original on the artist\'s PDS beside the playable copy', async () => {
+  const file = { name: 'fixture.wav', type: 'audio/x-wav', size: 1, arrayBuffer: async () => new ArrayBuffer(1) };
+  let transfer: UploadOperation | undefined;
+  const g = fixture({ beforeSaveTransfer: async value => { transfer = value; } });
+  g.confirm();
+  await g.model.add({ file, artist: 'fixture', title: 'Take' });
+  await setImmediate();
+  assert.deepEqual(g.originals, ['audio/wav']);
+  assert.deepEqual(transfer?.record.audioBlob, { $type: 'blob', ref: { $link: 'bafkreioriginal' }, mimeType: 'audio/wav', size: 1 });
+  assert.equal(g.model.snapshot()[0].phase, 'done');
+  // past the blob limit plyr.fm holds the only copy, and the record names no blob
+  const large = { name: 'fixture.mp3', type: 'audio/mpeg', size: MAX_AUDIO_BYTES + 1, arrayBuffer: async () => { throw new Error('not read'); } };
+  let held: UploadOperation | undefined;
+  const h = fixture({ beforeSaveTransfer: async value => { held = value; } });
+  h.confirm();
+  await h.model.add({ file: large, artist: 'fixture', title: 'Long' });
+  await setImmediate();
+  assert.ok(held && !Object.hasOwn(held.record, 'audioBlob'));
 });
 
 test('a worker rejection after handoff leaves transfer recovery without a second edit path', async () => {
