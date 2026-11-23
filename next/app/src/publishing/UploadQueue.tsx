@@ -7,12 +7,21 @@ import { guardLeave } from './leave-guard';
 import { jobLine } from '@plyr/next-core/publishing/upload-queue-model';
 import { uploadQueue, useUploadQueue } from './upload-queue';
 import { endOrphanedUploadActivities } from './upload-activity';
+import { finishAlbumUpload } from './album-uploads';
+import { getAuth } from '../auth-state';
 
 /** Mounted once at the root: resumes saved uploads for the signed-in account and guards the tab while one runs. */
 export function UploadQueueHost() {
   const auth = useAuth();
   useEffect(() => guardLeave(uploadQueue.active), []);
   useEffect(() => endOrphanedUploadActivities(), []);
+  // an album uploading from new album is made as soon as its last track is done, wherever the app is
+  useEffect(() => {
+    if (!auth.did) return;
+    const finish = () => { void finishAlbumUpload(getAuth()).catch(() => undefined); };
+    finish();
+    return uploadQueue.subscribe(finish);
+  }, [auth.did, auth.rpc]);
   useEffect(() => { if (auth.did && auth.uploadStorage) void uploadQueue.resume(auth.did).catch(() => undefined); }, [auth.did, auth.uploadStorage]);
   return null;
 }

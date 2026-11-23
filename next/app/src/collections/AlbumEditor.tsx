@@ -6,7 +6,7 @@ import { createPds } from '../pds';
 import { Action, Copy, row } from '../controls';
 import { errorMessage, Heading, Status } from '../CatalogPieces';
 import { resolveAlbumTracks } from './album-tracks';
-import { AlbumTracks, OwnAlbumTracks } from './AlbumTracks';
+import { AlbumTracks, OwnTrackSearch } from './AlbumTracks';
 import type { AlbumEntry } from '@plyr/next-core/collections/album-membership';
 import { CollectionOrderConflict, CollectionOrderUnconfirmed, type CollectionRevision } from '@plyr/next-core/collections/collection-order';
 
@@ -70,7 +70,7 @@ export function AlbumEditor({ list, close, saved }: { list: ListDetail; close: (
       <Action primary label="Save album tracks" disabled={busy || blocked || !changed} onPress={() => void save()} />
       <Action label={changed ? 'Cancel organizing' : 'Done organizing'} disabled={busy} onPress={close} />
     </View>
-    {revision && did && <OwnAlbumTracks did={did} selected={entries.flatMap(entry => { const uri = uriFor(entry); return uri ? [uri] : []; })}
+    {revision && did && <OwnTrackSearch did={did} selected={entries.flatMap(entry => { const uri = uriFor(entry); return uri ? [uri] : []; })}
       disabled={busy || blocked || entries.length >= 500} add={track => { setKnown(value => [...value, track]); change(value => [...value, track]); }} />}
   </View>;
 }
