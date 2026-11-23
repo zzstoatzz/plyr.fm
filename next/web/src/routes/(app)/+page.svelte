@@ -32,11 +32,11 @@
 		const picked = data.tags.includes(name) ? data.tags.filter(tag => tag !== name) : [...data.tags, name];
 		return picked.length ? `/?${new URLSearchParams(picked.map(tag => ['tag', tag]))}` : '/';
 	}
-	// with several tags the api lists tracks carrying more of them first, so each group is one run
-	function group(track: Track) {
-		const count = data.tags.filter(tag => track.metadata.tags?.includes(tag)).length;
-		if (count === data.tags.length) return data.tags.length === 2 ? 'has both' : `has all ${data.tags.length}`;
-		if (data.tags.length === 2) return 'has one';
+	// with several tags the api lists tracks carrying more of them first: the ones with every tag sit in a card,
+	// then each smaller count is one run under its own header
+	const hits = (track: Track) => data.tags.filter(tag => track.metadata.tags?.includes(tag)).length;
+	function runLabel(count: number, afterMatch: boolean) {
+		if (data.tags.length === 2) return afterMatch ? `also ${data.tags.join(' or ')}` : data.tags.join(' or ');
 		return `${count} of ${data.tags.length}`;
 	}
 	// The rail scrolls with the page until its end reaches the bottom of the screen, then stays there.
@@ -287,13 +287,24 @@
 			<Loading label="loading the latest tracks" />
 		{:then first}
 			{@const rows = [...first.data, ...extra]}
-			{#each rows as track, index (track.id)}
-				{#if data.tags.length > 1 && (index === 0 || group(track) !== group(rows[index - 1]))}
-					<h3 class="group" data-testid="home-tag-group">{group(track)}</h3>
+			{@const several = data.tags.length > 1}
+			{@const matched = several ? rows.findIndex(track => hits(track) < data.tags.length) : 0}
+			{@const split = matched < 0 ? rows.length : matched}
+			{#if split}
+				<section class="match" aria-labelledby="match-heading" data-testid="home-tag-match">
+					<h3 id="match-heading">{data.tags.join(' + ')}</h3>
+					{#each rows.slice(0, split) as track (track.id)}
+						<TrackRow {track} testid="home-track-row" />
+					{/each}
+				</section>
+			{/if}
+			{#each rows.slice(split) as track, index (track.id)}
+				{#if several && (index === 0 || hits(track) !== hits(rows[split + index - 1]))}
+					<h3 class="group" class:lead={index === 0 && !split} data-testid="home-tag-group">{runLabel(hits(track), split > 0)}</h3>
 				{/if}
 				<TrackRow {track} testid="home-track-row" />
 			{:else}
-				<p class="state">no tracks found.</p>
+				{#if !split}<p class="state">no tracks found.</p>{/if}
 			{/each}
 			{@const cursor = nextCursor ?? first.next_cursor}
 			{#if cursor && restoring !== latest}
@@ -338,8 +349,12 @@
 	.tag-shelf a[aria-current=page] { border-color: var(--accent); color: var(--accent); }
 	.tag-shelf small { font-variant-numeric: tabular-nums; }
 	.tag-shelf a :global(svg) { margin-left: -0.15rem; }
-	.group { margin: 1.1rem 0 0.35rem; padding-bottom: 0.35rem; border-bottom: 1px solid var(--line); color: var(--muted); font-size: var(--t-12-8); font-weight: 650; }
-	.group:first-of-type { margin-top: 0.2rem; }
+	/* tracks with every picked tag share one tinted card; the rest follow as plain rows under quieter headers */
+	.match { padding: 0.4rem 0.6rem; border: 1px solid var(--line); border-radius: 1rem; background: color-mix(in srgb, var(--accent) 7%, var(--surface)); }
+	.match h3, .group { font-size: var(--t-17-6); font-weight: 700; }
+	.match h3 { margin: 0.35rem 0 0.4rem; }
+	.group { margin: 2.2rem 0 0.6rem; color: var(--muted); }
+	.group.lead { margin-top: 0.2rem; }
 	@media (hover: hover) { .tag-shelf a:hover { filter: brightness(1.12); } }
 	.chart, .tags { min-width: 0; }
 	.chart-loading, .chart-empty { display: grid; align-items: center; min-height: 4.75rem; color: var(--muted); }
