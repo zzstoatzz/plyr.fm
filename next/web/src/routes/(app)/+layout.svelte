@@ -12,6 +12,8 @@
 	import { mountPrefs, restorePrefs } from '$lib/prefs.svelte';
 	import Artwork from '$lib/ui/Artwork.svelte';
 	import AccountMenu from '$lib/account/AccountMenu.svelte';
+	import PdsAudioSheet from '$lib/account/PdsAudioSheet.svelte';
+	import { pdsAudio } from '$lib/account/pds-audio.svelte';
 	import { activeUploadCount } from '$lib/upload-activity.svelte';
 	import { createDockPull } from '$lib/dock-pull';
 	import { navCollapsed, setNavCollapsed } from '$lib/nav';
@@ -112,6 +114,8 @@
 			resumed = account.rpc;
 			const owner = account.did;
 			const rpc = account.rpc;
+			// is everything of yours on your PDS? asked once per sign-in, off the critical path
+			if (owner) void pdsAudio.check();
 			if (owner && account.uploadStorage) {
 				void import('$lib/upload').then(({ uploadQueue }) => {
 					if (auth.getAuth().rpc === rpc) return uploadQueue.resume(owner);
@@ -313,6 +317,7 @@
 
 {#if account.did}
 	<AccountMenu bind:this={accountMenu} identity={account.handle ? '@' + account.handle : account.did} uploads={uploading} onShortcuts={openShortcuts} />
+	<PdsAudioSheet />
 {/if}
 
 <Toasts />
