@@ -36,15 +36,15 @@
 			{#if !player.liveStation}<div class="desktop-progress"><Scrub /></div>{/if}
 		</div>
 		<div class="extras">
-			<label class="volume">
-				<Icon name={player.volume === 0 ? 'mute' : 'volume'} size={19} />
-				<input type="range" aria-label="Volume" min="0" max="1" step="0.01" value={player.volume} style:--fill={`${player.volume * 100}%`} oninput={event => player.setVolume(event.currentTarget.valueAsNumber)} />
-			</label>
 			{#if player.liveStation}
 				<button type="button" class="icon-button" aria-label="Stop radio" onclick={() => player.stopRadio()}><Icon name="x" /></button>
 			{:else}
 				<button type="button" class="icon-button" aria-label="Queue" class:active={queuePage || player.queueOpen} aria-pressed={queuePage || player.queueOpen} onclick={onQueue}><Icon name="queue" /></button>
 			{/if}
+			<div class="volume">
+				<button type="button" class="icon-button" aria-label={player.volume === 0 ? 'Unmute' : 'Mute'} onclick={() => player.toggleMute()}><Icon name={player.volume === 0 ? 'mute' : 'volume'} size={20} /></button>
+				<input type="range" aria-label="Volume" min="0" max="1" step="0.01" value={player.volume} style:--fill={`${player.volume * 100}%`} oninput={event => player.setVolume(event.currentTarget.valueAsNumber)} />
+			</div>
 		</div>
 	</div>
 {/if}
@@ -64,8 +64,10 @@
 	.controls { min-width: 0; display: flex; align-items: center; gap: 0.8rem; }
 	.desktop-progress { flex: 1; min-width: 0; }
 	.active { color: var(--accent); }
-	.extras { display: flex; align-items: center; justify-content: flex-end; }
-	.volume { display: flex; align-items: center; gap: 0.5rem; width: 7.5rem; }
+	/* queue, then the volume at the far edge with room to aim: the slider grows with the dock instead of a fixed stub */
+	.extras { display: flex; align-items: center; justify-content: flex-end; gap: clamp(0.75rem, 2vw, 1.5rem); min-width: 0; }
+	.volume { display: flex; align-items: center; gap: 0.35rem; flex: 0 1 11rem; min-width: 6.5rem; }
+	.volume input { flex: 1; min-width: 0; height: 2rem; }
 	@media (max-width: 720px) {
 		.mobile-time { display: inline; }
 		.open { touch-action: pan-x; }

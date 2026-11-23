@@ -59,6 +59,10 @@ export interface Artist {
 	support_url: string | null;
 	/** where the artist sells each release; links only, see selling.ts */
 	offers?: { subject: string; url: string; amount?: number | null; currency?: string | null }[];
+	/** links the artist shows on their page; see artist-page.ts */
+	links?: { url: string; label?: string | null }[];
+	/** what sits behind the artist's page; null or missing is their photo, blurred */
+	backdrop?: { kind: string; color?: string | null; image?: string | null } | null;
 }
 
 export interface NetworkArtist { did: string; handle: string; display_name: string; avatar_url: string | null; track_count: number }

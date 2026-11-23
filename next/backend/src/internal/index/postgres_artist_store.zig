@@ -126,6 +126,8 @@ pub const PostgresArtistStore = struct {
         const availability_source = try parseClaimSource(try row.get([]const u8, 15));
         const support_url = try duplicateOptional(allocator, try row.get(?[]const u8, 6));
         const offers = try artist.parseOffers(allocator, try row.get([]const u8, 17));
+        const links = try artist.parseProfileLinks(allocator, try row.get([]const u8, 18));
+        const backdrop = try artist.parseBackdrop(allocator, try row.get(?[]const u8, 19));
 
         return .{
             .did = did,
@@ -136,6 +138,8 @@ pub const PostgresArtistStore = struct {
             .show_liked_on_profile = try row.get(bool, 5),
             .support_url = if (support_url) |url| (if (artist.validLink(url)) url else null) else null,
             .offers = offers,
+            .links = links,
+            .backdrop = backdrop,
             .created_at = created_at,
             .updated_at = updated_at,
             .record = .{
@@ -184,7 +188,9 @@ const select_fields =
     \\  ),
     \\  aa.evidence_source,
     \\  p.avatar IS NOT NULL AND p.avatar <> '' AND (a.avatar_url IS NULL OR p.avatar NOT LIKE 'https://cdn.bsky.app/img/avatar/plain/%'),
-    \\  CASE WHEN jsonb_typeof(pref.value->'buyLinks') = 'array' THEN (pref.value->'buyLinks')::text ELSE '[]' END
+    \\  CASE WHEN jsonb_typeof(pref.value->'buyLinks') = 'array' THEN (pref.value->'buyLinks')::text ELSE '[]' END,
+    \\  CASE WHEN jsonb_typeof(pref.value->'profileLinks') = 'array' THEN (pref.value->'profileLinks')::text ELSE '[]' END,
+    \\  CASE WHEN jsonb_typeof(pref.value->'backdrop') = 'object' THEN (pref.value->'backdrop')::text END
     \\FROM plyr_index.profile_records AS p
     \\JOIN plyr_index.account_availability AS aa
     \\  ON aa.repo_did = p.owner_did AND aa.available
@@ -300,13 +306,17 @@ test "artist resolution returns ordered visible music and current profile artwor
     try std.testing.expectEqual(@as(?[]const u8, null), authored.support_url);
     try std.testing.expectEqual(@as(usize, 0), authored.offers.len);
     _ = try postgres.pool.exec(
-        \\INSERT INTO plyr_account.preferences (owner_did, value) VALUES ('did:plc:second', '{"supportUrl":"https://ko-fi.com/second","buyLinks":[{"subject":"at://did:plc:second/fm.plyr.list/a","url":"https://second.bandcamp.com/album/a","amount":800,"currency":"USD"},{"subject":"at://did:plc:second/fm.plyr.list/b","url":"javascript:alert(1)"}]}')
+        \\INSERT INTO plyr_account.preferences (owner_did, value) VALUES ('did:plc:second', '{"supportUrl":"https://ko-fi.com/second","buyLinks":[{"subject":"at://did:plc:second/fm.plyr.list/a","url":"https://second.bandcamp.com/album/a","amount":800,"currency":"USD"},{"subject":"at://did:plc:second/fm.plyr.list/b","url":"javascript:alert(1)"}],"profileLinks":[{"url":"https://second.example","label":"site"},{"url":"ftp://second.example"}],"backdrop":{"kind":"color","color":"#1f7a55"}}')
     , .{});
     const selling = (try implementation.get(arena.allocator(), .{ .did = "did:plc:second" })).?;
     try std.testing.expectEqualStrings("https://ko-fi.com/second", selling.support_url.?);
     try std.testing.expectEqual(@as(usize, 1), selling.offers.len);
     try std.testing.expectEqualStrings("https://second.bandcamp.com/album/a", selling.offers[0].url);
     try std.testing.expectEqual(@as(?i64, 800), selling.offers[0].amount);
+    try std.testing.expectEqual(@as(usize, 1), selling.links.len);
+    try std.testing.expectEqualStrings("site", selling.links[0].label.?);
+    try std.testing.expectEqualStrings("#1f7a55", selling.backdrop.?.color.?);
+    try std.testing.expect(authored.backdrop == null);
     try std.testing.expectEqual(artist.ClaimSource.verified_repo, authored.sources.avatar);
     _ = try postgres.pool.exec("UPDATE plyr_index.profile_records SET avatar='https://cdn.bsky.app/img/avatar/plain/did:plc:second/stale'", .{});
     const copied = (try implementation.get(arena.allocator(), .{ .did = "did:plc:second" })).?;

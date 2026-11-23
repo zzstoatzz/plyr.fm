@@ -25,6 +25,7 @@
 	import { catalogRuntime } from '@plyr/next-core/catalog/runtime';
 	import { compactCount } from '$lib/listening/format';
 	import { trackHref } from '$lib/tracks';
+	import { linkName, readBackdrop, readLinks } from '@plyr/next-core/artist-page';
 
 	type Metrics = ArtistMetrics | null;
 	let { artist, metrics }: { artist: Artist; metrics: Promise<Metrics> } = $props();
@@ -49,6 +50,8 @@
 	const tab = $derived(tabs.find(item => item === page.url.searchParams.get('tab')) ?? 'tracks');
 	const visibleMetrics = $derived(retriedMetrics ?? metrics);
 	const supportLabel = (url: string) => url.replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/+$/, '');
+	const links = $derived(readLinks(artist.links));
+	const backdrop = $derived(readBackdrop(artist.backdrop));
 	const support = $derived(artist.support_url && /^https?:\/\/[^\s]+$/i.test(artist.support_url) ? artist.support_url : null);
 	const profilePath = $derived(resolve('/(app)/u/[actor]', { actor: artist.handle || artist.did }));
 
@@ -130,8 +133,10 @@
 	{/each}
 {/snippet}
 
-<article class="page-content artist">
-	{#if artist.avatar_url}<ImmersiveWash src={artist.avatar_url} />{/if}
+<article class="page-content artist immersive">
+	{#if backdrop.kind === 'image'}<ImmersiveWash mode="image" src={backdrop.image} />
+	{:else if backdrop.kind === 'color'}<ImmersiveWash mode="color" color={backdrop.color} />
+	{:else if backdrop.kind === 'photo' && artist.avatar_url}<ImmersiveWash src={artist.avatar_url} />{/if}
 	<div class="profile">
 	<header>
 		<div class="avatar"><Artwork src={artist.avatar_url ?? undefined} size={176} eager /></div>
@@ -140,6 +145,13 @@
 			{#if artist.handle}<a class="handle" href={profileLink(artist.handle)} target="_blank" rel="noopener noreferrer" aria-label={`@${artist.handle} on ${profileApp()}`}>@{artist.handle}</a>{/if}
 			<ListeningNow did={artist.did} {name} />
 			{#if artist.bio}<p class="bio">{artist.bio}</p>{/if}
+			{#if links.length}
+				<ul class="links" aria-label={`${name} elsewhere`}>
+					{#each links as link (link.url)}
+						<li><a class="hero-chip link" href={link.url} target="_blank" rel="noopener noreferrer"><Icon name="external" size={14} />{linkName(link)}</a></li>
+					{/each}
+				</ul>
+			{/if}
 			{#await visibleMetrics then result}
 				{#if result}
 					<div class="chips">
@@ -232,6 +244,11 @@
 	.handle { color: var(--muted); text-decoration: none; }
 	.handle:hover { color: var(--text); text-decoration: underline; }
 	.bio { color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; max-width: 44rem; margin-top: 0.35rem; }
+	.links { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.6rem 0 0; padding: 0; list-style: none; }
+	/* links read as links, not as the stat chips below them: outlined, no fill */
+	.links .link { display: inline-flex; align-items: center; gap: 0.35rem; border: 1px solid color-mix(in srgb, var(--text) 22%, transparent); background: none; color: var(--text); font-weight: 600; text-decoration: none; }
+	.links .link:hover { background: var(--hover); }
+	.links .link :global(svg) { color: var(--muted); }
 	.chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.6rem; }
 	.actions { display: flex; align-items: center; gap: 0.6rem; margin-top: 1rem; }
 	.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr)); gap: 0.6rem; align-content: center; }
@@ -279,7 +296,7 @@
 		.avatar { width: min(7.25rem, 36vw); }
 		.identity { width: 100%; justify-items: center; }
 		h1 { font-size: 1.85rem; }
-		.chips { justify-content: center; }
+		.chips, .links { justify-content: center; }
 		.actions { display: flex; flex-wrap: wrap; width: 100%; }
 		.actions :global(.hero-pill) { flex: 1 1 auto; }
 		.cards { grid-template-columns: minmax(0, 1fr); }

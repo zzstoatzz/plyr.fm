@@ -23,16 +23,17 @@ pub const Patch = struct {
     supportUrl: ?[]const u8 = null,
     /// artist setting: where each release is sold. replaces the whole list.
     buyLinks: ?[]const artist.Offer = null,
+    /// artist setting: links shown on your page. replaces the whole list.
+    profileLinks: ?[]const artist.ProfileLink = null,
+    /// artist setting: what sits behind your page. kind "photo" is the default.
+    backdrop: ?artist.Backdrop = null,
 
     pub fn valid(self: Patch) bool {
         if (self.theme) |value| if (!oneOf(value, &.{ "system", "light", "dark" })) return false;
         if (self.font) |value| if (!oneOf(value, &.{ "comic-sans", "system", "mono", "serif" })) return false;
         if (self.atprotoClient) |value| if (!oneOf(value, &.{ "bsky", "blacksky", "witchsky", "reddwarf", "pdsls" })) return false;
         if (self.scale) |value| if (value != 90 and value != 100 and value != 115 and value != 130) return false;
-        if (self.accent) |value| {
-            if (value.len != 7 or value[0] != '#') return false;
-            for (value[1..]) |digit| if (!std.ascii.isHex(digit)) return false;
-        }
+        if (self.accent) |value| if (!artist.validColor(value)) return false;
         if (self.hiddenTags) |values| {
             for (values) |value| if (!tag_filter.valid(value)) return false;
         }
@@ -44,11 +45,16 @@ pub const Patch = struct {
                 for (offers[0..index]) |earlier| if (std.mem.eql(u8, earlier.subject, offer.subject)) return false;
             }
         }
+        if (self.profileLinks) |links| {
+            if (links.len > artist.max_profile_links) return false;
+            for (links) |link| if (!artist.validProfileLink(link)) return false;
+        }
+        if (self.backdrop) |backdrop| if (!artist.validBackdrop(backdrop)) return false;
         return true;
     }
 
     pub fn empty(self: Patch) bool {
-        return self.theme == null and self.accent == null and self.font == null and self.keepPlaying == null and self.playThrough == null and self.tealScrobbling == null and self.scale == null and self.hiddenTags == null and self.atprotoClient == null and self.allowComments == null and self.supportUrl == null and self.buyLinks == null;
+        return self.theme == null and self.accent == null and self.font == null and self.keepPlaying == null and self.playThrough == null and self.tealScrobbling == null and self.scale == null and self.hiddenTags == null and self.atprotoClient == null and self.allowComments == null and self.supportUrl == null and self.buyLinks == null and self.profileLinks == null and self.backdrop == null;
     }
 };
 
@@ -121,6 +127,15 @@ test "a settings patch accepts only known values" {
     try std.testing.expect(!(Patch{ .buyLinks = &.{ album, album } }).valid());
     try std.testing.expect(!(Patch{ .buyLinks = &.{.{ .subject = album.subject, .url = album.url, .amount = 800 }} }).valid());
     try std.testing.expect(!(Patch{ .buyLinks = &.{} }).empty());
+    try std.testing.expect((Patch{ .profileLinks = &.{.{ .url = "https://dawn.bandcamp.com", .label = "bandcamp" }} }).valid());
+    try std.testing.expect(!(Patch{ .profileLinks = &.{.{ .url = "http://dawn.example" }} }).valid());
+    const one: artist.ProfileLink = .{ .url = "https://dawn.example" };
+    const seven = [_]artist.ProfileLink{ one, one, one, one, one, one, one };
+    try std.testing.expect(!(Patch{ .profileLinks = &seven }).valid());
+    try std.testing.expect(!(Patch{ .profileLinks = &.{} }).empty());
+    try std.testing.expect((Patch{ .backdrop = .{ .kind = "color", .color = "#1f7a55" } }).valid());
+    try std.testing.expect(!(Patch{ .backdrop = .{ .kind = "image", .image = "https://elsewhere.example/a.png" } }).valid());
+    try std.testing.expect(!(Patch{ .backdrop = .{ .kind = "photo" } }).empty());
 }
 
 test "account settings merge per owner" {

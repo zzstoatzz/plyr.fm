@@ -67,10 +67,24 @@
 	let searchKey = $state('Ctrl K');
 	let sidebarKey = $state('Ctrl B');
 	let collapsed = $state(navCollapsed());
+	// while the width animates, the open layout stays put inside a clipped rail and its words fade,
+	// so nothing snaps into the narrow layout (or out of it) halfway through the slide
+	let sliding = $state(false);
+	let slideEnd: ReturnType<typeof setTimeout> | undefined;
 	function toggleSidebar() {
 		if (matchMedia('(max-width: 720px)').matches) return;
-		collapsed = !collapsed;
-		setNavCollapsed(collapsed);
+		const next = !collapsed;
+		clearTimeout(slideEnd);
+		if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+			sliding = false;
+			collapsed = next;
+			setNavCollapsed(next);
+			return;
+		}
+		sliding = true;
+		setNavCollapsed(next);
+		if (!next) collapsed = false;
+		slideEnd = setTimeout(() => { collapsed = next; sliding = false; }, 200);
 	}
 	function openShortcuts() { shortcutsDialog.showModal(); }
 	const keyboardGuide = [
@@ -264,7 +278,7 @@
 <a class="skip" href="#main">skip to content</a>
 <input bind:this={keyboardProxy} class="keyboard-proxy" type="search" tabindex="-1" aria-hidden="true" autocomplete="off" />
 
-<div data-testid="app-frame" class="frame" class:hasPlayer={!!player.current} class:docked={queuePanelOpen} class:collapsed>
+<div data-testid="app-frame" class="frame" class:hasPlayer={!!player.current} class:docked={queuePanelOpen} class:collapsed class:sliding>
 	<nav aria-label="Main navigation">
 		<div class="brand-row">
 			<LinksMenu onShortcuts={openShortcuts} /><a class="brand" aria-label="plyr.fm home" href="/">plyr.fm</a>
@@ -374,7 +388,7 @@
 		nav .search-field.active { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); font-weight: 500; }
 		.nav-spacer { flex: 1; min-height: 1.5rem; }
 		nav .account { gap: 0.625rem; min-height: 3.25rem; padding: 0.5rem 0.625rem; border: 1px solid color-mix(in srgb, var(--line) 80%, transparent); border-radius: 0.875rem; background: var(--surface); }
-		nav .account.active { border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+		nav .account.active { background: var(--raised); }
 		nav .account .profile-avatar, nav .account .profile-avatar :global(svg) { width: 2.125rem; height: 2.125rem; }
 		nav .account .tab-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 		.who { display: grid; min-width: 0; flex: 1; line-height: 1.2; }
@@ -390,6 +404,11 @@
 		.sidebar-toggle .label kbd { margin-left: 0.25rem; color: var(--faint); font: inherit; }
 		nav :is(a, button):is(:hover, :focus-visible) > .label { opacity: 1; transition-delay: 0.35s; }
 		nav .sidebar-toggle { position: relative; }
+		/* sliding: words fade while the rail's width animates; the rail clips whatever is still wider than it */
+		nav :is(.brand, .search-field > .label, .search-field kbd, a > .label, .account .who, .who-chevron, .group-label, .brand-row :global(.trigger)) { transition: opacity 0.14s ease-out; }
+		.sliding nav { overflow: hidden; }
+		.sliding nav :is(.brand, .search-field > .label, .search-field kbd, a > .label, .account .who, .who-chevron, .group-label, .brand-row :global(.trigger)) { opacity: 0; transition-duration: 0.1s; }
+		.sliding nav .sidebar-toggle .label { display: none; }
 		/* the open sidebar names its toggle only on hover; collapsed, every item does */
 		.collapsed nav { overflow: visible; z-index: 7; }
 		.collapsed nav :is(a, button) { position: relative; }
@@ -399,9 +418,7 @@
 		.collapsed nav .search-field:hover { background: var(--raised); }
 		/* collapsed, the account is just the avatar circle */
 		.collapsed nav .account, .collapsed nav .account:hover { justify-content: center; min-height: 2.75rem; padding: 0; border: 0; background: none; }
-		.collapsed nav .account .profile-avatar { box-shadow: 0 0 0 2px transparent; transition: box-shadow 0.15s; }
-		.collapsed nav .account:hover .profile-avatar { box-shadow: 0 0 0 2px var(--line); }
-		.collapsed nav .account.active .profile-avatar { box-shadow: 0 0 0 2px var(--accent); }
+		.collapsed nav .account:hover .profile-avatar { filter: brightness(1.08); }
 		.collapsed nav .account .tab-label { width: auto; height: auto; overflow: visible; clip-path: none; }
 		.collapsed .group-label { height: 1px; margin: 0.9rem 0.6rem; padding: 0; overflow: hidden; color: transparent; background: var(--line); }
 	}
