@@ -12,7 +12,7 @@ import { useAppearance } from './appearance';
 import { Cover, artistName } from './CatalogPieces';
 import { ShareLink } from './ShareLink';
 import { TrackLikes } from './TrackLikes';
-import { isBroadcast } from '@plyr/next-core/radio';
+import { isBroadcast, radioStationPath } from '@plyr/next-core/radio';
 import { usePlayCount } from './use-play-count';
 import { PlayerControl } from './PlayerControl';
 import { usePlayback } from './playback';
@@ -257,7 +257,7 @@ export function NowPlaying({ track, close: leave, navigate: go }: {
               </View>
               <View style={styles.utilities}>
                 {!player.privatePlayback && !isBroadcast(track) && <View><TrackLikes key={track.id} track={track} iconOnly returnTo={returnTo} /></View>}
-                {!player.privatePlayback && <View><ShareLink compact path={`/track/${encodeURIComponent(track.id)}`} /></View>}
+                {!player.privatePlayback && <View><ShareLink compact path={player.live ? radioStationPath(player.live.station) : `/track/${encodeURIComponent(track.id)}`} /></View>}
                 {showComments && <View><Pressable testID="comments-toggle" accessibilityRole="button" accessibilityState={{ selected: commentsOpen }}
                   accessibilityLabel={commentsOpen ? 'Show the cover' : `Show comments (${comments.comments.length})`} onPress={() => setCommentsOpen(open => !open)} style={styles.commentCount}>
                   {({ hovered }: { pressed: boolean; hovered?: boolean }) => {

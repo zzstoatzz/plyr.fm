@@ -137,6 +137,8 @@ async function stationFlow(browser, origin, width, scheme) {
     assert.deepEqual(await page.evaluate(() => { const meta = navigator.mediaSession.metadata; return meta && [meta.title, meta.album, navigator.mediaSession.playbackState]; }),
       [airing.metadata.title, 'fresh radio', 'playing'], 'radio fills the lock screen like any track');
     await page.screenshot({ path: path.join(output, `${width}-${scheme}-live.png`) });
+    assert.equal(new URL(page.url()).pathname, '/radio/fresh', 'the address bar names the station on air');
+    await now.getByRole('button', { name: 'Share station', exact: true }).waitFor();
     await now.getByRole('button', { name: 'Pause', exact: true }).click();
     await page.waitForFunction(() => window.media.every(media => media.paused));
     await now.getByRole('button', { name: 'Listen live', exact: true }).click();
@@ -169,6 +171,28 @@ async function stationFlow(browser, origin, width, scheme) {
     assert.deepEqual(appViewWrites, []);
     assert.deepEqual(errors, []);
     console.log(`station grid, live controls and queue handoff passed at ${width}px (${scheme})`);
+  } finally { await context.close(); }
+}
+
+async function linkedStationFlow(browser, origin, width) {
+  const { context, page, errors } = await fixture(browser, width, 'dark');
+  try {
+    await page.goto(origin + '/radio/deep-cuts');
+    const linked = page.getByTestId('radio-linked');
+    await linked.getByText('deep cuts radio', { exact: true }).waitFor();
+    assert.equal(await page.title(), 'deep cuts radio · plyr.fm');
+    assert.ok(await page.evaluate(() => window.media.every(media => media.paused)), 'a link waits for a tap before it plays');
+    await linked.getByRole('button', { name: 'share' }).waitFor();
+    await page.screenshot({ path: path.join(output, `${width}-linked-station.png`) });
+    await linked.getByRole('button', { name: 'listen' }).click();
+    const now = page.getByRole('dialog', { name: 'Now playing' });
+    await now.getByText('live · deep cuts radio', { exact: true }).waitFor();
+    await page.waitForFunction(() => window.media.some(media => !media.paused));
+    await now.getByRole('button', { name: 'leave radio' }).click();
+    await page.goto(origin + '/radio/jazz');
+    await page.getByText("we couldn't find that station").waitFor();
+    assert.deepEqual(errors, []);
+    console.log(`a station link opens that station and waits for a tap at ${width}px`);
   } finally { await context.close(); }
 }
 
@@ -244,6 +268,7 @@ async function accountingAndEmbeds(browser, origin) {
   try {
     for (const width of [390, 1280]) for (const scheme of ['light', 'dark']) await stationFlow(browser, origin, width, scheme);
     for (const width of [390, 1280]) await broadcastFlow(browser, origin, width);
+    for (const width of [390, 1280]) await linkedStationFlow(browser, origin, width);
     await accountingAndEmbeds(browser, origin);
   } finally { await browser.close(); close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

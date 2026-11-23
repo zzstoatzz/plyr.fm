@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { isBroadcast } from '@plyr/next-core/radio';
+	import { isBroadcast, radioStationPath } from '@plyr/next-core/radio';
 	import { onMount } from 'svelte';
 	import { player } from './player.svelte';
 	import { api } from './api';
@@ -95,9 +95,11 @@
 
 	async function shareTrack() {
 		if (!player.current) return;
-		const url = new URL(trackHref(player.current), location.origin).href;
+		// on the radio the station is what's shared: the song changes, the station keeps playing
+		const station = player.liveStation;
+		const url = new URL(station ? radioStationPath(station) : trackHref(player.current), location.origin).href;
 		try {
-			if (navigator.share) await navigator.share({ title: player.current.metadata.title, url });
+			if (navigator.share) await navigator.share({ title: station ? `${station.label} radio` : player.current.metadata.title, url });
 			else await navigator.clipboard.writeText(url);
 		} catch {}
 	}
@@ -120,7 +122,7 @@
 					<button type="button" class="icon-button" aria-label={playing ? 'Pause' : player.liveStation ? 'Listen live' : 'Play'} onclick={() => player.toggle()}><Icon name={playing ? 'pause' : 'play'} size={18} /></button>
 				</div>
 			{:else}<span>{player.liveStation ? `live · ${player.liveStation.label} radio` : 'now playing'}</span>{/if}
-			{#if !player.liveStation}<a href={resolve('/(app)/queue')} class="icon-button" aria-label="Queue"><Icon name="queue" /></a>{:else}<span></span>{/if}
+			{#if !player.liveStation}<a href={resolve('/(app)/queue')} class="icon-button" aria-label="Queue"><Icon name="queue" /></a>{:else}<button class="icon-button" type="button" aria-label="Share station" onclick={shareTrack}><Icon name="share" /></button>{/if}
 		</header>
 		<div class="hero" data-testid="now-playing-hero">
 			<div class="artwork-frame">

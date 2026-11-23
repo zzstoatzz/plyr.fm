@@ -53,6 +53,9 @@ test('routes cover the shareable pages and production album links', () => {
   assert.deepEqual(route('/tag/lo%20fi'), { kind: 'tag', name: 'lo fi' });
   assert.deepEqual(route('/'), { kind: 'home' });
   assert.deepEqual(route('/atlas'), { kind: 'atlas' });
+  assert.deepEqual(route('/radio'), { kind: 'radio', station: null });
+  assert.deepEqual(route('/radio/deep-cuts'), { kind: 'radio', station: 'deep-cuts' });
+  assert.equal(route('/radio/loved/listen'), null);
   assert.equal(route('/track/1/edit'), null);
   assert.equal(route('/settings'), null);
 });
@@ -125,6 +128,35 @@ test('the atlas card is a large picture of the map', async () => {
   assert.equal(card?.large, true);
   assert.deepEqual(card?.image, { url: 'https://plyr.fm/previews/atlas.jpg', type: 'image/jpeg', width: 1200, height: 630 });
   assert.match(headTags(card!, 'https://plyr.fm/icons/icon-512.png'), /twitter:card" content="summary_large_image"/);
+});
+
+const lineup = { default_slug: 'loved', stations: [
+  { slug: 'loved', name: 'loved', description: 'the most-played tracks on plyr.fm' },
+  { slug: 'firehose', name: 'firehose', description: 'the atproto firehose, sonified' }
+] };
+
+test('a station link names the station and what it is playing', async () => {
+  const asked: string[] = [];
+  const radio = api({
+    radioStations: async () => lineup,
+    radioState: async (station: string) => {
+      asked.push(station);
+      return station === 'firehose'
+        ? { live: { stream_url: 'https://relay.test/live.m3u8', kind: 'hls', artwork_url: 'https://relay.test/cover.png' }, current: null }
+        : { live: null, current: { title: 'Kite', artist: 'Madeleine', artwork_url: 'https://images.plyr.fm/images/k.jpg' } };
+    }
+  });
+  const loved = await preview(new URL('https://plyr.fm/radio/loved'), radio);
+  assert.equal(loved?.title, 'loved radio on plyr.fm');
+  assert.equal(loved?.url, 'https://plyr.fm/radio/loved');
+  assert.equal(loved?.description, 'the most-played tracks on plyr.fm · now playing Kite by Madeleine');
+  assert.equal(loved?.image?.source, 'https://images.plyr.fm/images/k.jpg');
+  const firehose = await preview(new URL('https://plyr.fm/radio/firehose'), radio);
+  assert.equal(firehose?.description, 'the atproto firehose, sonified · on air now');
+  assert.equal(firehose?.image?.url, 'https://relay.test/cover.png');
+  assert.deepEqual(asked, ['loved', 'firehose']);
+  assert.equal(await preview(new URL('https://plyr.fm/radio/jazz'), radio), null);
+  assert.equal((await preview(new URL('https://plyr.fm/radio'), radio))?.url, 'https://plyr.fm/radio');
 });
 
 test('a list without its own cover uses its first member with art', async () => {

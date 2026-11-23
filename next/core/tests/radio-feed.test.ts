@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { setImmediate } from 'node:timers/promises';
 import { RadioFeed } from '../src/radio-feed.ts';
-import { isBroadcast, nextRead, parseRadio, radioPosition, radioStateUrl, radioStations } from '../src/radio.ts';
+import { isBroadcast, nextRead, parseRadio, radioPosition, radioStateUrl, radioStationBySlug, radioStationPath, radioStations } from '../src/radio.ts';
 import type { RadioSnapshot } from '../src/radio.ts';
 
 function snapshot(position: number): RadioSnapshot {
@@ -169,4 +169,11 @@ test('only stations that broadcast ask for the live stream', () => {
 		assert.equal(url.searchParams.get('station'), station.slug);
 		assert.equal(url.searchParams.get('catalogOnly'), station.slug === 'firehose' ? 'false' : 'true');
 	}
+});
+
+test('a station links to its own page, and only real stations resolve', () => {
+	assert.equal(radioStationPath({ slug: 'deep-cuts' }), '/radio/deep-cuts');
+	assert.equal(radioStationBySlug('fresh')?.label, 'fresh');
+	assert.equal(radioStationBySlug('jazz'), undefined);
+	assert.equal(radioStationBySlug(undefined), undefined);
 });

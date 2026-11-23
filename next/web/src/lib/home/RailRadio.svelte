@@ -25,7 +25,7 @@
 </script>
 
 <section class="radio" data-testid="home-radio" aria-labelledby="home-radio">
-  <header><h2 id="home-radio">on the radio</h2><a href={resolve('/(app)/radio')}>all stations</a></header>
+  <header><h2 id="home-radio">on the radio</h2><a href={resolve('/(app)/radio/[[station]]', {})}>all stations</a></header>
   <ul>
     {#each radioStations as station, index (station.slug)}
       {@const song = airing[index]?.snapshot?.currentSong}

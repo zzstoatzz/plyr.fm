@@ -30,7 +30,7 @@
 		<form method="dialog"><button class="icon-button" aria-label="Close links"><Icon name="x" size={19} /></button></form>
 	</header>
 	<nav aria-label="Explore">
-		<a class="in-nav" href={resolve('/(app)/radio')} onclick={() => dialog.close()}>
+		<a class="in-nav" href={resolve('/(app)/radio/[[station]]', {})} onclick={() => dialog.close()}>
 			<Icon name="ph_radio" size={21} /><span>radio<small>live station</small></span>
 		</a>
 		<a class="in-nav" href={resolve('/(app)/stats')} onclick={() => dialog.close()}>
