@@ -29,16 +29,20 @@ jobs:
         working-directory: next/services/processing
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: mlugg/setup-zig@v2
         with:
-          components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
+          version: 0.17.0
+      # every dependency is a tangled.org archive; keep the fetched packages
+      # so a tangled outage cannot fail a build whose deps have not changed
+      - uses: actions/cache@v4
         with:
-          workspaces: next/services/processing
+          path: next/services/processing/zig-pkg
+          key: processing-zig-pkg-${{ hashFiles('next/services/processing/build.zig.zon') }}
+          restore-keys: processing-zig-pkg-
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
-      - run: cargo fmt --check
-      - run: cargo clippy --all-targets -- -D warnings
-      - run: cargo test
+      - run: zig fmt --check build.zig src
+      - run: zig build test --summary all
+      - run: zig build fuzz -Dhegel -Dfuzz-cases=500
 
   deploy:
     needs: test
