@@ -8,6 +8,7 @@
 		user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21c0-4 3.6-6 8-6s8 2 8 6',
 		users: 'M9 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21c0-4 3-6 7-6s7 2 7 6M17 4a4 4 0 0 1 0 8m2 4c2 .8 3 2.4 3 5',
 		upload: 'M12 16V4M7 9l5-5 5 5M4 20h16',
+		cloud_up: 'M7 18a4.5 4.5 0 0 1-.6-9A6 6 0 0 1 18 8.5a4 4 0 0 1-.5 9.5H7zM12 11v6M9.5 13.5 12 11l2.5 2.5',
 		/* the familiar desktop-app sidebar glyph: a rounded window with a panel line on the left */
 		sidebar: 'M6.5 4h11A3.5 3.5 0 0 1 21 7.5v9a3.5 3.5 0 0 1-3.5 3.5h-11A3.5 3.5 0 0 1 3 16.5v-9A3.5 3.5 0 0 1 6.5 4zM9.5 4v16',
 		settings:

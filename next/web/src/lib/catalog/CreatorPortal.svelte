@@ -17,6 +17,7 @@
   import Icon, { type IconName } from '$lib/ui/Icon.svelte';
   import Loading from '$lib/ui/Loading.svelte';
   import DeleteTrackSheet from './DeleteTrackSheet.svelte';
+  import PdsAudioCard from '$lib/account/PdsAudioCard.svelte';
   import { loadAlbums, loadPrivateTracks, loadProfile, loadTracks, portalFor } from './portal';
   import { tracksContext } from '@plyr/next-core/play-context';
   import PlayButton from '$lib/ui/PlayButton.svelte';
@@ -198,6 +199,7 @@
     <button class="action" type="button" onclick={share}><Icon name="share" size={20} /><span>{copied ? 'copied' : 'share'}</span></button>
     <a class="action settings" href="/settings" aria-label="settings"><Icon name="settings" size={20} /></a>
   </nav>
+  <PdsAudioCard />
   {#if profileError}
     <p class="state" role="alert">couldn’t load your profile. <button class="text-button" type="button" onclick={load} disabled={loading}>retry</button></p>
   {/if}
