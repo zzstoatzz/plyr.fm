@@ -90,7 +90,7 @@
 
 <svelte:head><title>{title} · plyr.fm</title></svelte:head>
 
-<article class="page-content" class:playlist={list.object === 'playlist'} class:album={list.object === 'album'}>
+<article class="page-content immersive" class:playlist={list.object === 'playlist'} class:album={list.object === 'album'}>
 	{#if covers[0] || list.media?.artwork}<ImmersiveWash src={list.media?.artwork?.url ?? covers[0]} />{/if}
 	<header>
 		<div class="cover" class:collage>
@@ -174,8 +174,8 @@
 	/* rows sit straight on the page, as on home and artist pages */
 	.playlist .members { gap: 0.15rem; }
 	.playlist .unavailable { min-height: 4.65rem; display: flex; align-items: center; margin: 0; }
-	.album .members :global(.track) { border-bottom: 1px solid var(--line); }
-	.album .members :global(.track:last-child) { border-bottom: 0; }
+	/* a straight hairline inside the row's padding, not a border that curls up at the rounded hover corners */
+	.album .members :global(.track:not(:last-child))::after { content: ''; position: absolute; inset: auto 0.75rem 0; height: 1px; background: var(--line); pointer-events: none; }
 	.album .unavailable { display: flex; align-items: center; gap: 0.75rem; min-height: 3.5rem; margin: 0 -0.5rem; padding-inline: 0.5rem; border-bottom: 1px solid var(--line); }
 	.album .number { width: 2.25rem; text-align: center; color: var(--faint); font-variant-numeric: tabular-nums; }
 	@media (min-width: 1100px) {

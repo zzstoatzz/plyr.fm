@@ -49,7 +49,7 @@
 	}
 </script>
 
-<dialog bind:this={dialog} aria-labelledby="account-menu-title"
+<dialog bind:this={dialog} aria-labelledby="account-menu-title" class="account-menu"
 	onpointerdown={event => { startedOutside = event.target === dialog; }}
 	onclick={event => { if (startedOutside && event.target === dialog) dialog.close(); }}>
 	<div class="panel">
@@ -91,7 +91,17 @@
 	small { color: var(--muted); }
 	@media (max-width: 720px), (hover: none) { .keys { display: none; } }
 	@media (min-width: 721px) {
-		dialog { margin: auto auto calc(var(--toast-dock, 0px) + 4.75rem) 0.875rem; }
+		/* a menu that grows out of the account button: the button's own width and left edge, rising from just above it */
+		dialog { width: calc(var(--sidebar) - 1.75rem); margin: auto auto calc(var(--toast-dock, 0px) + 4.6rem) 0.875rem; border-radius: 0.875rem; box-shadow: 0 0.75rem 2rem rgb(0 0 0 / 0.22); }
+		:global(:root[data-nav='collapsed']) dialog { width: 13rem; margin: auto auto calc(var(--toast-dock, 0px) + 0.875rem) calc(var(--sidebar) + 0.25rem); }
 		dialog::backdrop { background: transparent; }
+		header { display: none; }
+		nav { padding: 0.3rem; }
+		nav :is(a, button) { gap: 0.7rem; min-height: 2.5rem; padding: 0.45rem 0.65rem; border-radius: 0.55rem; font-size: var(--t-14); }
+		nav :global(svg) { width: 18px; height: 18px; }
+		.row-label small { display: none; }
+		.row-label { overflow-wrap: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+		strong { font-weight: 550; }
+		nav :is(a, button):last-child { margin-top: 0.25rem; box-shadow: 0 -1px 0 var(--line); border-radius: 0 0 0.55rem 0.55rem; }
 	}
 </style>

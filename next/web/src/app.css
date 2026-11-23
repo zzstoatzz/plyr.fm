@@ -147,6 +147,8 @@ input[type='range']:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 3px colo
 .page-content { max-width: 84rem; margin-inline: auto; padding: clamp(1rem, 3vw, 2.25rem); }
 .state { color: var(--muted); margin: 1rem 0; }
 /* album, playlist and artist heroes: stat chips and an even control row (the art wash is ui/ImmersiveWash) */
+/* pages over an ImmersiveWash: hovers and separators tint the art instead of painting solid theme greys over it */
+.immersive { --hover: color-mix(in srgb, var(--text) 9%, transparent); --line: color-mix(in srgb, var(--text) 13%, transparent); }
 .hero-chip { padding: 0.3rem 0.75rem; border-radius: 999px; background: color-mix(in srgb, var(--raised) 85%, transparent); color: var(--muted); font-size: var(--t-14); font-variant-numeric: tabular-nums; }
 .hero-chip b { color: var(--text); font-weight: 700; }
 .hero-pill, .hero-round { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; height: 2.75rem; border: 0; border-radius: 999px; background: var(--raised); color: var(--text); font-weight: 700; }
