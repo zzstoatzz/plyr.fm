@@ -118,6 +118,7 @@ export class AtlasRenderer {
   private reach = new Float32Array(0);
   private byReach: number[] = [];
   private drawnFaces: { i: number; x: number; y: number; r: number }[] = [];
+  private drawnCovers: { i: number; sx: number; sy: number; size: number }[] = [];
   private regions: Neighborhood[] = [];
   private clusters: Neighborhood[] = [];
   private links: Uint32Array<ArrayBuffer> = new Uint32Array(0);
@@ -439,6 +440,11 @@ export class AtlasRenderer {
 
   private findNearest(sx: number, sy: number, maxDistPx: number): number {
     if (!this.data) return -1;
+    // a drawn cover answers anywhere on it; the last drawn sits on top
+    for (let k = this.drawnCovers.length - 1; k >= 0; k--) {
+      const c = this.drawnCovers[k];
+      if (Math.abs(sx - c.sx) <= c.size / 2 && Math.abs(sy - c.sy) <= c.size / 2) return c.i;
+    }
     const [dx, dy] = this.screenToData(sx, sy);
     const r = maxDistPx / this.scale;
     const cs = this.cellSize;
@@ -469,8 +475,8 @@ export class AtlasRenderer {
   }
 
   private findArtistAt(sx: number, sy: number): number {
-    // faces drawn last sit on top, so they win
-    for (let k = this.drawnFaces.length - 1; k >= 0; k--) {
+    // faces are drawn in reverse, so the first in the list sits on top and wins
+    for (let k = 0; k < this.drawnFaces.length; k++) {
       const f = this.drawnFaces[k];
       if ((sx - f.x) ** 2 + (sy - f.y) ** 2 <= f.r * f.r) return f.i;
     }
@@ -568,7 +574,7 @@ export class AtlasRenderer {
       }
       cands.sort((a, b) => a.d - b.d);
       if (cands.length > T.budget[small ? 's' : 'l']) cands.length = T.budget[small ? 's' : 'l'];
-      const maxPx = Math.min(T.maxPx, T.minPx + (zoom - T.start) * 3);
+      const maxPx = Math.min(T.maxPx, T.minPx * (zoom / T.start) ** 1.1);
       for (const c of cands) {
         let best = maxPx * maxPx * 1.3;
         for (const o of cands) {
@@ -612,6 +618,7 @@ export class AtlasRenderer {
       ctx.drawImage(spr, sx - w / 2, sy - w / 2, w, w);
     }
 
+    this.drawnCovers = covers;
     ctx.globalAlpha = coverAlpha;
     for (const c of covers) {
       const half = c.size / 2;

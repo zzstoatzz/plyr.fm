@@ -1,4 +1,8 @@
 const IN_FLIGHT = 12;
+/** sprites kept at once; the least recently drawn go first, with their images */
+const KEEP = 400;
+/** sprite builds per frame, so crossing a size step never rebuilds every cover at once */
+const BUILDS = 24;
 
 /**
  * track cover thumbnails for the atlas: the ones nearest the middle of the
@@ -11,6 +15,8 @@ export class TrackCovers {
   private loading = new Set<number>();
   private sprites = new Map<number, { px: number; cv: HTMLCanvasElement }>();
   private wanted: { i: number; url: string; d: number }[] = [];
+  private builds = 0;
+  private deferred = false;
 
   constructor(private onLoad: () => void) {}
 
@@ -30,6 +36,15 @@ export class TrackCovers {
       for (const { i, url } of this.wanted.slice(0, slots)) this.load(i, url);
     }
     this.wanted = [];
+    this.builds = 0;
+    // sprites left for later get the next frame
+    if (this.deferred) requestAnimationFrame(() => this.onLoad());
+    this.deferred = false;
+    for (const i of this.sprites.keys()) {
+      if (this.sprites.size <= KEEP) break;
+      this.sprites.delete(i);
+      this.images.delete(i);
+    }
   }
 
   private load(i: number, url: string): void {
@@ -51,11 +66,18 @@ export class TrackCovers {
     );
   }
 
-  private sprite(i: number, img: HTMLImageElement, px: number): HTMLCanvasElement {
+  private sprite(i: number, img: HTMLImageElement, px: number): HTMLCanvasElement | undefined {
     // sizes snap to powers of two and draw scaled, so a zoom rebuilds a sprite rarely
-    const size = Math.max(16, 2 ** Math.ceil(Math.log2(px)));
+    const size = Math.min(128, Math.max(16, 2 ** Math.ceil(Math.log2(px))));
     const hit = this.sprites.get(i);
-    if (hit?.px === size) return hit.cv;
+    if (hit) {
+      // most recently drawn last, so the oldest are dropped first
+      this.sprites.delete(i);
+      this.sprites.set(i, hit);
+      if (hit.px === size) return hit.cv;
+      if (this.builds >= BUILDS) return ((this.deferred = true), hit.cv);
+    } else if (this.builds >= BUILDS) return ((this.deferred = true), undefined);
+    this.builds++;
     const cv = document.createElement('canvas');
     cv.width = cv.height = size;
     const ctx = cv.getContext('2d')!;
