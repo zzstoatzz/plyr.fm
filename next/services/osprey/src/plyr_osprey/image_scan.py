@@ -10,12 +10,19 @@ prod image. a flag here only opens a review in next's queue.
 """
 
 import hashlib
+import io
 from dataclasses import dataclass
 from typing import Protocol
 
 import requests
+from PIL import Image
 
 MAX_IMAGE_BYTES = 10_000_000
+# what the image check takes as is: the moderation service reads at most 2 MB
+# of upload (axum's default), and Claude looks at no more than 1568px a side
+SEND_BYTES = 1_500_000
+SEND_EDGE = 1568
+SEND_TYPES = ('image/jpeg', 'image/png', 'image/webp', 'image/gif')
 # next's cover worker (next/services/audio/src/images.ts): copies a cover off its
 # PDS, keeps it only if it hashes to the CID, and serves it sized with &w=
 NEXT_IMAGES = 'https://plyr-next-audio.n8-3e9.workers.dev/images/'
@@ -68,6 +75,7 @@ class ModerationServiceImageScanner:
             body = image.raw.read(MAX_IMAGE_BYTES + 1, decode_content=True)
         if len(body) > MAX_IMAGE_BYTES:
             raise ValueError(f'{image_url} is over {MAX_IMAGE_BYTES} bytes')
+        body, media_type = sendable(body, media_type)
         response = requests.post(
             self._url,
             files={'image': ('cover', body, media_type)},
@@ -86,6 +94,28 @@ class ModerationServiceImageScanner:
             categories=[str(c) for c in categories] if isinstance(categories, list) else [],
             reason=str(answer.get('reason') or ''),
         )
+
+
+def sendable(body: bytes, media_type: str) -> tuple[bytes, str]:
+    """the image as the check can take it: a cover over the size, past 1568px or in
+    a format Claude doesn't read is sent as a JPEG of at most 1568px a side."""
+    if media_type in SEND_TYPES and len(body) <= SEND_BYTES:
+        with Image.open(io.BytesIO(body)) as image:
+            if max(image.size) <= SEND_EDGE:
+                return body, media_type
+    with Image.open(io.BytesIO(body)) as image:
+        image.seek(0)
+        image.thumbnail((SEND_EDGE, SEND_EDGE))
+        if image.mode in ('RGBA', 'LA', 'P'):
+            image = image.convert('RGBA')
+            flat = Image.new('RGB', image.size, 'white')
+            flat.paste(image, mask=image.getchannel('A'))
+            image = flat
+        else:
+            image = image.convert('RGB')
+        out = io.BytesIO()
+        image.save(out, 'JPEG', quality=85)
+    return out.getvalue(), 'image/jpeg'
 
 
 class Unconfigured:
