@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
+	import { resolveHandle } from '@plyr/next-core/auth-state';
 	import { profileApp, profileLink } from '$lib/profile-link';
 
 	const missing = $derived(page.status === 404);
@@ -11,12 +12,10 @@
 	$effect(() => {
 		elsewhere = undefined;
 		const name = actor;
-		if (!name) return;
-		const controller = new AbortController();
-		const known = name.startsWith('did:') ? Promise.resolve(true)
-			: fetch(`https://public.api.bsky.app/xrpc/com.atproto.identity.resolveHandle?handle=${encodeURIComponent(name)}`, { signal: controller.signal }).then(response => response.ok);
-		known.then(found => { if (found) elsewhere = name; }, () => undefined);
-		return () => controller.abort();
+		if (!name || name.startsWith('did:')) return;
+		let live = true;
+		resolveHandle(name).then(did => { if (live && typeof did === 'string') elsewhere = name; }, () => undefined);
+		return () => { live = false; };
 	});
 </script>
 
@@ -28,7 +27,7 @@
 	<p class="subtle">{missing ? (page.error?.message ?? "we couldn't find what you're looking for") : (page.error?.message ?? "plyr.fm couldn't load this page.")}</p>
 	<div class="links">
 		{#if elsewhere}
-			<a class="text-button" href={profileLink(elsewhere)} target="_blank" rel="noopener noreferrer">{elsewhere.startsWith('did:') ? 'see their profile' : `see @${elsewhere}`} on {profileApp()}</a>
+			<a class="text-button" href={profileLink(elsewhere)} target="_blank" rel="noopener noreferrer">see @{elsewhere} on {profileApp()}</a>
 		{/if}
 		{#if missing}
 			<a class="text-button" href={resolve('/search')}>search plyr.fm</a>

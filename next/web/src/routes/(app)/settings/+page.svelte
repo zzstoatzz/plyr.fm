@@ -140,7 +140,7 @@
 	<section aria-labelledby="links">
 		<h2 id="links">links</h2>
 		<div class="card">
-			<fieldset aria-describedby="links-detail">
+			<fieldset class="described" aria-describedby="links-detail">
 				<legend>open profiles in</legend>
 				<p id="links-detail" class="detail">the app you go to from an @handle on plyr.fm</p>
 				<div class="options">
@@ -200,9 +200,9 @@
 	.option > span { display: grid; place-items: center; min-height: 2.75rem; min-width: 2.75rem; padding: 0 0.75rem; border: 1px solid var(--line); border-radius: 0.55rem; color: var(--muted); background: var(--raised); }
 	.option input:checked + span { border-color: var(--accent); color: var(--text); font-weight: 620; }
 	.option input:focus-visible + span, .toggle input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-	fieldset:has(.detail) { display: grid; gap: 0.6rem; }
+	fieldset.described { display: grid; gap: 0.6rem; }
 	.detail { margin: 0; color: var(--muted); }
-	.app { display: flex !important; gap: 0.45rem; }
+	.option > .app { display: flex; gap: 0.45rem; }
 	.app img { flex: none; border-radius: 0.25rem; object-fit: contain; }
 	.custom input { opacity: 0; }
 	.custom > span { background: conic-gradient(#f894b8, #c2a2ff, #6a9fff, #66cd9d, #f2c66d, #f894b8); }
