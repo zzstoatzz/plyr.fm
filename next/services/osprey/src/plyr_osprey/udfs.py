@@ -49,7 +49,7 @@ class RecordingsArguments(ArgumentsBase):
 class RecordingsPlayingThrough(UDFBase[RecordingsArguments, Lines]):
     """someone else's recordings that play through the audio, one line each.
 
-    fingerprints the audio with AuDD, keeps
+    fingerprints the audio (AuDD, through plyr's moderation service), keeps
     the recordings that play through for about 48 seconds or fill the upload
     (evidence.song_evidence), and drops the uploader's own catalog. a failed
     scan raises, so nothing downstream reads it as clean.
@@ -70,8 +70,8 @@ class CoverArguments(ArgumentsBase):
 class ImagePolicyViolations(UDFBase[CoverArguments, Lines]):
     """what breaks plyr's image policy in a cover, one line; empty when it's fine.
 
-    the scan prod runs on every cover uploaded to it, asked of Claude directly.
-    a failed scan raises, so nothing downstream reads it
+    the scan prod runs on every cover uploaded to it (Claude, through plyr's
+    moderation service). a failed scan raises, so nothing downstream reads it
     as clean.
     """
 

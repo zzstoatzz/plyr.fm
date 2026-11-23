@@ -3,7 +3,8 @@
 DATABASE_URL             next's Postgres (the writer login)
 TRACK_COLLECTION_NSID    default fm.plyr.track
 LIST_COLLECTION_NSID     default fm.plyr.list (albums and playlists, for their covers)
-AUDD_API_TOKEN           for fingerprinting
+MODERATION_SERVICE_URL   plyr's moderation service, which holds the AuDD key
+MODERATION_AUTH_TOKEN    its X-Moderation-Key
 ANTHROPIC_API_KEY        for the cover check
 OSPREY_DRAIN_ONCE        true: stop when caught up (a scheduled run)
 OSPREY_POLL_SECONDS      otherwise, how long to wait when caught up
@@ -27,7 +28,7 @@ from osprey.worker.sinks.utils.acking_contexts import BaseAckingContext
 
 from plyr_osprey import udfs
 from plyr_osprey.entity_labels import PostgresEntityLabels
-from plyr_osprey.fingerprint import AudDFingerprinter
+from plyr_osprey.fingerprint import ModerationServiceFingerprinter
 from plyr_osprey.image_scan import ClaudeImageScanner
 from plyr_osprey.store import Store
 from plyr_osprey.tracks import ModerationLogSink, TrackInputStream, Walk
@@ -51,7 +52,8 @@ def register_udfs() -> Sequence[type[UDFBase[Any, Any]]]:
 @hookimpl_osprey
 def register_input_stream(config: Config) -> BaseInputStream[BaseAckingContext[Action]]:
     # required: without it every scan would fail and, after a few runs, be passed over
-    udfs.fingerprinter = AudDFingerprinter(config.expect_str('AUDD_API_TOKEN'))
+    service, token = config.expect_str('MODERATION_SERVICE_URL'), config.expect_str('MODERATION_AUTH_TOKEN')
+    udfs.fingerprinter = ModerationServiceFingerprinter(service, token)
     udfs.image_scanner = ClaudeImageScanner(anthropic.Anthropic(api_key=config.expect_str('ANTHROPIC_API_KEY')))
     store, walk = _shared(config)
     start = config.get_optional_str('OSPREY_START_AT_US')
