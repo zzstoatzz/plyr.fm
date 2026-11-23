@@ -81,7 +81,7 @@ pub fn handle(
 
     if (request.method == .OPTIONS) {
         var cors = app.cors;
-        if (catalog.match(app.track_collection, path) != null or radio.match(app.track_collection, path) != null or mem.eql(u8, path, labels.path)) cors.public = true;
+        cors.public = isPublicPath(app.track_collection, path);
         try response.empty(request, .no_content, request_id, cors);
     } else if (mem.eql(u8, path, "/health")) {
         if (request.method != .GET) {
@@ -179,6 +179,29 @@ pub fn handle(
     } else {
         try response.apiError(request, .not_found, request_id, app.cors);
     }
+}
+
+/// Paths any website may read from the browser (no credentials), so a
+/// preflight answers them with `*`. Everything credentialed or service-authed
+/// (recordPlay's cookie, notifications, moderation, checkUserAccess) keeps the
+/// exact `CORS_ALLOWED_ORIGINS` list.
+fn isPublicPath(track_collection: []const u8, path: []const u8) bool {
+    if (catalog.match(track_collection, path) != null) return true;
+    if (radio.match(track_collection, path) != null) return true;
+    if (mem.eql(u8, path, labels.path)) return true;
+    if (xrpc.match(track_collection, path)) |method| return method.isPublic();
+    return false;
+}
+
+test "public reads preflight for any origin; credentialed paths do not" {
+    const collection = "fm.plyr.track";
+    try std.testing.expect(isPublicPath(collection, "/xrpc/fm.plyr.unspecced.search"));
+    try std.testing.expect(isPublicPath(collection, "/xrpc/fm.plyr.unspecced.getTrackChart"));
+    try std.testing.expect(isPublicPath(collection, "/xrpc/fm.plyr.unspecced.resolveTracks"));
+    try std.testing.expect(isPublicPath(collection, "/xrpc/fm.plyr.unspecced.getTopTracks"));
+    try std.testing.expect(!isPublicPath(collection, "/xrpc/fm.plyr.unspecced.recordPlay"));
+    try std.testing.expect(!isPublicPath(collection, "/xrpc/com.atproto.managedspace.checkUserAccess"));
+    try std.testing.expect(!isPublicPath(collection, "/xrpc/fm.plyr.notification.listNotifications"));
 }
 
 fn publicCors(cors: response.CorsPolicy) response.CorsPolicy {

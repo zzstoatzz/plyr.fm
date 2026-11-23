@@ -69,8 +69,9 @@ pub const CorsPolicy = struct {
     /// Comma-separated exact origins. Empty means browser cross-origin access
     /// is disabled; wildcard origins are never compatible with auth cookies.
     allowed_origins: []const u8,
-    /// Public, credential-free reads (the catalog XRPC queries): any origin,
-    /// never with credentials.
+    /// Public, credential-free reads (the catalog and unspecced XRPC reads,
+    /// including the POST `resolve*` batch reads): any origin, never with
+    /// credentials.
     public: bool = false,
     captured_origin: ?[]const u8 = null,
     origin_captured: bool = false,
@@ -117,7 +118,7 @@ pub fn jsonWithHeaders(
     if (cors.public) {
         headers[count] = .{ .name = "access-control-allow-origin", .value = "*" };
         count += 1;
-        headers[count] = .{ .name = "access-control-allow-methods", .value = "GET, OPTIONS" };
+        headers[count] = .{ .name = "access-control-allow-methods", .value = "GET, POST, OPTIONS" };
         count += 1;
         headers[count] = .{ .name = "access-control-allow-headers", .value = "atproto-accept-labelers, atproto-proxy, content-type" };
         count += 1;
@@ -250,6 +251,7 @@ pub fn captureCors(request: *const Exchange, allocator: std.mem.Allocator, cors:
     const origin = requestOrigin(request, cors);
     return .{
         .allowed_origins = cors.allowed_origins,
+        .public = cors.public,
         .origin_captured = true,
         .captured_origin = if (origin) |value| try allocator.dupe(u8, value) else null,
     };
