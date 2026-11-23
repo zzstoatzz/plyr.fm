@@ -66,7 +66,7 @@ function PlaylistCard({ list, width }: { list: ListSummary; width: number }) {
   const theme = useAppearance();
   const name = list.metadata.name || 'untitled playlist';
   return <Link href={{ pathname: '/playlist/[id]', params: { id: list.id } }} asChild>
-    <Pressable accessibilityRole="link" accessibilityLabel={name} style={[styles.card, { width }]}>
+    <Pressable accessibilityRole="link" accessibilityLabel={name} style={StyleSheet.flatten([styles.card, { width }])}>
       <Cover uri={collectionArtwork(list)} size={width} radius={10} />
       <Text numberOfLines={1} style={{ marginTop: 6, color: theme.text, fontFamily: theme.fontFamily, fontSize: 14.5 * theme.scale, fontWeight: '600' }}>{name}</Text>
       <Text numberOfLines={1} style={{ color: theme.faint, fontFamily: theme.fontFamily, fontSize: 12.5 * theme.scale }}>{trackCount(list.metrics.member_count)}</Text>
