@@ -230,6 +230,8 @@ export function createApi(origin: string, playListenerId: () => string, nsidPref
 			{ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ uris: ids.map(uriFromId) }) }),
 		statsOverview: (range: StatsRange, signal?: AbortSignal) => get<StatsOverview>(xrpc('getStatsOverview'), { range }, signal),
 		stats: (signal?: AbortSignal) => get<{ object: 'platform_stats'; tracks: number; artists: number; duration_seconds: number; plays: number; updated_at_ms: number }>(xrpc('getStats'), undefined, signal),
+		/** the atlas map, rebuilt daily; its shape belongs to web's atlas (lib/atlas/types.ts) */
+		atlas: (signal?: AbortSignal) => get<unknown>(xrpc('getAtlas'), undefined, signal),
 		recordPlay: async (play: QualifiedPlay): Promise<PlayReceipt> => {
 			const url = new URL(origin + xrpc('recordPlay'));
 			for (const [key, value] of Object.entries(trackSubject(play.trackId))) url.searchParams.set(key, value);

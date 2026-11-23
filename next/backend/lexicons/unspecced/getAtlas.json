@@ -1,0 +1,13 @@
+{
+  "lexicon": 1,
+  "id": "fm.plyr.unspecced.getAtlas",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "The atlas: a 2D map of the public catalog from audio embeddings, with clusters and artists. Rebuilt daily; NotFound until the first build. The response body is the appview's own JSON shape, not yet specified here.",
+      "output": {
+        "encoding": "application/json"
+      }
+    }
+  }
+}

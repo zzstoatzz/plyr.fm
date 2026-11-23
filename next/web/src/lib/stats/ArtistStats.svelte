@@ -142,7 +142,7 @@
 			<ol class="list">
 				{#each tracks.slice(0, shown) as track, index (track.id)}
 					<RankedTrack {track} rank={index + 1} plays={track.metrics.play_count} max={Math.max(1, tracks[0].metrics.play_count)} collection={tracks}
-						showArtist={false} sound={track.legacy_id ? mine?.byLegacyId.get(track.legacy_id) : undefined} />
+						showArtist={false} sound={mine?.byTrackId.get(track.id)} />
 				{/each}
 			</ol>
 			<LoadMore cursor={shown < tracks.length} label="tracks" load={() => { shown += 25; }} />

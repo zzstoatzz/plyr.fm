@@ -71,7 +71,7 @@
 		return { x: Math.max(8, Math.min(canvas.clientWidth - 252, x + 16)), y: Math.max(8, y - 60), name, detail };
 	}
 
-	async function play(id: number, title: string) {
+	async function play(id: string | number, title: string) {
 		pending?.abort();
 		const request = new AbortController();
 		pending = request;

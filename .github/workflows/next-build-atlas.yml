@@ -1,0 +1,62 @@
+name: next build atlas
+
+# Rebuilds next's /atlas map (next/scripts/build-atlas.py) from next alone:
+# the corpus is next's public catalog, vectors live in next's postgres
+# (plyr_index.track_embeddings), new or changed audio is embedded through the
+# Modal CLAP endpoint, and the map is stored in plyr_index.atlas_snapshots,
+# which the api serves as fm.plyr.unspecced.getAtlas. Nothing here reads the
+# legacy python api or its database. While TURBOPUFFER_API_KEY exists, each
+# run first copies any legacy vectors next doesn't have yet (matched by
+# legacy_id), so the legacy catalog isn't embedded twice.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "next/scripts/build-atlas.py"
+      - "next/backend/migrations/0061_add_atlas.sql"
+      - ".github/workflows/next-build-atlas.yml"
+  schedule:
+    - cron: "37 9 * * *" # daily
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  # a push waits for that commit's next deploy (migrations, grants) to land
+  actions: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    concurrency:
+      group: next-build-atlas
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+      - name: wait for this commit's next deploy
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for i in $(seq 1 90); do
+            state="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/deploy-next.yml/runs?head_sha=$GITHUB_SHA" \
+              --jq '.workflow_runs[0] | select(.) | .status + " " + (.conclusion // "")')"
+            case "$state" in
+              "completed success") exit 0 ;;
+              completed*) echo "next deploy for $GITHUB_SHA: $state"; exit 1 ;;
+              "") if [ "$i" -gt 6 ]; then echo "no next deploy for this commit"; exit 0; fi ;;
+            esac
+            sleep 20
+          done
+          echo "next deploy for $GITHUB_SHA didn't finish"; exit 1
+      - name: embed new audio and build the map
+        env:
+          DATABASE_URL: ${{ secrets.ZIG_NEXT_WRITER_DATABASE_URL }}
+          TURBOPUFFER_API_KEY: ${{ secrets.TURBOPUFFER_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          seed=()
+          if [ -n "$TURBOPUFFER_API_KEY" ]; then seed=(--seed-turbopuffer); fi
+          uv run next/scripts/build-atlas.py "${seed[@]}"

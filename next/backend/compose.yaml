@@ -1,7 +1,7 @@
 # Disposable services for the Zig backend's tests and benchmarks only.
 services:
   zig-db:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     ports:
       - "5435:5432"
     environment:
@@ -13,7 +13,7 @@ services:
     command: ["postgres", "-c", "max_connections=100"]
 
   bench-db:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     profiles: [bench]
     ports:
       - "5434:5432"
