@@ -88,12 +88,10 @@ module.exports = async function restoredListening({ page, context, origin, coord
   await page.keyboard.press('Escape');
   await now.waitFor({ state: 'hidden' });
   await row.getByRole('link', { name: track.metadata.title, exact: true }).click();
-  await page.getByRole('button', { name: 'comments', exact: true }).click();
-  const comments = page.getByRole('dialog', { name: 'comments', exact: true });
+  const comments = page.getByRole('region', { name: 'comments', exact: true });
   await comments.getByRole('button', { name: 'Delete comment', exact: true }).click();
   await comments.getByRole('button', { name: 'delete', exact: true }).click();
   await comments.getByText('no comments yet.').waitFor();
-  await comments.getByRole('button', { name: 'Close comments', exact: true }).click();
   // a return visit draws the last shelf while the follow graph is still loading
   let release;
   const held = new Promise(resolve => { release = resolve; });
