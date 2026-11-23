@@ -34,6 +34,7 @@ async function fixture(browser, width, scheme, fastChange = false) {
   const reads = new Map();
   const receipts = [];
   const appViewWrites = [];
+  const broadcast = { offAir: false };
   await context.route('https://api.plyr.fm/**', route => {
     if (new URL(route.request().url()).pathname === '/tracks/42') return route.fulfill({ json: { atproto_record_uri: tracks[0].record.uri } });
     return route.abort();
@@ -53,7 +54,7 @@ async function fixture(browser, width, scheme, fastChange = false) {
     // Like the real station: a sonified broadcast with no rotation behind it.
     if (slug === 'firehose') return route.fulfill({ json: {
       station: 'firehose', current: null, current_ends_at: null, progress_seconds: 0, up_next: [],
-      live: { stream_url: 'https://live-fixture.invalid/firehose/index.m3u8', kind: 'hls', started_at: '2026-11-15T06:46:15Z', artwork_url: broadcastCover }
+      live: broadcast.offAir ? null : { stream_url: 'https://live-fixture.invalid/firehose/index.m3u8', kind: 'hls', started_at: '2026-11-15T06:46:15Z', artwork_url: broadcastCover }
     } });
     return route.fulfill({ json: {
       current: {
@@ -97,7 +98,7 @@ async function fixture(browser, width, scheme, fastChange = false) {
       dedup: { status: 'claimed', window_seconds: 30 }
     } });
   });
-  return { context, page, errors, reads, receipts, appViewWrites };
+  return { context, page, errors, reads, receipts, appViewWrites, broadcast };
 }
 
 async function stationFlow(browser, origin, width, scheme) {
@@ -197,7 +198,7 @@ async function linkedStationFlow(browser, origin, width) {
 }
 
 async function broadcastFlow(browser, origin, width) {
-  const { context, page, errors, receipts } = await fixture(browser, width, 'dark');
+  const { context, page, errors, receipts, broadcast } = await fixture(browser, width, 'dark');
   try {
     await page.goto(origin + '/radio');
     const grid = page.getByTestId('radio-stations');
@@ -213,6 +214,26 @@ async function broadcastFlow(browser, origin, width) {
     assert.deepEqual(await page.evaluate(() => { const meta = navigator.mediaSession.metadata; return meta && [meta.title, meta.artist, meta.album, meta.artwork.length, navigator.mediaSession.playbackState]; }),
       ['firehose', 'the atproto firehose, sonified', 'firehose radio', 1, 'playing'], 'the broadcast fills the lock screen');
     await page.screenshot({ path: path.join(output, `${width}-firehose-live.png`) });
+    // a stream that drops (production's broadcaster hiccups) reconnects at the live edge instead of going quiet
+    await page.evaluate(() => {
+      const media = window.media.find(element => !element.paused);
+      window.reconnected = false;
+      media.addEventListener('emptied', () => { window.reconnected = true; }, { once: true });
+      media.dispatchEvent(new Event('ended'));
+    });
+    await page.waitForFunction(() => window.reconnected, null, { timeout: 10_000 }).catch(() => assert.fail('a dropped broadcast reconnects'));
+    await page.waitForFunction(() => window.media.some(media => !media.paused && media.currentTime > 0.5), null, { timeout: 15_000 });
+    await now.getByText('live · firehose radio', { exact: true }).waitFor();
+    if (width === 1280) {
+      // the off-air check fails closed, so one slow answer from the broadcaster reads as off air: the stream outlasts it
+      await page.evaluate(() => { window.emptied = 0; for (const media of window.media) media.addEventListener('emptied', () => window.emptied++); });
+      broadcast.offAir = true;
+      await page.waitForTimeout(31_000);
+      broadcast.offAir = false;
+      assert.ok(await page.evaluate(() => window.media.some(media => !media.paused)), 'a broadcast still playing outlasts an off-air read');
+      assert.equal(await page.evaluate(() => window.emptied), 0, 'and is never torn down for it');
+      await now.getByRole('heading', { name: 'firehose', exact: true }).waitFor();
+    }
     await now.getByRole('button', { name: 'Pause', exact: true }).click();
     await page.waitForFunction(() => window.media.every(media => media.paused));
     await now.getByRole('button', { name: 'Listen live', exact: true }).click();

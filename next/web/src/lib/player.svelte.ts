@@ -73,6 +73,11 @@ class Player {
 	#liveOccurrence: string | undefined;
 	#liveSync = 0;
 	#liveBroadcast = false;
+	/** The broadcast on air, kept so a drop can reconnect to it, and how many reconnects in a row have not played yet. */
+	#liveSource: { track: Track; url: string } | undefined;
+	#liveReconnects = 0;
+	/** A broadcast is airing and audible: a station read that briefly misses it must not cut it off. */
+	get airingBroadcast() { return this.#liveBroadcast && this.playing; }
 	#embedded = false;
 	get outputElsewhere() { return !this.localMode && this.snapshot.outputElsewhere; }
 	#publicRepeat: PersonalPlaybackTarget['repeat'] = 'off';
@@ -385,6 +390,7 @@ class Player {
 		this.#liveClock = undefined;
 		this.#liveOccurrence = undefined;
 		this.#liveBroadcast = false;
+		this.#liveSource = undefined;
 		this.liveStation = undefined;
 		this.liveListening = false;
 		this.#liveSync++;
@@ -396,6 +402,7 @@ class Player {
 		if (this.#liveOccurrence === occurrence) return;
 		this.#liveOccurrence = occurrence;
 		this.#liveBroadcast = broadcast;
+		this.#liveSource = broadcast ? { track, url } : undefined;
 		this.queue = [track];
 		this.index = 0;
 		const audio = this.#audioElement();
@@ -424,6 +431,22 @@ class Player {
 			this.#audio?.pause();
 			this.loading = false;
 		}
+	}
+
+	/** A broadcast that drops (a playlist hiccup ends or errors the element) reconnects at the live edge instead of going quiet. */
+	#reconnectBroadcast() {
+		const source = this.#liveSource;
+		const occurrence = this.#liveOccurrence;
+		const clock = this.#liveClock;
+		if (!source || !occurrence || !clock || !this.liveStation || !this.liveListening || this.#liveReconnects >= 5) return false;
+		const delay = Math.min(8000, 1000 * 2 ** this.#liveReconnects++);
+		setTimeout(() => {
+			if (this.#liveSource !== source || this.#liveOccurrence !== occurrence || !this.liveListening) return;
+			this.#liveOccurrence = undefined;
+			void this.setRadioTrack(source.track, source.url, occurrence, clock, true);
+		}, delay);
+		this.loading = true;
+		return true;
 	}
 
 	async #resumeRadio() {
@@ -629,14 +652,14 @@ class Player {
 		for (const event of ['timeupdate', 'durationchange', 'play', 'pause', 'playing', 'waiting', 'ended']) {
 			audio.addEventListener(event, observe);
 		}
-		audio.addEventListener('playing', () => { this.#seekToStart(); this.#wantsPlay = false; this.loading = false; this.error = undefined; this.#updateMediaStatus(); });
+		audio.addEventListener('playing', () => { this.#liveReconnects = 0; this.#seekToStart(); this.#wantsPlay = false; this.loading = false; this.error = undefined; this.#updateMediaStatus(); });
 		audio.addEventListener('pause', () => { this.#updateMediaStatus(); });
 		audio.addEventListener('waiting', () => { if (!audio.paused) this.loading = true; });
 		audio.addEventListener('timeupdate', () => this.#setMediaPosition(audio));
 		audio.addEventListener('seeked', () => { this.#listening.settle(this.#token); this.#setMediaPosition(audio); });
-		audio.addEventListener('error', () => { if (this.#embedAnalysis?.corsLoading) return; if (audio.src) this.error = 'could not load this audio'; this.loading = false; });
+		audio.addEventListener('error', () => { if (this.#embedAnalysis?.corsLoading || this.#liveBroadcast && this.#reconnectBroadcast()) return; if (audio.src) this.error = 'could not load this audio'; this.loading = false; });
 		audio.addEventListener('ended', () => {
-			if (this.liveStation) { this.loading = this.liveListening; return; }
+			if (this.liveStation) { if (!(this.#liveBroadcast && this.#reconnectBroadcast())) this.loading = this.liveListening; return; }
 			if (this.jam) { if (this.jam.canSeek) void this.next(); return; }
 			if ((this.privateMode || !this.snapshot.remote) && this.repeat === 'one') { this.#repeatTrack(); return; }
 			if (this.privateMode || this.#embedded) void this.next();

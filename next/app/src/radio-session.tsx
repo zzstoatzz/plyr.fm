@@ -37,14 +37,20 @@ export function RadioProvider({ children }: { children: ReactNode }) {
   const audio = useAudioPlayer(null);
   const status = useAudioPlayerStatus(audio);
   const accounting = usePlayerAccounting(audio);
+  // the station's off-air check fails closed, so one slow answer from the broadcaster reads as off air: a broadcast
+  // still playing outlasts that read, as on the web
+  const aired = useRef<RadioSong | null>(null);
+  const read = station ? snapshot?.currentSong ?? null : null;
+  const held = station && aired.current?.live && aired.current.id === `live:${station.slug}` && status.playing ? aired.current : null;
+  const song = read ?? held;
+  aired.current = song;
+  const source = song?.audio ?? null;
   const solo = usePlayback();
   const { preferences } = useAppPreferences();
   const volume = useRef(preferences.volume);
   volume.current = preferences.volume;
   const latest = useRef(snapshot);
   latest.current = snapshot;
-  const song = station ? snapshot?.currentSong ?? null : null;
-  const source = song?.audio ?? null;
 
   useEffect(() => { audio.volume = preferences.volume; }, [audio, preferences.volume]);
 
