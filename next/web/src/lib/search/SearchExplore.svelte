@@ -21,7 +21,7 @@
 	let chartRequest: AbortController | undefined;
 	let live = false;
 	const artists = $derived([...new Map((charts ?? []).map(({ track }) =>
-		[track.artist.did, track])).values()].slice(0, 6));
+		[track.artist.did, track])).values()].slice(0, 10));
 
 	function loadChart() {
 		chartError = false;
@@ -35,7 +35,7 @@
 
 	function loadLists() {
 		listError = false;
-		void api.playlists({ limit: 6 }).then(
+		void api.playlists({ limit: 8 }).then(
 			({ data }) => { if (live) lists = data; },
 			() => { if (live) listError = true; }
 		);
@@ -67,7 +67,7 @@
 			<Loading label="loading popular tracks" inline />
 		{:else if charts.length}
 			<ul class="covers">
-				{#each charts.slice(0, 4) as { track } (track.id)}
+				{#each charts.slice(0, 8) as { track } (track.id)}
 					<li><a href={trackHref(track)}>
 						<span class="tile-art"><Artwork src={track.media.artwork?.url} fallback={track.artist.profile.avatar_url ?? undefined} size={200} eager /></span>
 						<strong>{track.metadata.title}</strong><small>{artistName(track)}</small>
@@ -102,7 +102,7 @@
 			<Loading label="loading playlists" inline />
 		{:else if lists.length}
 			<ul class="covers">
-				{#each lists.slice(0, 4) as list (list.id)}
+				{#each lists.slice(0, 8) as list (list.id)}
 					<li><a href={resolve('/(app)/playlist/[id]', { id: list.id })}>
 						<span class="tile-art"><Artwork src={list.media?.artwork?.url} fallbackIcon="queue" size={200} /></span>
 						<strong>{list.metadata.name || 'untitled playlist'}</strong><small>{list.owner.profile?.display_name || list.owner.profile?.handle || 'playlist'}</small>
@@ -132,7 +132,18 @@
 	.recent a { display: flex; align-items: center; gap: 0.4rem; min-height: 2.75rem; padding-inline: 0.7rem; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); }
 	.recent span { overflow-wrap: anywhere; }
 	.recent :global(svg) { flex: none; }
-	.clear { color: var(--muted); }
+	.clear { color: var(--muted); margin-block: -0.5rem; margin-inline-end: -0.5rem; }
+	.covers li:nth-child(n + 5), .people li:nth-child(n + 7) { display: none; }
+	@media (min-width: 1500px) {
+		.covers { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+		.people { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+		.covers li:nth-child(-n + 6), .people li:nth-child(-n + 8) { display: list-item; }
+	}
+	@media (min-width: 1900px) {
+		.covers { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+		.people { grid-template-columns: repeat(10, minmax(0, 1fr)); }
+		.covers li:nth-child(n), .people li:nth-child(n) { display: list-item; }
+	}
 	@media (max-width: 720px) {
 		.covers, .people { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 44%; overflow-x: auto; padding: 0.2rem 0.2rem 0.65rem; scroll-snap-type: x proximity; }
 		.people { grid-auto-columns: 30%; }

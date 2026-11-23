@@ -144,11 +144,15 @@
 <section class="page-content search-page">
 	<h1>search</h1>
 	<form action="/search" onsubmit={event => { event.preventDefault(); submitSearch(term); }}>
-		<!-- svelte-ignore a11y_autofocus -->
-		<input id="search-query" autofocus={!data.query} aria-label="Search tracks, artists, albums and playlists" type="search" name="q"
-			bind:this={input} bind:value={query} autocomplete="off" maxlength="100" placeholder="tracks, artists, albums and playlists"
-			onkeydown={event => moveFocus(event, -1)} />
-		<button class="icon-button" type="submit" aria-label="Search"><Icon name="search" /></button>
+		<label class="field">
+			<Icon name="search" size={18} />
+			<!-- svelte-ignore a11y_autofocus -->
+			<input id="search-query" autofocus={!data.query} aria-label="Search tracks, artists, albums and playlists" type="search" name="q" enterkeyhint="search"
+				bind:this={input} bind:value={query} autocomplete="off" maxlength="100" placeholder="tracks, artists, albums and playlists"
+				onkeydown={event => moveFocus(event, -1)} />
+			{#if query}<button class="erase" type="button" aria-label="clear search" onclick={() => { query = ''; input.focus(); }}><Icon name="x" size={16} /></button>
+			{:else}<kbd aria-hidden="true">/</kbd>{/if}
+		</label>
 	</form>
 	{#if length >= 2}
 		<nav class="result-types" aria-label="Result types">
@@ -193,7 +197,7 @@
 </section>
 
 <style>
-	.result-types { display: flex; gap: 0.25rem; overflow-x: auto; scrollbar-width: none; margin-block-end: 0.5rem; max-width: 40rem; }
+	.result-types { display: flex; gap: 0.25rem; overflow-x: auto; scrollbar-width: none; margin-block-end: 0.5rem; }
 	.result-types a { flex: none; display: inline-grid; place-items: center; min-width: 2.75rem; min-height: 2.75rem; padding-inline: 0.75rem; border-radius: 2rem; color: var(--muted); font-size: var(--t-14); }
 	.result-types a:hover { background: var(--hover); text-decoration: none; }
 	.result-types a[aria-current] { text-decoration: none; }
@@ -202,11 +206,19 @@
 	.search-tags h2 { flex-basis: 100%; font-size: var(--t-16); }
 	.search-tags a { display: inline-flex; align-items: center; gap: 0.3rem; min-height: 2.75rem; border: 1px solid var(--line); border-radius: 2rem; padding-inline: 0.7rem; }
 	.search-tags small { color: var(--muted); }
-	.search-page { max-width: 66rem; }
-	form { display: flex; gap: 0.5rem; margin: 0.75rem 0; max-width: 40rem; }
-	input { flex: 1; min-width: 0; min-height: 2.75rem; border: 1px solid var(--line); border-radius: 0.6rem; background: var(--surface); padding: 0.65rem; }
+	.search-page { max-width: 118rem; }
+	form { margin: 0.75rem 0; }
+	.field { display: flex; align-items: center; gap: 0.6rem; min-height: 3rem; padding: 0 0.5rem 0 0.9rem; border: 1px solid var(--line); border-radius: 0.75rem; background: var(--surface); color: var(--muted); cursor: text; }
+	.field:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+	input { flex: 1; min-width: 0; border: 0; background: none; color: var(--text); outline: none; padding: 0.6rem 0; }
+	input:focus-visible { outline: none; }
+	input::-webkit-search-cancel-button { display: none; }
+	kbd { font-family: inherit; font-size: var(--t-12); border: 1px solid var(--line); border-radius: 0.3rem; padding: 0 0.4rem; margin-inline-end: 0.35rem; }
+	@media (hover: none), (max-width: 720px) { kbd { display: none; } }
+	.erase { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border: 0; border-radius: 50%; background: none; color: var(--muted); }
+	.erase:hover { background: var(--hover); color: var(--text); }
 	.announcer { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-	ul { list-style: none; margin: 0; padding: 0; max-width: 40rem; }
+	ul { list-style: none; margin: 0; padding: 0; }
 	li { border-bottom: 1px solid var(--line); }
 	li a { display: flex; align-items: center; gap: 0.75rem; min-height: 3.5rem; padding: 0.5rem 0.25rem; border-radius: 0.65rem; }
 	li a:hover { background: var(--hover); text-decoration: none; }
