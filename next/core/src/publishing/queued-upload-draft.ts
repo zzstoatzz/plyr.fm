@@ -1,6 +1,6 @@
 import type { Did } from '../auth-state.ts';
 import type { MediaFile, NewTrack } from '../pds.ts';
-import { isCreateRkey, type CreateOperation } from './create-operation.ts';
+import { isAlbumAddress, isCreateRkey, type CreateOperation } from './create-operation.ts';
 import { canonicalAudioType } from './upload-queue-model.ts';
 import { readRule } from '../access/policy.ts';
 import { sellingLink } from '../selling.ts';
@@ -90,9 +90,11 @@ export function readQueuedUploadDraft(value: unknown, owner: Did, key: unknown):
   const waysIn = readWaysIn((value as Record<string, unknown>).waysIn);
   const downloadPolicy = readDownloadPolicy((value as Record<string, unknown>).downloadPolicy);
   const buyLink = readBuyLink((value as Record<string, unknown>).buyLink);
+  const addTo = (value as Record<string, unknown>).addTo;
+  if (addTo !== undefined && !isAlbumAddress(addTo, owner)) throw new Error('could not read a queued upload.');
   return { owner, id, title, artist, album, description, tags, autoTag, audio: file, coverName, ...(reservedRkey ? { reservedRkey } : {}),
     ...(features?.length ? { features } : {}), ...(explicit ? { explicit: true } : {}), ...(waysIn?.length ? { waysIn } : {}),
-    ...(downloadPolicy ? { downloadPolicy } : {}), ...(unlisted ? { unlisted: true } : {}), ...(buyLink ? { buyLink } : {}) };
+    ...(downloadPolicy ? { downloadPolicy } : {}), ...(unlisted ? { unlisted: true } : {}), ...(buyLink ? { buyLink } : {}), ...(addTo ? { addTo } : {}) };
 }
 
 export function reattachQueuedUpload(draft: QueuedUploadDraft, file: MediaFile, artwork?: MediaFile): NewTrack {
@@ -100,6 +102,6 @@ export function reattachQueuedUpload(draft: QueuedUploadDraft, file: MediaFile, 
     throw new Error('choose the original audio file.');
   }
   if (draft.coverName && !artwork) throw new Error('choose the cover again.');
-  const { title, artist, album, description, tags, autoTag, features, explicit, waysIn, downloadPolicy, unlisted, buyLink } = draft;
-  return { title, artist, album, description, tags, autoTag, file, artwork, features, explicit, waysIn, downloadPolicy, unlisted, buyLink };
+  const { title, artist, album, description, tags, autoTag, features, explicit, waysIn, downloadPolicy, unlisted, buyLink, addTo } = draft;
+  return { title, artist, album, description, tags, autoTag, file, artwork, features, explicit, waysIn, downloadPolicy, unlisted, buyLink, addTo };
 }

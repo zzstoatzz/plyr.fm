@@ -68,6 +68,8 @@ export interface NewTrack {
 	unlisted?: boolean;
 	/** where the artist already sells it, saved to their buy links before the track is published */
 	buyLink?: BuyLink;
+	/** one of the artist's albums: the track is added at the end once it's published */
+	addTo?: string;
 }
 
 export type DownloadPolicy = 'open' | 'ask' | 'supporters' | 'off';
@@ -153,8 +155,8 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 		if (operation.owner !== session().did || (operation.collection !== NSID.track && operation.collection !== NSID.list)) throw new Error('not your pending creation');
 		await createStorage.archive(operation, archived);
 	}
-	async function publishCreate(reservation: CreateReservation, record: Record<string, unknown>, draft?: CreateHandoff & { autoTag?: boolean }) {
-		const operation = { ...reservation, record, ...(draft ? { draftId: draft.id, autoTag: draft.autoTag } : {}) };
+	async function publishCreate(reservation: CreateReservation, record: Record<string, unknown>, draft?: CreateHandoff & { autoTag?: boolean; addTo?: string }) {
+		const operation = { ...reservation, record, ...(draft ? { draftId: draft.id, autoTag: draft.autoTag, ...(draft.addTo ? { addTo: draft.addTo } : {}) } : {}) };
 		const result = await recordCreator(session().rpc, createStorage, assertSession, NSID.list).create(operation, draft?.handedOff);
 		if (result.state !== 'accepted') throw new CreateUnconfirmed();
 		return { uri: result.uri, status: await settle(result.uri, result.cid) };
@@ -421,7 +423,7 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 			await access!.addWaysIn(reservation.uri, input.waysIn!);
 		}
 		assertSession();
-		return publishCreate(reservation, record, draft && { ...draft, autoTag: input.autoTag });
+		return publishCreate(reservation, record, draft && { ...draft, autoTag: input.autoTag, addTo: input.addTo });
 	}
 
 	async function prepareTrackRecord(input: NewTrack) {

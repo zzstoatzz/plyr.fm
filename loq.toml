@@ -573,7 +573,7 @@ max_lines = 520
 
 [[rules]]
 path = "next/core/src/pds.ts"
-max_lines = 569
+max_lines = 571
 
 [[rules]]
 path = "next/backend/README.md"
@@ -589,7 +589,7 @@ max_lines = 518
 
 [[rules]]
 path = "next/web/src/lib/publishing/UploadForm.svelte"
-max_lines = 590
+max_lines = 675
 
 [[rules]]
 path = "next/backend/src/internal/moderation/postgres_log.zig"
@@ -598,3 +598,7 @@ max_lines = 521
 [[rules]]
 path = "next/web/edge/link-preview.js"
 max_lines = 524
+
+[[rules]]
+path = "next/web/src/lib/publishing/AlbumUpload.svelte"
+max_lines = 683

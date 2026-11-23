@@ -142,7 +142,7 @@ async function fixture(browser, accounts, handle, width, scheme, scenario, audio
     await page.getByRole('img', { name: 'selected cover preview' }).waitFor();
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth === innerWidth), 'the album form fits the viewport');
     await page.screenshot({ path: path.join(output, `${width}-${scheme}-${scenario}-editor.png`), fullPage: true });
-    await page.getByRole('button', { name: 'upload tracks' }).click();
+    await page.getByRole('button', { name: 'upload album' }).click();
 
     if (scenario === 'reload') {
       await pausedBlob.promise;
@@ -177,7 +177,7 @@ async function fixture(browser, accounts, handle, width, scheme, scenario, audio
     await page.screenshot({ path: path.join(output, `${width}-${scheme}-${scenario}-progress.png`), fullPage: true });
 
     if (scenario === 'pending') {
-      await page.getByRole('button', { name: 'create album', exact: true }).click();
+      await page.getByRole('button', { name: 'make the album', exact: true }).click();
       const check = page.getByRole('button', { name: 'check status', exact: true });
       await check.waitFor();
       const view = page.getByRole('link', { name: 'view album', exact: true });
@@ -196,10 +196,10 @@ async function fixture(browser, accounts, handle, width, scheme, scenario, audio
       await page.waitForURL('**/album/**');
     } else if (scenario === 'partial') {
       await page.getByText('upload didn’t finish. choose alpha.mp3 to try again.').waitFor();
-      await page.getByRole('button', { name: 'set aside album', exact: true }).click();
+      await page.getByRole('button', { name: 'set aside', exact: true }).click();
       await page.getByText('uploaded tracks stay in your uploads. unfinished tracks stay in upload recovery.').waitFor();
-      await page.getByRole('button', { name: 'cancel', exact: true }).click();
-      await page.getByRole('button', { name: 'create album with 2 tracks' }).click();
+      await page.getByRole('button', { name: 'keep going', exact: true }).click();
+      await page.getByRole('button', { name: 'make the album with 2 tracks' }).click();
       await page.getByRole('button', { name: 'try saving again' }).waitFor();
       await page.getByRole('button', { name: 'try saving again' }).click();
       await page.getByRole('link', { name: 'view album' }).waitFor();
@@ -211,7 +211,7 @@ async function fixture(browser, accounts, handle, width, scheme, scenario, audio
       await other.getByLabel('original file for Alpha remastered').setInputFiles(selection[0]);
       await other.getByText('3 of 3 tracks uploaded').waitFor();
       await other.close();
-      await page.getByRole('button', { name: 'create album with 2 tracks' }).click();
+      await page.getByRole('button', { name: 'make the album with 2 tracks' }).click();
       await page.waitForURL('**/album/**');
     } else if (scenario === 'journal' || scenario === 'journal-other') {
       await page.evaluate(() => {
@@ -228,7 +228,7 @@ async function fixture(browser, accounts, handle, width, scheme, scenario, audio
           }
         });
       });
-      await page.getByRole('button', { name: 'create album', exact: true }).click();
+      await page.getByRole('button', { name: 'make the album', exact: true }).click();
       await page.waitForFunction(() => window.albumJournalCommitted === true);
       assert.equal(albumAttempts, 0, 'the album journal was durable before any record write');
       const elsewhere = scenario === 'journal-other';
@@ -249,8 +249,8 @@ async function fixture(browser, accounts, handle, width, scheme, scenario, audio
       await other.locator('input[type="file"][accept^="image"]').setInputFiles({ name: 'cover.png', mimeType: 'image/png', buffer: cover });
       await other.getByRole('img', { name: 'selected cover preview' }).waitFor();
       await Promise.all([
-        page.getByRole('button', { name: 'create album', exact: true }).click(),
-        other.getByRole('button', { name: 'create album', exact: true }).click()
+        page.getByRole('button', { name: 'make the album', exact: true }).click(),
+        other.getByRole('button', { name: 'make the album', exact: true }).click()
       ]);
       await lostAlbumReply.promise;
       await Promise.race([page.waitForURL('**/album/**'), other.waitForURL('**/album/**')]);

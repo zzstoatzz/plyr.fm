@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { albumPublishing } from '../src/collections/album-pds.ts';
-import type { CollectionItem } from '../src/collections/collection-order.ts';
+import { CollectionOrderConflict, type CollectionItem, type CollectionRevision } from '../src/collections/collection-order.ts';
 import { collectionOrdering } from '../src/collections/collection-order-pds.ts';
 import { readAlbumUploadPlan } from '../src/publishing/album-upload-plan.ts';
 import type { RepoRpc } from '../src/publishing/repo-rpc.ts';
@@ -12,7 +12,7 @@ const collection = 'fm.plyr.list';
 const prefix = `at://${did}/${trackCollection}/`;
 const missing = '3222222222229';
 
-function fixture() {
+function fixture(ordering?: ReturnType<typeof collectionOrdering>) {
   const reads: string[] = [];
   const published: { name: string; items: CollectionItem[]; draftId?: string }[] = [];
   let handoffs = 0;
@@ -33,7 +33,7 @@ function fixture() {
   const assertSession = () => {};
   const albums = albumPublishing({
     rpc, did, trackCollection, assertSession,
-    ordering: collectionOrdering({ rpc, did, collection, kind: 'album', assertSession, settle: async () => 'indexed' }),
+    ordering: ordering ?? collectionOrdering({ rpc, did, collection, kind: 'album', assertSession, settle: async () => 'indexed' }),
     async uploadCover() { return { imageBlob: 'cover' }; },
     async publish(name, items, _cover, draft) {
       published.push({ name, items, draftId: draft?.id });
@@ -79,4 +79,31 @@ test('an album plan preserves the selected order and stays with its original acc
   assert.throws(() => readAlbumUploadPlan(plan, 'did:plc:another'), /could not read/);
   assert.throws(() => readAlbumUploadPlan({ ...plan, slots: [slots[0], slots[0]] }, did), /could not read/);
   assert.throws(() => readAlbumUploadPlan({ ...plan, slots: [{ ...slots[0], reservedRkey: undefined }] }, did), /could not read/);
+});
+
+test('adding a new upload to an album appends it once and retries one conflicting write', async () => {
+  const albumUri = `at://${did}/${collection}/3album`;
+  const first = { uri: prefix + '3222222222222', cid: 'current-3222222222222' };
+  let items: CollectionItem[] = [{ subject: first }];
+  const writes: CollectionItem[][] = [];
+  let conflicts = 1;
+  const ordering = {
+    async read(uri: string): Promise<CollectionRevision> {
+      return { uri, cid: 'list', value: { $type: collection, name: 'recordings', listType: 'album', items } } as CollectionRevision;
+    },
+    async write(_revision: CollectionRevision, next: CollectionItem[]) {
+      if (conflicts-- > 0) throw new CollectionOrderConflict();
+      writes.push(next);
+      items = next;
+      return { revision: _revision, status: 'indexed' as const };
+    },
+    async save() { throw new Error('unused'); },
+  } as unknown as ReturnType<typeof collectionOrdering>;
+  const f = fixture(ordering);
+  const added = prefix + '3222222222223';
+  await f.albums.appendUpload(albumUri, added);
+  await f.albums.appendUpload(albumUri, added);
+  assert.equal(writes.length, 1);
+  assert.deepEqual(writes[0].map(item => item.subject.uri), [first.uri, added]);
+  await assert.rejects(f.albums.appendUpload(albumUri, prefix + missing), /could not find the new track/);
 });

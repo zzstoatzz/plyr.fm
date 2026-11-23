@@ -94,7 +94,7 @@ export function jobLine(job: UploadJobView): string {
     case 'publishing': return `publishing ${name}…`;
     case 'retrying': return `retrying ${name}…`;
     case 'awaiting-publication': return `${name} is waiting for playback confirmation`;
-    case 'done': return `${name} uploaded`;
+    case 'done': return job.error ? `${name} uploaded, but ${job.error}` : `${name} uploaded`;
     case 'failed': return job.error ? `${name} didn't upload: ${job.error}` : `${name} didn't upload`;
   }
 }

@@ -88,12 +88,15 @@ export function createUploadQueue<Rpc extends RepoRpc>({
     }
   }
 
-  async function finishCreate(job: Job, uri: string, autoTag?: boolean, operation?: UploadOperation) {
+  async function finishCreate(job: Job, uri: string, autoTag?: boolean, operation?: UploadOperation, addTo?: string) {
     const pds = createPds(session(job));
     const pending = (await pds.pendingCreates('track')).find(item => item.uri === uri);
     if (pending) await pds.dismissCreate(pending).catch(() => undefined);
     if (operation) await uploadStorage.delete(operation).catch(() => undefined);
-    patch(job, { phase: 'done', uri });
+    // the track is already up, so an album that can't take it is reported on the finished upload, not as a failure
+    const albumProblem = addTo ? await withRetries(job, () => createPds(session(job)).albumOrganization().appendUpload(addTo, uri))
+      .then(() => undefined, () => 'could not add it to the album') : undefined;
+    patch(job, { phase: 'done', uri, ...(albumProblem ? { error: albumProblem } : {}) });
     if (autoTag) void applyGenreTags(() => session(job), uri).catch(() => undefined);
   }
 
@@ -113,7 +116,7 @@ export function createUploadQueue<Rpc extends RepoRpc>({
       if ((await withRetries(job, () => pds.recoverCreate(pending, true))).state !== 'accepted') throw failure;
     }
     patch(job, { phase: 'publishing' });
-    await finishCreate(job, reservation.uri, input.autoTag);
+    await finishCreate(job, reservation.uri, input.autoTag, undefined, input.addTo);
   }
 
   async function runService(job: Job, operation: UploadOperation) {
@@ -162,7 +165,7 @@ export function createUploadQueue<Rpc extends RepoRpc>({
       patch(job, { phase: 'awaiting-publication' });
       return;
     }
-    await finishCreate(job, operation.uri, operation.autoTag, operation);
+    await finishCreate(job, operation.uri, operation.autoTag, operation, operation.addTo);
   }
 
   async function draftAvailable(draft: QueuedUploadDraft) {
@@ -196,7 +199,7 @@ export function createUploadQueue<Rpc extends RepoRpc>({
     const original = originalOnPds(input.file) ? await withRetries(job, () => uploadOriginal(session(job).rpc!, input.file, format.contentType)) : undefined;
     const record = await pds.prepareTrackRecord(ready);
     const operation: UploadOperation = { ...reservation, draftId: draft.id, record: { ...record, fileType: format.fileType, ...(original ? { audioBlob: original } : {}) }, uploadId: randomUUID(),
-      name: input.file.name, sizeBytes: input.file.size, ...format, ...(route.processing ? { processing: route.processing } : {}), ...(input.autoTag ? { autoTag: true } : {}) };
+      name: input.file.name, sizeBytes: input.file.size, ...format, ...(route.processing ? { processing: route.processing } : {}), ...(input.autoTag ? { autoTag: true } : {}), ...(input.addTo ? { addTo: input.addTo } : {}) };
     await uploadStorage.put(operation);
     job.handedOff = true;
     await queuedDrafts.take(draft);
@@ -259,6 +262,7 @@ export function createUploadQueue<Rpc extends RepoRpc>({
       const draft = queuedUploadDraft(input, owner, planned?.id ?? randomUUID(), planned?.reservedRkey);
       await queuedDrafts.put(draft);
       if (getAuth().did === owner) enqueueDraft(draft, input);
+      return draft.id;
     },
     reattach(draft: QueuedUploadDraft, file: MediaFile, artwork?: MediaFile) {
       if (draft.owner !== getAuth().did) throw new Error('sign in to the account that queued it.');
@@ -319,8 +323,9 @@ export function createUploadQueue<Rpc extends RepoRpc>({
       const job = jobs.find(item => item.phase === 'awaiting-publication' && item.owner === operation.owner &&
         item.uploadId === operation.uploadId && item.operation?.uri === operation.uri);
       if (job) remove(job);
-      if (disposition === 'published' && operation.autoTag && !alreadyQueued(operation)) {
-        void applyGenreTags(() => session(operation), operation.uri).catch(() => undefined);
+      if (disposition === 'published' && !alreadyQueued(operation)) {
+        if (operation.autoTag) void applyGenreTags(() => session(operation), operation.uri).catch(() => undefined);
+        if (operation.addTo) void createPds(session(operation)).albumOrganization().appendUpload(operation.addTo, operation.uri).catch(() => undefined);
       }
     },
     /** Creations and transfers the queue is driving, so recovery screens leave them alone. */

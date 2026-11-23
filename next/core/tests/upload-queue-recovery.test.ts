@@ -330,3 +330,11 @@ test('editing a failed album song cannot replace its reserved address', async ()
   await setImmediate();
   assert.equal(attempts, 2);
 });
+
+test('a queued draft keeps the album it joins only when that album is the owner\'s list', () => {
+  const base = { owner, id: 'album-join', title: 'one', artist: 'fixture', audio: { name: 'one.mp3', type: 'audio/mpeg', size: 1, lastModified: 1 } };
+  const own = `at://${owner}/fm.plyr.list/3333333333333`;
+  assert.equal(readQueuedUploadDraft({ ...base, addTo: own }, owner, queuedUploadKey(base)).addTo, own);
+  assert.throws(() => readQueuedUploadDraft({ ...base, addTo: 'at://did:plc:other/fm.plyr.list/3333333333333' }, owner, queuedUploadKey(base)));
+  assert.throws(() => readQueuedUploadDraft({ ...base, addTo: `at://${owner}/fm.plyr.track/3333333333333` }, owner, queuedUploadKey(base)));
+});
