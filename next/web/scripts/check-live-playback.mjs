@@ -74,12 +74,13 @@ async function run(browser, { width, height, signIn }) {
 	page.on('pageerror', error => consoleLines.push('pageerror ' + error.message));
 	let account;
 	try {
-		await page.goto(app + '/');
 		if (signIn) {
 			account = await browserAccount(handle, password, pdsUrl);
+			await page.goto(app + '/upload', { waitUntil: 'domcontentloaded' });
 			await account.signIn(page, () => {});
 			await page.waitForURL(url => url.origin === app);
 		}
+		await page.goto(app + '/');
 		const row = page.locator('main').getByRole('button', { name: /^Play / }).first();
 		await row.waitFor();
 		const name = (await row.getAttribute('aria-label'))?.replace(/^Play /, '');
