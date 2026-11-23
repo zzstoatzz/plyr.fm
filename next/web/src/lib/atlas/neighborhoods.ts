@@ -47,7 +47,7 @@ export function neighborhoods(clusters: AtlasCluster[], xs: Float32Array, ys: Fl
 }
 
 /** pairs of tracks joined on the map: each to its nearest few neighbours in the same cluster */
-export function neighborLinks(xs: Float32Array, ys: Float32Array, ids: ArrayLike<number>, radius = 0.06, per = 3): Uint16Array<ArrayBuffer> {
+export function neighborLinks(xs: Float32Array, ys: Float32Array, ids: ArrayLike<number>, radius = 0.06, per = 3): Uint32Array<ArrayBuffer> {
   const grid = new Map<string, number[]>();
   const cellOf = (i: number) => [Math.floor(xs[i] / radius), Math.floor(ys[i] / radius)];
   for (let i = 0; i < xs.length; i++) {
@@ -72,5 +72,5 @@ export function neighborLinks(xs: Float32Array, ys: Float32Array, ids: ArrayLike
     near.sort((p, q) => p.d - q.d);
     for (const { j } of near.slice(0, per)) pairs.push(i, j);
   }
-  return Uint16Array.from(pairs);
+  return Uint32Array.from(pairs);
 }

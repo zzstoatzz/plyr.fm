@@ -105,6 +105,7 @@ export class AtlasRenderer {
 
   // sprite caches
   private dotSprites = new Map<number, HTMLCanvasElement>();
+  private inks = new Map<number, string>();
   private starSprites = new Map<string, HTMLCanvasElement>();
   private haloSprites = new Map<string, HTMLCanvasElement>();
   private spriteTheme = '';
@@ -119,7 +120,7 @@ export class AtlasRenderer {
   private faces = new ArtistFaces(() => this.markDirty());
   private regions: Neighborhood[] = [];
   private clusters: Neighborhood[] = [];
-  private links: Uint16Array<ArrayBuffer> = new Uint16Array(0);
+  private links: Uint32Array<ArrayBuffer> = new Uint32Array(0);
   private layer: HTMLCanvasElement | null = null;
   private font = 'system-ui, sans-serif';
 
@@ -300,6 +301,7 @@ export class AtlasRenderer {
     if (this.spriteTheme !== t) {
       this.spriteTheme = t;
       this.dotSprites.clear();
+      this.inks.clear();
       this.starSprites.clear();
       this.haloSprites.clear();
       this.hueCache.clear();
@@ -599,7 +601,7 @@ export class AtlasRenderer {
       if (!this.dark) {
         const hot = i === this.hovered || i === this.selected;
         ctx.globalAlpha = hot ? 1 : 0.8;
-        ctx.fillStyle = rgba(this.inkColor(this.hueStep[i]), 1);
+        ctx.fillStyle = this.inkColor(this.hueStep[i]);
         ctx.beginPath();
         ctx.arc(sx, sy, Math.min(5, 1.5 + zoom * 0.25) * (hot ? 1.6 : 1), 0, Math.PI * 2);
         ctx.fill();
@@ -825,9 +827,14 @@ export class AtlasRenderer {
     ctx.globalAlpha = 1;
   }
 
-  private inkColor(step: number): [number, number, number] {
-    const m = this.hueColors(step).mid;
-    return [Math.round(m[0] * 0.8), Math.round(m[1] * 0.8), Math.round(m[2] * 0.8)];
+  private inkColor(step: number): string {
+    let ink = this.inks.get(step);
+    if (!ink) {
+      const m = this.hueColors(step).mid;
+      ink = rgba([Math.round(m[0] * 0.8), Math.round(m[1] * 0.8), Math.round(m[2] * 0.8)], 1);
+      this.inks.set(step, ink);
+    }
+    return ink;
   }
 
   private drawGlows(list: Neighborhood[], spread: number, minPx: number, maxPx: number, alpha: number): void {
