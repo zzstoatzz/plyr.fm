@@ -17,6 +17,16 @@ export async function pickMedia(type: 'audio/*' | 'image/*'): Promise<MediaFile 
   };
 }
 
+/** Several audio files at once: in Files, open the folder and tap select all. */
+export async function pickAudioFiles(): Promise<MediaFile[]> {
+  const result = await getDocumentAsync({ type: 'audio/*', copyToCacheDirectory: true, multiple: true });
+  if (result.canceled) return [];
+  return result.assets.map(asset => {
+    const file = new LocalFile(asset.uri);
+    return { name: asset.name, uri: asset.uri, type: asset.mimeType ?? file.type, size: asset.size ?? file.size, arrayBuffer: () => file.arrayBuffer() };
+  });
+}
+
 export async function measureAudioDuration(file: MediaFile): Promise<number | undefined> {
   const source = file.uri;
   if (!source) return;
