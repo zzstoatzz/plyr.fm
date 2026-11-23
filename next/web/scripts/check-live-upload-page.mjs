@@ -8,7 +8,23 @@ import { app, browserAccount } from './live-browser-account.mjs';
 // several open the album form. nothing is submitted; every write and upload is refused.
 const output = process.env.SCREENS_OUTPUT || '/tmp/plyr-live-upload-page';
 const { ZAT_TEST_HANDLE: handle, ZAT_TEST_PASSWORD: password, ZAT_TEST_PDS: pdsUrl } = process.env;
-const { signIn, signOut } = await browserAccount(handle, password, pdsUrl);
+const { signIn } = await browserAccount(handle, password, pdsUrl);
+
+// sign out from settings and report how the PDS answered the revoke, rather than waiting on a 2xx that may not come
+async function signOut(page) {
+  await page.goto(app + '/settings', { waitUntil: 'domcontentloaded' });
+  const button = page.getByRole('button', { name: 'sign out', exact: true });
+  const signedOut = page.locator('main').getByRole('link', { name: 'sign in', exact: true });
+  await button.or(signedOut).first().waitFor();
+  if (!await button.isVisible()) return;
+  const revoke = page.waitForResponse(response => /\/oauth\/revoke$/.test(new URL(response.url()).pathname), { timeout: 15_000 })
+    .then(response => response.status(), () => 'no request');
+  await button.click();
+  await page.waitForURL(app + '/');
+  console.log(`revoke: ${await revoke}`);
+  await page.goto(app + '/upload', { waitUntil: 'domcontentloaded' });
+  await signedOut.waitFor();
+}
 
 function wave(name) {
   const bytes = Buffer.alloc(8044);
@@ -80,7 +96,7 @@ async function verify(browser, width) {
     failure = new Error(`${width}px failed at ${stage}: ${error.message}`);
   } finally {
     try {
-      if (consented) await signOut(page, '/upload');
+      if (consented) await signOut(page);
     } catch (error) {
       await page.screenshot({ path: path.join(output, `${width}-sign-out.png`), fullPage: true }).catch(() => {});
       const cleanup = new Error(`${width}px failed to revoke the browser session at ${page.url()}: ${error.message.split('\n')[0]}`);
