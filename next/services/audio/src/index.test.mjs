@@ -112,3 +112,51 @@ test("preflight allows the client's audio PUT", async () => {
   assert.match(response.headers.get("access-control-allow-methods"), /PUT/);
   assert.match(response.headers.get("access-control-allow-headers"), /authorization/);
 });
+
+const secret = "test-upload-capability-secret-000000000000";
+const b64 = bytes => btoa(String.fromCharCode(...bytes)).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+async function signed(claim, key = secret) {
+  const payload = b64(new TextEncoder().encode(JSON.stringify(claim)));
+  const hmac = await crypto.subtle.importKey("raw", new TextEncoder().encode(key), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return `${payload}.${b64(new Uint8Array(await crypto.subtle.sign("HMAC", hmac, new TextEncoder().encode(payload))))}`;
+}
+const owner = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
+const ownerClaim = (fileId = "abc123", expiresAt = Date.now() + 60_000) => ({ version: 1, kind: "legacy-owner-audio", owner, fileId, expiresAt });
+const privateBucket = () => ({
+  async list({ prefix }) { return { objects: prefix === "audio/abc123." ? [{ key: "audio/abc123.m4a" }] : [] }; },
+  async get(key, options) {
+    assert.equal(key, "audio/abc123.m4a");
+    assert.equal(options.range.get("range"), "bytes=0-1");
+    return { size: 10, httpEtag: '"p"', range: { offset: 0, length: 2 }, body: "01", writeHttpMetadata(headers) { headers.set("content-type", "audio/mp4"); } };
+  },
+});
+const ownerRequest = (capability, fileId = "abc123") =>
+  new Request(`https://next.example/v1/legacy-audio/${fileId}?capability=${encodeURIComponent(capability)}`, { headers: { Range: "bytes=0-1" } });
+
+test("an owner's signed link streams their gated production file with Range, uncached", async () => {
+  const response = await worker.fetch(ownerRequest(await signed(ownerClaim())), { UPLOAD_CAPABILITY_SECRET: secret, AUDIO_PRIVATE_LEGACY: privateBucket() });
+  assert.equal(response.status, 206);
+  assert.equal(response.headers.get("content-range"), "bytes 0-1/10");
+  assert.equal(response.headers.get("cache-control"), "private, no-store");
+  assert.equal(await response.text(), "01");
+});
+
+test("gated production audio is refused without a valid owner link", async () => {
+  const env = { UPLOAD_CAPABILITY_SECRET: secret, AUDIO_PRIVATE_LEGACY: privateBucket() };
+  const upload = { version: 1, owner, uploadId: "12345678-1234-4123-8123-123456789abc", recordUri: `at://${owner}/fm.plyr.track/3m`, sizeBytes: 1, contentType: "audio/mpeg", fileType: "mp3", visibility: "public", downloadPolicy: "open", expiresAt: Date.now() + 60_000 };
+  for (const capability of [
+    "",
+    await signed(ownerClaim(), "another-secret-0000000000000000000000000"),
+    await signed(ownerClaim("other1")),
+    await signed(ownerClaim("abc123", Date.now() - 1)),
+    await signed(ownerClaim("abc123", Date.now() + 7_200_000)),
+    await signed(upload),
+  ]) {
+    const response = await worker.fetch(ownerRequest(capability), env);
+    assert.equal(response.status, 403, capability);
+  }
+  const missing = await worker.fetch(ownerRequest(await signed(ownerClaim("nofile")), "nofile"), env);
+  assert.equal(missing.status, 404);
+  const unbound = await worker.fetch(ownerRequest(await signed(ownerClaim())), { UPLOAD_CAPABILITY_SECRET: secret });
+  assert.equal(unbound.status, 503);
+});

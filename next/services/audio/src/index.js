@@ -1,12 +1,15 @@
 import { routeUpload } from "./upload-worker.ts";
 import { routeGenres } from "./genres.ts";
 import { routeImages, cidDigestHex } from "./images.ts";
-import { verifyCapability } from "./upload-capability.ts";
+import { verifyCapability, verifyOwnerAudio } from "./upload-capability.ts";
 export { OwnerUploads } from "./upload-worker.ts";
 
 // Content-addressed audio for next.plyr.fm (cover art: images.ts).
 //
 //   GET/HEAD /audio/{cid}  public, Range-capable, immutable
+//   GET/HEAD /v1/legacy-audio/{file_id}?capability=  an owner's supporter-gated
+//                          production file, read-only from AUDIO_PRIVATE_LEGACY,
+//                          for the record owner only (the coordinator signs it)
 //   PUT      /audio/{cid}  bearer UPLOAD_TOKEN (the backend mirror) or an upload
 //                          capability (the uploading client); body must hash to the cid
 //
@@ -27,6 +30,8 @@ export default {
   async fetch(request, env) {
     const upload = await routeUpload(request, env) ?? await routeGenres(request, env) ?? await routeImages(request, env);
     if (upload) return upload;
+    const legacy = await routeOwnerAudio(request, env);
+    if (legacy) return legacy;
     const key = new URL(request.url).pathname.slice(1);
     const match = KEY.exec(key);
     if (!match) return text(404, "not found");
@@ -43,7 +48,7 @@ export default {
         });
       case "GET":
       case "HEAD":
-        return read(request, env, key);
+        return read(request, env.AUDIO, key, IMMUTABLE);
       case "PUT":
         return write(request, env, key, match[1]);
       default:
@@ -54,17 +59,37 @@ export default {
   },
 };
 
-async function read(request, env, key) {
+const OWNER_AUDIO = /^\/v1\/legacy-audio\/([A-Za-z0-9]{1,64})$/;
+
+async function routeOwnerAudio(request, env) {
+  const url = new URL(request.url);
+  const match = OWNER_AUDIO.exec(url.pathname);
+  if (!match) return null;
+  if (request.method === "OPTIONS")
+    return new Response(null, { status: 204, headers: { ...CORS, "access-control-allow-methods": "GET, HEAD, OPTIONS", "access-control-allow-headers": "range", "access-control-max-age": "86400" } });
+  if (request.method !== "GET" && request.method !== "HEAD")
+    return text(405, "method not allowed", { allow: "GET, HEAD, OPTIONS" });
+  const claim = await verifyOwnerAudio(url.searchParams.get("capability"), env.UPLOAD_CAPABILITY_SECRET);
+  if (!claim || claim.fileId !== match[1]) return text(403, "forbidden");
+  const bucket = env.AUDIO_PRIVATE_LEGACY;
+  if (!bucket) return text(503, "unavailable");
+  // production stored the file as audio/{file_id}.{ext}; the record names no extension
+  const listed = await bucket.list({ prefix: `audio/${claim.fileId}.`, limit: 2 });
+  if (listed.objects.length !== 1) return text(404, "not found");
+  return read(request, bucket, listed.objects[0].key, "private, no-store");
+}
+
+async function read(request, bucket, key, cacheControl) {
   if (request.method === "HEAD") {
-    const head = await env.AUDIO.head(key);
+    const head = await bucket.head(key);
     if (!head) return text(404, "not found");
-    const headers = objectHeaders(head);
+    const headers = objectHeaders(head, cacheControl);
     headers.set("content-length", String(head.size));
     return new Response(null, { headers });
   }
   let object;
   try {
-    object = await env.AUDIO.get(key, {
+    object = await bucket.get(key, {
       range: request.headers,
       onlyIf: request.headers,
     });
@@ -72,7 +97,7 @@ async function read(request, env, key) {
     return text(416, "range not satisfiable");
   }
   if (!object) return text(404, "not found");
-  const headers = objectHeaders(object);
+  const headers = objectHeaders(object, cacheControl);
   if (!("body" in object)) return new Response(null, { status: 304, headers });
   if (!request.headers.has("range") || !object.range) {
     headers.set("content-length", String(object.size));
@@ -111,14 +136,14 @@ async function write(request, env, key, cid) {
   return text(201, "stored");
 }
 
-function objectHeaders(object) {
+function objectHeaders(object, cacheControl) {
   const headers = new Headers(CORS);
   object.writeHttpMetadata(headers);
   if (headers.get("content-type")?.toLowerCase() === "audio/x-flac")
     headers.set("content-type", "audio/flac");
   headers.set("etag", object.httpEtag);
   headers.set("accept-ranges", "bytes");
-  headers.set("cache-control", IMMUTABLE);
+  headers.set("cache-control", cacheControl);
   return headers;
 }
 

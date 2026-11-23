@@ -82,7 +82,7 @@ pub fn ownerHash(owner: []const u8) [64]u8 {
     return std.fmt.bytesToHex(digest, .lower);
 }
 
-pub fn sign(a: std.mem.Allocator, claim: Claim, secret: []const u8) ![]const u8 {
+pub fn sign(a: std.mem.Allocator, claim: anytype, secret: []const u8) ![]const u8 {
     if (secret.len < 32) return error.UploadUnavailable;
     const body = try std.json.Stringify.valueAlloc(a, claim, .{});
     const encoder = std.base64.url_safe_no_pad.Encoder;

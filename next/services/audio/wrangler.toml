@@ -11,6 +11,12 @@ workers_dev = true
 binding = "AUDIO"
 bucket_name = "plyr-next-audio"
 
+# production's supporter-gated audio, read-only: played back only to each
+# track's owner, through a link the coordinator signs (src/index.js)
+[[r2_buckets]]
+binding = "AUDIO_PRIVATE_LEGACY"
+bucket_name = "audio-private-prod"
+
 # cover art copied off artists' PDSes (src/images.ts)
 [[r2_buckets]]
 binding = "IMAGES"

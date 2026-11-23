@@ -21,6 +21,8 @@ import { useRemoteTrackControls } from './use-remote-track-controls';
 import { toast } from './toast';
 import { playbackFor, warm } from './playback-lookup';
 import { readyPlayback } from '@plyr/next-core/playback-ready';
+import { ownerAwarePlayback, ownerAudioUrl } from '@plyr/next-core/owner-audio';
+import * as authConfig from './auth-config.ts';
 import { PlaybackScope, type Playback } from './playback-context';
 
 const viewQueue = { label: 'view queue', href: '/queue' } as const;
@@ -174,7 +176,10 @@ export function PlaybackProvider({ children, playThrough, keepPlaying, volume }:
     setPreparing(false);
     try {
       // a track published moments ago may still be copying to the streaming origin
-      const lookup = () => { if (request !== sequence.current) throw new Error('superseded'); return playbackFor(track.id); };
+      const lookup = () => {
+        if (request !== sequence.current) throw new Error('superseded');
+        return ownerAwarePlayback(track, () => playbackFor(track.id), () => ownerAudioUrl(authConfig, auth, track.record.uri), auth.did);
+      };
       const playback = privateTrack ? { availability: { status: 'gated' as const, space: { record: track.record.uri }, delivery: undefined, artifact: undefined } }
         : await readyPlayback(lookup, { onPreparing: () => { if (request === sequence.current) setPreparing(true); } });
       if (request !== sequence.current) return false;

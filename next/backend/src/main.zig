@@ -511,6 +511,7 @@ test {
     _ = @import("internal/coordinator/server.zig");
     _ = @import("internal/uploads/admission.zig");
     _ = @import("internal/uploads/inspection.zig");
+    _ = @import("internal/uploads/owner_audio.zig");
     _ = @import("server.zig");
     _ = @import("internal/telemetry.zig");
 }

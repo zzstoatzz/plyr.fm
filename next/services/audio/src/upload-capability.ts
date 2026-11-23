@@ -47,7 +47,27 @@ function decode(value: string) {
   return Uint8Array.from(atob(value.replaceAll("-", "+").replaceAll("_", "/")), char => char.charCodeAt(0));
 }
 
-export async function verifyCapability(token: string | null, secret: string | undefined, now = Date.now()) {
+export type OwnerAudioClaim = { version: 1; kind: "legacy-owner-audio"; owner: string; fileId: string; expiresAt: number };
+
+export function validOwnerAudio(value: unknown, now = Date.now()): value is OwnerAudioClaim {
+  if (value === null || typeof value !== "object") return false;
+  const claim = value as Record<string, unknown>;
+  return claim.version === 1 && claim.kind === "legacy-owner-audio" &&
+    typeof claim.owner === "string" && /^did:(plc|web):[A-Za-z0-9._:%-]+$/.test(claim.owner) &&
+    typeof claim.fileId === "string" && /^[A-Za-z0-9]{1,64}$/.test(claim.fileId) &&
+    typeof claim.expiresAt === "number" && Number.isSafeInteger(claim.expiresAt) && claim.expiresAt > now && claim.expiresAt <= now + 3600000;
+}
+
+/** An owner's link to their own supporter-gated production file, signed by the coordinator. */
+export function verifyOwnerAudio(token: string | null, secret: string | undefined, now = Date.now()) {
+  return verifySigned(token, secret, value => validOwnerAudio(value, now));
+}
+
+export function verifyCapability(token: string | null, secret: string | undefined, now = Date.now()) {
+  return verifySigned(token, secret, value => validClaim(value, now));
+}
+
+async function verifySigned<T>(token: string | null, secret: string | undefined, valid: (value: unknown) => value is T): Promise<T | null> {
   if (typeof token !== "string" || token.length > 4096 || typeof secret !== "string" || secret.length < 32) return null;
   try {
     const [payload, signature, extra] = token.split(".");
@@ -55,7 +75,7 @@ export async function verifyCapability(token: string | null, secret: string | un
     const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
     if (!await crypto.subtle.verify("HMAC", key, decode(signature), encoder.encode(payload))) return null;
     const claim = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(decode(payload)));
-    return validClaim(claim, now) ? claim : null;
+    return valid(claim) ? claim : null;
   } catch {
     return null;
   }
