@@ -279,17 +279,9 @@ export async function preview(url, api, legacyPlaylists = LEGACY_PLAYLISTS) {
   }
 
   if (page.kind === 'atlas') {
-    return {
-      type: 'website',
-      title: `the ${SITE_NAME} atlas`,
-      shortTitle: 'atlas',
-      description: 'the catalog, mapped by sound. zoom in and select a track to play it.',
-      url: `${origin}/atlas`,
-      // a still of the map itself, refreshed with `bun run atlas:preview`
-      image: { url: `${origin}/previews/atlas.jpg`, type: 'image/jpeg', width: 1200, height: 630 },
-      imageAlt: `the ${SITE_NAME} atlas: tracks grouped into glowing neighborhoods by how they sound`,
-      large: true
-    };
+    const image = { url: `${origin}/previews/atlas.jpg`, type: 'image/jpeg', width: 1200, height: 630 }; // refresh: bun run atlas:preview
+    const alt = `the ${SITE_NAME} atlas: tracks grouped into glowing neighborhoods by how they sound`;
+    return { type: 'website', title: `the ${SITE_NAME} atlas`, shortTitle: 'atlas', description: 'the catalog, mapped by sound. zoom in and select a track to play it.', url: `${origin}/atlas`, image, imageAlt: alt, large: true };
   }
 
   if (page.kind === 'tag') {
