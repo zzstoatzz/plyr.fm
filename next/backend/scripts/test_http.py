@@ -163,19 +163,40 @@ def main() -> None:
                 data=payload,
             )
             assert status == 405 and body == {}
-            assert headers["access-control-allow-origin"] == ALLOWED_ORIGIN
+            # public reads answer any origin, without credentials
+            assert headers["access-control-allow-origin"] == "*"
+            assert "access-control-allow-credentials" not in headers
             assert headers["connection"].lower() == "close"
             assert _request(base_url, "/health")[0] == 200
 
         # a browser preflight before every JSON POST; an empty 204 once
         # crashed the process, so check it answers and the server survives
-        for path in (X + "resolveArtists", X + "listTracks", "/health"):
+        for path, expected in (
+            (X + "resolveArtists", "*"),
+            (X + "listTracks", "*"),
+            (X + "recordPlay", ALLOWED_ORIGIN),
+            ("/health", ALLOWED_ORIGIN),
+        ):
             status, headers, body = _request(
                 base_url, path, method="OPTIONS", origin=ALLOWED_ORIGIN
             )
             assert status == 204 and body == {}
-            assert headers["access-control-allow-origin"] == ALLOWED_ORIGIN
+            assert headers["access-control-allow-origin"] == expected
             assert _request(base_url, "/health")[0] == 200
+
+        # any website may preflight a public read, including the POST batch
+        # reads; recordPlay carries the play cookie, so it stays exact
+        stranger = "https://records.example"
+        status, headers, _ = _request(
+            base_url, X + "resolveTracks", method="OPTIONS", origin=stranger
+        )
+        assert status == 204 and headers["access-control-allow-origin"] == "*"
+        assert "POST" in headers["access-control-allow-methods"]
+        assert "access-control-allow-credentials" not in headers
+        status, headers, _ = _request(
+            base_url, X + "recordPlay", method="OPTIONS", origin=stranger
+        )
+        assert status == 204 and "access-control-allow-origin" not in headers
 
         assert_xrpc_methods(base_url, _request, COLLECTION)
 
@@ -343,14 +364,15 @@ def main() -> None:
             base_url, X + f"getTrack?uri={uri}", origin=ALLOWED_ORIGIN
         )
         assert status == 503 and unavailable["error"] == "ServiceUnavailable"
-        assert headers["access-control-allow-origin"] == ALLOWED_ORIGIN
+        assert headers["access-control-allow-origin"] == "*"
         assert headers["x-request-id"]
         status, headers, _ = _request(
             base_url,
             X + f"getTrack?uri={uri}",
             origin="https://client.example.attacker.test",
         )
-        assert status == 503 and "access-control-allow-origin" not in headers
+        assert status == 503 and headers["access-control-allow-origin"] == "*"
+        assert "access-control-allow-credentials" not in headers
 
         foreign = _q("at://did:plc:artist/fm.plyr.track/3m123abc")
         _expect(base_url, f"getTrack?uri={uri}", 405, method="POST")

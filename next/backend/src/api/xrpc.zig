@@ -59,6 +59,13 @@ pub const Method = enum {
             else => false,
         };
     }
+
+    /// Public reads answer any origin, without credentials, like production's
+    /// API. `recordPlay` keys anonymous listeners on the `plyr_play_id`
+    /// cookie, so it stays credentialed and limited to plyr's own origins.
+    pub fn isPublic(self: Method) bool {
+        return self != .recordPlay;
+    }
 };
 
 /// Which method `path` names, if any. `getTopTracks` and `getLatestTracks`
@@ -109,10 +116,12 @@ fn spec(method: Method) Spec {
 pub fn handle(
     request: *Exchange,
     allocator: std.mem.Allocator,
-    app: router.App,
+    shared: router.App,
     method: Method,
     request_id: []const u8,
 ) !void {
+    var app = shared;
+    app.cors.public = method.isPublic();
     const expected: @TypeOf(request.method) = if (method.isProcedure()) .POST else .GET;
     if (request.method != expected) return response.apiError(request, .method_not_allowed, request_id, app.cors);
 

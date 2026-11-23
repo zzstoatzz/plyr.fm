@@ -128,7 +128,7 @@ Direct SQL is reserved for projection adapter tests and benchmark fixtures.
 | `INDEX_MODE` | no | `required` by default; `disabled` is an explicit test/development mode whose readiness is `503` |
 | `MAX_CONNECTIONS`, `HANDLER_THREADS`, `REQUEST_TIMEOUT_SECONDS`, `KEEPALIVE_TIMEOUT_SECONDS` | no | listener limits: open connections (default `1024`), handler threads (`64`; a `records/await` call holds one for up to 10 s), seconds to send one complete request (`10`), seconds an idle keep-alive connection is kept (`75`) |
 | `PORT` | no | listener port, default `8001` |
-| `CORS_ALLOWED_ORIGINS` | no | comma-separated exact browser origins; empty disables CORS |
+| `CORS_ALLOWED_ORIGINS` | no | comma-separated exact browser origins for credentialed or service-authed endpoints (recordPlay, notifications, moderation, checkUserAccess); public reads answer any origin with `*` regardless |
 | `INGEST_STREAM_HOSTS` | no | comma-separated jetstream hostnames the ingester subscribes to, in failover order; default `stream.waow.tech` then the bsky jetstreams |
 | `INGEST_REPAIR_DID` | in repair mode | canonical DID whose complete repository is fetched, verified, and atomically reconciled |
 | `ACCOUNT_CHECK_INTERVAL_SECONDS` | no | authoritative current-PDS recheck interval, default 21600 (six hours) |
