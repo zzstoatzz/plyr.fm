@@ -34,6 +34,17 @@
 					r.style.setProperty('--custom-accent', p.accent);
 				}
 			} catch (e) {}
+			// a page loaded from one deploy whose app files are gone after the next one: load the
+			// current deploy (at most once a minute) rather than leave a blank screen
+			window.addEventListener('unhandledrejection', function (event) {
+				var text = String((event.reason && event.reason.message) || event.reason || '');
+				if (!/dynamically imported module|Importing a module script failed|error loading dynamically imported/i.test(text)) return;
+				try {
+					if (Date.now() - Number(sessionStorage.getItem('plyr-next:stale-reload') || 0) < 60000) return;
+					sessionStorage.setItem('plyr-next:stale-reload', String(Date.now()));
+				} catch (e) { return; }
+				location.reload();
+			});
 			// a collapsed desktop sidebar (lib/nav.ts) is in place from the first frame
 			try {
 				if (localStorage.getItem('plyr-next:nav') === 'collapsed') document.documentElement.dataset.nav = 'collapsed';
