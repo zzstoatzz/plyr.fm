@@ -1,4 +1,5 @@
-import { ArtistFaces } from './faces';
+import { TrackCovers } from './covers';
+import { ArtistFaces, artistReach } from './faces';
 import { neighborhoods, neighborLinks, type Neighborhood } from './neighborhoods';
 import type { AtlasArtist, AtlasCallbacks, AtlasData, AtlasOptions, AtlasPoint } from './types';
 
@@ -13,11 +14,11 @@ const TUNE = {
   regions: { spread: 1.9, minPx: 40, maxPx: 380, layer: { dark: 0.5, light: 0.38 }, outStart: 1.8, outRange: 1.0 },
   clusters: { spread: 2.4, minPx: 30, maxPx: 320, layer: { dark: 0.42, light: 0.32 }, inStart: 1.3, inRange: 1.0, outStart: 26, outRange: 10 },
   // neighbour lines stay faint: a hint of shape, not a wire diagram
-  links: { alpha: { dark: 0.1, light: 0.12 }, inStart: 0.6, inRange: 0.8, maxPx: 150 },
+  links: { alpha: { dark: 0.035, light: 0.05 }, inStart: 1.2, inRange: 2.5, maxPx: 70 },
   hueDark: { core: [0.55, 0.72], mid: [0.5, 0.52], edge: [0.45, 0.34] } as const,
   hueLight: { core: [0.55, 0.45], mid: [0.5, 0.6], edge: [0.45, 0.75] } as const,
   labels: { titles: { s: 5, l: 14 }, coarse: { s: 5, l: 10 }, fine: { s: 6, l: 16 }, artists: { s: 3, l: 8 } },
-  covers: { start: 14, range: 8, budget: { s: 18, l: 36 }, maxPx: 72, minPx: 10 }
+  covers: { start: 2.5, range: 2, budget: { s: 160, l: 360 }, maxPx: 72, minPx: 9 }
 };
 
 function clamp01(x: number): number {
@@ -111,13 +112,12 @@ export class AtlasRenderer {
   private spriteTheme = '';
   private hueCache = new Map<number, HueColors>();
 
-  // cover art
-  private coverImages = new Map<number, HTMLImageElement>();
-  private coverFailed = new Set<number>();
-  private coverLoading = new Set<number>();
-  private coverLoadCount = 0;
+  private covers = new TrackCovers(() => this.markDirty());
 
   private faces = new ArtistFaces(() => this.markDirty());
+  private reach = new Float32Array(0);
+  private byReach: number[] = [];
+  private drawnFaces: { i: number; x: number; y: number; r: number }[] = [];
   private regions: Neighborhood[] = [];
   private clusters: Neighborhood[] = [];
   private links: Uint32Array<ArrayBuffer> = new Uint32Array(0);
@@ -170,6 +170,8 @@ export class AtlasRenderer {
 
   setData(data: AtlasData): void {
     this.data = data;
+    this.reach = artistReach(data.points, data.artists);
+    this.byReach = data.artists.map((_, i) => i).sort((i, j) => this.reach[j] - this.reach[i]);
     const n = data.points.length;
     this.px = new Float32Array(n);
     this.py = new Float32Array(n);
@@ -420,32 +422,6 @@ export class AtlasRenderer {
 
   // --- images ---
 
-  private loadCover(i: number): void {
-    if (!this.data) return;
-    if (this.coverImages.has(i) || this.coverFailed.has(i) || this.coverLoading.has(i)) return;
-    if (this.coverLoadCount >= 8) return;
-    const url = this.data.points[i].thumb;
-    if (!url) {
-      this.coverFailed.add(i);
-      return;
-    }
-    this.coverLoading.add(i);
-    this.coverLoadCount++;
-    const img = new Image();
-    img.onload = () => {
-      this.coverImages.set(i, img);
-      this.coverLoading.delete(i);
-      this.coverLoadCount--;
-      this.markDirty();
-    };
-    img.onerror = () => {
-      this.coverFailed.add(i);
-      this.coverLoading.delete(i);
-      this.coverLoadCount--;
-    };
-    img.src = url;
-  }
-
   // --- transforms ---
 
   private cacheTransform(): void {
@@ -486,28 +462,17 @@ export class AtlasRenderer {
     return best;
   }
 
-  private artistRadiusPx(a: AtlasArtist): number {
-    // visible from the whole-map view; grows with sqrt(zoom) so walking in
-    // makes an artist more present without ballooning past the tracks.
-    // the zoom-scaled cap keeps a dominant catalog from owning the overview.
-    return Math.min(
-      12 + this.view.zoom * 5,
-      34,
-      (3.5 + Math.sqrt(a.count) * 1.2) * Math.sqrt(this.view.zoom)
-    );
+  private artistRadiusPx(i: number): number {
+    // sized by reach (plays and likes), legible from the whole-map view, and
+    // growing with sqrt(zoom) so walking in makes artists more present
+    return Math.min(36, (5 + 17 * this.reach[i]) * Math.sqrt(this.view.zoom));
   }
 
   private findArtistAt(sx: number, sy: number): number {
-    if (!this.data) return -1;
-    for (let i = 0; i < this.data.artists.length; i++) {
-      const a = this.data.artists[i];
-      const pr = this.artistRadiusPx(a);
-      if (pr < 5) continue;
-      const ax = this.cx + a.cx * this.scale;
-      const ay = this.cy + a.cy * this.scale;
-      const dx = sx - ax;
-      const dy = sy - ay;
-      if (dx * dx + dy * dy <= pr * pr) return i;
+    // faces drawn last sit on top, so they win
+    for (let k = this.drawnFaces.length - 1; k >= 0; k--) {
+      const f = this.drawnFaces[k];
+      if ((sx - f.x) ** 2 + (sy - f.y) ** 2 <= f.r * f.r) return f.i;
     }
     return -1;
   }
@@ -587,15 +552,48 @@ export class AtlasRenderer {
     if (clusterAlpha > 0.01) this.drawGlows(this.clusters, C.spread, C.minPx * Math.sqrt(Math.max(1, zoom / 2)), C.maxPx, C.layer[this.themeKey()] * clusterAlpha);
     this.drawLinks(zoom, xMin, xMax, yMin, yMax);
 
-    // --- points ---
+    // --- cover art: from a few steps of zoom in, a track with room around it
+    // shows its artwork instead of a dot; crowded ones stay dots until there's room
     const coverAlpha = fadeIn(zoom, TUNE.covers.start, TUNE.covers.range);
+    const coverPx = new Map<number, number>();
+    const covers: { i: number; sx: number; sy: number; size: number; spr: HTMLCanvasElement }[] = [];
+    if (coverAlpha > 0.01) {
+      const T = TUNE.covers;
+      const cands: { i: number; sx: number; sy: number; d: number }[] = [];
+      for (let i = 0; i < n; i++) {
+        if (this.px[i] < xMin || this.px[i] > xMax || this.py[i] < yMin || this.py[i] > yMax) continue;
+        const sx = this.cx + this.px[i] * this.scale;
+        const sy = this.cy + this.py[i] * this.scale;
+        cands.push({ i, sx, sy, d: (sx - W / 2) ** 2 + (sy - H / 2) ** 2 });
+      }
+      cands.sort((a, b) => a.d - b.d);
+      if (cands.length > T.budget[small ? 's' : 'l']) cands.length = T.budget[small ? 's' : 'l'];
+      const maxPx = Math.min(T.maxPx, T.minPx + (zoom - T.start) * 3);
+      for (const c of cands) {
+        let best = maxPx * maxPx * 1.3;
+        for (const o of cands) {
+          if (o !== c) best = Math.min(best, (c.sx - o.sx) ** 2 + (c.sy - o.sy) ** 2);
+        }
+        const size = Math.min(maxPx, Math.sqrt(best) * 0.88);
+        if (size < T.minPx) continue;
+        const spr = this.covers.cover(c.i, this.data.points[c.i].thumb, size * this.dpr, c.d);
+        if (!spr) continue;
+        covers.push({ i: c.i, sx: c.sx, sy: c.sy, size, spr });
+        coverPx.set(c.i, size);
+      }
+      this.covers.flush();
+    }
+
+    // --- points: a track drawn as its cover skips its dot once the cover is solid ---
     const useStar = zoom >= 2;
     const pointR = Math.min(8, 1.8 + zoom * 0.22);
+    const skipCovered = coverAlpha > 0.95;
     ctx.globalAlpha = 1;
     for (let i = 0; i < n; i++) {
       const x = this.px[i];
       const y = this.py[i];
       if (x < xMin || x > xMax || y < yMin || y > yMax) continue;
+      if (skipCovered && coverPx.has(i)) continue;
       const sx = this.cx + x * this.scale;
       const sy = this.cy + y * this.scale;
       if (!this.dark) {
@@ -614,79 +612,41 @@ export class AtlasRenderer {
       ctx.drawImage(spr, sx - w / 2, sy - w / 2, w, w);
     }
 
-    // --- cover art (high zoom): tracks resolve into their actual artwork ---
-    if (coverAlpha > 0.01) {
-      const budget = small ? TUNE.covers.budget.s : TUNE.covers.budget.l;
-      const cands: { i: number; sx: number; sy: number; d: number; size?: number }[] = [];
-      const vcx = W / 2;
-      const vcy = H / 2;
-      for (let i = 0; i < n; i++) {
-        const x = this.px[i];
-        const y = this.py[i];
-        if (x < xMin || x > xMax || y < yMin || y > yMax) continue;
-        const sx = this.cx + x * this.scale;
-        const sy = this.cy + y * this.scale;
-        const ddx = sx - vcx;
-        const ddy = sy - vcy;
-        cands.push({ i, sx, sy, d: ddx * ddx + ddy * ddy });
+    ctx.globalAlpha = coverAlpha;
+    for (const c of covers) {
+      const half = c.size / 2;
+      ctx.drawImage(c.spr, c.sx - half, c.sy - half, c.size, c.size);
+      if (c.i === this.hovered || c.i === this.selected) {
+        ctx.strokeStyle = this.dark ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.8)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(c.sx - half, c.sy - half, c.size, c.size, Math.max(2, c.size * 0.1));
+        ctx.stroke();
       }
-      cands.sort((a, b) => a.d - b.d);
-      if (cands.length > budget) cands.length = budget;
-      // adaptive size: shrink to local spacing so dense clusters read as
-      // distinct covers instead of an overlapping pile
-      const maxPx = Math.min(TUNE.covers.maxPx, 10 + (zoom - TUNE.covers.start) * 2.2);
-      for (const c of cands) {
-        let best = Infinity;
-        for (const o of cands) {
-          if (o === c) continue;
-          const dx = c.sx - o.sx;
-          const dy = c.sy - o.sy;
-          const dd = dx * dx + dy * dy;
-          if (dd < best) best = dd;
-        }
-        c.size =
-          best === Infinity
-            ? maxPx
-            : Math.max(TUNE.covers.minPx, Math.min(maxPx, Math.sqrt(best) * 0.9));
-      }
-      for (const c of cands) {
-        this.loadCover(c.i);
-        const img = this.coverImages.get(c.i);
-        const size = c.size ?? maxPx;
-        const half = size / 2;
-        const focus = c.i === this.hovered || c.i === this.selected;
-        if (img) {
-          ctx.globalAlpha = coverAlpha;
-          ctx.save();
-          ctx.beginPath();
-          ctx.roundRect(c.sx - half, c.sy - half, size, size, Math.max(2, size * 0.08));
-          ctx.clip();
-          ctx.drawImage(img, c.sx - half, c.sy - half, size, size);
-          ctx.restore();
-          if (focus) {
-            ctx.globalAlpha = coverAlpha;
-            ctx.strokeStyle = this.dark ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.8)';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.roundRect(c.sx - half, c.sy - half, size, size, Math.max(2, size * 0.08));
-            ctx.stroke();
-          }
-        }
-      }
-      ctx.globalAlpha = 1;
     }
+    ctx.globalAlpha = 1;
 
     // --- artist circles: always a face, or a tinted disk with an initial while
     // it loads or when the artist has none. never an empty ring.
     const artistCands: { name: string; x: number; y: number }[] = [];
-    const faces: { x: number; y: number; r: number }[] = [];
+    // most-listened first; a face that would mostly cover one already placed
+    // waits for more zoom, so the overview shows distinct, recognisable people
+    const faces: { i: number; x: number; y: number; r: number }[] = [];
     {
-      for (const a of this.data.artists) {
-        const pr = this.artistRadiusPx(a);
+      for (const ai of this.byReach) {
+        const a = this.data.artists[ai];
+        const pr = this.artistRadiusPx(ai);
         if (pr < 7) continue;
         const ax = this.cx + a.cx * this.scale;
         const ay = this.cy + a.cy * this.scale;
         if (ax < -40 || ax > W + 40 || ay < -40 || ay > H + 40) continue;
+        if (faces.some(f => Math.hypot(f.x - ax, f.y - ay) < (f.r + pr) * 0.75)) continue;
+        faces.push({ i: ai, x: ax, y: ay, r: pr });
+      }
+      // draw smallest first so the most-listened faces sit on top
+      for (let k = faces.length - 1; k >= 0; k--) {
+        const { i: ai, x: ax, y: ay, r: pr } = faces[k];
+        const a = this.data.artists[ai];
         const face = this.faces.face(a, pr, pr * 2 * this.dpr);
         if (face) {
           ctx.globalAlpha = 1;
@@ -706,11 +666,14 @@ export class AtlasRenderer {
             ctx.fillText((a.name || a.handle || '?').charAt(0).toLowerCase(), ax, ay + pr * 0.05);
           }
         }
-        faces.push({ x: ax, y: ay, r: pr });
-        if (zoom >= 2 && pr >= 9 && artistCands.length < 30) {
-          artistCands.push({ name: a.handle, x: ax, y: ay + pr + 9 });
+      }
+      for (const { i: ai, x: ax, y: ay, r: pr } of faces) {
+        if ((zoom >= 2 ? pr >= 9 : pr >= 14) && artistCands.length < 30) {
+          const a = this.data.artists[ai];
+          artistCands.push({ name: a.name || a.handle, x: ax, y: ay + pr + 12 });
         }
       }
+      this.drawnFaces = faces;
       ctx.globalAlpha = 1;
       this.faces.flush();
     }
@@ -736,7 +699,7 @@ export class AtlasRenderer {
     const fitsHoriz = (lx: number, halfW: number): boolean =>
       lx - halfW >= MARGIN && lx + halfW <= W - MARGIN;
     // labels step around artist faces
-    for (const f of faces) placed.push({ x: f.x, y: f.y, hw: f.r + 2, hh: f.r + 2 });
+    for (const f of faces) placed.push({ x: f.x, y: f.y, hw: f.r, hh: f.r });
 
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -792,7 +755,7 @@ export class AtlasRenderer {
         let title = this.data.points[i].title;
         if (!title) continue;
         const sx = this.cx + x * this.scale;
-        const sy = this.cy + y * this.scale - (coverAlpha > 0.5 ? 30 : 10);
+        const sy = this.cy + y * this.scale - (coverPx.get(i) ?? 4) / 2 - 8;
         if (sy < MARGIN || sy > H - 40) continue;
         if (title.length > truncLen) title = title.slice(0, truncLen - 1) + '…';
         const tw = ctx.measureText(title).width;
@@ -807,7 +770,7 @@ export class AtlasRenderer {
     if (artistCands.length) {
       const fontSize = small ? 8 : 10;
       ctx.font = `500 ${fontSize + 1}px ${this.font}`;
-      ctx.globalAlpha = Math.min(0.8, fadeIn(zoom, 2, 1.0));
+      ctx.globalAlpha = 0.8;
       ctx.fillStyle = this.dark ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.75)';
       const max = small ? TUNE.labels.artists.s : TUNE.labels.artists.l;
       let shown = 0;
@@ -838,8 +801,10 @@ export class AtlasRenderer {
   }
 
   private drawGlows(list: Neighborhood[], spread: number, minPx: number, maxPx: number, alpha: number): void {
-    const w = Math.ceil(this.W * this.dpr);
-    const h = Math.ceil(this.H * this.dpr);
+    // glows are soft, so their layer renders at half resolution: a quarter of the pixels
+    const k = this.dpr / 2;
+    const w = Math.ceil(this.W * k);
+    const h = Math.ceil(this.H * k);
     if (!this.layer || this.layer.width !== w || this.layer.height !== h) {
       this.layer = document.createElement('canvas');
       this.layer.width = w;
@@ -848,7 +813,7 @@ export class AtlasRenderer {
     const g = this.layer.getContext('2d')!;
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, w, h);
-    g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    g.setTransform(k, 0, 0, k, 0, 0);
     for (const nb of list) {
       const r = Math.min(maxPx, Math.max(minPx, nb.r * spread * this.scale));
       const sx = this.cx + nb.x * this.scale;
@@ -882,7 +847,7 @@ export class AtlasRenderer {
       p.lineTo(this.cx + this.px[j] * S, this.cy + this.py[j] * S);
     }
     const ctx = this.ctx;
-    ctx.lineWidth = Math.min(1.4, 0.7 + zoom * 0.08);
+    ctx.lineWidth = 0.75;
     ctx.globalAlpha = T.alpha[this.themeKey()] * alpha;
     for (const [step, p] of paths) {
       ctx.strokeStyle = rgba(this.hueColors(step).mid, 1);

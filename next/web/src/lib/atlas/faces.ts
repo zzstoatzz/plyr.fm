@@ -1,4 +1,4 @@
-import type { AtlasArtist } from './types';
+import type { AtlasArtist, AtlasPoint } from './types';
 
 const IN_FLIGHT = 6;
 
@@ -33,19 +33,15 @@ export class ArtistFaces {
   private load(a: AtlasArtist): void {
     this.loading.add(a.did);
     const img = new Image();
-    img.decoding = 'async';
-    img.onload = () => {
-      this.loading.delete(a.did);
-      if (img.naturalWidth > 0) this.images.set(a.did, img);
-      else this.failed.add(a.did);
-      this.onLoad();
-    };
-    img.onerror = () => {
-      this.loading.delete(a.did);
-      this.failed.add(a.did);
-      this.onLoad();
-    };
     img.src = a.avatar;
+    // decoded off the main thread, so the frame that first draws it doesn't stall
+    img.decode().then(
+      () => (img.naturalWidth > 0 ? this.images.set(a.did, img) : this.failed.add(a.did)),
+      () => this.failed.add(a.did)
+    ).finally(() => {
+      this.loading.delete(a.did);
+      this.onLoad();
+    });
   }
 
   // the power-of-two size nearest the drawn size, so small faces don't shimmer
@@ -67,4 +63,17 @@ export class ArtistFaces {
     this.sprites.set(key, cv);
     return cv;
   }
+}
+
+/**
+ * how present each artist is on the map, 0..1, from what listeners do with
+ * their tracks: plays, with a like worth 30 plays. never from how many tracks
+ * they uploaded, so a big archive alone doesn't make an artist loom.
+ */
+export function artistReach(points: AtlasPoint[], artists: AtlasArtist[]): Float32Array<ArrayBuffer> {
+  const score = new Map<string, number>();
+  for (const p of points) score.set(p.handle, (score.get(p.handle) ?? 0) + p.plays + p.likes * 30);
+  const raw = artists.map(a => score.get(a.handle) ?? 0);
+  const top = Math.max(1, ...raw);
+  return Float32Array.from(raw, s => Math.sqrt(s / top));
 }
