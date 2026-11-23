@@ -1,5 +1,5 @@
 import { AtlasRenderer } from './renderer';
-import type { AtlasCallbacks } from './types';
+import type { AtlasCallbacks } from '@plyr/next-core/atlas/types';
 
 const ignore = () => {};
 const still: AtlasCallbacks = { onHover: ignore, onHoverArtist: ignore, onActivate: ignore, onActivateArtist: ignore };

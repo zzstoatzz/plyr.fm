@@ -4,7 +4,7 @@
 	import { onMount, tick } from 'svelte';
 	import { atlasSummary, loadAtlas } from '$lib/atlas/catalog';
 	import { mountAtlas } from '$lib/atlas/canvas';
-	import type { AtlasData } from '$lib/atlas/types';
+	import type { AtlasData } from '@plyr/next-core/atlas/types';
 	import { api } from '$lib/api';
 	import { player } from '$lib/player.svelte';
 	import Loading from '$lib/ui/Loading.svelte';

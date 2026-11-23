@@ -1,4 +1,4 @@
-import type { AtlasCluster } from './types';
+import type { AtlasCluster } from './types.ts';
 
 /** a cluster as the map draws it: where its tracks sit, how far they spread, and the hue most of them share */
 export interface Neighborhood { id: number; label: string; count: number; x: number; y: number; r: number; top: number; bottom: number; step: number }

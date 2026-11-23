@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import type { AtlasData, AtlasPoint } from '../src/lib/atlas/types.ts';
+import type { AtlasData, AtlasPoint } from '@plyr/next-core/atlas/types';
 import { artistSounds, homeSounds, lift, soundHeadline, sounds } from '../src/lib/stats/sounds.ts';
 
 let next = 1;

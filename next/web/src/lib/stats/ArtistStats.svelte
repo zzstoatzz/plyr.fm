@@ -5,7 +5,7 @@
 	import type { Artist, ArtistMetrics, Track } from '@plyr/next-core/api';
 	import { api } from '$lib/api';
 	import { loadAtlas } from '$lib/atlas/catalog';
-	import type { AtlasData } from '$lib/atlas/types';
+	import type { AtlasData } from '@plyr/next-core/atlas/types';
 	import ImmersiveWash from '$lib/ui/ImmersiveWash.svelte';
 	import LoadMore from '$lib/ui/LoadMore.svelte';
 	import Loading from '$lib/ui/Loading.svelte';

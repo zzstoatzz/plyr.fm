@@ -7,7 +7,7 @@
 	import { trackIdFromUri } from '@plyr/next-core/api';
 	import { api } from '$lib/api';
 	import { loadAtlas } from '$lib/atlas/catalog';
-	import type { AtlasData } from '$lib/atlas/types';
+	import type { AtlasData } from '@plyr/next-core/atlas/types';
 	import { trackHref, artistName } from '$lib/tracks';
 	import Artwork from '$lib/ui/Artwork.svelte';
 	import ImmersiveWash from '$lib/ui/ImmersiveWash.svelte';

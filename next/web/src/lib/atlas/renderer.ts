@@ -1,78 +1,16 @@
 import { ArtistFaces } from './faces';
-import { neighborhoods, neighborLinks, type Neighborhood } from './neighborhoods';
-import type { AtlasArtist, AtlasCallbacks, AtlasData, AtlasOptions, AtlasPoint } from './types';
+import { neighborhoods, neighborLinks, type Neighborhood } from '@plyr/next-core/atlas/neighborhoods';
+import { clamp01, faceTint, fadeIn, fadeOut, hash01, hashText, hueColors, hueStepOf, rgba, TUNE, type HueColors } from '@plyr/next-core/atlas/palette';
+import { artistRadius, fitView, popularity } from '@plyr/next-core/atlas/view';
+import type { AtlasArtist, AtlasCallbacks, AtlasData, AtlasOptions, AtlasPoint } from '@plyr/next-core/atlas/types';
 
 interface HaloSprite {
   cv: HTMLCanvasElement;
   bucket: number;
 }
 
-const HUE_STEPS = 24;
-const TUNE = {
-  // glows are drawn on their own layer, so overlapping ones never stack past `layer`
-  regions: { spread: 1.9, minPx: 40, maxPx: 380, layer: { dark: 0.5, light: 0.38 }, outStart: 1.8, outRange: 1.0 },
-  clusters: { spread: 2.4, minPx: 30, maxPx: 320, layer: { dark: 0.42, light: 0.32 }, inStart: 1.3, inRange: 1.0, outStart: 26, outRange: 10 },
-  // neighbour lines stay faint: a hint of shape, not a wire diagram
-  links: { alpha: { dark: 0.1, light: 0.12 }, inStart: 0.6, inRange: 0.8, maxPx: 150 },
-  hueDark: { core: [0.55, 0.72], mid: [0.5, 0.52], edge: [0.45, 0.34] } as const,
-  hueLight: { core: [0.55, 0.45], mid: [0.5, 0.6], edge: [0.45, 0.75] } as const,
-  labels: { titles: { s: 5, l: 14 }, coarse: { s: 5, l: 10 }, fine: { s: 6, l: 16 }, artists: { s: 3, l: 8 } },
-  covers: { start: 14, range: 8, budget: { s: 18, l: 36 }, maxPx: 72, minPx: 10 }
-};
-
-function clamp01(x: number): number {
-  return x < 0 ? 0 : x > 1 ? 1 : x;
-}
-function fadeIn(zoom: number, start: number, range: number): number {
-  return clamp01((zoom - start) / range);
-}
-function fadeOut(zoom: number, start: number, range: number): number {
-  return 1 - clamp01((zoom - start) / range);
-}
-function hash01(id: number): number {
-  let x = (id * 2654435761) >>> 0;
-  x ^= x >>> 15;
-  x = (x * 2246822519) >>> 0;
-  x ^= x >>> 13;
-  return (x >>> 0) / 4294967296;
-}
-function hashText(text: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
-  return hash01(h >>> 0);
-}
-function hslToRgb(h: number, s: number, l: number): [number, number, number] {
-  if (s === 0) {
-    const v = Math.round(l * 255);
-    return [v, v, v];
-  }
-  const f = (p: number, q: number, t: number): number => {
-    if (t < 0) t += 1;
-    if (t > 1) t -= 1;
-    if (t < 1 / 6) return p + (q - p) * 6 * t;
-    if (t < 1 / 2) return q;
-    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
-    return p;
-  };
-  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-  const p = 2 * l - q;
-  return [
-    Math.round(f(p, q, h + 1 / 3) * 255),
-    Math.round(f(p, q, h) * 255),
-    Math.round(f(p, q, h - 1 / 3) * 255)
-  ];
-}
-function rgba(rgb: [number, number, number], a: number): string {
-  return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${a})`;
-}
 function easeOutCubic(t: number): number {
   return 1 - Math.pow(1 - t, 3);
-}
-
-interface HueColors {
-  core: [number, number, number];
-  mid: [number, number, number];
-  edge: [number, number, number];
 }
 
 export class AtlasRenderer {
@@ -182,8 +120,8 @@ export class AtlasRenderer {
       this.px[i] = p.x;
       this.py[i] = p.y;
       this.fineArr[i] = p.clusterFine;
-      this.hueStep[i] = Math.floor(hash01(p.clusterFine) * HUE_STEPS) % HUE_STEPS;
-      pop[i] = Math.log(1 + p.plays) + 2 * Math.log(1 + p.likes);
+      this.hueStep[i] = hueStepOf(p.clusterFine);
+      pop[i] = popularity(p);
       const key = `${Math.floor(p.x / this.cellSize)},${Math.floor(p.y / this.cellSize)}`;
       let cell = this.grid.get(key);
       if (!cell) {
@@ -233,24 +171,7 @@ export class AtlasRenderer {
 
   private fitToData(): void {
     if (!this.px.length || !this.W || !this.H) return;
-    // frame the main body of the catalog: points past Tukey's fences (a far-off cluster) start off-screen
-    const range = (values: Float32Array) => {
-      const sorted = values.slice().sort();
-      const at = (f: number) => sorted[Math.round(f * (sorted.length - 1))];
-      const reach = 1.5 * (at(0.75) - at(0.25));
-      const inside = sorted.filter(v => v >= at(0.25) - reach && v <= at(0.75) + reach);
-      return [inside[0], inside[inside.length - 1]];
-    };
-    const [xMin, xMax] = range(this.px);
-    const [yMin, yMax] = range(this.py);
-    const spanX = Math.max(0.01, xMax - xMin);
-    const spanY = Math.max(0.01, yMax - yMin);
-    const base = Math.min(this.W, this.H) * 0.42;
-    const [top, bottom] = this.insets.map(px => Math.min(px, this.H / 3));
-    const zoom = Math.min((0.9 * this.W) / (spanX * base), (0.86 * (this.H - top - bottom)) / (spanY * base));
-    this.view.zoom = Math.max(this.view.minZoom, Math.min(4, zoom));
-    this.view.panX = -(xMin + xMax) / 2;
-    this.view.panY = -(yMin + yMax) / 2 + (top - bottom) / 2 / (base * this.view.zoom);
+    Object.assign(this.view, fitView(this.px, this.py, this.W, this.H, ...this.insets));
   }
 
   // --- theme / colors ---
@@ -276,19 +197,9 @@ export class AtlasRenderer {
   }
 
   private hueColors(step: number): HueColors {
-    const themeKey = this.dark ? 1 : 0;
-    const cacheKey = step * 2 + themeKey;
+    const cacheKey = step * 2 + (this.dark ? 1 : 0);
     let c = this.hueCache.get(cacheKey);
-    if (!c) {
-      const h = step / HUE_STEPS;
-      const pal = this.dark ? TUNE.hueDark : TUNE.hueLight;
-      c = {
-        core: hslToRgb(h, pal.core[0], pal.core[1]),
-        mid: hslToRgb(h, pal.mid[0], pal.mid[1]),
-        edge: hslToRgb(h, pal.edge[0], pal.edge[1])
-      };
-      this.hueCache.set(cacheKey, c);
-    }
+    if (!c) this.hueCache.set(cacheKey, (c = hueColors(step, this.dark)));
     return c;
   }
 
@@ -487,14 +398,7 @@ export class AtlasRenderer {
   }
 
   private artistRadiusPx(a: AtlasArtist): number {
-    // visible from the whole-map view; grows with sqrt(zoom) so walking in
-    // makes an artist more present without ballooning past the tracks.
-    // the zoom-scaled cap keeps a dominant catalog from owning the overview.
-    return Math.min(
-      12 + this.view.zoom * 5,
-      34,
-      (3.5 + Math.sqrt(a.count) * 1.2) * Math.sqrt(this.view.zoom)
-    );
+    return artistRadius(a, this.view.zoom);
   }
 
   private findArtistAt(sx: number, sy: number): number {
@@ -692,7 +596,7 @@ export class AtlasRenderer {
           ctx.globalAlpha = 1;
           ctx.drawImage(face, ax - pr, ay - pr, pr * 2, pr * 2);
         } else {
-          const [r, g, b] = hslToRgb(hashText(a.did), 0.35, this.dark ? 0.28 : 0.82);
+          const [r, g, b] = faceTint(a.did, this.dark);
           ctx.globalAlpha = 1;
           ctx.beginPath();
           ctx.arc(ax, ay, pr, 0, Math.PI * 2);
