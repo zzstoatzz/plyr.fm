@@ -1,3 +1,4 @@
+import { ArtistFaces } from './faces';
 import type { AtlasArtist, AtlasCallbacks, AtlasCluster, AtlasData, AtlasOptions, AtlasPoint } from './types';
 
 interface HaloSprite {
@@ -123,12 +124,7 @@ export class AtlasRenderer {
   private coverLoading = new Set<number>();
   private coverLoadCount = 0;
 
-  // artist avatars: every drawn artist gets one, loaded biggest-first a few
-  // at a time and kept as pre-cut circles so drawing hundreds stays cheap
-  private avatarImages = new Map<string, HTMLImageElement>();
-  private avatarFailed = new Set<string>();
-  private avatarLoading = new Set<string>();
-  private avatarSprites = new Map<string, HTMLCanvasElement>();
+  private faces = new ArtistFaces(() => this.markDirty());
 
   // interaction
   private hovered = -1;
@@ -499,46 +495,6 @@ export class AtlasRenderer {
     img.src = url;
   }
 
-  private loadAvatar(a: AtlasArtist): void {
-    this.avatarLoading.add(a.did);
-    const img = new Image();
-    img.decoding = 'async';
-    img.onload = () => {
-      this.avatarLoading.delete(a.did);
-      if (img.naturalWidth > 0) this.avatarImages.set(a.did, img);
-      else this.avatarFailed.add(a.did);
-      this.markDirty();
-    };
-    img.onerror = () => {
-      this.avatarLoading.delete(a.did);
-      this.avatarFailed.add(a.did);
-      this.markDirty();
-    };
-    img.src = a.avatar;
-  }
-
-  /** a circle-cut avatar at the power-of-two size nearest the drawn size, so small rings don't shimmer */
-  private avatarSprite(did: string, img: HTMLImageElement, px: number): HTMLCanvasElement {
-    const size = Math.max(16, Math.min(256, 2 ** Math.ceil(Math.log2(px))));
-    const key = `${did}:${size}`;
-    const hit = this.avatarSprites.get(key);
-    if (hit) return hit;
-    const cv = document.createElement('canvas');
-    cv.width = cv.height = size;
-    const g = cv.getContext('2d')!;
-    g.imageSmoothingQuality = 'high';
-    g.beginPath();
-    g.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
-    g.clip();
-    // cover-fit a non-square avatar
-    const iw = img.naturalWidth;
-    const ih = img.naturalHeight;
-    const side = Math.min(iw, ih);
-    g.drawImage(img, (iw - side) / 2, (ih - side) / 2, side, side, 0, 0, size, size);
-    this.avatarSprites.set(key, cv);
-    return cv;
-  }
-
   // --- transforms ---
 
   private cacheTransform(): void {
@@ -797,19 +753,17 @@ export class AtlasRenderer {
     // it loads or when the artist has none. never an empty ring.
     const artistCands: { name: string; x: number; y: number }[] = [];
     {
-      const wanted: { a: AtlasArtist; pr: number }[] = [];
       for (const a of this.data.artists) {
         const pr = this.artistRadiusPx(a);
         if (pr < 7) continue;
         const ax = this.cx + a.cx * this.scale;
         const ay = this.cy + a.cy * this.scale;
         if (ax < -40 || ax > W + 40 || ay < -40 || ay > H + 40) continue;
-        const img = this.avatarImages.get(a.did);
-        if (img) {
+        const face = this.faces.face(a, pr, pr * 2 * this.dpr);
+        if (face) {
           ctx.globalAlpha = 0.95;
-          ctx.drawImage(this.avatarSprite(a.did, img, pr * 2 * this.dpr), ax - pr, ay - pr, pr * 2, pr * 2);
+          ctx.drawImage(face, ax - pr, ay - pr, pr * 2, pr * 2);
         } else {
-          if (a.avatar && !this.avatarFailed.has(a.did) && !this.avatarLoading.has(a.did)) wanted.push({ a, pr });
           const [r, g, b] = hslToRgb(hashText(a.did), 0.35, this.dark ? 0.28 : 0.82);
           ctx.globalAlpha = 0.9;
           ctx.beginPath();
@@ -835,12 +789,7 @@ export class AtlasRenderer {
         }
       }
       ctx.globalAlpha = 1;
-      // biggest visible faces first, a handful in flight at a time
-      const slots = 6 - this.avatarLoading.size;
-      if (slots > 0 && wanted.length) {
-        wanted.sort((p, q) => q.pr - p.pr);
-        for (const w of wanted.slice(0, slots)) this.loadAvatar(w.a);
-      }
+      this.faces.flush();
     }
 
     // the home preview is a still picture: dots and artists, no labels to crowd it
