@@ -48,7 +48,9 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /build/zig-out/bin/plyr-backend /usr/local/bin/plyr-backend
-COPY --from=ffmpeg /ffmpeg /usr/local/bin/ffmpeg
+# /usr/bin: the backend spawns children with an empty environment, so `nice`
+# looks for ffmpeg on the default PATH, which has no /usr/local/bin
+COPY --from=ffmpeg /ffmpeg /usr/bin/ffmpeg
 COPY --chmod=755 scripts/canary-resource-snapshot /usr/local/bin/canary-resource-snapshot
 
 EXPOSE 8000
