@@ -4,14 +4,12 @@
   import type { Track } from '@plyr/next-core/api';
   import { downloadAllowed } from '@plyr/next-core/downloads/model';
   import { isPrivateTrack } from '@plyr/next-core/track-access';
-  import { invalidateAll } from '$app/navigation';
   import { trackHref } from '$lib/tracks';
   import { auth } from '$lib/auth';
   import LikeButton from '$lib/listening/LikeButton.svelte';
   import Likers from '$lib/listening/Likers.svelte';
   import TrackDownload from '$lib/downloads/TrackDownload.svelte';
   import Icon from '$lib/ui/Icon.svelte';
-  import Loading from '$lib/ui/Loading.svelte';
   import PlaylistSheet from './PlaylistSheet.svelte';
 
   let { track, transport, compact = false }: { track: Track; transport: Snippet; compact?: boolean } = $props();
@@ -20,8 +18,7 @@
   let picker = $state<PlaylistSheet>();
   let downloader = $state<TrackDownload>();
   let downloading = $state(false);
-  let access = $state(false);
-  onMount(() => auth.subscribe(() => { account = auth.getAuth(); access = false; }));
+  onMount(() => auth.subscribe(() => { account = auth.getAuth(); }));
   const owner = $derived(!!account.rpc && account.did === track.artist.did);
   const downloadable = $derived(downloadAllowed(track));
   const signIn = $derived(`${resolve('/(app)/login')}?${new URLSearchParams({ return_to: trackHref(track) })}`);
@@ -44,26 +41,13 @@
       </button>
     {/if}
     {#if owner}<a class="chip" href={resolve('/(app)/edit-track/[id]', { id: track.id })}><Icon name="edit" size={18} />edit track</a>{/if}
-    {#if owner && !isPrivateTrack(track)}<button class="chip" type="button" aria-expanded={access} onclick={() => { access = !access; }}><Icon name="lock" size={18} />who can listen</button>{/if}
+    {#if owner && !isPrivateTrack(track)}<a class="chip" href={`${trackHref(track)}/access`}><Icon name="lock" size={18} />who can listen</a>{/if}
   </div>
   {#if downloadable}<TrackDownload bind:this={downloader} bind:busy={downloading} {track} />{/if}
   {#if picking}<PlaylistSheet bind:this={picker} {track} onclose={() => { picking = false; }} />{/if}
 {/if}
-{#if access && !compact}
-  <div class="panel access">
-    {#await import('$lib/access/AccessDialog.svelte')}
-      <Loading label="loading who can listen" inline />
-    {:then panel}
-      <panel.default subject={{ noun: 'track', tracks: [track], skey: track.record.rkey }} returnTo={trackHref(track)} onchange={() => void invalidateAll()} />
-    {:catch}
-      <p role="alert" class="state">could not open who can listen. reload the page and try again.</p>
-    {/await}
-  </div>
-{/if}
 
 <style>
-  .panel { display: grid; justify-items: center; text-align: center; }
-  .access { justify-items: stretch; text-align: start; width: min(28rem, 100%); margin-inline: auto; }
   .actions { display: flex; align-items: center; justify-content: center; gap: 0.5rem; flex-wrap: wrap; }
   .compact { justify-content: space-between; }
   .like { display: inline-flex; align-items: center; }
