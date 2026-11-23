@@ -277,7 +277,7 @@
 						{@const light = tagColors(tag.name, palettes.light.background, selected)}
 						{@const dark = tagColors(tag.name, palettes.dark.background, selected)}
 						{#if selected || data.tags.length < maxTags}
-							<a style:color="light-dark({light.color}, {dark.color})" style:background-color="light-dark({light.backgroundColor}, {dark.backgroundColor})" style:border-color="light-dark({light.borderColor}, {dark.borderColor})" class="tag-pill" href={tagHref(tag.name)} aria-current={selected ? 'page' : undefined} aria-label={`${selected ? 'remove' : 'add'} ${tag.name}`}>{#if selected}<Icon name="check" size={14} />{/if}{tag.name}{#if tag.track_count !== undefined} <small>{tag.track_count}</small>{/if}</a>
+							<a style:color="light-dark({light.color}, {dark.color})" style:background-color="light-dark({light.backgroundColor}, {dark.backgroundColor})" style:border-color="light-dark({light.borderColor}, {dark.borderColor})" class="tag-pill" href={tagHref(tag.name)} aria-current={selected ? 'page' : undefined}>{#if selected}<Icon name="check" size={14} />{/if}{tag.name}{#if tag.track_count !== undefined} <small>{tag.track_count}</small>{/if}</a>
 						{/if}
 					{/each}
 				</nav>
