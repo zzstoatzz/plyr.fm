@@ -3,13 +3,13 @@ import { api } from '$lib/api';
 import { player } from '$lib/player.svelte';
 
 // One loop writes the playing track's bar heights to `--wave-0`…`--wave-3` on
-// the root and marks it `data-live-wave` while they follow the audio; otherwise
-// icons keep their canned motion (not measured yet, a broadcast, another device).
+// each following icon and marks it `data-live` (only those icons restyle); without
+// that mark icons keep their canned motion (not measured yet, a broadcast, another device).
 
 const waveforms = new Map<string, Promise<TrackWaveform | null>>();
 const easing = createWaveEasing();
 const targets = new Array<number>(waveBars).fill(0);
-let users = 0;
+const icons = new Set<HTMLElement>();
 let frame = 0;
 let last = 0;
 let uri: string | undefined;
@@ -35,12 +35,11 @@ function follow(subject: string | undefined) {
 	if (subject) void load(subject).then(found => { if (uri === subject) waveform = found; });
 }
 
-function show(live: boolean) {
-	const root = document.documentElement;
+function show(icon: HTMLElement, live: boolean) {
 	if (live) {
-		easing.heights.forEach((height, bar) => root.style.setProperty(`--wave-${bar}`, height.toFixed(3)));
-		root.dataset.liveWave = '';
-	} else if ('liveWave' in root.dataset) delete root.dataset.liveWave;
+		easing.heights.forEach((height, bar) => icon.style.setProperty(`--wave-${bar}`, height.toFixed(3)));
+		icon.dataset.live = '';
+	} else if ('live' in icon.dataset) delete icon.dataset.live;
 }
 
 function tick(now: number) {
@@ -49,13 +48,13 @@ function tick(now: number) {
 	follow(snapshot.track?.uri);
 	const live = !!waveform && snapshot.state === 'playing' && !player.airingBroadcast;
 	if (live) easing.step(levelsAt(waveform!, snapshot.position, targets), last ? (now - last) / 1000 : 0);
-	show(live);
+	for (const icon of icons) show(icon, live);
 	last = now;
 	schedule();
 }
 
 function schedule() {
-	if (!frame && users > 0 && document.visibilityState === 'visible') frame = requestAnimationFrame(tick);
+	if (!frame && icons.size > 0 && document.visibilityState === 'visible') frame = requestAnimationFrame(tick);
 }
 
 function visibility() {
@@ -63,16 +62,18 @@ function visibility() {
 	schedule();
 }
 
-/** Keeps the loop running while an icon that follows the audio is on screen. */
-export function followPlayingLevels(): () => void {
-	if (users++ === 0) document.addEventListener('visibilitychange', visibility);
+/** Drives `icon` from the levels while it is on screen. */
+export function followPlayingLevels(icon: HTMLElement): () => void {
+	if (icons.size === 0) document.addEventListener('visibilitychange', visibility);
+	icons.add(icon);
 	schedule();
 	return () => {
-		if (--users > 0) return;
+		icons.delete(icon);
+		show(icon, false);
+		if (icons.size > 0) return;
 		document.removeEventListener('visibilitychange', visibility);
 		cancelAnimationFrame(frame);
 		frame = 0;
 		last = 0;
-		show(false);
 	};
 }
