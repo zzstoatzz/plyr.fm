@@ -1,5 +1,8 @@
 # syntax=docker/dockerfile:1.7
 
+# ffmpeg decodes tracks for the waveform prober; the same static build processing ships
+FROM mwader/static-ffmpeg:7.0.2@sha256:d9b22f65c2049d73bf8ae556bb4c5c7d45e9fb85939d87951ed98f22b0f19105 AS ffmpeg
+
 FROM --platform=$TARGETPLATFORM debian:bookworm-slim AS builder
 
 ARG ZIG_VERSION=0.17.0
@@ -45,6 +48,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /build/zig-out/bin/plyr-backend /usr/local/bin/plyr-backend
+COPY --from=ffmpeg /ffmpeg /usr/local/bin/ffmpeg
 COPY --chmod=755 scripts/canary-resource-snapshot /usr/local/bin/canary-resource-snapshot
 
 EXPOSE 8000

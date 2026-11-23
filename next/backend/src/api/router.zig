@@ -71,6 +71,7 @@ pub const App = struct {
     /// takedowns, asked by checkUserAccess
     space_restrictions: ?*PostgresRestrictions = null,
     radio: ?RadioService = null,
+    waveform_store: ?@import("../internal/delivery/postgres_waveform_store.zig").PostgresWaveformStore = null,
 };
 
 pub fn handle(

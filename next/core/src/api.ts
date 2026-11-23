@@ -2,6 +2,7 @@
 import { PlayDeliveryError, type PlayReceipt, type QualifiedPlay } from './play-outbox.ts';
 import { uriFromId } from './record-ids.ts';
 import { readableError } from './api-errors.ts';
+import { parseTrackWaveform, type TrackWaveformBody } from './track-waveform.ts';
 
 export interface Page<T> {
 	object: 'list';
@@ -262,6 +263,9 @@ export function createApi(origin: string, playListenerId: () => string, nsidPref
 		playback: (id: string, options?: { fresh?: boolean }) => options?.fresh
 			? request<Playback>(`${origin}${xrpc('getPlayback')}?${new URLSearchParams({ uri: uriFromId(id) })}`, 15_000, undefined, { cache: 'no-store' })
 			: get<Playback>(xrpc('getPlayback'), { uri: uriFromId(id) }),
+		/** null until the track's public audio has been measured */
+		trackWaveform: (uri: string, signal?: AbortSignal) => get<TrackWaveformBody>(xrpc('getTrackWaveform'), { uri }, signal)
+			.then(parseTrackWaveform, error => { if (error instanceof ApiError && error.status === 404) return null; throw error; }),
 		artist: (didOrHandle: string, signal?: AbortSignal) => get<Artist>(xrpc('getArtist'), { actor: didOrHandle }, signal),
 		artistMetrics: (did: string, signal?: AbortSignal) => get<ArtistMetrics>(xrpc('getArtistMetrics'), { actor: did }, signal),
 		albums: (artist_did: string, p: { limit?: number; cursor?: string } = {}) => get<Page<ListSummary>>(xrpc('listAlbums'), { artistDid: artist_did, ...p }),

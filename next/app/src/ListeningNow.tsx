@@ -51,7 +51,7 @@ export function ListeningNowStatus({ did, name }: { did: string; name: string })
     onPress={link ? () => void Linking.openURL(link).catch(() => toast.error('couldn’t open that link')) : undefined}
     onPressIn={() => setPressed(true)} onPressOut={() => setPressed(false)}
     style={StyleSheet.flatten([styles.line, { opacity: pressed ? 0.6 : 1 }])}>
-    <PlayingWave size={12} color={theme.accent} />
+    <PlayingWave size={12} color={theme.accent} live={false} />
     <Text numberOfLines={1} style={[styles.copy, text, { color: theme.muted }]}>
       listening to <Text style={[text, { color: theme.text, fontWeight: '600' }]}>{status.track}</Text>{artists ? ` · ${artists}` : ''}
     </Text>

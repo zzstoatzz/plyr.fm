@@ -1,0 +1,38 @@
+{
+  "lexicon": 1,
+  "id": "fm.plyr.unspecced.getTrackWaveform",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "How loud a track's bass, low mids, high mids and treble are over time, measured from its public audio, for drawing playing bars. levels is base64: bands bytes per frame at fps frames a second, each 0 (silent) to 255 (that band's loud passages). cid is the record version the levels were measured from. NotFound until the track's audio has been measured; private audio is never measured.",
+      "parameters": {
+        "type": "params",
+        "properties": {
+          "uri": {
+            "type": "string",
+            "format": "at-uri",
+            "description": "AT-URI of the fm.plyr.track record."
+          }
+        },
+        "required": [
+          "uri"
+        ]
+      },
+      "output": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "required": ["uri", "cid", "fps", "bands", "levels"],
+          "properties": {
+            "uri": { "type": "string", "format": "at-uri" },
+            "cid": { "type": "string", "format": "cid" },
+            "fps": { "type": "integer", "minimum": 1, "maximum": 60 },
+            "bands": { "type": "integer", "minimum": 1, "maximum": 16 },
+            "levels": { "type": "string" }
+          }
+        }
+      },
+      "errors": [{ "name": "NotFound" }]
+    }
+  }
+}

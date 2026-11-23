@@ -589,7 +589,7 @@ max_lines = 507
 
 [[rules]]
 path = "next/backend/src/main.zig"
-max_lines = 526
+max_lines = 531
 
 [[rules]]
 path = "next/web/src/lib/publishing/UploadForm.svelte"

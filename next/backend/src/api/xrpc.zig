@@ -23,6 +23,7 @@ const records = @import("records.zig");
 const search_api = @import("search.zig");
 const stats = @import("stats.zig");
 const tracks = @import("tracks.zig");
+const waveforms = @import("waveforms.zig");
 const query = @import("../internal/http/query.zig");
 const track_id = @import("../internal/identity/track_id.zig");
 const album_id = @import("../internal/identity/album_id.zig");
@@ -54,6 +55,7 @@ pub const Method = enum {
     resolveLatestTracks,
     getActorLikes,
     getIngestStatus,
+    getTrackWaveform,
 
     fn isProcedure(self: Method) bool {
         return switch (self) {
@@ -189,6 +191,7 @@ pub fn handle(
             try actors.listLikes(request, allocator, app.liked_track_store, id, app.track_collection, app.cors, request_id);
         },
         .getIngestStatus => try health.ingest(request, allocator, app.io, app.ingest_status_store, app.cors, request_id),
+        .getTrackWaveform => try waveforms.get(request, allocator, app.waveform_store, app.cors, request_id),
     }
 }
 
