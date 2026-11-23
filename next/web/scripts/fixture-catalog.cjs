@@ -47,7 +47,7 @@ async function serveAudio(route) {
 const atlasCluster = { id: 0, label: 'field recordings', cx: 0, cy: 0, count: 1 };
 const atlas = {
   points: [{
-    id: 19, x: 0, y: 0, title: tracks[0].metadata.title, artist: 'replyomatic', handle: 'sketches.test',
+    id: tracks[0].id, x: 0, y: 0, title: tracks[0].metadata.title, artist: 'replyomatic', handle: 'sketches.test',
     thumb: '', plays: 9, likes: 3, clusterCoarse: 0, clusterFine: 0, core: true
   }],
   artists: [], clusters: { coarse: [atlasCluster], fine: [{ ...atlasCluster, parent: 0 }] },
