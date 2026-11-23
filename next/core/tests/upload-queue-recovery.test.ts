@@ -37,6 +37,10 @@ function fixture({ statusGate, reserve = async () => record, beforeSaveTransfer,
   let published = false;
   let saved: UploadOperation[] = [];
   const originals: string[] = [];
+  const rpc = { post: async (_method: string, { input, headers }: { input: ArrayBuffer; headers: Record<string, string> }) => {
+    originals.push(headers['content-type']);
+    return { ok: true, data: { blob: { $type: 'blob', ref: { $link: 'bafkreioriginal' }, mimeType: headers['content-type'], size: input.byteLength } } };
+  } };
   const drafts = new Map<string, QueuedUploadDraft>();
   const status = (): UploadStatus => ({
     state: published ? 'published' : 'complete', recoveryRequired: false, reservedBytes: 1,
@@ -47,17 +51,13 @@ function fixture({ statusGate, reserve = async () => record, beforeSaveTransfer,
     reserveCreate: reserve,
     uploadTrack: async () => { throw new Error('host rejected the upload'); },
     prepareTrackRecord: async () => record.record,
-    uploadOriginalAudio: async (file: { size: number }, mimeType: string) => {
-      originals.push(mimeType);
-      return file.size > MAX_AUDIO_BYTES ? undefined : { $type: 'blob', ref: { $link: 'bafkreioriginal' }, mimeType, size: file.size };
-    },
     pendingCreates: async () => saved.length ? [record] : [],
     recoverCreate: async () => ({ state: 'different' }),
     uploadedTrack: async () => { publicationAttempts++; return { state: 'accepted' }; },
     dismissCreate: async () => { dismissed++; },
   } as unknown as ReturnType<typeof createPublicPds>;
   const model = createUploadQueue({
-    getAuth: () => ({ did: owner, rpc: {}, uploadStorage: true }) as Auth<RepoRpc>,
+    getAuth: () => ({ did: owner, rpc, uploadStorage: true }) as Auth<RepoRpc>,
     createPds: () => pds,
     measureAudioDuration: async () => 1,
     openUploadReader: () => { throw new Error('not used'); },

@@ -105,7 +105,7 @@
   let creationsToRecover = $derived(pending.filter(operation => !active.rkeys.has(operation.rkey) && !transfers.some(transfer => transfer.rkey === operation.rkey)));
   let creationBlocksUpload = $derived(creationsToRecover.some(operation => !operation.archived));
   let service = $derived(!!audio && needsPlyrStorage(audio, access.closed));
-  // the artist agrees only when plyr.fm would hold the sole copy; otherwise their PDS keeps the original
+  // asked only when plyr.fm would hold the sole copy
   let soleCopy = $derived(service && !!audio && !originalOnPds(audio));
   let privateTrack = $derived(onlyYou(access));
   let summary = $derived(accessSummary(access));
@@ -475,17 +475,9 @@
         {#if audio}<AudioPreview file={audio} bind:duration />{/if}
         {#if tooLargeClosed}<p class="problem" role="alert">closed tracks can be up to 100 MB for now. choose a smaller file or make it open.</p>{/if}
         {#if service}
-          {#if soleCopy}
-            <label class="consent">
-              <input type="checkbox" bind:checked={consent} />
-              <span><b>use plyr.fm storage</b> this file is over 100 MB, more than a track can keep on your PDS, so plyr.fm keeps it and serves it so it plays everywhere. playback and downloads are public.</span>
-            </label>
-          {:else}
-            <p class="consent"><span><b>your PDS keeps the original</b> plyr.fm adds an mp3 copy so it plays everywhere. playback and downloads are public.</span></p>
-          {/if}
-          {#if !account.uploadStorage}
-            <p class="problem">sign in again to allow plyr.fm storage. what you typed stays here. <a href="/login?return_to=%2Fupload">sign in again</a></p>
-          {/if}
+          {#if soleCopy}<label class="consent"><input type="checkbox" bind:checked={consent} /><span><b>use plyr.fm storage</b> this file is over 100 MB, more than a track can keep on your PDS, so plyr.fm keeps it and serves it so it plays everywhere. playback and downloads are public.</span></label>
+          {:else}<p class="consent note"><span><b>your PDS keeps the original</b> plyr.fm adds an mp3 copy so it plays everywhere. playback and downloads are public.</span></p>{/if}
+          {#if !account.uploadStorage}<p class="problem">sign in again to allow plyr.fm storage. what you typed stays here. <a href="/login?return_to=%2Fupload">sign in again</a></p>{/if}
         {/if}
       </div>
     </header>
@@ -555,9 +547,9 @@
   .chip.action { color: var(--text); font-weight: 700; }
   .chip.action:hover { background: var(--hover); }
   .consent { margin: 0; display: flex; align-items: flex-start; gap: 0.7rem; padding: 0.75rem 0.9rem; border-radius: 0.75rem; background: var(--glass); border: 1px solid var(--line); backdrop-filter: blur(16px); color: var(--muted); font-size: var(--t-14-4); line-height: 1.4; cursor: pointer; }
+  .consent.note { cursor: default; }
   .consent b { color: var(--text); margin-right: 0.25rem; }
   .consent input { accent-color: var(--accent); }
-  p.consent { cursor: default; }
   .consent input { width: 1.2rem; height: 1.2rem; flex: none; margin: 0.1rem 0 0; }
 
 
