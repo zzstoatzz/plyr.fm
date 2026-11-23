@@ -589,7 +589,7 @@ max_lines = 518
 
 [[rules]]
 path = "next/web/src/lib/publishing/UploadForm.svelte"
-max_lines = 675
+max_lines = 688
 
 [[rules]]
 path = "next/backend/src/internal/moderation/postgres_log.zig"

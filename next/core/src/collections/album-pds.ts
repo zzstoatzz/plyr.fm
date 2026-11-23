@@ -34,7 +34,7 @@ export function albumPublishing({ rpc, did, trackCollection, assertSession, orde
     const result = await readTrack(uri);
     if (!result) return null;
     const { value, cid } = result;
-    if (value.$type !== trackCollection || (value.visibility !== undefined && value.visibility !== 'public')
+    if (value.$type !== trackCollection || (value.visibility !== undefined && value.visibility !== 'public' && value.visibility !== 'unlisted')
       || value.audioSpace || value.supportGate) {
       throw new Error('choose one of your published tracks.');
     }

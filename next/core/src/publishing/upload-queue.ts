@@ -89,13 +89,14 @@ export function createUploadQueue<Rpc extends RepoRpc>({
   }
 
   async function finishCreate(job: Job, uri: string, autoTag?: boolean, operation?: UploadOperation, addTo?: string) {
+    // the track is already up, so an album that can't take it is reported on the finished upload, not as a failure.
+    // it joins before the stored operation goes, so a reload in between still knows which album it was for
+    const albumProblem = addTo ? await withRetries(job, () => createPds(session(job)).albumOrganization().appendUpload(addTo, uri))
+      .then(() => undefined, () => 'could not add it to the album') : undefined;
     const pds = createPds(session(job));
     const pending = (await pds.pendingCreates('track')).find(item => item.uri === uri);
     if (pending) await pds.dismissCreate(pending).catch(() => undefined);
     if (operation) await uploadStorage.delete(operation).catch(() => undefined);
-    // the track is already up, so an album that can't take it is reported on the finished upload, not as a failure
-    const albumProblem = addTo ? await withRetries(job, () => createPds(session(job)).albumOrganization().appendUpload(addTo, uri))
-      .then(() => undefined, () => 'could not add it to the album') : undefined;
     patch(job, { phase: 'done', uri, ...(albumProblem ? { error: albumProblem } : {}) });
     if (autoTag) void applyGenreTags(() => session(job), uri).catch(() => undefined);
   }

@@ -32,6 +32,9 @@
         await pds.archiveCreate(operation, true);
         await refresh();
       } else if (action === 'dismiss') {
+        if (kind === 'track' && known?.state === 'accepted' && operation.addTo) {
+          await pds.albumOrganization().appendUpload(operation.addTo, operation.uri).catch(() => { problem = 'the track is up, but could not add it to the album.'; });
+        }
         await pds.dismissCreate(operation, known?.state === 'different');
         if (kind === 'track' && known?.state === 'accepted' && operation.autoTag) {
           void applyGenreTags(() => pds, operation.uri).catch(() => undefined);

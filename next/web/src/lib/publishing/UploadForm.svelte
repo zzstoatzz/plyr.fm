@@ -144,8 +144,15 @@
     const image = files.find(isImage);
     const sounds = files.filter(file => file !== image);
     if (sounds.length > 1 && !editing && !into && onAlbum) return onAlbum(sounds, image);
+    if (sounds.length > 1 && into) { audioProblem = `add one track at a time to ${into.name}.`; return; }
     if (sounds[0]) { if (into) chooseAlbum(into); pickAudio(sounds[0]); }
     if (image) void pickCover(image);
+  }
+
+  // a tap on an album cover opens the same picker; every other opener clears it so a cancelled pick can't linger
+  function openPicker(into?: AlbumPick) {
+    pickInto = into;
+    audioInput?.click();
   }
 
   function chooseFiles(input: HTMLInputElement) {
@@ -155,6 +162,11 @@
     if (files.length > 1 && !editing && !into && onAlbum) {
       input.value = '';
       return onAlbum(files);
+    }
+    if (files.length > 1 && into) {
+      input.value = '';
+      audioProblem = `add one track at a time to ${into.name}.`;
+      return;
     }
     if (files[0] && into) chooseAlbum(into);
     pickAudio(files[0]);
@@ -343,7 +355,8 @@
     title = input.title;
     autoTitle = '';
     album = input.album ?? '';
-    target = albums.find(pick => pick.uri === input.addTo);
+    savedTarget = input.addTo ?? '';
+    target = albums.find(pick => pick.uri === savedTarget);
     description = input.description ?? '';
     tags = input.tags?.join('\n') ?? '';
     autoTag = !!input.autoTag;
@@ -421,7 +434,7 @@
   }
 </script>
 
-<UploadJobs jobs={jobs.filter(job => job.owner === owner && job.id !== finished?.jobId)} disabled={!hydrated || imageBusy || submitting} edit={editAgain} />
+<UploadJobs jobs={jobs.filter(job => job.owner === owner && (job.id !== finished?.jobId || job.phase === 'failed'))} disabled={!hydrated || imageBusy || submitting} edit={editAgain} />
 <PrivateUploads bind:this={privateUploads} {account} bind:busy={privateBusy} bind:blocked={privateBlocked} />
 {#if queuedProblem}
   <p role="alert">{queuedProblem}</p>
@@ -469,7 +482,7 @@
       <span class="drop-icon"><Icon name="wave" size={34} /></span>
       <h2><span class="wide">drop audio here</span><span class="narrow">add audio</span></h2>
       <p class="subtle">{onAlbum ? 'one file makes a track. several make an album.' : 'the title comes from the file name. everything else is optional.'}</p>
-      <button type="button" class="pill primary" onclick={() => audioInput?.click()}><Icon name="plus" size={18} />choose audio</button>
+      <button type="button" class="pill primary" onclick={() => openPicker()}><Icon name="plus" size={18} />choose audio</button>
       <p class="formats">{PUBLIC_AUDIO_FORMATS.toLowerCase()} · up to 1.5 GB each</p>
       {#if audioProblem}<p class="problem" role="alert">{audioProblem}</p>{/if}
       {#if artist}<p class="formats">posts to your profile as {artist}</p>{/if}
@@ -481,7 +494,7 @@
           {#each albums.slice(0, 11) as pick (pick.uri)}
             <li>
               <button type="button" class="album" class:hot={dropTarget === pick.uri} aria-label="add a track to {pick.name}"
-                onclick={() => { pickInto = pick; audioInput?.click(); }}
+                onclick={() => openPicker(pick)}
                 ondragover={event => { if (event.dataTransfer?.types.includes('Files')) { event.preventDefault(); event.stopPropagation(); dragging = false; dropTarget = pick.uri; } }}
                 ondragleave={() => { if (dropTarget === pick.uri) dropTarget = undefined; }}
                 ondrop={event => { event.stopPropagation(); drop(event, pick); }}>
@@ -522,10 +535,10 @@
           {#if audio}
             {#if duration}<span class="chip strong">{clock(duration)}</span>{/if}
             <span class="chip file" title={audio.name}>{audio.name} · {fileSize(audio.size)}</span>
-            <button type="button" class="chip action" onclick={() => audioInput?.click()}><Icon name="wave" size={15} />change audio</button>
+            <button type="button" class="chip action" onclick={() => openPicker()}><Icon name="wave" size={15} />change audio</button>
           {:else}
             <span class="chip">your draft is still here. choose the audio file again.</span>
-            <button type="button" class="chip action" onclick={() => audioInput?.click()}><Icon name="wave" size={15} />choose audio</button>
+            <button type="button" class="chip action" onclick={() => openPicker()}><Icon name="wave" size={15} />choose audio</button>
           {/if}
         </div>
         {#if service}

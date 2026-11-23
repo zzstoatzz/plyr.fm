@@ -26,7 +26,7 @@ function fixture(ordering?: ReturnType<typeof collectionOrdering>) {
       reads.push(rkey);
       if (rkey === missing) return { ok: false, status: 400, data: { error: 'RecordNotFound' } };
       return { ok: true, data: { uri: prefix + rkey, cid: 'current-' + rkey,
-        value: { $type: trackCollection, ...(rkey === 'private' ? { visibility: 'private' } : {}) } } };
+        value: { $type: trackCollection, ...(rkey === 'private' ? { visibility: 'private' } : rkey === 'unlisted' ? { visibility: 'unlisted' } : {}) } } };
     },
     async post() { throw new Error('album publishing must not rewrite a track'); }
   };
@@ -106,4 +106,10 @@ test('adding a new upload to an album appends it once and retries one conflictin
   assert.equal(writes.length, 1);
   assert.deepEqual(writes[0].map(item => item.subject.uri), [first.uri, added]);
   await assert.rejects(f.albums.appendUpload(albumUri, prefix + missing), /could not find the new track/);
+});
+
+test('a track kept out of feeds can still join an album', async () => {
+  const f = fixture();
+  assert.deepEqual(await f.albums.readUpload(prefix + 'unlisted'), { uri: prefix + 'unlisted', cid: 'current-unlisted' });
+  await assert.rejects(f.albums.readUpload(prefix + 'private'), /published tracks/);
 });

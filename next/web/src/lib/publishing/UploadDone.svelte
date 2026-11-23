@@ -20,7 +20,7 @@
   const pds = untrack(() => createPds(account));
   let job = $state.raw(uploadQueue.snapshot().find(item => item.id === jobId));
   let art = $state<string>();
-  let added = $state<string[]>(untrack(() => joined ? [joined.uri] : []));
+  let added = $state<string[]>([]);
   let adding = $state<string>();
   let track = $state.raw<Track>();
   let opening = $state(false);
@@ -28,7 +28,8 @@
   const uri = $derived(job?.phase === 'done' ? job.uri : undefined);
   const href = $derived(uri ? resolve('/(app)/track/[id]', { id: trackIdFromUri(uri) }) : undefined);
   const working = $derived(!job || uploadInProgress(job.phase));
-  const offered = $derived(albums.filter(album => !added.includes(album.uri)).slice(0, 3));
+  // the album it was dropped onto stays offered only if joining it failed
+  const offered = $derived(albums.filter(album => !added.includes(album.uri) && !(album.uri === joined?.uri && !job?.error)).slice(0, 3));
 
   onMount(() => {
     const stop = uploadQueue.subscribe(() => { job = uploadQueue.snapshot().find(item => item.id === jobId) ?? job; });
