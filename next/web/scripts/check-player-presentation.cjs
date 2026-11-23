@@ -30,6 +30,7 @@ async function verify(browser, origin, width, scheme) {
     await page.evaluate(() => { window.playingAudio = window.createdAudio.find(audio => !audio.paused); });
     const dock = page.getByTestId('player-dock');
     const opener = dock.getByRole('button', { name: 'Open now playing' });
+    assert.ok(await dock.getByLabel(/^(like|unlike|sign in to like) /i).isVisible(), 'the dock has a like at every width, like the iOS player bar');
     const dialog = page.getByRole('dialog', { name: 'Now playing' });
     const panel = page.getByTestId('now-playing-dismiss-region');
     const hero = page.getByTestId('now-playing-hero');
