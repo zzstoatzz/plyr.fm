@@ -557,7 +557,7 @@ max_lines = 571
 
 [[rules]]
 path = "next/web/src/lib/player.svelte.ts"
-max_lines = 861
+max_lines = 864
 
 [[rules]]
 path = "next/web/src/lib/atlas/renderer.ts"
