@@ -32,7 +32,6 @@ async function fixturePage(browser,accounts,options={}) {
    const type=file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':file.endsWith('.json')?'application/json':file.endsWith('.png')?'image/png':file.endsWith('.jpg')?'image/jpeg':file.endsWith('.ttf')?'font/ttf':file.endsWith('.woff2')?'font/woff2':'text/html';
    await route.fulfill({body:await fs.readFile(file),contentType:type});
   });
-  await context.route('https://api.plyr.fm/**',route=>route.request().method()==='POST'?route.abort():route.continue());
   await context.route('https://public.api.bsky.app/xrpc/com.atproto.identity.resolveHandle?*',async route=>{
    const h=new URL(route.request().url()).searchParams.get('handle');
    await route.fulfill({json:{did:accounts[h].did},headers:{'access-control-allow-origin':'*'}});

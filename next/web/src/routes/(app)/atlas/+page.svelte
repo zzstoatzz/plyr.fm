@@ -5,7 +5,7 @@
 	import { atlasSummary, loadAtlas } from '$lib/atlas/catalog';
 	import { mountAtlas } from '$lib/atlas/canvas';
 	import type { AtlasData } from '$lib/atlas/types';
-	import { trackEmbed } from '$lib/embed/catalog';
+	import { api } from '$lib/api';
 	import { player } from '$lib/player.svelte';
 	import Loading from '$lib/ui/Loading.svelte';
 
@@ -85,7 +85,7 @@
 			playbackError = 'could not play this track from the atlas. select it to try again.';
 		}, 10_000);
 		try {
-			const track = await trackEmbed(String(id), (input, init) => fetch(input, { ...init, signal: request.signal }));
+			const track = await api.track(String(id));
 			if (!request.signal.aborted) player.play(track);
 		} catch {
 			if (!request.signal.aborted) playbackError = 'could not play this track from the atlas.';

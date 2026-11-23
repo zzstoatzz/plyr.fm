@@ -32,7 +32,7 @@ function canonicalTrackId(value: string): boolean {
 export function pendingPlay(value: unknown): PendingPlay | null {
 	if (typeof value !== 'object' || value === null || !('trackId' in value) ||
 		!('occurrenceId' in value) || !('createdAt' in value)) return null;
-	if (typeof value.trackId !== 'string' || (!canonicalTrackId(value.trackId) && !/^radio:\d+$/.test(value.trackId)) || value.trackId.length > 2048 ||
+	if (typeof value.trackId !== 'string' || !canonicalTrackId(value.trackId) || value.trackId.length > 2048 ||
 		typeof value.occurrenceId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value.occurrenceId) ||
 		typeof value.createdAt !== 'number' || !Number.isFinite(value.createdAt)) return null;
 	return { trackId: value.trackId, occurrenceId: value.occurrenceId, createdAt: value.createdAt };
@@ -48,7 +48,6 @@ export class PlayDeliveryError extends Error {
 
 interface Options {
 	storage: PlayOutboxStorage;
-	resolve?(play: QualifiedPlay): Promise<QualifiedPlay>;
 	send(play: QualifiedPlay): Promise<PlayReceipt>;
 	onReceipt(receipt: PlayReceipt): void;
 	now?(): number;
@@ -159,17 +158,6 @@ export class PlayOutbox {
 				if (item.nextAttemptAt > this.now()) continue;
 				try {
 					await item.persisted;
-					if (!canonicalTrackId(item.trackId)) {
-						const resolved = await this.options.resolve?.(item);
-						if (!resolved || resolved.occurrenceId !== item.occurrenceId || !canonicalTrackId(resolved.trackId) || resolved.trackId.length > 2048) {
-							throw new PlayDeliveryError('invalid resolved play identity', true);
-						}
-						item.trackId = resolved.trackId;
-						item.persisted = this.options.storage.put({ trackId: item.trackId, occurrenceId: item.occurrenceId, createdAt: item.createdAt }).catch(() => {
-							console.warn('[plays] persistence unavailable; retaining resolved play in memory');
-						});
-						await item.persisted;
-					}
 					if (this.disposed) break;
 					console.info('[plays] submit', { occurrence: item.occurrenceId, track: item.trackId, attempt: item.attempts + 1 });
 					const receipt = await this.options.send(item);
