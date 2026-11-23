@@ -23,10 +23,11 @@
 			<span class="description">
 				<strong class="truncate">{player.current.metadata.title}</strong>
 				<span class="subtitle">
-					{#if player.liveStation}<span class="truncate">live · {player.liveStation.label} radio</span>
+					{#if player.error}<span class="error truncate" role="status">{player.error}</span>
+					{:else if player.liveStation}<span class="truncate">live · {player.liveStation.label} radio</span>
 					{:else if player.outputElsewhere}<span class="truncate">playing on another device</span>
 					{:else}<a class="artist truncate" href={resolve('/(app)/u/[actor]', { actor: player.current.artist.profile.handle || player.current.artist.did })}>{artistName(player.current)}</a>{/if}
-					{#if !player.liveStation && !player.outputElsewhere}<span class="mobile-time" aria-hidden="true">· {clock(player.position)}</span>{/if}
+					{#if !player.error && !player.liveStation && !player.outputElsewhere}<span class="mobile-time" aria-hidden="true">· {clock(player.position)}</span>{/if}
 				</span>
 			</span>
 			{#if !player.liveStation && !player.privateMode}<span class="like">{#key player.current.id}<LikeButton track={player.current} count={false} named />{/key}</span>{/if}
@@ -58,6 +59,8 @@
 	.description { display: grid; min-width: 0; }
 	.artist, .like { position: relative; pointer-events: auto; }
 	.like { flex: none; color: var(--muted); }
+	/* a press that can't make sound says why where the press landed, instead of a dock that sits on play */
+	.description .error { color: var(--danger); }
 	.subtitle { display: flex; gap: 0.25rem; }
 	.mobile-time { display: none; flex-shrink: 0; font-variant-numeric: tabular-nums; }
 	.description span { color: var(--muted); font-size: var(--t-12-8); }
