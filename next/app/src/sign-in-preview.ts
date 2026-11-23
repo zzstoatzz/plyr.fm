@@ -25,8 +25,8 @@ function didDocumentUrl(did: string) {
 
 async function signInHost(did: string, signal: AbortSignal): Promise<string | undefined> {
   const documentUrl = didDocumentUrl(did);
-  const document = documentUrl ? await json(documentUrl, signal) : undefined;
-  const services = Array.isArray(document?.service) ? document.service as { id?: unknown; serviceEndpoint?: unknown }[] : [];
+  const didDoc = documentUrl ? await json(documentUrl, signal) : undefined;
+  const services = Array.isArray(didDoc?.service) ? didDoc.service as { id?: unknown; serviceEndpoint?: unknown }[] : [];
   const pds = services.find(service => typeof service.id === 'string' && service.id.endsWith('#atproto_pds'))?.serviceEndpoint;
   if (typeof pds !== 'string' || !pds.startsWith('https://')) return undefined;
   const resource = await json(pds.replace(/\/$/, '') + '/.well-known/oauth-protected-resource', signal);
