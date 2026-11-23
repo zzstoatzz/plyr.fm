@@ -9,6 +9,7 @@
 	import type { Artist, ArtistMetrics, ListSummary } from '@plyr/next-core/api';
 	import { api } from '$lib/api';
 	import { auth } from '$lib/auth';
+	import { profileApp, profileLink } from '$lib/profile-link';
 	import { player } from '$lib/player.svelte';
 	import { artistContext } from '@plyr/next-core/play-context';
 	import PlayButton from '$lib/ui/PlayButton.svelte';
@@ -136,7 +137,7 @@
 		<div class="avatar"><Artwork src={artist.avatar_url ?? undefined} size={176} eager /></div>
 		<div class="identity">
 			<h1>{name}</h1>
-			{#if artist.handle && artist.display_name?.trim() && artist.display_name.trim() !== artist.handle}<p class="handle">@{artist.handle}</p>{/if}
+			{#if artist.handle}<a class="handle" href={profileLink(artist.handle)} target="_blank" rel="noopener noreferrer" aria-label={`@${artist.handle} on ${profileApp()}`}>@{artist.handle}</a>{/if}
 			<ListeningNow did={artist.did} {name} />
 			{#if artist.bio}<p class="bio">{artist.bio}</p>{/if}
 			{#await visibleMetrics then result}
@@ -228,7 +229,8 @@
 	.avatar { width: clamp(11rem, 14vw, 15rem); flex: none; border-radius: 50%; overflow: hidden; box-shadow: 0 0.7rem 2rem rgb(0 0 0 / 0.3); }
 	.identity { min-width: 0; display: grid; justify-items: start; gap: 0.35rem; overflow-wrap: anywhere; }
 	h1 { font-size: clamp(1.75rem, 5vw, 4rem); line-height: 1.05; letter-spacing: -0.035em; }
-	.handle { color: var(--muted); }
+	.handle { color: var(--muted); text-decoration: none; }
+	.handle:hover { color: var(--text); text-decoration: underline; }
 	.bio { color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; max-width: 44rem; margin-top: 0.35rem; }
 	.chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.6rem; }
 	.actions { display: flex; align-items: center; gap: 0.6rem; margin-top: 1rem; }

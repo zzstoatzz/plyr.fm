@@ -2,6 +2,7 @@ import { preferenceTransport } from '@plyr/next-core/preference-transport';
 import type { Agent } from './auth-state';
 import { JAM_COORDINATOR_URL, JAM_JOIN_METHOD, JAM_SERVICE_AUDIENCE } from './auth-config';
 import { hiddenTags } from '@plyr/next-core/hidden-tags';
+import { isAtClient, type AtClientName } from '@plyr/next-core/at-clients';
 
 export interface PersonalPreferences {
 	theme: 'system' | 'light' | 'dark';
@@ -14,6 +15,8 @@ export interface PersonalPreferences {
 	allowComments: boolean;
 	scale: number;
 	hiddenTags: string[];
+	/** the app profile links open in */
+	atprotoClient: AtClientName;
 }
 
 export function decodePreferences(value: unknown): Partial<PersonalPreferences> {
@@ -27,6 +30,7 @@ export function decodePreferences(value: unknown): Partial<PersonalPreferences> 
 	if (typeof v.playThrough === 'boolean') prefs.playThrough = v.playThrough;
 	if (typeof v.tealScrobbling === 'boolean') prefs.tealScrobbling = v.tealScrobbling;
 	if (typeof v.allowComments === 'boolean') prefs.allowComments = v.allowComments;
+	if (isAtClient(v.atprotoClient)) prefs.atprotoClient = v.atprotoClient;
 	const hidden = hiddenTags(v.hiddenTags);
 	if (hidden) prefs.hiddenTags = hidden;
 	if (v.scale === 90 || v.scale === 100 || v.scale === 115 || v.scale === 130) prefs.scale = v.scale / 100;

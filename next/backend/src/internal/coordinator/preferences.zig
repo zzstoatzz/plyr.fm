@@ -15,6 +15,8 @@ pub const Patch = struct {
     tealScrobbling: ?bool = null,
     scale: ?u16 = null,
     hiddenTags: ?[]const []const u8 = null,
+    /// the app profile links open in
+    atprotoClient: ?[]const u8 = null,
     /// artist setting: let listeners leave timed comments on your tracks
     allowComments: ?bool = null,
     /// artist setting: where listeners can support you. "" clears it.
@@ -25,6 +27,7 @@ pub const Patch = struct {
     pub fn valid(self: Patch) bool {
         if (self.theme) |value| if (!oneOf(value, &.{ "system", "light", "dark" })) return false;
         if (self.font) |value| if (!oneOf(value, &.{ "comic-sans", "system", "mono", "serif" })) return false;
+        if (self.atprotoClient) |value| if (!oneOf(value, &.{ "bsky", "blacksky", "witchsky", "reddwarf", "pdsls" })) return false;
         if (self.scale) |value| if (value != 90 and value != 100 and value != 115 and value != 130) return false;
         if (self.accent) |value| {
             if (value.len != 7 or value[0] != '#') return false;
@@ -45,7 +48,7 @@ pub const Patch = struct {
     }
 
     pub fn empty(self: Patch) bool {
-        return self.theme == null and self.accent == null and self.font == null and self.keepPlaying == null and self.playThrough == null and self.tealScrobbling == null and self.scale == null and self.hiddenTags == null and self.allowComments == null and self.supportUrl == null and self.buyLinks == null;
+        return self.theme == null and self.accent == null and self.font == null and self.keepPlaying == null and self.playThrough == null and self.tealScrobbling == null and self.scale == null and self.hiddenTags == null and self.atprotoClient == null and self.allowComments == null and self.supportUrl == null and self.buyLinks == null;
     }
 };
 
@@ -102,6 +105,9 @@ test "a settings patch accepts only known values" {
     try std.testing.expect(!(Patch{ .accent = "#12345g" }).valid());
     try std.testing.expect(!(Patch{ .font = "papyrus" }).valid());
     try std.testing.expect(!(Patch{ .scale = 200 }).valid());
+    try std.testing.expect((Patch{ .atprotoClient = "blacksky" }).valid());
+    try std.testing.expect(!(Patch{ .atprotoClient = "myspace" }).valid());
+    try std.testing.expect(!(Patch{ .atprotoClient = "bsky" }).empty());
     try std.testing.expect(!(Patch{ .hiddenTags = &.{" -- "} }).valid());
     try std.testing.expect(!(Patch{ .hiddenTags = &.{} }).empty());
     try std.testing.expect((Patch{}).empty());

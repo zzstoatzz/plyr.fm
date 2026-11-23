@@ -2,6 +2,7 @@
 	import { resolve } from '$app/paths';
 	import { api } from './api';
 	import Icon from './ui/Icon.svelte';
+	import { profileApp, profileLink } from './profile-link';
 
 	let { onShortcuts }: { onShortcuts?: () => void } = $props();
 	let dialog: HTMLDialogElement;
@@ -15,7 +16,6 @@
 	}
 
 	const links = [
-		{ title: 'profile', detail: '@plyr.fm on Bluesky', href: 'https://bsky.app/profile/plyr.fm', icon: 'user' },
 		{ title: 'status page', detail: '', href: 'https://status.zzstoatzz.io/@plyr.fm', icon: 'info' },
 		{ title: 'source code', detail: 'tangled.org', href: 'https://tangled.org/@zzstoatzz.io/plyr.fm', icon: 'link' },
 		{ title: 'documentation', detail: 'docs.plyr.fm', href: 'https://docs.plyr.fm', icon: 'library' },
@@ -44,6 +44,9 @@
 				<Icon name="ph_keys" size={21} /><span>keyboard shortcuts<small>press ?</small></span>
 			</button>
 		{/if}
+		<a href={profileLink('plyr.fm')} target="_blank" rel="noopener noreferrer">
+			<Icon name="user" size={21} /><span>profile<small>@plyr.fm on {profileApp()}</small></span>
+		</a>
 		{#each links as link (link.href)}
 			<a href={link.href} target="_blank" rel="noopener noreferrer">
 				<Icon name={link.icon} size={21} /><span>{link.title}{#if link.detail}<small>{link.detail}</small>{/if}</span>

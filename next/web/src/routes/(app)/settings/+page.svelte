@@ -7,6 +7,7 @@
 	import { auth, authorizeScrobbling, canScrobble, logout } from '$lib/auth';
 	import { player } from '$lib/player.svelte';
 	import { DEFAULT_HIDDEN_TAGS, hiddenTags } from '@plyr/next-core/hidden-tags';
+	import { AT_CLIENTS } from '@plyr/next-core/at-clients';
 	import { accents, fonts, prefs, scales, setPrefs, themes } from '$lib/prefs.svelte';
 	import { comments } from '$lib/listening/comments';
 	import Icon from '$lib/ui/Icon.svelte';
@@ -136,6 +137,24 @@
 		</div>
 	</section>
 
+	<section aria-labelledby="links">
+		<h2 id="links">links</h2>
+		<div class="card">
+			<fieldset aria-describedby="links-detail">
+				<legend>open profiles in</legend>
+				<p id="links-detail" class="detail">the app you go to from an @handle on plyr.fm</p>
+				<div class="options">
+					{#each AT_CLIENTS as client (client.value)}
+						<label class="option">
+							<input type="radio" name="atproto-client" value={client.value} checked={prefs.atprotoClient === client.value} onchange={() => setPrefs({ atprotoClient: client.value })} />
+							<span class="app"><img src={client.iconUrl} alt="" width="18" height="18" loading="lazy" onerror={event => event.currentTarget.remove()} />{client.label}</span>
+						</label>
+					{/each}
+				</div>
+			</fieldset>
+		</div>
+	</section>
+
 	{#if account.did}
 		<section aria-labelledby="your-tracks">
 			<h2 id="your-tracks">your tracks</h2>
@@ -181,6 +200,10 @@
 	.option > span { display: grid; place-items: center; min-height: 2.75rem; min-width: 2.75rem; padding: 0 0.75rem; border: 1px solid var(--line); border-radius: 0.55rem; color: var(--muted); background: var(--raised); }
 	.option input:checked + span { border-color: var(--accent); color: var(--text); font-weight: 620; }
 	.option input:focus-visible + span, .toggle input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+	fieldset:has(.detail) { display: grid; gap: 0.6rem; }
+	.detail { margin: 0; color: var(--muted); }
+	.app { display: flex !important; gap: 0.45rem; }
+	.app img { flex: none; border-radius: 0.25rem; object-fit: contain; }
 	.custom input { opacity: 0; }
 	.custom > span { background: conic-gradient(#f894b8, #c2a2ff, #6a9fff, #66cd9d, #f2c66d, #f894b8); }
 	.custom.selected > span { border-color: var(--accent); }

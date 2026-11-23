@@ -13,6 +13,8 @@ import { compactCount } from './home-state';
 import { CaretRight, Heart, PencilSimple, ShareNetwork, Shuffle } from './icons';
 import { Text } from './Text';
 import { toast } from './toast';
+import { useAppPreferences } from './preference-context';
+import { atClient, profileUrl } from '@plyr/next-core/at-clients';
 
 const AVATAR = 116;
 
@@ -26,6 +28,7 @@ export function ArtistHero({ artist, tracks, metrics, owner, onPlay, onShare, fo
   onPlay: (track: Track, queue: Track[]) => void; onShare: () => void; footer?: ReactNode;
 }) {
   const theme = useAppearance();
+  const { preferences } = useAppPreferences();
   const { fontScale } = useWindowDimensions();
   const icon = (size: number) => Math.round(size * Math.min(fontScale * theme.scale, 1.6));
   const name = artist.display_name || artist.handle;
@@ -43,7 +46,10 @@ export function ArtistHero({ artist, tracks, metrics, owner, onPlay, onShare, fo
       </View>
       <Text accessibilityRole="header" aria-level={1} numberOfLines={2} style={{ marginTop: 14, color: theme.text, fontFamily: theme.fontFamily,
         fontSize: 30 * theme.scale, lineHeight: 36 * theme.scale, fontWeight: '800', letterSpacing: -0.4, textAlign: 'center' }}>{name}</Text>
-      {artist.display_name && artist.display_name !== artist.handle ? <Text numberOfLines={1} style={{ color: theme.muted, fontFamily: theme.fontFamily, fontSize: 15 * theme.scale, textAlign: 'center' }}>@{artist.handle}</Text> : null}
+      {artist.handle ? <Pressable accessibilityRole="link" accessibilityLabel={`@${artist.handle} on ${atClient(preferences.atprotoClient).label}`} hitSlop={8}
+        onPress={() => void Linking.openURL(profileUrl(artist.handle, preferences.atprotoClient)).catch(() => toast.error('couldn’t open that link'))}>
+        {({ pressed }) => <Text numberOfLines={1} style={{ color: pressed ? theme.text : theme.muted, fontFamily: theme.fontFamily, fontSize: 15 * theme.scale, textAlign: 'center' }}>@{artist.handle}</Text>}
+      </Pressable> : null}
       <ListeningNowStatus did={artist.did} name={name} />
       {artist.bio ? <Text style={{ marginTop: 12, color: theme.muted, fontFamily: theme.fontFamily, fontSize: 15 * theme.scale, lineHeight: 22 * theme.scale, textAlign: 'center' }}>{artist.bio}</Text> : null}
     </View>
