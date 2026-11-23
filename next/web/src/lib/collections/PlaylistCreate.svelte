@@ -1,6 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { onMount, untrack } from 'svelte';
+  import { onMount, untrack, type Snippet } from 'svelte';
   import { playlistIdFromUri, type Track } from '@plyr/next-core/api';
   import { auth } from '$lib/auth';
   import { createPds } from '$lib/pds';
@@ -8,7 +8,11 @@
   import CollectionJournal from './CollectionJournal.svelte';
   import { collectionJournal } from './CollectionJournal.svelte.ts';
 
-  let { account, first, onCreated }: { account: ReturnType<typeof auth.getAuth>; first?: Track; onCreated?: () => void } = $props();
+  let { account, first, onCreated, trigger }: {
+    account: ReturnType<typeof auth.getAuth>; first?: Track; onCreated?: () => void;
+    /** draws the control that opens the dialog, in place of the default button */
+    trigger?: Snippet<[{ open: () => void; disabled: boolean }]>;
+  } = $props();
   const pds = untrack(() => createPds(account));
   let live = false;
   const current = () => live && auth.getAuth().rpc === account.rpc;
@@ -54,9 +58,10 @@
   }
 </script>
 
-<button type="button" class="text-button new" disabled={blocked || busy} onclick={() => { error = ''; dialog.showModal(); showing = true; }}>
-  <Icon name="plus" size={18} /> new playlist
-</button>
+{#snippet button({ open, disabled }: { open: () => void; disabled: boolean })}
+  <button type="button" class="text-button new" {disabled} onclick={open}><Icon name="plus" size={18} /> new playlist</button>
+{/snippet}
+{@render (trigger ?? button)({ open: () => { error = ''; dialog.showModal(); showing = true; }, disabled: blocked || busy })}
 <CollectionJournal {...journal.view} pds={pds} refresh={journal.refresh} />
 {#if error && !showing}<p class="state" role="alert">{error}</p>{/if}
 
