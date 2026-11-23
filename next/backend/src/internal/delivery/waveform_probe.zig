@@ -106,11 +106,23 @@ const Worker = struct {
         var scratch = try Io.Dir.cwd().openDir(self.io, if (std.c.getenv("TMPDIR")) |raw| std.mem.span(raw) else "/tmp", .{});
         defer scratch.close(self.io);
         defer scratch.deleteFile(self.io, name) catch |err| log.err("waveform scratch cleanup failed: {}", .{err});
-        try self.download(url, scratch, name);
-        return decode(self.io, self.allocator, scratch, name);
+        var report_buffer: [72]u8 = undefined;
+        const report = try std.fmt.bufPrint(&report_buffer, "{s}.err", .{name});
+        defer scratch.deleteFile(self.io, report) catch {};
+        const size = try self.download(url, scratch, name);
+        return decode(self.io, self.allocator, scratch, name, report) catch |err| {
+            // ffmpeg says why in its first line of stderr
+            var said: [512]u8 = undefined;
+            if (err == error.DecodeFailed) if (scratch.readFile(self.io, report, &said)) |text| {
+                const line = std.mem.trim(u8, text[0 .. std.mem.indexOfScalar(u8, text, '\n') orelse text.len], " \r");
+                log.warn("ffmpeg could not decode {s} ({d} bytes): {s}", .{ url, size, line });
+            } else |_| {};
+            return err;
+        };
     }
 
-    fn download(self: *Worker, url: []const u8, directory: Io.Dir, name: []const u8) !void {
+    /// Returns how many bytes it wrote.
+    fn download(self: *Worker, url: []const u8, directory: Io.Dir, name: []const u8) !u64 {
         var endpoint = try safe_endpoint.resolve(self.io, self.allocator, try duration_probe.origin(url));
         defer endpoint.deinit(self.allocator);
         try pinned_tls.prepare(self.io, self.transport);
@@ -128,6 +140,7 @@ const Worker = struct {
             if (offset >= result.span.total) break;
         }
         try writer.interface.flush();
+        return offset;
     }
 
     const Window = struct { result: zat.HttpTransport.FetchResult, span: duration_probe.Span };
@@ -161,14 +174,15 @@ const Worker = struct {
 };
 
 /// Decodes the file `name` in `directory` into levels, owned by `allocator`.
-/// ffmpeg is killed if it runs past its deadline.
-pub fn decode(io: Io, allocator: std.mem.Allocator, directory: Io.Dir, name: []const u8) !waveform.Levels {
+/// ffmpeg is killed if it runs past its deadline; its stderr goes to the file
+/// `report` in `directory` when one is named.
+pub fn decode(io: Io, allocator: std.mem.Allocator, directory: Io.Dir, name: []const u8, report: ?[]const u8) !waveform.Levels {
     var levels: waveform.Levels = undefined;
     const Race = union(enum) { done: anyerror!void, expired: Io.Cancelable!void };
     var buffer: [2]Race = undefined;
     var race: Io.Select(Race) = .init(io, &buffer);
     defer race.cancelDiscard();
-    try race.concurrent(.done, decodeInto, .{ io, allocator, directory, name, &levels });
+    try race.concurrent(.done, decodeInto, .{ io, allocator, directory, name, report, &levels });
     try race.concurrent(.expired, Io.sleep, .{ io, decode_timeout, .awake });
     switch (try race.await()) {
         .done => |result| try result,
@@ -177,13 +191,15 @@ pub fn decode(io: Io, allocator: std.mem.Allocator, directory: Io.Dir, name: []c
     return levels;
 }
 
-fn decodeInto(io: Io, allocator: std.mem.Allocator, directory: Io.Dir, name: []const u8, out: *waveform.Levels) anyerror!void {
+fn decodeInto(io: Io, allocator: std.mem.Allocator, directory: Io.Dir, name: []const u8, report: ?[]const u8, out: *waveform.Levels) anyerror!void {
+    const errors: ?Io.File = if (report) |path| try directory.createFile(io, path, .{}) else null;
+    defer if (errors) |file| file.close(io);
     var child = try std.process.spawn(io, .{
         .argv = &(decoder_args ++ .{ "-i", name } ++ decoder_output_args),
         .cwd = .{ .dir = directory },
         .stdin = .ignore,
         .stdout = .pipe,
-        .stderr = .ignore,
+        .stderr = if (errors) |file| .{ .file = file } else .ignore,
     });
     // a canceled or failed decode never leaves ffmpeg running
     defer child.kill(io);
@@ -227,7 +243,9 @@ test "ffmpeg's bands decode into levels" {
     };
     if (!(try generator.wait(io)).success()) return error.SkipZigTest;
 
-    const levels = try decode(io, allocator, tmp.dir, "tone.mp3");
+    // no extension, as the prober names its downloads
+    try tmp.dir.rename("tone.mp3", tmp.dir, "tone", io);
+    const levels = try decode(io, allocator, tmp.dir, "tone", "tone.err");
     defer allocator.free(levels.levels);
     try std.testing.expectEqual(@as(u8, 20), levels.fps);
     const frames = levels.levels.len / waveform.bands;
@@ -237,6 +255,12 @@ test "ffmpeg's bands decode into levels" {
     try std.testing.expectEqual(@as(u8, 0), levels.levels[30 * waveform.bands]);
     // the treble band hears nothing of a 110 Hz tone
     try std.testing.expect(levels.levels[10 * waveform.bands + 3] < 64);
+
+    // a file ffmpeg can't read fails, and ffmpeg's reason lands in the report
+    try tmp.dir.writeFile(io, .{ .sub_path = "noise", .data = "not audio at all" });
+    try std.testing.expectError(error.DecodeFailed, decode(io, allocator, tmp.dir, "noise", "noise.err"));
+    var said: [512]u8 = undefined;
+    try std.testing.expect((try tmp.dir.readFile(io, "noise.err", &said)).len > 0);
 }
 
 test {
