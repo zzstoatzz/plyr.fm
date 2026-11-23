@@ -60,6 +60,7 @@ export function route(pathname) {
   const parts = pathname.replace(/\/+$/, '').split('/').slice(1).map(decode);
   const [kind, a, b, c] = parts;
   if (parts.length === 0) return { kind: 'home' };
+  if (kind === 'atlas' && parts.length === 1) return { kind: 'atlas' };
   if (kind === 'track' && a && parts.length === 2) return { kind: 'track', id: a };
   if (kind === 'album' && a && parts.length === 2) return { kind: 'album', id: a };
   if (kind === 'playlist' && a && UUID.test(a) && parts.length === 2) return { kind: 'legacy-playlist', id: a };
@@ -274,6 +275,20 @@ export async function preview(url, api, legacyPlaylists = LEGACY_PLAYLISTS) {
       title: `${SITE_NAME} - audio streaming app`,
       description: SITE_DESCRIPTION,
       url: `${origin}/`
+    };
+  }
+
+  if (page.kind === 'atlas') {
+    return {
+      type: 'website',
+      title: `the ${SITE_NAME} atlas`,
+      shortTitle: 'atlas',
+      description: 'the catalog, mapped by sound. zoom in and select a track to play it.',
+      url: `${origin}/atlas`,
+      // a still of the map itself, refreshed with `bun run atlas:preview`
+      image: { url: `${origin}/previews/atlas.jpg`, type: 'image/jpeg', width: 1200, height: 630 },
+      imageAlt: `the ${SITE_NAME} atlas: tracks grouped into glowing neighborhoods by how they sound`,
+      large: true
     };
   }
 
