@@ -74,7 +74,7 @@ jobs:
         env:
           MESSAGE: "${{ github.sha }} ${{ github.event.head_commit.message || 'manual dispatch' }}"
         run: |
-          npx --yes eas-cli@latest update --channel production --environment production --platform ios \
+          npx --yes eas-cli@27.11.0 update --channel production --environment production --platform ios \
             --message "$(printf '%s' "$MESSAGE" | head -1 | cut -c1-200)" --non-interactive --json > "$RUNNER_TEMP/update.json"
           jq . "$RUNNER_TEMP/update.json"
           group=$(jq -er '.[0].group' "$RUNNER_TEMP/update.json")
