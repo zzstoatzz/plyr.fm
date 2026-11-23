@@ -69,6 +69,10 @@ const query =
     \\    OR COALESCE(pol.operator_labels, '[]'::jsonb) ?| ARRAY['copyright-violation']))
 ;
 
+test {
+    _ = @import("postgres_stats_overview_store.zig");
+}
+
 test "platform stats exclude unavailable and non-discoverable records and cache one snapshot" {
     const url = std.c.getenv("PLYR_ZIG_TEST_DATABASE_URL") orelse return error.SkipZigTest;
     const allocator = std.testing.allocator;

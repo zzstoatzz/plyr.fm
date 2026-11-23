@@ -10,6 +10,7 @@
 
 const std = @import("std");
 const pg = @import("pg");
+const query_pairs = @import("../http/query.zig");
 
 pub const Range = enum {
     week,
@@ -24,6 +25,17 @@ pub const Range = enum {
             .year => 365,
             .all => null,
         };
+    }
+
+    /// The `range` query parameter: one of the four names, month when absent.
+    pub fn parse(allocator: std.mem.Allocator, target: []const u8) !Range {
+        var pairs = query_pairs.Iterator.init(allocator, target);
+        var range: ?Range = null;
+        while (try pairs.next()) |pair| {
+            if (!std.mem.eql(u8, pair.name, "range") or range != null) return error.InvalidQuery;
+            range = std.meta.stringToEnum(Range, pair.value) orelse return error.InvalidQuery;
+        }
+        return range orelse .month;
     }
 
     fn bucket(self: Range) []const u8 {
@@ -52,7 +64,7 @@ pub const PostgresStatsOverviewStore = struct {
     pub fn get(self: *PostgresStatsOverviewStore, allocator: std.mem.Allocator, range: Range) Error![]const u8 {
         self.mutex.lockUncancelable(self.io);
         defer self.mutex.unlock(self.io);
-        const slot = &self.cached[@intFromEnum(range)];
+        const slot = &self.cached[@backingInt(range)];
         const now = std.Io.Timestamp.now(self.io, .awake).nanoseconds;
         if (slot.*) |value| {
             if (now - value.refreshed_ns < 60 * std.time.ns_per_s) return allocator.dupe(u8, value.json);
@@ -182,6 +194,18 @@ const query =
     \\)::text
 ;
 
+test "overview range is one of four names, month by default" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    try std.testing.expectEqual(Range.month, try Range.parse(a, "/xrpc"));
+    try std.testing.expectEqual(Range.week, try Range.parse(a, "/xrpc?range=week"));
+    try std.testing.expectEqual(Range.all, try Range.parse(a, "/xrpc?range=all"));
+    try std.testing.expectError(error.InvalidQuery, Range.parse(a, "/xrpc?range=day"));
+    try std.testing.expectError(error.InvalidQuery, Range.parse(a, "/xrpc?range=week&range=all"));
+    try std.testing.expectError(error.InvalidQuery, Range.parse(a, "/xrpc?period=week"));
+}
+
 test "stats overview counts dated plays by range and ranks tracks and artists" {
     const url = std.c.getenv("PLYR_ZIG_TEST_DATABASE_URL") orelse return error.SkipZigTest;
     const allocator = std.testing.allocator;
@@ -280,7 +304,7 @@ test "stats overview counts dated plays by range and ranks tracks and artists" {
     const cached_json = try store.get(allocator, .week);
     defer allocator.free(cached_json);
     try std.testing.expectEqualStrings(week_json, cached_json);
-    store.cached[@intFromEnum(Range.week)].?.refreshed_ns -= 61 * std.time.ns_per_s;
+    store.cached[@backingInt(Range.week)].?.refreshed_ns -= 61 * std.time.ns_per_s;
     const fresh_json = try store.get(allocator, .week);
     defer allocator.free(fresh_json);
     const fresh = try std.json.parseFromSlice(Overview, allocator, fresh_json, .{ .ignore_unknown_fields = true });
