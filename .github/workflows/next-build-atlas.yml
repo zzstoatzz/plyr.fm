@@ -14,7 +14,7 @@ on:
     branches: [main]
     paths:
       - "next/scripts/build-atlas.py"
-      - "next/backend/migrations/0060_add_atlas.sql"
+      - "next/backend/migrations/0061_add_atlas.sql"
       - ".github/workflows/next-build-atlas.yml"
   schedule:
     - cron: "37 9 * * *" # daily
