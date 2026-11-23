@@ -8,6 +8,9 @@ const { tracks, setup, serve, close } = require('./fixture-catalog.cjs');
 let origin = process.env.NEXT_WEB_URL;
 const output = process.env.SCREENS_OUTPUT || '/tmp/plyr-svelte-shell';
 
+// Like the server, suggestions are never already in the queue (the top tracks stack queues every fixture track).
+const suggestions = tracks.slice(4, 8).map((track, at) => ({ ...track, id: `${track.id}-suggested`, record: { ...track.record, uri: `${track.record.uri}-suggested` }, metadata: { ...track.metadata, title: `suggested ${at + 1}` } }));
+
 async function queueSuggestions(browser, phone, scheme) {
   const width = phone ? 390 : 1280;
   const { context, page, errors } = await setup(browser, width, phone ? 844 : 960, { phone, scheme });
@@ -18,7 +21,7 @@ async function queueSuggestions(browser, phone, scheme) {
     await page.route('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.getTrackSuggestions?**', route => {
       const url = new URL(route.request().url());
       seen.push({ seeds: url.searchParams.getAll('seed'), exclude: url.searchParams.getAll('exclude') });
-      return route.fulfill({ json: { object: 'track_suggestions', data: tracks.slice(4, 8) } });
+      return route.fulfill({ json: { object: 'track_suggestions', data: suggestions } });
     });
     await page.goto(origin);
     const navigation = page.getByRole('navigation', { name: 'Main navigation' });
@@ -46,7 +49,7 @@ async function queueSuggestions(browser, phone, scheme) {
 
     // with a queue: suggestions go with it, and + adds without reshuffling the row
     const suggested = queue.getByRole('region', { name: 'add to your queue', exact: true });
-    const add = suggested.getByRole('button', { name: `Add ${tracks[5].metadata.title} to queue`, exact: true });
+    const add = suggested.getByRole('button', { name: `Add ${suggestions[1].metadata.title} to queue`, exact: true });
     await add.waitFor({ timeout: 5000 });
     assert.ok(seen.at(-1).seeds.includes(tracks[0].record.uri), 'suggestions are seeded by the playing track');
     await add.click();
