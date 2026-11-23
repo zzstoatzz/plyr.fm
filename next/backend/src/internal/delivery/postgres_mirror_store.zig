@@ -183,12 +183,12 @@ const record_query =
 const failure_query =
     \\INSERT INTO plyr_index.track_mirror_attempts (
     \\  record_uri, record_cid, attempts, next_attempt_us, last_error
-    \\) VALUES ($1, $2, 1, $4 + 60000000, $3)
+    \\) VALUES ($1, $2, 1, $4::bigint + 60000000, $3)
     \\ON CONFLICT (record_uri) DO UPDATE SET
     \\  record_cid = EXCLUDED.record_cid,
     \\  attempts = CASE WHEN track_mirror_attempts.record_cid = EXCLUDED.record_cid
     \\    THEN track_mirror_attempts.attempts + 1 ELSE 1 END,
-    \\  next_attempt_us = $4 + LEAST(
+    \\  next_attempt_us = $4::bigint + LEAST(
     \\    86400000000,
     \\    60000000 * power(2, LEAST(16, CASE WHEN track_mirror_attempts.record_cid = EXCLUDED.record_cid
     \\      THEN track_mirror_attempts.attempts ELSE 0 END))::bigint
