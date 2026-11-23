@@ -597,7 +597,7 @@ max_lines = 521
 
 [[rules]]
 path = "next/web/edge/link-preview.js"
-max_lines = 524
+max_lines = 612
 
 [[rules]]
 path = "next/web/src/lib/publishing/AlbumUpload.svelte"

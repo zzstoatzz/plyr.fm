@@ -111,6 +111,7 @@ export default function Login() {
     <Action primary label={busy ? (host ? 'taking you to ' + host + '…' : 'redirecting…') : creating ? 'create account' : host ? 'continue at ' + host : 'sign in'}
       onPress={() => void submit()} disabled={busy || (!creating && !identifier)} />
     <Copy>{busy && slow ? 'still connecting. some servers take a few seconds.' : 'you’ll come straight back here after. plyr.fm never sees your password.'}</Copy>
+    <Copy>by continuing you agree to the <InlineLink href="https://plyr.fm/terms">terms</InlineLink> and <InlineLink href="https://plyr.fm/privacy">privacy policy</InlineLink>.</Copy>
     <Action label={creating ? 'what is a PDS?' : 'new to the atmosphere?'}
       selected={showHelp} onPress={() => setShowHelp(!showHelp)} />
     {showHelp && (creating ? <>
