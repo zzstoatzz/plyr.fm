@@ -22,6 +22,11 @@ on:
   schedule:
     - cron: "*/10 * * * *"
   workflow_dispatch:
+    inputs:
+      check_direct_pds:
+        description: "write a blob-only track to the test account's PDS and check next scans it"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -54,7 +59,7 @@ jobs:
   run:
     needs: test
     # a push runs it once the tests pass; the schedule and a manual run skip the tests
-    if: always() && github.ref == 'refs/heads/main' && (needs.test.result == 'success' || needs.test.result == 'skipped')
+    if: always() && github.ref == 'refs/heads/main' && !inputs.check_direct_pds && (needs.test.result == 'success' || needs.test.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     concurrency:
@@ -73,3 +78,29 @@ jobs:
           MODERATION_AUTH_TOKEN: ${{ secrets.MODERATION_AUTH_TOKEN }}
           OSPREY_DRAIN_ONCE: "true"
         run: scripts/run
+
+  # a record written straight to a PDS, never through plyr's upload API, still
+  # gets indexed, copied and fingerprinted (scripts/check-direct-pds.py)
+  direct-pds:
+    if: github.event_name == 'workflow_dispatch' && inputs.check_direct_pds
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: next-osprey-run
+      cancel-in-progress: false
+    defaults:
+      run:
+        working-directory: next/services/osprey
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+      - name: write, wait, scan, check
+        env:
+          TEST_HANDLE: ${{ secrets.ZAT_TEST_HANDLE }}
+          TEST_PASSWORD: ${{ secrets.ZAT_TEST_PASSWORD }}
+          DATABASE_URL: ${{ secrets.ZIG_NEXT_WRITER_DATABASE_URL }}
+          MODERATION_SERVICE_URL: ${{ secrets.MODERATION_SERVICE_URL }}
+          MODERATION_AUTH_TOKEN: ${{ secrets.MODERATION_AUTH_TOKEN }}
+        run: |
+          osprey="$(scripts/setup)"
+          "$osprey/.venv/bin/python" scripts/check-direct-pds.py
