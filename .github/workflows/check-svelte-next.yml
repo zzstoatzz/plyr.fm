@@ -280,6 +280,10 @@ jobs:
         if: github.event_name == 'push'
         working-directory: next/web
         run: node scripts/check-live-home-rail.mjs
+      - name: verify artist pages carry links and background
+        if: github.event_name == 'push'
+        working-directory: next/web
+        run: node scripts/check-live-artist-page.mjs
       - uses: actions/upload-artifact@v4
         if: always() && github.event_name == 'push'
         with:
