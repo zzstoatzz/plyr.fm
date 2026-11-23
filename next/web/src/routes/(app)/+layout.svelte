@@ -14,6 +14,7 @@
 	import AccountMenu from '$lib/account/AccountMenu.svelte';
 	import { activeUploadCount } from '$lib/upload-activity.svelte';
 	import { createDockPull } from '$lib/dock-pull';
+	import { navCollapsed, setNavCollapsed } from '$lib/nav';
 	import '../../app.css';
 
 	let { children } = $props();
@@ -62,11 +63,19 @@
 	] as const;
 	const accountPaths = [resolve('/(app)/settings'), resolve('/(app)/portal'), resolve('/(app)/get-paid')] as string[];
 	let searchKey = $state('Ctrl K');
+	let sidebarKey = $state('Ctrl B');
+	let collapsed = $state(navCollapsed());
+	function toggleSidebar() {
+		if (matchMedia('(max-width: 720px)').matches) return;
+		collapsed = !collapsed;
+		setNavCollapsed(collapsed);
+	}
 	function openShortcuts() { shortcutsDialog.showModal(); }
 	const keyboardGuide = [
 		{ action: 'search', keys: ['⌘ or Ctrl', 'K'] },
 		{ action: 'jump to search', keys: ['/'] },
 		{ action: 'settings', keys: ['⌘ or Ctrl', ','] },
+		{ action: 'show or hide the sidebar', keys: ['⌘ or Ctrl', 'B'] },
 		{ action: 'queue', keys: ['Q'] },
 		{ action: 'play or pause', keys: ['Space'] },
 		{ action: 'seek back or forward 10 seconds', keys: ['←', '→'] },
@@ -87,7 +96,7 @@
 	});
 
 	onMount(() => {
-		if (/Mac|iPhone|iPad/.test(navigator.platform)) searchKey = '⌘K';
+		if (/Mac|iPhone|iPad/.test(navigator.platform)) { searchKey = '⌘K'; sidebarKey = '⌘B'; }
 		// until auth settles, keep the prefs app.html painted with: applying the signed-out
 		// ones while the session restores flashed a signed-in dark theme to light on reload
 		if (account.ready) restorePrefs(account.did, account.agent, account.accountSync);
@@ -216,6 +225,7 @@
 		if (event.ctrlKey || event.metaKey) {
 			if (key === 'k') { event.preventDefault(); void toggleSearch(); }
 			else if (key === ',') { event.preventDefault(); void goto(resolve('/settings')); }
+			else if (key === 'b' && !(event.target instanceof HTMLElement && event.target.isContentEditable)) { event.preventDefault(); toggleSidebar(); }
 			return;
 		}
 		if (key === 'escape' && page.url.pathname === resolve('/search') && page.state.shortcutSearch) {
@@ -250,40 +260,45 @@
 <a class="skip" href="#main">skip to content</a>
 <input bind:this={keyboardProxy} class="keyboard-proxy" type="search" tabindex="-1" aria-hidden="true" autocomplete="off" />
 
-<div data-testid="app-frame" class="frame" class:hasPlayer={!!player.current} class:docked={queuePanelOpen}>
+<div data-testid="app-frame" class="frame" class:hasPlayer={!!player.current} class:docked={queuePanelOpen} class:collapsed>
 	<nav aria-label="Main navigation">
-		<div class="brand-row"><LinksMenu onShortcuts={openShortcuts} /><a class="brand" aria-label="plyr.fm home" href="/">plyr.fm</a></div>
+		<div class="brand-row">
+			<LinksMenu onShortcuts={openShortcuts} /><a class="brand" aria-label="plyr.fm home" href="/">plyr.fm</a>
+			<button type="button" class="sidebar-toggle" aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-expanded={!collapsed} onclick={toggleSidebar}>
+				<Icon name="ph_sidebar" size={20} /><span class="label">{collapsed ? 'expand' : 'collapse'} <kbd>{sidebarKey}</kbd></span>
+			</button>
+		</div>
 		<a class="search-field desktop-only" href="/search" onclick={holdKeyboard} class:active={page.url.pathname === '/search'} aria-current={page.url.pathname === '/search' ? 'page' : undefined}>
-			<Icon name="ph_search" size={18} /><span>search</span><kbd aria-hidden="true">{searchKey}</kbd>
+			<Icon name="ph_search" size={18} /><span class="label">search</span><kbd aria-hidden="true">{searchKey}</kbd>
 		</a>
 		{#each links as link (link.path)}
 			{@const active = page.url.pathname === link.path}
 			<a href={link.path} onclick={link.path === '/search' ? holdKeyboard : undefined} class:phone-only={link.path === '/search'} class:active aria-current={active ? 'page' : undefined}>
-				<Icon name={active ? link.filled : link.icon} size={22} /> <span>{link.label}</span>
+				<Icon name={active ? link.filled : link.icon} size={22} /> <span class="label">{link.label}</span>
 			</a>
 		{/each}
 		{#if account.did}
 			<a href="/upload" class:active={page.url.pathname === '/upload'} aria-current={page.url.pathname === '/upload' ? 'page' : undefined}>
-				<Icon name={page.url.pathname === '/upload' ? 'ph_upload_f' : 'ph_upload'} size={22} /><span>{uploading ? `uploading ${uploading}` : 'upload'}</span>
+				<Icon name={page.url.pathname === '/upload' ? 'ph_upload_f' : 'ph_upload'} size={22} /><span class="label">{uploading ? `uploading ${uploading}` : 'upload'}</span>
 			</a>
 		{/if}
 		<p class="group-label desktop-only" aria-hidden="true">explore</p>
 		{#each explore as link (link.path)}
 			{@const active = page.url.pathname === link.path}
 			<a class="desktop-only" href={link.path} class:active aria-current={active ? 'page' : undefined}>
-				<Icon name={active ? link.filled : link.icon} size={22} /><span>{link.label}</span>
+				<Icon name={active ? link.filled : link.icon} size={22} /><span class="label">{link.label}</span>
 			</a>
 		{/each}
 		<div class="nav-spacer" aria-hidden="true"></div>
 		{#if account.did}
 			<button type="button" class="account" aria-haspopup="dialog" class:active={accountPaths.includes(page.url.pathname)} aria-current={accountPaths.includes(page.url.pathname) ? 'page' : undefined} onclick={event => accountMenu?.open(event.currentTarget)}>
 				<span class="profile-avatar"><Artwork src={identity?.did === did ? identity?.avatar : undefined} size={24} fallbackIcon="user" eager /></span>
-				<span class="tab-label">you</span>
+				<span class="tab-label label">you</span>
 				<span class="who"><strong>{(identity?.did === did && identity?.name) || (account.handle ? '@' + account.handle : 'your account')}</strong>{#if account.handle && identity?.did === did && identity?.name}<small>@{account.handle}</small>{/if}</span>
 				<span class="who-chevron" aria-hidden="true"><Icon name="ph_updown" size={16} /></span>
 			</button>
 		{:else}
-			<a class="sign-in" href={resolve('/(app)/login') + '?' + new URLSearchParams({ return_to: page.url.pathname + page.url.search })} class:active={page.url.pathname === '/login'}><Icon name="ph_user" size={22} /><span>sign in</span></a>
+			<a class="sign-in" href={resolve('/(app)/login') + '?' + new URLSearchParams({ return_to: page.url.pathname + page.url.search })} class:active={page.url.pathname === '/login'}><Icon name="ph_user" size={22} /><span class="label">sign in</span></a>
 		{/if}
 	</nav>
 	<main id="main" tabindex="-1">{@render children()}</main>
@@ -361,6 +376,25 @@
 		.who strong { color: var(--text); font-size: var(--t-14); font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 		.who small { color: var(--faint); font: var(--t-12) system-ui, sans-serif; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 		.who-chevron { display: flex; color: var(--faint); }
+		nav :is(a, button) { white-space: nowrap; }
+		.sidebar-toggle { margin-left: auto; width: 2.25rem; justify-content: center; padding: 0; color: var(--faint); }
+		.sidebar-toggle .label, .collapsed nav .label { position: absolute; left: calc(100% + 0.5rem); top: 50%; z-index: 1; padding: 0.3rem 0.55rem; border: 1px solid var(--line); border-radius: 0.5rem;
+			background: var(--surface); color: var(--text); box-shadow: 0 0.25rem 0.9rem rgb(0 0 0 / 0.16); font: 500 var(--t-13-6)/1.2 system-ui, sans-serif;
+			transform: translateY(-50%); opacity: 0; pointer-events: none; transition: opacity 0.12s; }
+		.frame:not(.collapsed) .sidebar-toggle .label { top: calc(100% + 0.35rem); left: auto; right: 0; transform: none; }
+		.sidebar-toggle .label kbd { margin-left: 0.25rem; color: var(--faint); font: inherit; }
+		nav :is(a, button):is(:hover, :focus-visible) > .label { opacity: 1; transition-delay: 0.35s; }
+		nav .sidebar-toggle { position: relative; }
+		/* the open sidebar names its toggle only on hover; collapsed, every item does */
+		.collapsed nav { overflow: visible; z-index: 7; }
+		.collapsed nav :is(a, button) { position: relative; }
+		.collapsed .brand-row :global(.trigger), .collapsed nav .brand, .collapsed nav .search-field kbd, .collapsed .who, .collapsed .who-chevron { display: none; }
+		.collapsed .sidebar-toggle { margin-left: 0; width: 100%; height: 2.5rem; }
+		.collapsed nav .search-field { justify-content: center; padding: 0; background: none; border-color: transparent; }
+		.collapsed nav .search-field:hover { background: var(--raised); }
+		.collapsed nav .account { justify-content: center; padding: 0.375rem 0; }
+		.collapsed nav .account .tab-label { width: auto; height: auto; overflow: visible; clip-path: none; }
+		.collapsed .group-label { height: 1px; margin: 0.9rem 0.6rem; padding: 0; overflow: hidden; color: transparent; background: var(--line); }
 	}
 	.shortcuts { width: min(30rem, calc(100% - 2rem)); height: fit-content; max-height: calc(100dvh - 2rem); margin: auto; padding: 1rem 1.25rem; border: 1px solid var(--line); border-radius: 1rem; background: var(--surface); }
 	.shortcuts header, .shortcuts dl div { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }

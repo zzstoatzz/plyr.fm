@@ -12,6 +12,9 @@
 	font-display: swap;
 }
 
+/* registered so the sidebar width (and everything placed by it: the grid, washes, toasts) animates when it collapses */
+@property --sidebar { syntax: '<length>'; inherits: true; initial-value: 13.5rem; }
+
 :root {
 	color-scheme: light dark;
 	--bg: light-dark(#fafafa, #0a0a0a);
@@ -27,6 +30,8 @@
 	--adapted-accent: light-dark(color-mix(in srgb, var(--custom-accent) 48%, black), color-mix(in srgb, var(--custom-accent) 50%, white));
 	--on-accent: light-dark(white, #0a0a0a);
 	--sidebar: 13.5rem;
+	/* collapsed: icons only, each one exactly where it sits in the open sidebar */
+	--sidebar-collapsed: 4.625rem;
 	--queue: 26rem;
 	/* phones: the floating tab bar sits in the home-indicator zone like the iOS
 	   one; --tab-gap is its distance from the bottom edge and --tabs is all the
@@ -152,3 +157,9 @@ input[type='range']:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 3px colo
 	.hero-pill, .hero-round { height: 3rem; font-size: var(--t-16-8); }
 	.hero-round { width: 3rem; }
 }
+
+@media (min-width: 721px) {
+	:root[data-nav='collapsed'] { --sidebar: var(--sidebar-collapsed); }
+	:root { transition: --sidebar 0.2s cubic-bezier(0.2, 0, 0, 1); }
+}
+@media (prefers-reduced-motion: reduce) { :root { transition: none; } }

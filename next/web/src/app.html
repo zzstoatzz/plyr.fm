@@ -32,6 +32,10 @@
 					r.style.setProperty('--custom-accent', p.accent);
 				}
 			} catch (e) {}
+			// a collapsed desktop sidebar (lib/nav.ts) is in place from the first frame
+			try {
+				if (localStorage.getItem('plyr-next:nav') === 'collapsed') document.documentElement.dataset.nav = 'collapsed';
+			} catch (e) {}
 			// every screen reads the api: open the connection (and wake a scaled-to-zero
 			// machine) while the app's javascript is still downloading
 			try {
