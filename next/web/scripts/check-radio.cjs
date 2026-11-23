@@ -138,8 +138,8 @@ async function stationFlow(browser, origin, width, scheme) {
     assert.deepEqual(await page.evaluate(() => { const meta = navigator.mediaSession.metadata; return meta && [meta.title, meta.album, navigator.mediaSession.playbackState]; }),
       [airing.metadata.title, 'fresh radio', 'playing'], 'radio fills the lock screen like any track');
     await page.screenshot({ path: path.join(output, `${width}-${scheme}-live.png`) });
-    assert.equal(new URL(page.url()).pathname, '/radio/fresh', 'the address bar names the station on air');
-    await now.getByRole('button', { name: 'Share station', exact: true }).waitFor();
+    assert.equal(new URL(page.url()).pathname, '/radio', 'tuning in from the lineup stays on the lineup');
+    await now.getByRole('button', { name: 'share station' }).waitFor();
     await now.getByRole('button', { name: 'Pause', exact: true }).click();
     await page.waitForFunction(() => window.media.every(media => media.paused));
     await now.getByRole('button', { name: 'Listen live', exact: true }).click();
@@ -179,21 +179,28 @@ async function linkedStationFlow(browser, origin, width) {
   const { context, page, errors } = await fixture(browser, width, 'dark');
   try {
     await page.goto(origin + '/radio/deep-cuts');
-    const linked = page.getByTestId('radio-linked');
-    await linked.getByText('deep cuts radio', { exact: true }).waitFor();
-    assert.equal(await page.title(), 'deep cuts radio · plyr.fm');
-    assert.ok(await page.evaluate(() => window.media.every(media => media.paused)), 'a link waits for a tap before it plays');
-    await linked.getByRole('button', { name: 'share' }).waitFor();
-    await page.screenshot({ path: path.join(output, `${width}-linked-station.png`) });
-    await linked.getByRole('button', { name: 'listen' }).click();
+    // a station link lands in now playing for that station, waiting on the tap browsers need before audio
     const now = page.getByRole('dialog', { name: 'Now playing' });
     await now.getByText('live · deep cuts radio', { exact: true }).waitFor();
+    await now.getByRole('heading', { name: titles[slugs.indexOf('deep-cuts')], exact: true }).waitFor();
+    assert.equal(await page.title(), 'deep cuts radio · plyr.fm');
+    await now.getByRole('button', { name: 'Listen live', exact: true }).first().waitFor();
+    assert.ok(await page.evaluate(() => window.media.every(media => media.paused)), 'a link waits for a tap before it plays');
+    await now.getByRole('button', { name: 'share station' }).waitFor();
+    await now.getByRole('button', { name: 'leave radio' }).waitFor();
+    await page.waitForTimeout(700); // let the sheet finish rising for the screenshot
+    await page.screenshot({ path: path.join(output, `${width}-linked-station.png`) });
+    await now.getByRole('button', { name: 'Listen live', exact: true }).first().click();
     await page.waitForFunction(() => window.media.some(media => !media.paused));
-    await now.getByRole('button', { name: 'leave radio' }).click();
+    await now.getByRole('button', { name: 'Close', exact: true }).click();
+    await now.waitFor({ state: 'hidden' });
+    await page.getByTestId('radio-stations').waitFor();
+    await page.waitForTimeout(500);
+    assert.equal(await now.count(), 0, 'closing the sheet leaves the lineup, and it stays closed');
     await page.goto(origin + '/radio/jazz');
     await page.getByText("we couldn't find that station").waitFor();
     assert.deepEqual(errors, []);
-    console.log(`a station link opens that station and waits for a tap at ${width}px`);
+    console.log(`a station link opens that station in now playing and waits for a tap at ${width}px`);
   } finally { await context.close(); }
 }
 

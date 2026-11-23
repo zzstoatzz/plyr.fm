@@ -18,9 +18,10 @@ function onAir(snapshot: RadioSnapshot) {
   void player.setRadioTrack(song.track, song.audio, occurrence, () => radioPosition(snapshot), song.live);
 }
 
-export function tuneRadio(station: RadioStation, openNowPlaying?: () => void) {
+/** `listen` false tunes in paused, for a shared link that opens before anyone has tapped. */
+export function tuneRadio(station: RadioStation, openNowPlaying?: () => void, listen = true) {
   if (player.liveStation === station) {
-    if (!player.liveListening) player.setRadioListening(true);
+    if (listen && !player.liveListening) player.setRadioListening(true);
     if (player.current) openNowPlaying?.();
     return;
   }
@@ -28,7 +29,7 @@ export function tuneRadio(station: RadioStation, openNowPlaying?: () => void) {
   if (!feed) return;
   let opening = openNowPlaying;
   let unsubscribe: (() => void) | undefined;
-  player.startRadio(station, () => unsubscribe?.());
+  player.startRadio(station, () => unsubscribe?.(), listen);
   const changed = () => {
     const { snapshot, error } = feed.getSnapshot();
     if (error && !player.current) {

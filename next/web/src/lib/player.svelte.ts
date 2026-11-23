@@ -357,7 +357,8 @@ class Player {
 		else this.#jam?.command(intent);
 	}
 
-	startRadio(station: RadioStation, leave: () => void) {
+	/** `listening` false tunes in paused: a shared station link shows what's on and waits for the tap browsers require. */
+	startRadio(station: RadioStation, leave: () => void, listening = true) {
 		if (this.liveStation?.slug === station.slug) return;
 		this.#holdQueue();
 		this.privateMode = false;
@@ -365,13 +366,13 @@ class Player {
 		this.#audioElement();
 		this.liveStation = station;
 		this.#leaveRadio = leave;
-		this.liveListening = true;
+		this.liveListening = listening;
 		this.queueOpen = false;
 		this.queue = [];
 		this.index = -1;
 		this.repeat = 'off';
 		this.playing = false;
-		this.loading = true;
+		this.loading = listening;
 		this.time = this.length = 0;
 		this.error = undefined;
 		this.#clearMediaSession();
@@ -407,7 +408,9 @@ class Player {
 		this.index = 0;
 		const audio = this.#audioElement();
 		const ready = await this.#loadMedia(track, signal => broadcast ? liveStream(url, audio, signal) : Promise.resolve({ url }), track.id.startsWith('trk_'));
-		if (ready) void this.#resumeRadio();
+		if (!ready) return;
+		if (this.liveListening) void this.#resumeRadio();
+		else this.loading = false;
 	}
 
 	clearRadioTrack() {
