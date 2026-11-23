@@ -3,9 +3,8 @@ name: next osprey
 # Next's moderation rules worker (next/services/osprey): ROOST's Osprey engine
 # running plyr's SML rules over tracks the next appview indexes, writing review
 # flags to next's moderation log. It runs on a schedule and stops once it has
-# caught up; its cursor lives in next's database. Covers go to Claude directly.
-# Nothing here touches prod except asking prod's moderation service to
-# fingerprint audio (/scan), which holds the AuDD key and writes nothing.
+# caught up; its cursor lives in next's database. Audio goes to AuDD and covers
+# to Claude directly; nothing here touches prod.
 
 on:
   pull_request:
@@ -96,8 +95,7 @@ jobs:
       - name: run the rules until caught up
         env:
           DATABASE_URL: ${{ secrets.ZIG_NEXT_WRITER_DATABASE_URL }}
-          MODERATION_SERVICE_URL: ${{ secrets.MODERATION_SERVICE_URL }}
-          MODERATION_AUTH_TOKEN: ${{ secrets.MODERATION_AUTH_TOKEN }}
+          AUDD_API_TOKEN: ${{ secrets.AUDD_API_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OSPREY_DRAIN_ONCE: "true"
         run: scripts/run
@@ -125,8 +123,7 @@ jobs:
           TEST_HANDLE: ${{ secrets.ZAT_TEST_HANDLE }}
           TEST_PASSWORD: ${{ secrets.ZAT_TEST_PASSWORD }}
           DATABASE_URL: ${{ secrets.ZIG_NEXT_WRITER_DATABASE_URL }}
-          MODERATION_SERVICE_URL: ${{ secrets.MODERATION_SERVICE_URL }}
-          MODERATION_AUTH_TOKEN: ${{ secrets.MODERATION_AUTH_TOKEN }}
+          AUDD_API_TOKEN: ${{ secrets.AUDD_API_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           osprey="$(scripts/setup)"
