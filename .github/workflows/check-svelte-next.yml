@@ -100,8 +100,13 @@ jobs:
             run: bun run check:player-transition
           - name: player-presentation
             run: bun run check:player-presentation && bun run check:likers
-          - name: catalog
-            run: bun run check:artist-catalog && bun run check:atlas && bun run check:paged-lists
+          # the slowest checks, one job each so none of them sets the pace for the rest
+          - name: artist-catalog
+            run: bun run check:artist-catalog
+          - name: atlas
+            run: bun run check:atlas
+          - name: paged-lists
+            run: bun run check:paged-lists
           # holds the wheel down on home through several pages of latest and records the rail every frame
           # (with video): the live site as it is, then this build on the live catalog, which must not move
           - name: home-rail-scroll
@@ -231,7 +236,16 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
         working-directory: next
+      - id: playwright
+        working-directory: next/web
+        run: echo "version=$(node -p "require('playwright/package.json').version")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        id: browsers
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-shell-${{ runner.os }}-${{ steps.playwright.outputs.version }}
       - run: bun run playwright install --with-deps --only-shell chromium
+        if: steps.browsers.outputs.cache-hit != 'true'
         working-directory: next/web
       # the publish check plays AAC, which only branded Chrome decodes
       - run: bun run playwright install --with-deps chrome
