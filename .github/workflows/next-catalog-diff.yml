@@ -9,6 +9,9 @@ on:
     paths:
       - .github/workflows/next-catalog-diff.yml
       - next/backend/scripts/catalog_diff
+  # daily until the cutover, so drift between prod and next shows up on its own
+  schedule:
+    - cron: "17 6 * * *"
   workflow_dispatch:
 
 permissions:
