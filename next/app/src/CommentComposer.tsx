@@ -57,16 +57,17 @@ export function CommentComposer({ track, positionMs, returnTo }: { track: Track;
     }
   }
   return <View style={{ gap: 6 }}>
-    <View style={[styles.frame, frame]}>
-      <Pressable accessibilityRole="button" accessibilityLabel={pinned === undefined ? `Comment at ${clock(moment / 1000)}` : `Comment at ${clock(moment / 1000)}, move to now`}
-        onPress={() => setPinned(text ? positionMs : undefined)} style={[styles.chip, { backgroundColor: `${theme.accent}22` }]}>
-        <Text style={[styles.chipText, { color: theme.accent, fontSize: 13 * theme.scale }]}>at {clock(moment / 1000)}</Text>
-      </Pressable>
-      <TextInput value={text} accessibilityLabel={`Comment at ${clock(moment / 1000)}`} placeholder="add a comment…" placeholderTextColor={theme.faint}
+    <View style={[styles.frame, frame, { paddingLeft: 14 }]}>
+      <TextInput value={text} accessibilityLabel={`Comment at ${clock(moment / 1000)}`} placeholder={`comment at ${clock(moment / 1000)}`} placeholderTextColor={theme.faint}
         onChangeText={next => { setText(next); setError(undefined); if (!next) setPinned(undefined); else if (pinned === undefined) setPinned(positionMs); }}
         onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} onSubmitEditing={() => void send()} returnKeyType="send" submitBehavior="submit"
         editable={!sending} maxLength={MAX_COMMENT_BYTES * 2}
         style={[styles.input, { color: theme.text, fontFamily: theme.fontFamily, fontSize: inputFontSize(theme.scale) }]} />
+      {/* the placeholder names the moment while empty; once there is a draft the chip holds it, sitting right so the text never shifts */}
+      {!!text && <Pressable accessibilityRole="button" accessibilityLabel={`Comment at ${clock(moment / 1000)}, move to now`}
+        onPress={() => setPinned(positionMs)} style={[styles.chip, { backgroundColor: `${theme.accent}22` }]}>
+        <Text style={[styles.chipText, { color: theme.accent, fontSize: 13 * theme.scale }]}>at {clock(moment / 1000)}</Text>
+      </Pressable>}
       <Pressable accessibilityRole="button" accessibilityLabel="Post comment" accessibilityState={{ disabled: !ready, busy: sending }} disabled={!ready}
         onPress={() => void send()} style={[styles.send, { backgroundColor: ready ? theme.accent : theme.raised }]}>
         <ArrowUp size={16} color={ready ? theme.onAccent : theme.faint} weight="bold" />
