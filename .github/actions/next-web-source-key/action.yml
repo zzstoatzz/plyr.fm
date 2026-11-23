@@ -1,0 +1,20 @@
+name: next web source key
+description: >-
+  A hash of everything check-svelte-next.yml watches (plus all of next/scripts),
+  read from the checked-out commit. Keep it at least as wide as that
+  workflow's `paths`.
+outputs:
+  key:
+    description: 40 hex characters
+    value: ${{ steps.key.outputs.key }}
+runs:
+  using: composite
+  steps:
+    - id: key
+      shell: bash
+      run: |
+        key="$(git ls-tree HEAD -- \
+          next/web next/core next/package.json next/bun.lock next/vendor next/scripts \
+          .github/workflows/check-svelte-next.yml .github/actions/next-web-source-key \
+          | sha256sum | cut -c1-40)"
+        echo "key=$key" >> "$GITHUB_OUTPUT"
