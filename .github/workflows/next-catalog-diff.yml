@@ -1,0 +1,30 @@
+name: next catalog diff
+
+# Read-only: which prod tracks next has, which it doesn't, and why
+# (next/backend/scripts/catalog_diff). For the cutover's catalog reconcile.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/next-catalog-diff.yml
+      - next/backend/scripts/catalog_diff
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: compare prod's catalog with next's
+        working-directory: next/backend
+        env:
+          LEGACY_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL_PRD }}
+          DATABASE_URL: ${{ secrets.ZIG_NEXT_WRITER_DATABASE_URL }}
+        run: |
+          command -v psql > /dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client; }
+          scripts/catalog_diff | tee "$RUNNER_TEMP/diff.txt"
+          { echo '```'; cat "$RUNNER_TEMP/diff.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
