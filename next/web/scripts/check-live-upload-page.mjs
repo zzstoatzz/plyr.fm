@@ -23,6 +23,8 @@ async function verify(browser, width) {
   const context = await browser.newContext({ viewport: { width, height: 900 }, isMobile: width === 390, hasTouch: width === 390, serviceWorkers: 'block' });
   const page = await context.newPage();
   page.setDefaultTimeout(15_000);
+  // a leave-page prompt must not hold the sign-out navigation
+  page.on('dialog', dialog => dialog.accept());
   const writes = [];
   let stage = 'guarding writes';
   let failure;
@@ -80,7 +82,8 @@ async function verify(browser, width) {
     try {
       if (consented) await signOut(page, '/upload');
     } catch (error) {
-      const cleanup = new Error(`${width}px failed to revoke the browser session (${error.name})`);
+      await page.screenshot({ path: path.join(output, `${width}-sign-out.png`), fullPage: true }).catch(() => {});
+      const cleanup = new Error(`${width}px failed to revoke the browser session at ${page.url()}: ${error.message.split('\n')[0]}`);
       failure = failure ? new AggregateError([failure, cleanup], 'upload page check and cleanup failed') : cleanup;
     } finally { await context.close(); }
   }
