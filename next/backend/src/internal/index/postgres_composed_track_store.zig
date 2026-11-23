@@ -576,7 +576,7 @@ pub const projected_columns =
     \\  NULL::text,
     \\  COALESCE(pol.visibility, CASE WHEN v.record_json->>'visibility' = 'unlisted' THEN 'unlisted' END, 'public'),
     \\  COALESCE(pol.visibility, CASE WHEN v.record_json->>'visibility' = 'unlisted' THEN 'unlisted' END, 'public') IN ('public', 'supporters'),
-    \\  pol.space_uri,
+    \\  COALESCE(pol.space_uri, substring(v.audio_space FROM '^(at://[^/]+/space/[^/]+/[^/]+)/')),
     \\  COALESCE(pol.operator_labels, '[]'::jsonb)::text,
     \\  pol.moderation_decision,
     \\  COALESCE(metrics.play_count, 0)::bigint,
@@ -958,6 +958,8 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     try std.testing.expectEqual(track.Source.moderation_service, value.sources.operator_labels);
     try std.testing.expectEqual(track.ProjectionVerification.verified_repo, value.projection.verification);
     try std.testing.expectEqualStrings("self-note", value.moderation.self_labels[0]);
+    _ = try pool.exec("UPDATE plyr_index.track_records SET audio_space = 'at://did:plc:artist/space/fm.plyr.dev.audio/track/did:plc:artist/fm.plyr.dev.track/track'", .{});
+    try std.testing.expectEqualStrings("at://did:plc:artist/space/fm.plyr.dev.audio/track", (try implementation.store().getByUri(a, record_uri)).?.access.space_uri.?);
     try std.testing.expectEqualStrings("copyright-violation", value.moderation.operator_labels[0]);
     try std.testing.expectEqual(@as(i64, 7), value.metrics.play_count);
     try std.testing.expectEqual(@as(i64, 0), value.metrics.like_count);

@@ -341,12 +341,30 @@ jobs:
           curl --fail --silent "https://${FLY_APP}.fly.dev/xrpc/com.atproto.label.queryLabels?uriPatterns=at%3A%2F%2F*&limit=1" | jq -e '.labels | type == "array"' > /dev/null
           echo "labeler published: $(echo "$doc" | jq -c '[.service[]? | select(.id == "#atproto_labeler")]')"
 
-      - name: ingester status
+      # flyctl deploy leaves a stopped machine stopped, so a worker that exited
+      # once stayed down through every later deploy (the ingester, 2026-11-23,
+      # silently for hours). Start any stopped worker, show what it logs, and
+      # fail the deploy if it won't stay up.
+      - name: the ingester and space consumer are running
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
         run: |
+          workers() { flyctl machines list --app "$FLY_APP" --json | jq -r '.[] | select(.config.metadata.fly_process_group == "ingester" or .config.metadata.fly_process_group == "space_consumer") | "\(.id) \(.config.metadata.fly_process_group) \(.state)"'; }
+          workers | while read -r id group state; do
+            if [ "$state" != "started" ]; then
+              echo "::warning::$group machine $id was $state; starting it"
+              flyctl machine start "$id" --app "$FLY_APP"
+            fi
+          done
+          sleep 45
           flyctl status --app "$FLY_APP"
-          flyctl logs --app "$FLY_APP" --no-tail | grep -i ingest | tail -30 || true
+          down=0
+          while read -r id group state; do
+            echo "--- $group $id: $state"
+            flyctl logs --app "$FLY_APP" --machine "$id" --no-tail | tail -40 || true
+            [ "$state" = "started" ] || down=1
+          done < <(workers)
+          [ "$down" = 0 ] || { echo "::error::a worker machine is not running"; exit 1; }
 
       - name: reconcile the fm.plyr catalog into next
         if: inputs.reconcile_catalog

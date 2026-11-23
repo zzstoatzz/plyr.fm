@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { auth, login } from '$lib/auth';
@@ -41,6 +42,7 @@
 		{#if account.scopeRejected}
 			<button type="button" class="text-button" disabled={busy || !handle.trim()} onclick={() => submit(handle, true)}>sign in on this device</button>
 		{/if}
+		<p class="subtle hint">by signing in you agree to the <a href={resolve('/(app)/terms')}>terms</a> and <a href={resolve('/(app)/privacy')}>privacy policy</a></p>
 	</form>
 </section>
 
@@ -51,5 +53,6 @@
 	label { font-weight: 600; }
 	.hint, .failure { font-size: var(--t-14-4); }
 	.failure { color: var(--danger, #bd2727); }
+	.hint a { color: var(--accent); }
 	.submit { width: 100%; background: var(--accent); color: var(--on-accent); padding: 0.6rem; min-height: 2.75rem; border-radius: 0.55rem; border: 0; font-weight: 650; }
 </style>

@@ -5,8 +5,9 @@ description = "plyr's rules, UDFs and plumbing for ROOST's Osprey worker"
 requires-python = ">=3.11"
 # installed into Osprey's own environment (scripts/osprey), which provides
 # osprey-worker, psycopg2, requests and pluggy at the versions it pins.
-# pillow brings a cover down to what the image check accepts.
-dependencies = ["pillow>=11"]
+# pillow brings a cover down to what the image check accepts; anthropic asks
+# Claude about it.
+dependencies = ["pillow>=11", "anthropic>=2.12"]
 
 [project.entry-points.osprey_plugin]
 plyr = "plyr_osprey.register_plugins"
