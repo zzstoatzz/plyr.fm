@@ -72,8 +72,8 @@ export function NowPlayingDetails({ track, plays, navigate, position, playing, s
   </View>;
 }
 
-/** The track's tags; each opens home filtered to it. */
-function Tags({ track, navigate }: { track: Track; navigate: (target: Href) => void }) {
+/** The track's tags; each opens home filtered to it. Now playing and the track page both show them. */
+export function Tags({ track, navigate, centered, testID = 'now-playing-tags' }: { track: Track; navigate: (target: Href) => void; centered?: boolean; testID?: string }) {
   const theme = useAppearance();
   const [fetched, setFetched] = useState<{ id: string; tags: string[] }>();
   useEffect(() => {
@@ -84,7 +84,7 @@ function Tags({ track, navigate }: { track: Track; navigate: (target: Href) => v
   }, [track.id, track.metadata.tags]);
   const tags = track.metadata.tags ?? (fetched?.id === track.id ? fetched.tags : trackTags.peek(track.id) ?? []);
   if (!tags.length) return null;
-  return <View testID="now-playing-tags" style={styles.tags}>
+  return <View testID={testID} style={[styles.tags, centered && styles.centered]}>
     {tags.map(name => {
       const palette = tagColors(name, theme.background, false);
       return <Pressable key={name} accessibilityRole="link" accessibilityLabel={`Tracks tagged ${name}`} onPress={() => navigate({ pathname: '/', params: { tag: name } })} style={styles.tagTarget}>
@@ -211,6 +211,7 @@ const styles = StyleSheet.create({
   album: { alignSelf: 'flex-start', maxWidth: '100%', minHeight: 28, flexDirection: 'row', alignItems: 'center', gap: 8 },
   chapters: { marginTop: -10 },
   tags: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 6, marginVertical: -8 },
+  centered: { justifyContent: 'center' },
   tagTarget: { minHeight: 44, maxWidth: '100%', justifyContent: 'center' },
   tag: { minHeight: 30, borderRadius: 16, borderWidth: 1, paddingHorizontal: 12, justifyContent: 'center' },
   buy: { flexDirection: 'row', maxWidth: '100%' },

@@ -1,7 +1,8 @@
 import { Copy } from './controls';
 import { trackArtwork } from '@plyr/next-core/artwork';
 import { Text } from './Text';
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
+import { Tags } from './NowPlayingDetails';
 import { type ReactNode, useState } from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import type { Track } from '@plyr/next-core/api';
@@ -12,6 +13,7 @@ export function TrackPresentation({ track, controls, stats, utilities, access, c
   track: Track; controls: ReactNode; stats: ReactNode; utilities: ReactNode; access?: ReactNode; comments?: ReactNode;
 }) {
   const theme = useAppearance();
+  const router = useRouter();
   const { width, height } = useWindowDimensions();
   const [available, setAvailable] = useState(width);
   const compact = width < 600;
@@ -29,6 +31,7 @@ export function TrackPresentation({ track, controls, stats, utilities, access, c
       {track.metadata.album && <Text style={{ color: theme.muted, fontFamily: theme.fontFamily, fontSize: 15 * theme.scale, lineHeight: 22 * theme.scale, textAlign: 'center' }}>{track.metadata.album}</Text>}
     </View>
     <View style={styles.controls}>{controls}</View>
+    <View style={styles.tags}><Tags track={track} navigate={target => router.navigate(target)} centered testID="track-tags" /></View>
     {access}
     <View style={styles.stats}>{stats}</View>
     <View style={styles.utilities}>{utilities}</View>
@@ -41,6 +44,7 @@ const styles = StyleSheet.create({
   page: { width: '100%', maxWidth: 640, alignSelf: 'center', alignItems: 'center', paddingTop: 16, paddingBottom: 20, gap: 18 },
   identity: { width: '100%', alignItems: 'center', gap: 4 },
   controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', width: '100%', maxWidth: 320 },
+  tags: { alignSelf: 'stretch', marginVertical: -6 },
   stats: { minHeight: 22, alignItems: 'center', marginTop: -8 },
   utilities: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 28 },
   description: { alignSelf: 'stretch', marginTop: 8 }
