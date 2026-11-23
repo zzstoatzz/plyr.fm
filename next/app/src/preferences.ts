@@ -4,13 +4,14 @@ import type { Auth, Did } from './auth-state';
 import { accountPreferences, type PersonalPreferences } from './preference-sync';
 import { readLocal, writeLocal } from './storage';
 import { DEFAULT_HIDDEN_TAGS, hiddenTags } from '@plyr/next-core/hidden-tags';
+import { DEFAULT_AT_CLIENT } from '@plyr/next-core/at-clients';
 
 export type Preferences = PersonalPreferences & { volume: number };
 export type PreferenceStatus = 'local' | 'syncing' | 'synced' | 'error';
 
 const KEY = 'plyr-next:prefs';
 const DEFAULTS: Preferences = {
-	theme: 'system', accent: '#6a9fff', font: 'comic-sans', keepPlaying: false, playThrough: true, tealScrobbling: false, allowComments: false, volume: 1, scale: 1, hiddenTags: DEFAULT_HIDDEN_TAGS
+	theme: 'system', accent: '#6a9fff', font: 'comic-sans', keepPlaying: false, playThrough: true, tealScrobbling: false, allowComments: false, volume: 1, scale: 1, hiddenTags: DEFAULT_HIDDEN_TAGS, atprotoClient: DEFAULT_AT_CLIENT
 };
 type Account = {
 	did: string;

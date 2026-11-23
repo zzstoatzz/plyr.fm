@@ -1,6 +1,7 @@
 import type { Agent } from '@plyr/next-core/auth-state';
 import { preferenceTransport } from '@plyr/next-core/preference-transport';
 import { DEFAULT_HIDDEN_TAGS, hiddenTags } from '@plyr/next-core/hidden-tags';
+import { DEFAULT_AT_CLIENT, isAtClient, type AtClientName } from '@plyr/next-core/at-clients';
 import { invalidate } from '$app/navigation';
 import { authConfig } from './auth-config';
 
@@ -39,10 +40,12 @@ type Preferences = {
 	keepPlaying: boolean;
 	tealScrobbling: boolean;
 	allowComments: boolean;
+	/** the app profile links open in */
+	atprotoClient: AtClientName;
 };
 
 const defaults: Preferences = {
-	theme: 'system', accent: accents[0].color, font: undefined, scale: 1, hiddenTags: DEFAULT_HIDDEN_TAGS, playThrough: true, keepPlaying: false, tealScrobbling: false, allowComments: false
+	theme: 'system', accent: accents[0].color, font: undefined, scale: 1, hiddenTags: DEFAULT_HIDDEN_TAGS, playThrough: true, keepPlaying: false, tealScrobbling: false, allowComments: false, atprotoClient: DEFAULT_AT_CLIENT
 };
 type Account = {
 	key: string;
@@ -70,7 +73,7 @@ export async function confirmScrobblingConsent(): Promise<boolean> {
 
 function decode(value: unknown, remote = false): Partial<Preferences> {
 	if (!value || typeof value !== 'object') return {};
-	const { theme, accent, font, scale, playThrough, keepPlaying, tealScrobbling, allowComments } = value as Record<string, unknown>;
+	const { theme, accent, font, scale, playThrough, keepPlaying, tealScrobbling, allowComments, atprotoClient } = value as Record<string, unknown>;
 	const result: Partial<Preferences> = {};
 	if (theme === 'system' || theme === 'light' || theme === 'dark') result.theme = theme;
 	if (typeof accent === 'string' && /^#[0-9a-f]{6}$/i.test(accent)) result.accent = accent.toLowerCase();
@@ -85,6 +88,7 @@ function decode(value: unknown, remote = false): Partial<Preferences> {
 	if (typeof keepPlaying === 'boolean') result.keepPlaying = keepPlaying;
 	if (typeof tealScrobbling === 'boolean') result.tealScrobbling = tealScrobbling;
 	if (typeof allowComments === 'boolean') result.allowComments = allowComments;
+	if (isAtClient(atprotoClient)) result.atprotoClient = atprotoClient;
 	return result;
 }
 

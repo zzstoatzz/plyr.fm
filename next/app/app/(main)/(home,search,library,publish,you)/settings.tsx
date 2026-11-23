@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ChatCircle, Check, Palette, Headphones, UserCircle as UserRound } from '../../../src/icons';
+import { ChatCircle, Check, LinkSimple, Palette, Headphones, UserCircle as UserRound } from '../../../src/icons';
+import { AT_CLIENTS, atClient } from '@plyr/next-core/at-clients';
 import { Pressable, Switch, View } from 'react-native';
 import { useAuth, logout } from '../../../src/auth';
 import { useAppearance } from '../../../src/appearance';
@@ -17,7 +18,7 @@ import { sharePlaybackLog } from '../../../src/share-playback-log';
 const themes = ['system', 'light', 'dark'] as const;
 const fonts = ['comic-sans', 'system', 'mono', 'serif'] as const;
 const accents = [['blue', '#6a9fff'], ['green', '#4ade80'], ['pink', '#f472b6'], ['yellow', '#fbbf24'], ['purple', '#a78bfa'], ['rose', '#fb7185'], ['teal', '#2dd4bf'], ['orange', '#f97316']] as const;
-const names = { theme: 'theme', font: 'font', scale: 'interface size', accent: 'accent color' };
+const names = { theme: 'theme', font: 'font', scale: 'interface size', accent: 'accent color', client: 'open profiles in' };
 type Picker = keyof typeof names;
 
 export default function Settings() {
@@ -49,6 +50,9 @@ export default function Settings() {
       </SettingsRow>)}
       <SettingsRow label="share playback log" detail="recent play attempts on this device, to send when tracks won’t play" disclosure={false} onPress={() => void sharePlaybackLog(!!auth.did, auth.ready)} />
     </SettingsSection>
+    <SettingsSection title="links" icon={LinkSimple}>
+      <SettingsRow label="open profiles in" detail="the app you go to from an @handle on plyr.fm" value={atClient(preferences.atprotoClient).label} onPress={() => setPicker('client')} />
+    </SettingsSection>
     {auth.did && <SettingsSection title="your tracks" icon={ChatCircle}>
       <SettingsRow label="timed comments" detail={auth.accountSync ? 'let listeners leave comments on your tracks' : 'sign in again to change this for your tracks'}>
         <Switch accessibilityLabel="timed comments" disabled={!auth.accountSync} value={preferences.allowComments} thumbColor={theme.background} trackColor={{ false: theme.border, true: theme.accent }} ios_backgroundColor={theme.border} onValueChange={value => { setPreferences({ allowComments: value }); refreshComments(); }} />
@@ -73,6 +77,7 @@ export default function Settings() {
     {picker && <Sheet title={names[picker]} close={() => setPicker(undefined)}>
       {picker === 'theme' && themes.map(value => <Choice key={value} label={value} selected={preferences.theme === value} onPress={() => { setPreferences({ theme: value }); setPicker(undefined); }} />)}
       {picker === 'font' && fonts.map(value => <Choice key={value} label={value === 'comic-sans' ? 'comic sans' : value} selected={preferences.font === value} onPress={() => { setPreferences({ font: value }); setPicker(undefined); }} />)}
+      {picker === 'client' && AT_CLIENTS.map(client => <Choice key={client.value} label={client.label} selected={preferences.atprotoClient === client.value} onPress={() => { setPreferences({ atprotoClient: client.value }); setPicker(undefined); }} />)}
       {picker === 'scale' && [0.9, 1, 1.15, 1.3].map(value => <Choice key={value} label={`${Math.round(value * 100)}%`} selected={preferences.scale === value} onPress={() => { setPreferences({ scale: value }); setPicker(undefined); }} />)}
       {picker === 'accent' && <>
         <View style={row}>{accents.map(([name, value]) => <Pressable key={value} accessibilityRole="button" accessibilityLabel={`Accent ${name}`} aria-pressed={preferences.accent === value}
