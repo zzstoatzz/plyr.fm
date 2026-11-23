@@ -12,9 +12,7 @@ from tests.test_rules import NEXT_AUDIO, played_through
 OTHER_AUDIO = 'https://plyr-next-audio.n8-3e9.workers.dev/audio/other.mp3'
 
 
-def add_track(
-    db, n: int, audio_url: str | None, at_us: int, deleted: bool = False, blob_cid: str | None = None
-) -> str:
+def add_track(db, n: int, audio_url: str | None, at_us: int, deleted: bool = False, blob_cid: str | None = None) -> str:
     uri = f'at://did:plc:uploader/fm.plyr.track/{n}'
     with db.cursor() as cur:
         cur.execute(
@@ -112,9 +110,7 @@ def test_a_failing_scan_is_retried_then_passed_over(db, engine, fingerprinter) -
     assert rows(db, 'SELECT count(*) FROM plyr_moderation.events') == [(0,)]
 
 
-def test_a_track_written_straight_to_its_pds_is_scanned_once_next_holds_its_audio(
-    db, engine, fingerprinter
-) -> None:
+def test_a_track_written_straight_to_its_pds_is_scanned_once_next_holds_its_audio(db, engine, fingerprinter) -> None:
     # blob only, or a blob beside an audioUrl on a host next doesn't hold
     direct = add_track(db, 1, None, 10, blob_cid='bafkreiblob1')
     elsewhere = add_track(db, 2, 'https://evil.example/a.mp3', 20, blob_cid='bafkreiblob2')
