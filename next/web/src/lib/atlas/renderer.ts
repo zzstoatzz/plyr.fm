@@ -1,3 +1,4 @@
+import { ArtistFaces } from './faces';
 import type { AtlasArtist, AtlasCallbacks, AtlasCluster, AtlasData, AtlasOptions, AtlasPoint } from './types';
 
 interface HaloSprite {
@@ -42,6 +43,11 @@ function hash01(id: number): number {
   x = (x * 2246822519) >>> 0;
   x ^= x >>> 13;
   return (x >>> 0) / 4294967296;
+}
+function hashText(text: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+  return hash01(h >>> 0);
 }
 function hslToRgb(h: number, s: number, l: number): [number, number, number] {
   if (s === 0) {
@@ -118,9 +124,7 @@ export class AtlasRenderer {
   private coverLoading = new Set<number>();
   private coverLoadCount = 0;
 
-  // artist avatars
-  private avatarImages = new Map<string, HTMLImageElement>();
-  private avatarFailed = new Set<string>();
+  private faces = new ArtistFaces(() => this.markDirty());
 
   // interaction
   private hovered = -1;
@@ -491,19 +495,6 @@ export class AtlasRenderer {
     img.src = url;
   }
 
-  private loadAvatar(a: AtlasArtist): void {
-    if (this.avatarImages.has(a.did) || this.avatarFailed.has(a.did) || !a.avatar) return;
-    const img = new Image();
-    img.onload = () => {
-      this.avatarImages.set(a.did, img);
-      this.markDirty();
-    };
-    img.onerror = () => this.avatarFailed.add(a.did);
-    img.src = a.avatar;
-    // mark as pending so we don't create duplicate Image objects
-    this.avatarImages.set(a.did, img);
-  }
-
   // --- transforms ---
 
   private cacheTransform(): void {
@@ -758,44 +749,33 @@ export class AtlasRenderer {
       ctx.globalAlpha = 1;
     }
 
-    // --- artist circles ---
+    // --- artist circles: always a face, or a tinted disk with an initial while
+    // it loads or when the artist has none. never an empty ring.
     const artistCands: { name: string; x: number; y: number }[] = [];
     {
-      let avatarBudget = small ? 8 : 20;
       for (const a of this.data.artists) {
         const pr = this.artistRadiusPx(a);
         if (pr < 7) continue;
         const ax = this.cx + a.cx * this.scale;
         const ay = this.cy + a.cy * this.scale;
         if (ax < -40 || ax > W + 40 || ay < -40 || ay > H + 40) continue;
-        const wantAvatar = pr >= 10 && avatarBudget > 0;
-        if (wantAvatar) {
-          this.loadAvatar(a);
-          avatarBudget--;
-        }
-        const img = wantAvatar ? this.avatarImages.get(a.did) : undefined;
-        const loaded = img && img.complete && img.naturalWidth > 0;
-        if (loaded) {
-          ctx.save();
+        const face = this.faces.face(a, pr, pr * 2 * this.dpr);
+        if (face) {
+          ctx.globalAlpha = 0.95;
+          ctx.drawImage(face, ax - pr, ay - pr, pr * 2, pr * 2);
+        } else {
+          const [r, g, b] = hslToRgb(hashText(a.did), 0.35, this.dark ? 0.28 : 0.82);
           ctx.globalAlpha = 0.9;
           ctx.beginPath();
           ctx.arc(ax, ay, pr, 0, Math.PI * 2);
-          ctx.clip();
-          ctx.drawImage(img, ax - pr, ay - pr, pr * 2, pr * 2);
-          ctx.restore();
-        } else {
-          ctx.globalAlpha = 0.55;
-          ctx.beginPath();
-          ctx.arc(ax, ay, pr, 0, Math.PI * 2);
-          ctx.fillStyle = this.dark ? '#1a1a1a' : '#e8e8e8';
+          ctx.fillStyle = `rgb(${r},${g},${b})`;
           ctx.fill();
-          if (pr >= 12) {
-            ctx.font = `bold ${Math.max(8, Math.round(pr * 0.8))}px monospace`;
+          if (pr >= 8) {
+            ctx.font = `600 ${Math.round(pr * 0.9)}px system-ui, sans-serif`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillStyle = this.dark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)';
-            ctx.globalAlpha = 0.9;
-            ctx.fillText((a.name || '?').charAt(0).toLowerCase(), ax, ay);
+            ctx.fillStyle = this.dark ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.7)';
+            ctx.fillText((a.name || a.handle || '?').charAt(0).toLowerCase(), ax, ay + pr * 0.05);
           }
         }
         ctx.globalAlpha = 0.25 + Math.min(0.35, pr / 40);
@@ -809,6 +789,7 @@ export class AtlasRenderer {
         }
       }
       ctx.globalAlpha = 1;
+      this.faces.flush();
     }
 
     // the home preview is a still picture: dots and artists, no labels to crowd it
