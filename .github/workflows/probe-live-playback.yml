@@ -1,0 +1,31 @@
+name: probe live playback (temporary)
+on:
+  push:
+    branches: [probe/live-playback]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency: next-live-browser
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+        working-directory: next
+      - run: bun run playwright install --with-deps --only-shell chromium
+        working-directory: next/web
+      - working-directory: next/web
+        env:
+          ZAT_TEST_HANDLE: ${{ secrets.ZAT_TEST_HANDLE }}
+          ZAT_TEST_PASSWORD: ${{ secrets.ZAT_TEST_PASSWORD }}
+          ZAT_TEST_PDS: ${{ secrets.ZAT_TEST_PDS }}
+        run: node scripts/check-live-playback.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-playback
+          path: /tmp/plyr-live-playback
+          if-no-files-found: ignore
