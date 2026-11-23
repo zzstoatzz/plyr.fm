@@ -10,7 +10,6 @@ const upload_admission = @import("../uploads/admission.zig");
 const download_authorization = @import("../downloads/authorization.zig");
 const PostgresRestrictions = @import("../space/postgres_restrictions.zig").PostgresRestrictions;
 const upload_inspection = @import("../uploads/inspection.zig");
-const owner_audio = @import("../uploads/owner_audio.zig");
 const tickets = @import("../jams/tickets.zig");
 const config = @import("../../config.zig");
 const telemetry = @import("../telemetry.zig");
@@ -418,19 +417,8 @@ const Handler = struct {
             return http(conn, a, 200, response, origin);
         }
         if (std.mem.eql(u8, url, "/v1/playback/owner-audio")) {
-            if (!std.mem.eql(u8, method, "POST") or body.len > 8192) return http(conn, a, 400, "{}", origin);
-            const upload_settings = context.upload_settings orelse return http(conn, a, 503, "{}", origin);
-            const records = context.records orelse return http(conn, a, 503, "{}", origin);
-            const response = owner_audio.authorize(a, context.io, upload_settings, records.pool, body) catch |err| {
-                traced.failed(err);
-                return http(conn, a, switch (err) {
-                    error.InvalidRequest => 400,
-                    error.InvalidIdentity, error.NotOwner => 403,
-                    error.NotFound => 404,
-                    else => 503,
-                }, "{}", origin);
-            };
-            return http(conn, a, 200, response, origin);
+            const status, const value = @import("../uploads/owner_audio.zig").answer(a, context.io, context.upload_settings, if (context.records) |records| records.pool else null, method, body);
+            return http(conn, a, status, value, origin);
         }
         const upload_authorize = std.mem.eql(u8, url, "/v1/uploads/authorize");
         const upload_inspect = std.mem.eql(u8, url, "/internal/uploads/inspect");

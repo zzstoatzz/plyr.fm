@@ -33,6 +33,21 @@ pub fn fileId(owner: []const u8, record_uri: []const u8, collection: []const u8,
     return id;
 }
 
+/// The coordinator's reply to `POST /v1/playback/owner-audio`: a status and its body.
+pub fn answer(a: std.mem.Allocator, io: std.Io, settings: ?admission.Settings, pool: ?*pg.Pool, method: []const u8, body: []const u8) struct { u16, []const u8 } {
+    if (!std.mem.eql(u8, method, "POST") or body.len > 8192) return .{ 400, "{}" };
+    const value = authorize(a, io, settings orelse return .{ 503, "{}" }, pool orelse return .{ 503, "{}" }, body) catch |err| {
+        std.log.info("owner audio refused: {s}", .{@errorName(err)});
+        return .{ switch (err) {
+            error.InvalidRequest => 400,
+            error.InvalidIdentity, error.NotOwner => 403,
+            error.NotFound => 404,
+            else => 503,
+        }, "{}" };
+    };
+    return .{ 200, value };
+}
+
 pub fn authorize(a: std.mem.Allocator, io: std.Io, settings: admission.Settings, pool: *pg.Pool, body: []const u8) ![]const u8 {
     const span = logfire.span("playback.owner_audio", .{});
     defer span.end();

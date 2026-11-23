@@ -210,3 +210,7 @@ pub fn authorizedInternal(header: []const u8, secret: []const u8) bool {
 fn env(key: [:0]const u8) ?[]const u8 {
     return if (std.c.getenv(key)) |value| std.mem.span(value) else null;
 }
+
+test {
+    _ = @import("owner_audio.zig");
+}
