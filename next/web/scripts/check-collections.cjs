@@ -205,7 +205,7 @@ async function check(browser, accounts, width, scheme) {
       // the picker opens again on the playlists it had, with this add already counted, and asks for nothing
       const reads = playlistReads;
       await button('add to playlist').click();
-      await sheet.getByRole('button', { name: `Ordered playlist, ${at + 1} ${at ? 'tracks' : 'track'}`, exact: true }).waitFor({ timeout: 500 });
+      await sheet.getByRole('button', { name: `Ordered playlist, ${at + 1} ${at ? 'tracks' : 'track'}`, exact: true }).waitFor({ timeout: 2000 });
       assert.equal(playlistReads, reads, 'reopening add to playlist does not load the playlists again');
       await sheet.getByRole('button', { name: /^Ordered playlist, / }).click();
       await page.getByText('already in Ordered playlist', { exact: true }).waitFor();

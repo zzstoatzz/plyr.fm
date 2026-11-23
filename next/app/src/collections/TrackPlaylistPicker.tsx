@@ -64,10 +64,13 @@ export function TrackPlaylistPicker({ track, done }: { track: Track; done: () =>
     if (!label || blocked) return;
     try {
       const result = await pds.createPlaylist(label, track);
-      if (auth.did) ownPlaylists.created(auth.did, result.uri, label, track);
+      const made = () => { if (auth.did && (result.status === 'indexed' || result.status === 'pending')) ownPlaylists.created(auth.did, result.uri, label, track); };
+      made();
       if (!current() || result.status !== 'indexed') return;
       const accepted = (await recovery.refresh()).find(operation => operation.uri === result.uri && operation.cid);
       if (accepted) await pds.dismissCreate(accepted).catch(() => {});
+      // Dismissing settles the record once more, which counts as a change; this one is already in the list.
+      made();
       if (current()) announce(label, 'indexed', playlistIdFromUri(result.uri), true);
     } finally { if (current()) await recovery.refresh(); }
   });

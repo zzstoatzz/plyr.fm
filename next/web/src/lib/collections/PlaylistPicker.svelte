@@ -73,13 +73,16 @@
     error = '';
     try {
       const result = await pds.createPlaylist(label, track);
-      if (did) ownPlaylists.created(did, result.uri, label, track);
+      const made = () => { if (did && (result.status === 'indexed' || result.status === 'pending')) ownPlaylists.created(did, result.uri, label, track); };
+      made();
       if (!current()) return;
       await journal.refresh();
       if (!current()) return;
       if (result.status !== 'indexed') return;
       const accepted = journal.view.operations.find(operation => operation.uri === result.uri && operation.cid);
       if (accepted) await pds.dismissCreate(accepted).catch(() => {});
+      // Dismissing settles the record once more, which counts as a change; this one is already in the list.
+      made();
       if (current()) announce(label, 'indexed', playlistIdFromUri(result.uri), true);
     } catch (failure) {
       if (!current()) return;

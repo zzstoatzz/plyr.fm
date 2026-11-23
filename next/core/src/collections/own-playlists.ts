@@ -1,12 +1,15 @@
 import type { ListSummary, Page, Track } from '../api.ts';
-import { trackArtwork } from '../artwork.ts';
 import { playlistIdFromUri } from '../record-ids.ts';
 
 export interface OwnPlaylistsView { data: readonly ListSummary[]; cursor?: string; loading: boolean; error?: string }
 
 type Entry = OwnPlaylistsView & { at: number; revision: number; request: number; busy: boolean };
+let requests = 0;
 
 const empty: OwnPlaylistsView = { data: [], loading: true };
+
+/** What the catalog would show as the cover: the track's own image, never its artist's avatar. */
+const cover = (track: Track) => track.media?.artwork?.url ? { url: track.media.artwork.url } : null;
 
 /**
  * The signed-in account's playlists, for the "add to playlist" picker, kept for the session so the
@@ -32,14 +35,16 @@ export function createOwnPlaylists(options: {
 
   async function load(did: string, cursor?: string) {
     const entry = entries.get(did)!;
-    const request = entry.request + 1;
+    const request = ++requests;
     const revision = options.revision(did);
     // A first load shows that it is loading; checking again behind a list it already has does not.
     patch(did, { request, busy: true, loading: !entry.data.length || !!cursor, error: undefined });
     try {
       const page = await options.fetch(did, cursor);
       if (entries.get(did)?.request !== request) return;
-      const data = cursor ? [...entries.get(did)!.data, ...page.data] : page.data;
+      const had = entries.get(did)!.data;
+      // A playlist made here can come back on a later page too (its date is the device's), so it is never listed twice.
+      const data = cursor ? [...had, ...page.data.filter(list => !had.some(item => item.record.uri === list.record.uri))] : page.data;
       patch(did, { data, cursor: page.has_more ? page.next_cursor ?? undefined : undefined, loading: false, busy: false, at: cursor ? entries.get(did)!.at : now(), revision });
     } catch (failure) {
       if (entries.get(did)?.request !== request) return;
@@ -79,18 +84,17 @@ export function createOwnPlaylists(options: {
     added(did: string, uri: string, track: Track) {
       edit(did, data => data.map(list => list.record.uri !== uri ? list : {
         ...list,
-        media: list.media?.artwork ? list.media : { artwork: trackArtwork(track) ? { url: trackArtwork(track)! } : null },
+        media: list.media?.artwork ? list.media : { artwork: cover(track) },
         metrics: { ...list.metrics, member_count: list.metrics.member_count + 1, available_count: list.metrics.available_count + 1 }
       }));
     },
     /** A new playlist with this track in it goes to the top. */
     created(did: string, uri: string, name: string, track: Track) {
       const [, , collection = '', rkey = ''] = /^at:\/\/([^/]+)\/([^/]+)\/([^/]+)$/.exec(uri) ?? [];
-      const art = trackArtwork(track);
       const list: ListSummary = {
         object: 'playlist', id: playlistIdFromUri(uri), record: { uri, cid: '', collection, rkey },
         metadata: { name, created_at: new Date(now()).toISOString(), updated_at: null },
-        owner: { did, profile: null }, media: { artwork: art ? { url: art } : null },
+        owner: { did, profile: null }, media: { artwork: cover(track) },
         metrics: { member_count: 1, available_count: 1, total_plays: 0 }
       };
       edit(did, data => [list, ...data.filter(item => item.record.uri !== uri)]);

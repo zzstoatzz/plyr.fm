@@ -77,3 +77,35 @@ test('more appends the next page', async () => {
   assert.deepEqual(store.snapshot(did).data.map(item => item.id), ['p1', 'p2', 'p3']);
   assert.equal(store.snapshot(did).cursor, undefined);
 });
+
+test('a failed first load shows the error and retry starts over; forget drops everything', async () => {
+  const { store, calls, failing } = setup();
+  failing(true);
+  store.open(did);
+  await tick();
+  assert.equal(store.snapshot(did).error, 'down');
+  failing(false);
+  store.retry(did);
+  await tick();
+  assert.equal(calls(), 2);
+  assert.equal(store.snapshot(did).data.length, 2);
+  store.forget();
+  assert.equal(store.snapshot(did).loading, true);
+  assert.equal(store.snapshot(did).data.length, 0);
+});
+
+test('a playlist made here is not listed twice when a later page brings it back', async () => {
+  let page = 0;
+  const made = `at://${did}/fm.plyr.list/3`;
+  const store = createOwnPlaylists({
+    fetch: async (_did, cursor) => { page++; return cursor ? { object: 'list', data: [list(3)], has_more: false } : { object: 'list', data: [list(1)], has_more: true, next_cursor: 'n' }; },
+    revision: () => 0
+  });
+  store.open(did);
+  await tick();
+  store.created(did, made, 'list 3', track);
+  store.more(did);
+  await tick();
+  assert.equal(page, 2);
+  assert.deepEqual(store.snapshot(did).data.map(item => item.record.uri).filter(uri => uri === made).length, 1);
+});
