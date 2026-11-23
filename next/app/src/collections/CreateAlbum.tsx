@@ -20,6 +20,7 @@ import { CheckRow, FieldError, FormCard, SwitchRow } from '../publishing/UploadP
 import { useUploadQueue } from '../publishing/upload-queue';
 import { albumProgress, albumUploadCover, finishedAlbum, savedAlbumUpload, startAlbumUpload, subscribeAlbumUploads, type AlbumProgress, type AlbumTrack } from '../publishing/album-uploads';
 import { normalizeTrackTags } from '@plyr/next-core/publishing/track-tags';
+import { albumTitles } from '@plyr/next-core/publishing/album-titles';
 import { AlbumTracks, OwnTrackSearch } from './AlbumTracks';
 
 export default function CreateAlbum() {
@@ -69,13 +70,11 @@ function NewAlbum({ auth, did }: { auth: Auth; did: string }) {
 /** Files in name order, titled by name; a shared "01 " style prefix is dropped since the order already says it. */
 function albumTracks(files: MediaFile[]): AlbumTrack[] {
   const sorted = [...files].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-  const bare = sorted.map(file => file.name.replace(/\.[^.]+$/, '').trim());
-  const numbered = /^\d{1,3}\s*[-–.)_]?\s+\S/;
-  const strip = bare.length > 1 && bare.every(name => numbered.test(name));
+  const titles = albumTitles(sorted.map(file => file.name));
   return sorted.map((file, index) => ({
     key: `${file.uri ?? file.name}:${index}:${Date.now()}`,
     file: retype(file, canonicalAudioType(file)),
-    title: ((strip ? bare[index].replace(/^\d{1,3}\s*[-–.)_]?\s+/, '') : bare[index]) || file.name).slice(0, 256),
+    title: titles[index],
     explicit: false, features: []
   }));
 }

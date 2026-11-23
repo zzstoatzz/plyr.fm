@@ -10,6 +10,7 @@
   import { normalizeTrackTags } from '@plyr/next-core/publishing/track-tags';
   import { albumName } from '@plyr/next-core/collections/album-membership';
   import type { AlbumUploadPlan, AlbumUploadSlot } from '@plyr/next-core/publishing/album-upload-plan';
+  import { albumTitles } from '@plyr/next-core/publishing/album-titles';
   import { creditName } from '@plyr/next-core/publishing/credit-name';
   import { draftInRecovery, queuedUploadDraft, reattachQueuedUpload } from '@plyr/next-core/publishing/queued-upload-draft';
   import { RepoResponseError } from '@plyr/next-core/publishing/repo-rpc';
@@ -211,12 +212,11 @@
   }
 
   function addFiles(list: File[]) {
-    const additions: Selected[] = [];
-    const rejected: string[] = [];
-    for (const file of list) {
+    const additions: Selected[] = [], rejected: string[] = [];
+    const titles = albumTitles(list.map(file => file.name));
+    for (const [index, file] of list.entries()) {
       try {
-        const audio = canonicalAudioFile(file);
-        additions.push({ key: crypto.randomUUID(), file: audio, title: file.name.replace(/\.[^.]+$/, '').trim().slice(0, 256) || file.name.slice(0, 256), explicit: false, features: [], open: false });
+        additions.push({ key: crypto.randomUUID(), file: canonicalAudioFile(file), title: titles[index], explicit: false, features: [], open: false });
       } catch (failure) { rejected.push(`${file.name}: ${message(failure, 'could not open the file.')}`); }
     }
     if (selections.length + additions.length > 500) {

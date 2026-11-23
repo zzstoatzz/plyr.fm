@@ -11,7 +11,7 @@
   import { collectionJournal } from './CollectionJournal.svelte.ts';
   import OrderRows from './OrderRows.svelte';
 
-  let { account }: { account: ReturnType<typeof auth.getAuth> & { did: string } } = $props();
+  let { account, back }: { account: ReturnType<typeof auth.getAuth> & { did: string }; back?: () => void } = $props();
   const pds = untrack(() => createPds(account));
   const organization = untrack(() => pds.albumOrganization());
   let live = false;
@@ -71,8 +71,9 @@
     {#if error}<p role="alert">{error}</p>{/if}
     <div class="editor-actions">
       <button type="submit" class="text-button editor-save" disabled={blocked || imagePending || !name.trim() || !entries.length}>
-        {busy ? 'creating…' : 'create album'}
+        {busy ? 'creating…' : 'make the album'}
       </button>
+      {#if back}<button type="button" class="text-button" onclick={back} disabled={busy}>upload files instead</button>{/if}
     </div>
   </form>
   <AlbumTrackPicker did={account.did} {selected} disabled={blocked || entries.length >= 500} add={track => { entries = [...entries, track]; }} />
