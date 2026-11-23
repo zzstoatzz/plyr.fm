@@ -20,9 +20,12 @@ try {
     const page = await browser.newPage({ viewport: { width, height }, colorScheme: 'dark' });
     await page.goto(site + '/radio/deep-cuts');
     await page.waitForFunction(() => document.title === 'deep cuts radio · plyr.fm', null, { timeout: 20_000 });
-    await page.getByRole('button', { name: 'listen', exact: true }).first().waitFor();
+    const now = page.getByRole('dialog', { name: 'Now playing' });
+    await now.getByText('live · deep cuts radio', { exact: true }).waitFor();
+    await now.getByRole('button', { name: 'Listen live', exact: true }).first().waitFor();
+    await page.waitForTimeout(700);
     await page.screenshot({ path: path.join(output, `radio-link-${width}.png`) });
-    console.log(`${width}: /radio/deep-cuts opens deep cuts and waits for a tap`);
+    console.log(`${width}: /radio/deep-cuts opens deep cuts in now playing and waits for a tap`);
     await page.close();
   }
 
@@ -37,7 +40,7 @@ try {
       HTMLMediaElement.prototype.play = function () { if (!window.media.includes(this)) window.media.push(this); return play.call(this); };
     });
     await page.goto(site + '/radio/firehose');
-    await page.getByRole('button', { name: 'listen', exact: true }).first().click();
+    await page.getByRole('dialog', { name: 'Now playing' }).getByRole('button', { name: 'Listen live', exact: true }).first().click();
     await page.waitForFunction(() => window.media.some(media => !media.paused && media.currentTime > 1), null, { timeout: 30_000 });
     // a station read every 30s: two minutes spans several, which is where next used to drop the stream
     let last = 0, stalled = 0, longest = 0;

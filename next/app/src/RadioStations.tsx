@@ -1,14 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Image, PixelRatio, Pressable, StyleSheet, View, } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { useAppearance } from './appearance';
 import { displayUrl } from '@plyr/next-core/artwork';
 import { Cover } from './CatalogPieces';
 import { useLocalSearchParams } from 'expo-router';
-import { Action, Copy, InlineLink, Page } from './controls';
+import { Copy, InlineLink, Page } from './controls';
 import { playerSheet } from './player-sheet';
-import { radioStationBySlug, radioStationPath, radioStations, type RadioStation } from '@plyr/next-core/radio';
-import { shareLink } from './ShareLink';
+import { radioStationBySlug, radioStations, type RadioStation } from '@plyr/next-core/radio';
+import { usePlayback } from './playback-context';
 import { useRadio } from './radio-session';
 import { Text } from './Text';
 import { useRadioFeed } from './use-radio-feed';
@@ -20,7 +20,7 @@ const tiled = radioStations.filter(station => station !== featured);
 export default function RadioStations() {
   const radio = useRadio();
   const theme = useAppearance();
-  // `/radio/{station}` is a station's shareable link; it waits for a tap, since tuning in starts audio
+  // `/radio/{station}` is a station's shareable link: it goes straight to that station in now playing
   const linked = radioStationBySlug(useLocalSearchParams<{ station?: string }>().station);
   const [frame, setFrame] = useState(0);
   const [opening, setOpening] = useState<RadioStation | null>(null);
@@ -37,16 +37,19 @@ export default function RadioStations() {
     radio.tune(station);
     setOpening(station);
   };
+  // once per link, and never over something already playing: the lineup is still there to pick it from
+  const solo = usePlayback();
+  const followed = useRef<RadioStation | null>(null);
+  useEffect(() => {
+    if (!linked || followed.current === linked) return;
+    followed.current = linked;
+    if (radio.station === linked || !(solo.status.playing || radio.listening)) listen(linked);
+  });
   const tile = (station: RadioStation, tileWidth: number, tileHeight: number) => <StationWindow key={station.slug} station={station}
-    width={tileWidth} height={tileHeight} tuned={radio.station === station || station === linked} listening={radio.station === station && radio.listening} onPress={() => listen(station)} />;
+    width={tileWidth} height={tileHeight} tuned={radio.station === station} listening={radio.station === station && radio.listening} onPress={() => listen(station)} />;
   const small = { color: theme.muted, fontFamily: theme.fontFamily, fontSize: 13 * theme.scale, lineHeight: 20 * theme.scale };
   return <Page title="radio">
     <Copy>always on. pick a station and listen along with everyone else.</Copy>
-    {linked && <View testID="radio-linked" style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-      <Text style={{ color: theme.text, fontFamily: theme.fontFamily, fontWeight: '700', fontSize: 17 * theme.scale, flexGrow: 1 }}>{linked.label} radio</Text>
-      {!(radio.station === linked && radio.listening) && <Action primary label="listen" onPress={() => listen(linked)} />}
-      <Action label="share" onPress={() => void shareLink(radioStationPath(linked))} />
-    </View>}
     <View testID="radio-stations" onLayout={event => setFrame(event.nativeEvent.layout.width)} style={{ flexDirection: 'row', flexWrap: 'wrap', gap }}>
       {size > 0 && tiled.map(station => tile(station, size, size))}
       {size > 0 && tile(featured, frame, Math.round(Math.min(size, 180) * 0.75))}

@@ -1,47 +1,33 @@
 <script lang="ts">
-  import { radioStationPath, radioStations } from '@plyr/next-core/radio';
+  import { untrack } from 'svelte';
+  import { radioStations } from '@plyr/next-core/radio';
   import StationCard from '$lib/radio/StationCard.svelte';
   import { tuneRadio } from '$lib/radio/station';
   import { player } from '$lib/player.svelte';
-  import Icon from '$lib/ui/Icon.svelte';
   import type { PageProps } from './$types';
 
   let { data }: PageProps = $props();
   let linked = $derived(data.station);
-  let copied = $state(false);
 
-  async function share() {
-    if (!linked) return;
-    const url = new URL(radioStationPath(linked), location.origin).href;
-    try {
-      if (navigator.share) await navigator.share({ title: `${linked.label} radio`, url });
-      else {
-        await navigator.clipboard.writeText(url);
-        copied = true;
-      }
-    } catch {}
-  }
+  // A station link goes straight to that station in now playing, tuned in paused: browsers only start audio on a tap,
+  // and whatever the visitor already has playing keeps playing until they choose the station.
+  $effect(() => {
+    const station = linked;
+    if (!station) return;
+    // once per link: closing the sheet, or playing and pausing later, must not open it again
+    untrack(() => {
+      if (player.liveStation === station) player.openNowPlaying();
+      else if (!player.playing) tuneRadio(station, () => player.openNowPlaying(), false);
+    });
+  });
 </script>
 
 <svelte:head><title>{linked ? `${linked.label} radio · plyr.fm` : 'radio · plyr.fm'}</title></svelte:head>
 <section class="page-content radio">
   <h1>radio</h1>
   <p class="state">always on. pick a station and listen along with everyone else.</p>
-  {#if linked}
-    <div class="linked" data-testid="radio-linked">
-      <strong>{linked.label} radio</strong>
-      <div class="actions">
-        {#if player.liveStation !== linked || !player.liveListening}
-          <button type="button" class="hero-pill primary" onclick={event => tuneRadio(linked, () => player.openNowPlaying(event.detail === 0))}>
-            <Icon name="play" size={18} />listen
-          </button>
-        {/if}
-        <button type="button" class="hero-pill" onclick={share}><Icon name="share" size={18} />{copied ? 'link copied' : 'share'}</button>
-      </div>
-    </div>
-  {/if}
   <div data-testid="radio-stations" class="stations">
-    {#each radioStations as station (station.slug)}<StationCard {station} linked={station === linked} />{/each}
+    {#each radioStations as station (station.slug)}<StationCard {station} />{/each}
   </div>
   {#if player.liveStation}
     {#if player.error}<p role="status" class="state">{player.error}</p>{/if}
@@ -60,9 +46,6 @@
 
 <style>
   .radio { max-width: 64rem; }
-  .linked { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; margin-block: 0 1rem; padding: 0.75rem 0.9rem; border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--line)); border-radius: 0.75rem; background: var(--surface); }
-  .linked strong { font-size: var(--t-16-8); }
-  .actions { display: flex; gap: 0.5rem; }
   .stations { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.9rem; }
   details { margin-block: 1.3rem 0.8rem; border-block: 1px solid var(--line); }
   summary { cursor: pointer; padding-block: 0.85rem; }

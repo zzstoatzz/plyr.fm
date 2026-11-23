@@ -93,6 +93,7 @@
 		};
 	}
 
+	let copied = $state(false);
 	async function shareTrack() {
 		if (!player.current) return;
 		// on the radio the station is what's shared: the song changes, the station keeps playing
@@ -100,7 +101,11 @@
 		const url = new URL(station ? radioStationPath(station) : trackHref(player.current), location.origin).href;
 		try {
 			if (navigator.share) await navigator.share({ title: station ? `${station.label} radio` : player.current.metadata.title, url });
-			else await navigator.clipboard.writeText(url);
+			else {
+				await navigator.clipboard.writeText(url);
+				copied = true;
+				setTimeout(() => { copied = false; }, 2000);
+			}
 		} catch {}
 	}
 </script>
@@ -122,7 +127,7 @@
 					<button type="button" class="icon-button" aria-label={playing ? 'Pause' : player.liveStation ? 'Listen live' : 'Play'} onclick={() => player.toggle()}><Icon name={playing ? 'pause' : 'play'} size={18} /></button>
 				</div>
 			{:else}<span>{player.liveStation ? `live · ${player.liveStation.label} radio` : 'now playing'}</span>{/if}
-			{#if !player.liveStation}<a href={resolve('/(app)/queue')} class="icon-button" aria-label="Queue"><Icon name="queue" /></a>{:else}<button class="icon-button" type="button" aria-label="Share station" onclick={shareTrack}><Icon name="share" /></button>{/if}
+			{#if !player.liveStation}<a href={resolve('/(app)/queue')} class="icon-button" aria-label="Queue"><Icon name="queue" /></a>{:else}<span></span>{/if}
 		</header>
 		<div class="hero" data-testid="now-playing-hero">
 			<div class="artwork-frame">
@@ -159,7 +164,12 @@
 				{/if}
 				</div>
 				{#if player.error}<p class="state" role="status">{player.error}</p>{:else if player.preparing}<p class="state" role="status">preparing…</p>{/if}
-				{#if player.liveStation}<button class="text-button stop" onclick={() => { player.stopRadio(); close?.(); }}>leave radio</button>{/if}
+				{#if player.liveStation}
+					<div class="radio-actions">
+						<button class="hero-pill" type="button" onclick={shareTrack}><Icon name="share" size={18} />{copied ? 'link copied' : 'share station'}</button>
+						<button class="hero-pill" type="button" onclick={() => { player.stopRadio(); close?.(); }}>leave radio</button>
+					</div>
+				{/if}
 			</div>
 			{#if close && !player.liveStation && !player.privateMode}
 				<div class="hint-slot" class:seen={moreBelow.seen} inert={moreBelow.seen}>
@@ -237,7 +247,7 @@
 	.commands :global(.transport) { width: 100%; justify-content: space-evenly; }
 	.commands :global(.toggle) { width: 4.5rem; height: 4.5rem; box-shadow: 0 0.45rem 1.4rem color-mix(in srgb, var(--accent) 24%, transparent); }
 	.commands.live { justify-content: center; }
-	.stop { display: flex; margin-inline: auto; }
+	.radio-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.6rem; }
 	.options { justify-content: center; }
 	.composer { margin-block: 0.75rem; }
 	.composer:not(:has(*)) { display: none; }
