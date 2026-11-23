@@ -25,6 +25,10 @@
 	import { isOpen } from '@plyr/next-core/access/policy';
 	import { offerFor, offerLabel, supportLink } from '@plyr/next-core/selling';
 	import type { Artist } from '@plyr/next-core/api';
+	import TrackMock from './TrackMock.svelte';
+	import AccessMock from './AccessMock.svelte';
+	let mock = $state<'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'access' | ''>('');
+	onMount(() => { mock = (localStorage.getItem('plyr-mock:track') ?? '') as typeof mock; });
 	let { track, ownerActions, playTrack = player.play.bind(player) }: { track: Track; ownerActions?: Snippet; playTrack?: (track: Track) => void } = $props();
 	const context = $derived(tracksContext([track]));
 	const playState = $derived(contextState(context));
@@ -111,6 +115,7 @@
 
 <svelte:head><title>{track.metadata.title} · plyr.fm</title></svelte:head>
 
+{#if mock === 'access'}<AccessMock {track} />{:else if mock}<TrackMock {track} variant={mock} />{:else}
 <header class="mobile-header">
 	<a href={resolve('/')} aria-label="plyr.fm home"><span aria-hidden="true">✻</span> plyr.fm</a>
 	<a class="icon-button" href={resolve('/(app)/search')} aria-label="Search"><Icon name="search" /></a>
@@ -196,6 +201,7 @@
 		</dialog>
 	{/if}
 {/key}
+{/if}
 
 <style>
 	.mobile-header { display: none; }
