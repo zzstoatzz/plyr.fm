@@ -726,10 +726,10 @@ const artist_query = pagedQuery(artist_policy ++ track_tag_sql.filter, "$6::bigi
 /// newest. Rows carry their tags so a client can show why each one is there. The cursor stays
 /// (created_at, uri); its track's tag count is looked up again, and a track that is gone
 /// counts as carrying every tag, so the next page repeats rows rather than skips them.
-const ranked_hits = track_tag_sql.hits("v.record_uri", "v.record_cid");
+const tag_rank = track_tag_sql.hits("v.record_uri", "v.record_cid");
 const ranked_order = "ORDER BY page.hits DESC, v.record_created_at_us DESC, v.record_uri DESC";
 fn rankedQuery(comptime filter: []const u8, comptime limit: []const u8) []const u8 {
-    return "WITH page AS MATERIALIZED (\nSELECT v.record_uri, " ++ ranked_hits ++ " AS hits\n" ++ page_from ++
+    return "WITH page AS MATERIALIZED (\nSELECT v.record_uri, " ++ tag_rank ++ " AS hits\n" ++ page_from ++
         "\nWHERE v.record_created_at_us IS NOT NULL\n" ++ filter ++
         "\nORDER BY hits DESC, v.record_created_at_us DESC, v.record_uri DESC\nLIMIT " ++ limit ++ "\n)\nSELECT\n" ++
         projected_columns ++ ",\n" ++ track_tag_sql.detail_tags ++
@@ -738,7 +738,7 @@ fn rankedQuery(comptime filter: []const u8, comptime limit: []const u8) []const 
 }
 const ranked_filter = discovery_policy ++ track_tag_sql.filter ++ track_tag_sql.hidden_filter;
 const ranked_query = rankedQuery(ranked_filter, "$6::bigint");
-const ranked_after_query = rankedQuery(ranked_filter ++ "\n  AND (" ++ ranked_hits ++ ", v.record_created_at_us, v.record_uri) < (" ++
+const ranked_after_query = rankedQuery(ranked_filter ++ "\n  AND (" ++ tag_rank ++ ", v.record_created_at_us, v.record_uri) < (" ++
     "COALESCE((SELECT " ++ track_tag_sql.hits("cursor_track.record_uri", "cursor_track.record_cid") ++
     " FROM plyr_index.track_records AS cursor_track WHERE cursor_track.record_uri = $7), cardinality($4::text[])), $6::bigint, $7)", "$8::bigint");
 const artist_after_query = pagedQuery(artist_policy ++ track_tag_sql.filter ++ afterCursor("$6", "$7"), "$8::bigint");
