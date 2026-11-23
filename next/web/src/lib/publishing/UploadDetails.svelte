@@ -2,8 +2,8 @@
   import type { FeaturedArtist } from '@plyr/next-core/pds';
   import FeatureInput from './FeatureInput.svelte';
   import TagInput from './TagInput.svelte';
-  let { album = $bindable(''), tags = $bindable(''), description = $bindable(''), autoTag = $bindable(false), features = $bindable([]), explicit = $bindable(false), owner, tagProblem, onlyYou = false }: {
-    album: string; tags: string; description: string; autoTag: boolean; features: FeaturedArtist[]; explicit: boolean; owner?: string; tagProblem: string;
+  let { tags = $bindable(''), description = $bindable(''), autoTag = $bindable(false), features = $bindable([]), explicit = $bindable(false), owner, tagProblem, onlyYou = false }: {
+    tags: string; description: string; autoTag: boolean; features: FeaturedArtist[]; explicit: boolean; owner?: string; tagProblem: string;
     /** an only-you track keeps title, cover, description and tags; the rest waits until others can listen */
     onlyYou?: boolean;
   } = $props();
@@ -12,12 +12,11 @@
 <div class="details">
   <div class="card">
     {#if !onlyYou}
-      <label class="field"><span>album</span><input bind:value={album} maxlength="256" placeholder="optional" /></label>
       <FeatureInput bind:value={features} {owner} />
     {/if}
     <TagInput bind:value={tags} />
     {#if tagProblem}<p class="problem" role="alert">{tagProblem}</p>{/if}
-    {#if onlyYou}<p class="subtle note">album, featuring, auto-tag and explicit apply once someone else can listen.</p>{:else}
+    {#if onlyYou}<p class="subtle note">featuring, auto-tag and explicit apply once someone else can listen.</p>{:else}
     <label class="switch">
       <span><b>auto-tag with recommended genres</b><small>we listen once it's up and add a few genre tags. you can remove them later.</small></span>
       <input type="checkbox" role="switch" bind:checked={autoTag} />

@@ -3,7 +3,7 @@ import { repoOk as ok, getRecord, type RepoRpc } from '../publishing/repo-rpc.ts
 import type { CreateHandoff } from '../publishing/create-operation';
 import type { MediaFile } from '../publishing/private-music';
 import type { Track, AwaitStatus } from '../api';
-import type { CollectionItem, CollectionRevision } from './collection-order.ts';
+import { CollectionOrderConflict, type CollectionItem, type CollectionRevision } from './collection-order.ts';
 import type { collectionOrdering } from './collection-order-pds';
 import { albumName, albumMembership, type AlbumEntry } from './album-membership.ts';
 
@@ -34,7 +34,7 @@ export function albumPublishing({ rpc, did, trackCollection, assertSession, orde
     const result = await readTrack(uri);
     if (!result) return null;
     const { value, cid } = result;
-    if (value.$type !== trackCollection || (value.visibility !== undefined && value.visibility !== 'public')
+    if (value.$type !== trackCollection || (value.visibility !== undefined && value.visibility !== 'public' && value.visibility !== 'unlisted')
       || value.audioSpace || value.supportGate) {
       throw new Error('choose one of your published tracks.');
     }
@@ -91,5 +91,17 @@ export function albumPublishing({ rpc, did, trackCollection, assertSession, orde
     const items = albumMembership(revision, entries, additions);
     return ordering.write(revision, items, name, cover);
   }
-  return { ...ordering, create, createFromUploads, readUpload, save };
+  /** put a just-published track at the end of one of the artist's albums; a second call changes nothing */
+  async function appendUpload(albumUri: string, trackUri: string) {
+    for (let attempt = 0; ; attempt++) {
+      const revision = await ordering.read(albumUri);
+      if (revision.value.items.some(item => item.subject.uri === trackUri)) return;
+      if (revision.value.items.length >= 500) throw new Error('albums hold at most 500 tracks.');
+      const subject = await readUpload(trackUri);
+      if (!subject) throw new Error('could not find the new track.');
+      try { return await ordering.write(revision, [...revision.value.items, { subject }]); }
+      catch (failure) { if (!(failure instanceof CollectionOrderConflict) || attempt) throw failure; }
+    }
+  }
+  return { ...ordering, create, createFromUploads, readUpload, save, appendUpload };
 }

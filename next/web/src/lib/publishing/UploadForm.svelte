@@ -41,13 +41,16 @@
   import Icon from '$lib/ui/Icon.svelte';
   import Loading from '$lib/ui/Loading.svelte';
   import AudioPreview from './AudioPreview.svelte';
+  import AlbumChoice, { type AlbumPick } from './AlbumChoice.svelte';
+  import UploadDone from './UploadDone.svelte';
   import UploadDetails from './UploadDetails.svelte';
   import UploadJobs from './UploadJobs.svelte';
   import CreateRecovery from './CreateRecovery.svelte';
   import LargeUpload from './LargeUpload.svelte';
   import QueuedUpload from './QueuedUpload.svelte';
 
-  let { account, startOnlyYou = false }: { account: ReturnType<typeof auth.getAuth>; startOnlyYou?: boolean } = $props();
+  // several files at once become an album, which the page shows instead of this form
+  let { account, startOnlyYou = false, onAlbum }: { account: ReturnType<typeof auth.getAuth>; startOnlyYou?: boolean; onAlbum?: (files: File[], cover?: File) => void } = $props();
   let submitting = $state(false);
   let audio = $state<File>();
   let cover = $state<File>();
@@ -81,9 +84,15 @@
   let coverInput = $state<HTMLInputElement>();
   let autoTitle = $state('');
   let album = $state('');
+  let albums = $state.raw<AlbumPick[]>([]);
+  let target = $state<AlbumPick>();
+  let savedTarget = '';
+  let dropTarget = $state<string>();
+  let pickInto: AlbumPick | undefined;
+  let finished = $state<{ jobId: string; title: string; cover?: File; joined?: AlbumPick }>();
   let consent = $state(false);
   let autoTag = $state(false);
-  let editorDraft = $derived(JSON.stringify({ title, album, description, tags, autoTag, features, explicit, access, options, named: !!title && title === autoTitle }));
+  let editorDraft = $derived(JSON.stringify({ title, album, albumUri: target?.uri, description, tags, autoTag, features, explicit, access, options, named: !!title && title === autoTitle }));
   let reattach = $state(false);
   let imageBusy = $state(false);
   let imageVersion = 0;
@@ -126,15 +135,47 @@
     return file.type.startsWith('image/') || /\.(heic|heif|jpe?g|png|webp|gif|avif)$/i.test(file.name);
   }
 
-  function drop(event: DragEvent) {
+  function drop(event: DragEvent, into?: AlbumPick) {
     event.preventDefault();
     dragging = false;
+    dropTarget = undefined;
     if (!hydrated || submitting) return;
     const files = [...(event.dataTransfer?.files ?? [])];
     const image = files.find(isImage);
-    const sound = files.find(file => file !== image);
-    if (sound) pickAudio(sound);
+    const sounds = files.filter(file => file !== image);
+    if (sounds.length > 1 && !editing && !into && onAlbum) return onAlbum(sounds, image);
+    if (sounds.length > 1 && into) { audioProblem = `add one track at a time to ${into.name}.`; return; }
+    if (sounds[0]) { if (into) chooseAlbum(into); pickAudio(sounds[0]); }
     if (image) void pickCover(image);
+  }
+
+  // a tap on an album cover opens the same picker; every other opener clears it so a cancelled pick can't linger
+  function openPicker(into?: AlbumPick) {
+    pickInto = into;
+    audioInput?.click();
+  }
+
+  function chooseFiles(input: HTMLInputElement) {
+    const files = [...(input.files ?? [])];
+    const into = pickInto;
+    pickInto = undefined;
+    if (files.length > 1 && !editing && !into && onAlbum) {
+      input.value = '';
+      return onAlbum(files);
+    }
+    if (files.length > 1 && into) {
+      input.value = '';
+      audioProblem = `add one track at a time to ${into.name}.`;
+      return;
+    }
+    if (files[0] && into) chooseAlbum(into);
+    pickAudio(files[0]);
+  }
+
+  function chooseAlbum(pick: AlbumPick) {
+    target = pick;
+    album = pick.name;
+    finished = undefined;
   }
 
   function message(failure: unknown, fallback: string) {
@@ -158,6 +199,8 @@
       title = draftField(draft, 'title');
       if (draft && typeof draft === 'object' && 'named' in draft && draft.named === true) autoTitle = title;
       album = draftField(draft, 'album');
+      savedTarget = draftField(draft, 'albumUri');
+      target = albums.find(pick => pick.uri === savedTarget);
       description = draftField(draft, 'description');
       tags = draftField(draft, 'tags');
       if (draft && typeof draft === 'object') {
@@ -186,11 +229,17 @@
       profileAvatar = profile.avatar_url ?? undefined;
     }, () => {});
 
-    let finished = '';
+    if (owner) void api.albums(owner, { limit: 50 }).then(page => {
+      if (!current()) return;
+      albums = page.data.map(item => ({ uri: item.record.uri, name: item.metadata.name ?? 'untitled album', cover: item.media?.artwork?.url ?? undefined, count: item.metrics.member_count }));
+      target ??= albums.find(pick => pick.uri === savedTarget);
+    }, () => {});
+
+    let settled = '';
     const unsubscribe = uploadQueue.subscribe(() => {
       jobs = uploadQueue.snapshot();
       const signature = jobs.filter(job => !uploadInProgress(job.phase)).map(job => job.id).join();
-      if (signature !== finished) { finished = signature; void refresh(); }
+      if (signature !== settled) { settled = signature; void refresh(); }
     });
     void refresh();
     return () => { live = false; unsubscribe(); };
@@ -290,7 +339,7 @@
     const input = await writeEditor(owner, () => uploadQueue.takeBack(id, input => {
       if (!current()) throw new Error('reopen the upload page to edit this draft.');
       const previous = localStorage.getItem(draftKey);
-      const saved = JSON.stringify({ title: input.title, album: input.album, description: input.description, tags: input.tags?.join('\n'), autoTag: !!input.autoTag, features: input.features ?? [], explicit: !!input.explicit, access: accessFromRules(input.waysIn), options: optionsFromInput(input) });
+      const saved = JSON.stringify({ title: input.title, album: input.album, albumUri: input.addTo, description: input.description, tags: input.tags?.join('\n'), autoTag: !!input.autoTag, features: input.features ?? [], explicit: !!input.explicit, access: accessFromRules(input.waysIn), options: optionsFromInput(input) });
       localStorage.setItem(draftKey, saved);
       return () => {
         if (localStorage.getItem(draftKey) !== saved) return;
@@ -306,6 +355,8 @@
     title = input.title;
     autoTitle = '';
     album = input.album ?? '';
+    savedTarget = input.addTo ?? '';
+    target = albums.find(pick => pick.uri === savedTarget);
     description = input.description ?? '';
     tags = input.tags?.join('\n') ?? '';
     autoTag = !!input.autoTag;
@@ -325,6 +376,7 @@
     if (audioInput) audioInput.value = '';
     if (coverInput) coverInput.value = '';
     title = autoTitle = album = description = tags = formProblem = audioProblem = coverProblem = '';
+    target = undefined;
     features = [];
     explicit = false;
     options = { ...DEFAULT_OPTIONS };
@@ -357,14 +409,16 @@
     submitting = true;
     const submittedDraft = editorDraft;
     // everything is read before handles resolve, so typing during the lookup can't change what was sent
-    const base = { file: audio, artwork: cover, title, artist, album, description, tags: tags.trim() ? tags.split('\n') : undefined, autoTag,
+    const joined = target && !access.closed ? target : undefined;
+    const base = { file: audio, artwork: cover, title, artist, album, ...(joined ? { addTo: joined.uri } : {}), description, tags: tags.trim() ? tags.split('\n') : undefined, autoTag,
       ...(features.length ? { features: [...features] } : {}), ...(explicit ? { explicit: true } : {}), ...optionsInput($state.snapshot(options), access, service) };
     const submittedAccess = $state.snapshot(access);
     try {
       const waysIn = await accessRules(submittedAccess, memberDid);
       const input = { ...base, ...(waysIn.length ? { waysIn } : {}) };
+      let jobId = '';
       await writeEditor(owner, async () => {
-        await uploadQueue.add(input);
+        jobId = await uploadQueue.add(input);
         try {
           if (localStorage.getItem(draftKey) === submittedDraft) localStorage.removeItem(draftKey);
         } catch {
@@ -372,6 +426,7 @@
         }
       });
       if (!current() || audio !== input.file || cover !== input.artwork || editorDraft !== submittedDraft) return;
+      finished = { jobId, title: input.title.trim(), cover: input.artwork ?? undefined, joined };
       clearEditor();
     } catch (failure) {
       formProblem = message(failure, 'could not start the upload.');
@@ -379,7 +434,7 @@
   }
 </script>
 
-<UploadJobs jobs={jobs.filter(job => job.owner === owner)} disabled={!hydrated || imageBusy || submitting} edit={editAgain} />
+<UploadJobs jobs={jobs.filter(job => job.owner === owner && (job.id !== finished?.jobId || job.phase === 'failed'))} disabled={!hydrated || imageBusy || submitting} edit={editAgain} />
 <PrivateUploads bind:this={privateUploads} {account} bind:busy={privateBusy} bind:blocked={privateBlocked} />
 {#if queuedProblem}
   <p role="alert">{queuedProblem}</p>
@@ -417,110 +472,152 @@
   ondragleave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) dragging = false; }}
   ondrop={drop}
 >
-  <input type="file" aria-label="audio file" hidden accept={audioAccept()} bind:this={audioInput} onchange={event => pickAudio(event.currentTarget.files?.[0])} />
+  <input type="file" aria-label="audio file" hidden multiple={!editing && !!onAlbum} accept={audioAccept()} bind:this={audioInput} onchange={event => chooseFiles(event.currentTarget)} />
   <input type="file" aria-label="cover image" hidden accept="image/*,.heic,.heif" bind:this={coverInput} onchange={event => pickCover(event.currentTarget.files?.[0])} />
 
-  {#if !editing}
-    <div class="drop">
+  {#if !editing && finished && owner}
+    <UploadDone {account} jobId={finished.jobId} title={finished.title} cover={finished.cover} joined={finished.joined} {albums} another={() => { finished = undefined; }} />
+  {:else if !editing}
+    <div class="door">
       <span class="drop-icon"><Icon name="wave" size={34} /></span>
-      <h2><span class="wide">drop a track here</span><span class="narrow">choose a track</span></h2>
-      <p class="subtle">the title comes from the file name. everything else is optional.</p>
-      <button type="button" class="pill primary" onclick={() => audioInput?.click()}><Icon name="plus" size={18} />choose audio</button>
-      <p class="formats">{PUBLIC_AUDIO_FORMATS.toLowerCase()} · up to 1.5 GB</p>
+      <h2><span class="wide">drop audio here</span><span class="narrow">add audio</span></h2>
+      <p class="subtle">{onAlbum ? 'one file makes a track. several make an album.' : 'the title comes from the file name. everything else is optional.'}</p>
+      <button type="button" class="pill primary" onclick={() => openPicker()}><Icon name="plus" size={18} />choose audio</button>
+      <p class="formats">{PUBLIC_AUDIO_FORMATS.toLowerCase()} · up to 1.5 GB each</p>
       {#if audioProblem}<p class="problem" role="alert">{audioProblem}</p>{/if}
       {#if artist}<p class="formats">posts to your profile as {artist}</p>{/if}
     </div>
+    {#if albums.length && !privateTrack}
+      <section class="shelf" aria-labelledby="add-to-album">
+        <header><h2 id="add-to-album">add to an album</h2><span class="formats wide">drop onto a cover</span></header>
+        <ul>
+          {#each albums.slice(0, 11) as pick (pick.uri)}
+            <li>
+              <button type="button" class="album" class:hot={dropTarget === pick.uri} aria-label="add a track to {pick.name}"
+                onclick={() => openPicker(pick)}
+                ondragover={event => { if (event.dataTransfer?.types.includes('Files')) { event.preventDefault(); event.stopPropagation(); dragging = false; dropTarget = pick.uri; } }}
+                ondragleave={() => { if (dropTarget === pick.uri) dropTarget = undefined; }}
+                ondrop={event => { event.stopPropagation(); drop(event, pick); }}>
+                <span class="art"><Artwork src={pick.cover} size={176} fallbackIcon="disc" />{#if dropTarget === pick.uri}<span class="into">add to {pick.name}</span>{/if}</span>
+                <b>{pick.name}</b>
+                <small>{pick.count} {pick.count === 1 ? 'track' : 'tracks'}</small>
+              </button>
+            </li>
+          {/each}
+          {#if albums.length > 11}<li><a class="album all" href={resolve('/(app)/library')}><span class="art"><span>all albums</span></span></a></li>{/if}
+        </ul>
+      </section>
+    {/if}
   {:else}
-    <header class="hero">
+    <div class="sheet">
       <div class="backdrop" aria-hidden="true">{#if coverPreview}<img src={coverPreview} alt="" />{/if}</div>
-      <div class="cover-slot">
-        <button type="button" class="cover" class:empty={!coverPreview} disabled={imageBusy} onclick={() => coverInput?.click()} aria-label={cover ? 'change cover' : 'choose cover'}>
-          {#if coverPreview}
-            <img src={coverPreview} alt="selected cover preview" width="240" height="240" />
-            <span class="cover-chip"><Icon name="image" size={15} />change cover</span>
-          {:else}
-            <span class="cover-empty">
-              <Icon name="image" size={30} stroke={1.6} />
-              <b>{imageBusy ? 'preparing your cover…' : 'add a cover'}</b>
-              <small>optional · any photo or image</small>
-            </span>
+      <aside class="side">
+        <div class="cover-slot">
+          <button type="button" class="cover" class:empty={!coverPreview} disabled={imageBusy} onclick={() => coverInput?.click()} aria-label={cover ? 'change cover' : 'choose cover'}>
+            {#if coverPreview}
+              <img src={coverPreview} alt="selected cover preview" width="320" height="320" />
+              <span class="cover-chip"><Icon name="image" size={15} />change cover</span>
+            {:else}
+              <span class="cover-empty">
+                <Icon name="image" size={30} stroke={1.6} />
+                <b>{imageBusy ? 'preparing your cover…' : 'add a cover'}</b>
+                <small>optional · any photo or image</small>
+              </span>
+            {/if}
+          </button>
+          {#if cover}
+            <button type="button" class="remove" disabled={imageBusy} aria-label="remove cover" onclick={() => { cover = undefined; if (coverInput) coverInput.value = ''; }}><Icon name="x" size={16} /></button>
           {/if}
-        </button>
-        {#if cover}
-          <button type="button" class="remove" disabled={imageBusy} aria-label="remove cover" onclick={() => { cover = undefined; if (coverInput) coverInput.value = ''; }}><Icon name="x" size={16} /></button>
-        {/if}
-        {#if imageBusy && coverPreview}<p class="cover-note" role="status">preparing your cover…</p>{/if}
-        {#if coverProblem}<p class="problem cover-note" role="alert">{coverProblem}</p>{/if}
-      </div>
-      <div class="copy">
-        <span class="kind">new track</span>
-        <label class="title">
-          <input bind:value={title} aria-label="title" maxlength="256" required placeholder="name this track" />
-          <Icon name="edit" size={18} />
-        </label>
-        {#if artist}
-          <p class="owner"><span class="avatar"><Artwork src={profileAvatar} size={24} fallbackIcon="user" /></span>posts to your profile as {artist}</p>
-        {/if}
+          {#if imageBusy && coverPreview}<p class="cover-note" role="status">preparing your cover…</p>{/if}
+          {#if coverProblem}<p class="problem cover-note" role="alert">{coverProblem}</p>{/if}
+        </div>
         <div class="meta">
           {#if audio}
             {#if duration}<span class="chip strong">{clock(duration)}</span>{/if}
             <span class="chip file" title={audio.name}>{audio.name} · {fileSize(audio.size)}</span>
-            <button type="button" class="chip action" onclick={() => audioInput?.click()}><Icon name="wave" size={15} />change audio</button>
+            <button type="button" class="chip action" onclick={() => openPicker()}><Icon name="wave" size={15} />change audio</button>
           {:else}
             <span class="chip">your draft is still here. choose the audio file again.</span>
-            <button type="button" class="chip action" onclick={() => audioInput?.click()}><Icon name="wave" size={15} />choose audio</button>
+            <button type="button" class="chip action" onclick={() => openPicker()}><Icon name="wave" size={15} />choose audio</button>
           {/if}
         </div>
-        {#if audioProblem}<p class="problem" role="alert">{audioProblem}</p>{/if}
-        {#if audio}<AudioPreview file={audio} bind:duration />{/if}
-        {#if tooLargeClosed}<p class="problem" role="alert">closed tracks can be up to 100 MB for now. choose a smaller file or make it open.</p>{/if}
         {#if service}
           {#if soleCopy}<label class="consent"><input type="checkbox" bind:checked={consent} /><span><b>use plyr.fm storage</b> this file is over 100 MB, more than a track can keep on your PDS, so plyr.fm keeps it and serves it so it plays everywhere. playback and downloads are public.</span></label>
           {:else}<p class="consent note"><span><b>your PDS keeps the original</b> plyr.fm adds an mp3 copy so it plays everywhere. playback and downloads are public.</span></p>{/if}
           {#if !account.uploadStorage}<p class="problem">sign in again to allow plyr.fm storage. what you typed stays here. <a href="/login?return_to=%2Fupload">sign in again</a></p>{/if}
         {/if}
+      </aside>
+      <div class="main">
+        <div class="copy">
+          <span class="kind">new track</span>
+          <label class="title">
+            <input bind:value={title} aria-label="title" maxlength="256" required placeholder="name this track" />
+            <Icon name="edit" size={18} />
+          </label>
+          {#if artist}
+            <p class="owner"><span class="avatar"><Artwork src={profileAvatar} size={24} fallbackIcon="user" /></span>posts to your profile as {artist}</p>
+          {/if}
+          {#if audioProblem}<p class="problem" role="alert">{audioProblem}</p>{/if}
+          {#if audio}<AudioPreview file={audio} bind:duration />{/if}
+          {#if tooLargeClosed}<p class="problem" role="alert">closed tracks can be up to 100 MB for now. choose a smaller file or make it open.</p>{/if}
+        </div>
+        {#if !privateTrack}<AlbumChoice {albums} bind:target bind:album closed={access.closed} disabled={submitting} />{/if}
+        <UploadDetails bind:tags bind:description bind:autoTag bind:features bind:explicit owner={owner ?? undefined} {tagProblem} onlyYou={privateTrack} />
+        <AccessPicker bind:access bind:options plyrStorage={service} needsSettings={options.sell && !privateTrack && !account.accountSync ? signInAgain : undefined} {artist} {title} cover={coverPreview} disabled={submitting} {checked} needsSignIn={accessSignIn || undefined} />
       </div>
-    </header>
-
-    <UploadDetails bind:album bind:tags bind:description bind:autoTag bind:features bind:explicit owner={owner ?? undefined} {tagProblem} onlyYou={privateTrack} />
-    <AccessPicker bind:access bind:options plyrStorage={service} needsSettings={options.sell && !privateTrack && !account.accountSync ? signInAgain : undefined} {artist} {title} cover={coverPreview} disabled={submitting} {checked} needsSignIn={accessSignIn || undefined} />
+    </div>
   {/if}
 
   {#if draftProblem}<p class="problem" role="alert">{draftProblem}</p>{/if}
   {#if formProblem}<p class="problem" role="alert">{formProblem}</p>{/if}
+  {#if editing}
   <div class="bar">
-    {#if editing}
       <button type="button" class="summary" aria-label="who can listen: {summary.label}{summary.detail ? `, ${summary.detail}` : ''}. change" onclick={() => document.getElementById('who-can-listen')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>
         <Icon name={access.closed ? 'lock' : 'globe'} size={17} /><b>{summary.label}</b>{#if summary.detail}<small>· {summary.detail}</small>{/if}<span class="caret"><Icon name="down" size={15} /></span>
       </button>
       <span class="hint rights">by uploading you confirm you have the rights to share this.</span>
-    {:else}
-      <span class="hint"></span>
-    {/if}
     <button class="pill primary submit" type="submit" disabled={blocked}><Icon name="upload" size={18} />{submitting || privateBusy ? 'saving…' : 'upload'}</button>
   </div>
-  {#if editing}<p class="rights-phone">by uploading you confirm you have the rights to share this.</p>{/if}
+  <p class="rights-phone">by uploading you confirm you have the rights to share this.</p>
+  {/if}
 </form>
 
 <style>
   form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; border-radius: 1.25rem; }
-  form.dragging .drop, form.dragging .hero .cover { outline: 3px solid var(--accent); outline-offset: 4px; }
+  form.dragging .door, form.dragging .sheet .cover { outline: 3px solid var(--accent); outline-offset: 4px; }
   .problem { color: light-dark(#a3271f, #ff8f87); font-size: var(--t-14-4); }
   .problem a { color: inherit; text-decoration: underline; }
   .pill { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; min-height: 2.75rem; padding: 0 1.35rem; border: 0; border-radius: 999px; background: var(--raised); font-weight: 700; }
   .pill.primary { background: var(--accent); color: var(--on-accent); }
   .pill.primary:hover:not(:disabled) { filter: brightness(1.08); }
 
-  .drop { display: grid; justify-items: center; align-content: center; gap: 0.8rem; min-height: 22rem; padding: 2rem 1.25rem; text-align: center; border-radius: 1.25rem; border: 2px dashed color-mix(in srgb, var(--accent) 45%, var(--line)); background: radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%), var(--surface); }
+  .door { display: grid; justify-items: center; align-content: center; gap: 0.8rem; min-height: 22rem; padding: 2rem 1.25rem; text-align: center; border-radius: 1.25rem; border: 2px dashed color-mix(in srgb, var(--accent) 45%, var(--line)); background: radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%), var(--surface); }
   .drop-icon { width: 4.5rem; height: 4.5rem; display: grid; place-items: center; border-radius: 1.2rem; background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
-  .drop h2 { font-size: clamp(1.5rem, 3vw, 2rem); letter-spacing: -0.02em; }
-  .drop .narrow { display: none; }
+  .door h2 { font-size: clamp(1.5rem, 3vw, 2rem); letter-spacing: -0.02em; }
+  .door .narrow { display: none; }
+  .door .subtle { color: var(--muted); }
+
+  .shelf { display: grid; gap: 0.75rem; margin-top: 0.75rem; }
+  .shelf header { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
+  .shelf h2 { font-size: var(--t-16); font-weight: 700; }
+  .shelf ul { display: grid; grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)); gap: 1rem; margin: 0; padding: 0; list-style: none; }
+  .album { display: grid; gap: 0.3rem; width: 100%; padding: 0; border: 0; background: none; color: inherit; text-align: left; }
+  .album:hover { text-decoration: none; }
+  .album .art { position: relative; display: grid; place-items: center; aspect-ratio: 1; border-radius: 0.75rem; overflow: hidden; background: var(--raised); border: 1px solid var(--line); color: var(--faint); font-weight: 700; transition: transform 0.15s; }
+  .album .art :global(img) { width: 100%; height: 100%; object-fit: cover; }
+  .album:hover .art, .album.hot .art { transform: translateY(-2px); }
+  .album.hot .art { outline: 3px solid var(--accent); outline-offset: 3px; }
+  .album .into { position: absolute; inset: 0; display: grid; place-items: center; padding: 0.75rem; text-align: center; background: color-mix(in srgb, var(--bg) 62%, transparent); backdrop-filter: blur(4px); color: var(--text); font-weight: 800; }
+  .album b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--t-14-4); }
+  .album small { color: var(--faint); font-size: var(--t-12-8); }
   .formats { color: var(--faint); font-size: var(--t-13-6); }
 
-  .hero { position: relative; isolation: isolate; display: flex; align-items: flex-end; gap: 2rem; padding-block: 0.5rem 1.5rem; }
-  .backdrop { position: absolute; z-index: -1; inset: -3rem calc(-1 * clamp(1rem, 3vw, 2.25rem)) -2rem; overflow: hidden; pointer-events: none; mask-image: linear-gradient(to bottom, transparent, black 25%, black 45%, transparent); }
+  .sheet { position: relative; isolation: isolate; display: grid; grid-template-columns: minmax(13rem, 20rem) minmax(0, 1fr); gap: clamp(1.5rem, 3vw, 2.5rem); align-items: start; }
+  .side { position: sticky; top: 1.5rem; display: grid; gap: 0.75rem; min-width: 0; }
+  .main { display: grid; gap: 1rem; min-width: 0; }
+  .backdrop { position: absolute; z-index: -1; inset: -3rem calc(-1 * clamp(1rem, 3vw, 2.25rem)) auto; height: 34rem; overflow: hidden; pointer-events: none; mask-image: linear-gradient(to bottom, black 35%, transparent); }
   .backdrop img { width: 100%; height: 100%; object-fit: cover; filter: blur(48px) saturate(1.2); transform: scale(1.3); opacity: 0.55; }
-  .cover-slot { position: relative; flex: none; width: min(15rem, 38vw); display: grid; gap: 0.5rem; }
+  .cover-slot { position: relative; width: 100%; display: grid; gap: 0.5rem; }
   .cover { position: relative; display: block; width: 100%; aspect-ratio: 1; padding: 0; overflow: hidden; border-radius: 0.75rem; border: 0; background: var(--raised); box-shadow: 0 1.1rem 2.5rem rgb(0 0 0 / 0.3); }
   .cover.empty { box-shadow: none; border: 2px dashed var(--line); background: var(--surface); }
   .cover.empty:hover { border-color: var(--accent); }
@@ -566,11 +663,13 @@
   summary { cursor: pointer; padding: 0.6rem 0; }
 
   @media (max-width: 720px) {
-    .drop { min-height: 18rem; }
-    .drop .wide { display: none; }
-    .drop .narrow { display: inline; }
-    .hero { flex-direction: column; align-items: center; text-align: center; gap: 1rem; padding-top: 0; }
-    .backdrop { inset: -2rem -1rem -2rem; }
+    .door { min-height: 16rem; }
+    .door .narrow { display: inline; }
+    .wide { display: none; }
+    .shelf ul { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; }
+    .sheet { grid-template-columns: minmax(0, 1fr); gap: 1rem; }
+    .side { position: static; justify-items: center; text-align: center; }
+    .backdrop { inset: -2rem -1rem auto; height: 26rem; }
     .cover-slot { width: min(15rem, 56vw); }
     .copy { width: 100%; justify-items: center; }
     .title { width: 100%; }
