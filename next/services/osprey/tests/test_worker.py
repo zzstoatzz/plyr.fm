@@ -4,6 +4,7 @@ RulesSink and plyr's rules, out as review flags in the moderation log."""
 from osprey.worker.sinks.sink.output_sink import MultiOutputSink
 from osprey.worker.sinks.sink.rules_sink import RulesSink
 
+from plyr_osprey.image_scan import Verdict
 from plyr_osprey.store import MAX_ATTEMPTS, Store
 from plyr_osprey.tracks import ModerationLogSink, TrackInputStream, Walk
 from tests.conftest import TEST_DATABASE_URL
@@ -45,7 +46,7 @@ def mirror(db, uri: str, blob_cid: str, at_us: int) -> str:
 def drain(engine, start_at_us: int = 0) -> None:
     osprey, helpers = engine
     store, walk = Store(TEST_DATABASE_URL, 'fm.plyr.track'), Walk()
-    stream = TrackInputStream(store, walk, drain_once=True, start_at_us=start_at_us)
+    stream = TrackInputStream(store, walk, drain_once=True, start_at_us=start_at_us, covers_start_at_us=start_at_us)
     RulesSink(osprey, stream, MultiOutputSink([ModerationLogSink(store, walk)]), helpers, envoy_check_port=0).run()
     store.close()
 
@@ -74,7 +75,9 @@ def test_new_tracks_are_scanned_once_and_flags_open_reviews(db, engine, fingerpr
         (flagged, 1),
         (clean, 0),
     ]
-    assert rows(db, 'SELECT indexed_at_us, attempts FROM plyr_moderation.rule_cursors') == [(30, 0)]
+    assert rows(db, "SELECT indexed_at_us, attempts FROM plyr_moderation.rule_cursors WHERE name = 'tracks'") == [
+        (30, 0)
+    ]
     assert sorted(fingerprinter.scanned) == sorted([OTHER_AUDIO, NEXT_AUDIO])
 
     # an edit that keeps the audio comes round again but isn't paid for twice
@@ -82,7 +85,7 @@ def test_new_tracks_are_scanned_once_and_flags_open_reviews(db, engine, fingerpr
     drain(engine)
     assert len(fingerprinter.scanned) == 2
     assert rows(db, 'SELECT count(*) FROM plyr_moderation.events') == [(1,)]
-    assert rows(db, 'SELECT indexed_at_us FROM plyr_moderation.rule_cursors') == [(50,)]
+    assert rows(db, "SELECT indexed_at_us FROM plyr_moderation.rule_cursors WHERE name = 'tracks'") == [(50,)]
 
 
 def test_a_first_run_starts_from_now_not_the_whole_catalog(db, engine, fingerprinter) -> None:
@@ -101,7 +104,9 @@ def test_a_failing_scan_is_retried_then_passed_over(db, engine, fingerprinter) -
 
     for attempt in range(1, MAX_ATTEMPTS):
         drain(engine)
-        assert rows(db, 'SELECT indexed_at_us, attempts FROM plyr_moderation.rule_cursors') == [(0, attempt)]
+        assert rows(db, "SELECT indexed_at_us, attempts FROM plyr_moderation.rule_cursors WHERE name = 'tracks'") == [
+            (0, attempt)
+        ]
         assert OTHER_AUDIO not in fingerprinter.scanned
 
     drain(engine)  # the last attempt passes it over; the next run moves on
@@ -128,9 +133,82 @@ def test_a_track_written_straight_to_its_pds_is_scanned_once_next_holds_its_audi
         (direct, direct_copy),
         (elsewhere, elsewhere_copy),
     ]
-    assert rows(db, 'SELECT indexed_at_us FROM plyr_moderation.rule_cursors') == [(40,)]
+    assert rows(db, "SELECT indexed_at_us FROM plyr_moderation.rule_cursors WHERE name = 'tracks'") == [(40,)]
 
     # a copy of an older blob isn't the record's audio
     add_track(db, 1, None, 50, blob_cid='bafkreiblob3')
     drain(engine)
     assert len(fingerprinter.scanned) == 2
+
+
+def add_cover(db, n: int, image_url: str | None, at_us: int) -> str:
+    uri = add_track(db, n, None, at_us)
+    with db.cursor() as cur:
+        cur.execute('UPDATE plyr_index.track_records SET image_url = %s WHERE record_uri = %s', (image_url, uri))
+    return uri
+
+
+def add_list(db, n: int, cover_blob: str | None, at_us: int) -> str:
+    uri = f'at://did:plc:uploader/fm.plyr.list/{n}'
+    with db.cursor() as cur:
+        cur.execute(
+            """INSERT INTO plyr_index.list_records
+               (record_uri, record_cid, owner_did, collection, name, cover_blob_cid, indexed_at_us)
+               VALUES (%s, %s, 'did:plc:uploader', 'fm.plyr.list', %s, %s, %s)
+               ON CONFLICT (record_uri) DO UPDATE SET indexed_at_us = EXCLUDED.indexed_at_us,
+                   cover_blob_cid = EXCLUDED.cover_blob_cid, record_cid = EXCLUDED.record_cid""",
+            (uri, f'lcid{n}-{at_us}', f'album {n}', cover_blob, at_us),
+        )
+    return uri
+
+
+IMAGES = 'https://plyr-next-audio.n8-3e9.workers.dev/images/'
+
+
+def test_every_cover_next_shows_is_checked_however_it_was_written(db, engine, fingerprinter, image_scanner) -> None:
+    pds_cover = add_cover(
+        db, 1, 'https://pds.example/xrpc/com.atproto.sync.getBlob?did=did:plc:uploader&cid=bafkreicover1', 10
+    )
+    elsewhere = add_cover(db, 2, 'https://elsewhere.example/c.jpg', 20)
+    add_cover(db, 3, 'https://images.plyr.fm/prodcover.jpg', 30)  # prod checked it at upload
+    album = add_list(db, 1, 'bafkreialbum', 40)
+    add_list(db, 2, None, 50)
+    image_scanner.unsafe[f'{IMAGES}bafkreialbum?did=did:plc:uploader'] = Verdict(
+        is_safe=False, severity='high', categories=['sexual'], reason='explicit nudity'
+    )
+
+    drain(engine)
+
+    assert image_scanner.scanned == [
+        f'{IMAGES}bafkreicover1?did=did:plc:uploader',
+        'https://elsewhere.example/c.jpg',
+        f'{IMAGES}bafkreialbum?did=did:plc:uploader',
+    ]
+    assert fingerprinter.scanned == []
+    assert rows(db, 'SELECT subject_uri, action, actor, reason FROM plyr_moderation.events') == [
+        (album, 'flagged_by_scan', 'scan:cover', 'high: sexual: explicit nudity')
+    ]
+    assert rows(db, 'SELECT record_uri, violations FROM plyr_moderation.image_scans ORDER BY 1') == [
+        (album, 1),
+        (pds_cover, 0),
+        (elsewhere, 0),
+    ]
+    assert rows(db, 'SELECT name, indexed_at_us FROM plyr_moderation.rule_cursors ORDER BY 1') == [
+        ('covers', 40),
+        ('tracks', 30),
+    ]
+
+    # an edit that keeps the cover comes round again but isn't paid for twice; a new one is checked
+    add_list(db, 1, 'bafkreialbum', 60)
+    add_cover(db, 2, 'https://elsewhere.example/new.jpg', 70)
+    drain(engine)
+    assert image_scanner.scanned[3:] == ['https://elsewhere.example/new.jpg']
+
+
+def test_a_failing_cover_scan_is_retried_then_passed_over(db, engine, fingerprinter, image_scanner) -> None:
+    add_cover(db, 1, 'https://elsewhere.example/bad.jpg', 10)
+    add_cover(db, 2, 'https://elsewhere.example/ok.jpg', 20)
+    image_scanner.failing.add('https://elsewhere.example/bad.jpg')
+    for _ in range(MAX_ATTEMPTS + 1):
+        drain(engine)
+    assert rows(db, 'SELECT image_url FROM plyr_moderation.image_scans') == [('https://elsewhere.example/ok.jpg',)]

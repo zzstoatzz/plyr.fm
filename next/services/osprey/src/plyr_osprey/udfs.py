@@ -12,11 +12,13 @@ from osprey.engine.udf.arguments import ArgumentsBase
 from osprey.engine.udf.base import UDFBase
 from osprey.engine.utils.types import add_slots
 
-from plyr_osprey import evidence
+from plyr_osprey import evidence, image_scan
 from plyr_osprey.fingerprint import Fingerprinter, Unconfigured
+from plyr_osprey.image_scan import ImageScanner
 
-# set by register_plugins from the environment; tests swap in a fake
+# set by register_plugins from the environment; tests swap in fakes
 fingerprinter: Fingerprinter = Unconfigured()
+image_scanner: ImageScanner = image_scan.Unconfigured()
 
 FLAG_SOURCES = ('scan', 'rule')
 
@@ -59,6 +61,25 @@ class RecordingsPlayingThrough(UDFBase[RecordingsArguments, Lines]):
         matches = fingerprinter.matches(arguments.audio_url)
         found = evidence.others_playing_through(matches, arguments.owner_handle, arguments.owner_name)
         return [e.describe() for e in found[:3]]
+
+
+class CoverArguments(ArgumentsBase):
+    image_url: str
+
+
+class ImagePolicyViolations(UDFBase[CoverArguments, Lines]):
+    """what breaks plyr's image policy in a cover, one line; empty when it's fine.
+
+    the scan prod runs on every cover uploaded to it (Claude, through plyr's
+    moderation service). a failed scan raises, so nothing downstream reads it
+    as clean.
+    """
+
+    category = UdfCategories.ENGINE
+
+    def execute(self, execution_context: ExecutionContext, arguments: CoverArguments) -> Lines:
+        verdict = image_scanner.verdict(arguments.image_url)
+        return [] if verdict.is_safe else [verdict.describe()]
 
 
 class FlagArguments(ArgumentsBase):

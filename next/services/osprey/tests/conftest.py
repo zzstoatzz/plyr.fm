@@ -10,6 +10,7 @@ from osprey.worker.lib.osprey_engine import OspreyEngine, bootstrap_engine_with_
 from osprey.worker.lib.singletons import CONFIG
 
 from plyr_osprey import udfs
+from plyr_osprey.image_scan import Verdict
 
 HERE = Path(__file__).parent
 MIGRATIONS = HERE.parents[2] / 'backend' / 'migrations'
@@ -35,6 +36,26 @@ class FakeFingerprinter:
         return self.by_url.get(audio_url, [])
 
 
+class FakeImageScanner:
+    def __init__(self) -> None:
+        self.unsafe: dict[str, Verdict] = {}
+        self.failing: set[str] = set()
+        self.scanned: list[str] = []
+
+    def verdict(self, image_url: str) -> Verdict:
+        self.scanned.append(image_url)
+        if image_url in self.failing:
+            raise RuntimeError('scan failed')
+        return self.unsafe.get(image_url, Verdict(is_safe=True, severity='none', categories=[], reason=''))
+
+
+@pytest.fixture()
+def image_scanner(monkeypatch: pytest.MonkeyPatch) -> FakeImageScanner:
+    fake = FakeImageScanner()
+    monkeypatch.setattr(udfs, 'image_scanner', fake)
+    return fake
+
+
 @pytest.fixture(scope='session')
 def engine() -> tuple[OspreyEngine, UDFHelpers]:
     return bootstrap_engine_with_helpers()
@@ -55,8 +76,12 @@ DROP SCHEMA IF EXISTS plyr_moderation CASCADE;
 CREATE SCHEMA plyr_index;
 CREATE TABLE plyr_index.track_records (
     record_uri TEXT PRIMARY KEY, record_cid TEXT, owner_did TEXT NOT NULL, collection TEXT NOT NULL,
-    title TEXT, audio_url TEXT, audio_blob_cid TEXT, deleted BOOLEAN NOT NULL DEFAULT false,
+    title TEXT, audio_url TEXT, audio_blob_cid TEXT, image_url TEXT, deleted BOOLEAN NOT NULL DEFAULT false,
     indexed_at_us BIGINT NOT NULL
+);
+CREATE TABLE plyr_index.list_records (
+    record_uri TEXT PRIMARY KEY, record_cid TEXT, owner_did TEXT NOT NULL, collection TEXT NOT NULL,
+    name TEXT, cover_blob_cid TEXT, deleted BOOLEAN NOT NULL DEFAULT false, indexed_at_us BIGINT NOT NULL
 );
 CREATE TABLE plyr_index.track_delivery_origins (
     record_uri TEXT NOT NULL, service TEXT NOT NULL, record_cid TEXT NOT NULL, origin_url TEXT NOT NULL,
@@ -79,7 +104,7 @@ def db() -> Iterator[psycopg2.extensions.connection]:
     conn.autocommit = True
     with conn.cursor() as cur:
         cur.execute(INDEX_SCHEMA)
-        for name in ('0048_add_moderation_log.sql', '0050_add_moderation_rules_state.sql'):
+        for name in ('0048_add_moderation_log.sql', '0050_add_moderation_rules_state.sql', '0056_add_image_scans.sql'):
             cur.execute((MIGRATIONS / name).read_text())
     yield conn
     conn.close()

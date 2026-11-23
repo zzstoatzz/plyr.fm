@@ -13,6 +13,7 @@ on:
       - "next/services/osprey/**"
       - "next/backend/migrations/0048_add_moderation_log.sql"
       - "next/backend/migrations/0050_add_moderation_rules_state.sql"
+      - "next/backend/migrations/0056_add_image_scans.sql"
       - ".github/workflows/next-osprey.yml"
   push:
     branches: [main]

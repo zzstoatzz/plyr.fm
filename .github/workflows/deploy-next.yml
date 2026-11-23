@@ -137,12 +137,12 @@ jobs:
           psql "$(plain "$MIGRATOR_DATABASE_URL")" -X -q -v ON_ERROR_STOP=1 -v role="$role" <<'SQL'
           GRANT USAGE ON SCHEMA plyr_index TO :"role";
           GRANT SELECT ON plyr_index.track_records, plyr_index.actor_identities,
-              plyr_index.track_delivery_origins TO :"role";
+              plyr_index.track_delivery_origins, plyr_index.list_records TO :"role";
           GRANT USAGE ON SCHEMA plyr_moderation TO :"role";
           GRANT INSERT ON plyr_moderation.events TO :"role";
           GRANT USAGE ON SEQUENCE plyr_moderation.events_id_seq TO :"role";
           GRANT SELECT, INSERT, UPDATE ON plyr_moderation.rule_cursors, plyr_moderation.scans,
-              plyr_moderation.osprey_entity_labels TO :"role";
+              plyr_moderation.image_scans, plyr_moderation.osprey_entity_labels TO :"role";
           SQL
 
   build:

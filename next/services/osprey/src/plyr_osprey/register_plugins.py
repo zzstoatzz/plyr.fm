@@ -2,11 +2,13 @@
 
 DATABASE_URL             next's Postgres (the writer login)
 TRACK_COLLECTION_NSID    default fm.plyr.track
-MODERATION_SERVICE_URL   plyr's moderation service, which holds the AuDD key
+LIST_COLLECTION_NSID     default fm.plyr.list (albums and playlists, for their covers)
+MODERATION_SERVICE_URL   plyr's moderation service, which holds the AuDD and Claude keys
 MODERATION_AUTH_TOKEN    its X-Moderation-Key
 OSPREY_DRAIN_ONCE        true: stop when caught up (a scheduled run)
 OSPREY_POLL_SECONDS      otherwise, how long to wait when caught up
-OSPREY_START_AT_US       where a first run starts; default now
+OSPREY_START_AT_US       where the tracks walk's first run starts; default now
+OSPREY_COVERS_START_AT_US  where the covers walk's first run starts; default now
 """
 
 from collections.abc import Sequence
@@ -25,35 +27,42 @@ from osprey.worker.sinks.utils.acking_contexts import BaseAckingContext
 from plyr_osprey import udfs
 from plyr_osprey.entity_labels import PostgresEntityLabels
 from plyr_osprey.fingerprint import ModerationServiceFingerprinter
+from plyr_osprey.image_scan import ModerationServiceImageScanner
 from plyr_osprey.store import Store
 from plyr_osprey.tracks import ModerationLogSink, TrackInputStream, Walk
 
 
 @cache
 def _shared(config: Config) -> tuple[Store, Walk]:
-    store = Store(config.expect_str('DATABASE_URL'), config.get_str('TRACK_COLLECTION_NSID', 'fm.plyr.track'))
+    store = Store(
+        config.expect_str('DATABASE_URL'),
+        config.get_str('TRACK_COLLECTION_NSID', 'fm.plyr.track'),
+        config.get_str('LIST_COLLECTION_NSID', 'fm.plyr.list'),
+    )
     return store, Walk()
 
 
 @hookimpl_osprey
 def register_udfs() -> Sequence[type[UDFBase[Any, Any]]]:
-    return [udfs.UrlHost, udfs.RecordingsPlayingThrough, udfs.FlagForReview]
+    return [udfs.UrlHost, udfs.RecordingsPlayingThrough, udfs.ImagePolicyViolations, udfs.FlagForReview]
 
 
 @hookimpl_osprey
 def register_input_stream(config: Config) -> BaseInputStream[BaseAckingContext[Action]]:
     # required: without it every scan would fail and, after a few runs, be passed over
-    udfs.fingerprinter = ModerationServiceFingerprinter(
-        config.expect_str('MODERATION_SERVICE_URL'), config.expect_str('MODERATION_AUTH_TOKEN')
-    )
+    service, token = config.expect_str('MODERATION_SERVICE_URL'), config.expect_str('MODERATION_AUTH_TOKEN')
+    udfs.fingerprinter = ModerationServiceFingerprinter(service, token)
+    udfs.image_scanner = ModerationServiceImageScanner(service, token)
     store, walk = _shared(config)
     start = config.get_optional_str('OSPREY_START_AT_US')
+    covers_start = config.get_optional_str('OSPREY_COVERS_START_AT_US')
     return TrackInputStream(
         store,
         walk,
         poll_seconds=float(config.get_int('OSPREY_POLL_SECONDS', 30)),
         drain_once=config.get_bool('OSPREY_DRAIN_ONCE', False),
         start_at_us=int(start) if start else None,
+        covers_start_at_us=int(covers_start) if covers_start else None,
     )
 
 

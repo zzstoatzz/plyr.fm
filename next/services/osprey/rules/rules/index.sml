@@ -7,4 +7,11 @@ Import(rules=['models/track.sml'])
 # next reads through the labeler, until cutover: scans cost money.
 NextUpload = AudioHost == 'plyr-next-audio.n8-3e9.workers.dev'
 
-Require(rule='rules/copyright.sml', require_if=NextUpload and not ScannedBefore)
+Require(rule='rules/copyright.sml', require_if=ActionName == 'track' and NextUpload and not ScannedBefore)
+
+# Every cover next shows is checked against plyr's image policy, from an upload
+# or a record written straight to a PDS; prod's bucket holds only covers prod
+# already checked when they were uploaded to it, so those have no CoverUrl.
+HasCover = ResolveOptional(optional_value=CoverUrl, default_value='') != ''
+
+Require(rule='rules/cover.sml', require_if=ActionName == 'cover' and HasCover and not ScannedBefore)
