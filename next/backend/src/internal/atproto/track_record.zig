@@ -60,6 +60,7 @@ pub const Error = error{
     InvalidLabels,
     InvalidTags,
     InvalidBlob,
+    OutOfSpecBlob,
     OutOfMemory,
 };
 
@@ -78,7 +79,13 @@ pub fn parse(
     if (!lexicon_value.validDatetime(created_at)) return error.InvalidDatetime;
 
     const audio_url = try optionalUri(value, "audioUrl");
-    const audio_blob = try optionalBlob(value, "audioBlob");
+    // Production wrote some audioBlobs past the lexicon's limits: over 100 MB,
+    // or typed video/* for phone recordings. Those records still play from
+    // audioUrl, so the blob is left out instead of the whole record.
+    const audio_blob = optionalBlob(value, "audioBlob") catch |err| switch (err) {
+        error.OutOfSpecBlob => if (audio_url != null) null else return error.InvalidBlob,
+        else => |e| return e,
+    };
     const audio_space = try parseAudioSpace(value);
     if (audio_url == null and audio_blob == null and audio_space == null)
         return error.MissingAudioSource;
@@ -240,10 +247,8 @@ fn optionalBlob(value: zat.cbor.Value, key: []const u8) Error!?Blob {
     const parsed_cid = zat.Cid.fromBytes(cid.raw) catch return error.InvalidBlob;
     if (parsed_cid.codec() != zat.cbor.Codec.raw) return error.InvalidBlob;
     const media_type = field.getString("mimeType") orelse return error.InvalidBlob;
-    if (!validAudioMediaType(media_type))
-        return error.InvalidBlob;
     const size = field.getUint("size") orelse return error.InvalidBlob;
-    if (size > max_blob_size) return error.InvalidBlob;
+    if (!validAudioMediaType(media_type) or size > max_blob_size) return error.OutOfSpecBlob;
     return .{ .cid = cid, .media_type = media_type, .size = size };
 }
 
@@ -334,6 +339,39 @@ test "track record rejects missing audio, wrong blob codec, and invalid datetime
         error.InvalidDatetime,
         parse(a, .{ .map = &bad_date_map }, "fm.plyr.dev.track"),
     );
+}
+
+test "an out-of-spec audio blob is left out when audioUrl can play the track" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const raw_cid = try zat.Cid.create(a, 1, zat.cbor.Codec.raw, zat.cbor.HashFn.sha2_256, "audio");
+    for ([_]struct { mime: []const u8, size: u64 }{
+        .{ .mime = "audio/mpeg", .size = max_blob_size + 1 },
+        .{ .mime = "video/3gpp", .size = 42 },
+    }) |case| {
+        const blob = [_]zat.cbor.Value.MapEntry{
+            .{ .key = "$type", .value = .{ .text = "blob" } },
+            .{ .key = "ref", .value = .{ .cid = raw_cid } },
+            .{ .key = "mimeType", .value = .{ .text = case.mime } },
+            .{ .key = "size", .value = .{ .unsigned = case.size } },
+        };
+        const with_url = [_]zat.cbor.Value.MapEntry{
+            .{ .key = "$type", .value = .{ .text = "fm.plyr.dev.track" } },
+            .{ .key = "title", .value = .{ .text = "One" } },
+            .{ .key = "artist", .value = .{ .text = "Artist" } },
+            .{ .key = "fileType", .value = .{ .text = "mp3" } },
+            .{ .key = "createdAt", .value = .{ .text = "2026-08-08T12:00:00Z" } },
+            .{ .key = "audioUrl", .value = .{ .text = "https://audio.example/a.mp3" } },
+            .{ .key = "audioBlob", .value = .{ .map = &blob } },
+        };
+        const record = try parse(a, .{ .map = &with_url }, "fm.plyr.dev.track");
+        try std.testing.expectEqualStrings("https://audio.example/a.mp3", record.audio_url.?);
+        try std.testing.expect(record.audio_blob == null);
+
+        const blob_only = [_]zat.cbor.Value.MapEntry{ with_url[0], with_url[1], with_url[2], with_url[3], with_url[4], with_url[6] };
+        try std.testing.expectError(error.InvalidBlob, parse(a, .{ .map = &blob_only }, "fm.plyr.dev.track"));
+    }
 }
 
 test "gated tracks carry their audio in a space record" {

@@ -27,7 +27,9 @@ pub fn run() error{PropertyFailed}!void {
     });
 }
 
-const Kind = enum { absent, valid, invalid };
+/// `tolerated`: an audioBlob only past the lexicon's mimeType or size limits,
+/// which the parser leaves out when audioUrl can play the track
+const Kind = enum { absent, valid, invalid, tolerated };
 
 const Field = struct {
     key: []const u8,
@@ -79,18 +81,24 @@ fn uriValue(case: *hegel.TestCase, kind: Kind) !cbor.Value {
     };
 }
 
-fn blobValue(case: *hegel.TestCase, a: std.mem.Allocator, kind: Kind) !cbor.Value {
+fn blobValue(case: *hegel.TestCase, a: std.mem.Allocator, kind: *Kind) !cbor.Value {
     const raw_cid = try zat.Cid.create(a, 1, cbor.Codec.raw, cbor.HashFn.sha2_256, "audio");
     const dag_cid = try zat.Cid.forDagCbor(a, "audio");
     var type_name: []const u8 = "blob";
     var cid = raw_cid;
     var mime: []const u8 = try gen.pick(case, []const u8, &.{ "audio/flac", "audio/mpeg", "audio/x-wav" });
     var size: u64 = try case.int(u64, 0, track_record.max_blob_size);
-    if (kind == .invalid) switch (try case.int(u8, 0, 4)) {
+    if (kind.* == .invalid) switch (try case.int(u8, 0, 4)) {
         0 => type_name = "blub",
         1 => cid = dag_cid,
-        2 => mime = try gen.pick(case, []const u8, &.{ "image/png", "audio/", "audio/a b", "audio" }),
-        3 => size = track_record.max_blob_size + 1,
+        2 => {
+            mime = try gen.pick(case, []const u8, &.{ "image/png", "video/3gpp", "audio/", "audio/a b", "audio" });
+            kind.* = .tolerated;
+        },
+        3 => {
+            size = track_record.max_blob_size + 1;
+            kind.* = .tolerated;
+        },
         else => return .{ .text = "blob" },
     };
     const entries = try a.dupe(cbor.Value.MapEntry, &.{
@@ -170,7 +178,7 @@ fn trackFields(case: *hegel.TestCase, a: std.mem.Allocator) !std.ArrayList(Field
         .{ .key = "labels", .required = false },
     };
     for (specs) |spec| {
-        const kind = try kindOf(case, spec.required);
+        var kind = try kindOf(case, spec.required);
         if (kind == .absent) {
             try fields.append(a, .{ .key = spec.key, .kind = .absent, .value = .null });
             continue;
@@ -191,7 +199,7 @@ fn trackFields(case: *hegel.TestCase, a: std.mem.Allocator) !std.ArrayList(Field
         else if (std.mem.eql(u8, key, "audioUrl") or std.mem.eql(u8, key, "imageUrl"))
             try uriValue(case, kind)
         else if (std.mem.eql(u8, key, "audioBlob"))
-            try blobValue(case, a, kind)
+            try blobValue(case, a, &kind)
         else if (std.mem.eql(u8, key, "audioSpace"))
             (if (kind == .valid)
                 cbor.Value{ .text = "at://did:plc:artist/space/fm.plyr.dev.audio/supporters/did:plc:artist/fm.plyr.dev.track/3l2abc" }
@@ -234,6 +242,7 @@ fn trackModel(_: void, case: *hegel.TestCase) !void {
         if (field.kind == .absent) continue;
         try entries.append(a, .{ .key = field.key, .value = field.value });
         if (field.kind == .invalid) expect_ok = false;
+        if (field.kind == .tolerated and fields.items[4].kind != .valid) expect_ok = false;
         if (field.kind == .valid and (std.mem.eql(u8, field.key, "audioUrl") or
             std.mem.eql(u8, field.key, "audioBlob") or std.mem.eql(u8, field.key, "audioSpace")))
             has_audio = true;

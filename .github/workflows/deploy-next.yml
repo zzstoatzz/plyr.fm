@@ -366,8 +366,20 @@ jobs:
           done < <(workers)
           [ "$down" = 0 ] || { echo "::error::a worker machine is not running"; exit 1; }
 
+      # Records a parser rejected are not offered again by the firehose, so when
+      # what next accepts changes, the catalog is re-read to pick them up.
+      - name: did what next accepts change?
+        id: parsers
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          changed="$(gh api "repos/${{ github.repository }}/compare/${{ github.event.before }}...${{ github.sha }}" \
+            --jq '[.files[].filename | select(test("^next/backend/src/internal/atproto/([a-z_]+_record|lexicon_value)[.]zig$"))] | length')"
+          echo "changed=${changed:-0}" >> "$GITHUB_OUTPUT"
+
       - name: reconcile the fm.plyr catalog into next
-        if: inputs.reconcile_catalog
+        if: inputs.reconcile_catalog || (steps.parsers.outputs.changed != '' && steps.parsers.outputs.changed != '0')
         timeout-minutes: 70
         run: next/backend/scripts/canary_reconcile
         env:
@@ -376,7 +388,7 @@ jobs:
 
       - name: clean up the reconciliation machine
         timeout-minutes: 5
-        if: always() && inputs.reconcile_catalog
+        if: always() && (inputs.reconcile_catalog || (steps.parsers.outputs.changed != '' && steps.parsers.outputs.changed != '0'))
         run: next/backend/scripts/canary_reconcile --cleanup-only
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
