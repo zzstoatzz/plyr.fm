@@ -1,8 +1,10 @@
 import io
+from types import SimpleNamespace
 
+import pytest
 from PIL import Image
 
-from plyr_osprey.image_scan import SEND_BYTES, SEND_EDGE, sendable
+from plyr_osprey.image_scan import SEND_BYTES, SEND_EDGE, Verdict, sendable, verdict_from
 
 
 def encoded(size: tuple[int, int], kind: str, mode: str = 'RGB') -> bytes:
@@ -31,3 +33,27 @@ def test_a_format_claude_does_not_read_is_sent_as_jpeg() -> None:
     assert media_type == 'image/jpeg'
     with Image.open(io.BytesIO(sent)) as image:
         assert image.size == (200, 200)
+
+
+def answer(stop_reason: str, text: str | None) -> SimpleNamespace:
+    content = [SimpleNamespace(type='text', text=text)] if text is not None else []
+    return SimpleNamespace(stop_reason=stop_reason, content=content)
+
+
+def test_claude_answers_become_a_verdict() -> None:
+    found = verdict_from(
+        answer(
+            'end_turn',
+            '{"is_safe": false, "violated_categories": ["explicit_sexual"], "severity": "high", "explanation": "nudity"}',
+        )
+    )
+    assert found == Verdict(is_safe=False, severity='high', categories=['explicit_sexual'], reason='nudity')
+    assert found.describe() == 'high: explicit_sexual: nudity'
+
+
+def test_a_refused_or_cut_off_check_is_a_failed_scan_not_a_clean_one() -> None:
+    for stopped in ('refusal', 'max_tokens'):
+        with pytest.raises(RuntimeError):
+            verdict_from(answer(stopped, '{"is_safe": true}'))
+    with pytest.raises(TypeError):
+        verdict_from(answer('end_turn', None))
