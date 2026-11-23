@@ -20,8 +20,10 @@ const page_limit = 250;
 pub const track_label_values = [_][]const u8{ "copyright-violation", "porn", "sexual" };
 
 pub const Settings = struct {
-    /// empty disables the sync
-    labeler_url: []const u8 = "https://moderation.plyr.fm",
+    /// empty (the default) disables the sync. `moderation.plyr.fm` is still
+    /// prod's labeler, and next never reads prod: the labels already synced stay
+    /// in `track_policies`, and next's own scans (osprey) label from here on.
+    labeler_url: []const u8 = "",
     poll_ms: i64 = 60_000,
     track_collection: []const u8,
 
