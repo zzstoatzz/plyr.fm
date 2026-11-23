@@ -117,8 +117,15 @@ async function run(browser, { width, height, signIn }) {
 			console.log(`${label}: next track plays ${second}`);
 		}
 
+		await page.reload();
+		const play = await dockPlay(page);
+		await play.waitFor();
+		await play.click();
+		const restored = await heard(page, `${label} dock play after reload`);
+		console.log(`${label}: the restored queue plays from the dock (${restored})`);
+		await page.screenshot({ path: path.join(output, `${width}-${signIn ? 'in' : 'out'}.png`) });
 		if (!signIn) {
-			// a track this listener can't hear must say why in the dock, not sit on play at 0:00
+			// last, since it leaves a track this listener can't hear in the queue: it must say why in the dock, not sit on play at 0:00
 			const latest = await (await fetch('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.listTracks?limit=30')).json();
 			const closed = latest.data?.find(track => track.access?.space_uri || track.access?.gate);
 			const closedRow = closed && page.locator('main').getByRole('button', { name: 'Play ' + closed.metadata.title, exact: true }).first();
@@ -129,14 +136,6 @@ async function run(browser, { width, height, signIn }) {
 				console.log(`${label}: pressing closed "${closed.metadata.title}" says "${await reason.innerText()}"`);
 			} else console.log(`${label}: no closed track in latest right now; skipped the says-why check`);
 		}
-
-		await page.reload();
-		const play = await dockPlay(page);
-		await play.waitFor();
-		await play.click();
-		const restored = await heard(page, `${label} dock play after reload`);
-		console.log(`${label}: the restored queue plays from the dock (${restored})`);
-		await page.screenshot({ path: path.join(output, `${width}-${signIn ? 'in' : 'out'}.png`) });
 	} catch (error) {
 		if (consoleLines.length) error.message += '\nconsole:\n' + consoleLines.slice(-30).join('\n');
 		throw error;
