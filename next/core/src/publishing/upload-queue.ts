@@ -1,9 +1,9 @@
 import type { Auth, Did } from '../auth-state';
 import type { BuyLink, createPublicPds, MediaFile, NewTrack } from '../pds';
-import type { RepoRpc } from './repo-rpc';
 import type { CreateReservation } from './create-operation';
 import { audioFormat, uploadPublication, type ChunkReader, type UploadOperation, type UploadStatus, type UploadStorage, type transferParts } from './upload-model.ts';
-import { processingStep, retryDelay, transient, uploadInProgress, uploadRoute, type UploadJobView } from './upload-queue-model.ts';
+import { originalOnPds, processingStep, retryDelay, transient, uploadInProgress, uploadRoute, type UploadJobView } from './upload-queue-model.ts';
+import { repoOk, uploadRepoBlob, type RepoRpc } from './repo-rpc.ts';
 import type { UploadTransport } from './upload-transport';
 import type { UploadRecoveryDisposition } from './upload-recovery';
 import { draftInRecovery, queuedUploadDraft, reattachQueuedUpload, type QueuedUploadDraft, type QueuedUploadDrafts } from './queued-upload-draft.ts';
@@ -13,6 +13,9 @@ type Session = Pick<Auth<unknown>, 'did' | 'agent' | 'uploadStorage'>;
 type Pds = ReturnType<typeof createPublicPds>;
 const POLL_MS = 4_000, NUDGE_MS = 20_000, ATTEMPTS = 5, KEEP_FINISHED = 4;
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+async function uploadOriginal(rpc: RepoRpc, file: MediaFile, contentType: string) {
+  return (await repoOk(uploadRepoBlob(rpc, { input: await file.arrayBuffer(), headers: { 'content-type': contentType } }))).blob as Record<string, unknown>;
+}
 const hex = (bytes: ArrayBuffer) => Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, '0')).join('');
 
 export function createUploadQueue<Rpc extends RepoRpc>({
@@ -189,8 +192,10 @@ export function createUploadQueue<Rpc extends RepoRpc>({
     if (input.buyLink) { await withRetries(job, () => saveBuyLink!(() => session(job), reservation.uri, input.buyLink!)); job.buyLinkFor = reservation.uri; }
     if (route.kind === 'pds') return runPds(job, ready, reservation, draft);
     const format = audioFormat(input.file.name, input.file.type, !!route.processing);
+    // the original stays the artist's: on their PDS whenever it fits a blob, beside plyr.fm's playable copy
+    const original = originalOnPds(input.file) ? await withRetries(job, () => uploadOriginal(session(job).rpc!, input.file, format.contentType)) : undefined;
     const record = await pds.prepareTrackRecord(ready);
-    const operation: UploadOperation = { ...reservation, draftId: draft.id, record: { ...record, fileType: format.fileType }, uploadId: randomUUID(),
+    const operation: UploadOperation = { ...reservation, draftId: draft.id, record: { ...record, fileType: format.fileType, ...(original ? { audioBlob: original } : {}) }, uploadId: randomUUID(),
       name: input.file.name, sizeBytes: input.file.size, ...format, ...(route.processing ? { processing: route.processing } : {}), ...(input.autoTag ? { autoTag: true } : {}) };
     await uploadStorage.put(operation);
     job.handedOff = true;

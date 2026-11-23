@@ -23,6 +23,7 @@ async function verify(browser, width, album) {
   let stage = 'guarding publication';
   let failure;
   let consented = false;
+  let originals = 0;
   const destination = album ? '/upload?mode=album' : '/upload';
   const forbidden = [];
   const pdsResponses = [];
@@ -35,6 +36,12 @@ async function verify(browser, width, album) {
   try {
     await context.route('**/xrpc/**', route => {
       const { pathname } = new URL(route.request().url());
+      // the original goes to the PDS as a blob before admission; answer for it so the test account keeps nothing
+      if (route.request().method() === 'POST' && pathname === '/xrpc/com.atproto.repo.uploadBlob') {
+        originals++;
+        const size = route.request().postDataBuffer()?.length ?? 0;
+        return route.fulfill({ json: { blob: { $type: 'blob', ref: { $link: 'bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku' }, mimeType: 'audio/wav', size } } });
+      }
       if (route.request().method() === 'POST' && /^\/xrpc\/com\.atproto\.(repo|space|memberspace)\./.test(pathname)) {
         forbidden.push(pathname);
         return route.abort();
@@ -57,7 +64,8 @@ async function verify(browser, width, album) {
       await page.getByLabel('audio file', { exact: true }).setInputFiles(wave('single.wav'));
       await page.getByText('selected: single.wav', { exact: true }).waitFor();
     }
-    await page.getByRole('checkbox', { name: 'use plyr.fm storage' }).check();
+    // a wav fits a blob, so the artist's PDS keeps the original and there is nothing to agree to
+    assert.equal(await page.getByRole('checkbox', { name: 'use plyr.fm storage' }).count(), 0);
 
     stage = 'checking upload authority from the browser';
     const blocked = page.waitForEvent('requestfailed', { predicate: request => request.method() === 'POST' && /^\/v1\/uploads\/[a-f0-9]{64}\/[a-f0-9-]+$/.test(new URL(request.url()).pathname) }).catch(() => undefined);
@@ -68,6 +76,7 @@ async function verify(browser, width, album) {
     if (!admission.ok()) throw new Error(`upload admission returned HTTP ${admission.status()}`);
     assert.ok(await blocked, 'transfer start did not reach the browser guard');
     assert.deepEqual(forbidden, [], 'no repository or Space mutation was attempted');
+    assert.ok(originals >= 1, 'the original went to the PDS before admission');
   } catch (error) {
     const detail = stage === 'checking upload authority from the browser' && error.message.startsWith('upload admission returned HTTP') ? `: ${error.message}` : '';
     if (pdsResponses.length) console.error(pdsResponses.join(', '));

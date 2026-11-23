@@ -20,7 +20,7 @@
   import type { CreateOperation } from '@plyr/next-core/publishing/create-operation';
   import { PUBLIC_AUDIO_FORMATS, type UploadOperation } from '@plyr/next-core/publishing/upload-model';
   import { draftInRecovery, type QueuedUploadDraft } from '@plyr/next-core/publishing/queued-upload-draft';
-  import { needsPlyrStorage, uploadInProgress } from '@plyr/next-core/publishing/upload-queue-model';
+  import { needsPlyrStorage, originalOnPds, uploadInProgress } from '@plyr/next-core/publishing/upload-queue-model';
   import { normalizeTrackTags } from '@plyr/next-core/publishing/track-tags';
   import { creditName } from '@plyr/next-core/publishing/credit-name';
   import { accessFromRules, accessProblem, accessRules, accessSummary, DEFAULT_OPTIONS, onlyYou, optionsFromInput, optionsInput, readAccessDraft, readUploadOptions, sellProblem, type AccessDraft, type UploadOptions } from '@plyr/next-core/publishing/upload-access';
@@ -105,6 +105,8 @@
   let creationsToRecover = $derived(pending.filter(operation => !active.rkeys.has(operation.rkey) && !transfers.some(transfer => transfer.rkey === operation.rkey)));
   let creationBlocksUpload = $derived(creationsToRecover.some(operation => !operation.archived));
   let service = $derived(!!audio && needsPlyrStorage(audio, access.closed));
+  // asked only when plyr.fm would hold the sole copy
+  let soleCopy = $derived(service && !!audio && !originalOnPds(audio));
   let privateTrack = $derived(onlyYou(access));
   let summary = $derived(accessSummary(access));
   let tooLargeClosed = $derived(access.closed && !!audio && audio.size > MAX_AUDIO_BYTES);
@@ -118,7 +120,7 @@
 
   let editing = $derived(!!audio || !!cover || reattach || !!(title || album || description || tags || features.length));
   let blocked = $derived(submitting || privateBusy || !audio || !title.trim() || !artist || !!tagProblem || imageBusy || tooLargeClosed || !!accessSignIn || (!privateTrack && !!options.sell && !account.accountSync)
-    || (privateTrack ? privateBlocked : (loading || !!recoveryProblem || creationBlocksUpload || (service && (!consent || !account.uploadStorage)))));
+    || (privateTrack ? privateBlocked : (loading || !!recoveryProblem || creationBlocksUpload || (service && ((soleCopy && !consent) || !account.uploadStorage)))));
 
   function isImage(file: File) {
     return file.type.startsWith('image/') || /\.(heic|heif|jpe?g|png|webp|gif|avif)$/i.test(file.name);
@@ -473,13 +475,9 @@
         {#if audio}<AudioPreview file={audio} bind:duration />{/if}
         {#if tooLargeClosed}<p class="problem" role="alert">closed tracks can be up to 100 MB for now. choose a smaller file or make it open.</p>{/if}
         {#if service}
-          <label class="consent">
-            <input type="checkbox" bind:checked={consent} />
-            <span><b>use plyr.fm storage</b> plyr.fm keeps the original file and makes an mp3 so it plays everywhere. playback and downloads are public.</span>
-          </label>
-          {#if !account.uploadStorage}
-            <p class="problem">sign in again to allow plyr.fm storage. what you typed stays here. <a href="/login?return_to=%2Fupload">sign in again</a></p>
-          {/if}
+          {#if soleCopy}<label class="consent"><input type="checkbox" bind:checked={consent} /><span><b>use plyr.fm storage</b> this file is over 100 MB, more than a track can keep on your PDS, so plyr.fm keeps it and serves it so it plays everywhere. playback and downloads are public.</span></label>
+          {:else}<p class="consent note"><span><b>your PDS keeps the original</b> plyr.fm adds an mp3 copy so it plays everywhere. playback and downloads are public.</span></p>{/if}
+          {#if !account.uploadStorage}<p class="problem">sign in again to allow plyr.fm storage. what you typed stays here. <a href="/login?return_to=%2Fupload">sign in again</a></p>{/if}
         {/if}
       </div>
     </header>
@@ -548,7 +546,8 @@
   .chip.file { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; line-height: 1.4rem; }
   .chip.action { color: var(--text); font-weight: 700; }
   .chip.action:hover { background: var(--hover); }
-  .consent { display: flex; align-items: flex-start; gap: 0.7rem; padding: 0.75rem 0.9rem; border-radius: 0.75rem; background: var(--glass); border: 1px solid var(--line); backdrop-filter: blur(16px); color: var(--muted); font-size: var(--t-14-4); line-height: 1.4; cursor: pointer; }
+  .consent { margin: 0; display: flex; align-items: flex-start; gap: 0.7rem; padding: 0.75rem 0.9rem; border-radius: 0.75rem; background: var(--glass); border: 1px solid var(--line); backdrop-filter: blur(16px); color: var(--muted); font-size: var(--t-14-4); line-height: 1.4; cursor: pointer; }
+  .consent.note { cursor: default; }
   .consent b { color: var(--text); margin-right: 0.25rem; }
   .consent input { accent-color: var(--accent); }
   .consent input { width: 1.2rem; height: 1.2rem; flex: none; margin: 0.1rem 0 0; }

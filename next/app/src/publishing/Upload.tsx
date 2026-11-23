@@ -12,7 +12,7 @@ import { pickMedia, retype } from '../media-picker';
 import type { MediaFile } from '../pds';
 import { readLocal, removeLocal, writeLocal } from '../storage';
 import { LargeUploads, useLargeUploads } from './LargeUploads';
-import { canonicalAudioType, needsPlyrStorage, uploadInProgress } from '@plyr/next-core/publishing/upload-queue-model';
+import { canonicalAudioType, needsPlyrStorage, originalOnPds, uploadInProgress } from '@plyr/next-core/publishing/upload-queue-model';
 import { uploadQueue, useUploadQueue } from './upload-queue';
 import { UploadQueueList } from './UploadQueue';
 import { useSharedAudio } from './shared-audio';
@@ -112,6 +112,8 @@ function TrackUpload({ auth, onlyYou: startOnlyYou, scroll }: { auth: Auth; only
   const ours = (operation: { rkey: string }) => busy.rkeys.has(operation.rkey) || uploads.operations.some(upload => upload.rkey === operation.rkey);
   const creationRecovery = { ...recovery, operations: recovery.operations.filter(operation => !ours(operation)), archived: recovery.archived.filter(operation => !ours(operation)) };
   const service = !!file && needsPlyrStorage(file, access.closed);
+  // the artist agrees only when plyr.fm would hold the sole copy; otherwise their PDS keeps the original
+  const soleCopy = service && !originalOnPds(file);
   const privateTrack = onlyYou(access);
   const summary = accessSummary(access);
   const tooLargeClosed = access.closed && !!file && file.size > MAX_AUDIO_BYTES;
@@ -217,7 +219,7 @@ function TrackUpload({ auth, onlyYou: startOnlyYou, scroll }: { auth: Auth; only
   }
 
   const blocked = saving || needsSettings || privateUploads.busy || !file || !title.trim() || !artist || !!tagError || tooLargeClosed || accessSignIn
-    || (privateTrack ? privateUploads.blocked : service && (!serviceConsent || !auth.uploadStorage));
+    || (privateTrack ? privateUploads.blocked : service && ((soleCopy && !serviceConsent) || !auth.uploadStorage));
 
   async function upload() {
     const problem = accessProblem(access) ?? (privateTrack ? undefined : sellProblem(options.sell));
@@ -277,8 +279,10 @@ function TrackUpload({ auth, onlyYou: startOnlyYou, scroll }: { auth: Auth; only
         {problems.audio && <FieldError>{problems.audio}</FieldError>}
         {problems.artwork && <FieldError>{problems.artwork}</FieldError>}
         {service && <View style={{ alignSelf: 'stretch', gap: 4, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: theme.hairline, backgroundColor: theme.surface }}>
-          <CheckRow label="use plyr.fm storage" checked={serviceConsent} onChange={consent} />
-          <Copy>plyr.fm keeps the original file and makes an mp3 so it plays everywhere. playback and downloads are public.</Copy>
+          {soleCopy ? <>
+            <CheckRow label="use plyr.fm storage" checked={serviceConsent} onChange={consent} />
+            <Copy>this file is over 100 MB, more than a track can keep on your PDS, so plyr.fm keeps it and serves it so it plays everywhere. playback and downloads are public.</Copy>
+          </> : <Copy><Text style={{ color: theme.text, fontWeight: '600' }}>your PDS keeps the original.</Text> plyr.fm adds an mp3 copy so it plays everywhere. playback and downloads are public.</Copy>}
           {!auth.uploadStorage && <><Copy>sign in again to allow plyr.fm storage. what you typed stays here; you will choose the file again.</Copy><Action label="Sign in again" href={{ pathname: '/login', params: { return_to: '/upload' } }} /></>}
         </View>}
       </TrackHero> : <ChooseTrack onPress={() => void chooseAudio()} artist={artist}>

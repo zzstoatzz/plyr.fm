@@ -11,7 +11,7 @@
   import { draftInRecovery, queuedUploadDraft, reattachQueuedUpload } from '@plyr/next-core/publishing/queued-upload-draft';
   import { RepoResponseError } from '@plyr/next-core/publishing/repo-rpc';
   import { PUBLIC_AUDIO_FORMATS } from '@plyr/next-core/publishing/upload-model';
-  import { jobLine, needsPlyrStorage, uploadInProgress } from '@plyr/next-core/publishing/upload-queue-model';
+  import { jobLine, needsPlyrStorage, originalOnPds, uploadInProgress } from '@plyr/next-core/publishing/upload-queue-model';
   import { api } from '$lib/api';
   import { auth } from '$lib/auth';
   import { authConfig } from '$lib/auth-config';
@@ -48,6 +48,8 @@
   let artistName = $state<string>();
   let artist = $derived(artistName || account.handle || owner);
   let usesStorage = $derived(selections.some(item => needsPlyrStorage(item.file)));
+  // agreeing is only asked when plyr.fm would hold a file's sole copy; smaller originals stay on the artist's PDS
+  let soleCopies = $derived(selections.some(item => !originalOnPds(item.file)));
   const consentKey = $derived(`plyr-storage-consent:${owner}`);
   let consent = $state(false);
   let plan = $state.raw<AlbumUploadPlan>();
@@ -177,7 +179,7 @@
   async function start(event: SubmitEvent) {
     event.preventDefault();
     if (!current() || loading || saving || statusProblem || plan || blocked || coverPending || !selections.length
-      || selections.some(item => !item.title.trim()) || (usesStorage && !consent)) return;
+      || selections.some(item => !item.title.trim()) || (soleCopies && !consent)) return;
     saving = true;
     problem = '';
     try {
@@ -196,7 +198,7 @@
         const saved: AlbumUploadPlan = { owner, id: crypto.randomUUID(), reservedRkey: TID.nextStr(), name: title, coverName: cover?.name, slots };
         if (!current()) return;
         await albumUploads.add(saved);
-        if (usesStorage) { try { localStorage.setItem(consentKey, 'yes'); } catch {} }
+        if (soleCopies) { try { localStorage.setItem(consentKey, 'yes'); } catch {} }
         if (signIn) return;
         for (const { input, id, reservedRkey } of entries) {
           if (!current()) return;
@@ -409,11 +411,15 @@
       </OrderRows>
     {/if}
     {#if usesStorage}
-      <p class="subtle">plyr.fm stores these files and makes an mp3 for playback when needed. playback and downloads are public.</p>
-      <label class="consent"><input type="checkbox" bind:checked={consent} /> use plyr.fm storage</label>
+      {#if soleCopies}
+        <p class="subtle">files over 100 MB are more than a track can keep on your PDS, so plyr.fm keeps those. the rest stay on your PDS, and plyr.fm adds an mp3 copy where needed so they play everywhere. playback and downloads are public.</p>
+        <label class="consent"><input type="checkbox" bind:checked={consent} /> use plyr.fm storage</label>
+      {:else}
+        <p class="subtle">your PDS keeps the originals. plyr.fm adds an mp3 copy where needed so they play everywhere. playback and downloads are public.</p>
+      {/if}
     {/if}
     <button class="text-button primary" type="submit"
-      disabled={!!statusProblem || blocked || coverPending || !name.trim() || !selections.length || selections.some(item => !item.title.trim()) || (usesStorage && !consent)}>
+      disabled={!!statusProblem || blocked || coverPending || !name.trim() || !selections.length || selections.some(item => !item.title.trim()) || (soleCopies && !consent)}>
       {saving ? 'starting…' : usesStorage && !account.uploadStorage ? 'save album draft and sign in' : 'upload tracks'}
     </button>
   </form>

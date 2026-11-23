@@ -155,7 +155,8 @@ async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'reg
     if (request.url().endsWith('/activate')) {
       const { value } = await getRecord(upload.recordUri);
       assert.equal(value.audioUrl, upload.audioUrl);
-      assert.equal(value.audioBlob, undefined);
+      assert.equal(value.audioBlob.mimeType, 'audio/wav');
+      assert.equal(value.audioBlob.size, wav.length);
       assert.equal(value.downloadPolicy, 'open');
       assert.equal(value.fileType, 'mp3');
       activationChecks++;
@@ -337,10 +338,9 @@ async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'reg
     assert.equal(blobWrites, 2);
 
     await audioInput.setInputFiles({ name: 'for conversion.wav', mimeType: 'audio/wav', buffer: wav });
-    const consent = page.getByRole('checkbox', { name: 'use plyr.fm storage' });
-    await consent.waitFor();
-    assert.ok(await submit.isDisabled());
-    await consent.check();
+    // the original fits a blob, so the artist's PDS keeps it and nothing asks to hand it to plyr.fm
+    await page.getByText('your PDS keeps the original', { exact: true }).waitFor();
+    assert.equal(await page.getByRole('checkbox', { name: 'use plyr.fm storage' }).count(), 0);
     if (manualConfirmation) await page.getByRole('switch', { name: /auto-tag with recommended genres/ }).check();
     if (scenario === 'after-transfer') {
       await interruptDraftCleanup(page);
@@ -445,7 +445,7 @@ async function verify(browser, accounts, width, theme, mp3, wav, scenario = 'reg
     }
     assert.equal(state, 'published');
     assert.equal(writes.length, 2);
-    assert.equal(blobWrites, 2, 'converted source bytes never go to the PDS');
+    assert.equal(blobWrites, 3, 'the converted source keeps its original on the PDS');
     assert.deepEqual(errors, []);
     console.log(`Svelte public PDS and processed upload passed at ${width}px (${theme})`);
   } finally { releaseBlob.resolve(); releasePart.resolve(); await context.close(); }
