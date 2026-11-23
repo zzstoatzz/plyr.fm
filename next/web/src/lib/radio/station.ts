@@ -7,7 +7,13 @@ export const feeds = createRadioFeeds(apiOrigin);
 
 function onAir(snapshot: RadioSnapshot) {
   const song = snapshot.currentSong;
-  if (!song || (snapshot.endsAt !== null && snapshot.endsAt <= Date.now())) { player.clearRadioTrack(); return; }
+  if (!song || (snapshot.endsAt !== null && snapshot.endsAt <= Date.now())) {
+    // the station's off-air check fails closed, so one slow answer from the broadcaster reads as off air; a stream
+    // still playing outlasts that, and production keeps it too. a broadcast that really ends stops the element itself
+    if (!song && player.airingBroadcast) return;
+    player.clearRadioTrack();
+    return;
+  }
   const occurrence = JSON.stringify([song.id, song.audio, snapshot.endsAt]);
   void player.setRadioTrack(song.track, song.audio, occurrence, () => radioPosition(snapshot), song.live);
 }
