@@ -11,6 +11,28 @@ const rewrites = [_]Rewrite{
     .{ .from = "https://pub-7ea7ea9a6f224f4f8c0321a2bb008c5a.r2.dev/", .to = "https://images.plyr.fm/" },
 };
 
+/// Where plyr itself stores public audio: prod's bucket (and its CDN domain) and
+/// next's audio worker. An `audioUrl` elsewhere is only the artist's word for
+/// what plays there, so a blob beside it is still copied (see blob_mirror).
+pub const held_audio_prefixes = [_][]const u8{
+    "https://audio.plyr.fm/",
+    "https://pub-d4ed8a1e39d44dac85263d86ad5676fd.r2.dev/",
+    "https://plyr-next-audio.n8-3e9.workers.dev/audio/",
+};
+
+/// SQL that is true when `column` names audio on one of `held_audio_prefixes`
+/// (false for NULL).
+pub fn heldAudioSql(comptime column: []const u8) []const u8 {
+    comptime {
+        var sql: []const u8 = "(" ++ column ++ " IS NOT NULL AND (";
+        for (held_audio_prefixes, 0..) |prefix, i| {
+            if (i > 0) sql = sql ++ " OR ";
+            sql = sql ++ column ++ " LIKE '" ++ prefix ++ "%'";
+        }
+        return sql ++ "))";
+    }
+}
+
 /// The CDN address for a public bucket URL; any other URL is returned as is.
 pub fn canonical(allocator: std.mem.Allocator, url: []const u8) std.mem.Allocator.Error![]const u8 {
     for (rewrites) |rewrite| {
@@ -95,6 +117,15 @@ pub fn canonicalOwned(allocator: std.mem.Allocator, url: ?[]const u8) std.mem.Al
     const result = try canonical(allocator, value);
     if (result.ptr != value.ptr) allocator.free(value);
     return result;
+}
+
+test "held audio is plyr's own buckets, by prefix" {
+    try std.testing.expectEqualStrings(
+        "(v.audio_url IS NOT NULL AND (v.audio_url LIKE 'https://audio.plyr.fm/%' OR " ++
+            "v.audio_url LIKE 'https://pub-d4ed8a1e39d44dac85263d86ad5676fd.r2.dev/%' OR " ++
+            "v.audio_url LIKE 'https://plyr-next-audio.n8-3e9.workers.dev/audio/%'))",
+        comptime heldAudioSql("v.audio_url"),
+    );
 }
 
 test "public bucket hosts move to their CDN domains" {

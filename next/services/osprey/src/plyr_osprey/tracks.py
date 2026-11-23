@@ -77,10 +77,10 @@ class TrackInputStream(BaseInputStream[BaseAckingContext[Action]]):
 
 def _action(track: IndexedTrack) -> Action:
     return Action(
-        action_id=track.indexed_at_us,
+        action_id=track.ready_at_us,
         action_name=ACTION_NAME,
         data=track.action_data(),
-        timestamp=datetime.fromtimestamp(track.indexed_at_us / 1_000_000, tz=UTC),
+        timestamp=datetime.fromtimestamp(track.ready_at_us / 1_000_000, tz=UTC),
     )
 
 
@@ -110,6 +110,8 @@ class ModerationLogSink(BaseOutputSink):
         recordings = result.extracted_features.get(RECORDINGS_FEATURE)
         self._store.finish(track, flags, recordings if isinstance(recordings, list) else None)
         self._walk.settled = True
+        if isinstance(recordings, list):
+            log.info('scanned %s (%s): %d recordings', track.uri, track.audio_url, len(recordings))
         if flags:
             log.info('flagged %s: %s', track.uri, ', '.join(f.actor for f in flags))
 

@@ -55,7 +55,13 @@ DROP SCHEMA IF EXISTS plyr_moderation CASCADE;
 CREATE SCHEMA plyr_index;
 CREATE TABLE plyr_index.track_records (
     record_uri TEXT PRIMARY KEY, record_cid TEXT, owner_did TEXT NOT NULL, collection TEXT NOT NULL,
-    title TEXT, audio_url TEXT, deleted BOOLEAN NOT NULL DEFAULT false, indexed_at_us BIGINT NOT NULL
+    title TEXT, audio_url TEXT, audio_blob_cid TEXT, deleted BOOLEAN NOT NULL DEFAULT false,
+    indexed_at_us BIGINT NOT NULL
+);
+CREATE TABLE plyr_index.track_delivery_origins (
+    record_uri TEXT NOT NULL, service TEXT NOT NULL, record_cid TEXT NOT NULL, origin_url TEXT NOT NULL,
+    media_type TEXT NOT NULL, artifact_cid TEXT NOT NULL, verification TEXT NOT NULL,
+    observed_at_us BIGINT NOT NULL, PRIMARY KEY (record_uri, service)
 );
 CREATE TABLE plyr_index.actor_identities (did TEXT PRIMARY KEY, handle TEXT NOT NULL, display_name TEXT NOT NULL);
 CREATE TABLE plyr_index.track_policies (
