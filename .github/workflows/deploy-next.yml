@@ -367,7 +367,10 @@ jobs:
           [ "$down" = 0 ] || { echo "::error::a worker machine is not running"; exit 1; }
 
       # Records a parser rejected are not offered again by the firehose, so when
-      # what next accepts changes, the catalog is re-read to pick them up.
+      # what next accepts changes, the catalog is re-read to pick them up. A
+      # repository at an unchanged revision is only re-projected when
+      # projection_version (postgres_verified_snapshot_store.zig) went up, so a
+      # decoder change bumps it, and that bump is what starts the reconcile.
       - name: did what next accepts change?
         id: parsers
         if: github.event_name == 'push'
@@ -375,7 +378,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           changed="$(gh api "repos/${{ github.repository }}/compare/${{ github.event.before }}...${{ github.sha }}" \
-            --jq '[.files[].filename | select(test("^next/backend/src/internal/atproto/([a-z_]+_record|lexicon_value)[.]zig$"))] | length')"
+            --jq '[.files[].filename | select(. == "next/backend/src/internal/projection/postgres_verified_snapshot_store.zig")] | length')"
           echo "changed=${changed:-0}" >> "$GITHUB_OUTPUT"
 
       - name: reconcile the fm.plyr catalog into next
