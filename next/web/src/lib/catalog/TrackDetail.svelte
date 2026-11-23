@@ -139,7 +139,7 @@
 		{#if track.metadata.tags?.length}
 			<nav class="tags" aria-label="Tags">
 				{#each track.metadata.tags as tag (tag)}
-					<a href={resolve(`/?${new URLSearchParams({ tag })}`)}>{tag}</a>
+					<a class="tag-pill" href={resolve(`/?${new URLSearchParams({ tag })}`)}>{tag}</a>
 				{/each}
 			</nav>
 		{/if}
@@ -209,7 +209,7 @@
 	.actions, .tags { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0.4rem; }
 	.tags { margin: 0.2rem 0 0.65rem; }
 	.tags a { display: grid; align-items: center; min-height: 2.75rem; padding-inline: 0.65rem; max-width: 100%; overflow-wrap: anywhere; border-radius: 0.6rem; color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); font-size: var(--t-13-6); font-weight: 650; }
-	.tags a:hover { text-decoration: underline; }
+	@media (hover: hover) { .tags a:hover { background: color-mix(in srgb, var(--accent) 20%, var(--surface)); } }
 	.primary-button { width: 3.5rem; height: 3.5rem; }
 	.buy { display: inline-flex; align-items: center; gap: 0.45rem; height: 2.75rem; padding: 0 1.1rem; border: 1.5px solid var(--accent); border-radius: 999px; color: var(--accent); font-weight: 700; max-width: 100%; }
 	.buy span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
