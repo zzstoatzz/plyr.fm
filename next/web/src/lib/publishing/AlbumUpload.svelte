@@ -10,6 +10,7 @@
   import { normalizeTrackTags } from '@plyr/next-core/publishing/track-tags';
   import { albumName } from '@plyr/next-core/collections/album-membership';
   import type { AlbumUploadPlan, AlbumUploadSlot } from '@plyr/next-core/publishing/album-upload-plan';
+  import { albumTitles } from '@plyr/next-core/publishing/album-titles';
   import { creditName } from '@plyr/next-core/publishing/credit-name';
   import { draftInRecovery, queuedUploadDraft, reattachQueuedUpload } from '@plyr/next-core/publishing/queued-upload-draft';
   import { RepoResponseError } from '@plyr/next-core/publishing/repo-rpc';
@@ -213,14 +214,11 @@
   function addFiles(list: File[]) {
     const additions: Selected[] = [];
     const rejected: string[] = [];
-    // a shared "01 " style prefix is dropped from titles; the order already says it
-    const numbered = /^\d{1,3}\s*[-–.)_]?\s+(?=\S)/;
-    const bare = (file: File) => file.name.replace(/\.[^.]+$/, '').trim();
-    const strip = list.length > 1 && list.every(file => numbered.test(bare(file)));
-    for (const file of list) {
+    const titles = albumTitles(list.map(file => file.name));
+    for (const [index, file] of list.entries()) {
       try {
         const audio = canonicalAudioFile(file);
-        const title = (strip ? bare(file).replace(numbered, '') : bare(file)).slice(0, 256) || file.name.slice(0, 256);
+        const title = titles[index];
         additions.push({ key: crypto.randomUUID(), file: audio, title, explicit: false, features: [], open: false });
       } catch (failure) { rejected.push(`${file.name}: ${message(failure, 'could not open the file.')}`); }
     }
