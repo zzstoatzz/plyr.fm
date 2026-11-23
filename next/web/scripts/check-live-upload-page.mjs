@@ -10,17 +10,29 @@ const output = process.env.SCREENS_OUTPUT || '/tmp/plyr-live-upload-page';
 const { ZAT_TEST_HANDLE: handle, ZAT_TEST_PASSWORD: password, ZAT_TEST_PDS: pdsUrl } = process.env;
 const { signIn } = await browserAccount(handle, password, pdsUrl);
 
-// sign out from settings and report how the PDS answered the revoke, rather than waiting on a 2xx that may not come
+// sign out from settings and wait for the stored session to go; the revoke runs after the page has gone home,
+// so leaving too early would cut it off and keep the session
 async function signOut(page) {
   await page.goto(app + '/settings', { waitUntil: 'domcontentloaded' });
   const button = page.getByRole('button', { name: 'sign out', exact: true });
   const signedOut = page.locator('main').getByRole('link', { name: 'sign in', exact: true });
   await button.or(signedOut).first().waitFor();
   if (!await button.isVisible()) return;
-  const revoke = page.waitForResponse(response => /\/oauth\/revoke$/.test(new URL(response.url()).pathname), { timeout: 15_000 })
-    .then(response => response.status(), () => 'no request');
+  const revoke = page.context().waitForEvent('response', { predicate: response => /\/oauth\/revoke$/.test(new URL(response.url()).pathname), timeout: 30_000 })
+    .then(response => response.status(), () => 'not seen');
   await button.click();
   await page.waitForURL(app + '/');
+  await page.waitForFunction(() => new Promise((resolve, reject) => {
+    const open = indexedDB.open('@atproto-oauth-client');
+    open.onerror = () => reject(open.error);
+    open.onsuccess = () => {
+      const db = open.result;
+      const count = db.transaction('session').objectStore('session').count();
+      db.close();
+      count.onerror = () => reject(count.error);
+      count.onsuccess = () => resolve(count.result === 0);
+    };
+  }), null, { timeout: 30_000 });
   console.log(`revoke: ${await revoke}`);
   await page.goto(app + '/upload', { waitUntil: 'domcontentloaded' });
   await signedOut.waitFor();
