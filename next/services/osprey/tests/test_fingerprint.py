@@ -1,7 +1,7 @@
 import pytest
 import requests
 
-from plyr_osprey.fingerprint import ModerationServiceFingerprinter
+from plyr_osprey.fingerprint import AudDFingerprinter, matches_from
 
 
 class Response:
@@ -16,21 +16,50 @@ class Response:
         return self._body
 
 
-def test_scan_asks_the_moderation_service(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_scan_asks_audd_with_accurate_offsets(monkeypatch: pytest.MonkeyPatch) -> None:
     sent = {}
 
-    def post(url, json, headers, timeout):
-        sent.update(url=url, json=json, key=headers['X-Moderation-Key'])
-        return Response(200, {'matches': [{'artist': 'A', 'title': 'T'}, 'junk'], 'highest_score': 0})
+    def post(url, data, headers, timeout):
+        sent.update(url=url, data=data)
+        return Response(200, {'status': 'success', 'result': None})
 
     monkeypatch.setattr(requests, 'post', post)
-    found = ModerationServiceFingerprinter('https://moderation.example/', 'k').matches('https://x/a.mp3')
-    assert found == [{'artist': 'A', 'title': 'T'}]
-    assert sent == {'url': 'https://moderation.example/scan', 'json': {'audio_url': 'https://x/a.mp3'}, 'key': 'k'}
+    assert AudDFingerprinter('k').matches('https://x/a.mp3') == []
+    assert sent == {
+        'url': 'https://enterprise.audd.io/',
+        'data': {'api_token': 'k', 'url': 'https://x/a.mp3', 'accurate_offsets': '1'},
+    }
 
 
-@pytest.mark.parametrize('response', [Response(503, {}), Response(200, {'error': 'audd'})])
+def test_samples_become_one_match_per_song_with_offsets() -> None:
+    body = {
+        'status': 'success',
+        'result': [
+            {
+                'offset': '01:12',
+                'songs': [{'artist': 'A', 'title': 'T', 'score': 100, 'timecode': '00:40', 'isrc': 'I'}],
+            },
+            {'offset': 144000, 'songs': [{'title': 'U'}, 'junk']},
+            {'offset': 'x', 'songs': None},
+        ],
+    }
+    assert matches_from(body) == [
+        {'artist': 'A', 'title': 'T', 'score': 100, 'isrc': 'I', 'timecode': '00:40', 'offset_ms': 72000},
+        {'artist': 'Unknown', 'title': 'U', 'score': 0, 'offset_ms': 144000},
+    ]
+
+
+def test_a_single_song_has_no_offset() -> None:
+    assert matches_from({'status': 'success', 'result': {'artist': 'A', 'title': 'T'}}) == [
+        {'artist': 'A', 'title': 'T', 'score': 0}
+    ]
+
+
+@pytest.mark.parametrize(
+    'response',
+    [Response(503, {}), Response(200, {'status': 'error', 'error': {'error_code': 900}}), Response(200, ['x'])],
+)
 def test_a_failed_scan_raises(monkeypatch: pytest.MonkeyPatch, response: Response) -> None:
     monkeypatch.setattr(requests, 'post', lambda *a, **k: response)
-    with pytest.raises((requests.HTTPError, TypeError)):
-        ModerationServiceFingerprinter('https://m', 'k').matches('https://x/a.mp3')
+    with pytest.raises((requests.HTTPError, RuntimeError, TypeError)):
+        AudDFingerprinter('k').matches('https://x/a.mp3')
