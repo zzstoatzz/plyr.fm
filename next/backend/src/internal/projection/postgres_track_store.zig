@@ -213,7 +213,7 @@ fn applyRecord(conn: *pg.Conn, write: RecordWrite) TrackStore.Error!ApplyResult 
         write.indexed_at_us,
         write.audio_space,
     }) catch |err| {
-        std.log.err("track projection record upsert failed: {}", .{err});
+        std.log.err("track projection record upsert failed for {s}: {}: {s}", .{ write.record_uri, err, if (conn.err) |pg_err| pg_err.message else "" });
         return error.ProjectionUnavailable;
     };
     if (affected == 1) return .applied;
