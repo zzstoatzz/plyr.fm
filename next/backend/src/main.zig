@@ -199,6 +199,7 @@ pub fn main() !void {
         null;
     var space_restrictions: ?postgres_restrictions.PostgresRestrictions = if (postgres_store) |*store| .{ .pool = store.pool } else null;
     var platform_stats: ?postgres_platform_stats.PostgresPlatformStatsStore = if (postgres_store) |*store| .{ .pool = store.pool, .io = io, .collection = settings.track_collection } else null;
+    var legacy_audio: ?@import("internal/index/postgres_legacy_audio_store.zig").PostgresLegacyAudioStore = if (postgres_store) |*store| .{ .pool = store.pool } else null;
     var stats_overview: ?@import("internal/metrics/postgres_stats_overview_store.zig").PostgresStatsOverviewStore = if (postgres_store) |*store| .{ .pool = store.pool, .io = io, .collection = settings.track_collection, .like_collection = settings.like_collection } else null;
     switch (settings.role) {
         .jams => unreachable,
@@ -242,6 +243,7 @@ pub fn main() !void {
                 .artist_metric_store = artist_metric_store,
                 .stats_store = if (platform_stats) |*store| store.store() else null,
                 .stats_overview_store = if (stats_overview) |*store| store else null,
+                .legacy_audio = if (legacy_audio) |*store| store else null,
                 .verified_list_store = verified_list_store,
                 .record_status_store = record_status_store,
                 .ingest_status_store = ingest_status_store,
@@ -351,6 +353,8 @@ test {
     _ = @import("api/catalog.zig");
     _ = @import("internal/application/list_track_suggestions.zig");
     _ = @import("api/radio.zig");
+    _ = @import("api/legacy_links.zig");
+    _ = @import("internal/index/postgres_legacy_audio_store.zig");
     _ = @import("internal/application/public_catalog.zig");
     _ = @import("internal/index/track_record_json_store.zig");
     _ = @import("internal/application/notifications.zig");
