@@ -20,11 +20,12 @@
 	import Loading from '$lib/ui/Loading.svelte';
 	import TrackRow from '$lib/TrackRow.svelte';
 	import { api } from '$lib/api';
+	import { likes } from '$lib/listening/likes';
 	import { compactCount, postedAt } from '$lib/listening/format';
 	import WaysIn from '$lib/access/WaysIn.svelte';
 	import ReportSheet from '$lib/moderation/ReportSheet.svelte';
 	import { auth } from '$lib/auth';
-	import { onMount, tick } from 'svelte';
+	import { onMount, tick, untrack } from 'svelte';
 	import { isOpen } from '@plyr/next-core/access/policy';
 	import { offerFor, offerLabel, supportLink } from '@plyr/next-core/selling';
 	import type { Artist } from '@plyr/next-core/api';
@@ -53,7 +54,18 @@
 		return unsubscribe;
 	});
 	// the rest of the page: who liked it, more from the artist, and what sounds like it
-	let related = $state.raw<{ id: string; likers: { did: string; name: string; avatar: string | null }[]; more: Track[]; similar: Track[] }>();
+	let related = $state.raw<{ id: string; more: Track[]; similar: Track[] }>();
+	// who liked it comes from the shared like state, so liking here shows up at once
+	let likedBy = $state.raw(untrack(() => likes.likers(track)));
+	let likeCount = $state(untrack(() => likes.snapshot(track).count));
+	$effect(() => {
+		if (!canDiscuss) return;
+		const current = track;
+		const read = () => { likedBy = likes.likers(current); likeCount = likes.snapshot(current).count; };
+		read();
+		void likes.loadLikers(current);
+		return likes.subscribe(read);
+	});
 	$effect(() => {
 		if (!canDiscuss) return;
 		const { id, artist, record } = track;
@@ -61,10 +73,9 @@
 		let live = true;
 		const settle = <T,>(work: Promise<T>, fallback: T) => work.catch(() => fallback);
 		void Promise.all([
-			settle(api.trackLikes(id).then(page => page.data.map(like => ({ did: like.actor.did, name: like.actor.profile?.display_name || like.actor.profile?.handle || '', avatar: like.actor.profile?.avatar_url ?? null }))), []),
 			settle(api.tracks({ artist_did: artist.did, limit: 7 }, request.signal).then(page => page.data.filter(other => other.id !== id).slice(0, 5)), []),
 			settle(api.suggestions([record.uri], { limit: 5, signal: request.signal }).then(page => page.data), [])
-		]).then(([likers, more, similar]) => { if (live) related = { id, likers, more, similar }; });
+		]).then(([more, similar]) => { if (live) related = { id, more, similar }; });
 		return () => { live = false; request.abort(); };
 	});
 	const shown = $derived(related?.id === track.id ? related : undefined);
@@ -173,13 +184,14 @@
 			{#if active && player.error}<p class="state" role="status">{player.error}</p>{:else if active && player.preparing}<p class="state" role="status">preparing…</p>{/if}
 		</section>
 
-		{#if shown?.likers.length || track.metadata.description || (canDiscuss && commentsEnabled)}
+		{#if (canDiscuss && likedBy.people.length) || track.metadata.description || (canDiscuss && commentsEnabled)}
 			<div class="column">
-				{#if shown?.likers.length}
-					{@const [first, ...rest] = shown.likers}
+				{#if canDiscuss && likedBy.people.length}
+					{@const first = likedBy.people[0]}
+					{@const rest = Math.max(likeCount, likedBy.people.length) - 1}
 					<p class="liked">
-						<span class="faces" aria-hidden="true">{#each shown.likers.slice(0, 5) as liker (liker.did)}<Artwork src={liker.avatar ?? undefined} size={28} />{/each}</span>
-						<span>liked by <b>{first.name}</b>{#if rest.length}{` and ${rest.length} ${rest.length === 1 ? 'other' : 'others'}`}{/if}</span>
+						<span class="faces" aria-hidden="true">{#each likedBy.people.slice(0, 5) as liker (liker.did)}<Artwork src={liker.profile?.avatar_url ?? undefined} size={28} />{/each}</span>
+						<span>liked by <b>{first.profile?.display_name || first.profile?.handle || 'someone'}</b>{#if rest > 0}{` and ${rest} ${rest === 1 ? 'other' : 'others'}`}{/if}</span>
 					</p>
 				{/if}
 				{#if track.metadata.description}
