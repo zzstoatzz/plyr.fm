@@ -1,11 +1,12 @@
 import { clock } from '@plyr/next-core/chapters';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { PanResponder, View, type ViewInstance } from 'react-native';
+import { PanResponder, StyleSheet, View, type ViewInstance } from 'react-native';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { useAppearance } from './appearance';
 import { useAdjustable } from './behaviors/use-adjustable';
 import { usePlayback } from './playback';
 
-/** The mini player's progress drawn as its own bottom edge. A sideways drag on the edge scrubs; taps and vertical swipes don't. */
+/** The mini player's progress as a soft accent wash filling it. A sideways drag along its bottom scrubs; taps and vertical swipes don't. */
 export function MiniLip({ capsule, onScrub }: { capsule: boolean; onScrub: (seconds: number | undefined) => void }) {
   const player = usePlayback();
   const theme = useAppearance();
@@ -42,14 +43,22 @@ export function MiniLip({ capsule, onScrub }: { capsule: boolean; onScrub: (seco
   const adjustable = useAdjustable({ label: 'Playback position', value: position, min: 0, max: duration || 1, step: 10,
     text: `${clock(position)} of ${clock(duration)}`, onChange: seconds => void player.seek(seconds), disabled: !enabled });
   const fill = duration ? position / duration : 0;
-  const thick = dragging === undefined ? 2 : 4;
-  const edge = (color: string) => ({ position: 'absolute' as const, left: 0, top: 0, bottom: 0, width, borderRadius: radius, borderColor: 'transparent', borderBottomWidth: thick, borderBottomColor: color });
+  const at01 = (px: number) => width ? Math.max(0, Math.min(1, px / width)) : 0;
+  const head = width * fill;
+  // The front of the wash fades out rather than ending in a hard line.
+  const stops = dragging === undefined
+    ? [[0, 0.11], [at01(head - 32), 0.19], [at01(head + 16), 0]]
+    : [[0, 0.15], [at01(head - 1), 0.28], [at01(head + 20), 0]];
   return <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }}
     onLayout={event => { setSize(event.nativeEvent.layout); band.current?.measureInWindow(x => { left.current = x; }); }}>
     <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, borderRadius: radius, overflow: 'hidden' }}>
-      <View style={edge(theme.line)} />
-      <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: width * fill, overflow: 'hidden' }}><View style={edge(theme.accent)} /></View>
-      {dragging !== undefined && <View style={{ position: 'absolute', bottom: 0, left: width * fill - 7, width: 14, height: 14, borderRadius: 7, backgroundColor: theme.accent }} />}
+      <Svg style={StyleSheet.absoluteFill} width={width} height={height}>
+        <Defs><LinearGradient id="mini-wash" x1="0" y1="0" x2="1" y2="0">
+          {stops.map(([offset, opacity], index) => <Stop key={index} offset={offset} stopColor={theme.accent} stopOpacity={opacity} />)}
+        </LinearGradient></Defs>
+        <Rect width={width} height={height} fill="url(#mini-wash)" />
+      </Svg>
+      {dragging !== undefined && <View style={{ position: 'absolute', top: 7, bottom: 7, left: head - 1, width: 2, borderRadius: 1, backgroundColor: theme.accent }} />}
     </View>
     <View ref={band} testID="mini-player-scrub" {...adjustable} {...responder.panHandlers}
       style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 12 }} />

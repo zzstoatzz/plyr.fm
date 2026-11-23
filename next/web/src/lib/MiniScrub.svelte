@@ -2,7 +2,7 @@
 	import { player } from './player.svelte';
 	import { clock } from './tracks';
 
-	// The phone mini player's progress: its own bottom edge. Sideways drags on the edge scrub; taps and vertical swipes don't.
+	// The phone mini player's progress: a soft accent wash filling the pill. Sideways drags along its bottom scrub; taps and vertical swipes don't.
 	let band: HTMLDivElement | undefined = $state();
 	let dragging: number | undefined = $state();
 	let start: { x: number; y: number } | undefined;
@@ -53,9 +53,9 @@
 </script>
 
 <div class="lip" class:dragging={dragging !== undefined} style:--fill={`${fill}%`}>
-	<span class="edge" aria-hidden="true"><i class="rail"></i><i class="played"></i></span>
+	<span class="wash" aria-hidden="true"></span>
 	{#if dragging !== undefined}
-		<span class="knob" aria-hidden="true"></span>
+		<span class="head" aria-hidden="true"></span>
 		<span class="bubble" aria-hidden="true">{clock(dragging)}</span>
 	{/if}
 	<div class="band" bind:this={band} aria-hidden="true" onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={cancel}
@@ -68,19 +68,20 @@
 
 <style>
 	.lip { display: none; position: absolute; inset: -1px; border-radius: inherit; pointer-events: none; z-index: 2; }
-	.edge { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; }
-	.edge i { position: absolute; inset: 0; border-radius: inherit; border: 0 solid transparent; border-bottom-width: 2px; transition: border-bottom-width 0.12s; }
-	.edge .rail { border-bottom-color: color-mix(in srgb, var(--text) 14%, transparent); }
-	.edge .played { border-bottom-color: var(--accent); clip-path: inset(0 calc(100% - var(--fill)) 0 0); }
-	.dragging .edge i { border-bottom-width: 4px; }
-	.knob { position: absolute; top: calc(100% - 2px); left: var(--fill); width: 14px; height: 14px; border-radius: 50%; background: var(--accent); transform: translate(-50%, -50%);
-		box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent), 0 1px 4px rgb(0 0 0 / 0.3); }
+	/* the front of the wash fades out rather than ending in a hard line */
+	.wash { position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(90deg,
+		color-mix(in srgb, var(--accent) 11%, transparent) 0,
+		color-mix(in srgb, var(--accent) 19%, transparent) calc(var(--fill) - 2rem),
+		color-mix(in srgb, var(--accent) 0%, transparent) calc(var(--fill) + 1rem)); }
+	.dragging .wash, .lip:has(input:focus-visible) .wash { background: linear-gradient(90deg,
+		color-mix(in srgb, var(--accent) 15%, transparent) 0,
+		color-mix(in srgb, var(--accent) 28%, transparent) calc(var(--fill) - 1px),
+		color-mix(in srgb, var(--accent) 0%, transparent) calc(var(--fill) + 1.25rem)); }
+	.head { position: absolute; top: 0.45rem; bottom: 0.45rem; left: var(--fill); width: 2px; margin-left: -1px; border-radius: 2px; background: var(--accent); }
 	.bubble { position: absolute; top: -2.4rem; left: clamp(1.5rem, var(--fill), calc(100% - 1.5rem)); transform: translateX(-50%); padding: 0.2rem 0.55rem; border-radius: 999px;
 		background: var(--text); color: var(--surface); font-size: var(--t-12-8); font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.3; white-space: nowrap; box-shadow: 0 0.25rem 0.8rem rgb(0 0 0 / 0.25); }
 	.band { position: absolute; left: 0; right: 0; bottom: -0.25rem; height: 0.875rem; pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none; cursor: pointer; }
 	input { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
-	.lip:has(input:focus-visible) .edge i { border-bottom-width: 4px; }
 	.lip:has(input:disabled) .band { pointer-events: none; }
 	@media (max-width: 720px) { .lip { display: block; } }
-	@media (prefers-reduced-motion: reduce) { .edge i { transition: none; } }
 </style>
