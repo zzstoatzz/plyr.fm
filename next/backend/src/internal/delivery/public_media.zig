@@ -17,7 +17,9 @@ const rewrites = [_]Rewrite{
 pub const held_audio_prefixes = [_][]const u8{
     "https://audio.plyr.fm/",
     "https://pub-d4ed8a1e39d44dac85263d86ad5676fd.r2.dev/",
-    "https://plyr-next-audio.n8-3e9.workers.dev/audio/",
+    // the worker's whole origin: small uploads land under /audio/, large ones
+    // under /media/
+    "https://plyr-next-audio.n8-3e9.workers.dev/",
 };
 
 /// SQL that is true when `column` names audio on one of `held_audio_prefixes`
@@ -123,7 +125,7 @@ test "held audio is plyr's own buckets, by prefix" {
     try std.testing.expectEqualStrings(
         "(v.audio_url IS NOT NULL AND (v.audio_url LIKE 'https://audio.plyr.fm/%' OR " ++
             "v.audio_url LIKE 'https://pub-d4ed8a1e39d44dac85263d86ad5676fd.r2.dev/%' OR " ++
-            "v.audio_url LIKE 'https://plyr-next-audio.n8-3e9.workers.dev/audio/%'))",
+            "v.audio_url LIKE 'https://plyr-next-audio.n8-3e9.workers.dev/%'))",
         comptime heldAudioSql("v.audio_url"),
     );
 }
