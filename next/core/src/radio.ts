@@ -11,6 +11,15 @@ export const radioStations = [
 
 export type RadioStation = typeof radioStations[number];
 
+/** A station's shareable link on the site, the path production used too. */
+export function radioStationPath(station: Pick<RadioStation, 'slug'>) {
+  return `/radio/${encodeURIComponent(station.slug)}`;
+}
+
+export function radioStationBySlug(slug: string | null | undefined): RadioStation | undefined {
+  return radioStations.find(station => station.slug === slug);
+}
+
 interface StateTrack {
   id: number;
   title: string;

@@ -594,3 +594,7 @@ max_lines = 590
 [[rules]]
 path = "next/backend/src/internal/moderation/postgres_log.zig"
 max_lines = 521
+
+[[rules]]
+path = "next/web/edge/link-preview.js"
+max_lines = 524

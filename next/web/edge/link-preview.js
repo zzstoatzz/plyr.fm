@@ -61,6 +61,7 @@ export function route(pathname) {
   const [kind, a, b, c] = parts;
   if (parts.length === 0) return { kind: 'home' };
   if (kind === 'atlas' && parts.length === 1) return { kind: 'atlas' };
+  if (kind === 'radio' && parts.length <= 2) return { kind: 'radio', station: a || null };
   if (kind === 'track' && a && parts.length === 2) return { kind: 'track', id: a };
   if (kind === 'album' && a && parts.length === 2) return { kind: 'album', id: a };
   if (kind === 'playlist' && a && UUID.test(a) && parts.length === 2) return { kind: 'legacy-playlist', id: a };
@@ -101,7 +102,10 @@ export function createApi(origin, fetcher = fetch) {
     artistMetrics: (actor) => get('getArtistMetrics', { actor }),
     albums: (artistDid) => get('listAlbums', { artistDid, limit: '100' }),
     album: (id) => get('getAlbum', { uri: uriFromId(id) }),
-    playlist: (id) => get('getPlaylist', { uri: uriFromId(id) })
+    playlist: (id) => get('getPlaylist', { uri: uriFromId(id) }),
+    radioStations: () => get('getRadioStations', {}),
+    // a broadcasting station only names its live stream when asked for more than the catalog
+    radioState: (station) => get('getRadioState', { station, catalogOnly: String(station !== 'firehose') })
   };
 }
 
@@ -282,6 +286,26 @@ export async function preview(url, api, legacyPlaylists = LEGACY_PLAYLISTS) {
     const image = { url: `${origin}/previews/atlas.jpg`, type: 'image/jpeg', width: 1200, height: 630 }; // refresh: bun run atlas:preview
     const alt = `the ${SITE_NAME} atlas: tracks grouped into glowing neighborhoods by how they sound`;
     return { type: 'website', title: `the ${SITE_NAME} atlas`, shortTitle: 'atlas', description: 'the catalog, mapped by sound. zoom in and select a track to play it.', url: `${origin}/atlas`, image, imageAlt: alt, large: true };
+  }
+
+  if (page.kind === 'radio') {
+    if (!page.station) return { type: 'website', title: `radio on ${SITE_NAME}`, shortTitle: 'radio', description: 'always on. pick a station and listen along with everyone else.', url: `${origin}/radio` };
+    const station = (await api.radioStations())?.stations?.find((s) => s.slug === page.station);
+    if (!station) return null;
+    // the card is read once and kept by whoever unfurls it, so it names the station, not the song
+    const state = await api.radioState(station.slug);
+    const art = cardImage(state?.live?.artwork_url || state?.current?.artwork_url);
+    const onAir = state?.live ? 'on air now' : state?.current ? `now playing ${state.current.title} by ${state.current.artist}` : null;
+    return {
+      type: 'website',
+      title: `${station.name} radio on ${SITE_NAME}`,
+      shortTitle: `${station.name} radio`,
+      description: [station.description, onAir].filter(Boolean).join(' · '),
+      url: `${origin}/radio/${encodeURIComponent(station.slug)}`,
+      image: art,
+      imageAlt: `${station.name} radio`,
+      large: false
+    };
   }
 
   if (page.kind === 'tag') {
