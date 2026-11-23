@@ -28,7 +28,7 @@ export const PlayingWave = memo(function PlayingWave({ color, size = 18, live = 
   }, [progress, reduceMotion]);
   const width = size / 6;
   return <View aria-hidden pointerEvents="none" testID="playing-wave" style={{ width: size, height: size, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-    {bars.map((scaleY, index) => <Animated.View key={index} style={{
+    {bars.map((scaleY, index) => <Animated.View key={`${following ? 'live' : 'canned'}-${index}`} style={{
       width, height: size, borderRadius: width / 2, backgroundColor: color,
       transform: [{ scaleY: reduceMotion ? heights[index][0] : following ? waveHeights[index] : scaleY }]
     }} />)}
