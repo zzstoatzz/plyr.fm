@@ -31,7 +31,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: zig_test
           POSTGRES_PASSWORD: zig_test
@@ -158,7 +158,7 @@ jobs:
     # the like-count property runs the migration's triggers against this
     services:
       postgres:
-        image: postgres:16
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: zig_test
           POSTGRES_PASSWORD: zig_test
@@ -208,7 +208,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: zig_test
           POSTGRES_PASSWORD: zig_test

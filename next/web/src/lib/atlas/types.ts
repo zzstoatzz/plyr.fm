@@ -1,5 +1,6 @@
 export interface AtlasPoint {
-  x: number; y: number; id: number; title: string; artist: string; handle: string; thumb: string;
+  /** a track id; maps built from the legacy catalog used its numeric ids */
+  x: number; y: number; id: string | number; title: string; artist: string; handle: string; thumb: string;
   plays: number; likes: number; clusterCoarse: number; clusterFine: number; core: boolean;
 }
 

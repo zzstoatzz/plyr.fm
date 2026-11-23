@@ -74,10 +74,10 @@ async function setup(browser, width, height = 900, options = {}) {
   page.setDefaultTimeout(20_000);
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.route('https://api.plyr.fm/stats/atlas', route => route.fulfill({ json: atlas }));
   await page.route('https://api.next.plyr.fm/**', async route => {
     const url = new URL(route.request().url());
     const call = method(url);
+    if (call === 'getAtlas') return route.fulfill({ json: atlas });
     const byId = ['getTrack', 'getPlayback', 'getTrackComments'].includes(call) ? tracks.find(track => names(url, track.id)) : undefined;
     let body = { object: 'list', data: [], has_more: false };
     if (byId && call === 'getPlayback') body = { object: 'playback', track_id: byId.id, record: byId.record,

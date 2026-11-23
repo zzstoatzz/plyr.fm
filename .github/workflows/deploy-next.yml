@@ -161,6 +161,20 @@ jobs:
               plyr_moderation.image_scans, plyr_moderation.osprey_entity_labels TO :"role";
           SQL
 
+      # The atlas builder (next/scripts/build-atlas.py, next-build-atlas.yml)
+      # runs with the writer login: it keeps the embeddings and the snapshot.
+      - name: grant atlas state to the atlas builder's role
+        env:
+          MIGRATOR_DATABASE_URL: ${{ secrets.ZIG_NEXT_MIGRATOR_DATABASE_URL }}
+          WRITER_DATABASE_URL: ${{ secrets.ZIG_NEXT_WRITER_DATABASE_URL }}
+        run: |
+          plain() { local url="${1/postgresql+psycopg:/postgresql:}"; url="${url/postgresql+psycopg2:/postgresql:}"; echo "${url/postgresql+asyncpg:/postgresql:}"; }
+          role="$(psql "$(plain "$WRITER_DATABASE_URL")" -X -q -At -v ON_ERROR_STOP=1 -c 'SELECT current_user')"
+          psql "$(plain "$MIGRATOR_DATABASE_URL")" -X -q -v ON_ERROR_STOP=1 -v role="$role" <<'SQL'
+          GRANT USAGE ON SCHEMA plyr_index TO :"role";
+          GRANT SELECT, INSERT, UPDATE ON plyr_index.track_embeddings, plyr_index.atlas_snapshots TO :"role";
+          SQL
+
   build:
     name: build next image
     runs-on: ubuntu-latest

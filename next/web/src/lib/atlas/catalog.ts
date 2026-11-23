@@ -1,3 +1,4 @@
+import { api } from '$lib/api';
 import type { AtlasData } from './types';
 
 let cached: { at: number; load: Promise<AtlasData> } | undefined;
@@ -17,9 +18,7 @@ function isAtlas(value: unknown): value is AtlasData {
 
 export function loadAtlas() {
 	if (cached && Date.now() - cached.at < 3_600_000) return cached.load;
-	const load = fetch('https://api.plyr.fm/stats/atlas').then(async response => {
-		if (!response.ok) throw new Error('could not load the atlas.');
-		const data: unknown = await response.json();
+	const load = api.atlas().catch(() => { throw new Error('could not load the atlas.'); }).then(data => {
 		if (!isAtlas(data)) throw new Error('could not read the atlas.');
 		return data;
 	});

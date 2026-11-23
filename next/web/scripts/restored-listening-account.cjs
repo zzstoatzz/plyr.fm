@@ -17,11 +17,11 @@ module.exports = async function restoredListening({ page, context, origin, coord
   await context.route('https://public.api.bsky.app/xrpc/app.bsky.graph.getFollows?**', route => route.fulfill({ json: {
     follows: catalog.map(item => ({ did: item.artist.did, avatar: item.artist.profile.avatar_url }))
   } }));
-  await context.route('https://api.plyr.fm/stats/atlas', route => route.fulfill({ json: {
-    points: [], artists: [], clusters: { coarse: [], fine: [] }, meta: { nTracks: 0 }
-  } }));
   await page.route('https://api.next.plyr.fm/**', route => {
     const url = new URL(route.request().url());
+    if (method(url) === 'getAtlas') return route.fulfill({ json: {
+      points: [], artists: [], clusters: { coarse: [], fine: [] }, meta: { nTracks: 0 }
+    } });
     if (method(url) === 'resolveLatestTracks') {
       const dids = route.request().postDataJSON().dids;
       return route.fulfill({ json: { object: 'list', data: catalog.filter(item => dids.includes(item.artist.did)) } });
