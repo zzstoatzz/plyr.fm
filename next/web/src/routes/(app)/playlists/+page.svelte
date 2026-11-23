@@ -8,7 +8,7 @@
 <svelte:head><title>playlists · plyr.fm</title></svelte:head>
 <section class="page-content">
   <h1>playlists</h1>
-  <PagedListing load={cursor => api.playlists({ cursor, limit: 30 })} label="playlists" empty="no playlists yet." more="more playlists">
+  <PagedListing load={cursor => api.playlists({ cursor, limit: 30 })} label="playlists" empty="no playlists yet." key="playlists">
     {#snippet items(lists: ListSummary[])}<ListCards {lists} />{/snippet}
   </PagedListing>
 </section>

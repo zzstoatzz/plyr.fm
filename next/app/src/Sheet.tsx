@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { X } from './icons';
 import { Animated, Modal, Platform, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { ScrollEdgeProvider, useScrollEdge } from './behaviors/scroll-edge';
 import { SafeAreaProvider, initialWindowMetrics, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeepInViewContext, useKeepInView } from './behaviors/keep-in-view';
 import { useKeyboardInset } from './behaviors/use-keyboard-inset';
@@ -46,6 +47,7 @@ function SheetBody({ title, close, children, notice, anchor, lift, bar }: SheetP
   const insets = useSafeAreaInsets();
   const [panel, setPanel] = useState(0);
   const keeper = useKeepInView();
+  const edge = useScrollEdge();
   const wide = width >= 800;
   const form = !!bar && !wide;
   // iOS form sheets leave the keyboard to their scroll view's native inset, which Android doesn't have.
@@ -63,7 +65,7 @@ function SheetBody({ title, close, children, notice, anchor, lift, bar }: SheetP
       }}>
         <CompactRows.Provider value>
           {notice && <View style={{ padding: 8, gap: 8 }}>{notice}</View>}
-          <ScrollView keyboardShouldPersistTaps="handled">{children}</ScrollView>
+          <ScrollView {...edge.props} keyboardShouldPersistTaps="handled"><ScrollEdgeProvider edge={edge.edge}>{children}</ScrollEdgeProvider></ScrollView>
         </CompactRows.Provider>
       </View>
     </>;
@@ -90,10 +92,10 @@ function SheetBody({ title, close, children, notice, anchor, lift, bar }: SheetP
         <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={close} style={{ padding: 12 }}><X size={22} color={theme.text} /></Pressable>
       </View>}
       {notice && <View style={{ paddingHorizontal: 20, paddingTop: bar ? 12 : 0, paddingBottom: 12, gap: 12, borderBottomWidth: bar ? StyleSheet.hairlineWidth : 0, borderColor: theme.hairline }}>{notice}</View>}
-      <ScrollView ref={keeper.scroll} onScroll={keeper.onScroll} scrollEventThrottle={16} style={form ? { flex: 1 } : undefined}
+      <ScrollView ref={keeper.scroll} {...edge.props} onScroll={event => { keeper.onScroll(event); edge.props.onScroll(event); }} style={form ? { flex: 1 } : undefined}
         keyboardShouldPersistTaps="handled" keyboardDismissMode={form ? 'interactive' : 'none'} automaticallyAdjustKeyboardInsets={form}
         contentContainerStyle={{ padding: 20, paddingTop: bar ? 16 : 4, paddingBottom: form ? 20 + insets.bottom : 20, gap: 12 }}>
-        <KeepInViewContext.Provider value={form ? keeper.keep : undefined}>{children}</KeepInViewContext.Provider>
+        <KeepInViewContext.Provider value={form ? keeper.keep : undefined}><ScrollEdgeProvider edge={edge.edge}>{children}</ScrollEdgeProvider></KeepInViewContext.Provider>
       </ScrollView>
     </View>
   </View>;
@@ -103,6 +105,7 @@ function LiftedMenu({ title, close, lift: { anchor, preview }, notice, children 
   title: string; close: () => void; lift: Lift; notice?: ReactNode; children: ReactNode;
 }) {
   const theme = useAppearance();
+  const edge = useScrollEdge();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [panel, setPanel] = useState(0);
@@ -135,7 +138,7 @@ function LiftedMenu({ title, close, lift: { anchor, preview }, notice, children 
     }}>
       <CompactRows.Provider value>
         {notice && <View style={{ padding: 8, gap: 8 }}>{notice}</View>}
-        <ScrollView keyboardShouldPersistTaps="handled" bounces={false}>{children}</ScrollView>
+        <ScrollView {...edge.props} keyboardShouldPersistTaps="handled" bounces={false}><ScrollEdgeProvider edge={edge.edge}>{children}</ScrollEdgeProvider></ScrollView>
       </CompactRows.Provider>
     </Animated.View>
   </>;

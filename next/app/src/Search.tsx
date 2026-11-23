@@ -1,6 +1,7 @@
 import { Link, useFocusEffect, useLocalSearchParams, useNavigation, type Href } from 'expo-router';
 import { MagnifyingGlass as SearchIcon, X, CaretRight as ChevronRight } from './icons';
 import { useCallback, useEffect, useRef, useState, type ComponentRef } from 'react';
+import { LoadMore } from './LoadMore';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { api } from './api-client';
 import { playState, showsPause, tracksContext } from '@plyr/next-core/play-context';
@@ -120,7 +121,7 @@ export function Search({ onPlay }: { onPlay: Play }) {
         })}
       </View>
       {results.loading && results.data && <WaveLoading label="loading more…" />}
-      {!results.loading && results.data?.length === 20 && limit === 20 && <Action label="show more results" onPress={() => setExpanded(key)} />}
+      <LoadMore more={results.data?.length === 20 && limit === 20} loading={results.loading} error={results.error} load={() => setExpanded(key)} />
       {!results.loading && results.data?.length === 50 && <Copy>showing the first 50 results. try a more specific search.</Copy>}
     </>}
   </>;

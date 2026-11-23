@@ -2,6 +2,8 @@ import { trackArtwork, collectionArtwork } from '@plyr/next-core/artwork';
 import { ArrowsDownUp, CaretDown, CaretRight as ChevronRight, Check, CurrencyCircleDollar, Disc, Globe, LinkSimple, Lock, MagnifyingGlass, PencilSimple as Pencil, ShareNetwork, Tag, Trash, UploadSimple, X, type Icon as IconGlyph } from './icons';
 import { Link, useFocusEffect, type Href } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react';
+import { LoadMore } from './LoadMore';
+import { ScrollEdgeProvider, useScrollEdge } from './behaviors/scroll-edge';
 import { Pressable, ScrollView, StyleSheet, TextInput, View, type ScrollViewProps, type ScrollViewInstance } from 'react-native';
 import { api } from './api-client';
 import { ApiError, type Artist, type ListSummary, type Track } from '@plyr/next-core/api';
@@ -42,13 +44,16 @@ export function Portal() {
   return <AccountPortal key={auth.did} did={auth.did} handle={auth.handle} />;
 }
 
-function PortalPage({ children, scrollRef, ...props }: {
+function PortalPage({ children, scrollRef, onScroll, onContentSizeChange }: {
   children: ReactNode; scrollRef?: Ref<ScrollViewInstance>;
 } & Pick<ScrollViewProps, 'onScroll' | 'onContentSizeChange'>) {
   const theme = useAppearance();
-  return <ScrollView ref={scrollRef} {...props} scrollEventThrottle={16} contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets
+  const edge = useScrollEdge();
+  return <ScrollView ref={scrollRef} {...edge.props} onScroll={event => { edge.props.onScroll(event); onScroll?.(event); }}
+    onContentSizeChange={(width, height) => { edge.props.onContentSizeChange(width, height); onContentSizeChange?.(width, height); }}
+    contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets
     style={{ backgroundColor: theme.background }} contentContainerStyle={{ ...pageFrame, gap: 16, paddingTop: 16, paddingBottom: 32 }}>
-    {children}
+    <ScrollEdgeProvider edge={edge.edge}>{children}</ScrollEdgeProvider>
   </ScrollView>;
 }
 
@@ -217,7 +222,7 @@ function AccountPortal({ did, handle }: { did: string; handle: string | null }) 
             <DeleteTrack track={track} deleted={() => remove(track)} />
           </View>} />;
       })}
-      {found.length > shown && <View style={row}><Action label={`show more · ${found.length - shown} left`} onPress={() => setShown(count => count + PAGE)} /></View>}
+      <LoadMore more={found.length > shown} load={() => setShown(shown + PAGE)} />
       {everything && everything.length > 0 && !found.length && <View style={[row, { paddingVertical: 12 }]}>
         <Copy live>nothing matches.</Copy>
         <Action label="clear search and filters" onPress={() => { setQuery(''); setAccess(undefined); setAlbum(undefined); setTag(undefined); }} />

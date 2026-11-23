@@ -8,7 +8,7 @@
 </script>
 
 <h3>your published tracks</h3>
-<PagedListing load={cursor => api.tracks({ artist_did: did, limit: 30, cursor })} label="published tracks" empty="no published tracks yet." more="more published tracks">
+<PagedListing load={cursor => api.tracks({ artist_did: did, limit: 30, cursor })} label="published tracks" empty="no published tracks yet.">
   {#snippet items(tracks: Track[])}
     <ul>
       {#each tracks.filter(track => !isPrivateTrack(track)) as track (track.record.uri)}

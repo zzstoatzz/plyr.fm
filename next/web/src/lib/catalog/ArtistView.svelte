@@ -18,6 +18,7 @@
 	import Icon from '$lib/ui/Icon.svelte';
 	import ImmersiveWash from '$lib/ui/ImmersiveWash.svelte';
 	import Loading from '$lib/ui/Loading.svelte';
+	import LoadMore from '$lib/ui/LoadMore.svelte';
 	import { artistCatalogFor } from './artist-catalog';
 	import ListeningNow from './ListeningNow.svelte';
 	import { catalogRuntime } from '@plyr/next-core/catalog/runtime';
@@ -202,16 +203,16 @@
 					<TrackRow {track} collection={tracks} label={item === 'likes' ? `liked by ${name}` : name} />
 				{/each}
 				{@render lists(collections)}
-				{#if view.error}
+				{#if view.data.length}
+					<LoadMore cursor={view.cursor} loading={view.loading} error={view.error} label={item} load={catalog[item].more} retry={catalog[item].retry} />
+					{#if !tracks.length && !collections.length && !view.cursor && !view.loading && !view.error}<p class="state">no {item} yet.</p>{/if}
+				{:else if view.error}
 					<p class="state" role="alert">{view.error}</p>
 					<button type="button" class="text-button" onclick={catalog[item].retry}>retry</button>
 				{:else if view.loading}
 					<Loading label={`loading ${item}`} inline />
-				{:else if !tracks.length && !collections.length}
+				{:else}
 					<p class="state">no {item} yet.</p>
-				{/if}
-				{#if view.cursor && !view.error && !view.loading}
-					<button type="button" class="text-button" onclick={catalog[item].more}>more {item}</button>
 				{/if}
 			{/if}
 		</div>

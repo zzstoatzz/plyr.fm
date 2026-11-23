@@ -7,6 +7,7 @@ import { Action, Copy } from '../controls';
 import { Heading, Status, usePages } from '../CatalogPieces';
 import { PlayerControl } from '../PlayerControl';
 import { useAppearance } from '../appearance';
+import { LoadMore } from '../LoadMore';
 
 export function AlbumTracks({ entries, disabled, move, remove }: {
   entries: { key: string; title: string }[];
@@ -36,6 +37,6 @@ export function OwnAlbumTracks({ did, selected, disabled, add }: { did: string; 
       disabled={disabled || !track.record.cid || selected.includes(track.record.uri)} onPress={() => add(track)} />)}
     <Status loading={tracks.loading} error={tracks.error} retry={tracks.more} empty={!tracks.data.length ? 'no published tracks yet.' : undefined} />
     {!tracks.loading && <Action label="Reload your tracks" disabled={disabled} onPress={tracks.reload} />}
-    {tracks.cursor && !tracks.loading && !tracks.error && <Action label="More tracks" disabled={disabled} onPress={tracks.more} />}
+    <LoadMore more={tracks.cursor} loading={tracks.loading} error={tracks.error} load={tracks.more} />
   </View>;
 }

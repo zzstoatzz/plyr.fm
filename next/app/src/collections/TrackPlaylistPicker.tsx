@@ -8,13 +8,14 @@ import { getAuth } from '../auth-state';
 import { Cover, errorMessage } from '../CatalogPieces';
 import { ownPlaylists, useOwnPlaylists } from './own-playlists';
 import { Copy, inputFontSize } from '../controls';
-import { ArrowsClockwise, ListPlus, Plus } from '../icons';
+import { ArrowsClockwise, Plus } from '../icons';
 import { ActionRow } from '../ActionRow';
 import { CreateRecovery, useCreateRecovery } from '../publishing/CreateRecovery';
 import { Text } from '../Text';
 import { toast } from '../toast';
 import { useAppearance } from '../appearance';
 import { WaveLoading } from '../WaveLoading';
+import { LoadMore } from '../LoadMore';
 
 /** New playlist first, then the account's playlists. A tap adds, closes the menu and says where the track went. */
 export function TrackPlaylistPicker({ track, done }: { track: Track; done: () => void }) {
@@ -112,6 +113,6 @@ export function TrackPlaylistPicker({ track, done }: { track: Track; done: () =>
     {lists.loading && <WaveLoading label="Loading playlists" />}
     {lists.error && <><Copy>{lists.error}</Copy><ActionRow icon={ArrowsClockwise} label="retry" onPress={() => auth.did && ownPlaylists.retry(auth.did)} /></>}
     {!lists.loading && !lists.error && !lists.data.length && <Copy>no playlists yet. start one above.</Copy>}
-    {lists.cursor && !lists.loading && !lists.error && <ActionRow icon={ListPlus} label="more playlists" onPress={() => auth.did && ownPlaylists.more(auth.did)} />}
+    <LoadMore more={lists.cursor} loading={lists.loading} error={lists.error} load={() => auth.did && ownPlaylists.more(auth.did)} />
   </View>;
 }

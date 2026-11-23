@@ -6,6 +6,7 @@
   import { playlistAddNotice, playlistName, playlistTrackCount, type PlaylistAddStatus } from '@plyr/next-core/collections/playlist-add';
   import { auth } from '$lib/auth';
   import Loading from '$lib/ui/Loading.svelte';
+  import LoadMore from '$lib/ui/LoadMore.svelte';
   import { ownPlaylists } from './own-playlists';
   import { createPds } from '$lib/pds';
   import { toast } from '$lib/toast.svelte';
@@ -124,16 +125,15 @@
         {/each}
       </ul>
     {/if}
-    {#if lists.error}
+    {#if lists.data.length}
+      <LoadMore cursor={lists.cursor} loading={lists.loading} error={lists.error} label="playlists" load={() => did && ownPlaylists.more(did)} retry={() => did && ownPlaylists.retry(did)} />
+    {:else if lists.error}
       <p class="state" role="alert">{lists.error}</p>
       <button type="button" class="text-button" onclick={() => did && ownPlaylists.retry(did)}>retry your playlists</button>
     {:else if lists.loading}
       <Loading label="loading your playlists" inline />
-    {:else if !lists.data.length}
+    {:else}
       <p class="state">no playlists yet. start one above.</p>
-    {/if}
-    {#if lists.cursor && !lists.loading && !lists.error}
-      <button type="button" class="text-button" onclick={() => did && ownPlaylists.more(did)}>more playlists</button>
     {/if}
   </div>
 </div>
@@ -141,7 +141,7 @@
 <style>
   .picker { display: flex; flex-direction: column; min-height: 0; flex: 1; }
   .lists { overflow-y: auto; min-height: 0; flex: 1; overscroll-behavior: contain; }
-  .lists :global(.state), .lists :global(.text-button), .journal, .error { margin-inline: 1.25rem; }
+  .lists :global(.state), .lists :global(.text-button), .lists :global(.more), .journal, .error { margin-inline: 1.25rem; }
   ul { list-style: none; margin: 0; padding: 0; }
   hr { border: 0; border-top: 1px solid var(--line); margin: 0.3rem 1.25rem; }
   .row { display: flex; align-items: center; gap: 0.8rem; width: 100%; min-height: 3.6rem; padding: 0.45rem 1.25rem; border: 0; background: none; color: var(--faint); text-align: start; }

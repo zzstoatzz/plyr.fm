@@ -10,11 +10,13 @@ import { tracksContext } from '@plyr/next-core/play-context';
 import { router, useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
+import { LoadMore } from './LoadMore';
+import { ScrollEdgeProvider, useScrollEdge } from './behaviors/scroll-edge';
 import { PauseGlyph as PauseIcon, PlayGlyph as PlayIcon } from './PlayerGlyph';
 import { api } from './api-client';
 import { type Track } from '@plyr/next-core/api';
 import {
-  Button, Heading, ListRows, Status, trackCount,
+  Heading, ListRows, Status, trackCount,
   usePages, useResource, type Play, type TrackActions,
 } from './CatalogPieces';
 import { Search } from './Search';
@@ -144,7 +146,7 @@ function Playlists() {
     <Heading main>playlists</Heading>
     <ListRows lists={lists.data} />
     <Status loading={lists.loading} error={lists.error} retry={lists.more} empty={!lists.data.length ? 'no playlists yet.' : undefined} />
-    {lists.cursor && !lists.loading && !lists.error && <Button label="More playlists" onPress={lists.more} />}
+    <LoadMore more={lists.cursor} loading={lists.loading} error={lists.error} load={lists.more} />
   </>;
 }
 
@@ -155,6 +157,7 @@ export function Catalog({
 }: { screen: CatalogScreen; onPlay: Play; onEnqueue: (track: Track) => void; trackActions?: TrackActions }) {
   const colors = useAppearance();
   const { id, handle } = useLocalSearchParams<{ id?: string; handle?: string }>();
+  const scroll = useScrollEdge();
   let content: ReactNode;
   if (screen === 'home') return <Home onPlay={onPlay} />;
   else if (screen === 'search') content = <Search onPlay={onPlay} />;
@@ -165,8 +168,8 @@ export function Catalog({
     content = <Collection key={id} id={id} album={screen === 'album'} onPlay={onPlay} />;
   } else if (screen === 'artist' && handle) content = <ArtistProfile key={handle} handle={handle} onPlay={onPlay} />;
   else content = <Copy>this catalog link is incomplete.</Copy>;
-  return <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled" keyboardDismissMode={screen === 'search' ? 'on-drag' : undefined} automaticallyAdjustKeyboardInsets>
-    <View style={styles.page}>{content}</View>
+  return <ScrollView {...scroll.props} style={{ flex: 1, backgroundColor: colors.background }} contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled" keyboardDismissMode={screen === 'search' ? 'on-drag' : undefined} automaticallyAdjustKeyboardInsets>
+    <ScrollEdgeProvider edge={scroll.edge}><View style={styles.page}>{content}</View></ScrollEdgeProvider>
   </ScrollView>;
 }
 

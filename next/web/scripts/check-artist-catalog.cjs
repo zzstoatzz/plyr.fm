@@ -102,7 +102,9 @@ async function verify(browser, origin, width, scheme) {
     await firstTrack.waitFor();
     assert.equal(reads.albums, 0, 'the albums endpoint stays lazy');
 
-    await page.getByRole('button', { name: 'more tracks', exact: true }).click();
+    // the next page loads as the end of the list comes into view; there is no "more" button
+    assert.equal(await page.getByRole('button', { name: 'more tracks', exact: true }).count(), 0);
+    await panel('tracks').getByTestId('load-more').scrollIntoViewIfNeeded().catch(() => {});
     const secondTrack = panel('tracks').getByRole('link', { name: tracks[1].metadata.title, exact: true });
     await secondTrack.waitFor();
     await page.getByRole('button', { name: `Play ${artistName}`, exact: true }).click();
@@ -128,7 +130,7 @@ async function verify(browser, origin, width, scheme) {
     await panel('albums').getByText('album catalog unavailable', { exact: true }).waitFor();
     await panel('albums').getByRole('button', { name: 'retry', exact: true }).click();
     await panel('albums').getByRole('link', { name: /Porch recordings/ }).waitFor();
-    await panel('albums').getByRole('button', { name: 'more albums' }).click();
+    await panel('albums').getByTestId('load-more').scrollIntoViewIfNeeded().catch(() => {});
     await panel('albums').getByRole('link', { name: /A second album/ }).waitFor();
     assert.equal(await panel('albums').getByRole('link', { name: /A private draft|new album/ }).count(), 0);
     await tab('playlists').click();

@@ -13,6 +13,7 @@ import { useAppearance } from './appearance';
 import { toast } from './toast';
 import { LikeHeart } from './LikeHeart';
 import { likes, useLikers, useTrackLike } from './likes';
+import { LoadMore } from './LoadMore';
 
 export function TrackLikes({ track, compact = false, returnTo, menu = false, iconOnly = false, onNavigate }: { track: Track; compact?: boolean; returnTo?: string; menu?: boolean; iconOnly?: boolean; onNavigate?: () => void }) {
   const [open, setOpen] = useState(false);
@@ -75,7 +76,7 @@ export function People({ track, close }: { track: Track; close: () => void }) {
     {list.loading && <WaveLoading label="Loading likes" />}
     {list.error && !list.loading && <><Text style={{ color: theme.muted }}>couldn’t load who liked this</Text><ActionRow label="retry" icon={RefreshCw} onPress={() => void likes.loadLikers(track)} /></>}
     {list.loaded && !list.loading && !list.error && !list.people.length && <Text style={{ color: theme.muted }}>no likes yet.</Text>}
-    {list.more && !list.loading && !list.error && <ActionRow label="more people" icon={RefreshCw} onPress={() => void likes.loadLikers(track, { more: true })} />}
+    <LoadMore more={list.more} loading={list.loading} error={list.error} load={() => likes.loadLikers(track, { more: true })} />
   </>;
 }
 
