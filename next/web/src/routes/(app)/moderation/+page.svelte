@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
 	import { resolve } from '$app/paths';
-	import { trackIdFromUri } from '@plyr/next-core/api';
+	import { albumIdFromUri, playlistIdFromUri, trackIdFromUri } from '@plyr/next-core/api';
 	import { shortDate } from '@plyr/next-core/dates';
 	import { noteTooLong, REPORT_REASONS, type Decision, type QueueItem, type SubjectEvent } from '@plyr/next-core/moderation';
 	import { addGrants, auth, grantFailure } from '$lib/auth';
@@ -53,7 +53,9 @@
 		return `${Math.round(hours / 24)} days`;
 	}
 	const day = (ms: number) => shortDate(ms);
-	const isTrack = (item: QueueItem) => item.trackTitle !== null;
+	const isTrack = (item: QueueItem) => item.trackTitle !== null && !item.listType;
+	const isList = (item: QueueItem) => !!item.listType;
+	const takesDecisions = (item: QueueItem) => isTrack(item) || isList(item);
 	function title(item: QueueItem): string {
 		if (item.trackTitle) return item.trackTitle;
 		if (item.subject.startsWith('did:')) return 'an account';
@@ -63,7 +65,7 @@
 	function happened(event: SubjectEvent): string {
 		switch (event.action) {
 			case 'reported': return `reported: ${reasonLabel(event.reasonType ?? 'other')}`;
-			case 'flagged_by_scan': return 'matched a recording';
+			case 'flagged_by_scan': return event.actor === 'scan:cover' ? 'cover flagged by the image check' : 'matched a recording';
 			case 'flagged_by_rule': return 'flagged automatically';
 			case 'acknowledged': return 'looked at: nothing wrong';
 			case 'override_allow': return 'allowed';
@@ -142,10 +144,10 @@
 		await focusItem(subject);
 	}
 
-	const choices: { action: Decision; label: string; detail: string; trackOnly: boolean }[] = [
-		{ action: 'acknowledged', label: 'nothing wrong', detail: 'closes it; stays where it is', trackOnly: false },
-		{ action: 'override_allow', label: 'allow anyway', detail: 'a cover or licensed; keep it in feeds', trackOnly: true },
-		{ action: 'override_exclude', label: 'keep it off feeds', detail: 'out of home, search and radio; its page still works', trackOnly: true }
+	const choices: { action: Decision; label: string; detail: string; decision: boolean }[] = [
+		{ action: 'acknowledged', label: 'nothing wrong', detail: 'closes it; stays where it is', decision: false },
+		{ action: 'override_allow', label: 'allow anyway', detail: 'a cover or licensed; keep it in feeds', decision: true },
+		{ action: 'override_exclude', label: 'keep it off feeds', detail: 'out of home, search and radio; its page still works', decision: true }
 	];
 </script>
 
@@ -195,6 +197,10 @@
 						<h2 bind:this={detailHeading} tabindex="-1">{title(selected)}</h2>
 						{#if isTrack(selected)}
 							<a href={resolve('/(app)/track/[id]', { id: trackIdFromUri(selected.subject) })}>open the track</a>
+						{:else if selected.listType === 'album'}
+							<a href={resolve('/(app)/album/[id]', { id: albumIdFromUri(selected.subject) })}>open the album</a>
+						{:else if selected.listType === 'playlist'}
+							<a href={resolve('/(app)/playlist/[id]', { id: playlistIdFromUri(selected.subject) })}>open the playlist</a>
 						{:else if selected.subject.startsWith('did:')}
 							<a href={resolve('/(app)/u/[actor]', { actor: selected.subject })}>open the profile</a>
 						{/if}
@@ -213,7 +219,7 @@
 					{/if}
 					<h3>decide</h3>
 					<div class="choices">
-						{#each choices.filter(choice => !choice.trackOnly || isTrack(selected!)) as choice (choice.action)}
+						{#each choices.filter(choice => !choice.decision || takesDecisions(selected!)) as choice (choice.action)}
 							<button type="button" class="choice" disabled={!!deciding || noteLong} onclick={() => decide(choice.action)}>
 								<strong>{deciding === choice.action ? 'saving…' : choice.label}</strong><small>{choice.detail}</small>
 							</button>

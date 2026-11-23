@@ -511,7 +511,7 @@ max_lines = 807
 
 [[rules]]
 path = "next/backend/src/internal/index/postgres_verified_list_store.zig"
-max_lines = 544
+max_lines = 547
 
 [[rules]]
 path = "next/backend/src/api/router.zig"
@@ -569,7 +569,7 @@ max_lines = 681
 
 [[rules]]
 path = "next/backend/src/internal/projection/postgres_list_store.zig"
-max_lines = 511
+max_lines = 520
 
 [[rules]]
 path = "next/core/src/pds.ts"
@@ -590,3 +590,7 @@ max_lines = 518
 [[rules]]
 path = "next/web/src/lib/publishing/UploadForm.svelte"
 max_lines = 590
+
+[[rules]]
+path = "next/backend/src/internal/moderation/postgres_log.zig"
+max_lines = 521

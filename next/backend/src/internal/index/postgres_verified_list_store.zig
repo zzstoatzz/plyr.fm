@@ -424,6 +424,9 @@ const collection_joins =
     \\  ON records.list_type = 'album' AND legacy_cover.record_uri = records.record_uri
     \\JOIN plyr_index.account_availability AS owner_aa
     \\  ON owner_aa.repo_did = records.owner_did AND owner_aa.available
+    \\  -- kept off listings by a moderator (postgres_log.zig); its page still works
+    \\  AND NOT EXISTS (SELECT 1 FROM plyr_index.list_policies AS list_pol
+    \\    WHERE list_pol.record_uri = records.record_uri AND list_pol.moderation_decision = 'exclude')
     \\LEFT JOIN plyr_index.actor_identities AS owner_a
     \\  ON owner_a.did = records.owner_did
     \\LEFT JOIN plyr_index.profile_records AS owner_p

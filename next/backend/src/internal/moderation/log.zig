@@ -114,13 +114,45 @@ pub fn validSubject(subject: []const u8) bool {
 
 /// The track record a subject names, when it names one in `track_collection`.
 pub fn isTrack(subject: []const u8, track_collection: []const u8) bool {
+    return inCollection(subject, track_collection, "");
+}
+
+/// The album or playlist record a subject names: the list collection beside
+/// `track_collection` (`fm.plyr.track` → `fm.plyr.list`).
+pub fn isList(subject: []const u8, track_collection: []const u8) bool {
+    const suffix = ".track";
+    if (!std.mem.endsWith(u8, track_collection, suffix)) return false;
+    return inCollection(subject, track_collection[0 .. track_collection.len - suffix.len], ".list");
+}
+
+/// Whether a decision (allow, exclude) on `subject` projects anywhere.
+pub fn takesDecisions(subject: []const u8, track_collection: []const u8) bool {
+    return isTrack(subject, track_collection) or isList(subject, track_collection);
+}
+
+/// `subject` is `at://<did>/<prefix><suffix>/<rkey>`.
+fn inCollection(subject: []const u8, prefix: []const u8, suffix: []const u8) bool {
     if (!std.mem.startsWith(u8, subject, "at://")) return false;
     const rest = subject["at://".len..];
     const slash = std.mem.indexOfScalar(u8, rest, '/') orelse return false;
-    const tail = rest[slash + 1 ..];
-    if (!std.mem.startsWith(u8, tail, track_collection)) return false;
-    const after = tail[track_collection.len..];
+    var tail = rest[slash + 1 ..];
+    if (!std.mem.startsWith(u8, tail, prefix)) return false;
+    tail = tail[prefix.len..];
+    if (!std.mem.startsWith(u8, tail, suffix)) return false;
+    const after = tail[suffix.len..];
     return after.len > 1 and after[0] == '/' and std.mem.indexOfScalar(u8, after[1..], '/') == null;
+}
+
+test "decisions apply to tracks and to the albums and playlists beside them" {
+    try std.testing.expect(isTrack("at://did:plc:a/fm.plyr.track/3k", "fm.plyr.track"));
+    try std.testing.expect(!isTrack("at://did:plc:a/fm.plyr.list/3k", "fm.plyr.track"));
+    try std.testing.expect(isList("at://did:plc:a/fm.plyr.list/3k", "fm.plyr.track"));
+    try std.testing.expect(isList("at://did:plc:a/fm.plyr.dev.list/3k", "fm.plyr.dev.track"));
+    try std.testing.expect(!isList("at://did:plc:a/fm.plyr.listx/3k", "fm.plyr.track"));
+    try std.testing.expect(!isList("at://did:plc:a/fm.plyr.list/3k/x", "fm.plyr.track"));
+    try std.testing.expect(!isList("at://did:plc:a/fm.plyr.track/3k", "fm.plyr.track"));
+    try std.testing.expect(!takesDecisions("did:plc:a", "fm.plyr.track"));
+    try std.testing.expect(takesDecisions("at://did:plc:a/fm.plyr.list/3k", "fm.plyr.track"));
 }
 
 /// Reasons are free text a person reads in the queue: valid UTF-8, bounded.

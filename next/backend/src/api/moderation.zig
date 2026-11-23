@@ -157,10 +157,10 @@ pub fn handle(
                 try xrpcError(request, .bad_request, "InvalidRequest", "an event needs a subject and a decision", request_id, response_cors);
                 return;
             };
-            // decisions only project onto tracks so far; refusing them
+            // decisions project onto tracks, albums and playlists; refusing them
             // elsewhere keeps an operator from thinking an account is hidden
-            if (input.action.decision() != null and !log.isTrack(input.subject, config.track_collection)) {
-                try xrpcError(request, .bad_request, "UnsupportedSubject", "allow and exclude only apply to tracks for now", request_id, response_cors);
+            if (input.action.decision() != null and !log.takesDecisions(input.subject, config.track_collection)) {
+                try xrpcError(request, .bad_request, "UnsupportedSubject", "allow and exclude only apply to tracks, albums and playlists for now", request_id, response_cors);
                 return;
             }
             const id = moderation.record(.{
