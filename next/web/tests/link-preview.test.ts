@@ -296,8 +296,9 @@ test('only plyr.fm itself is open to search engines', () => {
 	assert.match(live, /Sitemap: https:\/\/plyr\.fm\/sitemap\.xml/);
 });
 
-test('llms.txt names this host and its appview', () => {
-	const text = edge.llmsTxt('https://plyr.fm', 'https://api.plyr.fm');
+test('llms.txt names this host and its appview', async () => {
+	const template = await readFile(new URL('../edge/llms.txt', import.meta.url), 'utf8');
+	const text = edge.llmsTxt('https://plyr.fm', 'https://api.plyr.fm', template);
 	assert.match(text, /^# plyr\.fm\n/);
 	assert.match(text, /https:\/\/api\.plyr\.fm\/xrpc\/fm\.plyr\.unspecced\.search\?q=/);
 	assert.match(text, /https:\/\/plyr\.fm\/oembed\?url=/);
