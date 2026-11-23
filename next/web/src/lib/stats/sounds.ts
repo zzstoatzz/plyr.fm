@@ -1,4 +1,4 @@
-import type { AtlasData, AtlasPoint } from '../atlas/types';
+import type { AtlasData, AtlasPoint } from '@plyr/next-core/atlas/types';
 
 /** One of the atlas's coarse regions: tracks grouped by how they sound. */
 export interface Sound {
