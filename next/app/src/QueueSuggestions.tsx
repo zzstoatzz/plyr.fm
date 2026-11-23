@@ -37,9 +37,13 @@ export function QueueSuggestionStrips() {
   // Marked added at once, so closing the queue mid-animation never brings the card back; it stays drawn until it has shrunk away.
   const add = (track: Track) => { player.enqueue(track, true); queueSuggestions.added(track.id); setLeaving(previous => new Set([...previous, track.id])); };
   const leave = (id: string) => setLeaving(previous => { const next = new Set(previous); next.delete(id); return next; });
-  const visible = (track: Track) => !store.added.has(track.id) || leaving.has(track.id);
+  // Anything already queued (or playing) stays out too, however it got there.
+  const queued = new Set(player.queue.map(track => track.id));
+  const visible = (track: Track) => leaving.has(track.id) || (!store.added.has(track.id) && !queued.has(track.id));
   const shownPicks = store.picks.filter(visible);
-  const shownMore = store.more.filter(visible);
+  // "more from" waits for the playing artist's own strip rather than showing the last artist's.
+  const moreHere = !!store.moreFor && store.moreFor === artistDid;
+  const shownMore = moreHere ? store.more.filter(visible) : [];
 
   return <>
     {shownPicks.length > 0 && <View style={styles.section}>
@@ -52,7 +56,7 @@ export function QueueSuggestionStrips() {
       </View>
       <Strip tracks={shownPicks} leaving={leaving} add={add} leave={leave} />
     </View>}
-    {store.more.length > 1 && shownMore.length > 0 && <View style={styles.section}>
+    {moreHere && store.more.length > 1 && shownMore.length > 0 && <View style={styles.section}>
       <Text accessibilityRole="header" numberOfLines={1} style={[styles.heading, { color: theme.muted, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale, paddingVertical: 10 }]}>more from {store.moreName}</Text>
       <Strip tracks={shownMore} leaving={leaving} add={add} leave={leave} />
     </View>}

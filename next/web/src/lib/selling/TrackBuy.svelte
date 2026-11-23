@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { albumUris, sellers } from '$lib/track-extras';
+	import { albums, sellers } from '$lib/track-extras';
 	import Icon from '$lib/ui/Icon.svelte';
 	import { offerFor, offerLabel } from '@plyr/next-core/selling';
 	import type { Artist, Track } from '@plyr/next-core/api';
@@ -20,11 +20,11 @@
 		if (!title) return;
 		const { id, artist } = track;
 		let live = true;
-		void albumUris.load(`${artist.did} ${title}`).then(uri => { if (live) album = { trackId: id, uri }; }, () => {});
+		void albums.load(`${artist.did} ${title}`).then(found => { if (live) album = { trackId: id, uri: found?.uri }; }, () => {});
 		return () => { live = false; };
 	});
 	const sellerArtist = $derived(seller?.did === track.artist.did ? seller.artist : sellers.peek(track.artist.did));
-	const albumUri = $derived(album?.trackId === track.id ? album.uri : track.metadata.album ? albumUris.peek(`${track.artist.did} ${track.metadata.album}`) : undefined);
+	const albumUri = $derived(album?.trackId === track.id ? album.uri : track.metadata.album ? albums.peek(`${track.artist.did} ${track.metadata.album}`)?.uri : undefined);
 	const offer = $derived(offerFor(sellerArtist, [track.record.uri, albumUri]));
 </script>
 

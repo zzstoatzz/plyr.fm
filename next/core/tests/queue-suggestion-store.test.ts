@@ -82,3 +82,33 @@ test('stacks load once per account and reload after they are used', async () => 
   assert.equal(calls.chart, 2);
   assert.equal(calls.latest, 1);
 });
+
+test('more from records whose strip it is, and an added card is forgotten once no strip holds it', async () => {
+  const { api } = fakeApi();
+  const byArtist = { ...api, tracks: async (params: { artist_did?: string }) => ({ data: params.artist_did === 'did:plc:b' ? [track(8, 'did:plc:b')] : [track(1), track(2), track(3)] }) } as typeof api;
+  const store = createQueueSuggestions(byArtist);
+  store.follow(playing(1));
+  await wait();
+  assert.equal(store.snapshot().moreFor, 'did:plc:a');
+  store.added('t3');
+  store.follow(playing(5, 'did:plc:b'));
+  await wait();
+  assert.equal(store.snapshot().moreFor, 'did:plc:b');
+  assert.equal(store.snapshot().added.has('t3'), false, 'back on this artist later, t3 can be offered again');
+});
+
+test('pick another playlist shows it is busy, and a failed refresh keeps the old stack', async () => {
+  let fail = false;
+  const { api } = fakeApi();
+  const store = createQueueSuggestions({ ...api, chart: async () => { if (fail) throw new Error('down'); return { data: [{ track: track(60) }] }; } } as typeof api);
+  store.showStacks(null);
+  await wait(10);
+  store.reloadStack('latest');
+  assert.equal(store.snapshot().stacks.latest, 'loading');
+  await wait(10);
+  fail = true;
+  store.started('top');
+  store.showStacks(null);
+  await wait(10);
+  assert.equal(typeof store.snapshot().stacks.top, 'object');
+});

@@ -9,7 +9,7 @@
 	import { isPrivateTrack } from '@plyr/next-core/track-access';
 	import { showsPause, tracksContext } from '@plyr/next-core/play-context';
 	import { trackArtwork } from '@plyr/next-core/artwork';
-	import { api } from '$lib/api';
+	import { albums, sellers } from '$lib/track-extras';
 	import { comments as trackComments } from '$lib/listening/comments';
 	import { parseChapters, clock } from '@plyr/next-core/chapters';
 	import { player } from '$lib/player.svelte';
@@ -57,11 +57,11 @@
 	let seller = $state.raw<{ did: string; artist: Artist }>();
 	$effect(() => {
 		const did = track.artist.did;
-		const request = new AbortController();
-		void api.artist(did, request.signal).then(artist => { seller = { did, artist }; }, () => {});
-		return () => request.abort();
+		let live = true;
+		void sellers.load(did).then(artist => { if (live) seller = { did, artist }; }, () => {});
+		return () => { live = false; };
 	});
-	const sellerArtist = $derived(seller?.did === track.artist.did ? seller.artist : undefined);
+	const sellerArtist = $derived(seller?.did === track.artist.did ? seller.artist : sellers.peek(track.artist.did));
 	const offer = $derived(offerFor(sellerArtist, [track.record.uri, album?.trackId === track.id ? album.uri : undefined]));
 	const support = $derived(supportLink(sellerArtist));
 	let waysAdmitted = $state(false);
@@ -71,12 +71,9 @@
 		const title = track.metadata.album;
 		if (!title || !canDiscuss) return;
 		const { id, artist } = track;
-		const request = new AbortController();
-		void api.search(title, { limit: 20, types: 'album', signal: request.signal }).then(({ data }) => {
-			const matches = data.filter(hit => hit.type === 'album' && hit.owner?.did === artist.did && hit.title === title);
-			if (!request.signal.aborted) album = matches.length === 1 ? { trackId: id, id: matches[0].id, uri: matches[0].record.uri } : undefined;
-		}, () => {});
-		return () => request.abort();
+		let live = true;
+		void albums.load(`${artist.did} ${title}`).then(found => { if (live) album = found ? { trackId: id, ...found } : undefined; }, () => {});
+		return () => { live = false; };
 	});
 
 	function play() {

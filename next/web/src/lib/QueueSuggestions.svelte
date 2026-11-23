@@ -29,8 +29,13 @@
 	});
 
 	// An added card leaves the strip (in both strips, if it sits in both) instead of staying as a checkmark.
-	const shownPicks = $derived(store.picks.filter(track => !store.added.has(track.id)));
-	const shownMore = $derived(store.more.filter(track => !store.added.has(track.id)));
+	// Anything already queued (or playing) stays out too, however it got there.
+	const queued = $derived(new Set(player.queue.map(track => track.id)));
+	const offerable = (track: Track) => !store.added.has(track.id) && !queued.has(track.id);
+	const shownPicks = $derived(store.picks.filter(offerable));
+	// "more from" waits for the playing artist's own strip rather than showing the last artist's.
+	const moreHere = $derived(!!store.moreFor && store.moreFor === player.current?.artist.did);
+	const shownMore = $derived(moreHere ? store.more.filter(offerable) : []);
 	const leaving = new Set<string>();
 
 	function add(track: Track, button: HTMLButtonElement) {
@@ -117,7 +122,7 @@
 			{@render strip(shownPicks)}
 		</section>
 	{/if}
-	{#if store.more.length > 1 && shownMore.length}
+	{#if moreHere && store.more.length > 1 && shownMore.length}
 		<section aria-labelledby="queue-more">
 			<div class="strip-head"><h2 id="queue-more" class="truncate">more from {store.moreName}</h2></div>
 			{@render strip(shownMore)}

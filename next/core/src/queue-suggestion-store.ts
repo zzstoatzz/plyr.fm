@@ -11,7 +11,9 @@ export interface QueueSuggestionsState {
   /** "more from <artist>": the playing artist's other tracks that were not queued yet. */
   more: readonly Track[];
   moreName: string;
-  /** Cards the listener added; they stay out of both strips. */
+  /** The artist `more` belongs to; a strip for someone who is no longer playing is not shown. */
+  moreFor?: string;
+  /** Cards the listener added; they stay out of both strips until the strips are replaced. */
   added: ReadonlySet<string>;
   /** The empty queue's stacks, for the account in `stacksFor`. */
   stacks: Readonly<Partial<Record<StarterKey, StackState>>>;
@@ -39,6 +41,11 @@ export function createQueueSuggestions(api: Api, options: { now?: () => number; 
   const listeners = new Set<() => void>();
   let state: QueueSuggestionsState = { picks: [], more: [], moreName: '', added: new Set(), stacks: {}, started: new Set() };
   const emit = (next: Partial<QueueSuggestionsState>) => { state = { ...state, ...next }; for (const listener of listeners) listener(); };
+  // A new strip forgets added cards it does not hold, so a track added once can be offered again another time.
+  const keepAdded = (picks: readonly Track[], more: readonly Track[]) => {
+    const held = new Set([...picks, ...more].map(track => track.id));
+    return new Set([...state.added].filter(id => held.has(id)));
+  };
 
   let picksFor: string | undefined;
   let picksRequest: AbortController | undefined;
@@ -63,7 +70,7 @@ export function createQueueSuggestions(api: Api, options: { now?: () => number; 
       api.suggestions(request.seeds, { exclude: request.exclude, limit: 12, signal: controller.signal }).then(result => {
         if (controller.signal.aborted) return;
         shown = [...result.data.map(track => track.record.uri), ...(round ? shown : [])].slice(0, 60);
-        emit({ picks: result.data });
+        emit({ picks: result.data, added: keepAdded(result.data, state.more) });
       }, () => { if (picksRequest === controller && !controller.signal.aborted) picksFor = undefined; });
     }, wait);
   }
@@ -71,13 +78,14 @@ export function createQueueSuggestions(api: Api, options: { now?: () => number; 
   function askMore(context: PlayingContext) {
     moreRequest?.abort();
     const did = moreFor = context.artistDid;
-    if (!did) { emit({ more: [], moreName: '' }); return; }
+    if (!did) { emit({ more: [], moreName: '', moreFor: undefined }); return; }
     const controller = moreRequest = new AbortController();
     const name = context.artistName;
     api.tracks({ artist_did: did, limit: 13 }, controller.signal).then(result => {
       if (controller.signal.aborted) return;
       const queued = new Set(context.queue().queue.map(track => track.id));
-      emit({ more: result.data.filter(track => !queued.has(track.id)).slice(0, 12), moreName: name });
+      const more = result.data.filter(track => !queued.has(track.id)).slice(0, 12);
+      emit({ more, moreName: name, moreFor: did, added: keepAdded(state.picks, more) });
     }, () => { if (moreRequest === controller && !controller.signal.aborted) moreFor = undefined; });
   }
 
@@ -85,17 +93,19 @@ export function createQueueSuggestions(api: Api, options: { now?: () => number; 
   const stackAt: Partial<Record<StarterKey, number>> = {};
   const attempts: Partial<Record<StarterKey, number>> = {};
 
-  function loadStack(key: StarterKey) {
+  function loadStack(key: StarterKey, busy = false) {
     const attempt = attempts[key] = (attempts[key] ?? 0) + 1;
     const did = stacksFor ?? undefined;
-    const settle = (value: StackState) => {
+    const settle = (value: StackState, fresh: boolean) => {
       if (attempts[key] !== attempt) return;
-      if (typeof value === 'object') stackAt[key] = now();
+      // A failed refresh keeps the old stack but leaves it stale, so the next look tries again.
+      if (fresh) stackAt[key] = now();
       emit({ stacks: { ...state.stacks, [key]: value } });
     };
-    // A stale stack stays on screen while its replacement loads.
-    if (typeof state.stacks[key] !== 'object') emit({ stacks: { ...state.stacks, [key]: 'loading' } });
-    loadStarter(api, key, did, options.random).then(settle, () => settle(typeof state.stacks[key] === 'object' ? state.stacks[key] : 'failed'));
+    // A stale stack stays on screen while its replacement loads; one the listener asked to replace shows that it is busy.
+    const kept = state.stacks[key];
+    if (busy || typeof kept !== 'object') emit({ stacks: { ...state.stacks, [key]: 'loading' } });
+    loadStarter(api, key, did, options.random).then(value => settle(value, true), () => settle(typeof kept === 'object' ? kept : 'failed', false));
   }
 
   return {
@@ -131,7 +141,8 @@ export function createQueueSuggestions(api: Api, options: { now?: () => number; 
         if (!stack || stack === 'failed' || stale || used.has(starter.key)) loadStack(starter.key);
       }
     },
-    reloadStack: loadStack,
+    /** "Pick another playlist". */
+    reloadStack: (key: StarterKey) => loadStack(key, true),
     started(key: StarterKey) { emit({ started: new Set([...state.started, key]) }); }
   };
 }
