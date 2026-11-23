@@ -134,8 +134,7 @@ const coordinator = 'https://jams.next.plyr.fm';
     await dock.getByRole('button', { name: 'Play', exact: true }).waitFor();
     assert.ok(joins >= 3, 'SDK restore still runs when database enumeration is unavailable');
 
-    await page.getByRole('button', { name: 'comments', exact: true }).click();
-    const panel = page.getByRole('dialog', { name: 'comments' });
+    const panel = page.getByRole('region', { name: 'comments' });
     const draft = panel.getByRole('textbox', { name: 'add a comment' });
     await panel.getByText('could not load comments.', { exact: false }).waitFor();
     assert.equal(await draft.count(), 0, 'no composer until the artist is known to allow comments');
@@ -170,7 +169,6 @@ const coordinator = 'https://jams.next.plyr.fm';
     await deleted;
     await panel.getByText('no comments yet.').waitFor();
     assert.deepEqual((await fetch(records).then(response => response.json())).records, []);
-    await panel.getByRole('button', { name: 'Close comments' }).click();
 
     const desktopNav = page.getByRole('navigation', { name: 'Main navigation' });
     const you = desktopNav.getByRole('button', { name: /^you\b/ });

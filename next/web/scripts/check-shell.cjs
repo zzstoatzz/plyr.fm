@@ -42,7 +42,7 @@ async function screen(browser, phone, scheme) {
     await Promise.all([page.waitForResponse(response => method(new URL(response.url())) === 'getTrackComments' && names(new URL(response.url()), tracks[3].id)), page.goto(origin + '/track/' + tracks[3].id)]);
     await page.getByRole('heading', { name: tracks[3].metadata.title, exact: true }).waitFor();
     await page.waitForTimeout(250);
-    assert.equal(await page.getByRole('button', { name: 'comments', exact: true }).count(), 0, 'no comments button when the artist has not opted in');
+    assert.equal(await page.getByRole('region', { name: 'comments', exact: true }).count(), 0, 'no comments when the artist has not opted in');
     await page.goto(origin);
     await page.getByTestId('home-track-row').first().waitFor();
     await page.getByTestId('home-chart').waitFor();
@@ -77,19 +77,11 @@ async function screen(browser, phone, scheme) {
     const tags = page.getByRole('navigation', { name: 'Tags', exact: true });
     const tag = tags.getByRole('link', { name: 'field & nature', exact: true });
     assert.equal(new URL(await tag.getAttribute('href'), origin).searchParams.get('tag'), 'field & nature');
-    assert.equal(await page.getByText('A recording made at dawn.', { exact: false }).isVisible(), false);
-    await page.getByLabel('Show details', { exact: true }).click();
     await page.getByText('A recording made at dawn.', { exact: false }).waitFor();
-    await capture('track');
-    const opener = page.getByRole('button', { name: 'comments', exact: true });
-    await opener.click();
-    const comments = page.getByRole('dialog', { name: 'comments', exact: true });
+    const comments = page.getByRole('region', { name: 'comments', exact: true });
     await comments.getByText('I love this moment.').waitFor();
     await comments.getByRole('link', { name: 'A Listener' }).waitFor();
-    await capture('track-comments');
-    await page.keyboard.press('Escape');
-    await comments.waitFor({ state: 'hidden' });
-    assert.ok(await opener.evaluate(node => node === document.activeElement));
+    await capture('track');
     let releaseDelivery;
     let deliveries = 0;
     const waiting = new Promise(resolve => { releaseDelivery = resolve; });
@@ -98,7 +90,6 @@ async function screen(browser, phone, scheme) {
     const loading = page.waitForRequest(request => playbackUrl(new URL(request.url())));
     await page.getByRole('article').getByRole('button', { name: 'Play', exact: true }).click();
     await loading;
-    await opener.click();
     await comments.getByRole('button', { name: 'Play from 0:14' }).click();
     await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'home', exact: true }).click();
     await page.waitForURL(origin + '/');
