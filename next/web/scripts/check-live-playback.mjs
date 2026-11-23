@@ -58,6 +58,27 @@ async function heard(page, step, { advance = 1.5, timeout = 25_000, differentFro
 	}
 }
 
+// sign out from settings and wait for the stored session to go (same steps as check-live-upload-page)
+async function signOut(page) {
+	await page.goto(app + '/settings', { waitUntil: 'domcontentloaded' });
+	const button = page.getByRole('button', { name: 'sign out', exact: true });
+	await button.or(page.getByRole('link', { name: 'sign in', exact: true })).first().waitFor();
+	if (!await button.isVisible()) return;
+	await button.click();
+	await page.waitForURL(app + '/');
+	await page.waitForFunction(() => new Promise((resolve, reject) => {
+		const open = indexedDB.open('@atproto-oauth-client');
+		open.onerror = () => reject(open.error);
+		open.onsuccess = () => {
+			const db = open.result;
+			const count = db.transaction('session').objectStore('session').count();
+			db.close();
+			count.onerror = () => reject(count.error);
+			count.onsuccess = () => resolve(count.result === 0);
+		};
+	}), null, { timeout: 30_000 });
+}
+
 async function dockPlay(page) {
 	const dock = page.locator('.dock, [class*=dock]').getByRole('button', { name: 'Play', exact: true });
 	return (await dock.count() ? dock : page.getByRole('button', { name: 'Play', exact: true })).first();
@@ -69,17 +90,19 @@ async function run(browser, { width, height, signIn }) {
 	await context.addInitScript(recordMedia);
 	const page = await context.newPage();
 	page.setDefaultTimeout(20_000);
+	page.on('dialog', dialog => dialog.accept());
 	const consoleLines = [];
 	page.on('console', message => { if (/plays|queue|playback|audio/i.test(message.text())) consoleLines.push(`${message.type()} ${message.text()}`.slice(0, 240)); });
 	page.on('pageerror', error => consoleLines.push('pageerror ' + error.message));
-	let account;
+	let signedInHere = false;
 	try {
-		await page.goto(app + '/');
 		if (signIn) {
-			account = await browserAccount(handle, password, pdsUrl);
-			await account.signIn(page, () => {});
+			await page.goto(app + '/upload', { waitUntil: 'domcontentloaded' });
+			await (await browserAccount(handle, password, pdsUrl)).signIn(page, () => {});
+			signedInHere = true;
 			await page.waitForURL(url => url.origin === app);
 		}
+		await page.goto(app + '/');
 		const row = page.locator('main').getByRole('button', { name: /^Play / }).first();
 		await row.waitFor();
 		const name = (await row.getAttribute('aria-label'))?.replace(/^Play /, '');
@@ -94,6 +117,19 @@ async function run(browser, { width, height, signIn }) {
 			console.log(`${label}: next track plays ${second}`);
 		}
 
+		if (!signIn) {
+			// a track this listener can't hear must say why in the dock, not sit on play at 0:00
+			const latest = await (await fetch('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.listTracks?limit=30')).json();
+			const closed = latest.data?.find(track => track.access?.space_uri || track.access?.gate);
+			const closedRow = closed && page.locator('main').getByRole('button', { name: 'Play ' + closed.metadata.title, exact: true }).first();
+			if (closedRow && await closedRow.count()) {
+				await closedRow.click();
+				const reason = page.getByTestId('player-dock').getByRole('status');
+				await reason.waitFor({ timeout: 20_000 });
+				console.log(`${label}: pressing closed "${closed.metadata.title}" says "${await reason.innerText()}"`);
+			} else console.log(`${label}: no closed track in latest right now; skipped the says-why check`);
+		}
+
 		await page.reload();
 		const play = await dockPlay(page);
 		await play.waitFor();
@@ -105,7 +141,7 @@ async function run(browser, { width, height, signIn }) {
 		if (consoleLines.length) error.message += '\nconsole:\n' + consoleLines.slice(-30).join('\n');
 		throw error;
 	} finally {
-		if (account) await account.signOut(page, '/').catch(error => console.log('sign-out after the check failed: ' + error.message));
+		if (signedInHere) await signOut(page).catch(error => console.log('sign-out after the check failed: ' + error.message));
 		await context.close();
 	}
 }
