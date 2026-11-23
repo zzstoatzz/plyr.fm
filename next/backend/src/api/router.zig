@@ -30,6 +30,7 @@ const TrackRecordJsonStore = @import("../internal/index/track_record_json_store.
 const VerifiedListStore = @import("../internal/index/verified_list_store.zig").VerifiedListStore;
 const RecordStatusStore = @import("../internal/index/record_status_store.zig").RecordStatusStore;
 const IngestStatusStore = @import("../internal/index/ingest_status_store.zig").IngestStatusStore;
+const legacy_links = @import("legacy_links.zig");
 
 const mem = std.mem;
 
@@ -51,6 +52,7 @@ pub const App = struct {
     verified_list_store: ?VerifiedListStore,
     record_status_store: ?RecordStatusStore = null,
     ingest_status_store: ?IngestStatusStore = null,
+    legacy_audio: ?*@import("../internal/index/postgres_legacy_audio_store.zig").PostgresLegacyAudioStore = null,
     search_store: ?SearchStore,
     play_metric_store: ?PlayMetricStore,
     track_collection: []const u8,
@@ -162,6 +164,8 @@ pub fn handle(
             app.cors,
             request_id,
         );
+    } else if (legacy_links.match(path)) |route| {
+        try legacy_links.handle(request, allocator, route, app.legacy_audio, app.track_collection, app.cors, request_id);
     } else if (mem.eql(u8, path, "/oembed")) {
         if (request.method != .GET and request.method != .HEAD) {
             try response.apiError(request, .method_not_allowed, request_id, app.cors);
