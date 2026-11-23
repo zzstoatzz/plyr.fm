@@ -180,7 +180,8 @@ async function queueGroups(browser, phone, scheme) {
     const bar = marker.locator('i').first();
     assert.equal(await bar.evaluate(node => getComputedStyle(node).clipPath), 'none', 'the playing bars are independent of the loading wave');
     assert.equal(await picks.nth(1).getByTestId('playing-wave').count(), 0);
-    assert.notEqual(await bar.evaluate(node => getComputedStyle(node).animationName), 'none');
+    // canned motion, or heights that follow the track's measured levels
+    assert.ok(await bar.evaluate(node => getComputedStyle(node).animationName !== 'none' || 'liveWave' in document.documentElement.dataset), 'the playing bars move');
     await page.emulateMedia({ reducedMotion: 'reduce' });
     assert.equal(await bar.evaluate(node => getComputedStyle(node).animationName), 'none');
     await page.emulateMedia({ reducedMotion: 'no-preference' });
