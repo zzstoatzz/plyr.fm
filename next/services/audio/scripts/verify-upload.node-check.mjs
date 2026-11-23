@@ -131,6 +131,29 @@ test('fixture refuses nonmanual or nonmain use before network mutations', async 
   assert.equal(called, false);
 });
 
+test('only an executor deploy push may run the fixture outside a manual dispatch', async t => {
+  const base = { ZAT_TEST_PDS: 'https://fixture.invalid', ZAT_TEST_HANDLE: 'fixture.invalid', ZAT_TEST_PASSWORD: 'secret', CLOUDFLARE_API_TOKEN: 'secret', CLOUDFLARE_ACCOUNT_ID: 'fixture', GITHUB_REF: 'refs/heads/main', GITHUB_EVENT_NAME: 'push', GITHUB_ACTIONS: 'true', RUNNER_OS: 'Linux' };
+  const keys = [...Object.keys(base), 'GITHUB_WORKFLOW', 'VERIFY_UPLOAD_PROCESSING', 'VERIFY_UPLOAD_FULLSIZE'];
+  const previous = Object.fromEntries(keys.map(key => [key, process.env[key]]));
+  t.after(() => { for (const [key, value] of Object.entries(previous)) if (value === undefined) delete process.env[key]; else process.env[key] = value; });
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => { calls++; throw new Error('stop at the network'); });
+  for (const extra of [
+    { GITHUB_WORKFLOW: 'next audio service', VERIFY_UPLOAD_PROCESSING: 'true' },
+    { GITHUB_WORKFLOW: 'deploy next processing' },
+    { GITHUB_WORKFLOW: 'deploy next processing', VERIFY_UPLOAD_PROCESSING: 'true', VERIFY_UPLOAD_FULLSIZE: 'true' },
+  ]) {
+    for (const key of keys) delete process.env[key];
+    Object.assign(process.env, base, extra);
+    await assert.rejects(main(), /manual main-only fixture/);
+  }
+  assert.equal(calls, 0);
+  for (const key of keys) delete process.env[key];
+  Object.assign(process.env, base, { GITHUB_WORKFLOW: 'deploy next processing', VERIFY_UPLOAD_PROCESSING: 'true' });
+  await assert.rejects(main(), /stop at the network/);
+  assert.equal(calls, 1);
+});
+
 test('full-size fixture refuses local execution before network or allocation', async t => {
   const env = { ZAT_TEST_PDS: 'https://fixture.invalid', ZAT_TEST_HANDLE: 'fixture.invalid', ZAT_TEST_PASSWORD: 'secret', CLOUDFLARE_API_TOKEN: 'secret', CLOUDFLARE_ACCOUNT_ID: 'fixture', GITHUB_REF: 'refs/heads/main', GITHUB_EVENT_NAME: 'workflow_dispatch', VERIFY_UPLOAD_FULLSIZE: 'true', GITHUB_ACTIONS: 'false', RUNNER_OS: 'Linux' };
   const previous = Object.fromEntries(Object.keys(env).map(key => [key, process.env[key]]));

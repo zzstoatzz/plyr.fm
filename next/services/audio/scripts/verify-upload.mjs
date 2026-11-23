@@ -151,9 +151,11 @@ export async function main({ deleteObject = deleteFixtureObject, verifyProcessin
   const required = ['ZAT_TEST_PDS', 'ZAT_TEST_HANDLE', 'ZAT_TEST_PASSWORD'];
   if (!prepublication) required.push('CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID');
   for (const name of required) assert.ok(process.env[name], `missing ${name}`);
-  assert.ok(process.env.GITHUB_REF === 'refs/heads/main' && process.env.GITHUB_EVENT_NAME === 'workflow_dispatch', 'manual main-only fixture');
   const fullSize = process.env.VERIFY_UPLOAD_FULLSIZE === 'true';
   const processing = process.env.VERIFY_UPLOAD_PROCESSING === 'true';
+  // a processing executor deploy from main runs the small processing fixture once
+  const executorDeploy = processing && !fullSize && process.env.GITHUB_EVENT_NAME === 'push' && process.env.GITHUB_WORKFLOW === 'deploy next processing';
+  assert.ok(process.env.GITHUB_REF === 'refs/heads/main' && (process.env.GITHUB_EVENT_NAME === 'workflow_dispatch' || executorDeploy), 'manual main-only fixture');
   assert.ok(!prepublication || !(fullSize || processing || process.env.DIAGNOSE_UPLOAD === 'true' || process.env.RESUME_UPLOAD_ID || process.env.RESUME_RECORD_RKEY),
     'prepublication requires a fresh small fixture');
   if (fullSize) assert.ok(process.env.GITHUB_ACTIONS === 'true' && process.env.RUNNER_OS === 'Linux', 'full-size fixture is cloud-only');

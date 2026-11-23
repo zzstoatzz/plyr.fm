@@ -69,3 +69,47 @@ jobs:
           status=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{}' https://plyr-next-processing.fly.dev/v1/processing)
           echo "unauthenticated dispatch: $status"
           test "$status" = 401 -o "$status" = 422 -o "$status" = 400
+
+  # a real processed upload through the deployed executor, with the
+  # disposable integration account; the fixture cleans up its own objects
+  # and record. One at a time.
+  verify:
+    needs: deploy
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency: next-processing-acceptance
+    defaults:
+      run:
+        working-directory: next/services/audio
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: next/services/audio/package-lock.json
+      - run: npm ci
+      - uses: oven-sh/setup-bun@v2
+      - name: install fixture SDK
+        working-directory: next
+        run: bun install --frozen-lockfile
+      - name: install media verification tools
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y ffmpeg
+      - name: verify a processed upload end to end
+        env:
+          ZAT_TEST_PDS: ${{ secrets.ZAT_TEST_PDS }}
+          ZAT_TEST_HANDLE: ${{ secrets.ZAT_TEST_HANDLE }}
+          ZAT_TEST_PASSWORD: ${{ secrets.ZAT_TEST_PASSWORD }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          VERIFY_UPLOAD_PROCESSING: "true"
+        run: node --experimental-strip-types scripts/verify-upload.mjs
+      - name: retain acceptance and cleanup receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: processing-acceptance
+          path: next/services/audio/upload-acceptance
+          retention-days: 3
+          if-no-files-found: ignore
