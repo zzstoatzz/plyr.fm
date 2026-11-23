@@ -1,4 +1,5 @@
 import type { AuthConfig } from './auth-config.ts';
+import { reportError as report } from './report-error.ts';
 import { didDocument, pdsEndpoint, pdsSupportsSpaces } from './identity.ts';
 
 export type Did = `did:${string}:${string}`;
@@ -56,7 +57,12 @@ export function createAuthState<Rpc>(config: AuthConfig, createRpc: (agent: Agen
 
 	function update(next: Auth<Rpc>) {
 		state = next;
-		for (const listener of listeners) listener();
+		// every subscriber hears every change: one that throws must not leave the rest on the old
+		// account (a half-applied switch), nor fail the sign-in or switch that made the change
+		for (const listener of listeners) {
+			try { listener(); }
+			catch (error) { report(error); }
+		}
 	}
 
 	async function scopeFor(identifier: string, deviceOnly: boolean): Promise<string> {
