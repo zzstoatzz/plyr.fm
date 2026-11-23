@@ -217,7 +217,7 @@
 			<header><h2 id="home-tags">browse by tag</h2></header>
 			<nav class="tag-list" aria-label="Browse by tag">
 				{#each tags.filter(tag => !prefs.hiddenTags.includes(tag.name)) as tag (tag.name)}
-					<a style:--dot="light-dark({tagColors(tag.name, palettes.light.background, false).color}, {tagColors(tag.name, palettes.dark.background, false).color})" href={resolve('/(app)/tag/[name]', { name: tag.name })}><i aria-hidden="true"></i><span class="truncate">{tag.name}</span> <small>{tag.track_count}</small></a>
+					<a style:--dot="light-dark({tagColors(tag.name, palettes.light.background, false).color}, {tagColors(tag.name, palettes.dark.background, false).color})" class="tag-pill" href={resolve('/(app)/tag/[name]', { name: tag.name })}><i aria-hidden="true"></i><span class="truncate">{tag.name}</span> <small>{tag.track_count}</small></a>
 				{/each}
 			</nav>
 		</section>
@@ -261,7 +261,7 @@
 						{@const selected = data.tags.includes(tag.name)}
 						{@const light = tagColors(tag.name, palettes.light.background, selected)}
 						{@const dark = tagColors(tag.name, palettes.dark.background, selected)}
-						<a style:color="light-dark({light.color}, {dark.color})" style:background-color="light-dark({light.backgroundColor}, {dark.backgroundColor})" style:border-color="light-dark({light.borderColor}, {dark.borderColor})" href={resolve('/(app)/tag/[name]', { name: tag.name })} aria-current={data.tags.includes(tag.name) ? 'page' : undefined}>{tag.name} <small>{tag.track_count}</small></a>
+						<a style:color="light-dark({light.color}, {dark.color})" style:background-color="light-dark({light.backgroundColor}, {dark.backgroundColor})" style:border-color="light-dark({light.borderColor}, {dark.borderColor})" class="tag-pill" href={resolve('/(app)/tag/[name]', { name: tag.name })} aria-current={data.tags.includes(tag.name) ? 'page' : undefined}>{tag.name} <small>{tag.track_count}</small></a>
 					{/each}
 				</nav>
 			{/if}
@@ -316,6 +316,7 @@
 	.tag-shelf a { display: inline-flex; align-items: center; gap: 0.3rem; min-height: 2.75rem; padding-inline: 0.65rem; border: 1px solid var(--line); border-radius: 1.5rem; white-space: nowrap; color: var(--muted); }
 	.tag-shelf a[aria-current=page] { border-color: var(--accent); color: var(--accent); }
 	.tag-shelf small { font-variant-numeric: tabular-nums; }
+	@media (hover: hover) { .tag-shelf a:hover { filter: brightness(1.12); } }
 	.chart, .tags { min-width: 0; }
 	.chart-loading, .chart-empty { display: grid; align-items: center; min-height: 4.75rem; color: var(--muted); }
 	.chart-empty button { justify-self: start; }

@@ -188,7 +188,7 @@
 				{#if !player.liveStation}
 					{#if tags.length}
 						<nav class="tags" aria-label="Tags" data-testid="now-playing-tags">
-							{#each tags as tag (tag)}<a href={resolve(`/?${new URLSearchParams({ tag })}`)}>{tag}</a>{/each}
+							{#each tags as tag (tag)}<a class="tag-pill" href={resolve(`/?${new URLSearchParams({ tag })}`)}>{tag}</a>{/each}
 						</nav>
 					{/if}
 					{#key player.current.id}<TrackBuy track={player.current} />{/key}
@@ -249,7 +249,7 @@
 	.track-link { display: flex; justify-content: space-between; padding-block: 0.65rem; border-bottom: 1px solid var(--line); }
 	.tags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-block: 0.85rem 0.5rem; }
 	.tags a { display: grid; align-items: center; min-height: 2.75rem; padding-inline: 0.75rem; max-width: 100%; overflow-wrap: anywhere; border-radius: 0.6rem; color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); font-size: var(--t-13-6); font-weight: 650; }
-	.tags a:hover { text-decoration: underline; }
+	@media (hover: hover) { .tags a:hover { background: color-mix(in srgb, var(--accent) 20%, var(--surface)); } }
 	.description { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); margin-top: 1rem; }
 	.chapters { margin-top: 1.25rem; }
 	h2 { font-size: var(--t-16); }

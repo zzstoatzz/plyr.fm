@@ -190,7 +190,7 @@
 			<nav class="search-tags" aria-label="Matching tags">
 				<h2>tags</h2>
 				{#each matchingTags as tag (tag.name)}
-					<a href={resolve('/(app)/tag/[name]', { name: tag.name })}>{tag.name} <small>{tag.track_count}</small></a>
+					<a class="tag-pill" href={resolve('/(app)/tag/[name]', { name: tag.name })}>{tag.name} <small>{tag.track_count}</small></a>
 				{/each}
 			</nav>
 	{/if}
@@ -206,6 +206,7 @@
 	.search-tags h2 { flex-basis: 100%; font-size: var(--t-16); }
 	.search-tags a { display: inline-flex; align-items: center; gap: 0.3rem; min-height: 2.75rem; border: 1px solid var(--line); border-radius: 2rem; padding-inline: 0.7rem; }
 	.search-tags small { color: var(--muted); }
+	@media (hover: hover) { .search-tags a:hover { background: var(--hover); } }
 	.search-page { max-width: 118rem; }
 	form { margin: 0.75rem 0; }
 	.field { display: flex; align-items: center; gap: 0.6rem; min-height: 3rem; padding: 0 0.5rem 0 0.9rem; border: 1px solid var(--line); border-radius: 0.75rem; background: var(--surface); color: var(--muted); cursor: text; }
