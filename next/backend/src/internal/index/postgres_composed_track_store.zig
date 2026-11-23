@@ -22,6 +22,7 @@ const liked_track_store = @import("liked_track_store.zig");
 const store_module = @import("track_store.zig");
 const resolve_tracks = @import("../application/resolve_tracks.zig");
 const track_tag_sql = @import("track_tag_sql.zig");
+const ranked_sql = @import("ranked_track_sql.zig");
 const mirror_store = @import("../delivery/postgres_mirror_store.zig");
 const batches = @import("postgres_track_batches.zig");
 
@@ -233,9 +234,10 @@ pub const PostgresComposedTrackStore = struct {
             return error.IndexUnavailable;
         };
         defer self.pool.release(conn);
+        const ranked = request.scope == .discovery and request.tags.len > 1;
         var result = switch (request.scope) {
             .discovery => if (request.after) |after|
-                conn.queryOpts(discovery_after_query, .{
+                conn.queryOpts(if (ranked) ranked_sql.after_query else discovery_after_query, .{
                     request.collection,
                     self.profile_collection,
                     self.like_collection,
@@ -244,19 +246,19 @@ pub const PostgresComposedTrackStore = struct {
                     after.created_at_us,
                     after.at_uri,
                     limit,
-                }, .{ .cache_name = "plyr_discovery_after_query" }) catch |err| {
+                }, .{ .cache_name = if (ranked) "plyr_ranked_after_query" else "plyr_discovery_after_query" }) catch |err| {
                     logQueryError(conn, "composed discovery query failed", err);
                     return postgres_read.failure(conn, err);
                 }
             else
-                conn.queryOpts(discovery_query, .{
+                conn.queryOpts(if (ranked) ranked_sql.query else discovery_query, .{
                     request.collection,
                     self.profile_collection,
                     self.like_collection,
                     request.tags,
                     request.hidden_tags,
                     limit,
-                }, .{ .cache_name = "plyr_discovery_query" }) catch |err| {
+                }, .{ .cache_name = if (ranked) "plyr_ranked_query" else "plyr_discovery_query" }) catch |err| {
                     logQueryError(conn, "composed discovery query failed", err);
                     return postgres_read.failure(conn, err);
                 },
@@ -294,13 +296,15 @@ pub const PostgresComposedTrackStore = struct {
             std.log.err("composed track collection read failed: {}", .{err});
             return postgres_read.failure(conn, err);
         }) |row| {
-            const value = decodeRow(allocator, row) catch |err| switch (err) {
+            var value = decodeRow(allocator, row) catch |err| switch (err) {
                 error.OutOfMemory => return error.OutOfMemory,
                 else => {
                     std.log.err("composed track collection decode failed: {}", .{err});
                     return error.CorruptProjection;
                 },
             };
+            if (ranked) value.metadata.tags = parseLabels(allocator, row.get([]const u8, projected_column_count) catch
+                return error.CorruptProjection) catch |err| return if (err == error.OutOfMemory) error.OutOfMemory else error.CorruptProjection;
             items.append(allocator, .{
                 .value = value,
                 .created_at_us = row.get(i64, 36) catch
@@ -690,6 +694,7 @@ fn afterCursor(comptime at: []const u8, comptime uri: []const u8) []const u8 {
 const discovery_query = pagedQuery(discovery_policy ++ track_tag_sql.filter ++ track_tag_sql.hidden_filter, "$6::bigint");
 const discovery_after_query = pagedQuery(discovery_policy ++ track_tag_sql.filter ++ track_tag_sql.hidden_filter ++ afterCursor("$6", "$7"), "$8::bigint");
 const artist_query = pagedQuery(artist_policy ++ track_tag_sql.filter, "$6::bigint");
+
 const artist_after_query = pagedQuery(artist_policy ++ track_tag_sql.filter ++ afterCursor("$6", "$7"), "$8::bigint");
 
 const liked_joined_projection = "SELECT\n" ++ projected_columns ++
@@ -1466,6 +1471,17 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     for ([_][]const u8{ "/v1/tags?limit=0", "/v1/tags?limit=101", "/v1/tags?limit=1&limit=2", "/v1/tags?cursor=bad", "/v1/tags?cursor=" }) |invalid| {
         try std.testing.expectEqual(tags_api.Result.invalid_request, tags_api.execute(a, implementation.store(), "fm.plyr.dev.track", invalid));
     }
+    // several tags list tracks with any of them, the ones carrying more of them first
+    const both_tags = &[_][]const u8{ "ambient", "zeta" };
+    const ranked_first = try implementation.store().listPublic(a, .{ .collection = "fm.plyr.dev.track", .scope = .discovery, .limit = 1, .after = null, .tags = both_tags, .hidden_tags = &.{} });
+    try std.testing.expectEqual(@as(usize, 1), ranked_first.len);
+    try std.testing.expectEqualStrings(quiet.upsert.record_uri, ranked_first[0].value.record.uri);
+    try std.testing.expectEqual(@as(usize, 2), ranked_first[0].value.metadata.tags.?.len);
+    const after_first: @import("../identity/track_cursor.zig").Cursor = .{ .created_at_us = ranked_first[0].created_at_us, .at_uri = ranked_first[0].value.record.uri };
+    const ranked_rest = try implementation.store().listPublic(a, .{ .collection = "fm.plyr.dev.track", .scope = .discovery, .limit = 5, .tags = both_tags, .hidden_tags = &.{}, .after = after_first });
+    try std.testing.expectEqual(@as(usize, 1), ranked_rest.len);
+    try std.testing.expectEqualStrings(pds_only_uri, ranked_rest[0].value.record.uri);
+    try std.testing.expectEqualStrings("ambient", ranked_rest[0].value.metadata.tags.?[0]);
     _ = try pool.exec("DELETE FROM plyr_index.track_records WHERE record_uri=$1", .{quiet.upsert.record_uri});
 
     const label_sync = @import("../moderation/label_sync.zig");

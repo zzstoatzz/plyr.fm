@@ -26,6 +26,19 @@
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
+	// a pill adds its tag to the ones picked, or takes it away; the list then shows tracks with any of them
+	const maxTags = 10;
+	function tagHref(name: string) {
+		const picked = data.tags.includes(name) ? data.tags.filter(tag => tag !== name) : [...data.tags, name];
+		return picked.length ? `/?${new URLSearchParams(picked.map(tag => ['tag', tag]))}` : '/';
+	}
+	// with several tags the api lists tracks carrying more of them first, so each group is one run
+	function group(track: Track) {
+		const count = data.tags.filter(tag => track.metadata.tags?.includes(tag)).length;
+		if (count === data.tags.length) return data.tags.length === 2 ? 'has both' : `has all ${data.tags.length}`;
+		if (data.tags.length === 2) return 'has one';
+		return `${count} of ${data.tags.length}`;
+	}
 	// The rail scrolls with the page until its end reaches the bottom of the screen, then stays there.
 	// It rests exactly as far above the screen's bottom as the page ends below the home's content (page
 	// padding plus the player dock), so reaching the end of the loaded tracks never nudges it, and the next
@@ -253,15 +266,19 @@
 	{/await}
 	{#if !data.tags.length}<FollowingLatest bind:this={following} />{/if}
 	<section class="latest" aria-labelledby="home-latest">
-		<header><h2 id="home-latest" tabindex="-1">{data.tags.length ? data.tags.join(', ') : 'latest'}</h2>{#if data.tags.length}<a href={resolve('/')}>all tracks</a>{:else}<span>newest first</span>{/if}</header>
+		<header><h2 id="home-latest" tabindex="-1">{data.tags.length ? data.tags.join(' + ') : 'latest'}</h2>{#if data.tags.length}<a href={resolve('/')}>all tracks</a>{:else}<span>newest first</span>{/if}</header>
 		{#await data.discovery then tags}
-			{#if tags.length}
+			{@const picked = data.tags.map(name => tags.find(tag => tag.name === name) ?? { name, track_count: undefined })}
+			{@const rest = tags.filter(tag => !data.tags.includes(tag.name) && !prefs.hiddenTags.includes(tag.name))}
+			{#if picked.length || rest.length}
 				<nav class="tag-shelf" aria-label="Browse by tag">
-					{#each tags.filter(tag => data.tags.includes(tag.name) || !prefs.hiddenTags.includes(tag.name)) as tag (tag.name)}
+					{#each [...picked, ...rest] as tag (tag.name)}
 						{@const selected = data.tags.includes(tag.name)}
 						{@const light = tagColors(tag.name, palettes.light.background, selected)}
 						{@const dark = tagColors(tag.name, palettes.dark.background, selected)}
-						<a style:color="light-dark({light.color}, {dark.color})" style:background-color="light-dark({light.backgroundColor}, {dark.backgroundColor})" style:border-color="light-dark({light.borderColor}, {dark.borderColor})" class="tag-pill" href={resolve('/(app)/tag/[name]', { name: tag.name })} aria-current={data.tags.includes(tag.name) ? 'page' : undefined}>{tag.name} <small>{tag.track_count}</small></a>
+						{#if selected || data.tags.length < maxTags}
+							<a style:color="light-dark({light.color}, {dark.color})" style:background-color="light-dark({light.backgroundColor}, {dark.backgroundColor})" style:border-color="light-dark({light.borderColor}, {dark.borderColor})" class="tag-pill" href={tagHref(tag.name)} aria-current={selected ? 'page' : undefined}>{#if selected}<Icon name="check" size={14} />{/if}{tag.name}{#if tag.track_count !== undefined} <small>{tag.track_count}</small>{/if}</a>
+						{/if}
 					{/each}
 				</nav>
 			{/if}
@@ -269,7 +286,11 @@
 		{#await latest}
 			<Loading label="loading the latest tracks" />
 		{:then first}
-			{#each [...first.data, ...extra] as track (track.id)}
+			{@const rows = [...first.data, ...extra]}
+			{#each rows as track, index (track.id)}
+				{#if data.tags.length > 1 && (index === 0 || group(track) !== group(rows[index - 1]))}
+					<h3 class="group" data-testid="home-tag-group">{group(track)}</h3>
+				{/if}
 				<TrackRow {track} testid="home-track-row" />
 			{:else}
 				<p class="state">no tracks found.</p>
@@ -316,6 +337,9 @@
 	.tag-shelf a { display: inline-flex; align-items: center; gap: 0.3rem; min-height: 2.75rem; padding-inline: 0.65rem; border: 1px solid var(--line); border-radius: 1.5rem; white-space: nowrap; color: var(--muted); }
 	.tag-shelf a[aria-current=page] { border-color: var(--accent); color: var(--accent); }
 	.tag-shelf small { font-variant-numeric: tabular-nums; }
+	.tag-shelf a :global(svg) { margin-left: -0.15rem; }
+	.group { margin: 1.1rem 0 0.35rem; padding-bottom: 0.35rem; border-bottom: 1px solid var(--line); color: var(--muted); font-size: var(--t-12-8); font-weight: 650; }
+	.group:first-of-type { margin-top: 0.2rem; }
 	@media (hover: hover) { .tag-shelf a:hover { filter: brightness(1.12); } }
 	.chart, .tags { min-width: 0; }
 	.chart-loading, .chart-empty { display: grid; align-items: center; min-height: 4.75rem; color: var(--muted); }

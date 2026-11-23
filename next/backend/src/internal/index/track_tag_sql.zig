@@ -57,3 +57,16 @@ pub const hidden_filter =
     \\    )
     \\  ))
 ;
+
+/// How many of the requested tags ($4) a record carries, with the same verified-over-legacy
+/// rule as `filter`. Ranks a multi-tag listing so tracks with every tag come first.
+pub fn hits(comptime uri: []const u8, comptime cid: []const u8) []const u8 {
+    return "(SELECT count(DISTINCT hit.tag) FROM (" ++
+        "SELECT unnest(tags.tags) AS tag FROM plyr_index.track_tag_records AS tags" ++
+        " WHERE tags.record_uri = " ++ uri ++ " AND tags.record_cid = " ++ cid ++ " AND tags.tags_present" ++
+        " UNION ALL SELECT annotation.tag FROM plyr_index.legacy_track_tags AS annotation" ++
+        " JOIN plyr_index.track_tag_records AS observed ON observed.record_uri = annotation.record_uri" ++
+        " AND observed.record_cid = annotation.observed_record_cid AND NOT observed.tags_present" ++
+        " WHERE annotation.record_uri = " ++ uri ++ " AND annotation.observed_record_cid = " ++ cid ++
+        ") AS hit WHERE hit.tag = ANY(plyr_index.normalize_track_tags($4::text[])))";
+}
