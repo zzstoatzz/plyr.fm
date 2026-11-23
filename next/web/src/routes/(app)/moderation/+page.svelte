@@ -2,6 +2,7 @@
 	import { onDestroy, onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { trackIdFromUri } from '@plyr/next-core/api';
+	import { shortDate } from '@plyr/next-core/dates';
 	import { noteTooLong, REPORT_REASONS, type Decision, type QueueItem, type SubjectEvent } from '@plyr/next-core/moderation';
 	import { addGrants, auth, grantFailure } from '$lib/auth';
 	import { authConfig } from '$lib/auth-config';
@@ -50,7 +51,7 @@
 		if (hours < 48) return `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
 		return `${Math.round(hours / 24)} days`;
 	}
-	const day = (ms: number) => new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+	const day = (ms: number) => shortDate(ms);
 	const isTrack = (item: QueueItem) => item.trackTitle !== null;
 	function title(item: QueueItem): string {
 		if (item.trackTitle) return item.trackTitle;

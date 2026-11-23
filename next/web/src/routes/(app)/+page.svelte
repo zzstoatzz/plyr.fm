@@ -26,8 +26,23 @@
 
 	let { data }: PageProps = $props();
 	// The rail scrolls with the page until its end reaches the bottom of the screen, then stays there.
+	// It rests exactly as far above the screen's bottom as the page ends below the home's content (page
+	// padding plus the player dock), so reaching the end of the loaded tracks never nudges it, and the next
+	// page of tracks never drops it back.
 	let railHeight = $state(0);
 	let viewHeight = $state(0);
+	let below = $state(24);
+	$effect(() => {
+		// a sticky box stops at its container's content edge, so the home's own bottom padding counts as below
+		const measure = () => {
+			const end = home.getBoundingClientRect().bottom + window.scrollY - parseFloat(getComputedStyle(home).paddingBottom);
+			below = Math.max(24, Math.ceil(document.documentElement.scrollHeight - end));
+		};
+		const observer = new ResizeObserver(measure);
+		observer.observe(document.body);
+		observer.observe(home);
+		return () => observer.disconnect();
+	});
 	const chartPeriods = ['month', 'week', 'day', 'all_time'] as const;
 	type ChartPeriod = typeof chartPeriods[number];
 	const chartLabels: Record<ChartPeriod, string> = {
@@ -288,7 +303,7 @@
 		{/await}
 	</section>
 	</div>
-	{#if !data.tags.length}<aside class="rail" aria-label="explore" bind:clientHeight={railHeight} style:--pin={`${Math.min(24, viewHeight - railHeight - 24)}px`}>{@render rail()}<RailRadio /></aside>{/if}
+	{#if !data.tags.length}<aside class="rail" aria-label="explore" bind:clientHeight={railHeight} style:--pin={`${Math.min(24, viewHeight - railHeight - below)}px`}>{@render rail()}<RailRadio /></aside>{/if}
 </div>
 </PullRefresh>
 

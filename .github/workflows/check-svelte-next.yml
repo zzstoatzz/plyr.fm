@@ -100,6 +100,10 @@ jobs:
             run: bun run check:player-presentation && bun run check:likers
           - name: catalog
             run: bun run check:artist-catalog && bun run check:atlas
+          # holds the wheel down on home through several pages of latest and records the rail every frame
+          # (with video): the live site as it is, then this build on the live catalog, which must not move
+          - name: home-rail-scroll
+            run: RAIL_SITE=live node scripts/probe-home-rail-scroll.mjs; RAIL_STRICT=1 node scripts/probe-home-rail-scroll.mjs
     defaults:
       run:
         working-directory: next/web

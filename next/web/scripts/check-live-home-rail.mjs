@@ -36,7 +36,26 @@ try {
     assert.ok(rail.bottom > height / 2 && rail.bottom <= height, `the rail stays on screen after scrolling (bottom at ${Math.round(rail.bottom)}px)`);
     assert.ok(await radio.isVisible(), 'radio is still in view');
     await page.screenshot({ path: path.join(output, `${name}-scrolled.png`) });
-    console.log(`${name}: rail pinned, bottom at ${Math.round(rail.bottom)}px; ${(await radio.locator('small').allTextContents()).join(' | ')}`);
+    // hold the wheel down through more pages of latest: the pinned rail must not move when the end is reached or a page lands
+    const rows = page.getByTestId('home-track-row');
+    const startRows = await rows.count();
+    await page.evaluate(() => {
+      const node = document.querySelector('aside.rail');
+      const samples = window.__railBottoms = [];
+      const sample = () => { samples.push(node.getBoundingClientRect().bottom); window.__railFrame = requestAnimationFrame(sample); };
+      sample();
+    });
+    for (let step = 0; step < 200 && await rows.count() < startRows + 48 && await page.locator('.latest .more').count(); step++) {
+      await page.mouse.wheel(0, 240);
+      await page.waitForTimeout(60);
+    }
+    await page.waitForTimeout(1500);
+    const bottoms = await page.evaluate(() => { cancelAnimationFrame(window.__railFrame); return window.__railBottoms; });
+    const loaded = await rows.count() - startRows;
+    assert.ok(loaded >= 24, `latest loaded more tracks while scrolling (${loaded} rows)`);
+    const drift = Math.max(...bottoms) - Math.min(...bottoms);
+    assert.ok(drift <= 1, `the pinned rail holds still while latest loads more (moved ${Math.round(drift)}px)`);
+    console.log(`${name}: rail pinned, bottom at ${Math.round(rail.bottom)}px, held within ${drift.toFixed(1)}px over ${loaded} more rows; ${(await radio.locator('small').allTextContents()).join(' | ')}`);
     await page.close();
   }
 } finally { await browser.close(); }
