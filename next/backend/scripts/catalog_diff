@@ -53,6 +53,9 @@ LEFT JOIN plyr_index.account_availability AS aa ON aa.repo_did = split_part(p.ur
 SELECT bucket, count(*) AS tracks, sum(plays) AS plays, count(*) FILTER (WHERE gate <> '') AS gated
 FROM bucketed GROUP BY bucket ORDER BY tracks DESC;
 
+\echo '## next repos by projection version (a bump re-projects every repo on the next deploy)'
+SELECT projection_version, count(*) AS repos FROM plyr_index.repo_heads GROUP BY 1 ORDER BY 1;
+
 \echo '## next tracks prod does not have (next-native uploads)'
 SELECT count(*) AS tracks FROM plyr_index.track_records AS v
 WHERE NOT v.deleted AND NOT EXISTS (SELECT 1 FROM prod AS p WHERE p.uri = v.record_uri);
