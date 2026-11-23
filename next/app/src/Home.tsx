@@ -39,6 +39,25 @@ function HomeFeed({ onPlay, hiddenTags }: { onPlay: Play; hiddenTags: string[] }
   }, [tag]);
   const [headerHeight, setHeaderHeight] = useState(0);
   const rowHeight = Math.max(96, Math.ceil(64 * colors.scale + 32));
+  // with several tags the api lists tracks carrying more of them first; a label opens each run
+  const groupHeight = Math.ceil(36 * colors.scale);
+  const groups = useMemo(() => {
+    if (selected.length < 2) return [];
+    const label = (track: Track) => {
+      const count = selected.filter(tag => track.metadata.tags?.includes(tag)).length;
+      if (count === selected.length) return selected.length === 2 ? 'has both' : `has all ${selected.length}`;
+      return selected.length === 2 ? 'has one' : `${count} of ${selected.length}`;
+    };
+    return tracks.map((track, index) => index === 0 || label(track) !== label(tracks[index - 1]) ? label(track) : undefined);
+  }, [selected, tracks]);
+  const offsets = useMemo(() => {
+    let offset = 0;
+    return tracks.map((_, index) => {
+      const start = offset;
+      offset += rowHeight + (groups[index] ? groupHeight : 0);
+      return start;
+    });
+  }, [tracks, groups, rowHeight, groupHeight]);
   const viewport = useRef({ height: 0, content: 0, offset: 0 });
   const fillViewport = useCallback(() => {
     const { height, content, offset } = viewport.current;
@@ -67,7 +86,10 @@ function HomeFeed({ onPlay, hiddenTags }: { onPlay: Play; hiddenTags: string[] }
       <HomeTagBar feed={feed} hiddenTags={hiddenTags} />
     </View>
   </View>, [onPlay, chartKey, network, feed, hiddenTags, latest.reload]);
-  const renderItem = useCallback(({ item }: { item: Track }) => <View style={{ opacity: pending ? 0.5 : 1 }}><HomeTrackRow height={rowHeight} track={item} tracks={tracks} onPlay={onPlay} /></View>, [pending, rowHeight, tracks, onPlay]);
+  const renderItem = useCallback(({ item, index }: { item: Track; index: number }) => <View style={{ opacity: pending ? 0.5 : 1 }}>
+    {groups[index] && <View testID="home-tag-group" style={[styles.group, { height: groupHeight, borderBottomColor: colors.line }]}><Text accessibilityRole="header" style={{ color: colors.muted, fontSize: 12.8 * colors.scale, fontWeight: '600' }}>{groups[index]}</Text></View>}
+    <HomeTrackRow height={rowHeight} track={item} tracks={tracks} onPlay={onPlay} />
+  </View>, [pending, rowHeight, tracks, onPlay, groups, groupHeight, colors]);
   return <View style={{ flex: 1, backgroundColor: colors.background }}><Animated.FlatList ref={list}
     onScrollBeginDrag={pull.onScrollBeginDrag} onScrollEndDrag={pull.onScrollEndDrag} testID="home-feed" data={tracks} keyExtractor={track => track.id} contentInsetAdjustmentBehavior="automatic"
     style={[{ flex: 1, backgroundColor: colors.background }, pull.listStyle]} contentContainerStyle={{ ...pageFrame, paddingTop: 16, paddingBottom: 24 }}
@@ -76,10 +98,10 @@ function HomeFeed({ onPlay, hiddenTags }: { onPlay: Play; hiddenTags: string[] }
     onScroll={pull.onScroll} scrollEventThrottle={16}
     accessibilityState={{ busy: latest.loading }} keyboardShouldPersistTaps="handled" ListHeaderComponent={header} onEndReachedThreshold={1.5}
     onEndReached={() => { if (latest.cursor && !latest.loading && !latest.error) latest.more(); }}
-    getItemLayout={(_, index) => ({ length: rowHeight, offset: 16 + headerHeight + index * rowHeight, index })}
+    getItemLayout={(_, index) => ({ length: rowHeight + (groups[index] ? groupHeight : 0), offset: 16 + headerHeight + (offsets[index] ?? index * rowHeight), index })}
     initialNumToRender={24} maxToRenderPerBatch={24} updateCellsBatchingPeriod={16} windowSize={11}
     renderItem={renderItem}
-    ListFooterComponent={<View style={{ minHeight: listHeight - tracks.length * rowHeight }}><View testID="home-feed-footer" style={{ height: 112, justifyContent: 'center' }}>
+    ListFooterComponent={<View style={{ minHeight: listHeight - (tracks.length ? offsets[tracks.length - 1] + rowHeight : 0) }}><View testID="home-feed-footer" style={{ height: 112, justifyContent: 'center' }}>
       {latest.loading ? <WaveLoading label={tracks.length ? 'loading more...' : 'loading tracks...'} /> :
         <Status error={latest.error} retry={tracks.length ? undefined : latest.more} empty={!tracks.length ? selected.length ? 'no tracks match these tags' : 'no tracks yet' : undefined} />}
       {tracks.length > 0 && latest.error && <Pressable accessibilityRole="button" onPress={latest.more} style={styles.more}><Text style={{ color: colors.accent }}>retry loading tracks</Text></Pressable>}
@@ -90,4 +112,5 @@ function HomeFeed({ onPlay, hiddenTags }: { onPlay: Play; hiddenTags: string[] }
 const styles = StyleSheet.create({
   home: { gap: 18 }, section: { gap: 12 }, headingRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, rowGap: 4 },
   more: { alignSelf: 'center', padding: 14 },
+  group: { justifyContent: 'flex-end', paddingBottom: 6, borderBottomWidth: StyleSheet.hairlineWidth },
 });
