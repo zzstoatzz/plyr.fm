@@ -5,8 +5,8 @@ from osprey.worker.sinks.sink.output_sink import MultiOutputSink
 from osprey.worker.sinks.sink.rules_sink import RulesSink
 
 from plyr_osprey.image_scan import Verdict
-from plyr_osprey.store import MAX_ATTEMPTS, Store
-from plyr_osprey.tracks import ModerationLogSink, TrackInputStream, Walk
+from plyr_osprey.store import MAX_ATTEMPTS, IndexedCover, Store
+from plyr_osprey.tracks import CURSORS, ModerationLogSink, TrackInputStream, Walk
 from tests.conftest import TEST_DATABASE_URL
 from tests.test_rules import NEXT_AUDIO, played_through
 
@@ -43,10 +43,12 @@ def mirror(db, uri: str, blob_cid: str, at_us: int) -> str:
     return url
 
 
-def drain(engine, start_at_us: int = 0) -> None:
+def drain(engine, start_at_us: int = 0, cursors: tuple[str, ...] = CURSORS) -> None:
     osprey, helpers = engine
     store, walk = Store(TEST_DATABASE_URL, 'fm.plyr.track'), Walk()
-    stream = TrackInputStream(store, walk, drain_once=True, start_at_us=start_at_us, covers_start_at_us=start_at_us)
+    stream = TrackInputStream(
+        store, walk, drain_once=True, start_at_us=start_at_us, covers_start_at_us=start_at_us, cursors=cursors
+    )
     RulesSink(osprey, stream, MultiOutputSink([ModerationLogSink(store, walk)]), helpers, envoy_check_port=0).run()
     store.close()
 
@@ -86,6 +88,15 @@ def test_new_tracks_are_scanned_once_and_flags_open_reviews(db, engine, fingerpr
     assert len(fingerprinter.scanned) == 2
     assert rows(db, 'SELECT count(*) FROM plyr_moderation.events') == [(1,)]
     assert rows(db, "SELECT indexed_at_us FROM plyr_moderation.rule_cursors WHERE name = 'tracks'") == [(50,)]
+
+
+def test_without_audd_tracks_wait_and_are_scanned_once_it_is_set(db, engine, fingerprinter) -> None:
+    add_track(db, 1, NEXT_AUDIO, 10)
+    drain(engine, cursors=(IndexedCover.cursor,))
+    assert fingerprinter.scanned == []
+    assert rows(db, "SELECT count(*) FROM plyr_moderation.rule_cursors WHERE name = 'tracks' AND attempts > 0") == [(0,)]
+    drain(engine)
+    assert fingerprinter.scanned == [NEXT_AUDIO]
 
 
 def test_a_first_run_starts_from_now_not_the_whole_catalog(db, engine, fingerprinter) -> None:

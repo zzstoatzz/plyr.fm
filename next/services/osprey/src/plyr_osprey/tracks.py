@@ -48,6 +48,7 @@ class TrackInputStream(BaseInputStream[BaseAckingContext[Action]]):
         drain_once: bool = False,
         start_at_us: int | None = None,
         covers_start_at_us: int | None = None,
+        cursors: tuple[str, ...] = CURSORS,
     ) -> None:
         super().__init__()
         self._store = store
@@ -56,12 +57,13 @@ class TrackInputStream(BaseInputStream[BaseAckingContext[Action]]):
         self._poll_seconds = poll_seconds
         self._drain_once = drain_once
         self._starts = {IndexedTrack.cursor: start_at_us, IndexedCover.cursor: covers_start_at_us}
+        self._cursors = cursors
 
     def _gen(self) -> Iterator[BaseAckingContext[Action]]:
         drained: set[str] = set()
         while True:
             idle = True
-            for cursor in CURSORS:
+            for cursor in self._cursors:
                 if cursor in drained:
                     continue
                 position = self._store.cursor_position(cursor, self._starts[cursor])
@@ -84,7 +86,7 @@ class TrackInputStream(BaseInputStream[BaseAckingContext[Action]]):
                     idle = False
                 elif self._drain_once:
                     drained.add(cursor)
-            if self._drain_once and len(drained) == len(CURSORS):
+            if self._drain_once and len(drained) == len(self._cursors):
                 return
             if idle:
                 time.sleep(self._poll_seconds)
