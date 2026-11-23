@@ -63,9 +63,10 @@
 {#if enabled && account.commenting && track.record.cid}
   <form class:compact onsubmit={event => { event.preventDefault(); void post(); }}>
     <label for={id} class:sr-only={compact}>add a comment</label>
-    <textarea {@attach grow} {id} rows={compact ? 1 : 2} placeholder={compact ? 'say something about this moment…' : undefined} maxlength={MAX_COMMENT_BYTES} bind:value={draft} disabled={busy} oninput={event => { if (event.currentTarget.value.trim()) pinned ??= position; else pinned = undefined; error = ''; }}></textarea>
+    <textarea {@attach grow} {id} rows={compact ? 1 : 2} placeholder={compact ? `comment at ${clock(seconds)}` : undefined} maxlength={MAX_COMMENT_BYTES} bind:value={draft} disabled={busy} oninput={event => { if (event.currentTarget.value.trim()) pinned ??= position; else pinned = undefined; error = ''; }}></textarea>
     <div class="form-actions">
-      <button type="button" class="text-button time" title="use the current playback position" onclick={() => { pinned = draft.trim() ? position : undefined; }}>at {clock(seconds)}</button>
+      <!-- the compact placeholder already names the moment, so its chip shows only once there is a draft to pin -->
+      {#if !compact || draft.trim()}<button type="button" class="text-button time" title="use the current playback position" onclick={() => { pinned = draft.trim() ? position : undefined; }}>at {clock(seconds)}</button>{/if}
       <button type="submit" class="text-button submit" aria-label={compact ? 'Post comment' : undefined} disabled={busy || !draft.trim() || tooLong}>{#if compact}<Icon name={busy ? 'clock' : 'upload'} size={18} />{:else}{busy ? 'posting…' : 'post comment'}{/if}</button>
     </div>
   </form>
