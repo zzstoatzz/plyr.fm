@@ -62,6 +62,11 @@ SELECT bucket, uri, plays, gate FROM bucketed
 WHERE bucket <> 'indexed' AND uri <> ''
 ORDER BY bucket, plays DESC, uri LIMIT 400;
 
+\echo '## why next turned missing records away (plyr_index.record_rejections)'
+SELECT r.reason, left(r.detail, 120) AS detail, count(*) AS records
+FROM bucketed AS b JOIN plyr_index.record_rejections AS r ON r.record_uri = b.uri
+WHERE b.bucket LIKE 'missing:%' GROUP BY r.reason, left(r.detail, 120) ORDER BY records DESC;
+
 \copy (SELECT uri FROM bucketed WHERE bucket LIKE 'missing:%' ORDER BY uri) TO '$work/missing.txt'
 
 \echo '## prod-only rows per artist'
