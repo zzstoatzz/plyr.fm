@@ -7,7 +7,18 @@ name: deploy next (zig)
 # It never touches relay-api, relay-api-staging, their databases, or
 # production-fe. Deploys on every push to main that touches next/backend
 # (PRs already ran the zig tests), and by manual dispatch.
+#
+# Pull requests build the image too (nothing else), tagged by a hash of the
+# exact image source. When the merge lands with that same source, the push
+# reuses the PR's image instead of compiling for ~140s again.
 on:
+  pull_request:
+    paths:
+      - "next/backend/**"
+      - "backend/src/backend/upload_contract.json"
+      - "!next/backend/docs/**"
+      - "!next/backend/**/*.md"
+      - ".github/workflows/deploy-next.yml"
   push:
     branches:
       - main
@@ -27,7 +38,11 @@ on:
 permissions:
   contents: read
 
-concurrency: deploy-next
+# main deploys stay strictly one after another; a newer PR push replaces its
+# older image build.
+concurrency:
+  group: deploy-next-${{ github.event_name == 'pull_request' && github.ref || 'main' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   FLY_APP: plyr-api-zig-canary
@@ -37,6 +52,7 @@ jobs:
   # the deploy waits for both.
   migrate:
     name: migrate next db
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -148,15 +164,53 @@ jobs:
   build:
     name: build next image
     runs-on: ubuntu-latest
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
+      # Everything the image is made from: the next/backend tree (Dockerfile,
+      # build.zig, src, scripts) and the shared upload policy. A PR checks out
+      # its merge with main, so its key is the key main gets if nothing else
+      # under next/backend lands first.
+      - name: hash the image source
+        id: source
+        run: |
+          key="$(git ls-tree HEAD -- next/backend backend/src/backend/upload_contract.json | sha256sum | cut -c1-40)"
+          echo "image=registry.fly.io/${FLY_APP}:src-${key}" >> "$GITHUB_OUTPUT"
+          echo "image source: src-${key}" >> "$GITHUB_STEP_SUMMARY"
+
+      # a PR from a fork gets no secrets; it has nothing to build here
+      - name: check for credentials
+        id: creds
+        run: |
+          if [ -n "$FLY_API_TOKEN" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          test "$GITHUB_EVENT_NAME" = pull_request
+          echo "no Fly credentials on this PR; main builds the image after merge" >> "$GITHUB_STEP_SUMMARY"
+
+      # any failure here (registry auth, a missing tag) just means "build it"
+      - name: reuse an image built from this exact source
+        id: reuse
+        if: steps.creds.outputs.ok == 'true'
+        env:
+          SOURCE_IMAGE: ${{ steps.source.outputs.image }}
+        run: |
+          flyctl auth docker > /dev/null 2>&1 || { echo "hit=false" >> "$GITHUB_OUTPUT"; exit 0; }
+          if docker buildx imagetools inspect "$SOURCE_IMAGE" > /dev/null 2>&1; then
+            echo "hit=true" >> "$GITHUB_OUTPUT"
+            echo "reusing $SOURCE_IMAGE" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "hit=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: stage shared upload policy in the image context
+        if: steps.creds.outputs.ok == 'true' && steps.reuse.outputs.hit != 'true'
         run: cp backend/src/backend/upload_contract.json next/backend/upload_contract.json
 
       - name: build and publish image
+        if: steps.creds.outputs.ok == 'true' && steps.reuse.outputs.hit != 'true'
         working-directory: next/backend
         run: >-
           flyctl deploy
@@ -165,13 +219,32 @@ jobs:
           --app "$FLY_APP"
           --build-only
           --push
-          --image-label "$GITHUB_SHA"
+          --image-label "${STEPS_SOURCE_IMAGE##*:}"
         env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_ZIG_NEXT }}
+          STEPS_SOURCE_IMAGE: ${{ steps.source.outputs.image }}
+
+      # the deploys (and canary_reconcile) run registry.fly.io/<app>:<commit>,
+      # so give the source image this commit's tag: a registry-side copy, no pull
+      - name: tag the image with this commit
+        if: github.event_name != 'pull_request'
+        env:
+          SOURCE_IMAGE: ${{ steps.source.outputs.image }}
+        working-directory: next/backend
+        run: |
+          if flyctl auth docker > /dev/null &&
+            docker buildx imagetools create --tag "registry.fly.io/${FLY_APP}:${GITHUB_SHA}" "$SOURCE_IMAGE"; then
+            exit 0
+          fi
+          # the registry copy is a shortcut, never a gate: build this commit the old way
+          echo "::warning::could not tag $SOURCE_IMAGE; building this commit instead"
+          cp ../../backend/src/backend/upload_contract.json upload_contract.json
+          flyctl deploy --config fly.canary.toml --remote-only --app "$FLY_APP" \
+            --build-only --push --image-label "$GITHUB_SHA"
 
   deploy-jams:
     name: deploy next Jam coordinator
     needs: [migrate, build]
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -200,6 +273,7 @@ jobs:
   deploy:
     name: deploy next api
     needs: [migrate, build]
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

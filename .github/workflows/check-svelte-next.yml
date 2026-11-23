@@ -29,6 +29,7 @@ on:
       - "next/scripts/check-play-controls.mjs"
       - "next/scripts/check-pagination.mjs"
       - ".github/workflows/check-svelte-next.yml"
+      - ".github/actions/next-web-source-key/**"
   # a merge to main ships next web live, like the next api; next has no users to protect
   push:
     branches: [main]
@@ -43,6 +44,7 @@ on:
       - "next/scripts/check-play-controls.mjs"
       - "next/scripts/check-pagination.mjs"
       - ".github/workflows/check-svelte-next.yml"
+      - ".github/actions/next-web-source-key/**"
 
 permissions:
   contents: read
@@ -53,9 +55,44 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # A merge whose next web source already passed every check on its PR skips
+  # straight to the deploy (nate's call, 2026-11-23). The PR proves it with an
+  # artifact named after a hash of everything this workflow watches, this file
+  # included, so a PR that edits the checks can't vouch for the ones main runs.
+  # Any lookup failure means "run the checks".
+  gate:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      verified: ${{ steps.lookup.outputs.verified }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: source
+        uses: ./.github/actions/next-web-source-key
+      - id: lookup
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KEY: ${{ steps.source.outputs.key }}
+        run: |
+          found="$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=next-web-verified-$KEY&per_page=20" \
+            --jq '[.artifacts[] | select(.expired | not)] | length' 2> /dev/null || echo 0)"
+          if [ "${found:-0}" -gt 0 ]; then
+            echo "verified=true" >> "$GITHUB_OUTPUT"
+            echo "next web source $KEY already passed check + browser on its PR; deploying without re-running them" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "verified=false" >> "$GITHUB_OUTPUT"
+          fi
+
   # The gate: types, boundaries, unit tests and the build. Fast, so a PR knows within about 30s.
   check:
-    if: github.event_name != 'workflow_dispatch' || inputs.target == 'preview' || inputs.target == 'live'
+    needs: gate
+    if: >-
+      !cancelled() && needs.gate.outputs.verified != 'true' &&
+      (github.event_name != 'workflow_dispatch' || inputs.target == 'preview' || inputs.target == 'live')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -79,7 +116,10 @@ jobs:
 
   # The browser checks, side by side instead of one after another.
   browser:
-    if: github.event_name != 'workflow_dispatch' || inputs.target == 'preview' || inputs.target == 'live'
+    needs: gate
+    if: >-
+      !cancelled() && needs.gate.outputs.verified != 'true' &&
+      (github.event_name != 'workflow_dispatch' || inputs.target == 'preview' || inputs.target == 'live')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
@@ -100,8 +140,13 @@ jobs:
             run: bun run check:player-transition
           - name: player-presentation
             run: bun run check:player-presentation && bun run check:likers
-          - name: catalog
-            run: bun run check:artist-catalog && bun run check:atlas && bun run check:paged-lists
+          # the slowest checks, one job each so none of them sets the pace for the rest
+          - name: artist-catalog
+            run: bun run check:artist-catalog
+          - name: atlas
+            run: bun run check:atlas
+          - name: paged-lists
+            run: bun run check:paged-lists
           # holds the wheel down on home through several pages of latest and records the rail every frame
           # (with video): the live site as it is, then this build on the live catalog, which must not move
           - name: home-rail-scroll
@@ -137,9 +182,36 @@ jobs:
           path: ${{ runner.temp }}/next-svelte-screens/${{ matrix.name }}
           if-no-files-found: ignore
 
-  deploy:
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || inputs.target == 'preview' || inputs.target == 'live')
+  # a PR that passed everything vouches for its exact source (see gate)
+  mark-verified:
+    # gate is skipped on PRs, which would skip this too without the explicit results
+    if: >-
+      !cancelled() && github.event_name == 'pull_request' &&
+      needs.check.result == 'success' && needs.browser.result == 'success'
     needs: [check, browser]
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - id: source
+        uses: ./.github/actions/next-web-source-key
+      - env:
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/verified"
+          printf 'pr=%s\nsha=%s\nrun=%s\n' "$PR" "$GITHUB_SHA" "$GITHUB_RUN_ID" > "$RUNNER_TEMP/verified/source.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: next-web-verified-${{ steps.source.outputs.key }}
+          path: ${{ runner.temp }}/verified
+          retention-days: 14
+
+  deploy:
+    needs: [gate, check, browser]
+    if: >-
+      !cancelled() && github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || inputs.target == 'preview' || inputs.target == 'live') &&
+      (needs.gate.outputs.verified == 'true' || (needs.check.result == 'success' && needs.browser.result == 'success'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     concurrency: next-svelte-web-pages-${{ inputs.target || 'live' }}
@@ -231,7 +303,16 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
         working-directory: next
+      - id: playwright
+        working-directory: next/web
+        run: echo "version=$(node -p "require('playwright/package.json').version")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        id: browsers
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-shell-${{ runner.os }}-${{ steps.playwright.outputs.version }}
       - run: bun run playwright install --with-deps --only-shell chromium
+        if: steps.browsers.outputs.cache-hit != 'true'
         working-directory: next/web
       # the publish check plays AAC, which only branded Chrome decodes
       - run: bun run playwright install --with-deps chrome
