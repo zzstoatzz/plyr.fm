@@ -23,6 +23,8 @@ async function verify(browser, width) {
   const context = await browser.newContext({ viewport: { width, height: 900 }, isMobile: width === 390, hasTouch: width === 390, serviceWorkers: 'block' });
   const page = await context.newPage();
   page.setDefaultTimeout(15_000);
+  // the track form guards a picked file against leaving; the check leaves on purpose to sign out
+  page.on('dialog', dialog => dialog.accept());
   const writes = [];
   let stage = 'guarding writes';
   let failure;
