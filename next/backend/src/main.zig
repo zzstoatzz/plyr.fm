@@ -28,6 +28,7 @@ const catalog_reconcile_runner = @import("internal/ingest/catalog_reconcile_runn
 const account_reconciler = @import("internal/account/reconciler.zig");
 const blob_mirror = @import("internal/delivery/blob_mirror.zig");
 const duration_probe = @import("internal/delivery/duration_probe.zig");
+const waveform_probe = @import("internal/delivery/waveform_probe.zig");
 const ingest_heartbeat = @import("internal/index/ingest_heartbeat.zig");
 const label_sync = @import("internal/moderation/label_sync.zig");
 const moderation_api = @import("api/moderation.zig");
@@ -244,6 +245,7 @@ pub fn main() !void {
                 .stats_store = if (platform_stats) |*store| store.store() else null,
                 .stats_overview_store = if (stats_overview) |*store| store else null,
                 .legacy_audio = if (legacy_audio) |*store| store else null,
+                .waveform_store = if (postgres_store) |*store| .{ .pool = store.pool } else null,
                 .verified_list_store = verified_list_store,
                 .record_status_store = record_status_store,
                 .ingest_status_store = ingest_status_store,
@@ -318,6 +320,7 @@ pub fn main() !void {
             const store = if (postgres_store) |*value| value else return error.IngesterDatabaseRequired;
             blob_mirror.spawnBeside(io, allocator, store.pool);
             duration_probe.spawnBeside(io, allocator, store.pool);
+            waveform_probe.spawnBeside(io, allocator, store.pool);
             ingest_heartbeat.spawnBeside(io, store.pool);
             actor_identity_refresher.spawnBeside(io, allocator, store.pool);
             label_sync.spawnBeside(io, allocator, store.pool, settings.track_collection);
@@ -447,6 +450,8 @@ test {
     _ = @import("internal/ingest/catalog_reconciler.zig");
     _ = @import("internal/delivery/blob_mirror.zig");
     _ = @import("internal/delivery/duration_probe.zig");
+    _ = @import("internal/delivery/waveform_probe.zig");
+    _ = @import("api/waveforms.zig");
     _ = @import("internal/moderation/label_sync.zig");
     _ = @import("internal/moderation/log.zig");
     _ = @import("internal/moderation/postgres_log.zig");

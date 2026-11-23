@@ -39,7 +39,7 @@
 	<svelte:element this={href ? 'a' : 'span'} class="listening" {href}
 		target={external ? '_blank' : undefined} rel={external ? 'noopener noreferrer' : undefined}
 		aria-label={`${name} is listening to ${status.track}${artists ? ` by ${artists}` : ''}`}>
-		<PlayingWave />
+		<PlayingWave live={false} />
 		<span class="truncate">listening to <b>{status.track}</b>{#if artists}<span class="by">&nbsp;· {artists}</span>{/if}</span>
 	</svelte:element>
 {/if}

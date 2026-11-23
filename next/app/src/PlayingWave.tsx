@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useState } from 'react';
 import { Animated, Easing, StyleSheet, View } from 'react-native';
 import { useAppearance } from './appearance';
+import { usePlayingLevels, waveHeights } from './playing-levels';
 
 const times = [0, 0.2, 0.45, 0.7, 0.85, 1];
 const heights = [
@@ -10,8 +11,10 @@ const heights = [
   [0.34, 0.58, 0.72, 0.38, 0.53, 0.34]
 ];
 
-export const PlayingWave = memo(function PlayingWave({ color, size = 18 }: { color: string; size?: number }) {
+/** `live={false}` for someone else's listening: the bars only follow audio this app plays. */
+export const PlayingWave = memo(function PlayingWave({ color, size = 18, live = true }: { color: string; size?: number; live?: boolean }) {
   const { reduceMotion } = useAppearance();
+  const following = usePlayingLevels(live && !reduceMotion);
   const [progress] = useState(() => new Animated.Value(0));
   const bars = useMemo(() => heights.map(outputRange => progress.interpolate({ inputRange: times, outputRange })), [progress]);
   useEffect(() => {
@@ -25,9 +28,9 @@ export const PlayingWave = memo(function PlayingWave({ color, size = 18 }: { col
   }, [progress, reduceMotion]);
   const width = size / 6;
   return <View aria-hidden pointerEvents="none" testID="playing-wave" style={{ width: size, height: size, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-    {bars.map((scaleY, index) => <Animated.View key={index} style={{
+    {bars.map((scaleY, index) => <Animated.View key={`${following ? 'live' : 'canned'}-${index}`} style={{
       width, height: size, borderRadius: width / 2, backgroundColor: color,
-      transform: [{ scaleY: reduceMotion ? heights[index][0] : scaleY }]
+      transform: [{ scaleY: reduceMotion ? heights[index][0] : following ? waveHeights[index] : scaleY }]
     }} />)}
   </View>;
 });

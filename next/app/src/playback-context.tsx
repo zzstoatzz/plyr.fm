@@ -1,10 +1,11 @@
-import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import type { useAudioPlayerStatus } from 'expo-audio';
 import type { Track } from '@plyr/next-core/api';
 import { playState, pressPlay, showsPause, tracksContext, type PlayContext } from '@plyr/next-core/play-context';
 import type { JamIntent } from '@plyr/next-core/jam-connection';
 import type { RadioStation } from '@plyr/next-core/radio';
 import type { ActiveJam } from '@plyr/next-core/jam-playback';
+import { feedPlayingLevels } from './playing-levels';
 
 export interface Playback {
   /** Set while a radio station is the output: there is nothing to seek, skip or queue. */
@@ -73,6 +74,8 @@ export function PlaybackScope({ value, children }: { value: Playback; children: 
   useLayoutEffect(() => { latestSetPlaying.current = value.setPlaying; }, [value.setPlaying]);
   const setPlaying = useCallback((playing: boolean) => latestSetPlaying.current(playing), []);
   const trackPlayback = useMemo(() => ({ current, playing, starting, station, inJam, setPlaying }), [current, playing, starting, station, inJam, setPlaying]);
+  const audible = !!playing && !station && !value.outputElsewhere;
+  useEffect(() => feedPlayingLevels(current?.record.uri, value.status.currentTime, audible), [current, value.status.currentTime, audible]);
   return <PlaybackContext.Provider value={value}>
     <TrackPlaybackContext.Provider value={trackPlayback}>{children}</TrackPlaybackContext.Provider>
   </PlaybackContext.Provider>;

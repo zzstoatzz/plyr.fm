@@ -192,6 +192,8 @@ async function verify(browser, origin, width, scheme) {
     assert.ok(await dialog.isVisible(), 'Escape closes the wheel, not the player');
     assert.ok(Math.abs(await at() - before) < 3, 'escaping the wheel leaves playback alone');
     await line.click();
+    // the wheel blooms open; a click mid-bloom lands on a row that is still moving
+    await wheel.evaluate(node => Promise.all(node.getAnimations().map(animation => animation.finished)));
     await wheel.getByRole('option', { name: '1:00, porch' }).click();
     await wheel.waitFor({ state: 'hidden' });
     await page.waitForFunction(() => window.playingAudio.currentTime >= 59.9);

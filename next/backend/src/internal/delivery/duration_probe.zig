@@ -140,7 +140,7 @@ const Worker = struct {
 };
 
 /// `scheme://host[:port]` of an https URL, for endpoint resolution.
-fn origin(url: []const u8) ![]const u8 {
+pub fn origin(url: []const u8) ![]const u8 {
     if (!std.ascii.startsWithIgnoreCase(url, "https://")) return error.InvalidAudioUrl;
     const rest = url["https://".len..];
     const end = std.mem.indexOfAny(u8, rest, "/?#") orelse rest.len;
@@ -148,10 +148,10 @@ fn origin(url: []const u8) ![]const u8 {
     return url[0 .. "https://".len + end];
 }
 
-const Span = struct { first: u64, length: usize, total: u64 };
+pub const Span = struct { first: u64, length: usize, total: u64 };
 
 /// `bytes first-last/total`; an unknown total (`*`) isn't enough to measure.
-fn parseContentRange(value: []const u8) ?Span {
+pub fn parseContentRange(value: []const u8) ?Span {
     const text = std.mem.trim(u8, value, " ");
     if (!std.ascii.startsWithIgnoreCase(text, "bytes ")) return null;
     const rest = text["bytes ".len..];

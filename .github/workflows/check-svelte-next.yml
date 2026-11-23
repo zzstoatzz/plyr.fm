@@ -140,7 +140,7 @@ jobs:
           - name: player-transition
             run: bun run check:player-transition
           - name: player-presentation
-            run: bun run check:player-presentation && bun run check:likers
+            run: bun run check:player-presentation && bun run check:likers && bun run check:playing-levels
           # the slowest checks, one job each so none of them sets the pace for the rest
           - name: artist-catalog
             run: bun run check:artist-catalog

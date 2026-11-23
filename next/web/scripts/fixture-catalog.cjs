@@ -27,6 +27,11 @@ audio.write('RIFF', 0); audio.writeUInt32LE(audio.length - 8, 4); audio.write('W
 audio.writeUInt32LE(16, 16); audio.writeUInt16LE(1, 20); audio.writeUInt16LE(1, 22);
 audio.writeUInt32LE(8000, 24); audio.writeUInt32LE(16000, 28); audio.writeUInt16LE(2, 32);
 audio.writeUInt16LE(16, 34); audio.write('data', 36); audio.writeUInt32LE(audio.length - 44, 40);
+// four bands swelling at different rates over the fixture audio's four minutes, 20 frames a second
+const waveform = Buffer.from(Array.from({ length: 240 * 20 * 4 }, (_, index) => {
+  const seconds = Math.floor(index / 4) / 20, band = index % 4;
+  return Math.round(127.5 * (1 + Math.sin(2 * Math.PI * seconds * (0.7 + band * 0.45) + band)));
+}));
 const pictures = images ? fs.readdirSync(images).filter(name => name.endsWith('.jpg')).sort().map(name => path.join(images, name)) : [];
 const server = http.createServer((request, response) => {
   let filename = path.join(dist, decodeURIComponent(request.url.split('?')[0]));
@@ -78,6 +83,11 @@ async function setup(browser, width, height = 900, options = {}) {
     const url = new URL(route.request().url());
     const call = method(url);
     if (call === 'getAtlas') return route.fulfill({ json: atlas });
+    if (call === 'getTrackWaveform') {
+      const track = tracks.find(item => item.record.uri === url.searchParams.get('uri'));
+      return track ? route.fulfill({ json: { uri: track.record.uri, cid: track.record.cid, fps: 20, bands: 4, levels: waveform.toString('base64') } })
+        : route.fulfill({ status: 404, json: { error: 'NotFound', message: 'The requested resource was not found.' } });
+    }
     const byId = ['getTrack', 'getPlayback', 'getTrackComments'].includes(call) ? tracks.find(track => names(url, track.id)) : undefined;
     let body = { object: 'list', data: [], has_more: false };
     if (byId && call === 'getPlayback') body = { object: 'playback', track_id: byId.id, record: byId.record,
