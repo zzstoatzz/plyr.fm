@@ -1,5 +1,6 @@
 import { useAppearance } from './appearance';
-import { ListPlus, DotsThree as Ellipsis } from './icons';
+import { ListPlus, Lock, DotsThree as Ellipsis } from './icons';
+import { Pill } from './HeroPieces';
 import { collectionArtwork } from '@plyr/next-core/artwork';
 import { ownerTrackAddress } from '@plyr/next-core/track-access';
 import { useAuth } from './auth';
@@ -59,7 +60,15 @@ function TrackDetail({ id, onPlay, onEnqueue, trackActions }: {
     if (!rkey) return await api.track(id);
     return pds ? (await pds.track(rkey)) ?? null : null;
   }, [id, rkey, pds]);
-  const result = useResource(load);
+  const result = useResource(load, 0, true);
+  // coming back from who can listen or edit track shows what changed
+  const focus = useRef({ visited: false, retry: result.retry });
+  focus.current.retry = result.retry;
+  useFocusEffect(useCallback(() => {
+    if (focus.current.visited) focus.current.retry();
+    focus.current.visited = true;
+  }, []));
+  const theme = useAppearance();
   const { state, pause: playing, press } = usePlayContext(tracksContext(result.data ? [result.data] : []));
   const loadPending = useCallback(async () => pds ? await pds.pending() : [], [pds]);
   const pending = useResource(loadPending);
@@ -105,7 +114,11 @@ function TrackDetail({ id, onPlay, onEnqueue, trackActions }: {
         <ShareLink compact path={`/track/${encodeURIComponent(track.id)}`} />
         <PlayerControl icon={Ellipsis} label="More" onPress={() => setActionsOpen(true)} />
       </>}
-      access={<TrackSelling track={track} viewer={account.did} />}
+      access={<>
+        {account.did === track.artist.did && <Pill icon={<Lock size={18 * theme.scale} color={theme.text} />} label="who can listen"
+          accessibilityLabel="Who can listen" role="link" onPress={() => router.push(`/who-can-listen/${track.id}`)} />}
+        <TrackSelling track={track} viewer={account.did} />
+      </>}
       comments={<TrackComments track={track} />} />
     {actionsOpen && <TrackMenu track={track} close={() => setActionsOpen(false)} actions={trackActions?.(track)} />}
   </>;
