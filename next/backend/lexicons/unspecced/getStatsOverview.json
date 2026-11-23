@@ -1,0 +1,19 @@
+{
+  "lexicon": 1,
+  "id": "fm.plyr.unspecced.getStatsOverview",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "The stats page for one range: plays over time (by day for week and month, by month for year and all), plays against the range before, uploads, likes, the ten most played tracks and up to 500 artists by plays. The response body is the appview's own JSON shape, not yet specified here.",
+      "parameters": {
+        "type": "params",
+        "properties": {
+          "range": { "type": "string", "knownValues": ["week", "month", "year", "all"], "default": "month" }
+        }
+      },
+      "output": {
+        "encoding": "application/json"
+      }
+    }
+  }
+}

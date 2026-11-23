@@ -1,5 +1,6 @@
 import type { LikeActor, Page, Track, TrackLike } from './api.ts';
 import { createLatestWriter } from './latest-write.ts';
+import { reportError as report } from './report-error.ts';
 import type { createPublicPds } from './pds.ts';
 
 type Account = { did: string | null; handle?: string | null; rpc: unknown };
@@ -32,7 +33,12 @@ export function createTrackLikes<Session extends Account>({ getAuth, createPds, 
   let session = getAuth().rpc;
   let writer = createLatestWriter();
   let viewer: { did: string; profile?: LikeActor['profile']; asked: boolean } | undefined;
-  function emit() { for (const listener of listeners) listener(); }
+  function emit() {
+    for (const listener of listeners) {
+      try { listener(); }
+      catch (error) { report(error); }
+    }
+  }
   function reset() { session = getAuth().rpc; entries.clear(); viewer = undefined; writer = createLatestWriter(); emit(); }
   function sync() { if (session !== getAuth().rpc) reset(); }
   // The unclamped count, so taking back a change the appview never counted can't drift.

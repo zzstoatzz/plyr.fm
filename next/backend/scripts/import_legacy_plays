@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Brings legacy production play totals into next's track_metrics.
+# Brings legacy production play totals into next's track_metrics, and its
+# dated plays (public.track_plays, per track per UTC day) into
+# plyr_index.legacy_play_days for the stats page's plays over time.
 #
 # Reads public.tracks on the legacy database in a read-only session, then in
 # one transaction on next: each track's count moves by (new legacy total -
@@ -45,6 +47,16 @@ COPY (
     GROUP BY atproto_record_uri
 ) TO STDOUT WITH (FORMAT csv)" > "$work/legacy.csv"
 
+PGOPTIONS='-c default_transaction_read_only=on' psql "$legacy" -X -q -v ON_ERROR_STOP=1 -c "
+COPY (
+    SELECT t.atproto_record_uri, (p.played_at AT TIME ZONE 'UTC')::date, count(*)::bigint
+    FROM public.track_plays AS p
+    JOIN public.tracks AS t ON t.id = p.track_id
+    WHERE t.atproto_record_uri ~ '^at://did:[^/]+/fm[.]plyr[.]track/[A-Za-z0-9._~:-]+\$'
+      AND split_part(t.atproto_record_uri, '/', 3) = t.artist_did
+    GROUP BY 1, 2
+) TO STDOUT WITH (FORMAT csv)" > "$work/days.csv"
+
 finish=COMMIT
 [[ "${DRY_RUN:-}" == 1 ]] && finish=ROLLBACK
 
@@ -80,6 +92,13 @@ INSERT INTO plyr_index.legacy_play_counts (record_uri, play_count, observed_at_u
 SELECT record_uri, play_count, (extract(epoch FROM clock_timestamp()) * 1000000)::BIGINT FROM incoming
 ON CONFLICT (record_uri) DO UPDATE
     SET play_count = EXCLUDED.play_count, observed_at_us = EXCLUDED.observed_at_us;
+
+LOCK TABLE plyr_index.legacy_play_days IN EXCLUSIVE MODE;
+DELETE FROM plyr_index.legacy_play_days;
+\copy plyr_index.legacy_play_days (record_uri, day, plays) FROM '$work/days.csv' WITH (FORMAT csv)
+\echo dated plays
+SELECT count(DISTINCT record_uri) AS tracks, count(*) AS track_days, coalesce(sum(plays), 0) AS plays, min(day) AS first_day, max(day) AS last_day
+FROM plyr_index.legacy_play_days;
 
 \echo after
 SELECT count(*) AS tracks_with_plays, coalesce(sum(play_count), 0) AS next_total FROM plyr_index.track_metrics;
