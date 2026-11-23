@@ -30,7 +30,7 @@ import psycopg2
 
 HERE = Path(__file__).parent
 COLLECTION = 'fm.plyr.track'
-WAIT_SECONDS = 300
+WAIT_SECONDS = 600
 
 
 def call(url: str, *, body: bytes | None = None, token: str | None = None, content_type: str = 'application/json'):

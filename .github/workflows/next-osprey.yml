@@ -31,6 +31,8 @@ on:
 
 permissions:
   contents: read
+  # a push waits for that commit's next deploy (migrations, grants) to land
+  actions: read
 
 jobs:
   test:
@@ -72,6 +74,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v7
+      - name: wait for this commit's next deploy
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for i in $(seq 1 90); do
+            state="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/deploy-next.yml/runs?head_sha=$GITHUB_SHA" \
+              --jq '.workflow_runs[0] | select(.) | .status + " " + (.conclusion // "")')"
+            case "$state" in
+              "completed success") exit 0 ;;
+              completed*) echo "next deploy for $GITHUB_SHA: $state"; exit 1 ;;
+              "") if [ "$i" -gt 6 ]; then echo "no next deploy for this commit"; exit 0; fi ;;
+            esac
+            sleep 20
+          done
+          echo "next deploy for $GITHUB_SHA didn't finish"; exit 1
       - name: run the rules until caught up
         env:
           DATABASE_URL: ${{ secrets.ZIG_NEXT_WRITER_DATABASE_URL }}
@@ -81,9 +99,12 @@ jobs:
         run: scripts/run
 
   # a record written straight to a PDS, never through plyr's upload API, still
-  # gets indexed, copied and fingerprinted (scripts/check-direct-pds.py)
+  # gets indexed, copied, fingerprinted and its cover checked
+  # (scripts/check-direct-pds.py). runs after the rules worker changes on main,
+  # or by hand.
   direct-pds:
-    if: github.event_name == 'workflow_dispatch' && inputs.check_direct_pds
+    needs: run
+    if: always() && github.ref == 'refs/heads/main' && ((github.event_name == 'workflow_dispatch' && inputs.check_direct_pds) || (github.event_name == 'push' && needs.run.result == 'success'))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     concurrency:
