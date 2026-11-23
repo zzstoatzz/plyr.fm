@@ -10,6 +10,7 @@ const stores = new Set(['web/src/lib/listening/likes.ts', 'app/src/likes.ts']);
 // Counts that are not the live like: an owner's catalog stats, a ranking score, a row helper whose callers pass the shared count.
 const allowed = new Map([
   ['web/src/lib/catalog/CreatorPortal.svelte', 'the owner\'s catalog stats, read as a report'],
+  ['web/src/lib/stats/ArtistStats.svelte', 'an artist\'s total likes on the stats page, read as a report'],
   ['app/src/Portal.tsx', 'the owner\'s catalog stats, read as a report'],
   ['app/src/home-state.ts', 'a ranking score for whose tracks you like'],
   ['app/src/CatalogPieces.tsx', 'trackMeta, whose callers pass useTrackLike().count'],

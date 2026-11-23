@@ -26,6 +26,7 @@ def assert_xrpc_methods(
         "getTrackChart?period=week&limit=5",
         "search?q=ambient",
         "getStats",
+        "getStatsOverview?range=week",
         "listAlbums?artistDid=did%3Aplc%3Aartist",
         f"getAlbum?uri={quoted(album, safe='')}",
         "listPlaylists?limit=5",
@@ -56,6 +57,7 @@ def assert_xrpc_methods(
         f"getTrack?uri={quoted(song, safe='')}&legacyId=42",
         "getArtist",
         "getActorLikes?actor=artist.example",
+        "getStatsOverview?range=day",
     ):
         status, _, body = request(base_url, xrpc + target)
         assert status == 400, (target, status, body)

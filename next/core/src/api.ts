@@ -74,6 +74,31 @@ export interface ArtistMetrics {
 	top_track: { id: string; title: string; play_count: number } | null;
 }
 
+export type StatsRange = 'week' | 'month' | 'year' | 'all';
+
+/** The stats page for one range. `series` is by day for week and month, by month for year and all. */
+export interface StatsOverview {
+	object: 'stats_overview';
+	range: StatsRange;
+	bucket: 'day' | 'month';
+	start_day: string;
+	end_day: string;
+	/** all time: every counted play; otherwise the dated plays in the range */
+	plays: number;
+	/** the plays in range that carry a date: all of them, except all time */
+	dated_plays: number;
+	/** the same length of time just before; null for all time */
+	previous_plays: number | null;
+	uploads: number;
+	/** all time, every range */
+	likes: number;
+	series: { start: string; plays: number; uploads: number }[];
+	/** the ten most played in range, as record URIs */
+	tracks: { uri: string; plays: number }[];
+	/** up to 500 artists, most played in range first */
+	artists: { did: string; plays: number; tracks: number }[];
+}
+
 export interface ListSummary {
 	object: 'album' | 'playlist';
 	id: string;
@@ -203,6 +228,7 @@ export function createApi(origin: string, playListenerId: () => string, nsidPref
 			{ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dids, limit }) }).then(page => page.data),
 		resolveTracks: (ids: string[], signal?: AbortSignal) => request<{ object: 'list'; data: Track[]; missing: string[] }>(origin + xrpc('resolveTracks'), 15_000, signal,
 			{ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ uris: ids.map(uriFromId) }) }),
+		statsOverview: (range: StatsRange, signal?: AbortSignal) => get<StatsOverview>(xrpc('getStatsOverview'), { range }, signal),
 		stats: (signal?: AbortSignal) => get<{ object: 'platform_stats'; tracks: number; artists: number; duration_seconds: number; plays: number; updated_at_ms: number }>(xrpc('getStats'), undefined, signal),
 		recordPlay: async (play: QualifiedPlay): Promise<PlayReceipt> => {
 			const url = new URL(origin + xrpc('recordPlay'));
@@ -227,7 +253,7 @@ export function createApi(origin: string, playListenerId: () => string, nsidPref
 			get<TrackCommentPage>(xrpc('getTrackComments'), { uri: uriFromId(id) }, signal),
 		tracks: ({ artist_did, hidden_tag, ...p }: { limit?: number; cursor?: string; artist_did?: string; tag?: string[]; hidden_tag?: string[] } = {}, signal?: AbortSignal) =>
 			get<Page<Track>>(xrpc('listTracks'), { ...p, artistDid: artist_did, hiddenTag: hidden_tag }, signal),
-		tags: (limit = 24, signal?: AbortSignal, cursor?: string) => get<Page<{ name: string; track_count: number }>>(xrpc('getTags'), { limit, cursor }, signal),
+		tags: (limit = 24, signal?: AbortSignal, cursor?: string) => get<Page<{ name: string; track_count: number; total_plays: number }>>(xrpc('getTags'), { limit, cursor }, signal),
 		track: (id: string, options?: { fresh?: boolean }) => options?.fresh
 			? request<Track>(`${origin}${xrpc('getTrack')}?${new URLSearchParams(trackSubject(id))}`, 15_000, undefined, { cache: 'no-store' })
 			: get<Track>(xrpc('getTrack'), trackSubject(id)),

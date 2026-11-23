@@ -222,40 +222,51 @@ async function queueGroups(browser, phone, scheme) {
 async function statsScreen(browser, phone, scheme) {
   const width = phone ? 390 : 1280;
   const { context, page, errors } = await setup(browser, width, phone ? 844 : 960, { phone, scheme });
-  let reads = 0;
+  let overviewReads = 0;
   try {
-    await page.route('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.getStats', route => {
-      const visits = ++reads - Number(phone);
-      if (visits === 2 || visits === 4) return route.fulfill({ status: 503, json: {} });
-      return route.fulfill({ json: { object: 'platform_stats', plays: 393 + visits, tracks: 1422, artists: 122, duration_seconds: 532800, updated_at_ms: 1794651020000 } });
+    await page.route('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.getStats', route => route.fulfill({ json: { object: 'platform_stats', plays: 19081, tracks: 1422, artists: 122, duration_seconds: 532800, updated_at_ms: 1794651020000 } }));
+    const did = tracks[0].artist.did;
+    // the one mapped track is the atlas fixture's point 19
+    await page.route(/^https:\/\/api\.next\.plyr\.fm\/xrpc\/fm\.plyr\.unspecced\.listTracks(?:\?|$)/, route => route.fulfill({
+      json: { object: 'list', data: [{ ...tracks[0], legacy_id: 19 }, ...tracks.slice(1)], has_more: false } }));
+    const artist = { object: 'artist', did, handle: 'sketches.test', display_name: 'replyomatic', bio: null, avatar_url: null, support_url: null };
+    const days = n => Array.from({ length: n }, (_, i) => ({ start: new Date(Date.UTC(2026, 10, 23 - n + 1 + i)).toISOString().slice(0, 10), plays: (i * 7) % 23 + (i === n - 3 ? 60 : 0), uploads: i % 4 === 0 ? 2 : 0 }));
+    const overview = range => {
+      const series = range === 'week' ? days(7) : days(30);
+      const plays = range === 'all' ? 19081 : series.reduce((sum, day) => sum + day.plays, 0);
+      return { object: 'stats_overview', range, bucket: 'day', start_day: series[0].start, end_day: series.at(-1).start, plays, dated_plays: plays,
+        previous_plays: range === 'week' ? plays * 2 : Math.round(plays / 3), uploads: 9, likes: 357, series,
+        tracks: tracks.slice(0, 5).map((track, i) => ({ uri: track.record.uri, plays: 50 - i * 7 })),
+        artists: [{ did, plays: 2441, tracks: 12 }, { did: 'did:plc:other', plays: 900, tracks: 3 }] };
+    };
+    await page.route('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.getStatsOverview?**', route => {
+      const range = new URL(route.request().url()).searchParams.get('range');
+      if (++overviewReads === 1) return route.fulfill({ status: 503, json: {} });
+      return route.fulfill({ json: overview(range) });
     });
-    const chartTrack = tracks[0];
-    const did = chartTrack.artist.did;
-    const artist = { did, handle: 'alice.test', display_name: 'Alice Example' };
-    let weekReads = 0;
-    let artistLookups = 0;
-    await page.route('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.getTrackChart?**', route => {
-      const params = new URL(route.request().url()).searchParams;
-      if (params.get('limit') !== '5') return route.fallback();
-      const period = params.get('period');
-      if (period === 'week' && ++weekReads === 1) return route.fulfill({ status: 503, json: {} });
-      return route.fulfill({ json: { data: period === 'all_time' ? [] : [{ rank: 1, period_like_count: 12, track: chartTrack }] } });
+    await page.route('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.resolveTracks', route => {
+      const uris = JSON.parse(route.request().postData()).uris;
+      return route.fulfill({ json: { object: 'list', data: tracks.filter(track => uris.includes(track.record.uri)), missing: [] } });
     });
+    await page.route('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.resolveArtists', route => route.fulfill({ json: { object: 'list', data: [
+      { did, handle: 'sketches.test', display_name: 'replyomatic', avatar_url: null, track_count: 12 },
+      { did: 'did:plc:other', handle: 'other.test', display_name: 'another artist', avatar_url: null, track_count: 3 }] } }));
+    await page.route('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.getTags?**', route => route.fulfill({ json: { object: 'list', has_more: false, data: [
+      { name: 'ambient', track_count: 56, total_plays: 1046 }, { name: 'electronic', track_count: 120, total_plays: 2263 }] } }));
     await page.route('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.search?**', route => {
       const params = new URL(route.request().url()).searchParams;
       assert.equal(params.get('types'), 'artist');
-      const match = { id: did, title: artist.display_name, owner: artist };
-      return route.fulfill({ json: { data: params.get('q') === 'alice' ? [match] : [] } });
+      const match = { object: 'search_result', type: 'artist', id: did, title: artist.display_name, owner: artist, image_url: null };
+      return route.fulfill({ json: { data: params.get('q') === 'sketch' ? [match] : [] } });
     });
     await page.route('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.getArtist*', route => {
-      if (method(new URL(route.request().url())) !== 'getArtistMetrics') return route.fulfill({ json: artist });
-      artistLookups += 1;
-      return route.fulfill({ json: { totals: { tracks: 3, plays: 57, duration_seconds: 1200 },
-        top_track: { id: chartTrack.id, title: chartTrack.metadata.title, play_count: 42 } } });
+      const url = new URL(route.request().url());
+      if (method(url) !== 'getArtistMetrics') return route.fulfill({ json: artist });
+      return route.fulfill({ json: { object: 'artist_metrics', artist_did: did, totals: { tracks: 9, plays: 2441, duration_seconds: 53106 }, top_track: null } });
     });
     await page.goto(origin);
     await page.getByTestId('home-track-row').first().waitFor();
-    assert.equal(reads, 0, 'stats do not load in the home shell');
+    assert.equal(overviewReads, 0, 'stats do not load in the home shell');
     if (phone) {
       await page.getByRole('button', { name: 'Open links menu' }).click();
       await page.getByText('1,422 tracks · 122 artists', { exact: true }).waitFor();
@@ -264,60 +275,50 @@ async function statsScreen(browser, phone, scheme) {
       await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'stats', exact: true }).click();
     }
     await page.waitForURL('**/stats');
-    await page.getByRole('heading', { name: 'stats', exact: true }).waitFor();
-    await page.getByText('394', { exact: true }).waitFor();
-    await page.getByText('6d 4h', { exact: true }).waitFor();
-    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
-    assert.equal(await page.getByLabel('Catalog totals').evaluate(node =>
-      getComputedStyle(node).gridTemplateColumns.split(' ').filter(size => Number.parseFloat(size) > 0).length
-    ), phone ? 3 : 4);
-    const chart = page.getByRole('region', { name: 'most liked tracks', exact: true });
-    await chart.getByText('12 likes').waitFor();
-    await page.screenshot({ path: path.join(output, `${width}-${scheme}-stats.png`) });
-    await chart.getByRole('button', { name: '7 days', exact: true }).click();
-    await chart.getByRole('alert').waitFor();
-    await chart.getByRole('button', { name: 'retry track chart' }).click();
-    await chart.getByText('12 likes').waitFor();
-    assert.ok(await chart.getByRole('button', { name: '7 days', exact: true }).evaluate(button => document.activeElement === button));
-    await chart.getByRole('button', { name: 'all time', exact: true }).click();
-    await chart.getByText('no likes in this time range.').waitFor();
-    assert.equal(artistLookups, 0, 'artist metrics are fetched only after selection');
-    const input = page.getByRole('searchbox', { name: 'find an artist', description: 'type at least two characters.', exact: true });
-    await input.fill('unknown');
-    await page.getByText('no artists found for “unknown”.').waitFor();
-    await input.fill('@alice');
-    await page.getByRole('status').filter({ hasText: '1 artist found' }).waitFor();
-    const link = page.getByRole('link', { name: 'Alice Example @alice.test' });
-    await input.press('Tab');
-    assert.ok(await link.evaluate(item => item === document.activeElement));
-    await page.keyboard.press('Enter');
-    await page.waitForURL('**/stats?artist=*#artist-stats');
-    await page.getByLabel('artist totals').getByText('57', { exact: true }).waitFor();
-    assert.equal(await page.getByRole('region', { name: 'artist stats', exact: true }).getByRole('link', { name: chartTrack.metadata.title, exact: true }).count(), 0,
-      'artist metrics can include an unlisted most-played track');
-    await page.getByRole('navigation', { name: 'stats breadcrumb' }).getByRole('link', { name: 'stats', exact: true }).click();
-    await page.waitForURL('**/stats#artist-stats');
-    assert.equal(await page.getByLabel('artist totals').count(), 0);
-    await page.getByRole('button', { name: 'refresh stats' }).click();
-    await page.getByRole('alert').getByText('could not refresh stats.').waitFor();
-    assert.ok(await page.getByText('394', { exact: true }).isVisible(), 'failed refresh keeps the last totals');
+    await page.getByRole('heading', { name: 'stats for', exact: true }).waitFor();
+    await page.getByRole('alert').getByText('couldn’t load stats.').waitFor();
     await page.getByRole('button', { name: 'try again' }).click();
-    await page.getByText('396', { exact: true }).waitFor();
-    assert.equal(reads, 3 + Number(phone));
-    await page.reload();
-    await page.getByRole('alert').getByText('could not load stats.').waitFor();
-    await page.getByRole('button', { name: 'try again' }).press('Enter');
-    await page.getByText('398', { exact: true }).waitFor();
-    assert.ok(await page.getByRole('button', { name: 'refresh stats' }).evaluate(button => document.activeElement === button),
-      'retry keeps keyboard focus on the same action');
-    assert.equal(reads, 5 + Number(phone));
-    await page.goto(origin + '/stats?artist=' + encodeURIComponent(did) + '#artist-stats');
-    const artistTotals = page.getByLabel('artist totals');
-    await artistTotals.getByText('57', { exact: true }).waitFor();
-    assert.ok(await artistTotals.evaluate(element => element.getBoundingClientRect().top < innerHeight));
-    assert.equal(await page.getByRole('region', { name: 'most liked tracks', exact: true }).count(), 0);
-    assert.equal(reads, 5 + Number(phone), 'a direct artist view does not fetch catalog totals');
-    await page.screenshot({ path: path.join(output, `${width}-${scheme}-artist-stats.png`) });
+    const month = overview('month');
+    await page.getByText(month.plays.toLocaleString('en-US'), { exact: true }).waitFor();
+    await page.getByText('plays in the last 30 days', { exact: true }).waitFor();
+    await page.getByText('↑ 3.0× the 30 days before').waitFor();
+    await page.getByLabel('totals').getByText('19,081', { exact: true }).waitFor();
+    await page.getByRole('group', { name: 'plays in the last 30 days, by day' }).waitFor();
+    await page.getByRole('heading', { name: 'what plyr.fm sounds like' }).waitFor();
+    const top = page.getByRole('region', { name: 'most played' });
+    await top.getByRole('link', { name: tracks[0].metadata.title, exact: true }).waitFor();
+    assert.equal(await top.getByRole('button', { name: `Play ${tracks[0].metadata.title}` }).count(), 1, 'most played rows play from the shared control');
+    await page.getByRole('region', { name: 'tags' }).getByText('2,263').waitFor();
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'stats fit the window');
+    await page.screenshot({ path: path.join(output, `${width}-${scheme}-stats.png`), fullPage: true });
+
+    await page.getByRole('navigation', { name: 'time range' }).getByRole('link', { name: '7 days', exact: true }).click();
+    await page.waitForURL('**/stats?range=week');
+    await page.getByText('plays in the last 7 days', { exact: true }).waitFor();
+    await page.getByText(/% fewer than the 7 days before/).waitFor();
+
+    const field = page.locator('#stat-artist');
+    await field.fill('nobody');
+    await page.getByText('no artists found for “nobody”.').waitFor();
+    await field.fill('@sketch');
+    await page.getByRole('option', { name: /replyomatic/ }).waitFor();
+    await field.press('Enter');
+    await page.waitForURL('**/stats?artist=sketches.test');
+    const hero = page.getByRole('region', { name: 'artist totals' });
+    await hero.getByText('2,441', { exact: true }).waitFor();
+    await hero.getByText('#1 of 122 artists').waitFor();
+    await hero.getByText('13% of every play on plyr.fm').waitFor();
+    await page.getByRole('heading', { name: 'how replyomatic sounds' }).waitFor();
+    await page.getByText('8 of replyomatic’s 9 tracks aren’t on the sound map yet.').waitFor();
+    await page.getByRole('region', { name: 'tracks' }).getByText('field recordings').waitFor();
+    assert.equal(await page.getByRole('navigation', { name: 'time range' }).count(), 0, 'artist stats are all time only');
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'artist stats fit the window');
+    await page.screenshot({ path: path.join(output, `${width}-${scheme}-artist-stats.png`), fullPage: true });
+    await page.getByRole('link', { name: 'back to stats for everyone' }).click();
+    await page.waitForURL(url => url.pathname === '/stats' && !url.search);
+    await page.getByText('plays in the last 30 days', { exact: true }).waitFor();
+    await page.getByRole('link', { name: /another artist/ }).click();
+    await page.waitForURL('**/stats?artist=other.test');
     assert.deepEqual(errors, []);
   } finally { await context.close(); }
 }
