@@ -13,6 +13,8 @@ async function queueSuggestions(browser, phone, scheme) {
   const { context, page, errors } = await setup(browser, width, phone ? 844 : 960, { phone, scheme });
   try {
     const seen = [];
+    let artistReads = 0;
+    page.on('request', request => { if (request.url().includes('fm.plyr.unspecced.listTracks') && request.url().includes('artist')) artistReads++; });
     await page.route('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.getTrackSuggestions?**', route => {
       const url = new URL(route.request().url());
       seen.push({ seeds: url.searchParams.getAll('seed'), exclude: url.searchParams.getAll('exclude') });
@@ -54,6 +56,19 @@ async function queueSuggestions(browser, phone, scheme) {
     assert.equal(await suggested.getByRole('button', { name: /added to queue$/ }).count(), 0, 'no checkmark is left behind');
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'suggestions fit the window');
     await page.screenshot({ path: path.join(output, `${width}-${scheme}-queue-suggestions.png`) });
+
+    // closing and reopening the queue on the same track shows the strips at once and asks for nothing
+    const asked = { suggestions: seen.length, artist: artistReads };
+    for (let round = 0; round < 3; round++) {
+      if (phone) await page.goBack(); else await page.keyboard.press('q');
+      await queue.waitFor({ state: 'detached', timeout: 3000 });
+      await openQueue();
+      await queue.waitFor();
+      assert.ok(await suggested.isVisible(), 'suggestions are there the moment the queue opens');
+      assert.equal(await suggested.getByRole('listitem').count(), 3, 'the added card stays gone');
+    }
+    await page.waitForTimeout(600);
+    assert.deepEqual({ suggestions: seen.length, artist: artistReads }, asked, 'reopening the queue refetches nothing');
     assert.deepEqual(errors, []);
   } finally { await context.close(); }
 }

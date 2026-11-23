@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Artist, Track } from '@plyr/next-core/api';
 import { offerFor, supportLink, type Offer } from '@plyr/next-core/selling';
-import { api } from '../api-client';
+import { sellers } from '../track-extras';
 import { useAlbum } from '../use-album-id';
 
 /** the artist's public profile, for their buy and support links. quiet on failure: selling is optional. */
@@ -9,11 +9,12 @@ export function useSeller(did: string | undefined): Artist | undefined {
   const [found, setFound] = useState<{ did: string; artist: Artist }>();
   useEffect(() => {
     if (!did) return;
-    const controller = new AbortController();
-    api.artist(did, controller.signal).then(artist => { if (!controller.signal.aborted) setFound({ did, artist }); }, () => {});
-    return () => controller.abort();
+    let live = true;
+    sellers.load(did).then(artist => { if (live) setFound({ did, artist }); }, () => {});
+    return () => { live = false; };
   }, [did]);
-  return did && found?.did === did ? found.artist : undefined;
+  if (!did) return undefined;
+  return found?.did === did ? found.artist : sellers.peek(did);
 }
 
 /** where a listener can buy this track (its own link, else its album's) and support its artist */

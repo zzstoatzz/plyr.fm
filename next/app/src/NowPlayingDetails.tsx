@@ -9,8 +9,8 @@ import { toast } from './toast';
 import { useTrackSelling } from './selling/use-selling';
 import type { Track } from '@plyr/next-core/api';
 import { isPrivateTrack } from '@plyr/next-core/track-access';
-import { api } from './api-client';
 import { useAppearance } from './appearance';
+import { trackTags } from './track-extras';
 import { Cover, artistName } from './CatalogPieces';
 import { Text } from './Text';
 import { PlayingWave } from './PlayingWave';
@@ -74,15 +74,14 @@ export function NowPlayingDetails({ track, plays, navigate, position, playing, s
 /** The track's tags; each opens home filtered to it. */
 function Tags({ track, navigate }: { track: Track; navigate: (target: Href) => void }) {
   const theme = useAppearance();
-  // Lists carry no tags; the track read does.
   const [fetched, setFetched] = useState<{ id: string; tags: string[] }>();
   useEffect(() => {
     if (track.metadata.tags != null) return;
     let live = true;
-    api.track(track.id).then(detail => { if (live) setFetched({ id: track.id, tags: detail.metadata.tags ?? [] }); }, () => {});
+    trackTags.load(track.id).then(tags => { if (live) setFetched({ id: track.id, tags }); }, () => {});
     return () => { live = false; };
   }, [track.id, track.metadata.tags]);
-  const tags = track.metadata.tags ?? (fetched?.id === track.id ? fetched.tags : []);
+  const tags = track.metadata.tags ?? (fetched?.id === track.id ? fetched.tags : trackTags.peek(track.id) ?? []);
   if (!tags.length) return null;
   return <View testID="now-playing-tags" style={styles.tags}>
     {tags.map(name => {
