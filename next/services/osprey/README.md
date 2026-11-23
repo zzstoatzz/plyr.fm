@@ -18,8 +18,11 @@ plyr_index.track_records ──▶ TrackInputStream ──▶ Osprey RulesSink �
 ```
 
 - **input** (`src/plyr_osprey/tracks.py`): walks indexed tracks in
-  `(indexed_at_us, record_uri)` order, so edits come round again. A first run
-  starts from now, not the whole catalog.
+  `(ready_at_us, record_uri)` order, so edits come round again. A track's audio
+  is the address next plays: its verified copy of the record's blob, else the
+  record's `audioUrl`. A record written straight to a PDS (blob only) is ready
+  when that copy lands, so it comes round then. A first run starts from now,
+  not the whole catalog.
 - **rules** (`rules/`): `rules/index.sml` decides what applies to a track;
   `rules/copyright.sml` is prod's "plays through" copyright rule.
 - **UDFs** (`src/plyr_osprey/udfs.py`): `RecordingsPlayingThrough` fingerprints
@@ -51,6 +54,7 @@ with `OSPREY_DRAIN_ONCE=true`.
 
 ## scope until cutover
 
-Prod fingerprints every fm.plyr.track upload and next already reads prod's
-verdicts through the labeler, so `rules/index.sml` only scans audio next stored
-itself (`plyr-next-audio`). Scans cost money; at cutover, drop that condition.
+`rules/index.sml` scans audio next holds (`plyr-next-audio`): uploads made on
+next.plyr.fm and next's copies of blobs from records written straight to a PDS.
+Prod's own uploads are left to prod's scan, which next reads through the
+labeler; scans cost money. At cutover, drop that condition.

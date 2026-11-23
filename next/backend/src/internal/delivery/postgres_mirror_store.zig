@@ -7,6 +7,7 @@
 
 const std = @import("std");
 const pg = @import("pg");
+const public_media = @import("public_media.zig");
 
 pub const Candidate = struct {
     record_uri: []const u8,
@@ -138,9 +139,10 @@ pub const pending_where =
     \\  AND v.record_cid IS NOT NULL
     \\  AND v.audio_blob_cid IS NOT NULL
     \\  AND v.audio_blob_media_type IS NOT NULL
-    \\  -- a record that already names an https audio URL (e.g. prod's CDN)
-    \\  -- plays from it; copying it again would double storage for no gain.
-    \\  AND (v.audio_url IS NULL OR v.audio_url NOT LIKE 'https://%')
+    \\  -- audio plyr already stores (prod's CDN, next's uploads) isn't copied
+    \\  -- twice. a blob beside any other audioUrl is: that URL is unverified and
+    \\  -- unscanned, the copy is what playback prefers and moderation scans.
+++ "\n  AND NOT " ++ public_media.heldAudioSql("v.audio_url") ++ "\n" ++
     \\  -- the origin proves a blob, so an edit that keeps the audio keeps its copy
     \\  AND (d.record_uri IS NULL OR d.artifact_cid <> v.audio_blob_cid)
 ;

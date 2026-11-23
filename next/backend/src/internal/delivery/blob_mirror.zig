@@ -9,8 +9,10 @@
 //! A blob-backed version isn't listed or read back until that origin exists, so
 //! ingest wakes this worker for every new version; the uploading client has
 //! usually stored the object already, leaving only a HEAD.
-//! Records that already carry an https `audioUrl` aren't mirrored: they play
-//! from that URL (unverified), so storage isn't paid twice.
+//! Records whose `audioUrl` is audio plyr already stores (prod's CDN, next's
+//! uploads) aren't mirrored, so storage isn't paid twice. A blob beside any other
+//! `audioUrl` (a record written straight to a PDS) is: that URL is unverified,
+//! and the copy is what playback prefers and moderation scans.
 //!
 //! Unconfigured, the worker idles instead of crash-looping so the process
 //! group can be deployed before the bucket credentials exist.

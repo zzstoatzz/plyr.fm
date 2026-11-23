@@ -1,7 +1,10 @@
 """next's Postgres, as the worker sees it: indexed tracks in, review flags out.
 
-the cursor walks plyr_index.track_records in (indexed_at_us, record_uri)
-order, so an edited track comes round again. the flags for a track, the scan
+the cursor walks plyr_index.track_records in (ready_at_us, record_uri) order,
+so an edited track comes round again. a track is ready when it was indexed or,
+for audio that lives only as a PDS blob (a record written straight to its
+PDS), when next's verified copy of that blob landed: the copy is what next
+plays and what gets scanned, so such a track comes round again once it exists. the flags for a track, the scan
 record and the cursor move in one transaction, so a crash re-runs a track
 rather than skipping it. a track that keeps failing is passed over after
 MAX_ATTEMPTS runs, so one bad file can't stall the queue.
@@ -25,17 +28,27 @@ INSERT INTO plyr_moderation.rule_cursors (name, indexed_at_us, record_uri)
 VALUES (%s, %s, '') ON CONFLICT (name) DO NOTHING
 """
 
+# the audio is the address next plays: its verified copy of the record's blob
+# (the blob mirror's origin, as playback picks it), else the record's audioUrl
 SELECT_TRACKS = """
-SELECT t.record_uri, t.record_cid, t.owner_did, t.title, t.audio_url, t.indexed_at_us,
+WITH ready AS (
+    SELECT t.record_uri, t.record_cid, t.owner_did, t.title,
+           coalesce(d.origin_url, t.audio_url) AS audio_url,
+           greatest(t.indexed_at_us, coalesce(d.observed_at_us, 0)) AS ready_at_us
+    FROM plyr_index.track_records t
+    LEFT JOIN plyr_index.track_delivery_origins d
+      ON d.record_uri = t.record_uri AND d.artifact_cid = t.audio_blob_cid
+     AND d.service = 'r2' AND d.verification = 'verified_blob_cid'
+    WHERE NOT t.deleted AND t.collection = %s
+)
+SELECT r.record_uri, r.record_cid, r.owner_did, r.title, r.audio_url, r.ready_at_us,
        coalesce(a.handle, ''), coalesce(a.display_name, ''),
        EXISTS (SELECT 1 FROM plyr_moderation.scans s
-               WHERE s.record_uri = t.record_uri AND s.audio_url = t.audio_url)
-FROM plyr_index.track_records t
-LEFT JOIN plyr_index.actor_identities a ON a.did = t.owner_did
-WHERE NOT t.deleted
-  AND t.collection = %s
-  AND (t.indexed_at_us, t.record_uri) > (%s, %s)
-ORDER BY t.indexed_at_us, t.record_uri
+               WHERE s.record_uri = r.record_uri AND s.audio_url = r.audio_url)
+FROM ready r
+LEFT JOIN plyr_index.actor_identities a ON a.did = r.owner_did
+WHERE (r.ready_at_us, r.record_uri) > (%s, %s)
+ORDER BY r.ready_at_us, r.record_uri
 LIMIT %s
 """
 
@@ -71,7 +84,7 @@ class IndexedTrack:
     did: str
     title: str
     audio_url: str | None
-    indexed_at_us: int
+    ready_at_us: int
     handle: str
     display_name: str
     # this audio was fingerprinted on an earlier pass (the record was edited)
@@ -146,7 +159,7 @@ class Store:
                 cur.execute(INSERT_FLAG, (flag.subject, flag.action, flag.actor, flag.reason or None))
             if scanned is not None and track.audio_url:
                 cur.execute(INSERT_SCAN, (track.uri, track.cid, track.audio_url, len(scanned)))
-            cur.execute(ADVANCE, (track.indexed_at_us, track.uri, CURSOR_NAME))
+            cur.execute(ADVANCE, (track.ready_at_us, track.uri, CURSOR_NAME))
 
     def failed(self, track: IndexedTrack) -> bool:
         """count a failed run on the track at the cursor. returns whether it was passed over."""
@@ -157,5 +170,5 @@ class Store:
             attempts = int(row[0]) if row else 0
             if attempts < MAX_ATTEMPTS:
                 return False
-            cur.execute(ADVANCE, (track.indexed_at_us, track.uri, CURSOR_NAME))
+            cur.execute(ADVANCE, (track.ready_at_us, track.uri, CURSOR_NAME))
         return True

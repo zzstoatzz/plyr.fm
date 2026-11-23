@@ -1,9 +1,10 @@
 Import(rules=['models/track.sml'])
 
-# Prod fingerprints every upload, and next already reads prod's verdicts
-# through the labeler, so until next replaces prod only audio that next itself
-# stored (uploads made on next.plyr.fm) is scanned here: scans cost money.
-# At cutover, require the copyright rules for every track.
+# Audio next holds is scanned however the record got there: an upload on
+# next.plyr.fm, or a record written straight to its PDS, whose blob next copies
+# (and checks against its CID) before playing it; AudioUrl is then that copy.
+# Prod's own uploads (audio.plyr.fm) are left to prod's scan, whose verdicts
+# next reads through the labeler, until cutover: scans cost money.
 NextUpload = AudioHost == 'plyr-next-audio.n8-3e9.workers.dev'
 
 Require(rule='rules/copyright.sml', require_if=NextUpload and not ScannedBefore)
