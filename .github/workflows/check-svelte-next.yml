@@ -369,6 +369,20 @@ jobs:
         if: github.event_name == 'push'
         working-directory: next/web
         run: node scripts/check-live-radio.mjs
+      - name: verify the upload page opens its track and album forms signed in
+        if: github.event_name == 'push'
+        working-directory: next/web
+        env:
+          ZAT_TEST_HANDLE: ${{ secrets.ZAT_TEST_HANDLE }}
+          ZAT_TEST_PASSWORD: ${{ secrets.ZAT_TEST_PASSWORD }}
+          ZAT_TEST_PDS: ${{ secrets.ZAT_TEST_PDS }}
+        run: node scripts/check-live-upload-page.mjs
+      - uses: actions/upload-artifact@v4
+        if: always() && github.event_name == 'push'
+        with:
+          name: live-upload-page
+          path: /tmp/plyr-live-upload-page
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         if: always() && github.event_name == 'push'
         with:
