@@ -12,3 +12,46 @@ pub fn get(request: *Exchange, allocator: std.mem.Allocator, store: ?Store, cors
     const body = try std.json.Stringify.valueAlloc(allocator, value, .{});
     try response.json(request, .ok, body, request_id, cors);
 }
+
+const overview_store = @import("../internal/metrics/postgres_stats_overview_store.zig");
+const query = @import("../internal/http/query.zig");
+
+/// The stats page's overview for `range` (week, month, year or all; month
+/// when absent).
+pub fn overview(request: *Exchange, allocator: std.mem.Allocator, store: ?*overview_store.PostgresStatsOverviewStore, cors: response.CorsPolicy, request_id: []const u8) !void {
+    const range = parseRange(allocator, request.target) catch |err| switch (err) {
+        error.OutOfMemory => return err,
+        else => return response.apiError(request, .invalid_request, request_id, cors),
+    };
+    const source = store orelse return response.apiError(request, .service_unavailable, request_id, cors);
+    const body = source.get(allocator, range) catch |err| switch (err) {
+        error.OutOfMemory => return err,
+        else => {
+            std.log.err("stats overview failed: {}", .{err});
+            return response.apiError(request, .service_unavailable, request_id, cors);
+        },
+    };
+    try response.json(request, .ok, body, request_id, cors);
+}
+
+fn parseRange(allocator: std.mem.Allocator, target: []const u8) !overview_store.Range {
+    var pairs = query.Iterator.init(allocator, target);
+    var range: ?overview_store.Range = null;
+    while (try pairs.next()) |pair| {
+        if (!std.mem.eql(u8, pair.name, "range") or range != null) return error.InvalidQuery;
+        range = std.meta.stringToEnum(overview_store.Range, pair.value) orelse return error.InvalidQuery;
+    }
+    return range orelse .month;
+}
+
+test "overview range is one of four names, month by default" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    try std.testing.expectEqual(overview_store.Range.month, try parseRange(a, "/xrpc"));
+    try std.testing.expectEqual(overview_store.Range.week, try parseRange(a, "/xrpc?range=week"));
+    try std.testing.expectEqual(overview_store.Range.all, try parseRange(a, "/xrpc?range=all"));
+    try std.testing.expectError(error.InvalidQuery, parseRange(a, "/xrpc?range=day"));
+    try std.testing.expectError(error.InvalidQuery, parseRange(a, "/xrpc?range=week&range=all"));
+    try std.testing.expectError(error.InvalidQuery, parseRange(a, "/xrpc?period=week"));
+}

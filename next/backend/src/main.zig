@@ -21,6 +21,7 @@ const postgres_record_status = @import("internal/index/postgres_record_status_st
 const postgres_ingest_status = @import("internal/index/postgres_ingest_status_store.zig");
 const postgres_play_metrics = @import("internal/metrics/postgres_play_metric_store.zig");
 const postgres_platform_stats = @import("internal/metrics/postgres_platform_stats_store.zig");
+const postgres_stats_overview = @import("internal/metrics/postgres_stats_overview_store.zig");
 const postgres_artist_metrics = @import("internal/metrics/postgres_artist_metric_store.zig");
 const repair_runner = @import("internal/ingest/repair_runner.zig");
 const stream_runner = @import("internal/ingest/stream_runner.zig");
@@ -198,6 +199,7 @@ pub fn main() !void {
         null;
     var space_restrictions: ?postgres_restrictions.PostgresRestrictions = if (postgres_store) |*store| .{ .pool = store.pool } else null;
     var platform_stats: ?postgres_platform_stats.PostgresPlatformStatsStore = if (postgres_store) |*store| .{ .pool = store.pool, .io = io, .collection = settings.track_collection } else null;
+    var stats_overview: ?postgres_stats_overview.PostgresStatsOverviewStore = if (postgres_store) |*store| .{ .pool = store.pool, .io = io, .collection = settings.track_collection, .like_collection = settings.like_collection } else null;
     switch (settings.role) {
         .jams => unreachable,
         .account_reconciler => {
@@ -239,6 +241,7 @@ pub fn main() !void {
                 .artist_store = artist_store,
                 .artist_metric_store = artist_metric_store,
                 .stats_store = if (platform_stats) |*store| store.store() else null,
+                .stats_overview_store = if (stats_overview) |*store| store else null,
                 .verified_list_store = verified_list_store,
                 .record_status_store = record_status_store,
                 .ingest_status_store = ingest_status_store,
@@ -431,6 +434,7 @@ test {
     _ = @import("internal/metrics/postgres_play_metric_store.zig");
     _ = @import("internal/metrics/postgres_artist_metric_store.zig");
     _ = @import("internal/metrics/postgres_platform_stats_store.zig");
+    _ = @import("internal/metrics/postgres_stats_overview_store.zig");
     _ = @import("internal/metrics/redis_play_dedup_store.zig");
     _ = @import("internal/identity/playlist_id.zig");
     _ = @import("internal/identity/scoped_record_cursor.zig");

@@ -36,6 +36,7 @@ const mem = std.mem;
 pub const App = struct {
     io: std.Io,
     stats_store: ?@import("../internal/metrics/platform_stats_store.zig").Store = null,
+    stats_overview_store: ?*@import("../internal/metrics/postgres_stats_overview_store.zig").PostgresStatsOverviewStore = null,
     track_store: ?TrackStore,
     track_chart_store: ?TrackChartStore = null,
     track_suggestion_store: ?TrackSuggestionStore = null,
