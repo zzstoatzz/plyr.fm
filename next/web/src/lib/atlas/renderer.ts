@@ -1,5 +1,6 @@
 import { ArtistFaces } from './faces';
-import type { AtlasArtist, AtlasCallbacks, AtlasCluster, AtlasData, AtlasOptions, AtlasPoint } from './types';
+import { neighborhoods, neighborLinks, type Neighborhood } from './neighborhoods';
+import type { AtlasArtist, AtlasCallbacks, AtlasData, AtlasOptions, AtlasPoint } from './types';
 
 interface HaloSprite {
   cv: HTMLCanvasElement;
@@ -8,20 +9,11 @@ interface HaloSprite {
 
 const HUE_STEPS = 24;
 const TUNE = {
-  nebula: {
-    alpha: 0.2,
-    spread: 3.0,
-    minHaloPx: 40,
-    growRefZoom: 2,
-    maxHaloPx: 340,
-    varBase: 0.7,
-    varRange: 0.3,
-    inStart: 1.7,
-    inRange: 1.2,
-    outStart: 26,
-    outRange: 10
-  },
-  coarse: { alphaDark: 0.13, alphaLight: 0.1, outStart: 1.8, outRange: 1.0 },
+  // glows are drawn on their own layer, so overlapping ones never stack past `layer`
+  regions: { spread: 1.9, minPx: 40, maxPx: 380, layer: { dark: 0.5, light: 0.38 }, outStart: 1.8, outRange: 1.0 },
+  clusters: { spread: 2.4, minPx: 30, maxPx: 320, layer: { dark: 0.42, light: 0.32 }, inStart: 1.3, inRange: 1.0, outStart: 26, outRange: 10 },
+  // neighbour lines stay faint: a hint of shape, not a wire diagram
+  links: { alpha: { dark: 0.1, light: 0.12 }, inStart: 0.6, inRange: 0.8, maxPx: 150 },
   hueDark: { core: [0.55, 0.72], mid: [0.5, 0.52], edge: [0.45, 0.34] } as const,
   hueLight: { core: [0.55, 0.45], mid: [0.5, 0.6], edge: [0.45, 0.75] } as const,
   labels: { titles: { s: 5, l: 14 }, coarse: { s: 5, l: 10 }, fine: { s: 6, l: 16 }, artists: { s: 3, l: 8 } },
@@ -113,6 +105,7 @@ export class AtlasRenderer {
 
   // sprite caches
   private dotSprites = new Map<number, HTMLCanvasElement>();
+  private inks = new Map<number, string>();
   private starSprites = new Map<string, HTMLCanvasElement>();
   private haloSprites = new Map<string, HTMLCanvasElement>();
   private spriteTheme = '';
@@ -125,6 +118,11 @@ export class AtlasRenderer {
   private coverLoadCount = 0;
 
   private faces = new ArtistFaces(() => this.markDirty());
+  private regions: Neighborhood[] = [];
+  private clusters: Neighborhood[] = [];
+  private links: Uint32Array<ArrayBuffer> = new Uint32Array(0);
+  private layer: HTMLCanvasElement | null = null;
+  private font = 'system-ui, sans-serif';
 
   // interaction
   private hovered = -1;
@@ -199,8 +197,11 @@ export class AtlasRenderer {
     const order = Array.from(this.popOrder);
     order.sort((a, b) => pop[b] - pop[a]);
     this.popOrder.set(order);
-    this.computeClusterGeometry(data.clusters.coarse, 'clusterCoarse');
-    this.computeClusterGeometry(data.clusters.fine, 'clusterFine');
+    const core = data.points.map(p => p.core);
+    this.regions = neighborhoods(data.clusters.coarse, this.px, this.py, data.points.map(p => p.clusterCoarse), core, this.hueStep);
+    this.clusters = neighborhoods(data.clusters.fine, this.px, this.py, this.fineArr, core, this.hueStep);
+    this.links = neighborLinks(this.px, this.py, this.fineArr);
+    this.font = getComputedStyle(this.canvas).fontFamily || this.font;
     this.fitToData();
     this.markDirty();
   }
@@ -252,56 +253,6 @@ export class AtlasRenderer {
     this.view.panY = -(yMin + yMax) / 2 + (top - bottom) / 2 / (base * this.view.zoom);
   }
 
-  private computeClusterGeometry(
-    clusters: AtlasCluster[],
-    key: 'clusterCoarse' | 'clusterFine'
-  ): void {
-    if (!this.data) return;
-    const byId = new Map<number, AtlasCluster>();
-    const members = new Map<number, number[]>();
-    for (const cl of clusters) {
-      byId.set(cl.id, cl);
-      members.set(cl.id, []);
-    }
-    for (let i = 0; i < this.data.points.length; i++) {
-      members.get(this.data.points[i][key])?.push(i);
-    }
-    for (const cl of clusters) {
-      const idx = members.get(cl.id) ?? [];
-      if (!idx.length) {
-        cl.radius = 0.03;
-        cl.lantern = null;
-        continue;
-      }
-      let distSum = 0;
-      for (const i of idx) {
-        distSum += Math.hypot(this.px[i] - cl.cx, this.py[i] - cl.cy);
-      }
-      cl.radius = (distSum / idx.length) * 2 || 0.03;
-      // lantern: weighted center of members within the trimmed radius,
-      // sized by RMS spread — the light sits where the tracks are
-      const kept = idx.filter(
-        (i) => Math.hypot(this.px[i] - cl.cx, this.py[i] - cl.cy) <= (cl.radius ?? 0.03)
-      );
-      const use = kept.length ? kept : idx;
-      let mx = 0;
-      let my = 0;
-      for (const i of use) {
-        mx += this.px[i];
-        my += this.py[i];
-      }
-      mx /= use.length;
-      my /= use.length;
-      let sum2 = 0;
-      for (const i of use) {
-        const dx = this.px[i] - mx;
-        const dy = this.py[i] - my;
-        sum2 += dx * dx + dy * dy;
-      }
-      cl.lantern = { x: mx, y: my, r: Math.max(0.008, Math.sqrt(sum2 / use.length)) };
-    }
-  }
-
   // --- theme / colors ---
 
   setDark(dark: boolean): void {
@@ -341,7 +292,7 @@ export class AtlasRenderer {
     return c;
   }
 
-  private themeKey(): string {
+  private themeKey(): 'dark' | 'light' {
     return this.dark ? 'dark' : 'light';
   }
 
@@ -350,6 +301,7 @@ export class AtlasRenderer {
     if (this.spriteTheme !== t) {
       this.spriteTheme = t;
       this.dotSprites.clear();
+      this.inks.clear();
       this.starSprites.clear();
       this.haloSprites.clear();
       this.hueCache.clear();
@@ -423,7 +375,7 @@ export class AtlasRenderer {
     return cv;
   }
 
-  private getHaloSprite(clusterId: number, radiusPx: number): HaloSprite {
+  private getHaloSprite(step: number, radiusPx: number): HaloSprite {
     const buckets = [20, 50, 100, 200, 400];
     let bucket = buckets[buckets.length - 1];
     for (const b of buckets) {
@@ -432,7 +384,6 @@ export class AtlasRenderer {
         break;
       }
     }
-    const step = Math.floor(hash01(clusterId) * HUE_STEPS) % HUE_STEPS;
     const key = `${step}_${bucket}`;
     let cv = this.haloSprites.get(key);
     if (cv) return { cv, bucket };
@@ -627,47 +578,14 @@ export class AtlasRenderer {
     const yMin = tl[1] - pad;
     const yMax = br[1] + pad;
 
-    // --- coarse region nebulae (zoomed out) ---
-    const coarseAlphaNow =
-      (this.dark ? TUNE.coarse.alphaDark : TUNE.coarse.alphaLight) *
-      fadeOut(zoom, TUNE.coarse.outStart, TUNE.coarse.outRange);
-    if (coarseAlphaNow > 0.01) {
-      for (const cl of this.data.clusters.coarse) {
-        const r = (cl.radius ?? 0.05) * this.scale;
-        if (r < 2) continue;
-        const sx = this.cx + cl.cx * this.scale;
-        const sy = this.cy + cl.cy * this.scale;
-        if (sx + r < 0 || sx - r > W || sy + r < 0 || sy - r > H) continue;
-        const halo = this.getHaloSprite(cl.id + 1000, r);
-        const drawSize = halo.cv.width * (r / halo.bucket) * (small ? 0.7 : 1);
-        ctx.globalAlpha = coarseAlphaNow;
-        ctx.drawImage(halo.cv, sx - drawSize / 2, sy - drawSize / 2, drawSize, drawSize);
-      }
-      ctx.globalAlpha = 1;
-    }
-
-    // --- fine cluster lanterns (zoomed in) ---
-    const neb = TUNE.nebula;
-    const nebAlpha = fadeIn(zoom, neb.inStart, neb.inRange) * fadeOut(zoom, neb.outStart, neb.outRange);
-    if (nebAlpha > 0.01) {
-      for (const cl of this.data.clusters.fine) {
-        const L = cl.lantern;
-        if (!L) continue;
-        const rFloor = neb.minHaloPx * Math.sqrt(Math.max(1, zoom / neb.growRefZoom));
-        const rPx =
-          Math.min(neb.maxHaloPx, Math.max(rFloor, L.r * neb.spread * this.scale)) *
-          (small ? 0.85 : 1);
-        const sx = this.cx + L.x * this.scale;
-        const sy = this.cy + L.y * this.scale;
-        if (sx + rPx < 0 || sx - rPx > W || sy + rPx < 0 || sy - rPx > H) continue;
-        const halo = this.getHaloSprite(cl.id, rPx);
-        const drawSize = halo.cv.width * (rPx / halo.bucket);
-        const v = neb.varBase + hash01(cl.id) * neb.varRange;
-        ctx.globalAlpha = neb.alpha * v * nebAlpha;
-        ctx.drawImage(halo.cv, sx - drawSize / 2, sy - drawSize / 2, drawSize, drawSize);
-      }
-      ctx.globalAlpha = 1;
-    }
+    // --- neighborhoods: region glows hand off to cluster glows, with faint lines between neighbours ---
+    const R = TUNE.regions;
+    const C = TUNE.clusters;
+    const regionAlpha = fadeOut(zoom, R.outStart, R.outRange);
+    if (regionAlpha > 0.01) this.drawGlows(this.regions, R.spread, R.minPx, R.maxPx * (small ? 0.8 : 1), R.layer[this.themeKey()] * regionAlpha);
+    const clusterAlpha = fadeIn(zoom, C.inStart, C.inRange) * fadeOut(zoom, C.outStart, C.outRange);
+    if (clusterAlpha > 0.01) this.drawGlows(this.clusters, C.spread, C.minPx * Math.sqrt(Math.max(1, zoom / 2)), C.maxPx, C.layer[this.themeKey()] * clusterAlpha);
+    this.drawLinks(zoom, xMin, xMax, yMin, yMax);
 
     // --- points ---
     const coverAlpha = fadeIn(zoom, TUNE.covers.start, TUNE.covers.range);
@@ -680,6 +598,15 @@ export class AtlasRenderer {
       if (x < xMin || x > xMax || y < yMin || y > yMax) continue;
       const sx = this.cx + x * this.scale;
       const sy = this.cy + y * this.scale;
+      if (!this.dark) {
+        const hot = i === this.hovered || i === this.selected;
+        ctx.globalAlpha = hot ? 1 : 0.8;
+        ctx.fillStyle = this.inkColor(this.hueStep[i]);
+        ctx.beginPath();
+        ctx.arc(sx, sy, Math.min(5, 1.5 + zoom * 0.25) * (hot ? 1.6 : 1), 0, Math.PI * 2);
+        ctx.fill();
+        continue;
+      }
       const spr = useStar
         ? this.getStarSprite(this.hueStep[i], pointR, i === this.hovered || i === this.selected)
         : this.getDotSprite(this.hueStep[i]);
@@ -752,6 +679,7 @@ export class AtlasRenderer {
     // --- artist circles: always a face, or a tinted disk with an initial while
     // it loads or when the artist has none. never an empty ring.
     const artistCands: { name: string; x: number; y: number }[] = [];
+    const faces: { x: number; y: number; r: number }[] = [];
     {
       for (const a of this.data.artists) {
         const pr = this.artistRadiusPx(a);
@@ -761,11 +689,11 @@ export class AtlasRenderer {
         if (ax < -40 || ax > W + 40 || ay < -40 || ay > H + 40) continue;
         const face = this.faces.face(a, pr, pr * 2 * this.dpr);
         if (face) {
-          ctx.globalAlpha = 0.95;
+          ctx.globalAlpha = 1;
           ctx.drawImage(face, ax - pr, ay - pr, pr * 2, pr * 2);
         } else {
           const [r, g, b] = hslToRgb(hashText(a.did), 0.35, this.dark ? 0.28 : 0.82);
-          ctx.globalAlpha = 0.9;
+          ctx.globalAlpha = 1;
           ctx.beginPath();
           ctx.arc(ax, ay, pr, 0, Math.PI * 2);
           ctx.fillStyle = `rgb(${r},${g},${b})`;
@@ -778,12 +706,7 @@ export class AtlasRenderer {
             ctx.fillText((a.name || a.handle || '?').charAt(0).toLowerCase(), ax, ay + pr * 0.05);
           }
         }
-        ctx.globalAlpha = 0.25 + Math.min(0.35, pr / 40);
-        ctx.beginPath();
-        ctx.arc(ax, ay, pr, 0, Math.PI * 2);
-        ctx.strokeStyle = this.dark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.4)';
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
+        faces.push({ x: ax, y: ay, r: pr });
         if (zoom >= 2 && pr >= 9 && artistCands.length < 30) {
           artistCands.push({ name: a.handle, x: ax, y: ay + pr + 9 });
         }
@@ -812,68 +735,50 @@ export class AtlasRenderer {
     // rather than shifting inward (a shifted label points at nothing)
     const fitsHoriz = (lx: number, halfW: number): boolean =>
       lx - halfW >= MARGIN && lx + halfW <= W - MARGIN;
+    // labels step around artist faces
+    for (const f of faces) placed.push({ x: f.x, y: f.y, hw: f.r + 2, hh: f.r + 2 });
 
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     const drawLabel = (text: string, x: number, y: number): void => {
-      ctx.strokeStyle = this.dark ? 'rgba(0,0,0,0.88)' : 'rgba(255,255,255,0.88)';
-      ctx.lineWidth = 4;
+      ctx.strokeStyle = this.dark ? 'rgba(10,10,10,0.82)' : 'rgba(250,250,250,0.9)';
+      ctx.lineWidth = 5;
       ctx.lineJoin = 'round';
       ctx.strokeText(text, x, y);
       ctx.fillText(text, x, y);
     };
 
-    const coarseLabelAlpha = fadeOut(zoom, 1.7, 0.6);
-    if (coarseLabelAlpha > 0.01) {
-      const fontSize = small ? 10 : 13;
-      ctx.font = `${fontSize}px monospace`;
-      ctx.globalAlpha = 0.95 * coarseLabelAlpha;
-      ctx.fillStyle = this.dark ? 'rgba(255,255,255,0.95)' : 'rgba(0,0,0,0.88)';
-      const max = small ? TUNE.labels.coarse.s : TUNE.labels.coarse.l;
+    // neighborhood names sit above their tracks, or failing that in the middle or just below
+    const nameNeighborhoods = (list: Neighborhood[], alpha: number, max: number, size: number, weight: number): void => {
+      if (alpha < 0.01) return;
+      ctx.font = `${weight} ${size}px ${this.font}`;
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = this.dark ? 'rgba(255,255,255,0.94)' : 'rgba(20,20,20,0.9)';
       let shown = 0;
-      const sorted = [...this.data.clusters.coarse].sort((a, b) => b.count - a.count);
-      for (const cl of sorted) {
+      for (const nb of list) {
         if (shown >= max) break;
-        const sx = this.cx + cl.cx * this.scale;
-        const sy = this.cy + cl.cy * this.scale - Math.sqrt(cl.count) * 1.5;
-        if (sy < MARGIN || sy > H - 40) continue;
-        const tw = ctx.measureText(cl.label).width;
+        const sx = this.cx + nb.x * this.scale;
+        const tw = ctx.measureText(nb.label).width;
         if (!fitsHoriz(sx, tw / 2)) continue;
-        if (canPlace(sx, sy, tw, fontSize)) {
-          drawLabel(cl.label, sx, sy);
-          shown++;
+        const spots = [nb.top * this.scale - size, nb.y * this.scale, nb.bottom * this.scale + size + 6];
+        for (const dy of spots) {
+          const ly = this.cy + dy;
+          if (ly < MARGIN + size || ly > H - 40) continue;
+          if (canPlace(sx, ly, tw, size)) {
+            drawLabel(nb.label, sx, ly);
+            shown++;
+            break;
+          }
         }
       }
-    }
-
-    const fineLabelAlpha = fadeIn(zoom, 1.7, 0.6) * fadeOut(zoom, neb.outStart, neb.outRange);
-    if (fineLabelAlpha > 0.01) {
-      const fontSize = small ? 10 : 12;
-      ctx.font = `bold ${fontSize}px monospace`;
-      ctx.globalAlpha = 0.95 * fineLabelAlpha;
-      ctx.fillStyle = this.dark ? 'rgba(255,255,255,0.95)' : 'rgba(0,0,0,0.88)';
-      const max = small ? TUNE.labels.fine.s : TUNE.labels.fine.l;
-      let shown = 0;
-      const sorted = [...this.data.clusters.fine].sort((a, b) => b.count - a.count);
-      for (const cl of sorted) {
-        if (shown >= max) break;
-        if (cl.cx < xMin || cl.cx > xMax || cl.cy < yMin || cl.cy > yMax) continue;
-        const sx = this.cx + cl.cx * this.scale;
-        const sy = this.cy + cl.cy * this.scale - 14;
-        if (sy < MARGIN || sy > H - 40) continue;
-        const tw = ctx.measureText(cl.label).width;
-        if (!fitsHoriz(sx, tw / 2)) continue;
-        if (canPlace(sx, sy, tw, fontSize)) {
-          drawLabel(cl.label, sx, sy);
-          shown++;
-        }
-      }
-    }
+    };
+    nameNeighborhoods(this.regions, fadeOut(zoom, 1.7, 0.6), small ? TUNE.labels.coarse.s : TUNE.labels.coarse.l, small ? 12 : 14, 650);
+    nameNeighborhoods(this.clusters, fadeIn(zoom, 1.7, 0.6) * fadeOut(zoom, C.outStart, C.outRange), small ? TUNE.labels.fine.s : TUNE.labels.fine.l, small ? 11 : 12.5, 550);
 
     const titleAlpha = fadeIn(zoom, 4.5, 1.0);
     if (titleAlpha > 0.01) {
       const fontSize = small ? 9 : 11;
-      ctx.font = `${fontSize}px monospace`;
+      ctx.font = `500 ${fontSize + 1}px ${this.font}`;
       ctx.globalAlpha = 0.9 * titleAlpha;
       ctx.fillStyle = this.dark ? 'rgba(255,255,255,0.95)' : 'rgba(0,0,0,0.88)';
       const max = small ? TUNE.labels.titles.s : TUNE.labels.titles.l;
@@ -901,7 +806,7 @@ export class AtlasRenderer {
 
     if (artistCands.length) {
       const fontSize = small ? 8 : 10;
-      ctx.font = `${fontSize}px monospace`;
+      ctx.font = `500 ${fontSize + 1}px ${this.font}`;
       ctx.globalAlpha = Math.min(0.8, fadeIn(zoom, 2, 1.0));
       ctx.fillStyle = this.dark ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.75)';
       const max = small ? TUNE.labels.artists.s : TUNE.labels.artists.l;
@@ -919,6 +824,70 @@ export class AtlasRenderer {
       }
     }
 
+    ctx.globalAlpha = 1;
+  }
+
+  private inkColor(step: number): string {
+    let ink = this.inks.get(step);
+    if (!ink) {
+      const m = this.hueColors(step).mid;
+      ink = rgba([Math.round(m[0] * 0.8), Math.round(m[1] * 0.8), Math.round(m[2] * 0.8)], 1);
+      this.inks.set(step, ink);
+    }
+    return ink;
+  }
+
+  private drawGlows(list: Neighborhood[], spread: number, minPx: number, maxPx: number, alpha: number): void {
+    const w = Math.ceil(this.W * this.dpr);
+    const h = Math.ceil(this.H * this.dpr);
+    if (!this.layer || this.layer.width !== w || this.layer.height !== h) {
+      this.layer = document.createElement('canvas');
+      this.layer.width = w;
+      this.layer.height = h;
+    }
+    const g = this.layer.getContext('2d')!;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.clearRect(0, 0, w, h);
+    g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    for (const nb of list) {
+      const r = Math.min(maxPx, Math.max(minPx, nb.r * spread * this.scale));
+      const sx = this.cx + nb.x * this.scale;
+      const sy = this.cy + nb.y * this.scale;
+      if (sx + r < 0 || sx - r > this.W || sy + r < 0 || sy - r > this.H) continue;
+      const halo = this.getHaloSprite(nb.step, r);
+      const size = halo.cv.width * (r / halo.bucket);
+      g.globalAlpha = 0.75 + hash01(nb.id) * 0.25;
+      g.drawImage(halo.cv, sx - size / 2, sy - size / 2, size, size);
+    }
+    this.ctx.globalAlpha = alpha;
+    this.ctx.drawImage(this.layer, 0, 0, this.W, this.H);
+    this.ctx.globalAlpha = 1;
+  }
+
+  private drawLinks(zoom: number, xMin: number, xMax: number, yMin: number, yMax: number): void {
+    const T = TUNE.links;
+    const alpha = clamp01((zoom - T.inStart) / T.inRange);
+    if (alpha < 0.01) return;
+    const S = this.scale;
+    const out = (x: number, y: number) => x < xMin || x > xMax || y < yMin || y > yMax;
+    const paths = new Map<number, Path2D>();
+    for (let k = 0; k < this.links.length; k += 2) {
+      const i = this.links[k];
+      const j = this.links[k + 1];
+      if (out(this.px[i], this.py[i]) && out(this.px[j], this.py[j])) continue;
+      if (Math.hypot(this.px[j] - this.px[i], this.py[j] - this.py[i]) * S > T.maxPx) continue;
+      let p = paths.get(this.hueStep[i]);
+      if (!p) paths.set(this.hueStep[i], (p = new Path2D()));
+      p.moveTo(this.cx + this.px[i] * S, this.cy + this.py[i] * S);
+      p.lineTo(this.cx + this.px[j] * S, this.cy + this.py[j] * S);
+    }
+    const ctx = this.ctx;
+    ctx.lineWidth = Math.min(1.4, 0.7 + zoom * 0.08);
+    ctx.globalAlpha = T.alpha[this.themeKey()] * alpha;
+    for (const [step, p] of paths) {
+      ctx.strokeStyle = rgba(this.hueColors(step).mid, 1);
+      ctx.stroke(p);
+    }
     ctx.globalAlpha = 1;
   }
 
@@ -966,6 +935,16 @@ export class AtlasRenderer {
         this.view.panY = this.dragStartPanY + (e.clientY - this.dragStartY) / this.scale;
         this.markDirty();
         this.cb.onHover(null, 0, 0);
+        return;
+      }
+      // off the map (over the nav, the header, the dock) nothing is under the pointer
+      if (mx < 0 || my < 0 || mx > rect.width || my > rect.height) {
+        if (this.hovered >= 0 || this.hoveredArtist >= 0) {
+          this.hovered = this.hoveredArtist = -1;
+          this.cb.onHover(null, 0, 0);
+          this.cb.onHoverArtist(null, 0, 0);
+          this.markDirty();
+        }
         return;
       }
       this.cacheTransform();

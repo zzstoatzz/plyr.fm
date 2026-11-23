@@ -56,6 +56,16 @@ nate first. Add an entry when a PR settles something.
   provider plyr can verify, such as Atmosphere Money, plugs in, together with
   the access decider. atprotofans is not supported.
 
+- Atlas rendering (2026-11-23, nate picked constellations, #2910): each track
+  is joined to its nearest few same-cluster neighbours by near-transparent
+  lines (alpha ≤ 0.12) that fade out when neighbours are far apart on screen.
+  Artist faces are opaque with no ring or border. Labels use the app font, sit
+  above their neighbourhood instead of on its dots, and step around faces.
+  Light mode draws solid dots instead of glowing stars. `/atlas` unfurls with
+  a committed still (`static/previews/atlas.jpg`, from `bun run
+  atlas:preview`) that shows real faces, so regenerate it after removing an
+  artist.
+
 ## known and open
 
 - The account picker's combobox (the only one, and it passes the APG combobox

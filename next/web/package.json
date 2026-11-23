@@ -15,6 +15,7 @@
     "check:player-presentation": "node scripts/check-player-presentation.cjs",
     "check:artist-catalog": "node scripts/check-artist-catalog.cjs",
     "check:atlas": "node scripts/check-atlas.cjs",
+    "atlas:preview": "node scripts/atlas-preview.cjs",
     "check:performance": "node scripts/check-performance.cjs",
     "check:embed-live": "node scripts/check-embed-live.cjs",
     "check:embed": "node scripts/check-embed-events.cjs",

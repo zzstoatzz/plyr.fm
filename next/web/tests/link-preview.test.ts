@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import * as edge from '../edge/link-preview.js';
 
 // the worker is plain JS for Cloudflare; its inferred types are too narrow to assert against
-const { default: worker, cardImage, injectCard, oembed, ogImage, preview, route, slugify, wantsPreview } = edge as any;
+const { default: worker, cardImage, headTags, injectCard, oembed, ogImage, preview, route, slugify, wantsPreview } = edge as any;
 
 const uri = 'at://did:plc:artist/fm.plyr.track/3abc';
 const trackId = 'trk_' + btoa(uri).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -52,6 +52,7 @@ test('routes cover the shareable pages and production album links', () => {
   assert.deepEqual(route('/u/warklo.test/album/etudes-pour-dac'), { kind: 'legacy-album', actor: 'warklo.test', slug: 'etudes-pour-dac' });
   assert.deepEqual(route('/tag/lo%20fi'), { kind: 'tag', name: 'lo fi' });
   assert.deepEqual(route('/'), { kind: 'home' });
+  assert.deepEqual(route('/atlas'), { kind: 'atlas' });
   assert.equal(route('/track/1/edit'), null);
   assert.equal(route('/settings'), null);
 });
@@ -116,6 +117,14 @@ test('album, artist and legacy album links', async () => {
   const moved = await preview(new URL('https://plyr.fm/u/warklo.test/album/etudes-pour-dac?x=1'), api());
   assert.deepEqual(moved, { redirect: `https://plyr.fm/album/${albumId}?x=1` });
   assert.equal(await preview(new URL('https://plyr.fm/u/warklo.test/album/nope'), api()), null);
+});
+
+test('the atlas card is a large picture of the map', async () => {
+  const card = await preview(new URL('https://plyr.fm/atlas'), api());
+  assert.equal(card?.url, 'https://plyr.fm/atlas');
+  assert.equal(card?.large, true);
+  assert.deepEqual(card?.image, { url: 'https://plyr.fm/previews/atlas.jpg', type: 'image/jpeg', width: 1200, height: 630 });
+  assert.match(headTags(card!, 'https://plyr.fm/icons/icon-512.png'), /twitter:card" content="summary_large_image"/);
 });
 
 test('a list without its own cover uses its first member with art', async () => {
