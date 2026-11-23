@@ -128,6 +128,11 @@ export function robots(origin) {
   ].join('\n');
 }
 
+const LLMS_TXT = /* llms-txt */ '';
+
+/** llms.txt (llmstxt.org) for this host: `edge/llms.txt` with its `{origin}` and `{api}` filled in */
+export const llmsTxt = (origin, apiOrigin, template = LLMS_TXT) => template.replaceAll('{origin}', origin).replaceAll('{api}', apiOrigin);
+
 const SITEMAP_PAGES = 20;
 const xmlEscape = (text) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -560,7 +565,8 @@ const API_ORIGIN = '__PLYR_API_ORIGIN__';
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    const api = createApi(API_ORIGIN.startsWith('http') ? API_ORIGIN : 'https://api.next.plyr.fm');
+    const apiOrigin = API_ORIGIN.startsWith('http') ? API_ORIGIN : 'https://api.next.plyr.fm';
+    const api = createApi(apiOrigin);
 
     if (url.pathname === '/oembed') {
       const { status, body } = await oembed(url, api);
@@ -574,8 +580,9 @@ export default {
       });
     }
 
-    if (url.pathname === '/robots.txt') {
-      return new Response(robots(url.origin), { headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'public, max-age=3600' } });
+    if (url.pathname === '/robots.txt' || url.pathname === '/llms.txt') {
+      const text = url.pathname === '/robots.txt' ? robots(url.origin) : llmsTxt(url.origin, apiOrigin);
+      return new Response(text, { headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'public, max-age=3600' } });
     }
     if (url.pathname === '/sitemap.xml') {
       return new Response(await sitemap(url.origin, api), { headers: { 'content-type': 'application/xml; charset=utf-8', 'cache-control': 'public, max-age=3600' } });
