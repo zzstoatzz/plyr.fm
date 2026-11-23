@@ -1,7 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { downloadAllowed } from '@plyr/next-core/downloads/model';
-  import { invalidateAll } from '$app/navigation';
   import { isPrivateTrack } from '@plyr/next-core/track-access';
   import { onDestroy, onMount, tick } from 'svelte';
   import type { Track } from '@plyr/next-core/api';
@@ -24,14 +23,11 @@
   let downloader = $state<TrackDownload>();
   let reporting = $state(false);
   let reporter = $state<ReportSheet>();
-  let accessDialog: HTMLDialogElement;
-  let access = $state(false);
-  let accessChanged = false;
   let copied = $state(false);
   let error = $state(false);
   let account = $state.raw(auth.getAuth());
   const id = $props.id();
-  onMount(() => auth.subscribe(() => { const next = auth.getAuth(); if (next.rpc !== account.rpc) { picking = false; accessDialog?.close(); } account = next; }));
+  onMount(() => auth.subscribe(() => { const next = auth.getAuth(); if (next.rpc !== account.rpc) { picking = false; } account = next; }));
   const owner = $derived(!!account.did && account.did === track.artist.did && !isPrivateTrack(track));
   const queueable = $derived(player.canEditPublicQueue && !player.liveStation);
   function show(place: () => void) {
@@ -99,7 +95,7 @@
   {#if owner}
     <hr>
     <a class="text-button" href={resolve('/(app)/edit-track/[id]', { id: track.id })}><Icon name="edit" size={18} />edit track</a>
-    <button class="text-button" type="button" onclick={() => { access = true; accessChanged = false; panel.hidePopover(); accessDialog.showModal(); }}><Icon name="lock" size={18} />who can listen</button>
+    <a class="text-button" href={`${trackHref(track)}/access`}><Icon name="lock" size={18} />who can listen</a>
   {/if}
   <hr>
   <a class="text-button" href={resolve('/(app)/u/[actor]', { actor: track.artist.did })}><Icon name="user" size={18} />go to artist</a>
@@ -113,17 +109,8 @@
 {#if picking}<PlaylistSheet bind:this={picker} {track} onclose={() => { picking = false; trigger.focus(); }} />{/if}
 {#if reporting}<ReportSheet bind:this={reporter} subject={track.record.uri} name={track.metadata.title} owner={artistName(track)} returnTo={trackHref(track)} onclose={() => { reporting = false; trigger.focus(); }} />{/if}
 {#if downloading}<TrackDownload bind:this={downloader} {track} announce onclose={() => trigger.focus()} />{/if}
-<dialog bind:this={accessDialog} class="picker" onclose={() => { access = false; trigger.focus(); if (accessChanged) void invalidateAll(); }}>
-  <header><strong>who can listen</strong><form method="dialog"><button class="icon-button" type="submit" aria-label="Close who can listen"><Icon name="x" size={18} /></button></form></header>
-{#if access}
-  {#await import('$lib/access/AccessDialog.svelte') then { default: Access }}<Access subject={{ noun: 'track', tracks: [track], skey: track.record.rkey }} returnTo={trackHref(track)} onchange={() => { accessChanged = true; }} />{:catch}<p role="alert">could not open this. reload the page and try again.</p>{/await}
-{/if}
-</dialog>
 
 <style>
-  .picker { width: min(32rem, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); overflow-y: auto; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 0.8rem; padding: 0.75rem; }
-  .picker::backdrop { background: rgb(0 0 0 / 0.5); }
-  header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 0.5rem; }
   .menu { position: fixed; inset: auto; margin: 0; width: min(15rem, calc(100vw - 1rem)); background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 0.8rem; padding: 0.4rem; box-shadow: 0 0.4rem 1.4rem rgb(0 0 0 / 0.13); }
   .menu :is(button, a) { width: 100%; justify-content: start; gap: 0.6rem; font-size: var(--t-14); }
   hr { border: 0; border-top: 1px solid var(--line); margin: 0.3rem 0.2rem; }
