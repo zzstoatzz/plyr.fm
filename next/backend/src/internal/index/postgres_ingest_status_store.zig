@@ -127,9 +127,10 @@ test "PostgreSQL ingest status reads every checkpoint and the mirror queue" {
         \\  audio_blob_size, deleted, commit_rev, indexed_at_us)
         \\SELECT 'at://did:plc:a/fm.plyr.dev.track/' || g, 'bafytrack' || g, 'did:plc:a', 'fm.plyr.dev.track',
         \\  g::text, 't', 'a', 'mp3', '2026-01-01T00:00:00Z',
-        \\  CASE WHEN g = 3 THEN 'https://cdn.example/3.mp3' END, 'bafyblob' || g, 'audio/mpeg', 1,
+        \\  CASE WHEN g = 3 THEN 'https://audio.plyr.fm/3.mp3' WHEN g = 4 THEN 'https://cdn.example/4.mp3' END,
+        \\  'bafyblob' || g, 'audio/mpeg', 1,
         \\  false, '3jzfcijpj2z2a', 1
-        \\FROM generate_series(1, 3) AS g
+        \\FROM generate_series(1, 4) AS g
     , .{});
     _ = try pool.exec(
         \\INSERT INTO plyr_index.track_mirror_attempts VALUES
@@ -142,7 +143,8 @@ test "PostgreSQL ingest status reads every checkpoint and the mirror queue" {
     try std.testing.expectEqual(@as(?i64, 900), status.reconciled_at_us);
     try std.testing.expectEqual(@as(?i64, 9), status.label_seq);
     try std.testing.expectEqual(@as(?i64, 50), status.label_synced_at_us);
-    // track 3 plays from its https audioUrl, so the mirror skips it
-    try std.testing.expectEqual(@as(u64, 2), status.mirror_pending);
+    // track 3 plays from plyr's own CDN, so the mirror skips it; track 4's
+    // audioUrl is somewhere else, so its blob is still copied
+    try std.testing.expectEqual(@as(u64, 3), status.mirror_pending);
     try std.testing.expectEqual(@as(u64, 1), status.mirror_retrying);
 }
