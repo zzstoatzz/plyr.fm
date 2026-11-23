@@ -22,6 +22,7 @@ const liked_track_store = @import("liked_track_store.zig");
 const store_module = @import("track_store.zig");
 const resolve_tracks = @import("../application/resolve_tracks.zig");
 const track_tag_sql = @import("track_tag_sql.zig");
+const ranked_sql = @import("ranked_track_sql.zig");
 const mirror_store = @import("../delivery/postgres_mirror_store.zig");
 const batches = @import("postgres_track_batches.zig");
 
@@ -235,8 +236,8 @@ pub const PostgresComposedTrackStore = struct {
         defer self.pool.release(conn);
         const ranked = request.scope == .discovery and request.tags.len > 1;
         var result = switch (request.scope) {
-            .discovery => if (ranked) (if (request.after) |after|
-                conn.queryOpts(ranked_after_query, .{
+            .discovery => if (request.after) |after|
+                conn.queryOpts(if (ranked) ranked_sql.after_query else discovery_after_query, .{
                     request.collection,
                     self.profile_collection,
                     self.like_collection,
@@ -245,44 +246,19 @@ pub const PostgresComposedTrackStore = struct {
                     after.created_at_us,
                     after.at_uri,
                     limit,
-                }, .{ .cache_name = "plyr_ranked_after_query" }) catch |err| {
-                    logQueryError(conn, "composed ranked discovery query failed", err);
-                    return postgres_read.failure(conn, err);
-                }
-            else
-                conn.queryOpts(ranked_query, .{
-                    request.collection,
-                    self.profile_collection,
-                    self.like_collection,
-                    request.tags,
-                    request.hidden_tags,
-                    limit,
-                }, .{ .cache_name = "plyr_ranked_query" }) catch |err| {
-                    logQueryError(conn, "composed ranked discovery query failed", err);
-                    return postgres_read.failure(conn, err);
-                }) else if (request.after) |after|
-                conn.queryOpts(discovery_after_query, .{
-                    request.collection,
-                    self.profile_collection,
-                    self.like_collection,
-                    request.tags,
-                    request.hidden_tags,
-                    after.created_at_us,
-                    after.at_uri,
-                    limit,
-                }, .{ .cache_name = "plyr_discovery_after_query" }) catch |err| {
+                }, .{ .cache_name = if (ranked) "plyr_ranked_after_query" else "plyr_discovery_after_query" }) catch |err| {
                     logQueryError(conn, "composed discovery query failed", err);
                     return postgres_read.failure(conn, err);
                 }
             else
-                conn.queryOpts(discovery_query, .{
+                conn.queryOpts(if (ranked) ranked_sql.query else discovery_query, .{
                     request.collection,
                     self.profile_collection,
                     self.like_collection,
                     request.tags,
                     request.hidden_tags,
                     limit,
-                }, .{ .cache_name = "plyr_discovery_query" }) catch |err| {
+                }, .{ .cache_name = if (ranked) "plyr_ranked_query" else "plyr_discovery_query" }) catch |err| {
                     logQueryError(conn, "composed discovery query failed", err);
                     return postgres_read.failure(conn, err);
                 },
@@ -328,10 +304,7 @@ pub const PostgresComposedTrackStore = struct {
                 },
             };
             if (ranked) value.metadata.tags = parseLabels(allocator, row.get([]const u8, projected_column_count) catch
-                return error.CorruptProjection) catch |err| switch (err) {
-                error.OutOfMemory => return error.OutOfMemory,
-                else => return error.CorruptProjection,
-            };
+                return error.CorruptProjection) catch |err| return if (err == error.OutOfMemory) error.OutOfMemory else error.CorruptProjection;
             items.append(allocator, .{
                 .value = value,
                 .created_at_us = row.get(i64, 36) catch
@@ -722,25 +695,6 @@ const discovery_query = pagedQuery(discovery_policy ++ track_tag_sql.filter ++ t
 const discovery_after_query = pagedQuery(discovery_policy ++ track_tag_sql.filter ++ track_tag_sql.hidden_filter ++ afterCursor("$6", "$7"), "$8::bigint");
 const artist_query = pagedQuery(artist_policy ++ track_tag_sql.filter, "$6::bigint");
 
-/// A multi-tag listing: tracks with any of the tags, those carrying more of them first, then
-/// newest. Rows carry their tags so a client can show why each one is there. The cursor stays
-/// (created_at, uri); its track's tag count is looked up again, and a track that is gone
-/// counts as carrying every tag, so the next page repeats rows rather than skips them.
-const tag_rank = track_tag_sql.hits("v.record_uri", "v.record_cid");
-const ranked_order = "ORDER BY page.hits DESC, v.record_created_at_us DESC, v.record_uri DESC";
-fn rankedQuery(comptime filter: []const u8, comptime limit: []const u8) []const u8 {
-    return "WITH page AS MATERIALIZED (\nSELECT v.record_uri, " ++ tag_rank ++ " AS hits\n" ++ page_from ++
-        "\nWHERE v.record_created_at_us IS NOT NULL\n" ++ filter ++
-        "\nORDER BY hits DESC, v.record_created_at_us DESC, v.record_uri DESC\nLIMIT " ++ limit ++ "\n)\nSELECT\n" ++
-        projected_columns ++ ",\n" ++ track_tag_sql.detail_tags ++
-        "\nFROM page\nJOIN plyr_index.track_records AS v ON v.record_uri = page.record_uri\n" ++
-        projected_joins ++ "\n" ++ ranked_order;
-}
-const ranked_filter = discovery_policy ++ track_tag_sql.filter ++ track_tag_sql.hidden_filter;
-const ranked_query = rankedQuery(ranked_filter, "$6::bigint");
-const ranked_after_query = rankedQuery(ranked_filter ++ "\n  AND (" ++ tag_rank ++ ", v.record_created_at_us, v.record_uri) < (" ++
-    "COALESCE((SELECT " ++ track_tag_sql.hits("cursor_track.record_uri", "cursor_track.record_cid") ++
-    " FROM plyr_index.track_records AS cursor_track WHERE cursor_track.record_uri = $7), cardinality($4::text[])), $6::bigint, $7)", "$8::bigint");
 const artist_after_query = pagedQuery(artist_policy ++ track_tag_sql.filter ++ afterCursor("$6", "$7"), "$8::bigint");
 
 const liked_joined_projection = "SELECT\n" ++ projected_columns ++
@@ -1523,10 +1477,8 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     try std.testing.expectEqual(@as(usize, 1), ranked_first.len);
     try std.testing.expectEqualStrings(quiet.upsert.record_uri, ranked_first[0].value.record.uri);
     try std.testing.expectEqual(@as(usize, 2), ranked_first[0].value.metadata.tags.?.len);
-    const ranked_rest = try implementation.store().listPublic(a, .{ .collection = "fm.plyr.dev.track", .scope = .discovery, .limit = 5, .tags = both_tags, .hidden_tags = &.{}, .after = .{
-        .created_at_us = ranked_first[0].created_at_us,
-        .at_uri = ranked_first[0].value.record.uri,
-    } });
+    const after_first: @import("../identity/track_cursor.zig").Cursor = .{ .created_at_us = ranked_first[0].created_at_us, .at_uri = ranked_first[0].value.record.uri };
+    const ranked_rest = try implementation.store().listPublic(a, .{ .collection = "fm.plyr.dev.track", .scope = .discovery, .limit = 5, .tags = both_tags, .hidden_tags = &.{}, .after = after_first });
     try std.testing.expectEqual(@as(usize, 1), ranked_rest.len);
     try std.testing.expectEqualStrings(pds_only_uri, ranked_rest[0].value.record.uri);
     try std.testing.expectEqualStrings("ambient", ranked_rest[0].value.metadata.tags.?[0]);
