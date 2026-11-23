@@ -2,7 +2,8 @@ import { findAudioGaps, moveAudioGap, type AudioGap, type GapContext } from './p
 import type { RepoRpc } from './repo-rpc.ts';
 import type { Did } from '../auth-state.ts';
 
-export type RowState = 'waiting' | 'moving' | 'moved' | 'too-big' | 'no-copy' | 'failed';
+/** `already`: by the time it ran, nothing was left to move (fixed or changed elsewhere) */
+export type RowState = 'waiting' | 'moving' | 'moved' | 'already' | 'too-big' | 'no-copy' | 'failed';
 export interface GapRow { state: RowState; progress: number; error?: string }
 
 export interface PdsAudioSnapshot {
@@ -41,6 +42,7 @@ export function createPdsAudioStore({ getAuth, subscribeAuth, collection, pdsEnd
   let rows: Record<string, GapRow> = {};
   let dismissed: string | null = null;
   let run = 0;
+  let moveAbort: AbortController | null = null;
   let snapshot: PdsAudioSnapshot;
   const listeners = new Set<() => void>();
 
@@ -58,7 +60,12 @@ export function createPdsAudioStore({ getAuth, subscribeAuth, collection, pdsEnd
 
   function reset() { run++; did = null; checked = false; finished = false; gaps = []; rows = {}; }
 
-  subscribeAuth(() => { if (getAuth().did !== did && !moving) { reset(); emit(); } });
+  // another account: stop any move for the old one and start over (the host checks the new one)
+  subscribeAuth(() => {
+    if (getAuth().did === did) return;
+    moveAbort?.abort(); moveAbort = null; moving = false;
+    reset(); emit();
+  });
 
   async function check() {
     const account = getAuth();
@@ -83,40 +90,44 @@ export function createPdsAudioStore({ getAuth, subscribeAuth, collection, pdsEnd
     const account = getAuth();
     if (!account.did || !account.rpc || moving || account.did !== did) return;
     const owner = account.did, rpc = account.rpc;
+    const mine = run, abort = new AbortController();
+    moveAbort = abort;
     moving = true; finished = false; emit();
-    const settled = (gap: AudioGap) => gap.tooBig || ['moved', 'too-big', 'no-copy'].includes(rows[gap.uri]?.state ?? '');
+    const settled = (gap: AudioGap) => gap.tooBig || ['moved', 'already', 'too-big', 'no-copy'].includes(rows[gap.uri]?.state ?? '');
     const todo = gaps.filter(gap => !settled(gap));
     rows = { ...rows, ...Object.fromEntries(gaps.filter(gap => !settled(gap) || gap.tooBig).map(gap => [gap.uri, { state: gap.tooBig ? 'too-big' : 'waiting', progress: 0 } satisfies GapRow])) };
     emit();
-    const set = (uri: string, row: GapRow) => { rows = { ...rows, [uri]: row }; emit(); };
-    const assertSession = () => { const now = getAuth(); if (now.did !== owner || now.rpc !== rpc) throw new Error('you signed out before this finished.'); };
+    const set = (uri: string, row: GapRow) => { if (mine !== run) return; rows = { ...rows, [uri]: row }; emit(); };
+    const assertSession = () => { if (getAuth().did !== owner) throw new Error('you signed out before this finished.'); };
     try {
       const ctx = { rpc, did: owner, collection, pds: await pdsEndpoint(owner), fetcher };
       let next = 0;
       // two at a time: each file passes through this device, so more would only split the bandwidth
       await Promise.all([0, 1].map(async () => {
-        while (next < todo.length) {
+        while (next < todo.length && !abort.signal.aborted) {
           const gap = todo[next++];
           set(gap.uri, { state: 'moving', progress: 0 });
           let shown = 0;
           try {
-            const result = await moveAudioGap(ctx, gap, { assertSession, onProgress: progress => {
+            const result = await moveAudioGap(ctx, gap, { assertSession, signal: abort.signal, onProgress: progress => {
               // a progress bar doesn't need every chunk
               if (progress - shown < 0.02 && progress < 1) return;
               shown = progress; set(gap.uri, { state: 'moving', progress });
             } });
-            set(gap.uri, { state: result === 'already' ? 'moved' : result, progress: 1 });
+            set(gap.uri, { state: result, progress: 1 });
           } catch (failure) {
             set(gap.uri, { state: 'failed', progress: 0, error: failure instanceof Error ? failure.message : 'something went wrong.' });
           }
         }
       }));
     } catch (failure) {
-      for (const gap of todo) if (rows[gap.uri]?.state === 'waiting') rows = { ...rows, [gap.uri]: { state: 'failed', progress: 0, error: failure instanceof Error ? failure.message : undefined } };
+      if (mine === run) for (const gap of todo) if (rows[gap.uri]?.state === 'waiting') rows = { ...rows, [gap.uri]: { state: 'failed', progress: 0, error: failure instanceof Error ? failure.message : undefined } };
     }
+    // a switch to another account already reset everything
+    if (mine !== run) return;
+    moveAbort = null;
     moving = false; finished = true;
-    if (getAuth().did === owner) onMoved?.(owner);
-    else reset();
+    onMoved?.(owner);
     emit();
   }
 
@@ -139,7 +150,7 @@ export function createPdsAudioStore({ getAuth, subscribeAuth, collection, pdsEnd
 
   /** closes the finished summary; what couldn't move is offered again only once the set of tracks changes */
   function close() {
-    gaps = gaps.filter(gap => rows[gap.uri]?.state !== 'moved');
+    gaps = gaps.filter(gap => !['moved', 'already'].includes(rows[gap.uri]?.state ?? ''));
     rows = {}; finished = false;
     if (fixable().length) dismiss();
     else emit();
@@ -169,15 +180,15 @@ export const apology = 'sometimes a bug on our side or a hiccup at your PDS host
 
 export const movingCopy = (snapshot: PdsAudioSnapshot) => {
   const total = snapshot.fixable.length;
-  const done = snapshot.fixable.filter(gap => snapshot.rows[gap.uri]?.state === 'moved').length;
+  const done = snapshot.fixable.filter(gap => ['moved', 'already'].includes(snapshot.rows[gap.uri]?.state ?? '')).length;
   return { title: `moving ${total === 1 ? 'your track' : `${total} tracks`} to your PDS`, detail: `${done} of ${total} done. you can leave this page, it keeps going.` };
 };
 
 export function resultCopy(snapshot: Pick<PdsAudioSnapshot, 'fixable' | 'rows'>) {
   const count = (state: RowState) => snapshot.fixable.filter(gap => snapshot.rows[gap.uri]?.state === state).length;
   const moved = count('moved'), tooBig = count('too-big'), noCopy = count('no-copy'), failed = count('failed');
-  const stuck = snapshot.fixable.length - moved;
-  if (!stuck) return { allMoved: true, retry: false, title: "everything's on your PDS now", detail: `${moved === 1 ? '1 track' : `${moved} tracks`} moved.` };
+  const stuck = snapshot.fixable.length - moved - count('already');
+  if (!stuck) return { allMoved: true, retry: false, title: "everything's on your PDS now", detail: moved ? `${moved === 1 ? '1 track' : `${moved} tracks`} moved.` : 'nothing was left to move.' };
   const title = moved ? `${moved} moved, ${stuck} couldn't` : stuck === 1 ? "this one couldn't move" : `these ${stuck} couldn't move`;
   const detail = [
     tooBig && "your PDS won't take files over 100 MB, so plyr.fm keeps those. they play the same either way.",

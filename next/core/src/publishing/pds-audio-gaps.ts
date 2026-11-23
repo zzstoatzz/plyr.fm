@@ -232,6 +232,8 @@ export async function moveAudioGap(ctx: GapContext, gap: AudioGap, { onProgress,
       check();
       const uploaded = await repoOk(uploadRepoBlob(ctx.rpc, { input: bytes, headers: { 'content-type': blobMime(current.value.audioBlob) ?? 'application/octet-stream' } }));
       if (blobCid(uploaded.blob) !== now.blobCid) throw new Error('your PDS stored a different file.');
+      // an upload the record doesn't reference yet can be dropped by the PDS; only a served blob counts
+      if (await pdsHasBlob(ctx, now.blobCid, signal) !== true) throw new Error("your PDS didn't keep the file.");
       return 'moved';
     }
     return 'no-copy';
@@ -262,7 +264,9 @@ export async function moveAudioGap(ctx: GapContext, gap: AudioGap, { onProgress,
     try {
       await repoOk(putRecord(ctx.rpc, { input: {
         repo: ctx.did, collection: ctx.collection, rkey: gap.rkey,
-        record: { ...current.value, audioBlob: blob },
+        // a prod-era bucket URL is rewritten to the same file's audio.plyr.fm address, the one origin prod
+        // trusts: with the old one, prod's ingest would drop the URL and re-mirror the track
+        record: { ...current.value, audioUrl: canonicalAudio(audioUrl), audioBlob: blob },
         swapRecord: current.cid
       } }));
       return 'moved';

@@ -22,6 +22,8 @@
         <span class="state">stays on plyr.fm</span>
       {:else if row?.state === 'moved'}
         <span class="state ok"><Icon name="check" size={15} />on your PDS</span>
+      {:else if row?.state === 'already'}
+        <span class="state">nothing to move</span>
       {:else if row?.state === 'moving'}
         <span class="state" role="progressbar" aria-label={`moving ${gap.title}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(row.progress * 100)}>
           <span class="bar"><i style:width={`${Math.round(row.progress * 100)}%`}></i></span>{row.progress >= 1 ? 'saving' : `${Math.round(row.progress * 100)}%`}

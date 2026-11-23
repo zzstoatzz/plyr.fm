@@ -27,7 +27,8 @@ const lostCid = rawCid(lostBytes);
 const presentCid = rawCid(new Uint8Array([1]));
 const blob = (cid: string, mimeType = 'audio/mpeg', size = 3) => ({ $type: 'blob', ref: { $link: cid }, mimeType, size });
 
-function repo(records: Record<string, Record<string, unknown>>) {
+/** `served`: the blobs the PDS serves; an upload joins it unless the PDS is set to drop it */
+function repo(records: Record<string, Record<string, unknown>>, served?: string[]) {
   const cids = new Map(Object.keys(records).map(rkey => [rkey, `bafyrei${rkey}0`]));
   const writes: { record: Record<string, unknown>; swapRecord?: string }[] = [];
   const uploads: { bytes: Uint8Array; type: string }[] = [];
@@ -41,6 +42,7 @@ function repo(records: Record<string, Record<string, unknown>>) {
       if (method === 'com.atproto.repo.uploadBlob') {
         const bytes = new Uint8Array(input as ArrayBuffer);
         uploads.push({ bytes, type: headers!['content-type'] });
+        served?.push(rawCid(bytes));
         return { ok: true, data: { blob: blob(rawCid(bytes), headers!['content-type'], bytes.byteLength) } };
       }
       if (input.swapRecord !== cids.get(input.rkey)) return { ok: false, status: 400, data: { error: 'InvalidSwap' } };
@@ -130,8 +132,9 @@ test('an edit made elsewhere mid-move is kept, and the blob lands on the newest 
 });
 
 test('a lost blob is restored only from a copy with the same hash, without touching the record', async () => {
-  const fixture = repo({ c: { title: 'lost', audioUrl: 'https://audio.plyr.fm/audio/c.mp3', audioBlob: blob(lostCid) } });
-  const { fetcher, calls } = network({ mirror: { [lostCid]: lostBytes } });
+  const onPds = [presentCid];
+  const fixture = repo({ c: { title: 'lost', audioUrl: 'https://audio.plyr.fm/audio/c.mp3', audioBlob: blob(lostCid) } }, onPds);
+  const { fetcher, calls } = network({ onPds, mirror: { [lostCid]: lostBytes } });
   const [gap] = await findAudioGaps(ctx(fixture.rpc, fetcher));
   assert.equal(await moveAudioGap(ctx(fixture.rpc, fetcher), gap), 'moved');
   assert.deepEqual(fixture.uploads.map(upload => [...upload.bytes]), [[...lostBytes]]);
@@ -142,6 +145,26 @@ test('a lost blob is restored only from a copy with the same hash, without touch
   const wrong = network({ mirror: { [lostCid]: new Uint8Array([0]) } });
   assert.equal(await moveAudioGap(ctx(other.rpc, wrong.fetcher), gap), 'no-copy');
   assert.equal(other.uploads.length, 0);
+
+  // an upload the PDS doesn't go on serving isn't reported as moved
+  const dropping = repo({ c: { title: 'lost', audioUrl: 'https://audio.plyr.fm/audio/c.mp3', audioBlob: blob(lostCid) } });
+  const keepsNothing = network({ mirror: { [lostCid]: lostBytes } });
+  await assert.rejects(moveAudioGap(ctx(dropping.rpc, keepsNothing.fetcher), gap), /didn't keep/);
+});
+
+test("a prod-era bucket URL is written as the audio.plyr.fm address prod trusts, so prod keeps the track as it was", async () => {
+  const old = 'https://pub-d4ed8a1e39d44dac85263d86ad5676fd.r2.dev/audio/old.mp3';
+  const fixture = repo({ f: { title: 'old', audioUrl: old, fileType: 'mp3' } });
+  const base = network();
+  const fetcher = (async (url: string, init?: RequestInit) => url === 'https://audio.plyr.fm/audio/old.mp3'
+    ? new Response(init?.method === 'HEAD' ? null : original, { headers: { 'content-length': String(original.byteLength), 'content-type': 'audio/mpeg' } })
+    : base.fetcher(url, init)) as typeof fetch;
+  const [gap] = await findAudioGaps(ctx(fixture.rpc, fetcher));
+  assert.equal(await moveAudioGap(ctx(fixture.rpc, fetcher), gap), 'moved');
+  const { record } = fixture.writes[0];
+  assert.equal(record.audioUrl, 'https://audio.plyr.fm/audio/old.mp3');
+  assert.equal(record.fileType, 'mp3');
+  assert.ok(record.audioBlob);
 });
 
 test('a file over 100 MB stays with plyr.fm instead of failing', async () => {
@@ -187,5 +210,34 @@ test('the store asks once per account, "not now" lasts until the tracks change, 
   // signing out clears it
   account = { did: null as any, rpc: null as any, ready: true };
   for (const listener of authListeners) listener();
+  assert.equal(store.snapshot.gaps.length, 0);
+});
+
+test('switching accounts mid-move stops the old move and starts clean', async () => {
+  const { createPdsAudioStore } = await import('../src/publishing/pds-audio-store.ts');
+  const fixture = repo({ a: { title: 'one', audioUrl: media }, b: { title: 'two', audioUrl: media }, c: { title: 'three', audioUrl: media } });
+  const { fetcher } = network();
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  let account = { did: did as `did:${string}:${string}`, rpc: fixture.rpc, ready: true };
+  const authListeners = new Set<() => void>();
+  const slow = (async (url: string, init?: RequestInit) => {
+    if (url === `${media}/original`) await gate;
+    return fetcher(url, init);
+  }) as typeof fetch;
+  const store = createPdsAudioStore({ getAuth: () => account, subscribeAuth: listener => authListeners.add(listener), collection, fetcher: slow,
+    pdsEndpoint: async () => pds, storage: { read: () => null, write: () => {} } });
+  await store.check();
+  const moving = store.moveAll();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.ok(store.snapshot.moving);
+  account = { did: 'did:plc:bbbbbbbbbbbbbbbbbbbbbbbb' as `did:${string}:${string}`, rpc: repo({}).rpc, ready: true };
+  for (const listener of authListeners) listener();
+  assert.ok(!store.snapshot.moving && !store.snapshot.showCard);
+  release();
+  await moving;
+  assert.equal(fixture.writes.length, 0);
+  assert.deepEqual(store.snapshot.rows, {});
+  await store.check();
   assert.equal(store.snapshot.gaps.length, 0);
 });

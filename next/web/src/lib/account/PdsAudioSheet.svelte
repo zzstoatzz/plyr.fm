@@ -15,7 +15,9 @@
   const copy = $derived(sheetCopy(count));
 
   $effect(() => {
-    if (pdsAudio.state.showSheet && !shown) { shown = true; sheet.show(); }
+    // re-arms once the ask is answered, so another account on this device gets its own
+    if (!pdsAudio.state.showSheet) shown = false;
+    else if (!shown) { shown = true; sheet.show(); }
   });
 
   function move() {
