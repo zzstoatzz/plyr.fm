@@ -40,7 +40,7 @@ export default function Atlas() {
         setFree(old => old?.y === y && old.height === height ? old : { y, height });
       }} />
     </SafeAreaView>
-    <View pointerEvents="none" style={styles.header} onLayout={event => setHeaderHeight(event.nativeEvent.layout.height)}>
+    <View pointerEvents="none" style={[styles.header, { backgroundColor: theme.glass }]} onLayout={event => setHeaderHeight(event.nativeEvent.layout.height)}>
       <Text accessibilityRole="header" aria-level={1} style={[styles.title, { color: theme.text, fontSize: 28 * theme.scale, textShadowColor: theme.background }]}>atlas</Text>
       <Text style={{ color: theme.muted, fontSize: 13 * theme.scale, textShadowColor: theme.background, textShadowRadius: 8 }}>
         {result.data ? atlasSummary(result.data) : 'the catalog, mapped by sound'}
@@ -59,7 +59,7 @@ function AtlasMap({ atlas, width, height, clear }: { atlas: PreparedAtlas; width
   }, [atlas, width, height, clear.top, clear.bottom]);
   const [live, setLive] = useState<Live>(still);
   const [selected, setSelected] = useState(-1);
-  const state = useRef({ view, live, frame: 0, glide: 0 });
+  const state = useRef<{ view: AtlasView; live: Live; frame: number; glide: number; drawn: number; aim?: Live }>({ view, live, frame: 0, glide: 0, drawn: 0 });
   state.current.view = view;
 
   const scene = useMemo(() => buildScene(atlas, { width, height, view, dark: theme.dark, overscan: OVERSCAN, selected }), [atlas, width, height, view, theme.dark, selected]);
@@ -69,6 +69,7 @@ function AtlasMap({ atlas, width, height, clear }: { atlas: PreparedAtlas; width
     const s = state.current;
     if (s.live === still) return;
     moved.current = true;
+    s.drawn = Date.now();
     s.view = settle(s.view, s.live, width, height);
     s.live = still;
     setView(s.view);
@@ -79,7 +80,8 @@ function AtlasMap({ atlas, width, height, clear }: { atlas: PreparedAtlas; width
     moved.current = true;
     const s = state.current;
     s.live = next;
-    if (strayed(next, width, height, OVERSCAN)) return commit();
+    // zooming out strays on nearly every update, so mid-gesture redraws wait a beat; an edge may show for that long
+    if (strayed(next, width, height, OVERSCAN) && Date.now() - s.drawn > 120) return commit();
     if (s.frame) return;
     s.frame = requestAnimationFrame(() => { s.frame = 0; setLive(s.live); });
   }, [width, height, commit]);
@@ -87,23 +89,25 @@ function AtlasMap({ atlas, width, height, clear }: { atlas: PreparedAtlas; width
   const stopGlide = useCallback(() => {
     if (state.current.glide) cancelAnimationFrame(state.current.glide);
     state.current.glide = 0;
+    state.current.aim = undefined;
   }, []);
 
   /** ease the camera to `to`, then draw it at rest */
   const animateTo = useCallback((to: Live) => {
     stopGlide();
     const from = state.current.live;
-    if (theme.reduceMotion) { move(to); commit(); return; }
+    state.current.aim = to;
+    if (theme.reduceMotion) { state.current.aim = undefined; state.current.live = to; commit(); return; }
     const start = Date.now();
     const step = () => {
       const t = Math.min(1, (Date.now() - start) / 260);
       state.current.live = between(from, to, t);
       setLive(state.current.live);
       if (t < 1) state.current.glide = requestAnimationFrame(step);
-      else { state.current.glide = 0; commit(); }
+      else { state.current.glide = 0; state.current.aim = undefined; commit(); }
     };
     state.current.glide = requestAnimationFrame(step);
-  }, [theme.reduceMotion, move, commit, stopGlide]);
+  }, [theme.reduceMotion, commit, stopGlide]);
 
   /** a flung pan keeps going and slows, like a native scroll view */
   const glide = useCallback((vx: number, vy: number) => {
@@ -124,11 +128,11 @@ function AtlasMap({ atlas, width, height, clear }: { atlas: PreparedAtlas; width
     state.current.glide = requestAnimationFrame(step);
   }, [theme.reduceMotion, move, commit, stopGlide]);
 
+  /** zoom by `factor` about (x, y); a press while one is easing builds on where that one was heading */
   const zoomAt = useCallback((factor: number, x = width / 2, y = height / 2) => {
-    stopGlide();
-    commit();
-    animateTo(pinchBy(still, factor, x, y, state.current.view.zoom));
-  }, [width, height, commit, animateTo, stopGlide]);
+    const s = state.current;
+    animateTo(pinchBy(s.aim ?? s.live, factor, x, y, s.view.zoom));
+  }, [width, height, animateTo]);
 
   const tapAt = useCallback((x: number, y: number) => {
     stopGlide();
@@ -143,19 +147,24 @@ function AtlasMap({ atlas, width, height, clear }: { atlas: PreparedAtlas; width
   }, [atlas, width, height, commit, stopGlide]);
 
   const caught = useRef(false);
-  const pan = useRef({ x: 0, y: 0 });
+  const pan = useRef({ x: 0, y: 0, at: 0 });
   const pinch = useRef(1);
   const pinching = useRef(false);
   const panGesture = usePanGesture({
     runOnJS: true, maxPointers: 2,
-    onBegin: () => { caught.current = !!state.current.glide; stopGlide(); pan.current = { x: 0, y: 0 }; },
+    onBegin: () => { caught.current = !!state.current.glide; stopGlide(); pan.current = { x: 0, y: 0, at: 0 }; },
     onUpdate: event => {
       const dx = event.translationX - pan.current.x;
       const dy = event.translationY - pan.current.y;
-      pan.current = { x: event.translationX, y: event.translationY };
+      pan.current = { x: event.translationX, y: event.translationY, at: Date.now() };
       move(panBy(state.current.live, dx, dy));
     },
-    onDeactivate: event => { if (!pinching.current) glide(event.velocityX, event.velocityY); }
+    // a finger held still before lifting reports a stale velocity; it shouldn't fling
+    onDeactivate: event => {
+      if (pinching.current) return;
+      const fresh = Date.now() - pan.current.at < 80;
+      glide(fresh ? event.velocityX : 0, fresh ? event.velocityY : 0);
+    }
   });
   const pinchGesture = usePinchGesture({
     runOnJS: true,
@@ -183,7 +192,7 @@ function AtlasMap({ atlas, width, height, clear }: { atlas: PreparedAtlas; width
       <View collapsable={false} style={styles.fill} accessible accessibilityLabel="Catalog atlas"
         accessibilityHint="pinch to zoom, drag to move around, and tap a track to select it">
         <View style={[StyleSheet.absoluteFill, { transformOrigin: 'left top', transform: [{ translateX: live.tx }, { translateY: live.ty }, { scale: live.s }] }]}>
-          <AtlasLayers atlas={atlas} scene={scene} fontFamily={theme.fontFamily} background={theme.background} />
+          <AtlasLayers atlas={atlas} scene={scene} fontFamily={theme.fontFamily} background={theme.background} accent={theme.accent} />
         </View>
       </View>
     </GestureDetector>
@@ -202,7 +211,7 @@ const styles = StyleSheet.create({
   fill: { flex: 1, overflow: 'hidden' },
   flex: { flex: 1 },
   notice: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  header: { position: 'absolute', top: 8, left: 16, right: 16, gap: 2 },
+  header: { position: 'absolute', top: 8, left: 12, alignSelf: 'flex-start', maxWidth: '80%', gap: 2, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16 },
   title: { fontWeight: '800', letterSpacing: -0.8, textShadowRadius: 10 },
   controls: { position: 'absolute', left: 12, right: 12, flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
   zoom: { borderRadius: 28, padding: 4, gap: 4 }

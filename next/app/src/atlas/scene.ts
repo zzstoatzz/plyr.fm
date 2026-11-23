@@ -200,19 +200,20 @@ export function buildScene(atlas: PreparedAtlas, frame: Frame): Scene {
     covers,
     coverAlpha,
     faces,
-    labels: placeLabels(atlas, frame, { scale, cx, cy }, faces, artistNames, coverAlpha),
+    labels: placeLabels(atlas, frame, { scale, cx, cy }, faces, covers, artistNames, coverAlpha),
     selection: frame.selected >= 0 ? { x: cx + xs[frame.selected] * scale, y: cy + ys[frame.selected] * scale } : undefined
   };
 }
 
-/** the label economy: one collision pass in priority order, labels stepping around faces and never pushed off their subject */
-function placeLabels(atlas: PreparedAtlas, frame: Frame, at: { scale: number; cx: number; cy: number }, faces: Scene['faces'],
+/** the label economy: one collision pass in priority order, labels stepping around faces and covers and never pushed off their subject */
+function placeLabels(atlas: PreparedAtlas, frame: Frame, at: { scale: number; cx: number; cy: number }, faces: Scene['faces'], covers: Scene['covers'],
   artistNames: { name: string; x: number; y: number }[], coverAlpha: number): Label[] {
   const { width: W, height: H, view: { zoom } } = frame;
   const { scale, cx, cy } = at;
   const PAD = 2;
   const MARGIN = 8;
-  const placed = faces.map(f => ({ x: f.x, y: f.y, hw: f.r + 2, hh: f.r + 2 }));
+  const placed = [...faces.map(f => ({ x: f.x, y: f.y, hw: f.r + 2, hh: f.r + 2 })),
+    ...covers.map(c => ({ x: c.x, y: c.y, hw: c.size / 2 + 2, hh: c.size / 2 + 2 }))];
   const labels: Label[] = [];
   const fits = (x: number, halfW: number) => x - halfW >= MARGIN && x + halfW <= W - MARGIN;
   const place = (x: number, y: number, w: number, h: number) => {
@@ -246,13 +247,14 @@ function placeLabels(atlas: PreparedAtlas, frame: Frame, at: { scale: number; cx
   name(atlas.regions, fadeOut(zoom, 1.7, 0.6), TUNE.labels.coarse.s, 13, '700', 'r');
   name(atlas.clusters, fadeIn(zoom, 1.7, 0.6) * fadeOut(zoom, C.outStart, C.outRange), TUNE.labels.fine.s, 12, '600', 'c');
 
+  const coverSize = new Map(covers.map(c => [c.i, c.size]));
   const titleAlpha = 0.9 * fadeIn(zoom, 4.5, 1);
   if (titleAlpha > 0.01) {
     let shown = 0;
     for (let k = 0; k < atlas.byPopularity.length && shown < TUNE.labels.titles.s; k++) {
       const i = atlas.byPopularity[k];
       const x = cx + atlas.xs[i] * scale;
-      const y = cy + atlas.ys[i] * scale - (coverAlpha > 0.5 ? 30 : 10);
+      const y = cy + atlas.ys[i] * scale - (coverAlpha > 0.5 ? (coverSize.get(i) ?? 0) / 2 + 9 : 10);
       if (x < 0 || x > W || y < MARGIN || y > H - 40) continue;
       let text = atlas.data.points[i].title;
       if (!text) continue;

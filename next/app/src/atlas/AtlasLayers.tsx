@@ -22,7 +22,7 @@ function glowStops(c: HueColors) {
 const smallAvatar = (url: string) => url.replace('/img/avatar/plain/', '/img/avatar_thumbnail/plain/');
 
 /** The drawn map for one committed view. Pinches and pans move it whole; it is drawn again when they settle. */
-export const AtlasLayers = memo(function AtlasLayers({ atlas, scene, fontFamily, background }: { atlas: PreparedAtlas; scene: Scene; fontFamily?: string; background: string }) {
+export const AtlasLayers = memo(function AtlasLayers({ atlas, scene, fontFamily, background, accent }: { atlas: PreparedAtlas; scene: Scene; fontFamily?: string; background: string; accent: string }) {
   const { width: W, height: H, dark, overscan } = scene.frame;
   const ox = W * overscan;
   const oy = H * overscan;
@@ -58,7 +58,7 @@ export const AtlasLayers = memo(function AtlasLayers({ atlas, scene, fontFamily,
       style={{ position: 'absolute', left: c.x - c.size / 2, top: c.y - c.size / 2, width: c.size, height: c.size, borderRadius: Math.max(2, c.size * 0.08), opacity: scene.coverAlpha }} />)}
     {scene.faces.map(f => <Face key={atlas.data.artists[f.i].did} artist={atlas.data.artists[f.i]} x={f.x} y={f.y} r={f.r} dark={dark} fontFamily={fontFamily} />)}
     <Svg width={W} height={H} style={StyleSheet.absoluteFill}>
-      {scene.selection && <Circle cx={scene.selection.x} cy={scene.selection.y} r={9} fill="none" stroke={dark ? '#ffffff' : '#171717'} strokeWidth={2} />}
+      {scene.selection && <Circle cx={scene.selection.x} cy={scene.selection.y} r={10} fill="none" stroke={accent} strokeWidth={3} />}
       {scene.labels.map(l => <G key={l.key} opacity={l.alpha}>
         <SvgText x={l.x} y={l.y} fontSize={l.size} fontWeight={l.weight} fontFamily={fontFamily} textAnchor="middle" alignmentBaseline="middle"
           stroke={background} strokeWidth={4} strokeLinejoin="round" strokeOpacity={0.85} fill={background}>{l.text}</SvgText>

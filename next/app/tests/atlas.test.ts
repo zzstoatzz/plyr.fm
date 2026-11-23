@@ -76,6 +76,9 @@ test('zoomed far into a cluster, the nearest tracks turn into a bounded set of c
   const scene = buildScene(atlas, { ...size, view: { zoom: 20, panX: 0.5, panY: 0.5 }, dark: true, overscan: 0.25, selected: 3 });
   assert.ok(scene.covers.length > 0 && scene.covers.length <= 18);
   assert.ok(scene.coverAlpha > 0 && scene.selection);
+  for (const l of scene.labels) for (const c of scene.covers) {
+    assert.ok(Math.abs(l.x - c.x) >= l.text.length * l.size * 0.28 + c.size / 2 || Math.abs(l.y - c.y) >= l.size / 2 + c.size / 2, `${l.text} sits on a cover`);
+  }
 });
 
 test('a tap finds the artist face first, then the nearest track, then nothing', () => {
