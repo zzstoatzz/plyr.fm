@@ -56,13 +56,17 @@ nate first. Add an entry when a PR settles something.
   provider plyr can verify, such as Atmosphere Money, plugs in, together with
   the access decider. atprotofans is not supported.
 
-- Atlas rendering (2026-11-23, nate picked constellations, #2910): each track
-  is joined to its nearest few same-cluster neighbours by near-transparent
-  lines (alpha ≤ 0.12) that fade out when neighbours are far apart on screen.
-  Artist faces are opaque with no ring or border. Labels use the app font, sit
-  above their neighbourhood instead of on its dots, and step around faces.
-  Light mode draws solid dots instead of glowing stars. `/atlas` unfurls with
-  a committed still (`static/previews/atlas.jpg`, from `bun run
+- Atlas rendering (2026-11-23, nate picked constellations, #2910; tuned the
+  same day): each track is joined to its nearest few same-cluster neighbours
+  by lines that only hint at the shape (alpha ≤ 0.05, short links only,
+  fading in past ~1.2× zoom), never a visible web. Artist faces are opaque
+  with no ring or border, sized by listener reach (plays, a like worth 30
+  plays), never by track count, and legible from the whole-map view; a face
+  that would mostly cover a bigger one waits for more zoom. Tracks show their
+  cover art from ~2.5× wherever there is room, and stay dots where crowded.
+  Labels use the app font, sit above their neighbourhood instead of on its
+  dots, and step around faces. Light mode draws solid dots. `/atlas` unfurls
+  with a committed still (`static/previews/atlas.jpg`, from `bun run
   atlas:preview`) that shows real faces, so regenerate it after removing an
   artist.
 
