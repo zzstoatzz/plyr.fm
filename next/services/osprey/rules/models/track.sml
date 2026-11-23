@@ -12,5 +12,8 @@ AudioUrl: Optional[str] = JsonData(path='$.audio_url', required=False)
 
 AudioHost: str = UrlHost(url=ResolveOptional(optional_value=AudioUrl, default_value=''))
 
-# this audio was fingerprinted when an earlier version of the record came by
+# where next shows the record's cover (a `cover` action), if it's next's to scan
+CoverUrl: Optional[str] = JsonData(path='$.cover_url', required=False)
+
+# this audio (or cover) was scanned when an earlier version of the record came by
 ScannedBefore: bool = JsonData(path='$.scanned_before', coerce_type=True)

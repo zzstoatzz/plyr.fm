@@ -23,11 +23,18 @@ plyr_index.track_records ──▶ TrackInputStream ──▶ Osprey RulesSink �
   record's `audioUrl`. A record written straight to a PDS (blob only) is ready
   when that copy lands, so it comes round then. A first run starts from now,
   not the whole catalog.
-- **rules** (`rules/`): `rules/index.sml` decides what applies to a track;
-  `rules/copyright.sml` is prod's "plays through" copyright rule.
+- **covers** (same file): a second walk, with its own cursor, over the cover
+  art of tracks (`imageUrl`) and albums/playlists (`imageBlob`), however the
+  record was written. A cover is checked where next shows it: a PDS blob at
+  next's cover worker, which checks it against its CID.
+- **rules** (`rules/`): `rules/index.sml` decides what applies to a record;
+  `rules/copyright.sml` is prod's "plays through" copyright rule;
+  `rules/cover.sml` flags a cover that breaks plyr's image policy.
 - **UDFs** (`src/plyr_osprey/udfs.py`): `RecordingsPlayingThrough` fingerprints
   audio through plyr's moderation service (which holds the AuDD key) and applies
-  the evidence bar from prod (`evidence.py`); `FlagForReview` is the effect a
+  the evidence bar from prod (`evidence.py`); `ImagePolicyViolations` sends a
+  cover to the same service's `/scan-image`, the Claude check prod runs on every
+  cover uploaded to it (`image_scan.py`); `FlagForReview` is the effect a
   matched rule leaves; `UrlHost` is a helper.
 - **output**: the flags for a track, its scan record and the cursor are written
   in one transaction. A failed scan isn't recorded as clean: the run stops and
@@ -47,7 +54,9 @@ for the Postgres round trip). `scripts/run` runs the worker:
 | `MODERATION_SERVICE_URL`, `MODERATION_AUTH_TOKEN` | plyr's moderation service, for `/scan` |
 | `OSPREY_DRAIN_ONCE` | `true` stops once caught up |
 | `OSPREY_POLL_SECONDS` | otherwise, the wait when caught up (default 30) |
-| `OSPREY_START_AT_US` | where a first run starts (default now) |
+| `OSPREY_START_AT_US` | where the tracks walk's first run starts (default now) |
+| `OSPREY_COVERS_START_AT_US` | where the covers walk's first run starts (default now) |
+| `LIST_COLLECTION_NSID` | albums and playlists, for their covers (default `fm.plyr.list`) |
 
 In production it runs every 10 minutes from `.github/workflows/next-osprey.yml`
 with `OSPREY_DRAIN_ONCE=true`.

@@ -333,9 +333,11 @@ const queue_query =
     \\  GROUP BY e.subject_uri
     \\)
     \\SELECT o.subject_uri, o.opened_at_ms, o.open_count, o.reasons,
-    \\       t.title, t.owner_did, p.moderation_decision, o.first_id
+    \\       coalesce(t.title, l.name), coalesce(t.owner_did, l.owner_did), p.moderation_decision, o.first_id
     \\FROM open o
     \\LEFT JOIN plyr_index.track_records t ON t.record_uri = o.subject_uri AND NOT t.deleted
+    \\-- an album or playlist can be flagged too (its cover), so it gets a title
+    \\LEFT JOIN plyr_index.list_records l ON l.record_uri = o.subject_uri AND NOT l.deleted
     \\LEFT JOIN plyr_index.track_policies p ON p.record_uri = o.subject_uri
     \\WHERE o.first_id > $2
     \\ORDER BY o.first_id
@@ -464,6 +466,7 @@ pub fn resetTestSchema(pool: *pg.Pool) !void {
         \\  moderation_write_source text, moderation_observed_at_us bigint,
         \\  CONSTRAINT ck_track_policies_nonempty CHECK (visibility IS NOT NULL OR jsonb_array_length(operator_labels) > 0 OR moderation_decision IS NOT NULL))
     , .{});
+    _ = try pool.exec("CREATE TABLE plyr_index.list_records (record_uri text PRIMARY KEY, owner_did text, name text, deleted boolean NOT NULL DEFAULT false)", .{});
     _ = try pool.exec("CREATE TABLE plyr_index.comment_records (record_uri text PRIMARY KEY, deleted boolean NOT NULL DEFAULT false)", .{});
     _ = try pool.exec("CREATE TABLE plyr_index.actor_identities (did text PRIMARY KEY)", .{});
     _ = try pool.exec("INSERT INTO plyr_index.actor_identities VALUES ('did:plc:listener')", .{});

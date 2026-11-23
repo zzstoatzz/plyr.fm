@@ -1,9 +1,10 @@
 """end to end: a track written straight to a PDS gets scanned by next's rules.
 
 writes an unlisted fm.plyr.track with only an audioBlob (a few seconds of a
-tone) to the test account's PDS, the way a client that never talks to plyr
-would, then waits for next to index it and copy its blob, runs the rules
-worker once, and checks that the copy was fingerprinted. the record is deleted
+tone) and a cover (a plain PNG blob, named by its getBlob URL) to the test
+account's PDS, the way a client that never talks to plyr would, then waits for
+next to index it and copy its blob, runs the rules worker once, and checks that
+the audio copy was fingerprinted and the cover checked. the record is deleted
 afterwards whatever happens.
 
 env: TEST_HANDLE, TEST_PASSWORD (an app password), DATABASE_URL (next's db),
@@ -21,6 +22,7 @@ import time
 import urllib.parse
 import urllib.request
 import wave
+import zlib
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -28,7 +30,7 @@ import psycopg2
 
 HERE = Path(__file__).parent
 COLLECTION = 'fm.plyr.track'
-WAIT_SECONDS = 300
+WAIT_SECONDS = 600
 
 
 def call(url: str, *, body: bytes | None = None, token: str | None = None, content_type: str = 'application/json'):
@@ -71,6 +73,20 @@ def tone(seconds: int = 6, rate: int = 22050) -> bytes:
     return buffer.getvalue()
 
 
+def png(size: int = 64) -> bytes:
+    """a flat square of a colour picked per run, so the blob is new every time."""
+    shade = int(time.time()) % 200
+    row = b'\x00' + bytes([shade, 120, 200 - shade]) * size
+
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        return struct.pack('>I', len(data)) + kind + data + struct.pack('>I', zlib.crc32(kind + data))
+
+    header = struct.pack('>IIBBBBB', size, size, 8, 2, 0, 0, 0)
+    return (
+        b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', header) + chunk(b'IDAT', zlib.compress(row * size)) + chunk(b'IEND', b'')
+    )
+
+
 def wait_for(conn, sql: str, args: tuple, what: str):
     deadline = time.time() + WAIT_SECONDS
     while time.time() < deadline:
@@ -93,6 +109,8 @@ def main() -> None:
     )
     token = session['accessJwt']
     blob = call(f'{pds}/xrpc/com.atproto.repo.uploadBlob', body=tone(), token=token, content_type='audio/wav')['blob']
+    cover = call(f'{pds}/xrpc/com.atproto.repo.uploadBlob', body=png(), token=token, content_type='image/png')['blob']
+    cover_query = urllib.parse.urlencode({'did': did, 'cid': cover['ref']['$link']})
     record = {
         '$type': COLLECTION,
         'title': 'direct-to-PDS check',
@@ -102,6 +120,8 @@ def main() -> None:
         'visibility': 'unlisted',
         'createdAt': datetime.now(UTC).isoformat().replace('+00:00', 'Z'),
         'audioBlob': blob,
+        'imageBlob': cover,
+        'imageUrl': f'{pds}/xrpc/com.atproto.sync.getBlob?{cover_query}',
     }
     created = call(
         f'{pds}/xrpc/com.atproto.repo.createRecord',
@@ -133,7 +153,13 @@ def main() -> None:
         print(f'scans: {scans}', flush=True)
         if not any(audio == copy for audio, _ in scans):
             sys.exit(f'{uri} was not scanned at {copy}')
-        print('ok: the direct-to-PDS track was scanned at its verified copy', flush=True)
+        with conn, conn.cursor() as cur:
+            cur.execute('SELECT image_url, violations FROM plyr_moderation.image_scans WHERE record_uri = %s', (uri,))
+            covers = cur.fetchall()
+        print(f'cover scans: {covers}', flush=True)
+        if not any(cover['ref']['$link'] in image for image, _ in covers):
+            sys.exit(f"{uri}'s cover was not checked")
+        print('ok: the direct-to-PDS track was scanned at its verified copy and its cover checked', flush=True)
     finally:
         call(
             f'{pds}/xrpc/com.atproto.repo.deleteRecord',
