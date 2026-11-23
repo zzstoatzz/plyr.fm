@@ -65,6 +65,11 @@ nate first. Add an entry when a PR settles something.
   a committed still (`static/previews/atlas.jpg`, from `bun run
   atlas:preview`) that shows real faces, so regenerate it after removing an
   artist.
+- The atlas on iOS (2026-11-23) draws the same map from `@plyr/next-core/atlas`
+  (palette, neighbourhoods, fitting, loading), so a look change lands in core
+  for both clients. During a pinch or drag the drawn map moves as one native
+  transform and is drawn again at rest; a tap picks a track into a card that
+  plays it or opens its page.
 
 ## known and open
 
