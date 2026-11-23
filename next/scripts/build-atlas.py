@@ -22,7 +22,7 @@ everything comes from next, never from the legacy python api or its database:
   same anonymous discovery surface as home, minus adult/copyright labels and
   anything gated or private.
 - vectors are CLAP audio embeddings kept in next's postgres
-  (`plyr_index.track_embeddings`, migration 0059). tracks without one, or
+  (`plyr_index.track_embeddings`, migration 0060). tracks without one, or
   whose audio changed, are embedded through the Modal CLAP endpoint, a few
   hundred per run. `--seed-turbopuffer` copies the legacy vectors in once,
   matched by each track's `legacy_id`, so the first build doesn't re-embed
