@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# Compares legacy production's catalog with what next indexed, for the cutover:
+# every prod track lands in exactly one bucket, and the ones next is missing are
+# listed with why. Read-only on both databases; prints only public atproto
+# record uris and counts, so its output is safe in public CI logs.
+#
+#   LEGACY_DATABASE_URL  legacy production database
+#   DATABASE_URL         next database
+set -euo pipefail
+
+: "${LEGACY_DATABASE_URL:?}"
+: "${DATABASE_URL:?}"
+
+plain() { local url="${1/postgresql+psycopg:/postgresql:}"; url="${url/postgresql+psycopg2:/postgresql:}"; echo "${url/postgresql+asyncpg:/postgresql:}"; }
+ro() { PGOPTIONS='-c default_transaction_read_only=on -c client_min_messages=warning' psql "$(plain "$1")" -X -q -v ON_ERROR_STOP=1 "${@:2}"; }
+
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+
+ro "$LEGACY_DATABASE_URL" -c "
+COPY (
+    SELECT coalesce(atproto_record_uri, ''), artist_did, coalesce(play_count, 0)::bigint,
+           (image_id IS NOT NULL OR image_url IS NOT NULL),
+           coalesce(support_gate->>'type', CASE WHEN audio_storage = 'r2_private' THEN 'private' ELSE '' END)
+    FROM public.tracks
+) TO STDOUT WITH (FORMAT csv)" > "$work/prod.csv"
+
+# temp tables need a writable session; it only writes them, and rolls back
+PGOPTIONS='-c client_min_messages=warning' psql "$(plain "$DATABASE_URL")" -X -q -v ON_ERROR_STOP=1 <<SQL
+BEGIN;
+CREATE TEMP TABLE prod (uri TEXT, artist_did TEXT, plays BIGINT, has_image BOOLEAN, gate TEXT);
+\copy prod FROM '$work/prod.csv' WITH (FORMAT csv)
+
+CREATE TEMP VIEW bucketed AS
+SELECT p.*, v.record_uri IS NOT NULL AS indexed,
+  CASE
+    WHEN p.uri = '' THEN 'no PDS record (prod-only row)'
+    WHEN p.uri !~ '^at://did:[^/]+/fm[.]plyr[.]track/[A-Za-z0-9._~:-]+$' THEN 'malformed record uri'
+    WHEN split_part(p.uri, '/', 3) <> p.artist_did THEN 'record owned by another account'
+    WHEN v.record_uri IS NULL AND aa.repo_did IS NULL THEN 'missing: next never saw the account'
+    WHEN v.record_uri IS NULL AND NOT aa.available THEN 'missing: account unavailable (' || coalesce(aa.unavailable_reason, '?') || ')'
+    WHEN v.record_uri IS NULL THEN 'missing: account indexed, record not'
+    WHEN v.deleted THEN 'deleted on next (record gone from PDS)'
+    WHEN NOT coalesce(aa.available, false) THEN 'indexed, account unavailable (' || coalesce(aa.unavailable_reason, '?') || ')'
+    WHEN p.has_image AND v.image_url IS NULL THEN 'indexed, cover missing on next'
+    ELSE 'indexed'
+  END AS bucket
+FROM prod AS p
+LEFT JOIN plyr_index.track_records AS v ON v.record_uri = p.uri
+LEFT JOIN plyr_index.account_availability AS aa ON aa.repo_did = split_part(p.uri, '/', 3);
+
+\echo '## prod tracks by where they stand on next'
+SELECT bucket, count(*) AS tracks, sum(plays) AS plays, count(*) FILTER (WHERE gate <> '') AS gated
+FROM bucketed GROUP BY bucket ORDER BY tracks DESC;
+
+\echo '## next tracks prod does not have (next-native uploads)'
+SELECT count(*) AS tracks FROM plyr_index.track_records AS v
+WHERE NOT v.deleted AND NOT EXISTS (SELECT 1 FROM prod AS p WHERE p.uri = v.record_uri);
+
+\echo '## everything not plainly indexed, by bucket (public record uris)'
+SELECT bucket, uri, plays, gate FROM bucketed
+WHERE bucket <> 'indexed' AND uri <> ''
+ORDER BY bucket, plays DESC, uri LIMIT 400;
+
+\echo '## prod-only rows per artist'
+SELECT artist_did, count(*) AS tracks, sum(plays) AS plays FROM bucketed
+WHERE bucket = 'no PDS record (prod-only row)' GROUP BY artist_did ORDER BY tracks DESC LIMIT 50;
+ROLLBACK;
+SQL
