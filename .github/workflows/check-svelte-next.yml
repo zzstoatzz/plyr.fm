@@ -284,6 +284,10 @@ jobs:
         if: github.event_name == 'push'
         working-directory: next/web
         run: node scripts/check-live-artist-page.mjs
+      - name: verify radio station links and that the firehose stays on air
+        if: github.event_name == 'push'
+        working-directory: next/web
+        run: node scripts/check-live-radio.mjs
       - uses: actions/upload-artifact@v4
         if: always() && github.event_name == 'push'
         with:
