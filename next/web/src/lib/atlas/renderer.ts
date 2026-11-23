@@ -43,6 +43,11 @@ function hash01(id: number): number {
   x ^= x >>> 13;
   return (x >>> 0) / 4294967296;
 }
+function hashText(text: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+  return hash01(h >>> 0);
+}
 function hslToRgb(h: number, s: number, l: number): [number, number, number] {
   if (s === 0) {
     const v = Math.round(l * 255);
@@ -118,9 +123,12 @@ export class AtlasRenderer {
   private coverLoading = new Set<number>();
   private coverLoadCount = 0;
 
-  // artist avatars
+  // artist avatars: every drawn artist gets one, loaded biggest-first a few
+  // at a time and kept as pre-cut circles so drawing hundreds stays cheap
   private avatarImages = new Map<string, HTMLImageElement>();
   private avatarFailed = new Set<string>();
+  private avatarLoading = new Set<string>();
+  private avatarSprites = new Map<string, HTMLCanvasElement>();
 
   // interaction
   private hovered = -1;
@@ -492,16 +500,43 @@ export class AtlasRenderer {
   }
 
   private loadAvatar(a: AtlasArtist): void {
-    if (this.avatarImages.has(a.did) || this.avatarFailed.has(a.did) || !a.avatar) return;
+    this.avatarLoading.add(a.did);
     const img = new Image();
+    img.decoding = 'async';
     img.onload = () => {
-      this.avatarImages.set(a.did, img);
+      this.avatarLoading.delete(a.did);
+      if (img.naturalWidth > 0) this.avatarImages.set(a.did, img);
+      else this.avatarFailed.add(a.did);
       this.markDirty();
     };
-    img.onerror = () => this.avatarFailed.add(a.did);
+    img.onerror = () => {
+      this.avatarLoading.delete(a.did);
+      this.avatarFailed.add(a.did);
+      this.markDirty();
+    };
     img.src = a.avatar;
-    // mark as pending so we don't create duplicate Image objects
-    this.avatarImages.set(a.did, img);
+  }
+
+  /** a circle-cut avatar at the power-of-two size nearest the drawn size, so small rings don't shimmer */
+  private avatarSprite(did: string, img: HTMLImageElement, px: number): HTMLCanvasElement {
+    const size = Math.max(16, Math.min(256, 2 ** Math.ceil(Math.log2(px))));
+    const key = `${did}:${size}`;
+    const hit = this.avatarSprites.get(key);
+    if (hit) return hit;
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = size;
+    const g = cv.getContext('2d')!;
+    g.imageSmoothingQuality = 'high';
+    g.beginPath();
+    g.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+    g.clip();
+    // cover-fit a non-square avatar
+    const iw = img.naturalWidth;
+    const ih = img.naturalHeight;
+    const side = Math.min(iw, ih);
+    g.drawImage(img, (iw - side) / 2, (ih - side) / 2, side, side, 0, 0, size, size);
+    this.avatarSprites.set(key, cv);
+    return cv;
   }
 
   // --- transforms ---
@@ -758,44 +793,35 @@ export class AtlasRenderer {
       ctx.globalAlpha = 1;
     }
 
-    // --- artist circles ---
+    // --- artist circles: always a face, or a tinted disk with an initial while
+    // it loads or when the artist has none. never an empty ring.
     const artistCands: { name: string; x: number; y: number }[] = [];
     {
-      let avatarBudget = small ? 8 : 20;
+      const wanted: { a: AtlasArtist; pr: number }[] = [];
       for (const a of this.data.artists) {
         const pr = this.artistRadiusPx(a);
         if (pr < 7) continue;
         const ax = this.cx + a.cx * this.scale;
         const ay = this.cy + a.cy * this.scale;
         if (ax < -40 || ax > W + 40 || ay < -40 || ay > H + 40) continue;
-        const wantAvatar = pr >= 10 && avatarBudget > 0;
-        if (wantAvatar) {
-          this.loadAvatar(a);
-          avatarBudget--;
-        }
-        const img = wantAvatar ? this.avatarImages.get(a.did) : undefined;
-        const loaded = img && img.complete && img.naturalWidth > 0;
-        if (loaded) {
-          ctx.save();
+        const img = this.avatarImages.get(a.did);
+        if (img) {
+          ctx.globalAlpha = 0.95;
+          ctx.drawImage(this.avatarSprite(a.did, img, pr * 2 * this.dpr), ax - pr, ay - pr, pr * 2, pr * 2);
+        } else {
+          if (a.avatar && !this.avatarFailed.has(a.did) && !this.avatarLoading.has(a.did)) wanted.push({ a, pr });
+          const [r, g, b] = hslToRgb(hashText(a.did), 0.35, this.dark ? 0.28 : 0.82);
           ctx.globalAlpha = 0.9;
           ctx.beginPath();
           ctx.arc(ax, ay, pr, 0, Math.PI * 2);
-          ctx.clip();
-          ctx.drawImage(img, ax - pr, ay - pr, pr * 2, pr * 2);
-          ctx.restore();
-        } else {
-          ctx.globalAlpha = 0.55;
-          ctx.beginPath();
-          ctx.arc(ax, ay, pr, 0, Math.PI * 2);
-          ctx.fillStyle = this.dark ? '#1a1a1a' : '#e8e8e8';
+          ctx.fillStyle = `rgb(${r},${g},${b})`;
           ctx.fill();
-          if (pr >= 12) {
-            ctx.font = `bold ${Math.max(8, Math.round(pr * 0.8))}px monospace`;
+          if (pr >= 8) {
+            ctx.font = `600 ${Math.round(pr * 0.9)}px system-ui, sans-serif`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillStyle = this.dark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)';
-            ctx.globalAlpha = 0.9;
-            ctx.fillText((a.name || '?').charAt(0).toLowerCase(), ax, ay);
+            ctx.fillStyle = this.dark ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.7)';
+            ctx.fillText((a.name || a.handle || '?').charAt(0).toLowerCase(), ax, ay + pr * 0.05);
           }
         }
         ctx.globalAlpha = 0.25 + Math.min(0.35, pr / 40);
@@ -809,6 +835,12 @@ export class AtlasRenderer {
         }
       }
       ctx.globalAlpha = 1;
+      // biggest visible faces first, a handful in flight at a time
+      const slots = 6 - this.avatarLoading.size;
+      if (slots > 0 && wanted.length) {
+        wanted.sort((p, q) => q.pr - p.pr);
+        for (const w of wanted.slice(0, slots)) this.loadAvatar(w.a);
+      }
     }
 
     // the home preview is a still picture: dots and artists, no labels to crowd it
