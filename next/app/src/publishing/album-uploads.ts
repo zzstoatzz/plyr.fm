@@ -93,10 +93,13 @@ export async function albumProgress(auth: Auth): Promise<AlbumProgress | undefin
   if (!plan) return;
   const organization = createPds(auth).albumOrganization();
   const jobs = uploadQueue.snapshot();
+  // a large upload still being processed resumes from storage after a restart, so it still counts as uploading
+  const transfers = new Set((await uploadStorage.load(plan.owner)).map(operation => operation.draftId));
   const slots = await Promise.all(plan.slots.map(async slot => {
     const job = jobs.findLast(item => item.owner === plan.owner && item.draftId === slot.id);
     if (job && (uploadInProgress(job.phase) || job.phase === 'awaiting-publication')) return { slot, state: job.phase === 'waiting' ? 'waiting' as const : 'working' as const, detail: job.phase === 'uploading' && job.progress ? `${Math.round(job.progress * 100)}%` : job.phase };
     if (await organization.readUpload(trackUri(slot))) return { slot, state: 'done' as const };
+    if (transfers.has(slot.id)) return { slot, state: 'working' as const, detail: 'processing' };
     return { slot, state: 'stopped' as const, detail: job?.error ? `didn’t finish: ${job.error}` : 'waiting in upload recovery' };
   }));
   return { plan, slots };
