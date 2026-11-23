@@ -82,11 +82,11 @@ export interface ArtistSound {
 	share: number;
 }
 
-/** The sounds an artist's tracks fall in, most played first, plus each mapped track's sound by its legacy id. */
+/** The sounds an artist's tracks fall in, most played first, plus each mapped track's sound by its track id. */
 export function artistSounds(data: AtlasData, handle: string) {
 	const everyone = new Map(sounds(data).map(sound => [sound.id, sound]));
 	const mine = data.points.filter(point => point.handle === handle);
-	const byId = new Map<number, string>();
+	const byId = new Map<string | number, string>();
 	const grouped = new Map<number, ArtistSound>();
 	for (const point of mine) {
 		const sound = everyone.get(point.clusterCoarse);
@@ -100,5 +100,5 @@ export function artistSounds(data: AtlasData, handle: string) {
 	const list = [...grouped.values()]
 		.map(entry => ({ ...entry, share: entry.soundPlays ? entry.plays / entry.soundPlays : 0 }))
 		.sort((a, b) => b.plays - a.plays || b.tracks - a.tracks);
-	return { sounds: list, mapped: mine.length, byLegacyId: byId };
+	return { sounds: list, mapped: mine.length, byTrackId: byId };
 }

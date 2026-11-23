@@ -24,11 +24,11 @@ const local = process.env.ATLAS_DATA;
       const f = file.get(route.request().url());
       return f && fs.existsSync(f) ? route.fulfill({ body: fs.readFileSync(f) }) : route.fulfill({ status: 404 });
     };
-    await page.route('https://api.plyr.fm/stats/atlas', route => route.fulfill({ json: atlas }));
+    await page.route('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.getAtlas', route => route.fulfill({ json: atlas }));
     await page.route('https://cdn.bsky.app/**', serveFile);
     await page.route('https://images.plyr.fm/**', serveFile);
   } else {
-    await page.unroute('https://api.plyr.fm/stats/atlas');
+    await page.unroute('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.getAtlas');
     await context.unroute('**/*');
   }
   // the card is the map alone: no page title or zoom controls over it

@@ -5,12 +5,10 @@ import { createAccount, login, useAuth } from './auth';
 import { Action, Copy, InlineLink, Page, row } from './controls';
 import { returnPath } from './return-path';
 import { AccountPicker, type AccountSuggestion } from './AccountPicker';
+import { ACCOUNT_PROVIDERS, signInPreview, type SignInPreview } from './sign-in-preview';
 
-const catalog = 'https://api.plyr.fm/auth';
 const typeahead = 'https://typeahead.waow.tech/xrpc/app.bsky.actor.searchActorsTypeahead';
 
-interface Preview { handle: string; display_name?: string; avatar_url?: string; sign_in_host: string }
-interface Provider { url: string; name: string; recommended: boolean; description?: string; info_url?: string }
 
 export default function Login() {
   const auth = useAuth();
@@ -21,9 +19,8 @@ export default function Login() {
   const [handle, setHandle] = useState('');
   const [actors, setActors] = useState<AccountSuggestion[]>([]);
   const [chosen, setChosen] = useState<AccountSuggestion>();
-  const [preview, setPreview] = useState<Preview>();
-  const [providers, setProviders] = useState<Provider[]>();
-  const [provider, setProvider] = useState<Provider>();
+  const [preview, setPreview] = useState<SignInPreview>();
+  const [provider, setProvider] = useState(ACCOUNT_PROVIDERS[0]);
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [slow, setSlow] = useState(false);
@@ -37,12 +34,9 @@ export default function Login() {
     const query = encodeURIComponent(identifier);
     const timer = setTimeout(() => {
       if (identifier.includes('.') || identifier.startsWith('did:')) {
-        void fetch(catalog + '/sign-in-preview?handle=' + query, { signal })
-          .then(async response => {
-            if (!response.ok) return;
-            const account: Preview = await response.json();
-            if (!signal.aborted) { setPreview(account); setActors([]); }
-          }).catch(() => {});
+        void signInPreview(identifier, signal)
+          .then(account => { if (account && !signal.aborted) { setPreview(account); setActors([]); } })
+          .catch(() => {});
       }
       if (!chosen && !identifier.startsWith('did:')) {
         void fetch(typeahead + '?q=' + query + '&limit=5', { signal, headers: { 'X-Client': 'next.plyr.fm' } })
@@ -55,21 +49,6 @@ export default function Login() {
     }, 300);
     return () => { clearTimeout(timer); controller.abort(); };
   }, [identifier, creating, busy, chosen]);
-
-  useEffect(() => {
-    if (!creating) return;
-    const controller = new AbortController();
-    void fetch(catalog + '/pds-options', { signal: controller.signal })
-      .then(async response => {
-        if (!response.ok) throw new Error();
-        const data: { enabled: boolean; options: Provider[] } = await response.json();
-        if (controller.signal.aborted) return;
-        const options = data.enabled ? data.options.filter(item => item.url.startsWith('https://')) : [];
-        setProviders(options);
-        setProvider(options.find(item => item.recommended) ?? options[0]);
-      }).catch(() => { if (!controller.signal.aborted) setProviders([]); });
-    return () => controller.abort();
-  }, [creating]);
 
   useEffect(() => {
     if (!busy) return;
@@ -86,14 +65,14 @@ export default function Login() {
   }
 
   async function submit(localOnly = deviceOnly === 'true') {
-    if (pending.current || (creating ? !provider : !identifier)) return;
+    if (pending.current || (!creating && !identifier)) return;
     pending.current = true;
     setBusy(true);
     setSlow(false);
     setError(undefined);
     try {
       const destination = typeof intent === 'string' ? intent : undefined;
-      if (creating && provider) await createAccount(provider.url, destination);
+      if (creating) await createAccount(provider.url, destination);
       else await login(identifier, localOnly, destination);
       router.replace(intent ?? '/settings');
     } catch (failure) {
@@ -104,7 +83,7 @@ export default function Login() {
     }
   }
 
-  const host = creating ? provider?.name : preview?.sign_in_host;
+  const host = creating ? provider.name : preview?.sign_in_host;
   return <Page title={creating ? 'create account' : 'sign in to plyr.fm'}>
     <View style={row}>
       <Action label="sign in" selected={!creating} disabled={busy} onPress={() => { setCreating(false); setShowHelp(false); setError(undefined); }} />
@@ -112,10 +91,8 @@ export default function Login() {
     </View>
     {creating ? <>
       <Copy>choose a <InlineLink href="https://at-me.zzstoatzz.io/view/?handle=zzstoatzz.io">home</InlineLink> for your data</Copy>
-      {providers === undefined && <Copy>loading account providers…</Copy>}
-      {providers?.length === 0 && <Copy>account providers are unavailable right now. you can still create an account with Bluesky or Blacksky.</Copy>}
-      {providers?.map(item => <View key={item.url} style={{ gap: 6 }}>
-        <Action label={item.name + (item.recommended ? ' · recommended' : '')} selected={item.url === provider?.url}
+      {ACCOUNT_PROVIDERS.map(item => <View key={item.url} style={{ gap: 6 }}>
+        <Action label={item.name + (item.recommended ? ' · recommended' : '')} selected={item.url === provider.url}
           disabled={busy} onPress={() => setProvider(item)} />
         {item.description && <Copy>{item.info_url ? <InlineLink href={item.info_url}>{item.description}</InlineLink> : item.description}</Copy>}
       </View>)}
@@ -132,8 +109,9 @@ export default function Login() {
       {deviceOnly === 'true' && <Copy>preferences will stay on this device for this sign-in.</Copy>}
     </>}
     <Action primary label={busy ? (host ? 'taking you to ' + host + '…' : 'redirecting…') : creating ? 'create account' : host ? 'continue at ' + host : 'sign in'}
-      onPress={() => void submit()} disabled={busy || (creating ? !provider : !identifier)} />
+      onPress={() => void submit()} disabled={busy || (!creating && !identifier)} />
     <Copy>{busy && slow ? 'still connecting. some servers take a few seconds.' : 'you’ll come straight back here after. plyr.fm never sees your password.'}</Copy>
+    <Copy>by continuing you agree to the <InlineLink href="https://plyr.fm/terms">terms</InlineLink> and <InlineLink href="https://plyr.fm/privacy">privacy policy</InlineLink>.</Copy>
     <Action label={creating ? 'what is a PDS?' : 'new to the atmosphere?'}
       selected={showHelp} onPress={() => setShowHelp(!showHelp)} />
     {showHelp && (creating ? <>

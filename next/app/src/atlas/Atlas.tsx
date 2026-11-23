@@ -4,6 +4,7 @@ import { AccessibilityInfo, StyleSheet, View, type LayoutChangeEvent } from 'rea
 import { GestureDetector, useExclusiveGestures, usePanGesture, usePinchGesture, useSimultaneousGestures, useTapGesture } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { atlasSummary, loadAtlas } from '@plyr/next-core/atlas/load';
+import { api } from '../api-client';
 import { fitView, type AtlasView } from '@plyr/next-core/atlas/view';
 import { useAppearance } from '../appearance';
 import { Status, useResource } from '../CatalogPieces';
@@ -17,10 +18,11 @@ import { between, keepOnMap, panBy, pinchBy, settle, still, strayed, type Live }
 import { buildScene, hitTest, prepareAtlas, type PreparedAtlas, type Rect } from './scene';
 
 const OVERSCAN = 0.3;
+const fetchAtlas = () => loadAtlas(api.atlas);
 
 export default function Atlas() {
   const theme = useAppearance();
-  const result = useResource(loadAtlas);
+  const result = useResource(fetchAtlas);
   const atlas = useMemo(() => result.data && prepareAtlas(result.data), [result.data]);
   const [size, setSize] = useState<{ width: number; height: number }>();
   const [free, setFree] = useState<{ y: number; height: number }>();

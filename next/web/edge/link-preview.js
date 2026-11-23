@@ -76,6 +76,87 @@ export function route(pathname) {
   return null;
 }
 
+// production pages next folded into others. Old links, bookmarks and search
+// results land on the page that does that job now instead of a 404.
+const MOVED = [
+  [/^\/u\/([^/]+)\/liked$/, (_, actor) => `/u/${actor}`],
+  [/^\/liked\/([^/]+)$/, (_, actor) => `/u/${actor}`],
+  [/^\/(?:for-you|activity)$/, () => '/'],
+  [/^\/record$/, () => '/upload'],
+  [/^\/costs$/, () => '/stats'],
+  [/^\/profile\/setup$/, () => '/edit-profile'],
+  [/^\/portal\/manage$/, () => '/portal']
+];
+
+/** where an old production path lives now, or null */
+export function movedPath(pathname) {
+  const path = pathname.replace(/\/+$/, '') || '/';
+  for (const [pattern, target] of MOVED) {
+    const match = pattern.exec(path);
+    if (match) return target(...match);
+  }
+  return null;
+}
+
+/** an `/at/<at-uri>` link (production's at-uri resolver) as the next page for that record */
+export async function atUriPath(pathname, api) {
+  const raw = decode(pathname.replace(/^\/at\/?/, '')).replace(/^at:/, '').replace(/^:?\/{0,2}/, '');
+  const [authority, collection, rkey] = raw.split('/');
+  if (!authority?.startsWith('did:') && !authority?.includes('.')) return '/';
+  if (!collection) return `/u/${authority}`;
+  if (!rkey) return '/';
+  const uri = `at://${authority}/${collection}/${rkey}`;
+  if (collection.endsWith('.track')) return `/track/${idFromUri('trk_', uri)}`;
+  if (collection.endsWith('.list')) return (await api.album(idFromUri('alb_', uri))) ? `/album/${idFromUri('alb_', uri)}` : `/playlist/${idFromUri('pls_', uri)}`;
+  return `/u/${authority}`;
+}
+
+const AI_TRAINING = ['GPTBot', 'ClaudeBot', 'CCBot', 'Google-Extended', 'Applebot-Extended', 'anthropic-ai', 'Bytespider'];
+const PRIVATE_PAGES = ['/portal', '/settings', '/library', '/liked', '/upload', '/edit-profile', '/edit-track', '/create-album', '/get-paid', '/login', '/queue', '/oauth', '/private', '/moderation', '/embed'];
+
+/** search engines index plyr.fm itself; every other host (next., previews) stays out of results */
+export function robots(origin) {
+  if (new URL(origin).hostname !== 'plyr.fm') return 'User-agent: *\nDisallow: /\n';
+  return [
+    ...AI_TRAINING.map(agent => `User-agent: ${agent}\nDisallow: /\n`),
+    'User-agent: *',
+    'Allow: /',
+    ...PRIVATE_PAGES.map(path => `Disallow: ${path}`),
+    '',
+    `Sitemap: ${origin}/sitemap.xml`,
+    ''
+  ].join('\n');
+}
+
+const LLMS_TXT = /* llms-txt */ '';
+
+/** llms.txt (llmstxt.org) for this host: `edge/llms.txt` with its `{origin}` and `{api}` filled in */
+export const llmsTxt = (origin, apiOrigin, template = LLMS_TXT) => template.replaceAll('{origin}', origin).replaceAll('{api}', apiOrigin);
+
+const SITEMAP_PAGES = 20;
+const xmlEscape = (text) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/** the public catalog's tracks and artists, newest first, for search engines */
+export async function sitemap(origin, api) {
+  const entries = new Map([['/', null], ['/radio', null], ['/atlas', null], ['/stats', null], ['/terms', null], ['/privacy', null]]);
+  let cursor;
+  for (let page = 0; page < SITEMAP_PAGES; page++) {
+    const result = await api.tracks(cursor);
+    for (const track of result?.data ?? []) {
+      if (track.access?.visibility !== 'public') continue;
+      const updated = track.metadata?.created_at?.slice(0, 10) ?? null;
+      entries.set(`/track/${track.id}`, updated);
+      const artist = `/u/${track.artist?.profile?.handle || track.artist?.did}`;
+      if (!entries.has(artist)) entries.set(artist, updated);
+    }
+    cursor = result?.next_cursor;
+    if (!result?.has_more || !cursor) break;
+  }
+  const urls = [...entries].map(([path, updated]) =>
+    `  <url><loc>${xmlEscape(origin + path)}</loc>${updated ? `<lastmod>${updated}</lastmod>` : ''}</url>`);
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>\n`;
+}
+
 /** reads the appview's `fm.plyr.unspecced.*` methods; null on any miss */
 export function createApi(origin, fetcher = fetch) {
   const get = async (method, params) => {
@@ -103,6 +184,7 @@ export function createApi(origin, fetcher = fetch) {
     albums: (artistDid) => get('listAlbums', { artistDid, limit: '100' }),
     album: (id) => get('getAlbum', { uri: uriFromId(id) }),
     playlist: (id) => get('getPlaylist', { uri: uriFromId(id) }),
+    tracks: (cursor) => get('listTracks', cursor ? { limit: '100', cursor } : { limit: '100' }),
     radioStations: () => get('getRadioStations', {}),
     // a broadcasting station only names its live stream when asked for more than the catalog
     radioState: (station) => get('getRadioState', { station, catalogOnly: String(station !== 'firehose') })
@@ -483,7 +565,8 @@ const API_ORIGIN = '__PLYR_API_ORIGIN__';
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    const api = createApi(API_ORIGIN.startsWith('http') ? API_ORIGIN : 'https://api.next.plyr.fm');
+    const apiOrigin = API_ORIGIN.startsWith('http') ? API_ORIGIN : 'https://api.next.plyr.fm';
+    const api = createApi(apiOrigin);
 
     if (url.pathname === '/oembed') {
       const { status, body } = await oembed(url, api);
@@ -496,6 +579,16 @@ export default {
         }
       });
     }
+
+    if (url.pathname === '/robots.txt' || url.pathname === '/llms.txt') {
+      const text = url.pathname === '/robots.txt' ? robots(url.origin) : llmsTxt(url.origin, apiOrigin);
+      return new Response(text, { headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'public, max-age=3600' } });
+    }
+    if (url.pathname === '/sitemap.xml') {
+      return new Response(await sitemap(url.origin, api), { headers: { 'content-type': 'application/xml; charset=utf-8', 'cache-control': 'public, max-age=3600' } });
+    }
+    const moved = url.pathname.startsWith('/at/') ? await atUriPath(url.pathname, api) : movedPath(url.pathname);
+    if (moved) return Response.redirect(new URL(moved + url.search, url.origin).href, 301);
 
     const page = route(url.pathname);
     if (page?.kind === 'og') return ogImage(page, url.origin, api);

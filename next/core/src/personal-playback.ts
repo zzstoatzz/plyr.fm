@@ -366,16 +366,16 @@ export function createPersonalPlayback(options: Options) {
       ...(entry && durationMs > 0 && durationMs <= 86400000 ? { entry: { ...entry, durationMs } } : {}) };
   }
 
-  async function fillContinuation() {
+  async function fillContinuation(asked = false) { // asked: a Next press at the queue's end wants a track even with keep playing off
     const current = session;
-    if (!current || (playback().suspended || held) || !keepPlaying() || current.wire && !owned) return;
+    if (!current || (playback().suspended || held) || !(asked || keepPlaying()) || current.wire && !owned) return;
     const entries = current.state.entries;
     const remaining = entries.length - current.state.index - 1;
     if (!entries.length || remaining > 2) return;
     const scope = context;
     const seen = new Set(entries.map(entry => entry.track.id));
     await continuation.prefetch(seen);
-    if (session !== current || scope !== context || (playback().suspended || held) || !keepPlaying()) return;
+    if (session !== current || scope !== context || (playback().suspended || held) || !(asked || keepPlaying())) return;
     if (current.state.tail?.kind === 'collection' && current.state.index + 1 < current.state.entries.length) return;
     const fresh = continuation.peek(new Set(current.state.entries.map(entry => entry.track.id)));
     if (!fresh.length) return;
@@ -386,8 +386,8 @@ export function createPersonalPlayback(options: Options) {
     } else current.local(queue.appendContinuation(current.state, entriesToAppend));
     continuation.consumed(new Set(fresh.map(track => track.id)));
   }
-  function ensureContinuation() {
-    continuing ??= fillContinuation().catch(() => playback().error('could not load more tracks')).finally(() => { continuing = undefined; });
+  function ensureContinuation(asked = false) {
+    continuing ??= fillContinuation(asked).catch(() => playback().error('could not load more tracks')).finally(() => { continuing = undefined; });
     return continuing;
   }
 
@@ -397,7 +397,7 @@ export function createPersonalPlayback(options: Options) {
     const current = session;
     if (!current || (playback().suspended || held)) return;
     if (current.wire && !owned) return;
-    if (current.state.index + 1 >= current.state.entries.length && playback().repeat !== 'all') await ensureContinuation();
+    if (current.state.index + 1 >= current.state.entries.length && playback().repeat !== 'all') await ensureContinuation(explicit);
     if (current !== session || (playback().suspended || held)) return;
     if (current.wire) { await current.dispatch({ action: 'advance' }); return; }
     if (current.state.index + 1 < current.state.entries.length) select(current.state.index + 1);

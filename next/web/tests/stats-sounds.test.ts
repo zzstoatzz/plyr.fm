@@ -39,6 +39,6 @@ test('an artist’s sounds give their slice of each sound’s plays', () => {
 	const result = artistSounds(data, 'stellz.test');
 	assert.equal(result.mapped, 2);
 	assert.deepEqual(result.sounds.map(sound => [sound.label, sound.tracks, sound.plays, sound.share]), [['deep house', 1, 60, 0.6], ['piano', 1, 10, 0.25]]);
-	assert.equal(result.byLegacyId.get(mine[1].id), 'piano');
+	assert.equal(result.byTrackId.get(mine[1].id), 'piano');
 	assert.equal(artistSounds(data, 'nobody.test').sounds.length, 0);
 });

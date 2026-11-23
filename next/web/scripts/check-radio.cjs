@@ -35,10 +35,8 @@ async function fixture(browser, width, scheme, fastChange = false) {
   const receipts = [];
   const appViewWrites = [];
   const broadcast = { offAir: false };
-  await context.route('https://api.plyr.fm/**', route => {
-    if (new URL(route.request().url()).pathname === '/tracks/42') return route.fulfill({ json: { atproto_record_uri: tracks[0].record.uri } });
-    return route.abort();
-  });
+  // a numeric production id resolves through the appview's legacy links
+  await page.route('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.getTrack?legacyId=42', route => route.fulfill({ json: tracks[0] }));
   await page.route('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.getRadioState?**', route => {
     const url = new URL(route.request().url());
     const slug = url.searchParams.get('station');

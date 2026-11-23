@@ -4,7 +4,7 @@
 	import { resolve } from '$app/paths';
 	import type { Artist, ArtistMetrics, Track } from '@plyr/next-core/api';
 	import { api } from '$lib/api';
-	import { loadAtlas } from '@plyr/next-core/atlas/load';
+	import { loadAtlas } from '$lib/atlas/catalog';
 	import type { AtlasData } from '@plyr/next-core/atlas/types';
 	import ImmersiveWash from '$lib/ui/ImmersiveWash.svelte';
 	import LoadMore from '$lib/ui/LoadMore.svelte';
@@ -142,7 +142,7 @@
 			<ol class="list">
 				{#each tracks.slice(0, shown) as track, index (track.id)}
 					<RankedTrack {track} rank={index + 1} plays={track.metrics.play_count} max={Math.max(1, tracks[0].metrics.play_count)} collection={tracks}
-						showArtist={false} sound={track.legacy_id ? mine?.byLegacyId.get(track.legacy_id) : undefined} />
+						showArtist={false} sound={mine?.byTrackId.get(track.id)} />
 				{/each}
 			</ol>
 			<LoadMore cursor={shown < tracks.length} label="tracks" load={() => { shown += 25; }} />

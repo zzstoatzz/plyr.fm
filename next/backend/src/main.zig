@@ -28,6 +28,7 @@ const catalog_reconcile_runner = @import("internal/ingest/catalog_reconcile_runn
 const account_reconciler = @import("internal/account/reconciler.zig");
 const blob_mirror = @import("internal/delivery/blob_mirror.zig");
 const duration_probe = @import("internal/delivery/duration_probe.zig");
+const ingest_heartbeat = @import("internal/index/ingest_heartbeat.zig");
 const label_sync = @import("internal/moderation/label_sync.zig");
 const moderation_api = @import("api/moderation.zig");
 const postgres_moderation = @import("internal/moderation/postgres_log.zig");
@@ -198,6 +199,7 @@ pub fn main() !void {
         null;
     var space_restrictions: ?postgres_restrictions.PostgresRestrictions = if (postgres_store) |*store| .{ .pool = store.pool } else null;
     var platform_stats: ?postgres_platform_stats.PostgresPlatformStatsStore = if (postgres_store) |*store| .{ .pool = store.pool, .io = io, .collection = settings.track_collection } else null;
+    var legacy_audio: ?@import("internal/index/postgres_legacy_audio_store.zig").PostgresLegacyAudioStore = if (postgres_store) |*store| .{ .pool = store.pool } else null;
     var stats_overview: ?@import("internal/metrics/postgres_stats_overview_store.zig").PostgresStatsOverviewStore = if (postgres_store) |*store| .{ .pool = store.pool, .io = io, .collection = settings.track_collection, .like_collection = settings.like_collection } else null;
     switch (settings.role) {
         .jams => unreachable,
@@ -241,6 +243,7 @@ pub fn main() !void {
                 .artist_metric_store = artist_metric_store,
                 .stats_store = if (platform_stats) |*store| store.store() else null,
                 .stats_overview_store = if (stats_overview) |*store| store else null,
+                .legacy_audio = if (legacy_audio) |*store| store else null,
                 .verified_list_store = verified_list_store,
                 .record_status_store = record_status_store,
                 .ingest_status_store = ingest_status_store,
@@ -315,6 +318,7 @@ pub fn main() !void {
             const store = if (postgres_store) |*value| value else return error.IngesterDatabaseRequired;
             blob_mirror.spawnBeside(io, allocator, store.pool);
             duration_probe.spawnBeside(io, allocator, store.pool);
+            ingest_heartbeat.spawnBeside(io, store.pool);
             actor_identity_refresher.spawnBeside(io, allocator, store.pool);
             label_sync.spawnBeside(io, allocator, store.pool, settings.track_collection);
             try stream_runner.run(io, allocator, store.pool, settings.stream_hosts, .{
@@ -349,6 +353,8 @@ test {
     _ = @import("api/catalog.zig");
     _ = @import("internal/application/list_track_suggestions.zig");
     _ = @import("api/radio.zig");
+    _ = @import("api/legacy_links.zig");
+    _ = @import("internal/index/postgres_legacy_audio_store.zig");
     _ = @import("internal/application/public_catalog.zig");
     _ = @import("internal/index/track_record_json_store.zig");
     _ = @import("internal/application/notifications.zig");

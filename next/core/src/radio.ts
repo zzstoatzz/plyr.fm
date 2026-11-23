@@ -31,7 +31,7 @@ interface StateTrack {
   duration: number;
   artwork_url: string | null;
   thumbnail_url: string | null;
-  atproto_record_uri: string | null;
+  atproto_record_uri: string;
   atproto_record_cid: string | null;
   created_at: string;
   like_count: number;
@@ -80,11 +80,11 @@ export interface RadioSnapshot {
 }
 
 function song(item: StateTrack): RadioSong {
-  const uri = item.atproto_record_uri ?? `at://${item.artist_did}/fm.plyr.track/radio-${item.id}`;
+  const uri = item.atproto_record_uri;
   const [, , did, collection, rkey] = uri.split('/');
   const track: Track = {
     object: 'track',
-    id: item.atproto_record_uri ? trackIdFromUri(item.atproto_record_uri) : `radio:${item.id}`,
+    id: trackIdFromUri(uri),
     record: { uri, cid: item.atproto_record_cid, revision: null, collection, rkey },
     metadata: { title: item.title, artist_name: item.artist, description: null, album: null, duration_seconds: item.duration, created_at: item.created_at },
     artist: { did: did || item.artist_did, profile: { handle: item.artist_handle, display_name: item.artist, avatar_url: item.artist_avatar_url ?? null } },

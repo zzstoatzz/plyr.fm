@@ -213,7 +213,7 @@ fn applyRecord(conn: *pg.Conn, write: RecordWrite) TrackStore.Error!ApplyResult 
         write.indexed_at_us,
         write.audio_space,
     }) catch |err| {
-        std.log.err("track projection record upsert failed: {}", .{err});
+        std.log.err("track projection record upsert failed for {s}: {}: {s}", .{ write.record_uri, err, if (conn.err) |pg_err| pg_err.message else "" });
         return error.ProjectionUnavailable;
     };
     if (affected == 1) return .applied;
@@ -344,7 +344,7 @@ pub fn createTestTable(pool: *pg.Pool) !void {
         \\    OR (NOT deleted AND record_cid IS NOT NULL AND title IS NOT NULL
         \\      AND artist_name IS NOT NULL AND file_type IS NOT NULL
         \\      AND record_created_at IS NOT NULL
-        \\      AND (audio_url IS NOT NULL OR audio_blob_cid IS NOT NULL))
+        \\      AND (audio_url IS NOT NULL OR audio_blob_cid IS NOT NULL OR audio_space IS NOT NULL))
         \\  ),
         \\  CONSTRAINT ck_track_records_blob_shape CHECK (
         \\    (audio_blob_cid IS NULL AND audio_blob_media_type IS NULL AND audio_blob_size IS NULL)
@@ -439,7 +439,10 @@ test "PostgreSQL track projection replaces complete records and keeps tombstones
     try policy.deinit();
     try expectTrack(pool, "One", &rev_1.str(), false);
 
-    const upsert_2 = makeUpsert(try cidString(a, "record-2"), "Two", &rev_2.str(), commit_2);
+    // a closed track: its audio sits in a space, not on the public record
+    var upsert_2 = makeUpsert(try cidString(a, "record-2"), "Two", &rev_2.str(), commit_2);
+    upsert_2.upsert.audio_url = null;
+    upsert_2.upsert.audio_space = "at://did:plc:artist/space/fm.plyr.dev.audio/3m123abc/did:plc:artist/fm.plyr.dev.track/3m123abc";
     try std.testing.expectEqual(ApplyResult.applied, try store.apply(a, upsert_2));
     try std.testing.expectEqual(ApplyResult.stale, try store.apply(a, upsert_1));
     try expectTrack(pool, "Two", &rev_2.str(), false);
@@ -513,10 +516,7 @@ fn expectRecordJson(pool: *pg.Pool, expected: ?[]const u8) !void {
 }
 
 fn expectTrack(pool: *pg.Pool, title: ?[]const u8, rev: []const u8, deleted: bool) !void {
-    var row = (try pool.row(
-        "SELECT title, commit_rev, deleted FROM plyr_index.track_records WHERE rkey = '3m123abc'",
-        .{},
-    )).?;
+    var row = (try pool.row("SELECT title, commit_rev, deleted FROM plyr_index.track_records WHERE rkey = '3m123abc'", .{})).?;
     defer row.deinit() catch {};
     try std.testing.expect(optionalEql(try row.get(?[]const u8, 0), title));
     try std.testing.expectEqualStrings(rev, try row.get([]const u8, 1));

@@ -15,17 +15,17 @@ async function verify(browser, origin, width) {
   let releaseLookup;
   const heldLookup = new Promise(resolve => { releaseLookup = resolve; });
   try {
-    await page.route('https://api.plyr.fm/stats/atlas', route => {
+    await page.route('https://api.next.plyr.fm/xrpc/fm.plyr.unspecced.getAtlas', route => {
       reads++;
       return phone && reads === 1 ? route.fulfill({ status: 503 }) : route.fulfill({ json: atlas });
     });
-    await page.route('https://api.plyr.fm/tracks/19', async route => {
+    await page.route(/\/xrpc\/fm\.plyr\.unspecced\.getTrack\?/, async route => {
       selections++;
       if (!phone && selections === 1) {
         await heldLookup;
-        return route.fulfill({ json: { atproto_record_uri: track.record.uri } }).catch(() => {});
+        return route.fulfill({ json: track }).catch(() => {});
       }
-      return route.fulfill({ json: { atproto_record_uri: track.record.uri } });
+      return route.fulfill({ json: track });
     });
     if (!phone) await page.setViewportSize({ width, height: 1 });
     await page.goto(origin);

@@ -108,6 +108,8 @@ const candidate_query =
     \\  AND v.record_cid IS NOT NULL
     \\  AND v.audio_space IS NULL
     \\  AND COALESCE(d.origin_url, v.audio_url) LIKE 'https://%'
+    \\  -- production's gated audio answers only its signed-in supporters
+    \\  AND COALESCE(d.origin_url, v.audio_url) NOT LIKE 'https://api.plyr.fm/%'
     \\  AND (m.record_uri IS NULL OR m.record_cid <> v.record_cid
     \\    OR (m.duration_seconds IS NULL AND m.next_attempt_us <= $1))
     \\ORDER BY m.attempts NULLS FIRST, v.record_uri
@@ -191,6 +193,7 @@ test "the prober measures, backs off, and starts over for a new version" {
         \\('at://a/known', 'cidk', 'did:plc:a', 200, 'https://audio.example/k.mp3', NULL, NULL),
         \\('at://a/private', 'cidp', 'did:plc:a', NULL, NULL, 'bafyblob', 'at://space'),
         \\('at://a/insecure', 'cidi', 'did:plc:a', NULL, 'http://audio.example/i.mp3', NULL, NULL),
+        \\('at://a/gated', 'cidgt', 'did:plc:a', NULL, 'https://api.plyr.fm/audio/abc123', NULL, NULL),
         \\('at://a/blob', 'cidb', 'did:plc:a', NULL, NULL, 'bafyblob2', NULL),
         \\('at://gone/1', 'cidg', 'did:plc:gone', NULL, 'https://audio.example/g.mp3', NULL, NULL)
     , .{});

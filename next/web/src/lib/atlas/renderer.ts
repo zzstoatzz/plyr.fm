@@ -1,6 +1,6 @@
 import { ArtistFaces } from './faces';
 import { neighborhoods, neighborLinks, type Neighborhood } from '@plyr/next-core/atlas/neighborhoods';
-import { clamp01, faceTint, fadeIn, fadeOut, hash01, hueColors, hueStepOf, rgba, TUNE, type HueColors } from '@plyr/next-core/atlas/palette';
+import { clamp01, faceTint, fadeIn, fadeOut, hash01, hashText, hueColors, hueStepOf, rgba, TUNE, type HueColors } from '@plyr/next-core/atlas/palette';
 import { artistRadius, fitView, popularity } from '@plyr/next-core/atlas/view';
 import type { AtlasArtist, AtlasCallbacks, AtlasData, AtlasOptions, AtlasPoint } from '@plyr/next-core/atlas/types';
 
@@ -760,7 +760,7 @@ export class AtlasRenderer {
       if (sx + r < 0 || sx - r > this.W || sy + r < 0 || sy - r > this.H) continue;
       const halo = this.getHaloSprite(nb.step, r);
       const size = halo.cv.width * (r / halo.bucket);
-      g.globalAlpha = 0.75 + hash01(nb.id) * 0.25;
+      g.globalAlpha = 0.75 + (typeof nb.id === 'number' ? hash01(nb.id) : hashText(nb.id)) * 0.25;
       g.drawImage(halo.cv, sx - size / 2, sy - size / 2, size, size);
     }
     this.ctx.globalAlpha = alpha;

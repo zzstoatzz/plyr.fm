@@ -15,11 +15,10 @@ function isAtlas(value: unknown): value is AtlasData {
 		&& typeof data.meta?.nTracks === 'number';
 }
 
-export function loadAtlas() {
+/** the atlas, kept for an hour; `fetchAtlas` is the client's own `api.atlas` */
+export function loadAtlas(fetchAtlas: () => Promise<unknown>) {
 	if (cached && Date.now() - cached.at < 3_600_000) return cached.load;
-	const load = fetch('https://api.plyr.fm/stats/atlas').then(async response => {
-		if (!response.ok) throw new Error('could not load the atlas.');
-		const data: unknown = await response.json();
+	const load = fetchAtlas().catch(() => { throw new Error('could not load the atlas.'); }).then(data => {
 		if (!isAtlas(data)) throw new Error('could not read the atlas.');
 		return data;
 	});

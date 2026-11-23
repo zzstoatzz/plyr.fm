@@ -6,7 +6,7 @@
 	import { trackArtwork } from '@plyr/next-core/artwork';
 	import { trackIdFromUri } from '@plyr/next-core/api';
 	import { api } from '$lib/api';
-	import { loadAtlas } from '@plyr/next-core/atlas/load';
+	import { loadAtlas } from '$lib/atlas/catalog';
 	import type { AtlasData } from '@plyr/next-core/atlas/types';
 	import { trackHref, artistName } from '$lib/tracks';
 	import Artwork from '$lib/ui/Artwork.svelte';

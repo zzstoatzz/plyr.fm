@@ -15,6 +15,7 @@ on:
             verify-live-like,
             verify-live-publish,
             verify-live-not-found,
+            verify-live-playback,
           ]
         default: preview
   pull_request:
@@ -291,7 +292,7 @@ jobs:
   # dispatched targets run alone; every deploy from main also runs the signed-out not-found check
   verify-live-browser:
     needs: deploy
-    if: always() && github.ref == 'refs/heads/main' && ((github.event_name == 'push' && needs.deploy.result == 'success') || (github.event_name == 'workflow_dispatch' && (inputs.target == 'verify-live-upload-consent' || inputs.target == 'verify-live-jam' || inputs.target == 'verify-live-like' || inputs.target == 'verify-live-publish' || inputs.target == 'verify-live-not-found')))
+    if: always() && github.ref == 'refs/heads/main' && ((github.event_name == 'push' && needs.deploy.result == 'success') || (github.event_name == 'workflow_dispatch' && (inputs.target == 'verify-live-upload-consent' || inputs.target == 'verify-live-jam' || inputs.target == 'verify-live-like' || inputs.target == 'verify-live-publish' || inputs.target == 'verify-live-not-found' || inputs.target == 'verify-live-playback')))
     runs-on: ubuntu-latest
     timeout-minutes: 8
     concurrency: next-live-browser
@@ -353,24 +354,39 @@ jobs:
           ZAT_TEST_PDS: ${{ secrets.ZAT_TEST_PDS }}
           PLAYWRIGHT_CHANNEL: chrome
         run: node scripts/check-live-publish.mjs
+      - name: verify a press makes sound, signed out and signed in, phone and desktop
+        if: github.event_name == 'push' || inputs.target == 'verify-live-playback'
+        working-directory: next/web
+        env:
+          ZAT_TEST_HANDLE: ${{ secrets.ZAT_TEST_HANDLE }}
+          ZAT_TEST_PASSWORD: ${{ secrets.ZAT_TEST_PASSWORD }}
+          ZAT_TEST_PDS: ${{ secrets.ZAT_TEST_PDS }}
+        run: node scripts/check-live-playback.mjs
+      - uses: actions/upload-artifact@v4
+        if: always() && (github.event_name == 'push' || inputs.target == 'verify-live-playback')
+        with:
+          name: live-playback
+          path: /tmp/plyr-live-playback
+          if-no-files-found: ignore
       - name: verify missing pages show the not-found page
-        if: github.event_name == 'push' || inputs.target == 'verify-live-not-found'
+        # every live check runs even when an earlier one fails, so one failure never hides another
+        if: "!cancelled() && (github.event_name == 'push' || inputs.target == 'verify-live-not-found')"
         working-directory: next/web
         run: node scripts/check-live-not-found.mjs
       - name: verify the home rail ends with radio and stays on screen
-        if: github.event_name == 'push'
+        if: "!cancelled() && github.event_name == 'push'"
         working-directory: next/web
         run: node scripts/check-live-home-rail.mjs
       - name: verify artist pages carry links and background
-        if: github.event_name == 'push'
+        if: "!cancelled() && github.event_name == 'push'"
         working-directory: next/web
         run: node scripts/check-live-artist-page.mjs
       - name: verify radio station links and that the firehose stays on air
-        if: github.event_name == 'push'
+        if: "!cancelled() && github.event_name == 'push'"
         working-directory: next/web
         run: node scripts/check-live-radio.mjs
       - name: verify the upload page opens its track and album forms signed in
-        if: github.event_name == 'push'
+        if: "!cancelled() && github.event_name == 'push'"
         working-directory: next/web
         env:
           ZAT_TEST_HANDLE: ${{ secrets.ZAT_TEST_HANDLE }}

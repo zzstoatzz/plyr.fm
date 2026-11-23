@@ -13,7 +13,6 @@ import { TrackLikes } from './TrackLikes';
 import { usePlayback } from './playback';
 import { Sheet, type Anchor, type Lift } from './Sheet';
 import { DownloadAction } from './downloads/DownloadAction';
-import { AccessSheet } from './access/AccessSheet';
 
 export function TrackMenu({ track, close, actions, returnTo, anchor, lift }: { track: Track; close: () => void; actions?: ReactNode; returnTo?: string; anchor?: Anchor; lift?: Lift }) {
   const { did } = useAuth();
@@ -21,7 +20,6 @@ export function TrackMenu({ track, close, actions, returnTo, anchor, lift }: { t
   const router = useRouter();
   const [playlists, setPlaylists] = useState(false);
   const [download, setDownload] = useState(false);
-  const [access, setAccess] = useState(false);
   const [destination, setDestination] = useState<Href>();
   function finishNavigation() {
     if (!destination) return;
@@ -33,7 +31,6 @@ export function TrackMenu({ track, close, actions, returnTo, anchor, lift }: { t
     if (Platform.OS === 'ios') setDestination(login);
     else { close(); router.push(login); }
   }
-  if (access) return <AccessSheet subject={{ noun: 'track', tracks: [track], skey: track.record.rkey, returnTo: `/track/${track.id}` }} close={close} />;
   function go(href: Href) {
     if (Platform.OS === 'ios') setDestination(href);
     else { close(); router.push(href); }
@@ -60,7 +57,9 @@ export function TrackMenu({ track, close, actions, returnTo, anchor, lift }: { t
         {did === track.artist.did && <ActionRow icon={Pencil} label="edit track"
           href={Platform.OS === 'ios' ? undefined : `/edit-track/${track.id}`}
           onPress={Platform.OS === 'ios' ? () => setDestination(`/edit-track/${track.id}`) : close} />}
-        {did === track.artist.did && <ActionRow icon={Lock} label="who can listen" onPress={() => setAccess(true)} />}
+        {did === track.artist.did && <ActionRow icon={Lock} label="who can listen"
+          href={Platform.OS === 'ios' ? undefined : `/who-can-listen/${track.id}`}
+          onPress={Platform.OS === 'ios' ? () => setDestination(`/who-can-listen/${track.id}`) : close} />}
         <ShareLink menu path={`/track/${encodeURIComponent(track.id)}`} />
         <ActionRow icon={UserCircle} label="go to artist" onPress={() => go({ pathname: '/u/[handle]', params: { handle: track.artist.profile.handle || track.artist.did } })} />
         {actions}

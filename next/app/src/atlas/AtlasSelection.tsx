@@ -8,7 +8,6 @@ import { useAppearance } from '../appearance';
 import { Cover, useResource } from '../CatalogPieces';
 import { Round } from '../HeroPieces';
 import { X } from '../icons';
-import { canonicalTrackId } from '../legacy-track';
 import { glassSurface } from '../materials';
 import { PauseGlyph, PlayGlyph } from '../PlayerGlyph';
 import { usePlayContext, usePlayback } from '../playback-context';
@@ -18,7 +17,7 @@ import { Text } from '../Text';
 export function AtlasSelection({ point, onClose }: { point: AtlasPoint; onClose: () => void }) {
   const theme = useAppearance();
   const player = usePlayback();
-  const load = useCallback(async () => api.track(await canonicalTrackId(String(point.id), new AbortController().signal)), [point.id]);
+  const load = useCallback(() => api.track(String(point.id)), [point.id]);
   const track = useResource(load);
   const { pause, press } = usePlayContext(tracksContext(track.data ? [track.data] : []));
   const Glyph = pause ? PauseGlyph : PlayGlyph;

@@ -1,0 +1,83 @@
+name: next ios ota
+
+# Publishes an over-the-air update of next/app to the `production` channel,
+# the one TestFlight builds listen on, the same command next-ship-ios runs on
+# nate's mac. Only for JS/asset changes: when the iOS fingerprint differs from
+# the newest shipped build (tag next-ios/<n>), no installed build could take the
+# update, so the job says a TestFlight build is needed and publishes nothing.
+# Without an EXPO_TOKEN repo secret the job notes that and succeeds.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "next/app/**"
+      - "next/core/**"
+      - ".github/workflows/next-ota.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: next-ios-ota
+  cancel-in-progress: false
+
+jobs:
+  ota:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EXPO_PUBLIC_SITE_URL: https://next.plyr.fm
+    steps:
+      - name: check for EXPO_TOKEN
+        if: env.EXPO_TOKEN == ''
+        run: |
+          echo "::notice title=next ios ota::EXPO_TOKEN not set; skipping OTA"
+          echo "EXPO_TOKEN not set; skipping OTA" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/checkout@v4
+        if: env.EXPO_TOKEN != ''
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        if: env.EXPO_TOKEN != ''
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v2
+        if: env.EXPO_TOKEN != ''
+      - run: bun install --frozen-lockfile
+        if: env.EXPO_TOKEN != ''
+        working-directory: next
+      - name: compare fingerprint with the newest shipped build
+        id: runtime
+        if: env.EXPO_TOKEN != ''
+        working-directory: next/app
+        run: |
+          fingerprint() { npx --no-install expo-updates fingerprint:generate --platform ios | jq -er .hash; }
+          head=$(fingerprint)
+          tag=$(git tag -l 'next-ios/*' --sort=-v:refname | head -1)
+          test -n "$tag"
+          git worktree add --detach "$RUNNER_TEMP/shipped" "$tag"
+          (cd "$RUNNER_TEMP/shipped/next" && bun install --frozen-lockfile > /dev/null)
+          shipped=$(cd "$RUNNER_TEMP/shipped/next/app" && fingerprint)
+          echo "runtime $head; $tag runtime $shipped"
+          if [ "$head" = "$shipped" ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=next ios ota::native fingerprint changed since $tag ($shipped -> $head); this needs a TestFlight build, not an OTA. Skipping."
+            echo "native fingerprint changed since $tag; needs a TestFlight build. No OTA published." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: publish ota
+        if: env.EXPO_TOKEN != '' && steps.runtime.outputs.publish == 'true'
+        working-directory: next/app
+        env:
+          MESSAGE: "${{ github.sha }} ${{ github.event.head_commit.message || 'manual dispatch' }}"
+        run: |
+          npx --yes eas-cli@27.11.0 update --channel production --environment production --platform ios \
+            --message "$(printf '%s' "$MESSAGE" | head -1 | cut -c1-200)" --non-interactive --json > "$RUNNER_TEMP/update.json"
+          jq . "$RUNNER_TEMP/update.json"
+          group=$(jq -er '.[0].group' "$RUNNER_TEMP/update.json")
+          runtime=$(jq -er '.[0].runtimeVersion' "$RUNNER_TEMP/update.json")
+          echo "update group $group (runtime $runtime)"
+          echo "published OTA update group \`$group\` (runtime \`$runtime\`) for ${GITHUB_SHA}" >> "$GITHUB_STEP_SUMMARY"

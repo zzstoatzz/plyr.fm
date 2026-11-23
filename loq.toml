@@ -366,6 +366,10 @@ path = "scripts/build_atlas.py"
 max_lines = 589
 
 [[rules]]
+path = "next/scripts/build-atlas.py"
+max_lines = 729
+
+[[rules]]
 path = "frontend/src/routes/atlas/renderer.ts"
 max_lines = 1182
 
@@ -585,7 +589,7 @@ max_lines = 507
 
 [[rules]]
 path = "next/backend/src/main.zig"
-max_lines = 520
+max_lines = 526
 
 [[rules]]
 path = "next/web/src/lib/publishing/UploadForm.svelte"
@@ -597,7 +601,7 @@ max_lines = 521
 
 [[rules]]
 path = "next/web/edge/link-preview.js"
-max_lines = 524
+max_lines = 617
 
 [[rules]]
 path = "next/web/src/lib/publishing/AlbumUpload.svelte"

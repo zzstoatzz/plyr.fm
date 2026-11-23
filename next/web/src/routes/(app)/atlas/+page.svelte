@@ -2,10 +2,10 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { onMount, tick } from 'svelte';
-	import { atlasSummary, loadAtlas } from '@plyr/next-core/atlas/load';
+	import { atlasSummary, loadAtlas } from '$lib/atlas/catalog';
 	import { mountAtlas } from '$lib/atlas/canvas';
 	import type { AtlasData } from '@plyr/next-core/atlas/types';
-	import { trackEmbed } from '$lib/embed/catalog';
+	import { api } from '$lib/api';
 	import { player } from '$lib/player.svelte';
 	import Loading from '$lib/ui/Loading.svelte';
 
@@ -71,7 +71,7 @@
 		return { x: Math.max(8, Math.min(canvas.clientWidth - 252, x + 16)), y: Math.max(8, y - 60), name, detail };
 	}
 
-	async function play(id: number, title: string) {
+	async function play(id: string | number, title: string) {
 		pending?.abort();
 		const request = new AbortController();
 		pending = request;
@@ -85,7 +85,7 @@
 			playbackError = 'could not play this track from the atlas. select it to try again.';
 		}, 10_000);
 		try {
-			const track = await trackEmbed(String(id), (input, init) => fetch(input, { ...init, signal: request.signal }));
+			const track = await api.track(String(id));
 			if (!request.signal.aborted) player.play(track);
 		} catch {
 			if (!request.signal.aborted) playbackError = 'could not play this track from the atlas.';

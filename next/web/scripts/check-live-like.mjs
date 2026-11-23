@@ -3,7 +3,6 @@ import { chromium } from 'playwright';
 import { app, browserAccount } from './live-browser-account.mjs';
 
 const api = 'https://api.next.plyr.fm';
-const production = 'https://api.plyr.fm';
 const uri = 'at://did:plc:siv7zbedip4vcet4v67piibr/fm.plyr.track/3mrttu6zg4k22';
 const id = 'trk_' + Buffer.from(uri).toString('base64url');
 const path = '/track/' + id;
@@ -17,13 +16,6 @@ async function json(url, init) {
   return response.json();
 }
 
-async function checkProduction() {
-  const response = await request(production + '/tracks/by-uri?' + new URLSearchParams({ uri }));
-  assert.equal(response.status, 404, 'the fixture must be absent from the legacy catalog');
-  assert.equal((await response.json()).detail, 'track not found');
-}
-
-await checkProduction();
 const track = await json(api + '/xrpc/fm.plyr.unspecced.getTrack?' + new URLSearchParams({ uri }));
 assert.ok(track.legacy_id == null && track.access.visibility === 'public' && track.record.uri === uri && track.record.cid,
   'expected the preflighted Next-only track');

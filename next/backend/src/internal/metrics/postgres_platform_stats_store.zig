@@ -12,7 +12,15 @@ pub const PostgresPlatformStatsStore = struct {
     refreshed_ns: i96 = 0,
 
     pub fn store(self: *PostgresPlatformStatsStore) platform.Store {
-        return .{ .context = self, .get_fn = getOpaque };
+        return .{ .context = self, .get_fn = getOpaque, .atlas_fn = atlasOpaque };
+    }
+
+    fn atlasOpaque(context: *anyopaque, allocator: std.mem.Allocator) platform.Store.Error!?[]const u8 {
+        const self: *PostgresPlatformStatsStore = @ptrCast(@alignCast(context));
+        var row = (self.pool.row(atlas_query, .{}) catch return error.MetricsUnavailable) orelse return null;
+        defer row.deinit() catch {};
+        const body = row.get([]const u8, 0) catch return error.CorruptMetrics;
+        return allocator.dupe(u8, body) catch error.MetricsUnavailable;
     }
 
     fn getOpaque(context: *anyopaque) platform.Store.Error!platform.Stats {
@@ -51,6 +59,8 @@ pub const PostgresPlatformStatsStore = struct {
         return value;
     }
 };
+
+const atlas_query = "SELECT body::text FROM plyr_index.atlas_snapshots WHERE id = 1";
 
 const query =
     \\SELECT count(*)::bigint, count(DISTINCT v.owner_did)::bigint,

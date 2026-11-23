@@ -31,6 +31,14 @@ case "$marker" in
     *) echo "refusing: next database has no plyr-zig marker comment" >&2; exit 1 ;;
 esac
 
+# On main this runs beside the deploy that migrates the database, so a new
+# table may not exist yet: wait for it rather than fail.
+for _ in $(seq 1 40); do
+    [[ "$(next_psql -At -c "SELECT to_regclass('plyr_index.legacy_play_days') IS NOT NULL")" == t ]] && break
+    echo "waiting for the migration that adds plyr_index.legacy_play_days"
+    sleep 15
+done
+
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 

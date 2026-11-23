@@ -31,10 +31,9 @@ plyr_index.track_records ──▶ TrackInputStream ──▶ Osprey RulesSink �
   `rules/copyright.sml` is prod's "plays through" copyright rule;
   `rules/cover.sml` flags a cover that breaks plyr's image policy.
 - **UDFs** (`src/plyr_osprey/udfs.py`): `RecordingsPlayingThrough` fingerprints
-  audio through plyr's moderation service (which holds the AuDD key) and applies
-  the evidence bar from prod (`evidence.py`); `ImagePolicyViolations` sends a
-  cover to the same service's `/scan-image`, the Claude check prod runs on every
-  cover uploaded to it (`image_scan.py`); `FlagForReview` is the effect a
+  audio with AuDD and applies
+  the evidence bar from prod (`evidence.py`); `ImagePolicyViolations` asks
+  Claude about a cover with prod's image policy prompt (`image_scan.py`); `FlagForReview` is the effect a
   matched rule leaves; `UrlHost` is a helper.
 - **output**: the flags for a track, its scan record and the cursor are written
   in one transaction. A failed scan isn't recorded as clean: the run stops and
@@ -51,7 +50,8 @@ for the Postgres round trip). `scripts/run` runs the worker:
 | env | |
 | --- | --- |
 | `DATABASE_URL` | next's Postgres (the writer login) |
-| `MODERATION_SERVICE_URL`, `MODERATION_AUTH_TOKEN` | plyr's moderation service, for `/scan` |
+| `AUDD_API_TOKEN` | AuDD, for fingerprinting |
+| `ANTHROPIC_API_KEY` | the cover check |
 | `OSPREY_DRAIN_ONCE` | `true` stops once caught up |
 | `OSPREY_POLL_SECONDS` | otherwise, the wait when caught up (default 30) |
 | `OSPREY_START_AT_US` | where the tracks walk's first run starts (default now) |

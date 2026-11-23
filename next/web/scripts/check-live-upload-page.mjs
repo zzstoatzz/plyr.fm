@@ -83,6 +83,7 @@ async function verify(browser, width) {
     await shot('door');
 
     stage = 'choosing several files';
+    await page.locator('form:not([inert])').filter({ has: page.getByLabel('audio file', { exact: true }) }).waitFor();
     await page.getByLabel('audio file', { exact: true }).setInputFiles([wave('first.wav'), wave('second.wav')]);
     await page.waitForURL(app + '/upload?mode=album');
     assert.equal(await page.getByRole('textbox', { name: 'title for track 2' }).inputValue(), 'second');
@@ -95,6 +96,8 @@ async function verify(browser, width) {
     await page.waitForURL(app + '/upload');
 
     stage = 'choosing one file';
+    // the form stays inert until the saved draft is restored, and a restore after the pick would blank the title
+    await page.locator('form:not([inert])').filter({ has: page.getByLabel('audio file', { exact: true }) }).waitFor();
     await page.getByLabel('audio file', { exact: true }).setInputFiles(wave('single.wav'));
     // the title fills from the file name once the audio is read
     const title = page.getByRole('textbox', { name: 'title', exact: true });
@@ -103,6 +106,16 @@ async function verify(browser, width) {
     await page.getByRole('group', { name: 'album' }).waitFor();
     await shot('track');
     await page.evaluate(() => { for (const key of Object.keys(localStorage)) if (key.includes('upload')) localStorage.removeItem(key); });
+
+    stage = 'new album from files';
+    await page.goto(app + '/create-album', { waitUntil: 'domcontentloaded' });
+    await page.getByRole('button', { name: 'choose files', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'add those tracks', exact: true }).waitFor();
+    // a folder's numbered files land in name order whatever order they were picked in
+    await page.getByLabel('audio files', { exact: true }).setInputFiles([wave('02 second.wav'), wave('01 first.wav')]);
+    assert.equal(await page.getByRole('textbox', { name: 'title for track 1' }).inputValue(), 'first');
+    await page.getByRole('button', { name: 'upload album' }).waitFor();
+    await shot('new-album');
     const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
     assert.ok(scrollWidth <= width, `the page scrolls sideways at ${width}px`);
     assert.deepEqual(writes, [], 'nothing was written');
@@ -119,7 +132,7 @@ async function verify(browser, width) {
     } finally { await context.close(); }
   }
   if (failure) throw failure;
-  console.log(`${width}px: drop zone, album form and track form open on live next`);
+  console.log(`${width}px: drop zone, album form, track form and new album open on live next`);
 }
 
 await mkdir(output, { recursive: true });
