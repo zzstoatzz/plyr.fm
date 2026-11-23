@@ -245,7 +245,9 @@ async function check(browser, accounts, width, scheme) {
     assert.equal((await read(playlistUri)).error, 'RecordNotFound');
 
     await page.goto(origin + '/create-album');
+    await button('add those tracks').click();
     await main.getByRole('textbox', { name: 'album name' }).fill('Chosen tracks');
+    await main.getByRole('searchbox', { name: 'find your tracks' }).fill('a');
     await button('Add Alpha').click();
     await button('Add Beta').click();
     await button('Move Beta up').click();
@@ -262,7 +264,7 @@ async function check(browser, accounts, width, scheme) {
       coverEntered.resolve();
       return coverReleased.promise;
     };
-    await button('create album').click();
+    await button('make the album').click();
     await coverEntered.promise;
     staleTrack = true;
     coverReleased.resolve();
@@ -272,7 +274,7 @@ async function check(browser, accounts, width, scheme) {
     await main.getByRole('img', { name: 'selected cover preview' }).waitFor();
     staleTrack = false;
     holdCover = undefined;
-    await button('create album').click();
+    await button('make the album').click();
     await main.getByRole('heading', { name: 'Chosen tracks' }).waitFor();
     assert.deepEqual((await read(albumUri)).value.items.map(item => item.subject), expected);
     const originalCover = await readCover();
@@ -300,6 +302,7 @@ async function check(browser, accounts, width, scheme) {
     await button('edit album').click();
     await button('Remove Beta').click();
     await button('add tracks').click();
+    await main.getByRole('searchbox', { name: 'find your tracks' }).fill('gamma');
     await button('Add Gamma').click();
     await button('save changes').click();
     await button('edit album').waitFor();

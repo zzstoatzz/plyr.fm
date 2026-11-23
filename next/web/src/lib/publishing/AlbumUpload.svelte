@@ -213,10 +213,15 @@
   function addFiles(list: File[]) {
     const additions: Selected[] = [];
     const rejected: string[] = [];
+    // a shared "01 " style prefix is dropped from titles; the order already says it
+    const numbered = /^\d{1,3}\s*[-–.)_]?\s+(?=\S)/;
+    const bare = (file: File) => file.name.replace(/\.[^.]+$/, '').trim();
+    const strip = list.length > 1 && list.every(file => numbered.test(bare(file)));
     for (const file of list) {
       try {
         const audio = canonicalAudioFile(file);
-        additions.push({ key: crypto.randomUUID(), file: audio, title: file.name.replace(/\.[^.]+$/, '').trim().slice(0, 256) || file.name.slice(0, 256), explicit: false, features: [], open: false });
+        const title = (strip ? bare(file).replace(numbered, '') : bare(file)).slice(0, 256) || file.name.slice(0, 256);
+        additions.push({ key: crypto.randomUUID(), file: audio, title, explicit: false, features: [], open: false });
       } catch (failure) { rejected.push(`${file.name}: ${message(failure, 'could not open the file.')}`); }
     }
     if (selections.length + additions.length > 500) {
