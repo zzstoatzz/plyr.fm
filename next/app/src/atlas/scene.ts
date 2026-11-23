@@ -89,7 +89,8 @@ export function project(atlas: PreparedAtlas, frame: Pick<Frame, 'width' | 'heig
 export function hitTest(atlas: PreparedAtlas, frame: Pick<Frame, 'width' | 'height' | 'view'>, sx: number, sy: number): { artist: number } | { point: number } | null {
   const { toScreen, toData, scale } = project(atlas, frame);
   const artists = atlas.data.artists;
-  for (let i = 0; i < artists.length; i++) {
+  // faces draw in array order, so the last one is on top
+  for (let i = artists.length - 1; i >= 0; i--) {
     const r = artistRadius(artists[i], frame.view.zoom);
     if (r < 7) continue;
     const [ax, ay] = toScreen(artists[i].cx, artists[i].cy);

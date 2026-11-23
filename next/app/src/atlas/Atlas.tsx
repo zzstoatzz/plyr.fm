@@ -16,7 +16,7 @@ import { AtlasSelection } from './AtlasSelection';
 import { between, panBy, pinchBy, settle, still, strayed, type Live } from './camera';
 import { buildScene, hitTest, prepareAtlas, type PreparedAtlas } from './scene';
 
-const OVERSCAN = 0.25;
+const OVERSCAN = 0.3;
 
 export default function Atlas() {
   const theme = useAppearance();
@@ -24,7 +24,8 @@ export default function Atlas() {
   const atlas = useMemo(() => result.data && prepareAtlas(result.data), [result.data]);
   const [size, setSize] = useState<{ width: number; height: number }>();
   const [free, setFree] = useState<{ y: number; height: number }>();
-  const clear = useMemo(() => size && free ? { top: 72, bottom: Math.max(0, size.height - free.y - free.height) } : undefined, [size, free]);
+  const [headerHeight, setHeaderHeight] = useState<number>();
+  const clear = useMemo(() => size && free && headerHeight ? { top: headerHeight + 8, bottom: Math.max(0, size.height - free.y - free.height) } : undefined, [size, free, headerHeight]);
   const onLayout = (event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
     setSize(old => old?.width === width && old.height === height ? old : { width, height });
@@ -39,7 +40,7 @@ export default function Atlas() {
         setFree(old => old?.y === y && old.height === height ? old : { y, height });
       }} />
     </SafeAreaView>
-    <View pointerEvents="none" style={styles.header}>
+    <View pointerEvents="none" style={styles.header} onLayout={event => setHeaderHeight(event.nativeEvent.layout.height)}>
       <Text accessibilityRole="header" aria-level={1} style={[styles.title, { color: theme.text, fontSize: 28 * theme.scale, textShadowColor: theme.background }]}>atlas</Text>
       <Text style={{ color: theme.muted, fontSize: 13 * theme.scale, textShadowColor: theme.background, textShadowRadius: 8 }}>
         {result.data ? atlasSummary(result.data) : 'the catalog, mapped by sound'}
@@ -51,6 +52,11 @@ export default function Atlas() {
 function AtlasMap({ atlas, width, height, clear }: { atlas: PreparedAtlas; width: number; height: number; clear: { top: number; bottom: number } }) {
   const theme = useAppearance();
   const [view, setView] = useState<AtlasView>(() => fitView(atlas.xs, atlas.ys, width, height, clear.top, clear.bottom + 64));
+  const moved = useRef(false);
+  // the tab bar's inset can land a layout pass late: keep the opening view clear of it until the person moves the map
+  useEffect(() => {
+    if (!moved.current) setView(fitView(atlas.xs, atlas.ys, width, height, clear.top, clear.bottom + 64));
+  }, [atlas, width, height, clear.top, clear.bottom]);
   const [live, setLive] = useState<Live>(still);
   const [selected, setSelected] = useState(-1);
   const state = useRef({ view, live, frame: 0, glide: 0 });
@@ -62,6 +68,7 @@ function AtlasMap({ atlas, width, height, clear }: { atlas: PreparedAtlas; width
   const commit = useCallback(() => {
     const s = state.current;
     if (s.live === still) return;
+    moved.current = true;
     s.view = settle(s.view, s.live, width, height);
     s.live = still;
     setView(s.view);
@@ -69,6 +76,7 @@ function AtlasMap({ atlas, width, height, clear }: { atlas: PreparedAtlas; width
   }, [width, height]);
 
   const move = useCallback((next: Live) => {
+    moved.current = true;
     const s = state.current;
     s.live = next;
     if (strayed(next, width, height, OVERSCAN)) return commit();
@@ -125,6 +133,8 @@ function AtlasMap({ atlas, width, height, clear }: { atlas: PreparedAtlas; width
   const tapAt = useCallback((x: number, y: number) => {
     stopGlide();
     commit();
+    // a touch that stopped a glide only stops it, like a scroll view
+    if (caught.current) { caught.current = false; return; }
     const hit = hitTest(atlas, { width, height, view: state.current.view }, x, y);
     if (hit && 'artist' in hit) {
       const artist = atlas.data.artists[hit.artist];
@@ -132,12 +142,13 @@ function AtlasMap({ atlas, width, height, clear }: { atlas: PreparedAtlas; width
     } else setSelected(hit ? hit.point : -1);
   }, [atlas, width, height, commit, stopGlide]);
 
+  const caught = useRef(false);
   const pan = useRef({ x: 0, y: 0 });
   const pinch = useRef(1);
   const pinching = useRef(false);
   const panGesture = usePanGesture({
     runOnJS: true, maxPointers: 2,
-    onBegin: () => { stopGlide(); pan.current = { x: 0, y: 0 }; },
+    onBegin: () => { caught.current = !!state.current.glide; stopGlide(); pan.current = { x: 0, y: 0 }; },
     onUpdate: event => {
       const dx = event.translationX - pan.current.x;
       const dy = event.translationY - pan.current.y;
@@ -156,10 +167,11 @@ function AtlasMap({ atlas, width, height, clear }: { atlas: PreparedAtlas; width
     },
     onDeactivate: () => { pinching.current = false; commit(); }
   });
-  const doubleTap = useTapGesture({ runOnJS: true, numberOfTaps: 2, onActivate: event => zoomAt(2, event.x, event.y) });
-  const tap = useTapGesture({ runOnJS: true, onActivate: event => tapAt(event.x, event.y) });
+  const doubleTap = useTapGesture({ runOnJS: true, numberOfTaps: 2, maxDistance: 10, onActivate: event => zoomAt(2, event.x, event.y) });
+  const tap = useTapGesture({ runOnJS: true, maxDistance: 10, onActivate: event => tapAt(event.x, event.y) });
   const taps = useExclusiveGestures(doubleTap, tap);
-  const gestures = useSimultaneousGestures(panGesture, pinchGesture, taps);
+  // taps wait for a drag or pinch to fail, so a quick flick never lands as a tap
+  const gestures = useExclusiveGestures(useSimultaneousGestures(panGesture, pinchGesture), taps);
 
   useEffect(() => () => { stopGlide(); cancelAnimationFrame(state.current.frame); }, [stopGlide]);
   useEffect(() => {
@@ -179,8 +191,8 @@ function AtlasMap({ atlas, width, height, clear }: { atlas: PreparedAtlas; width
       {selected >= 0 ? <AtlasSelection key={selected} point={atlas.data.points[selected]} onClose={() => setSelected(-1)} />
         : <View style={styles.flex} />}
       <View style={[styles.zoom, glassSurface(theme)]}>
-        <Round label="Zoom in" onPress={() => zoomAt(1.6)}><Plus size={20} color={theme.text} /></Round>
-        <Round label="Zoom out" onPress={() => zoomAt(1 / 1.6)}><Minus size={20} color={theme.text} /></Round>
+        <Round label="Zoom in" onPress={() => zoomAt(1.5)}><Plus size={20} color={theme.text} /></Round>
+        <Round label="Zoom out" onPress={() => zoomAt(1 / 1.5)}><Minus size={20} color={theme.text} /></Round>
       </View>
     </View>
   </>;
