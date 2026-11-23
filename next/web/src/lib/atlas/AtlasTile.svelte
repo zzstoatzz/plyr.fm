@@ -20,7 +20,7 @@
 
 		async function paint() {
 			try {
-				const [{ mountAtlas }, { loadAtlas, atlasSummary }] = await Promise.all([import('./canvas'), import('./catalog')]);
+				const [{ mountAtlas }, { loadAtlas, atlasSummary }] = await Promise.all([import('./canvas'), import('@plyr/next-core/atlas/load')]);
 				if (!live || !desktop.matches) { if (live) observer.observe(tile); return; }
 				const atlas = await loadAtlas();
 				if (!live || !desktop.matches) { if (live) observer.observe(tile); return; }

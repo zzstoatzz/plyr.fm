@@ -1,4 +1,4 @@
-import type { AtlasData } from './types';
+import type { AtlasData } from './types.ts';
 
 let cached: { at: number; load: Promise<AtlasData> } | undefined;
 

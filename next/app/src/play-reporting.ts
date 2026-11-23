@@ -2,7 +2,7 @@ import { api } from './api-client';
 import { PlayOutbox } from '@plyr/next-core/play-outbox';
 import { playOutboxStorage } from './play-outbox-storage';
 import { playMetrics } from '@plyr/next-core/play-metrics';
-import { radioTrackId } from './radio-track';
+import { canonicalTrackId } from './legacy-track';
 
 let outbox: PlayOutbox | undefined;
 
@@ -12,7 +12,7 @@ export function playOutbox() {
       storage: playOutboxStorage,
       resolve: async (play) => play.trackId.startsWith('radio:') ? {
         ...play,
-        trackId: await radioTrackId(play.trackId.slice(6), new AbortController().signal),
+        trackId: await canonicalTrackId(play.trackId.slice(6), new AbortController().signal),
       } : play,
       send: api.recordPlay,
       onReceipt: (receipt) => {

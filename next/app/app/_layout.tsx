@@ -1,5 +1,5 @@
 import { Text } from '../src/Text';
-import { type Icon, ArrowLeft, House, MagnifyingGlass as Search, Books as Library, UserCircle as UserRound, PlusCircle as CirclePlus, Radio, ChartBar, GearSix as Settings, SignIn } from '../src/icons';
+import { type Icon, ArrowLeft, House, MagnifyingGlass as Search, Books as Library, UserCircle as UserRound, PlusCircle as CirclePlus, Radio, ChartBar, GlobeHemisphereWest, GearSix as Settings, SignIn } from '../src/icons';
 import { Link, Stack, router, usePathname, useSegments, type Href } from 'expo-router';
 import { useEffect } from 'react';
 import { useFonts } from 'expo-font';
@@ -103,6 +103,10 @@ function Shell() {
           {path === '/' && <Link href="/radio" asChild><Pressable accessibilityRole="link" accessibilityLabel="Radio"
             style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
             <Radio size={21} color={theme.muted} />
+          </Pressable></Link>}
+          {path === '/' && <Link href="/atlas" asChild><Pressable accessibilityRole="link" accessibilityLabel="Atlas"
+            style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+            <GlobeHemisphereWest size={21} color={theme.muted} />
           </Pressable></Link>}
           {path === '/' && <Link href="/stats" asChild><Pressable accessibilityRole="link" accessibilityLabel="Stats"
             style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>

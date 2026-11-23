@@ -1,4 +1,4 @@
-import type { AtlasArtist } from './types';
+import type { AtlasArtist } from '@plyr/next-core/atlas/types';
 
 const IN_FLIGHT = 6;
 
