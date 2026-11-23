@@ -42,6 +42,7 @@ pub const Method = enum {
     search,
     getStats,
     getAtlas,
+    getStatsOverview,
     awaitRecord,
     listAlbums,
     getAlbum,
@@ -168,6 +169,7 @@ pub fn handle(
         .search => try search_api.list(request, allocator, app.search_store, app.track_collection, app.list_collection, app.profile_collection, app.cors, request_id),
         .getStats => try stats.get(request, allocator, app.stats_store, app.cors, request_id),
         .getAtlas => try stats.atlas(request, allocator, app.stats_store, app.cors, request_id),
+        .getStatsOverview => try stats.overview(request, allocator, app.stats_overview_store, app.cors, request_id),
         .awaitRecord => try records.awaitRecord(request, allocator, app.io, app.record_status_store, .{
             .track = app.track_collection,
             .list = app.list_collection,

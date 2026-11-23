@@ -61,6 +61,8 @@
 	.numbered { grid-template-columns: 2.25rem minmax(0, 1fr) auto 3rem; min-height: 3.5rem; }
 	.number { display: grid; place-items: center; height: 2.25rem; color: var(--faint); font-variant-numeric: tabular-nums; }
 	.numbered .play { background: var(--hover); color: var(--text); }
+	/* the number's slot shows one thing at a time: the number, or the play/playing control that replaces it */
+	.numbered .cover:has(.play.playing) .number, .numbered:hover .number, .numbered .playback:focus-visible .number { visibility: hidden; }
 	.numbered.current .number, .numbered.current .title { color: var(--accent); }
 	.numbered .artist { display: none; }
 	.name { display: grid; justify-items: start; min-width: 0; }

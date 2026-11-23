@@ -13,11 +13,12 @@
   let snapshot = $state.raw(untrack(() => likes.snapshot(track)));
   const label = $derived((snapshot.liked ? 'Unlike' : 'Like') + (named ? ` ${track.metadata.title}` : ' track'));
   onMount(() => {
-    const stop = likes.subscribe(() => { snapshot = likes.snapshot(track); });
+    // the dock tears its heart down a tick after the queue empties, so the track can be gone when likes reset
+    const stop = likes.subscribe(() => { if (track) snapshot = likes.snapshot(track); });
     const stopAuth = auth.subscribe(() => { account = auth.getAuth(); });
     return () => { stop(); stopAuth(); };
   });
-  $effect(() => { track; account.rpc; snapshot = likes.snapshot(track); void likes.load(track); });
+  $effect(() => { if (!track) return; account.rpc; snapshot = likes.snapshot(track); void likes.load(track); });
 </script>
 
 <span class="like-control" class:liked={snapshot.liked}>
