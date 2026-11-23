@@ -1,18 +1,20 @@
 import { AlbumRows, TrackRows } from './TrackRows';
 import { trackArtwork } from '@plyr/next-core/artwork';
-import { X, ListPlus } from './icons';
+import { X } from './icons';
 import { PlayerControl } from './PlayerControl';
 import { AccountSection } from './AccountPieces';
-import { ListCards } from './ListCards';
+import { PinnedCollection, PlaylistGrid } from './LibraryPieces';
+import { loadAll } from '@plyr/next-core/catalog/owned';
+import type { ListSummary } from '@plyr/next-core/api';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import { api } from './api-client';
 import { playlistIdFromUri, type AwaitStatus, type ListDetail, type Track } from '@plyr/next-core/api';
 import { useAuth } from './auth';
 import { getAuth } from './auth-state';
 import {
-  Button, Heading, ListRows, Row, Status, artistName, errorMessage, usePages, useResource, type Play,
+  Button, Heading, Row, Status, artistName, errorMessage, usePages, useResource, type Play,
 } from './CatalogPieces';
 import { Action, Field, InlineLink, Copy } from './controls';
 import { Sheet } from './Sheet';
@@ -72,6 +74,20 @@ export function Library({ likesOnly, onPlay }: { likesOnly: boolean; onPlay: Pla
   return <AccountLibrary key={`${did}:${session.version}`} did={did} likesOnly={likesOnly} onPlay={onPlay} />;
 }
 
+type Whole<T> = { items?: T[]; failed?: boolean };
+/** a whole collection, re-read on demand; a re-read keeps what is drawn until the new copy lands */
+function useWhole<T>(load: () => Promise<T[]>, enabled: boolean) {
+  const [value, setValue] = useState<Whole<T>>({});
+  const [version, setVersion] = useState(0);
+  useEffect(() => {
+    if (!enabled) return;
+    let live = true;
+    load().then(items => { if (live) setValue({ items }); }, () => { if (live) setValue(previous => ({ items: previous.items, failed: true })); });
+    return () => { live = false; };
+  }, [load, enabled, version]);
+  return { ...value, reload: useCallback(() => setVersion(current => current + 1), []) };
+}
+
 function AccountLibrary({ did, likesOnly, onPlay }: { did: string; likesOnly: boolean; onPlay: Play }) {
   const auth = useAuth();
   const pds = usePds();
@@ -81,24 +97,30 @@ function AccountLibrary({ did, likesOnly, onPlay }: { did: string; likesOnly: bo
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState<string>();
   const mutation = useMutation();
-  const loadLikes = useCallback((cursor?: string) => api.actorLikes(did, { limit: likesOnly ? 30 : 5, cursor }), [did, likesOnly]);
-  const loadLists = useCallback((cursor?: string) => likesOnly
-    ? Promise.resolve({ object: 'list' as const, data: [], has_more: false })
-    : api.playlists({ owner_did: did, limit: 30, cursor }), [did, likesOnly]);
+  const loadLikes = useCallback((cursor?: string) => likesOnly
+    ? api.actorLikes(did, { limit: 30, cursor })
+    : Promise.resolve({ object: 'list' as const, data: [], has_more: false }), [did, likesOnly]);
   const likes = usePages(loadLikes);
-  const lists = usePages(loadLists);
+  // the overview reads whole collections: the pinned tiles count, play and shuffle all of them
+  const allLikes = useWhole(useCallback(() => loadAll(cursor => api.actorLikes(did, { limit: 100, cursor })), [did]), !likesOnly);
+  const uploads = useWhole(useCallback(() => loadAll(cursor => api.tracks({ artist_did: did, limit: 100, cursor })), [did]), !likesOnly);
+  const playlists = useWhole<ListSummary>(useCallback(() => loadAll(cursor => api.playlists({ owner_did: did, limit: 100, cursor })), [did]), !likesOnly);
   const focus = useRef({ visited: false, active: false });
   const reloadLikes = likes.reload;
-  const reloadLists = lists.reload;
+  const reloadAllLikes = allLikes.reload;
+  const reloadUploads = uploads.reload;
+  const reloadPlaylists = playlists.reload;
   useFocusEffect(useCallback(() => {
     focus.current.active = true;
     if (focus.current.visited) {
       reloadLikes();
-      reloadLists();
+      reloadAllLikes();
+      reloadUploads();
+      reloadPlaylists();
     }
     focus.current.visited = true;
     return () => { focus.current.active = false; };
-  }, [reloadLikes, reloadLists]));
+  }, [reloadLikes, reloadAllLikes, reloadUploads, reloadPlaylists]));
   function create() {
     void mutation.run(async () => {
       try {
@@ -119,19 +141,12 @@ function AccountLibrary({ did, likesOnly, onPlay }: { did: string; likesOnly: bo
     {likesOnly && likes.cursor && !likes.loading && !likes.error && <Button label="More liked tracks" onPress={likes.more} />}
   </>;
   if (likesOnly) return <><Heading main>liked tracks</Heading>{likedTracks}</>;
-  const liked = <AccountSection title="liked tracks">
-    {likedTracks}
-    <InlineLink standalone href="/liked">see all liked tracks</InlineLink>
-  </AccountSection>;
-  const playlists = <AccountSection title="your playlists">
-    <ListRows lists={lists.data} includeEmpty />
-    <Status loading={lists.loading} error={lists.error} retry={lists.more} empty={!lists.data.length ? 'no playlists yet. make one for your next listen.' : undefined} />
-    {lists.cursor && !lists.loading && !lists.error && <Button label="More playlists" onPress={lists.more} />}
-  </AccountSection>;
+  const newBlocked = recovery.loading || !!recovery.error || !!recovery.operations.length;
   return <>
-    <View style={styles.actions}>
-      <Action primary icon={ListPlus} label="New playlist" disabled={recovery.loading || !!recovery.error || !!recovery.operations.length} onPress={() => { mutation.clear(); setCreating(true); }} />
-      <Action label="Browse playlists" href="/playlists" />
+    <View style={styles.links}><InlineLink href="/playlists">browse playlists</InlineLink></View>
+    <View style={styles.pinned}>
+      <PinnedCollection liked title="liked tracks" href="/liked" tracks={allLikes.items} failed={allLikes.failed && !allLikes.items} onPlay={onPlay} />
+      {uploads.items?.length ? <PinnedCollection title="your uploads" href="/portal" tracks={uploads.items} onPlay={onPlay} /> : null}
     </View>
     <CreateRecovery auth={auth} recovery={recovery} kind="playlist" onDismiss={() => { setCreated(undefined); mutation.clear(); }} />
     <EarlierCreates auth={auth} recovery={recovery} kind="playlist" />
@@ -139,7 +154,10 @@ function AccountLibrary({ did, likesOnly, onPlay }: { did: string; likesOnly: bo
       <Status empty={mutation.message} />
       {created && <InlineLink standalone href={{ pathname: '/playlist/[id]', params: { id: playlistIdFromUri(created) } }}>open created playlist</InlineLink>}
     </>}
-    {liked}{playlists}
+    <AccountSection title={playlists.items ? `playlists · ${playlists.items.length}` : 'playlists'}>
+      {playlists.failed && !playlists.items ? <Status error="could not load your playlists." retry={playlists.reload} /> : null}
+      <PlaylistGrid lists={playlists.items ?? []} newDisabled={newBlocked} onNew={() => { mutation.clear(); setCreating(true); }} />
+    </AccountSection>
     {creating && <Sheet title="new playlist" close={() => { if (!mutation.busy) setCreating(false); }}>
       <Field label="Playlist name" value={name} onChangeText={setName} maxLength={64} editable={!mutation.busy} autoFocus />
       <Status loading={mutation.busy} error={mutation.message} />
@@ -263,5 +281,7 @@ const styles = StyleSheet.create({
   group: { gap: 8 },
   wide: { flexBasis: '100%', gap: 8 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
+  links: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: -4 },
+  pinned: { gap: 10 },
   input: { padding: 13, minHeight: 46, borderRadius: 9 },
 });
