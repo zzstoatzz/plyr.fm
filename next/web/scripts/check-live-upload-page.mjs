@@ -83,6 +83,7 @@ async function verify(browser, width) {
     await shot('door');
 
     stage = 'choosing several files';
+    await page.locator('form:not([inert])').filter({ has: page.getByLabel('audio file', { exact: true }) }).waitFor();
     await page.getByLabel('audio file', { exact: true }).setInputFiles([wave('first.wav'), wave('second.wav')]);
     await page.waitForURL(app + '/upload?mode=album');
     assert.equal(await page.getByRole('textbox', { name: 'title for track 2' }).inputValue(), 'second');
@@ -95,6 +96,8 @@ async function verify(browser, width) {
     await page.waitForURL(app + '/upload');
 
     stage = 'choosing one file';
+    // the form stays inert until the saved draft is restored, and a restore after the pick would blank the title
+    await page.locator('form:not([inert])').filter({ has: page.getByLabel('audio file', { exact: true }) }).waitFor();
     await page.getByLabel('audio file', { exact: true }).setInputFiles(wave('single.wav'));
     // the title fills from the file name once the audio is read
     const title = page.getByRole('textbox', { name: 'title', exact: true });
