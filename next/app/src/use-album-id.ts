@@ -3,6 +3,8 @@ import { api } from './api-client';
 import { type ListSummary, type Track } from '@plyr/next-core/api';
 
 const byArtist = new Map<string, Promise<ListSummary[]>>();
+// What came back, so a sheet that opens again draws the album link on its first frame.
+const settled = new Map<string, ListSummary[]>();
 
 /** A track names its album by title only; the artist's album with that name, if one exists. */
 export function albumFor(name: string | null, albums: ListSummary[]): ListSummary | null {
@@ -21,14 +23,16 @@ export function useAlbum(track: Track): ListSummary | null {
     let live = true;
     let albums = byArtist.get(did);
     if (!albums) {
-      albums = api.albums(did, { limit: 100 }).then(page => page.data);
+      albums = api.albums(did, { limit: 100 }).then(page => { settled.set(did, page.data); return page.data; });
       albums.catch(() => byArtist.delete(did));
       byArtist.set(did, albums);
     }
     albums.then(list => { if (live) setFound({ track: track.id, album: albumFor(album, list) }); }, () => {});
     return () => { live = false; };
   }, [album, did, track.id]);
-  return found?.track === track.id ? found.album : null;
+  if (found?.track === track.id) return found.album;
+  const known = album ? settled.get(did) : undefined;
+  return known ? albumFor(album, known) : null;
 }
 
 export function useAlbumId(track: Track): string | null {

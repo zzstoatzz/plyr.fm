@@ -25,6 +25,7 @@
 	import CommentsView from './listening/CommentsView.svelte';
 	import { comments } from './listening/comments';
 	import TrackBuy from './selling/TrackBuy.svelte';
+	import { trackTags } from './track-extras';
 	import { compactCount } from './listening/format';
 
 	let { close, pull }: { close?: () => void; pull?: DockPull } = $props();
@@ -33,15 +34,14 @@
 	const moreBelow = oneTimeHint('now-playing.more-below');
 	const chapters = $derived(parseChapters(player.current?.metadata.description, player.current?.metadata.duration_seconds ?? undefined));
 	const chapter = $derived(currentChapter(chapters.chapters, player.position));
-	// Lists carry no tags; the track read does.
 	let fetchedTags = $state.raw<{ id: string; tags: string[] }>();
 	$effect(() => {
 		const current = player.current;
 		if (!current || current.metadata.tags != null || player.privateMode || player.liveStation) return;
 		const { id } = current;
-		void api.track(id).then(track => { fetchedTags = { id, tags: track.metadata.tags ?? [] }; }, () => {});
+		void trackTags.load(id).then(tags => { fetchedTags = { id, tags }; }, () => {});
 	});
-	const tags = $derived(player.current?.metadata.tags ?? (fetchedTags?.id === player.current?.id ? fetchedTags?.tags : undefined) ?? []);
+	const tags = $derived(player.current?.metadata.tags ?? (player.current && (fetchedTags?.id === player.current.id ? fetchedTags.tags : trackTags.peek(player.current.id))) ?? []);
 	const playing = $derived(player.liveStation ? player.liveListening : player.playing && !player.outputElsewhere);
 	const commentable = $derived(!!player.current && !player.privateMode && !player.liveStation);
 	let commentState = $state.raw(comments.snapshot());

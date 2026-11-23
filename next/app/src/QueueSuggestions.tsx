@@ -3,13 +3,13 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import type { Track } from '@plyr/next-core/api';
 import { trackArtwork } from '@plyr/next-core/artwork';
-import { loadStarter, starters, suggestionRequest, type Starter } from '@plyr/next-core/queue-suggestions';
-import { api } from './api-client';
+import { starters, type Starter } from '@plyr/next-core/queue-suggestions';
 import { useAppearance } from './appearance';
 import { useAuth } from './auth';
 import { artistName, Cover } from './CatalogPieces';
 import { ArrowClockwise, Check, Play, Plus } from './icons';
 import { usePlayback } from './playback';
+import { queueSuggestions, useQueueSuggestions } from './queue-suggestions-store';
 import { Text } from './Text';
 
 const CARD = 118;
@@ -19,62 +19,45 @@ const GAP = 10;
 export function QueueSuggestionStrips() {
   const player = usePlayback();
   const theme = useAppearance();
+  const store = useQueueSuggestions();
   const uri = player.current?.record.uri;
   const artistDid = player.current?.artist.did;
-  const [round, setRound] = useState(0);
-  const [picks, setPicks] = useState<Track[]>([]);
-  const [more, setMore] = useState<{ name: string; tracks: Track[] }>({ name: '', tracks: [] });
   // An added card shrinks out of its strip (both strips, if it sits in both) instead of staying as a checkmark.
   const [leaving, setLeaving] = useState<Set<string>>(new Set());
-  const [gone, setGone] = useState<Set<string>>(new Set());
-  const shown = useRef<string[]>([]);
   const latest = useRef(player);
   latest.current = player;
 
-  // Refetch when the playing track changes or on refresh, not on every queue edit.
+  // The strips live in a session store: reopening the queue on the same track shows them as they were and asks for nothing.
   useEffect(() => {
-    if (!uri) { setPicks([]); return; }
-    const controller = new AbortController();
-    const timer = setTimeout(() => {
-      const request = suggestionRequest(latest.current.queue, latest.current.index, round ? shown.current : []);
-      if (!request) return;
-      api.suggestions(request.seeds, { exclude: request.exclude, limit: 12, signal: controller.signal }).then(result => {
-        setPicks(result.data);
-        shown.current = [...result.data.map(track => track.record.uri), ...(round ? shown.current : [])].slice(0, 60);
-      }, () => {});
-    }, 300);
-    return () => { clearTimeout(timer); controller.abort(); };
-  }, [uri, round]);
-
-  useEffect(() => {
+    if (!uri) return;
     const current = latest.current.current;
-    if (!artistDid || !current) { setMore({ name: '', tracks: [] }); return; }
-    const controller = new AbortController();
-    api.tracks({ artist_did: artistDid, limit: 13 }, controller.signal).then(result => {
-      const queued = new Set(latest.current.queue.map(track => track.id));
-      setMore({ name: artistName(current), tracks: result.data.filter(track => !queued.has(track.id)).slice(0, 12) });
-    }, () => {});
-    return () => controller.abort();
-  }, [artistDid]);
+    queueSuggestions.follow({ uri, artistDid, artistName: current ? artistName(current) : '', queue: () => ({ queue: latest.current.queue, index: latest.current.index }) });
+  }, [uri, artistDid]);
 
-  const add = (track: Track) => { player.enqueue(track, true); setLeaving(previous => new Set([...previous, track.id])); };
-  const leave = (id: string) => setGone(previous => previous.has(id) ? previous : new Set([...previous, id]));
-  const shownPicks = picks.filter(track => !gone.has(track.id));
-  const shownMore = more.tracks.filter(track => !gone.has(track.id));
+  // Marked added at once, so closing the queue mid-animation never brings the card back; it stays drawn until it has shrunk away.
+  const add = (track: Track) => { player.enqueue(track, true); queueSuggestions.added(track.id); setLeaving(previous => new Set([...previous, track.id])); };
+  const leave = (id: string) => setLeaving(previous => { const next = new Set(previous); next.delete(id); return next; });
+  // Anything already queued (or playing) stays out too, however it got there.
+  const queued = new Set(player.queue.map(track => track.id));
+  const visible = (track: Track) => leaving.has(track.id) || (!store.added.has(track.id) && !queued.has(track.id));
+  const shownPicks = store.picks.filter(visible);
+  // "more from" waits for the playing artist's own strip rather than showing the last artist's.
+  const moreHere = !!store.moreFor && store.moreFor === artistDid;
+  const shownMore = moreHere ? store.more.filter(visible) : [];
 
   return <>
     {shownPicks.length > 0 && <View style={styles.section}>
       <View style={styles.head}>
         <Text accessibilityRole="header" style={[styles.heading, { color: theme.muted, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale }]}>add to your queue</Text>
-        <Pressable accessibilityRole="button" accessibilityLabel="Show other suggestions" onPress={() => setRound(value => value + 1)} hitSlop={4}
+        <Pressable accessibilityRole="button" accessibilityLabel="Show other suggestions" onPress={() => queueSuggestions.refresh()} hitSlop={4}
           style={({ pressed }) => [styles.icon, { opacity: pressed ? 0.6 : 1 }]}>
           <ArrowClockwise size={18} color={theme.muted} />
         </Pressable>
       </View>
       <Strip tracks={shownPicks} leaving={leaving} add={add} leave={leave} />
     </View>}
-    {more.tracks.length > 1 && shownMore.length > 0 && <View style={styles.section}>
-      <Text accessibilityRole="header" numberOfLines={1} style={[styles.heading, { color: theme.muted, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale, paddingVertical: 10 }]}>more from {more.name}</Text>
+    {moreHere && store.more.length > 1 && shownMore.length > 0 && <View style={styles.section}>
+      <Text accessibilityRole="header" numberOfLines={1} style={[styles.heading, { color: theme.muted, fontFamily: theme.fontFamily, fontSize: 14 * theme.scale, paddingVertical: 10 }]}>more from {store.moreName}</Text>
       <Strip tracks={shownMore} leaving={leaving} add={add} leave={leave} />
     </View>}
   </>;
@@ -117,36 +100,22 @@ function SuggestionCard({ track, leaving, add, leave }: { track: Track; leaving:
   </Animated.View>;
 }
 
-type Loaded = { tracks: Track[]; label: string } | 'loading' | 'failed';
-
 /** The empty queue: ready-made stacks with real covers, added (or played) in one tap. */
 export function QueueStarters() {
   const player = usePlayback();
   const theme = useAppearance();
   const { did } = useAuth();
   const offered = starters(!!did);
-  const [stacks, setStacks] = useState<Record<string, Loaded>>({});
-  const [started, setStarted] = useState<Set<string>>(new Set());
-  const pending = useRef<Record<string, number>>({});
-
-  const load = (starter: Starter) => {
-    const attempt = pending.current[starter.key] = (pending.current[starter.key] ?? 0) + 1;
-    const settle = (value: Loaded) => { if (pending.current[starter.key] === attempt) setStacks(previous => ({ ...previous, [starter.key]: value })); };
-    settle('loading');
-    loadStarter(api, starter.key, did ?? undefined).then(settle, () => settle('failed'));
-  };
-  useEffect(() => {
-    for (const key in pending.current) pending.current[key]++;
-    setStacks({}); setStarted(new Set());
-    for (const starter of offered) load(starter);
-  }, [did]); // eslint-disable-line react-hooks/exhaustive-deps
+  const { stacks, started } = useQueueSuggestions();
+  // Stacks stay loaded for the next time the queue empties; a new account, a used stack or a stale one loads again.
+  useEffect(() => { queueSuggestions.showStacks(did); }, [did]);
 
   const start = (starter: Starter) => {
     const stack = stacks[starter.key];
     if (typeof stack !== 'object' || !stack.tracks.length) return;
     if (player.current) player.enqueueAll(stack.tracks, stack.label);
     else player.play(stack.tracks[0], stack.tracks, stack.label);
-    setStarted(previous => new Set([...previous, starter.key]));
+    queueSuggestions.started(starter.key);
   };
 
   const surface = { backgroundColor: theme.surface, borderColor: theme.border };
@@ -177,7 +146,7 @@ export function QueueStarters() {
                 {starter.key === 'playlist' && ready ? stack.label : starter.title}</Text>
               {big && <Text numberOfLines={1} style={{ color: theme.muted, fontFamily: theme.fontFamily, fontSize: 12.5 * theme.scale }}>{starter.subtitle}</Text>}
             </View>
-            {starter.key === 'playlist' && <Pressable accessibilityRole="button" accessibilityLabel="Pick another playlist" onPress={() => load(starter)} hitSlop={4} style={styles.icon}>
+            {starter.key === 'playlist' && <Pressable accessibilityRole="button" accessibilityLabel="Pick another playlist" onPress={() => queueSuggestions.reloadStack(starter.key)} hitSlop={4} style={styles.icon}>
               <ArrowClockwise size={16} color={theme.muted} />
             </Pressable>}
             <Pressable accessibilityRole="button" accessibilityLabel={label} disabled={!ready} onPress={() => start(starter)} hitSlop={6}

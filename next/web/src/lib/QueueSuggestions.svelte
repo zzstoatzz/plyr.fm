@@ -4,10 +4,11 @@
 	import { resolve } from '$app/paths';
 	import type { Track } from '@plyr/next-core/api';
 	import { trackArtwork } from '@plyr/next-core/artwork';
-	import { loadStarter, starters, suggestionRequest, type Starter } from '@plyr/next-core/queue-suggestions';
-	import { api } from './api';
+	import { starters, type Starter } from '@plyr/next-core/queue-suggestions';
+	import type { StackState } from '@plyr/next-core/queue-suggestion-store';
 	import { auth } from './auth';
 	import { player } from './player.svelte';
+	import { queueSuggestions } from './queue-suggestions';
 	import { artistName, trackHref } from './tracks';
 	import Artwork from './ui/Artwork.svelte';
 	import Icon from './ui/Icon.svelte';
@@ -15,48 +16,26 @@
 	let { empty }: { empty: boolean } = $props();
 	let account = $state.raw(auth.getAuth());
 	onMount(() => auth.subscribe(() => { account = auth.getAuth(); }));
+	let store = $state.raw(queueSuggestions.snapshot());
+	onMount(() => queueSuggestions.subscribe(() => { store = queueSuggestions.snapshot(); }));
 
-	const current = $derived(player.current);
-	let refresh = $state(0);
-	let shown: string[] = [];
-	let picks = $state.raw<Track[]>([]);
-	let more = $state.raw<Track[]>([]);
-	let added = $state.raw(new Set<string>());
-	let moreName = $state('');
-
-	// Refetch when the playing track changes or on refresh, not on every queue edit, so a + does not reshuffle the row under the finger.
+	// The strips live in a session store: reopening the queue on the same track shows them as they were and asks for nothing.
 	$effect(() => {
-		const uri = current?.record.uri;
-		const round = refresh;
-		if (!uri || empty) { picks = []; return; }
-		const controller = new AbortController();
-		const timer = setTimeout(() => {
-			const request = untrack(() => suggestionRequest(player.queue, player.index, round ? shown : []));
-			if (!request) return;
-			api.suggestions(request.seeds, { exclude: request.exclude, limit: 12, signal: controller.signal }).then(result => {
-				picks = result.data;
-				shown = [...result.data.map(track => track.record.uri), ...(round ? shown : [])].slice(0, 60);
-			}, () => {});
-		}, 300);
-		return () => { clearTimeout(timer); controller.abort(); };
-	});
-
-	$effect(() => {
-		const did = current?.artist.did;
-		const name = current ? artistName(current) : '';
-		if (!did || empty) { more = []; return; }
-		const controller = new AbortController();
-		api.tracks({ artist_did: did, limit: 13 }, controller.signal).then(result => {
-			const queued = untrack(() => new Set(player.queue.map(track => track.id)));
-			more = result.data.filter(track => !queued.has(track.id)).slice(0, 12);
-			moreName = name;
-		}, () => {});
-		return () => controller.abort();
+		const uri = player.current?.record.uri;
+		const artistDid = player.current?.artist.did;
+		if (empty || !uri) return;
+		const name = untrack(() => player.current ? artistName(player.current) : '');
+		queueSuggestions.follow({ uri, artistDid, artistName: name, queue: () => ({ queue: player.queue, index: player.index }) });
 	});
 
 	// An added card leaves the strip (in both strips, if it sits in both) instead of staying as a checkmark.
-	const shownPicks = $derived(picks.filter(track => !added.has(track.id)));
-	const shownMore = $derived(more.filter(track => !added.has(track.id)));
+	// Anything already queued (or playing) stays out too, however it got there.
+	const queued = $derived(new Set(player.queue.map(track => track.id)));
+	const offerable = (track: Track) => !store.added.has(track.id) && !queued.has(track.id);
+	const shownPicks = $derived(store.picks.filter(offerable));
+	// "more from" waits for the playing artist's own strip rather than showing the last artist's.
+	const moreHere = $derived(!!store.moreFor && store.moreFor === player.current?.artist.did);
+	const shownMore = $derived(moreHere ? store.more.filter(offerable) : []);
 	const leaving = new Set<string>();
 
 	function add(track: Track, button: HTMLButtonElement) {
@@ -68,7 +47,7 @@
 			const next = card?.nextElementSibling ?? card?.previousElementSibling;
 			next?.querySelector<HTMLButtonElement>('.plus')?.focus();
 		}
-		added = new Set([...added, track.id]);
+		queueSuggestions.added(track.id);
 	}
 
 	/** The added card shrinks away and its neighbours close the gap; any other card that leaves (a refresh) just goes. */
@@ -79,40 +58,22 @@
 		return { duration: 240, easing: cubicOut, css: (t: number, u: number) => `overflow: hidden; width: ${t * width}px; margin-inline-end: ${-u * gap}px; opacity: ${t}; transform: scale(${0.85 + 0.15 * t});` };
 	}
 
-	// Starters: each stack loads its tracks up front so the tile shows real covers.
-	type Loaded = { tracks: Track[]; label: string } | 'loading' | 'failed';
+	// Starters: each stack loads its tracks up front so the tile shows real covers, and keeps them for the next time the queue empties.
 	const offered = $derived(starters(!!account.did));
-	let stacks = $state<Record<string, Loaded>>({});
-	let started = $state.raw(new Set<string>());
-	let stacksFor: string | null | undefined;
-	const pending: Record<string, number> = {};
-
-	function load(starter: Starter) {
-		const attempt = pending[starter.key] = (pending[starter.key] ?? 0) + 1;
-		const settle = (value: Loaded) => { if (pending[starter.key] === attempt) stacks[starter.key] = value; };
-		stacks[starter.key] = 'loading';
-		loadStarter(api, starter.key, account.did ?? undefined).then(settle, () => settle('failed'));
-	}
-
 	$effect(() => {
 		const did = account.did;
-		if (!empty) return;
-		untrack(() => {
-			// A different account gets its own stacks, never the last one's.
-			if (did !== stacksFor) { stacksFor = did; stacks = {}; started = new Set(); for (const key in pending) pending[key]++; }
-			for (const starter of offered) if (!stacks[starter.key]) load(starter);
-		});
+		if (empty) queueSuggestions.showStacks(did);
 	});
 
 	function start(starter: Starter) {
-		const stack = stacks[starter.key];
+		const stack = store.stacks[starter.key];
 		if (typeof stack !== 'object' || !stack.tracks.length) return;
 		if (player.current) player.enqueueCollection(stack.tracks);
 		else player.play(stack.tracks[0], stack.tracks, stack.label);
-		started = new Set([...started, starter.key]);
+		queueSuggestions.started(starter.key);
 	}
 
-	function covers(stack: Loaded | undefined) {
+	function covers(stack: StackState | undefined) {
 		return typeof stack === 'object' ? stack.tracks.slice(0, 4) : [];
 	}
 </script>
@@ -125,7 +86,7 @@
 		</div>
 		<div class="tiles">
 			{#each offered as starter, index (starter.key)}
-				{@const stack = stacks[starter.key]}
+				{@const stack = store.stacks[starter.key]}
 				{#if stack !== 'failed' && !(typeof stack === 'object' && !stack.tracks.length)}
 					<div class="tile" class:big={index === 0}>
 						<button class="stack" type="button" tabindex="-1" aria-hidden="true" disabled={typeof stack !== 'object'} onclick={() => start(starter)}>
@@ -140,10 +101,10 @@
 								<span class="subtle truncate">{typeof stack === 'object' ? `${stack.tracks.length} tracks · ${starter.subtitle}` : starter.subtitle}</span>
 							</div>
 							{#if starter.key === 'playlist'}
-								<button class="icon-button" type="button" aria-label="Pick another playlist" title="pick another playlist" onclick={() => load(starter)}><Icon name="refresh" size={16} /></button>
+								<button class="icon-button" type="button" aria-label="Pick another playlist" title="pick another playlist" onclick={() => queueSuggestions.reloadStack(starter.key)}><Icon name="refresh" size={16} /></button>
 							{/if}
-							<button class="plus" class:done={started.has(starter.key)} type="button" aria-label={`${player.current ? 'Add' : 'Play'} ${starter.title}`} disabled={typeof stack !== 'object'} onclick={() => start(starter)}>
-								<Icon name={started.has(starter.key) ? 'check' : player.current ? 'plus' : 'play'} size={16} />
+							<button class="plus" class:done={store.started.has(starter.key)} type="button" aria-label={`${player.current ? 'Add' : 'Play'} ${starter.title}`} disabled={typeof stack !== 'object'} onclick={() => start(starter)}>
+								<Icon name={store.started.has(starter.key) ? 'check' : player.current ? 'plus' : 'play'} size={16} />
 							</button>
 						</div>
 					</div>
@@ -156,14 +117,14 @@
 		<section aria-labelledby="queue-suggested">
 			<div class="strip-head">
 				<h2 id="queue-suggested">add to your queue</h2>
-				<button class="icon-button" type="button" aria-label="Show other suggestions" title="show other suggestions" onclick={() => { refresh++; }}><Icon name="refresh" size={16} /></button>
+				<button class="icon-button" type="button" aria-label="Show other suggestions" title="show other suggestions" onclick={() => queueSuggestions.refresh()}><Icon name="refresh" size={16} /></button>
 			</div>
 			{@render strip(shownPicks)}
 		</section>
 	{/if}
-	{#if more.length > 1 && shownMore.length}
+	{#if moreHere && store.more.length > 1 && shownMore.length}
 		<section aria-labelledby="queue-more">
-			<div class="strip-head"><h2 id="queue-more" class="truncate">more from {moreName}</h2></div>
+			<div class="strip-head"><h2 id="queue-more" class="truncate">more from {store.moreName}</h2></div>
 			{@render strip(shownMore)}
 		</section>
 	{/if}

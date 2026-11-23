@@ -57,6 +57,13 @@ instead. Add one when something bites.
 
 ## checks
 
+- **A panel or sheet that keeps its fetched data in component state refetches
+  on every open**, and its content pops in each time (the queue's suggestion
+  strips did this). Keep what it shows in a session store or a
+  `@plyr/next-core/keyed-cache` that outlives the mount, keyed by what the data
+  depends on (track, artist, account), and draw the cached value on the first
+  frame. See `queue-suggestion-store.ts` and `track-extras.ts`.
+
 - **Refetching a list on focus with `reload()` drops the pages someone already
   loaded.** Use `revalidate()` from `usePages`, which refetches the loaded
   pages and swaps them in.
