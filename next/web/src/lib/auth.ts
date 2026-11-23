@@ -45,18 +45,80 @@ auth.subscribe(() => {
 	saveKnownAccounts([{ did, handle: handle || known.find(item => item.did === did)?.handle || null }, ...known.filter(item => item.did !== did)]);
 });
 
-export function otherAccounts() { return knownAccounts().filter(item => item.did !== auth.getAuth().did); }
+export type OtherAccount = AccountIdentity & { signedIn: boolean };
+
+/** dids this browser still holds a session for: the SDK's own store, read without refreshing anything */
+async function storedSessions(): Promise<Set<string>> {
+	try {
+		const db = await new Promise<IDBDatabase>((resolve, reject) => {
+			const request = indexedDB.open('@atproto-oauth-client');
+			request.onsuccess = () => resolve(request.result);
+			request.onerror = () => reject(request.error);
+		});
+		try {
+			if (!db.objectStoreNames.contains('session')) return new Set();
+			const keys = await new Promise<IDBValidKey[]>((resolve, reject) => {
+				const request = db.transaction('session').objectStore('session').getAllKeys();
+				request.onsuccess = () => resolve(request.result);
+				request.onerror = () => reject(request.error);
+			});
+			return new Set(keys.filter(key => typeof key === 'string'));
+		} finally { db.close(); }
+	} catch { return new Set(); }
+}
+
+/**
+ * The other accounts this tab has used. An account whose session this browser no longer holds
+ * stays listed as signed out, so it can be signed back into or removed, never offered as a switch that can't work.
+ */
+export async function otherAccounts(): Promise<OtherAccount[]> {
+	const others = knownAccounts().filter(item => item.did !== auth.getAuth().did);
+	if (!others.length) return [];
+	const held = await storedSessions();
+	return others.map(item => ({ ...item, signedIn: held.has(item.did) }));
+}
+
+/** Why a switch didn't happen: the session is gone (sign in again), or the account host couldn't be reached (try again). */
+export class SwitchError extends Error {
+	constructor(readonly reason: 'signed-out' | 'unreachable', options?: ErrorOptions) {
+		super(reason === 'signed-out' ? 'signed out' : 'unreachable', options);
+	}
+}
 
 let switchingAccount: Promise<void> | undefined;
 export function switchAccount(did: Did): Promise<void> {
 	if (switchingAccount) return switchingAccount;
 	const previous = auth.getAuth().rpc;
-	switchingAccount = oauthClient()
-		.then(client => client.restore(did))
-		.then(session => activate(session, () => auth.getAuth().rpc === previous))
-		.finally(() => { switchingAccount = undefined; });
+	switchingAccount = (async () => {
+		const client = await oauthClient().catch(cause => { throw new SwitchError('unreachable', { cause }); });
+		let session: OAuthSession;
+		try { session = await client.restore(did); }
+		catch (cause) {
+			console.warn('account switch failed', cause);
+			// the SDK drops a session it can't refresh (even over a dropped connection), so ask the store what is left
+			const gone = !(await storedSessions()).has(did);
+			throw new SwitchError(gone ? 'signed-out' : 'unreachable', { cause });
+		}
+		await activate(session, () => auth.getAuth().rpc === previous);
+	})().finally(() => { switchingAccount = undefined; });
 	return switchingAccount;
 }
+
+/** Signs back into an account whose session ended. Cancelling at the account host comes back to the current account. */
+export function signBackIn(account: AccountIdentity, intent: string) {
+	return login(account.handle ?? account.did, false, intent, 'reconnect');
+}
+
+/** Takes an account off this tab's list and ends whatever session this browser still holds for it. */
+export async function forgetAccount(did: Did) {
+	saveKnownAccounts(knownAccounts().filter(item => item.did !== did));
+	if (did === auth.getAuth().did) return;
+	const current = localStorage.getItem(currentSubKey);
+	// the SDK's revoke also forgets which account restores on reload; that is still the current one
+	await oauthClient().then(client => client.revoke(did)).catch(() => undefined);
+	if (current) localStorage.setItem(currentSubKey, current);
+}
+const currentSubKey = '@@atproto/oauth-client-browser(sub)';
 
 let client: Promise<BrowserOAuthClient> | undefined;
 function oauthClient() {
@@ -159,13 +221,13 @@ async function initialize() {
 	auth.clearAuth();
 }
 
-export async function login(identifier: string, deviceOnly: boolean, intent?: string, addAccount = false) {
+export async function login(identifier: string, deviceOnly: boolean, intent?: string, addAccount: boolean | 'reconnect' = false) {
 	await prepareQueueLogin();
 	const scope = await auth.scopeFor(identifier, deviceOnly);
 	const previous = addAccount ? auth.getAuth().did : null;
 	if (previous) sessionStorage.setItem(addAccountKey, previous);
 	try {
-		await (await oauthClient()).signInRedirect(identifier, { scope, state: returnPath(intent), ...(addAccount ? { prompt: 'login' as const } : {}) });
+		await (await oauthClient()).signInRedirect(identifier, { scope, state: returnPath(intent), ...(addAccount === true ? { prompt: 'login' as const } : {}) });
 	} catch (error) {
 		if (previous) sessionStorage.removeItem(addAccountKey);
 		throw error;

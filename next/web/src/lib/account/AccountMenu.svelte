@@ -1,16 +1,17 @@
 <script lang="ts">
 	import { afterNavigate, goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { auth, logout, otherAccounts, switchAccount } from '$lib/auth';
+	import { auth, forgetAccount, logout, otherAccounts, signBackIn, switchAccount, SwitchError, type OtherAccount } from '$lib/auth';
 	import { isModerator } from '$lib/moderation/client';
 	import Icon, { type IconName } from '$lib/ui/Icon.svelte';
 
 	let { identity, uploads, onShortcuts }: { identity: string; uploads: number; onShortcuts: () => void } = $props();
 	let dialog: HTMLDialogElement;
 	let startedOutside = false;
-	let others = $state.raw<ReturnType<typeof otherAccounts>>([]);
+	let others = $state.raw<OtherAccount[]>([]);
 	let switching = $state(false);
-	let error = $state(false);
+	let failure = $state.raw<{ did: string; message: string }>();
 	let moderator = $state(isModerator(auth.getAuth().did));
 	const uploadDetail = $derived(uploads === 0 ? 'add a track or album'
 		: uploads === 1 ? '1 upload in progress' : `${uploads} uploads in progress`);
@@ -28,18 +29,39 @@
 
 	export function open(trigger: HTMLButtonElement) {
 		moderator = isModerator(auth.getAuth().did);
-		others = otherAccounts();
-		error = false;
+		failure = undefined;
+		void otherAccounts().then(found => { others = found; });
 		trigger.focus({ preventScroll: true });
 		dialog.showModal();
 	}
 
-	async function selectAccount(did: ReturnType<typeof otherAccounts>[number]['did']) {
+	const named = (account: OtherAccount) => account.handle ? '@' + account.handle : 'that account';
+
+	async function selectAccount(account: OtherAccount) {
 		switching = true;
-		error = false;
-		try { await switchAccount(did); dialog.close(); }
-		catch { error = true; }
+		failure = undefined;
+		try { await switchAccount(account.did); dialog.close(); }
+		catch (error) {
+			const signedOut = !(error instanceof SwitchError) || error.reason === 'signed-out';
+			if (signedOut) others = others.map(item => item.did === account.did ? { ...item, signedIn: false } : item);
+			failure = { did: account.did, message: signedOut
+				? `${named(account)} is signed out on this browser. sign in again, or remove it.`
+				: `couldn’t reach ${named(account)}’s account host. try again.` };
+		}
 		finally { switching = false; }
+	}
+
+	async function signIn(account: OtherAccount) {
+		switching = true;
+		failure = undefined;
+		try { await signBackIn(account, page.url.pathname + page.url.search); }
+		catch { failure = { did: account.did, message: `couldn’t start signing in to ${named(account)}. try again.` }; switching = false; }
+	}
+
+	async function remove(account: OtherAccount) {
+		others = others.filter(item => item.did !== account.did);
+		if (failure?.did === account.did) failure = undefined;
+		await forgetAccount(account.did);
 	}
 
 	async function signOut() {
@@ -67,10 +89,17 @@
 			{/each}
 			<button type="button" class="keys" onclick={() => { dialog.close(); onShortcuts(); }}><Icon name="ph_keys" size={22} /><span class="row-label"><strong>keyboard shortcuts</strong><small>press ?</small></span></button>
 			{#each others as account (account.did)}
-				<button type="button" disabled={switching} onclick={() => selectAccount(account.did)}><Icon name="user" size={22} /><span class="row-label">switch to {account.handle ? '@' + account.handle : account.did}</span></button>
+				{#if account.signedIn}
+					<button type="button" disabled={switching} onclick={() => selectAccount(account)}><Icon name="user" size={22} /><span class="row-label">switch to {named(account)}</span></button>
+				{:else}
+					<div class="signed-out">
+						<button type="button" disabled={switching} onclick={() => signIn(account)}><Icon name="user" size={22} /><span class="row-label">sign in again as {named(account)}</span></button>
+						<button type="button" class="remove" disabled={switching} aria-label="Remove {named(account)} from this list" onclick={() => remove(account)}><Icon name="x" size={17} /></button>
+					</div>
+				{/if}
+				{#if failure?.did === account.did}<p class="switch-error" role="alert">{failure.message}</p>{/if}
 			{/each}
 			{#if !switching}<a href={resolve('/login?addAccount=1&return_to=%2Fsettings')} onclick={() => dialog.close()}><Icon name="users" size={22} /><span class="row-label">add account</span></a>{/if}
-			{#if error}<p class="switch-error" role="alert">couldn’t switch accounts. sign in again to reconnect.</p>{/if}
 			<button type="button" disabled={switching} onclick={signOut}><Icon name="ph_logout" size={22} /><span class="row-label">sign out</span></button>
 		</nav>
 	</div>
@@ -87,7 +116,11 @@
 	nav :is(a, button):focus-visible { outline-offset: -2px; }
 	.row-label { display: grid; flex: 1; min-width: 0; color: var(--text); overflow-wrap: anywhere; }
 	strong { font-weight: 620; }
-	.switch-error { color: var(--muted); padding-inline: 0.9rem; }
+	.switch-error { color: var(--muted); padding: 0 0.9rem 0.4rem; font-size: var(--t-14); }
+	.signed-out { display: flex; align-items: center; min-width: 0; }
+	.signed-out > button:first-child { flex: 1; min-width: 0; }
+	.signed-out .row-label { color: var(--muted); }
+	.signed-out .remove { flex: none; justify-content: center; min-width: 2.75rem; padding-inline: 0; }
 	small { color: var(--muted); }
 	@media (max-width: 720px), (hover: none) { .keys { display: none; } }
 	@media (min-width: 721px) {
@@ -102,6 +135,6 @@
 		.row-label small { display: none; }
 		.row-label { overflow-wrap: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
 		strong { font-weight: 550; }
-		nav :is(a, button):last-child { margin-top: 0.25rem; box-shadow: 0 -1px 0 var(--line); border-radius: 0 0 0.55rem 0.55rem; }
+		nav > :is(a, button):last-child { margin-top: 0.25rem; box-shadow: 0 -1px 0 var(--line); border-radius: 0 0 0.55rem 0.55rem; }
 	}
 </style>
