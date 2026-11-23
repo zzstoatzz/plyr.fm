@@ -15,7 +15,7 @@ primary_region = "sjc"
   space_consumer = "space_consumer"
 
 [env]
-  CORS_ALLOWED_ORIGINS = "https://next.plyr.fm,https://plyr-fm-next-svelte.pages.dev,https://plyr-fm-next.pages.dev,http://127.0.0.1:5174"
+  CORS_ALLOWED_ORIGINS = "https://plyr.fm,https://next.plyr.fm,https://plyr-fm-next-svelte.pages.dev,https://plyr-fm-next.pages.dev,http://127.0.0.1:5174"
   DATABASE_ROLE = "plyr_zig_canary"
   # one connection opens before the api binds (each Neon connect is ~1s);
   # the rest connect in the background after it's serving.
