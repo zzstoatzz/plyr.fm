@@ -24,8 +24,9 @@ export function createClosing({ NSID, AUDIO_SPACE_TYPE, SPACE_MANAGING_APP }: Co
 
   /** split a public track record into the closed public record and the protected copy that holds its audio */
   function closedRecords(current: Value, space: string, did: string, rkey: string): { public: Value; protected: Value } {
+    // a stale page can offer to close a track that's already closed; say that, not that its audio is missing
+    if ('audioSpace' in current || 'supportGate' in current) throw new Error('this track is already closed. reload to see who can listen.');
     if (current.$type !== NSID.track || !object(current.audioBlob)) throw new Error('only tracks with audio on your PDS can be closed.');
-    if ('audioSpace' in current || 'supportGate' in current) throw new Error('this track is already closed.');
     const open: Value = { ...current };
     const protectedCopy: Value = { $type: NSID.track, title: current.title, artist: current.artist, createdAt: current.createdAt };
     for (const key of ['fileType', 'duration', ...PROTECTED] as const) if (key in current) protectedCopy[key] = current[key];
