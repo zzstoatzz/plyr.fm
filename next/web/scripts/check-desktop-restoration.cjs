@@ -74,6 +74,11 @@ async function verify(browser, origin, width, scheme) {
     await page.keyboard.press('Escape');
     await dialog.waitFor({ state: 'hidden' });
     assert.ok(await opener.evaluate(node => node === document.activeElement), 'closing returns focus to the dock');
+    assert.equal(await dock.getByLabel(/^(like|unlike|sign in to like) /i).count(), 1, 'the desktop dock has a like for the playing track');
+    const artistLink = dock.getByRole('link', { name: await dock.locator('.artist').textContent(), exact: true });
+    await artistLink.click();
+    await page.waitForURL('**/u/**');
+    assert.equal(await page.getByRole('dialog', { name: 'Now playing' }).count(), 0, 'the dock artist name opens the artist page, not now playing');
     await radio.click();
     await page.waitForURL('**/radio');
     assert.ok(await radio.evaluate(node => node.classList.contains('active')), 'secondary navigation remains usable');
