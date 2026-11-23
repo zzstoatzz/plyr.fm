@@ -74,8 +74,12 @@
 		const settle = <T,>(work: Promise<T>, fallback: T) => work.catch(() => fallback);
 		void Promise.all([
 			settle(api.tracks({ artist_did: artist.did, limit: 7 }, request.signal).then(page => page.data.filter(other => other.id !== id).slice(0, 5)), []),
-			settle(api.suggestions([record.uri], { limit: 5, signal: request.signal }).then(page => page.data), [])
-		]).then(([more, similar]) => { if (live) related = { id, more, similar }; });
+			settle(api.suggestions([record.uri], { limit: 10, signal: request.signal }).then(page => page.data), [])
+		]).then(([more, similar]) => {
+			// "sounds like this" skips what "more from" already shows
+			const shownAbove = new Set(more.map(other => other.id));
+			if (live) related = { id, more, similar: similar.filter(other => other.id !== id && !shownAbove.has(other.id)).slice(0, 5) };
+		});
 		return () => { live = false; request.abort(); };
 	});
 	const shown = $derived(related?.id === track.id ? related : undefined);
