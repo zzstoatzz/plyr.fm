@@ -94,7 +94,9 @@ def test_without_audd_tracks_wait_and_are_scanned_once_it_is_set(db, engine, fin
     add_track(db, 1, NEXT_AUDIO, 10)
     drain(engine, cursors=(IndexedCover.cursor,))
     assert fingerprinter.scanned == []
-    assert rows(db, "SELECT count(*) FROM plyr_moderation.rule_cursors WHERE name = 'tracks' AND attempts > 0") == [(0,)]
+    assert rows(db, "SELECT count(*) FROM plyr_moderation.rule_cursors WHERE name = 'tracks' AND attempts > 0") == [
+        (0,)
+    ]
     drain(engine)
     assert fingerprinter.scanned == [NEXT_AUDIO]
 
