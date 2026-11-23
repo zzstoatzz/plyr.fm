@@ -107,6 +107,7 @@ async function screen(browser, phone, scheme) {
     const slider = dock.getByRole('slider', { name: 'Playback position' });
     await page.waitForFunction(node => node.valueAsNumber >= 14, await slider.elementHandle());
     assert.equal(deliveries, 1, 'choosing a timestamp during delivery does not start it again');
+    assert.ok(await dock.getByLabel(/^(like|unlike|sign in to like) /i).isVisible(), 'the dock has a like at every width, like the iOS player bar');
     await page.getByTestId('home-track-row').first().getByRole('link', { name: tracks[0].metadata.title, exact: true }).click();
     await dock.getByRole('button', { name: 'Pause', exact: true }).click();
     await page.getByRole('article').getByRole('button', { name: 'Play', exact: true }).click();
