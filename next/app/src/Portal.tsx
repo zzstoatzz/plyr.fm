@@ -28,6 +28,7 @@ import { confirmTrackDelete } from './publishing/confirm-delete';
 import { PrivateTrackDelete } from './publishing/PrivateTrackDelete';
 import { Sheet } from './Sheet';
 import { usePlayback } from './playback';
+import { PdsAudioCard } from './PdsAudio';
 
 const portalTabs = ['tracks', 'albums'] as const;
 /** rows rendered at once; a big catalog grows on request instead of mounting hundreds of rows */
@@ -162,6 +163,7 @@ function AccountPortal({ did, handle }: { did: string; handle: string | null }) 
       <Tool icon={Pencil} label="edit" accessibilityLabel="edit profile" href="/edit-profile" />
       <Tool icon={ShareNetwork} label="share" accessibilityLabel="share your page" onPress={() => void shareLink(publicPath)} />
     </View>
+    <PdsAudioCard />
     {errors.profile && <View style={row}><Copy>couldn’t load your profile.</Copy><Action label="retry" onPress={() => void load()} /></View>}
 
     <View style={[styles.search, { borderColor: theme.line, backgroundColor: theme.surface }]}>

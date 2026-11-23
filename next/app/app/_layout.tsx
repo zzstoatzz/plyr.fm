@@ -21,6 +21,7 @@ import { useMyAvatar } from '../src/use-my-avatar';
 import { usePreferences } from '../src/preferences';
 import { usesLiquidTabs } from '../src/tab-platform';
 import { UploadQueueHost } from '../src/publishing/UploadQueue';
+import { PdsAudioHost } from '../src/PdsAudio';
 import { UploadIslandHost, useIslandHidesStatusBar } from '../src/publishing/UploadIsland';
 
 export default function RootLayout() {
@@ -39,6 +40,7 @@ export default function RootLayout() {
           <UploadQueueHost />
           <Shell />
           <UploadIslandHost />
+          <PdsAudioHost />
         </RadioProvider>
       </PlaybackProvider>
     </AppearanceProvider>
