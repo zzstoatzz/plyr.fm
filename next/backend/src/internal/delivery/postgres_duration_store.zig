@@ -136,13 +136,13 @@ const measured_query =
 const failure_query =
     \\INSERT INTO plyr_index.track_measured_durations (
     \\  record_uri, record_cid, duration_seconds, attempts, next_attempt_us, last_error, observed_at_us
-    \\) VALUES ($1, $2, NULL, 1, $4 + 600000000, $3, $4)
+    \\) VALUES ($1, $2, NULL, 1, $4::bigint + 600000000, $3, $4)
     \\ON CONFLICT (record_uri) DO UPDATE SET
     \\  record_cid = EXCLUDED.record_cid,
     \\  duration_seconds = NULL,
     \\  attempts = CASE WHEN track_measured_durations.record_cid = EXCLUDED.record_cid
     \\    THEN track_measured_durations.attempts + 1 ELSE 1 END,
-    \\  next_attempt_us = $4 + LEAST(
+    \\  next_attempt_us = $4::bigint + LEAST(
     \\    604800000000,
     \\    600000000 * power(2, LEAST(16, CASE WHEN track_measured_durations.record_cid = EXCLUDED.record_cid
     \\      THEN track_measured_durations.attempts ELSE 0 END))::bigint
@@ -228,4 +228,6 @@ test "the prober measures, backs off, and starts over for a new version" {
     try std.testing.expectEqualStrings("cid1b", again[0].record_cid);
     // a measurement for a version that has since moved on is dropped
     try std.testing.expect(!try store.recordMeasured(first[0], 1, 4_000));
+    // a real clock reads in the quadrillions of microseconds, past int4
+    try store.recordFailure(again[0], "Unsupported", 1_795_000_000_000_000);
 }
