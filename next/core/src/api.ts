@@ -59,6 +59,17 @@ export interface Artist {
 	support_url: string | null;
 	/** where the artist sells each release; links only, see selling.ts */
 	offers?: { subject: string; url: string; amount?: number | null; currency?: string | null }[];
+	/** MOCK: the artist's page customization (proposed fm.plyr.actor.page), resolved by the appview */
+	page?: ArtistPage;
+}
+
+/** MOCK: proposed shape, see the customize-artist-page proposal. not a published lexicon. */
+export interface ArtistPage {
+	accent?: string;
+	backdrop?: { kind: 'photo' } | { kind: 'image'; url: string } | { kind: 'color'; color: string } | { kind: 'plain' };
+	pins?: ({ note?: string } & ({ list: ListSummary; tracks: Track[] } | { track: Track }))[];
+	links?: { label: string; url: string }[];
+	sections?: ('tracks' | 'albums' | 'playlists' | 'likes')[];
 }
 
 export interface NetworkArtist { did: string; handle: string; display_name: string; avatar_url: string | null; track_count: number }

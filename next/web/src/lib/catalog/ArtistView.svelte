@@ -23,6 +23,7 @@
 	import { catalogRuntime } from '@plyr/next-core/catalog/runtime';
 	import { compactCount } from '$lib/listening/format';
 	import { trackHref } from '$lib/tracks';
+	import PageEditor from './PageEditor.svelte';
 
 	type Metrics = ArtistMetrics | null;
 	let { artist, metrics }: { artist: Artist; metrics: Promise<Metrics> } = $props();
@@ -44,7 +45,22 @@
 	let retriedMetrics = $state.raw<Promise<Metrics>>();
 	const name = $derived(artist.display_name?.trim() || artist.handle || artist.did);
 	const owner = $derived(account.did === artist.did);
-	const tab = $derived(tabs.find(item => item === page.url.searchParams.get('tab')) ?? 'tracks');
+	// MOCK: the artist's own page settings (proposed fm.plyr.actor.page)
+	const custom = $derived(artist.page);
+	const shown = $derived<readonly Tab[]>(custom?.sections?.length ? custom.sections : tabs);
+	const tab = $derived(shown.find(item => item === page.url.searchParams.get('tab')) ?? shown[0]);
+	const customizing = $derived(page.url.searchParams.has('customize'));
+	const accentStyle = $derived(custom?.accent ? `--accent: light-dark(color-mix(in srgb, ${custom.accent} 55%, black), color-mix(in srgb, ${custom.accent} 70%, white)); --on-accent: light-dark(white, #0a0a0a);` : undefined);
+	const pinTitle = (pin: NonNullable<NonNullable<typeof custom>['pins']>[number]) => 'list' in pin ? (pin.list.metadata.name || 'untitled') : pin.track.metadata.title;
+	const pinTracks = (pin: NonNullable<NonNullable<typeof custom>['pins']>[number]) => 'list' in pin ? pin.tracks : [pin.track];
+	const pinHref = (pin: NonNullable<NonNullable<typeof custom>['pins']>[number]) => 'list' in pin
+		? (pin.list.object === 'album' ? resolve('/(app)/album/[id]', { id: pin.list.id }) : resolve('/(app)/playlist/[id]', { id: pin.list.id }))
+		: trackHref({ id: pin.track.id });
+	const pinMeta = (pin: NonNullable<NonNullable<typeof custom>['pins']>[number]) => {
+		const list = pinTracks(pin);
+		const seconds = list.reduce((sum, t) => sum + (t.metadata.duration_seconds ?? 0), 0);
+		return 'list' in pin ? `${pin.list.object} · ${list.length} tracks · ${catalogRuntime(seconds)}` : `track · ${catalogRuntime(seconds)}`;
+	};
 	const visibleMetrics = $derived(retriedMetrics ?? metrics);
 	const supportLabel = (url: string) => url.replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/+$/, '');
 	const support = $derived(artist.support_url && /^https?:\/\/[^\s]+$/i.test(artist.support_url) ? artist.support_url : null);
@@ -80,7 +96,7 @@
 	function select(next: Tab) {
 		if (next === tab) return;
 		const url = new URL(page.url);
-		if (next === 'tracks') url.searchParams.delete('tab');
+		if (next === shown[0]) url.searchParams.delete('tab');
 		else url.searchParams.set('tab', next);
 		buttons[next]?.focus({ preventScroll: true });
 		void goto(url, { replaceState: true, noScroll: true, keepFocus: true });
@@ -128,8 +144,36 @@
 	{/each}
 {/snippet}
 
-<article class="page-content artist">
-	{#if artist.avatar_url}<ImmersiveWash src={artist.avatar_url} />{/if}
+{#snippet pinned(where: 'narrow' | 'wide')}
+	{#if custom?.pins?.length}
+		<section class="pins {where}" class:solo={custom.pins.length === 1} aria-label={`pinned by ${name}`}>
+			{#each custom.pins as pin, index (index)}
+				{@const list = pinTracks(pin)}
+				{@const title = pinTitle(pin)}
+				<div class="pin" class:lead-pin={index === 0}>
+					<a class="pin-art" href={pinHref(pin)} aria-label={title}>
+						{#if 'list' in pin}<CollectionArtwork list={pin.list} size={index === 0 ? 176 : 72} />{:else}<Artwork src={trackArtwork(pin.track)} size={index === 0 ? 176 : 72} />{/if}
+					</a>
+					<div class="pin-copy">
+						{#if index === 0}<small class="eyebrow">pinned</small>{/if}
+						<a class="pin-title" href={pinHref(pin)}>{title}</a>
+						<span class="pin-meta">{pinMeta(pin)}</span>
+					</div>
+					{#if pin.note && index === 0}<p class="note">{pin.note}</p>{/if}
+					{#if index === 0 && list[0]}
+						<div class="pin-actions"><PlayButton class="hero-pill primary" text name={title} context={{ kind: 'tracks', tracks: list }} start={() => player.play(list[0], list, title)} /></div>
+					{/if}
+					{#if index > 0 && list[0]}<PlayButton class="hero-round" name={title} context={{ kind: 'tracks', tracks: list }} start={() => player.play(list[0], list, title)} />{/if}
+				</div>
+			{/each}
+		</section>
+	{/if}
+{/snippet}
+
+<article class="page-content artist" class:editing={customizing} style={accentStyle}>
+	{#if custom?.backdrop?.kind === 'image'}<ImmersiveWash mode="image" src={custom.backdrop.url} />
+	{:else if custom?.backdrop?.kind === 'color'}<ImmersiveWash mode="color" color={custom.backdrop.color} />
+	{:else if custom?.backdrop?.kind !== 'plain' && artist.avatar_url}<ImmersiveWash src={artist.avatar_url} />{/if}
 	<div class="profile">
 	<header>
 		<div class="avatar"><Artwork src={artist.avatar_url ?? undefined} size={176} eager /></div>
@@ -138,6 +182,13 @@
 			{#if artist.handle && artist.display_name?.trim() && artist.display_name.trim() !== artist.handle}<p class="handle">@{artist.handle}</p>{/if}
 			<ListeningNow did={artist.did} {name} />
 			{#if artist.bio}<p class="bio">{artist.bio}</p>{/if}
+			{#if custom?.links?.length}
+				<nav class="links" aria-label={`${name} elsewhere`}>
+					{#each custom.links as link (link.url)}
+						<a class="hero-chip link" href={link.url} target="_blank" rel="noopener noreferrer"><Icon name="external" size={14} /> {link.label}</a>
+					{/each}
+				</nav>
+			{/if}
 			{#await visibleMetrics then result}
 				{#if result}
 					<div class="chips">
@@ -154,12 +205,13 @@
 					<PlayButton class="hero-pill primary" text {name} context={artistContext(artist.did)} start={() => player.play(views.tracks.data[0], views.tracks.data, name)} />
 					{#if views.tracks.data.length > 1}<button class="hero-pill" type="button" aria-label={`Shuffle ${name}`} onclick={shuffle}><Icon name="shuffle" /> Shuffle</button>{/if}
 				{/if}
-				{#if owner}<a class="hero-round" href={resolve('/(app)/edit-profile')} aria-label="edit profile"><Icon name="edit" /></a>{/if}
+				{#if owner || customizing}<a class="hero-round" href={resolve('/(app)/edit-profile')} aria-label="edit profile"><Icon name="edit" /></a>{/if}
 				<button class="hero-round" type="button" aria-label="Share artist" onclick={share}><Icon name="share" /></button>
 			</div>
 			{#if copied}<p role="status" class="subtle">link copied</p>{/if}
 		</div>
 	</header>
+	{@render pinned('narrow')}
 	{#await visibleMetrics then result}
 		{#if support || result?.top_track}
 			<div class="cards" class:pair={support && result?.top_track}>
@@ -185,13 +237,14 @@
 	{/await}
 	</div>
 	<div class="catalog">
+	{@render pinned('wide')}
 	<div class="tabs" role="tablist" aria-label="Artist catalog">
-		{#each tabs as item (item)}
+		{#each shown as item (item)}
 			<button type="button" id={`${id}-tab-${item}`} role="tab" bind:this={buttons[item]} aria-controls={`${id}-panel-${item}`}
 				aria-selected={tab === item} tabindex={tab === item ? 0 : -1} onclick={() => select(item)} onkeydown={event => tabKey(event, item)}>{item}</button>
 		{/each}
 	</div>
-	{#each tabs as item (item)}
+	{#each shown as item (item)}
 		<div class="panel" class:own={item === 'tracks'} id={`${id}-panel-${item}`} role="tabpanel" aria-labelledby={`${id}-tab-${item}`} hidden={item !== tab} tabindex="0">
 			{#if item === tab}
 				{@const view = views[item]}
@@ -217,6 +270,7 @@
 		</div>
 	{/each}
 	</div>
+{#if customizing}<PageEditor {artist} />{/if}
 </article>
 
 <style>
@@ -285,5 +339,39 @@
 		.panel :global(.track) { grid-template-columns: min(3.25rem, 16vw) minmax(0, 1fr) auto; }
 	}
 	.art { border-radius: 0.44rem; }
+	/* MOCK: artist customization */
+	.links { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.6rem; }
+	.links .link { display: inline-flex; align-items: center; gap: 0.35rem; color: var(--text); text-decoration: none; font-weight: 600; }
+	.links .link:hover { background: var(--hover); }
+	.links .link :global(svg) { color: var(--accent); }
+	.pins { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(17rem, 100%), 1fr)); gap: 0.6rem; margin-bottom: 0.75rem; }
+	.pin { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 0.9rem; padding: 0.6rem; border-radius: 0.9rem; background: color-mix(in srgb, var(--raised) 72%, transparent); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); min-width: 0; }
+	.pin-art { display: block; width: 4.5rem; border-radius: 0.5rem; overflow: hidden; flex: none; }
+	.pin-copy { display: grid; justify-items: start; gap: 0.15rem; min-width: 0; }
+	.pin-title { color: var(--text); font-weight: 700; overflow-wrap: anywhere; }
+	.pin-meta { color: var(--muted); font-size: var(--t-13-6); }
+	.eyebrow { color: var(--accent); font-size: var(--t-11-2); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+	.lead-pin { grid-column: 1 / -1; column-gap: 1.5rem; row-gap: 0; padding: 1rem; grid-template-columns: auto minmax(0, 1fr); align-items: start; align-content: start; }
+	.lead-pin .pin-art { grid-row: 1 / span 3; }
+	.lead-pin .pin-copy { padding-top: 0.5rem; }
+	.lead-pin .note, .lead-pin .pin-actions { grid-column: 2; }
+	.pins.narrow { display: none; }
+	@media (max-width: 1099px) { .pins.narrow { display: grid; } .pins.wide { display: none; } }
+	.lead-pin .pin-art { width: clamp(7rem, 14vw, 11rem); border-radius: 0.6rem; box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 0.25); }
+	.lead-pin .pin-title { font-size: clamp(1.35rem, 2.4vw, 2rem); line-height: 1.1; letter-spacing: -0.02em; }
+	.note { color: var(--text); opacity: 0.85; max-width: 38rem; margin: 0.35rem 0 0.2rem; white-space: pre-wrap; }
+	.pin-actions { margin-top: 0.75rem; }
+	@media (min-width: 1100px) { .artist.editing { padding-right: calc(24rem + var(--pad)); } }
+	@media (max-width: 720px) {
+		.links { justify-content: center; }
+		.pins { grid-template-columns: minmax(0, 1fr); }
+		.lead-pin { column-gap: 1rem; padding: 0.85rem; align-items: center; }
+		.lead-pin .pin-art { width: 5.5rem; grid-row: 1; }
+		.lead-pin .pin-copy { padding-top: 0; }
+		.lead-pin .note, .lead-pin .pin-actions { grid-column: 1 / -1; }
+		.lead-pin .note { margin-top: 0.75rem; }
+		.pin-actions { margin-top: 0.5rem; }
+		.pin-actions :global(.hero-pill) { height: 2.5rem; }
+	}
 	small { display: block; }
 </style>
