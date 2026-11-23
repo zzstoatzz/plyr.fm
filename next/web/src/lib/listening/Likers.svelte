@@ -4,6 +4,7 @@
   import type { Track } from '@plyr/next-core/api';
   import Icon from '$lib/ui/Icon.svelte';
   import Artwork from '$lib/ui/Artwork.svelte';
+  import LoadMore from '$lib/ui/LoadMore.svelte';
   import { likes } from './likes';
   import { compactCount } from './format';
   import { placePopover } from './popover';
@@ -75,8 +76,9 @@
   {/each}
   {#if !list.people.length}
     {#if list.error}<p>could not load likes. <button class="text-button" type="button" onclick={() => likes.loadLikers(track)}>try again</button></p>{:else if list.loaded}<p>no likes yet.</p>{:else}<p role="status">loading likes…</p>{/if}
+  {:else}
+    <LoadMore cursor={list.more} loading={list.loading} error={list.error ? 'could not load more people.' : ''} label="people" load={() => likes.loadLikers(track, { more: true })} retry={() => likes.loadLikers(track, { more: list.more })} />
   {/if}
-  {#if list.more && !list.loading}<button class="text-button" type="button" onclick={() => likes.loadLikers(track, { more: true })}>more people</button>{/if}
 </div>
 
 <style>

@@ -27,6 +27,7 @@ on:
       - "next/scripts/check-boundaries.mjs"
       - "next/scripts/check-type-scale.mjs"
       - "next/scripts/check-play-controls.mjs"
+      - "next/scripts/check-pagination.mjs"
       - ".github/workflows/check-svelte-next.yml"
   # a merge to main ships next web live, like the next api; next has no users to protect
   push:
@@ -40,6 +41,7 @@ on:
       - "next/scripts/check-boundaries.mjs"
       - "next/scripts/check-type-scale.mjs"
       - "next/scripts/check-play-controls.mjs"
+      - "next/scripts/check-pagination.mjs"
       - ".github/workflows/check-svelte-next.yml"
 
 permissions:
@@ -67,7 +69,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
         working-directory: next
-      - run: bun run check:boundaries && bun run check:type-scale && bun run check:play-controls && bun run check:like-state
+      - run: bun run check:boundaries && bun run check:type-scale && bun run check:play-controls && bun run check:like-state && bun run check:pagination
         working-directory: next
       - run: bun run check && bun run test
         working-directory: next/core
@@ -99,7 +101,7 @@ jobs:
           - name: player-presentation
             run: bun run check:player-presentation && bun run check:likers
           - name: catalog
-            run: bun run check:artist-catalog && bun run check:atlas
+            run: bun run check:artist-catalog && bun run check:atlas && bun run check:paged-lists
           # holds the wheel down on home through several pages of latest and records the rail every frame
           # (with video): the live site as it is, then this build on the live catalog, which must not move
           - name: home-rail-scroll

@@ -24,6 +24,7 @@ import { AlbumEditor } from './collections/AlbumEditor';
 import { CollectionOrderEditor } from './collections/CollectionOrderEditor';
 import { AccessSheet } from './access/AccessSheet';
 import type { CollectionRevision } from '@plyr/next-core/collections/collection-order';
+import { LoadMore } from './LoadMore';
 
 function usePds() {
   const { did, rpc } = useAuth();
@@ -138,7 +139,7 @@ function AccountLibrary({ did, likesOnly, onPlay }: { did: string; likesOnly: bo
   const likedTracks = <>
     <TrackRows tracks={likes.data} onPlay={onPlay} />
     <Status loading={likes.loading} error={likes.error} retry={likes.more} empty={!likes.data.length ? 'no liked tracks yet.' : undefined} />
-    {likesOnly && likes.cursor && !likes.loading && !likes.error && <Button label="More liked tracks" onPress={likes.more} />}
+    {likesOnly && <LoadMore more={likes.cursor} loading={likes.loading} error={likes.error} load={likes.more} />}
   </>;
   if (likesOnly) return <><Heading main>liked tracks</Heading>{likedTracks}</>;
   const newBlocked = recovery.loading || !!recovery.error || !!recovery.operations.length;

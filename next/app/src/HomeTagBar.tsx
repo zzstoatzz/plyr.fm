@@ -29,9 +29,9 @@ export function HomeTagBar({ feed, hiddenTags }: { feed: LatestFeed; hiddenTags:
         {selected.map((name) => tag(name, true, tags.find((item) => item.name === name)?.track_count))}
         {selected.length > 0 && <View testID="home-tags-divider" style={[styles.divider, { backgroundColor: colors.line }]} />}
         {tags.filter(({ name }) => !selected.includes(name) && !hiddenTags.includes(name)).map(({ name, track_count }) => tag(name, false, track_count))}
-        {tagPages.hasMore && <Pressable accessibilityRole="button" accessibilityLabel="More tags" accessibilityState={{ busy: tagPages.loading, disabled: tagPages.loading }} disabled={tagPages.loading} onPress={() => void tagPages.more(true)} style={styles.tagTarget}>
-          <Text style={{ color: colors.muted, fontSize: 12 * colors.scale }}>{tagPages.loading ? 'loading…' : 'more'}</Text>
-        </Pressable>}
+        {tagPages.hasMore && tagPages.loading && <View accessibilityLabel="Loading more tags" style={styles.tagTarget}>
+          <Text style={{ color: colors.muted, fontSize: 12 * colors.scale }}>loading…</Text>
+        </View>}
       </TagScroller>
     </View>}
     <Status error={tagPages.error} retry={tagPages.retry} />

@@ -87,7 +87,7 @@
     {@const did = account.did}
     {#key account.rpc}
       <PagedListing load={cursor => api.actorLikes(did, { limit: 30, cursor })} label="liked tracks"
-        empty="no liked tracks yet." more="more liked tracks" version={likedVersion}>
+        empty="no liked tracks yet." version={likedVersion} key={`liked:${did}`}>
         {#snippet items(tracks: Track[])}
           {#each tracks as track (track.id)}<TrackRow {track} collection={tracks} label="liked tracks" />{/each}
         {/snippet}

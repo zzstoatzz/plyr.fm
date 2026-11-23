@@ -12,6 +12,7 @@ import { Choice } from './AccountPieces';
 import { shareLink } from './ShareLink';
 import { ArtistHero } from './ArtistHero';
 import { useTabs } from './behaviors/use-tabs';
+import { LoadMore } from './LoadMore';
 
 const sections = ['tracks', 'albums', 'playlists', 'likes'] as const;
 type Section = typeof sections[number];
@@ -76,7 +77,7 @@ function ArtistCatalog({ artist, onPlay }: { artist: Artist; onPlay: Play }) {
 function PageStatus<T>({ page, label }: { page: ReturnType<typeof usePages<T>>; label: string }) {
   return <>
     <Status loading={page.loading} error={page.error} retry={page.more} empty={!page.data.length ? `no ${label} yet.` : undefined} />
-    {page.cursor && !page.loading && !page.error && <View style={styles.actions}><Action label={`More ${label}`} onPress={page.more} /></View>}
+    <LoadMore more={page.cursor} loading={page.loading} error={page.error} load={page.more} />
   </>;
 }
 

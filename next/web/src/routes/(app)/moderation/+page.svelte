@@ -10,6 +10,7 @@
 	import { isModerator, moderation } from '$lib/moderation/client';
 	import { toast } from '$lib/toast.svelte';
 	import Loading from '$lib/ui/Loading.svelte';
+	import LoadMore from '$lib/ui/LoadMore.svelte';
 
 	let account = $state.raw(auth.getAuth());
 	let items = $state<QueueItem[]>([]);
@@ -185,7 +186,7 @@
 						</li>
 					{/each}
 				</ul>
-				{#if cursor}<button class="text-button" type="button" disabled={loading} onclick={() => load(true)}>{loading ? 'loading…' : 'show more'}</button>{/if}
+				{#if items.length}<LoadMore {cursor} {loading} {error} label="reports" load={() => load(true)} />{/if}
 			</section>
 
 			{#if selected}

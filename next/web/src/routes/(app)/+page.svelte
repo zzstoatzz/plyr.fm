@@ -17,6 +17,7 @@
 	import Icon from '$lib/ui/Icon.svelte';
 	import LinksMenu from '$lib/LinksMenu.svelte';
 	import Loading from '$lib/ui/Loading.svelte';
+	import LoadMore from '$lib/ui/LoadMore.svelte';
 	import RailRadio from '$lib/home/RailRadio.svelte';
 	import TrackRow from '$lib/TrackRow.svelte';
 	import FollowingLatest from '$lib/listening/FollowingLatest.svelte';
@@ -109,16 +110,6 @@
 			}).finally(() => { if (restoring === request) restoring = undefined; });
 		}
 	};
-
-	function observeMore(node: HTMLElement, cursor: string) {
-		const request = latest;
-		if (typeof IntersectionObserver === 'undefined') return;
-		const observer = new IntersectionObserver(entries => {
-			if (entries.some(entry => entry.isIntersecting) && restoring !== request && latest === request && !error) void more(cursor);
-		}, { rootMargin: '0px 0px 200px' });
-		observer.observe(node);
-		return () => observer.disconnect();
-	}
 
 	async function more(cursor: string, retry?: HTMLButtonElement) {
 		if (pending || completed.has(cursor)) return;
@@ -285,17 +276,7 @@
 			{/each}
 			{@const cursor = nextCursor ?? first.next_cursor}
 			{#if cursor && restoring !== latest}
-				{#key cursor}
-					<div class="more" {@attach node => observeMore(node, cursor)}>
-						{#if error}
-							<p role="status">{loading ? 'loading more tracks…' : error}</p>
-							<button type="button" class="text-button" aria-disabled={loading} onclick={event => more(cursor, event.currentTarget)}>try again</button>
-						{:else if loading}<Loading label="loading more tracks" inline />
-						{:else if typeof IntersectionObserver === 'undefined'}
-							<button type="button" class="text-button" onclick={event => more(cursor, event.currentTarget)}>load more</button>
-						{/if}
-					</div>
-				{/key}
+				<LoadMore {cursor} {loading} {error} label="tracks" load={button => more(cursor, button)} />
 			{/if}
 		{:catch}
 			<p role="status" class="state">could not load tracks.</p>
@@ -330,7 +311,6 @@
 	.featured:has(.feature-link:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
 	.featured:hover .feature-link { text-decoration: underline; text-decoration-thickness: 0.06em; text-underline-offset: 0.12em; }
 	.feature-content :global(.primary-button) { position: relative; z-index: 1; }
-	.more { min-height: 2.75rem; color: var(--muted); }
 	.latest { min-width: 0; }
 	.tag-shelf { display: flex; gap: 0.45rem; overflow-x: auto; padding: 0.2rem 0.15rem 0.75rem; scrollbar-width: none; }
 	.tag-shelf a { display: inline-flex; align-items: center; gap: 0.3rem; min-height: 2.75rem; padding-inline: 0.65rem; border: 1px solid var(--line); border-radius: 1.5rem; white-space: nowrap; color: var(--muted); }

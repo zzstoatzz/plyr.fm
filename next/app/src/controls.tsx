@@ -2,6 +2,7 @@ import { usePressIntent } from './use-press-intent';
 import { Text } from './Text';
 import { useContext, useEffect, useId, useRef, useState, type ReactNode, type Ref } from 'react';
 import { KeepInViewContext } from './behaviors/keep-in-view';
+import { ScrollEdgeProvider, useScrollEdge } from './behaviors/scroll-edge';
 import { Link, type Href } from 'expo-router';
 import { Keyboard, Pressable, ScrollView, StyleSheet, TextInput, type TextInputInstance, type TextInputProps, type ScrollViewProps, type ScrollViewInstance, View } from 'react-native';
 import type { Glyph } from './PlayerGlyph';
@@ -28,11 +29,15 @@ export function Action({ label, onPress, href, disabled, selected, primary, dest
   return href ? <Link href={href} asChild>{control}</Link> : control;
 }
 
-export function Page({ title, children, scrollRef, ...scrollProps }: { title: string; children: ReactNode; scrollRef?: Ref<ScrollViewInstance> } & Pick<ScrollViewProps, 'scrollEnabled' | 'onScroll' | 'onContentSizeChange' | 'onLayout'>) {
+export function Page({ title, children, scrollRef, scrollEnabled, onScroll, onContentSizeChange, onLayout }: { title: string; children: ReactNode; scrollRef?: Ref<ScrollViewInstance> } & Pick<ScrollViewProps, 'scrollEnabled' | 'onScroll' | 'onContentSizeChange' | 'onLayout'>) {
   const theme = useAppearance();
-  return <ScrollView ref={scrollRef} {...scrollProps} scrollEventThrottle={16} contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets style={{ backgroundColor: theme.background }} contentContainerStyle={styles.page}>
+  const scroll = useScrollEdge();
+  return <ScrollView ref={scrollRef} scrollEnabled={scrollEnabled} scrollEventThrottle={16}
+    onScroll={event => { scroll.props.onScroll(event); onScroll?.(event); }}
+    onContentSizeChange={(width, height) => { scroll.props.onContentSizeChange(width, height); onContentSizeChange?.(width, height); }}
+    onLayout={event => { scroll.props.onLayout(event); onLayout?.(event); }} contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets style={{ backgroundColor: theme.background }} contentContainerStyle={styles.page}>
     <Text accessibilityRole="header" aria-level={1} style={{ color: theme.text, fontSize: 28 * theme.scale, fontFamily: theme.fontFamily, fontWeight: '700', textTransform: 'lowercase' }}>{title}</Text>
-    {children}
+    <ScrollEdgeProvider edge={scroll.edge}>{children}</ScrollEdgeProvider>
   </ScrollView>;
 }
 

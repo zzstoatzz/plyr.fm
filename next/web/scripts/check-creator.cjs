@@ -284,7 +284,7 @@ async function run(browser, accounts, width, theme, mp3) {
     await main.getByRole('tab', { name: 'likes' }).click();
     await main.getByText('no likes yet.', { exact: true }).waitFor();
     await main.getByRole('tab', { name: 'tracks' }).click();
-    await main.getByRole('button', { name: 'more tracks' }).click();
+    await main.getByTestId('load-more').scrollIntoViewIfNeeded().catch(() => {});
     await main.getByRole('link', { name: 'recording after edit', exact: true }).click();
     const indexedLike = page.waitForResponse(response => {
       const url = new URL(response.url());
