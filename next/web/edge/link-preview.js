@@ -128,6 +128,74 @@ export function robots(origin) {
   ].join('\n');
 }
 
+const SOURCE = 'https://github.com/zzstoatzz/plyr.fm/blob/main';
+
+/** a plain-text map of plyr.fm for language models (llmstxt.org), naming this host and its appview */
+export function llmsTxt(origin, apiOrigin) {
+  return `# plyr.fm
+
+> An open-source audio streaming app on the AT Protocol. Tracks, albums,
+> playlists, likes and comments are atproto records in each account's own
+> repository on its PDS. The plyr.fm appview indexes them and answers XRPC
+> queries; it never writes records.
+
+## Read the catalog
+
+- Appview: \`${apiOrigin}/xrpc/{nsid}\`. Queries are \`GET\` with query parameters; procedures are \`POST\` with a JSON body. Errors are JSON \`{error, message}\`.
+- Methods under \`fm.plyr.unspecced.*\` may change without notice. Except \`recordPlay\`, they need no auth and answer any origin.
+- List methods take \`limit\` and \`cursor\` and return \`cursor\` while more results exist.
+
+Public reads:
+
+- \`fm.plyr.unspecced.search?q=&types=&limit=\`: tracks, artists, albums and playlists. \`types\` is comma-separated: track, artist, album, playlist.
+- \`fm.plyr.unspecced.getTopTracks?period=&limit=\`: most liked public tracks; period is day, week, month or all.
+- \`fm.plyr.unspecced.getLatestTracks\`, \`listTracks\` (by \`artistDid\` or \`tag\`), \`getTags\`, \`getTrackChart\`.
+- \`fm.plyr.unspecced.getTrack?uri=\`: one track by the AT-URI of its \`fm.plyr.track\` record, or \`legacyId=\` for a numeric ID from an older plyr.fm link. \`resolveTracks\` (POST) takes several URIs.
+- \`fm.plyr.unspecced.getPlayback?uri=\`: whether and where a track's audio can play. \`availability.status\` is available, preparing (ask again shortly), unavailable or gated.
+- \`fm.plyr.unspecced.getTrackLikes\`, \`getTrackComments\`, \`getTrackSuggestions\`.
+- \`fm.plyr.unspecced.getAlbum?uri=\`, \`listAlbums?artistDid=\`, \`getPlaylist?uri=\`, \`listPlaylists?ownerDid=\`.
+- \`fm.plyr.unspecced.getArtist?actor=\`, \`getArtistMetrics\`, \`getActorLikes\`, \`resolveArtists\` (POST).
+- \`fm.plyr.unspecced.getRadioStations\`, \`getRadioState?station=\`, \`getStats\`, \`getStatsOverview\`, \`getAtlas\`, \`getIngestStatus\`.
+- \`com.atproto.label.queryLabels\`: labels issued by the plyr.fm labeler.
+
+Example: \`GET ${apiOrigin}/xrpc/fm.plyr.unspecced.search?q=ambient&types=track&limit=5\`
+
+Account methods take a service JWT for the appview: \`fm.plyr.notification.listNotifications\`, \`getUnreadCount\`, \`updateSeen\`, and \`fm.plyr.moderation.createReport\`.
+
+The response bodies of most \`unspecced\` methods are the appview's own JSON shape, not yet specified in their lexicons. A metadata response is not proof that audio played.
+
+## Write data
+
+The appview does not write. To publish a track, like, comment or list, write the record to the account's PDS with \`com.atproto.repo.createRecord\`; the appview indexes it from the network. \`fm.plyr.unspecced.awaitRecord?uri=\` waits until a record just written is indexed.
+
+## Lexicons
+
+- \`fm.plyr.track\`: an audio track.
+- \`fm.plyr.list\`: an ordered list of records (an album or playlist).
+- \`fm.plyr.like\`: a like on a track.
+- \`fm.plyr.comment\`: a timed comment anchored to a playback position.
+- \`fm.plyr.actor.profile\`: an artist profile.
+- \`fm.plyr.release\`: one edition (album, single, EP) listing track records in play order.
+- \`fm.plyr.policy\`: one way into an artist's gated spaces.
+- \`fm.plyr.next.*\`: spaces and records used only by this service (protected audio, jams).
+
+## Pages and embeds
+
+- Pages: \`${origin}/track/{id}\`, \`/album/{id}\`, \`/playlist/{id}\`, \`/u/{handle}\`, \`/tag/{name}\`, \`/radio\`.
+- Embeds: \`${origin}/embed/track/{id}\`, \`/embed/album/{id}\`, \`/embed/playlist/{id}\`, \`/embed/u/{handle}\`, \`/embed/radio\`.
+- oEmbed: \`${origin}/oembed?url={page url}&format=json\` for track, album, playlist and artist pages; honours \`maxwidth\` and \`maxheight\`. JSON only.
+
+## Docs and source
+
+- [XRPC reference](${SOURCE}/next/docs/developers/xrpc.md)
+- [Lexicons](${SOURCE}/next/docs/lexicons.md)
+- [Authentication](${SOURCE}/next/docs/developers/auth.md)
+- [Method lexicons (JSON)](https://github.com/zzstoatzz/plyr.fm/tree/main/next/backend/lexicons)
+- [Record lexicons (JSON)](https://github.com/zzstoatzz/plyr.fm/tree/main/lexicons); \`release\`, \`policy\` and \`fm.plyr.next.*\` are in [next/app/lexicons](https://github.com/zzstoatzz/plyr.fm/tree/main/next/app/lexicons)
+- [Source](https://github.com/zzstoatzz/plyr.fm)
+`;
+}
+
 const SITEMAP_PAGES = 20;
 const xmlEscape = (text) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -560,7 +628,8 @@ const API_ORIGIN = '__PLYR_API_ORIGIN__';
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    const api = createApi(API_ORIGIN.startsWith('http') ? API_ORIGIN : 'https://api.next.plyr.fm');
+    const apiOrigin = API_ORIGIN.startsWith('http') ? API_ORIGIN : 'https://api.next.plyr.fm';
+    const api = createApi(apiOrigin);
 
     if (url.pathname === '/oembed') {
       const { status, body } = await oembed(url, api);
@@ -576,6 +645,9 @@ export default {
 
     if (url.pathname === '/robots.txt') {
       return new Response(robots(url.origin), { headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'public, max-age=3600' } });
+    }
+    if (url.pathname === '/llms.txt') {
+      return new Response(llmsTxt(url.origin, apiOrigin), { headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'public, max-age=3600' } });
     }
     if (url.pathname === '/sitemap.xml') {
       return new Response(await sitemap(url.origin, api), { headers: { 'content-type': 'application/xml; charset=utf-8', 'cache-control': 'public, max-age=3600' } });

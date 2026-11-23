@@ -15,6 +15,6 @@ await writeFile(
 );
 await writeFile(
   new URL('../build/_routes.json', import.meta.url),
-  JSON.stringify({ version: 1, include: ['/', '/atlas', '/radio', '/radio/*', '/track/*', '/u/*', '/album/*', '/playlist/*', '/tag/*', '/jam/*', '/oembed', '/og/*', '/embed/playlist/*', '/embed/album/*', '/robots.txt', '/sitemap.xml', '/liked/*', '/for-you', '/activity', '/record', '/costs', '/profile/*', '/portal/*', '/at/*'], exclude: [] }, null, 2) + '\n'
+  JSON.stringify({ version: 1, include: ['/', '/atlas', '/radio', '/radio/*', '/track/*', '/u/*', '/album/*', '/playlist/*', '/tag/*', '/jam/*', '/oembed', '/og/*', '/embed/playlist/*', '/embed/album/*', '/robots.txt', '/sitemap.xml', '/llms.txt', '/liked/*', '/for-you', '/activity', '/record', '/costs', '/profile/*', '/portal/*', '/at/*'], exclude: [] }, null, 2) + '\n'
 );
 console.log(`link previews: build/_worker.js reads ${api}, maps ${Object.keys(playlists).length} production playlist ids`);
