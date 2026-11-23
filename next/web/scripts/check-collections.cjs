@@ -68,7 +68,7 @@ async function check(browser, accounts, width, scheme) {
       metrics: { member_count: members.length, available_count: members.filter(member => member.track).length, total_plays: 0 }
     };
   }
-  let loseCreate = true, loseDelete = false, creates = 0, playlistUri, albumUri;
+  let loseCreate = true, loseDelete = false, creates = 0, playlistUri, albumUri, playlistReads = 0;
   let createBody;
   const { page, context } = await fixturePage(browser, accounts, {
     dist: path.resolve(__dirname, '../build'), context: { viewport: { width, height: 900 }, colorScheme: scheme },
@@ -116,6 +116,7 @@ async function check(browser, accounts, width, scheme) {
       return route.fulfill({ json: { status: 'indexed' } });
     }
     if (method(url) === 'listPlaylists' || method(url) === 'listAlbums') {
+      if (method(url) === 'listPlaylists') playlistReads++;
       const kind = method(url) === 'listAlbums' ? 'album' : 'playlist';
       return route.fulfill({ json: listPage([...projection.values()].filter(record => record.value.listType === kind).map(listDetail)) });
     }
@@ -195,13 +196,17 @@ async function check(browser, accounts, width, scheme) {
     assert.equal(creates, 1, 'recovering a lost create response uses the same record address');
     assert.equal(loseCreate, false);
     assert.deepEqual((await read(playlistUri)).value.items, []);
-    for (const track of tracks.slice(0, 2)) {
+    for (const [at, track] of tracks.slice(0, 2).entries()) {
       await page.goto(origin + '/track/' + track.id);
       const sheet = page.getByRole('dialog', { name: 'add to playlist' });
       await button('add to playlist').click();
       await sheet.getByRole('button', { name: /^Ordered playlist, / }).click();
       await page.getByText('added to Ordered playlist', { exact: true }).waitFor();
+      // the picker opens again on the playlists it had, with this add already counted, and asks for nothing
+      const reads = playlistReads;
       await button('add to playlist').click();
+      await sheet.getByRole('button', { name: `Ordered playlist, ${at + 1} ${at ? 'tracks' : 'track'}`, exact: true }).waitFor({ timeout: 2000 });
+      assert.equal(playlistReads, reads, 'reopening add to playlist does not load the playlists again');
       await sheet.getByRole('button', { name: /^Ordered playlist, / }).click();
       await page.getByText('already in Ordered playlist', { exact: true }).waitFor();
     }

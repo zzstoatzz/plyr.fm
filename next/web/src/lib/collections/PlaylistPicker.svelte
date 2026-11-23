@@ -4,9 +4,9 @@
   import { onMount, tick, untrack } from 'svelte';
   import { playlistIdFromUri, type ListSummary, type Track } from '@plyr/next-core/api';
   import { playlistAddNotice, playlistName, playlistTrackCount, type PlaylistAddStatus } from '@plyr/next-core/collections/playlist-add';
-  import { api } from '$lib/api';
   import { auth } from '$lib/auth';
-  import PagedListing from '$lib/catalog/PagedListing.svelte';
+  import Loading from '$lib/ui/Loading.svelte';
+  import { ownPlaylists } from './own-playlists';
   import { createPds } from '$lib/pds';
   import { toast } from '$lib/toast.svelte';
   import Artwork from '$lib/ui/Artwork.svelte';
@@ -25,10 +25,16 @@
   let error = $state('');
   let input = $state<HTMLInputElement>();
   const blocked = $derived(journal.view.loading || !!journal.view.error || journal.view.operations.some(operation => !operation.archived));
+  // The account's playlists live for the session: the picker opens on them, and its own adds and creates update them in place.
+  const did = untrack(() => account.did);
+  let lists = $state.raw(ownPlaylists.snapshot(did));
   onMount(() => {
     live = true;
     void journal.refresh();
-    return () => { live = false; };
+    const stop = ownPlaylists.subscribe(() => { lists = ownPlaylists.snapshot(did); });
+    if (did) ownPlaylists.open(did);
+    lists = ownPlaylists.snapshot(did);
+    return () => { live = false; stop(); };
   });
 
   function announce(label: string, status: PlaylistAddStatus, id: string, created = false) {
@@ -45,6 +51,7 @@
     error = '';
     try {
       const status = await pds.addToPlaylist(list.record.uri, track);
+      if (did && (status === 'indexed' || status === 'pending')) ownPlaylists.added(did, list.record.uri, track);
       if (current()) announce(playlistName(list), status, list.id);
     } catch (failure) {
       if (current()) error = failure instanceof Error ? failure.message : 'could not add this track. try again.';
@@ -66,12 +73,16 @@
     error = '';
     try {
       const result = await pds.createPlaylist(label, track);
+      const made = () => { if (did && (result.status === 'indexed' || result.status === 'pending')) ownPlaylists.created(did, result.uri, label, track); };
+      made();
       if (!current()) return;
       await journal.refresh();
       if (!current()) return;
       if (result.status !== 'indexed') return;
       const accepted = journal.view.operations.find(operation => operation.uri === result.uri && operation.cid);
       if (accepted) await pds.dismissCreate(accepted).catch(() => {});
+      // Dismissing settles the record once more, which counts as a change; this one is already in the list.
+      made();
       if (current()) announce(label, 'indexed', playlistIdFromUri(result.uri), true);
     } catch (failure) {
       if (!current()) return;
@@ -100,21 +111,30 @@
   {#if error}<p class="error" role="alert">{error}</p>{/if}
   <hr>
   <div class="lists">
-    <PagedListing load={cursor => api.playlists({ owner_did: account.did ?? undefined, limit: 30, cursor })} label="your playlists" empty="no playlists yet. start one above." more="more playlists">
-      {#snippet items(lists: ListSummary[])}
-        <ul aria-label="your playlists">
-          {#each lists as list (list.id)}
-            <li>
-              <button type="button" class="row" disabled={busy} aria-busy={adding === list.id} aria-label={`${playlistName(list)}, ${playlistTrackCount(list)}`} onclick={() => add(list)}>
-                <span class="thumb"><Artwork src={list.media?.artwork?.url} fallbackIcon="music" size={88} /></span>
-                <span class="name"><span class="truncate">{playlistName(list)}</span><small>{playlistTrackCount(list)}</small></span>
-                {#if adding === list.id}<span class="spin" aria-hidden="true"></span>{:else}<Icon name="plus" size={18} />{/if}
-              </button>
-            </li>
-          {/each}
-        </ul>
-      {/snippet}
-    </PagedListing>
+    {#if lists.data.length}
+      <ul aria-label="your playlists">
+        {#each lists.data as list (list.id)}
+          <li>
+            <button type="button" class="row" disabled={busy} aria-busy={adding === list.id} aria-label={`${playlistName(list)}, ${playlistTrackCount(list)}`} onclick={() => add(list)}>
+              <span class="thumb"><Artwork src={list.media?.artwork?.url} fallbackIcon="music" size={88} /></span>
+              <span class="name"><span class="truncate">{playlistName(list)}</span><small>{playlistTrackCount(list)}</small></span>
+              {#if adding === list.id}<span class="spin" aria-hidden="true"></span>{:else}<Icon name="plus" size={18} />{/if}
+            </button>
+          </li>
+        {/each}
+      </ul>
+    {/if}
+    {#if lists.error}
+      <p class="state" role="alert">{lists.error}</p>
+      <button type="button" class="text-button" onclick={() => did && ownPlaylists.retry(did)}>retry your playlists</button>
+    {:else if lists.loading}
+      <Loading label="loading your playlists" inline />
+    {:else if !lists.data.length}
+      <p class="state">no playlists yet. start one above.</p>
+    {/if}
+    {#if lists.cursor && !lists.loading && !lists.error}
+      <button type="button" class="text-button" onclick={() => did && ownPlaylists.more(did)}>more playlists</button>
+    {/if}
   </div>
 </div>
 
