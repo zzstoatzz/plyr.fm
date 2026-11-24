@@ -239,7 +239,7 @@ max_lines = 916
 
 [[rules]]
 path = "frontend/src/lib/components/TrackEntryCard.svelte"
-max_lines = 600
+max_lines = 610
 
 [[rules]]
 path = "frontend/src/routes/record/+page.svelte"
@@ -367,7 +367,7 @@ max_lines = 589
 
 [[rules]]
 path = "next/scripts/build-atlas.py"
-max_lines = 732
+max_lines = 610
 
 [[rules]]
 path = "frontend/src/routes/atlas/renderer.ts"

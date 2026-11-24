@@ -28,21 +28,22 @@ everything comes from next, never from the legacy python api or its database:
   matched by each track's `legacy_id`, so the first build doesn't re-embed
   the whole legacy catalog.
 - the map is projected (PCA + UMAP), clustered in a separate 10D space
-  (HDBSCAN, two tiers), labelled by c-TF-IDF with optional claude
-  refinement (pub-search's build-atlas, see its docs/atlas.md), and written
+  (HDBSCAN, two tiers), named from the audio (atlas_labels.py: CLAP text
+  embeddings of plain sound descriptions, checked against each cluster's
+  tracks, worded by haiku when ANTHROPIC_API_KEY is set), and written
   to `plyr_index.atlas_snapshots`, which the api serves as
   `fm.plyr.unspecced.getAtlas`.
 
 usage (next-build-atlas.yml runs it daily):
     export DATABASE_URL=postgresql://...      # next's writer login
-    export ANTHROPIC_API_KEY=...              # optional: refined labels
+    export ANTHROPIC_API_KEY=...              # optional: haiku words the names
     export TURBOPUFFER_API_KEY=...            # only with --seed-turbopuffer
     uv run next/scripts/build-atlas.py [--seed-turbopuffer] [-o atlas.json] [--dry-run]
 """
 
 import argparse
-import asyncio
 import json
+import os
 import re
 import sys
 import time
@@ -50,13 +51,13 @@ from collections import Counter
 from pathlib import Path
 from typing import NamedTuple
 
+import atlas_labels
 import httpx
 import numpy as np
 import psycopg
 from pydantic import ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sklearn.decomposition import PCA
-from sklearn.feature_extraction.text import TfidfVectorizer
 
 EXCLUDED_LABELS = {"sexual", "porn", "copyright-violation"}
 EMBED_MODEL = "laion/clap-htsat-unfused"
@@ -75,6 +76,9 @@ class Settings(BaseSettings):
     track_namespace: str = "fm.plyr"
     clap_embed_url: str = (
         "https://zzstoatzz--plyr-clap-clapservice-embed-audio.modal.run"
+    )
+    clap_embed_text_url: str = (
+        "https://zzstoatzz--plyr-clap-clapservice-embed-text.modal.run"
     )
     embed_limit: int = 300
     turbopuffer_api_key: str = ""
@@ -115,6 +119,14 @@ def tpuf_export(settings: Settings) -> list[dict]:
             if len(page) < 10000:
                 break
     return rows
+
+
+def load_snapshot(conn: psycopg.Connection) -> dict | None:
+    """the map the api serves now, to compare names against."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT body::text FROM plyr_index.atlas_snapshots WHERE id = 1")
+        row = cur.fetchone()
+    return json.loads(row[0]) if row else None
 
 
 def plain_url(db_url: str) -> str:
@@ -305,124 +317,6 @@ def embed_missing(
     log(f"  checked {checked}, embedded {embedded}, failed {failed}")
 
 
-def extract_terms(text: str) -> str:
-    return " ".join(t for t in re.findall(r"[a-z0-9]+", text.lower()) if len(t) > 1)
-
-
-def cluster_tfidf_labels(
-    docs_per_cluster: dict[int, list[str]], n_terms: int = 3
-) -> dict[int, str]:
-    """c-TF-IDF keyword labels: one pseudo-document per cluster."""
-    cluster_ids = sorted(docs_per_cluster.keys())
-    if not cluster_ids:
-        return {}
-    docs = [" ".join(docs_per_cluster[cid]) for cid in cluster_ids]
-    vectorizer = TfidfVectorizer(
-        max_features=5000,
-        stop_words="english",
-        token_pattern=r"[a-z0-9]{2,}",
-        lowercase=True,
-    )
-    try:
-        tfidf = vectorizer.fit_transform(docs)
-    except ValueError:
-        return {cid: f"cluster {cid}" for cid in cluster_ids}
-    feature_names = vectorizer.get_feature_names_out()
-    labels = {}
-    for i, cid in enumerate(cluster_ids):
-        row = tfidf[i].toarray().flatten()
-        top_idx = row.argsort()[-n_terms:][::-1]
-        top_terms = [feature_names[j] for j in top_idx if row[j] > 0]
-        labels[cid] = " ".join(top_terms) if top_terms else f"cluster {cid}"
-    return labels
-
-
-def llm_refine_labels(
-    tfidf_labels: dict[int, str],
-    evidence_per_cluster: dict[int, list[str]],
-    cluster_counts: dict[int, int],
-    api_key: str,
-    tier: str,
-    batch_size: int = 15,
-) -> dict[int, str]:
-    """refine keyword labels into short region names with claude haiku."""
-    from anthropic import AsyncAnthropic
-
-    client = AsyncAnthropic(api_key=api_key)
-    rng = np.random.default_rng(42)
-    cluster_ids = sorted(tfidf_labels.keys())
-    batches = [
-        cluster_ids[i : i + batch_size] for i in range(0, len(cluster_ids), batch_size)
-    ]
-
-    system_instructions = (
-        "You are labeling clusters for a music atlas — a 2D map of a track catalog "
-        "where each cluster groups tracks that sound alike (clustered on audio "
-        "embeddings, not text).\n\n"
-        "For each cluster you receive its keyword seed plus sample track titles and "
-        "listener tags. Write a short evocative label (2-4 lowercase words) that names "
-        "the sonic territory, like a region on a map.\n\n"
-        'Good labels: "ambient drift", "bedroom pop", "heavy guitars", '
-        '"late night electronic", "acoustic folk", "glitch experiments"\n'
-        'Bad labels: "track song mix", "untitled demo 2", "cluster seven"\n\n'
-        "Respond with ONLY a JSON object mapping cluster ID (as string) to label. "
-        "No other text."
-    )
-
-    async def label_batch(batch: list[int]) -> dict[int, str]:
-        parts = []
-        for cid in batch:
-            evidence = evidence_per_cluster.get(cid, [])
-            sample = (
-                list(rng.choice(evidence, size=min(12, len(evidence)), replace=False))
-                if evidence
-                else []
-            )
-            parts.append(
-                f"Cluster {cid} ({cluster_counts.get(cid, 0)} tracks):\n"
-                f"  Keywords: {tfidf_labels[cid]}\n"
-                f"  Samples: {', '.join(repr(t) for t in sample)}"
-            )
-        resp = await client.messages.create(
-            model="claude-haiku-5-5",
-            max_tokens=4096,
-            output_config={"effort": "low"},
-            system=[
-                {
-                    "type": "text",
-                    "text": system_instructions,
-                    "cache_control": {"type": "ephemeral"},
-                }
-            ],
-            messages=[{"role": "user", "content": "\n\n".join(parts)}],
-        )
-        text = "".join(
-            block.text for block in resp.content if block.type == "text"
-        ).strip()
-        if text.startswith("```"):
-            text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-        try:
-            parsed = json.loads(text)
-            return {int(k): str(v) for k, v in parsed.items()}
-        except (json.JSONDecodeError, ValueError):
-            log("  warning: failed to parse LLM response for a batch, keeping keywords")
-            return {}
-
-    async def run_all() -> dict[int, str]:
-        results = await asyncio.gather(*[label_batch(b) for b in batches])
-        merged: dict[int, str] = {}
-        for r in results:
-            merged.update(r)
-        return merged
-
-    log(
-        f"  refining {tier} labels with LLM ({len(batches)} batches, {len(cluster_ids)} clusters)..."
-    )
-    refined = asyncio.run(run_all())
-    log(f"  {tier}: {len(refined)}/{len(cluster_ids)} labels refined")
-    return {cid: refined.get(cid, tfidf_labels[cid]) for cid in cluster_ids}
-
-
 def assign_outliers(
     coords: np.ndarray, labels: np.ndarray, centroids: dict[int, np.ndarray]
 ) -> np.ndarray:
@@ -447,7 +341,12 @@ def main() -> None:
         "--seed-turbopuffer", action="store_true", help="copy legacy vectors in first"
     )
     parser.add_argument(
-        "--dry-run", action="store_true", help="build the map but don't store it"
+        "--dry-run",
+        action="store_true",
+        help="build the map without writing anything (no embedding, no snapshot)",
+    )
+    parser.add_argument(
+        "--no-compare", action="store_true", help="skip the before/after name table"
     )
     args = parser.parse_args()
 
@@ -471,12 +370,15 @@ def main() -> None:
     corpus = load_corpus(client, settings)
     log(f"  {len(corpus)} atlas-eligible tracks")
 
-    if args.seed_turbopuffer:
+    if args.seed_turbopuffer and not args.dry_run:
         log("copying legacy vectors from turbopuffer...")
         seed_from_turbopuffer(client, conn, settings, corpus)
 
-    log("embedding new and changed audio...")
-    embed_missing(client, conn, settings, corpus)
+    if args.dry_run:
+        log("dry run: mapping only tracks already embedded")
+    else:
+        log("embedding new and changed audio...")
+        embed_missing(client, conn, settings, corpus)
 
     vectors = load_vectors(conn)
     keyed = [
@@ -551,74 +453,41 @@ def main() -> None:
     )
     labels_fine, fine_centroids, core_fine = cluster_tier("fine", fine_size, 2)
 
-    # label evidence: titles + tags of CORE members only — points HDBSCAN
-    # actually assigned. snapped outliers blur the vocabulary a label draws on.
-    # a cluster whose core evidence is empty falls back to full membership.
-    log("computing cluster labels (c-TF-IDF on titles+tags)...")
-
-    def evidence_for(i: int) -> str:
-        m = meta[i]
-        parts = [m["title"] or ""]
-        parts.extend(m["tags"] or [])
-        return extract_terms(" ".join(parts))
-
-    def display_evidence(i: int) -> str:
-        m = meta[i]
-        tags = ", ".join(m["tags"] or [])
-        return f"{m['title']}" + (f" [{tags}]" if tags else "")
-
-    def collect(
-        labels: np.ndarray, core: np.ndarray, centroids: dict
-    ) -> tuple[dict, dict]:
-        docs: dict[int, list[str]] = {int(c): [] for c in centroids}
-        samples: dict[int, list[str]] = {int(c): [] for c in centroids}
-        docs_all: dict[int, list[str]] = {int(c): [] for c in centroids}
-        samples_all: dict[int, list[str]] = {int(c): [] for c in centroids}
-        for i in range(n):
-            ev = evidence_for(i)
-            if not ev:
-                continue
-            cid = int(labels[i])
-            docs_all[cid].append(ev)
-            samples_all[cid].append(display_evidence(i))
-            if core[i]:
-                docs[cid].append(ev)
-                samples[cid].append(display_evidence(i))
-        for cid, evidence in docs.items():
-            if not evidence:
-                docs[cid] = docs_all[cid]
-                samples[cid] = samples_all[cid]
-        return docs, samples
-
-    coarse_docs, coarse_samples = collect(labels_coarse, core_coarse, coarse_centroids)
-    fine_docs, fine_samples = collect(labels_fine, core_fine, fine_centroids)
-    coarse_labels = cluster_tfidf_labels(coarse_docs)
-    fine_labels = cluster_tfidf_labels(fine_docs)
-
-    if settings.anthropic_api_key:
-        coarse_counts = {
-            int(c): int((labels_coarse == c).sum()) for c in set(labels_coarse)
-        }
-        fine_counts = {int(c): int((labels_fine == c).sum()) for c in set(labels_fine)}
-        try:
-            coarse_labels = llm_refine_labels(
-                coarse_labels,
-                coarse_samples,
-                coarse_counts,
-                settings.anthropic_api_key,
-                "coarse",
+    # names come from the audio, like the clusters: CLAP's text encoder places
+    # plain sound descriptions in the same space (see atlas_labels.py)
+    log("naming sounds from the audio...")
+    vocab_vecs = atlas_labels.embed_vocab(settings.clap_embed_text_url)
+    lean = (
+        atlas_labels.track_leanings(X, vocab_vecs) if vocab_vecs is not None else None
+    )
+    tags_per_track = [m["tags"] or [] for m in meta]
+    previous = None if args.no_compare else load_snapshot(conn)
+    summary = []
+    tier_names = {}
+    for tier, labels, core in (
+        ("coarse", labels_coarse, core_coarse),
+        ("fine", labels_fine, core_fine),
+    ):
+        evidence = atlas_labels.gather_evidence(labels, core, tags_per_track, lean)
+        names = atlas_labels.name_clusters(evidence, settings.anthropic_api_key, tier)
+        tier_names[tier] = names
+        key = "clusterCoarse" if tier == "coarse" else "clusterFine"
+        before = atlas_labels.previous_names(
+            previous,
+            tier,
+            [{"id": m["id"], key: int(labels[i])} for i, m in enumerate(meta)],
+        )
+        samples: dict[int, list[str]] = {}
+        for i in np.argsort([-(m["play_count"] or 0) for m in meta]):
+            samples.setdefault(int(labels[i]), []).append(
+                f"{meta[i]['title']} ({meta[i]['artist_handle']})"
             )
-            fine_labels = llm_refine_labels(
-                fine_labels,
-                fine_samples,
-                fine_counts,
-                settings.anthropic_api_key,
-                "fine",
-            )
-        except Exception as e:  # noqa: BLE001 - labels are optional; keywords stand in
-            log(f"  LLM labeling failed, keeping c-TF-IDF labels: {e}")
-    else:
-        log("  (no ANTHROPIC_API_KEY — c-TF-IDF labels only)")
+        summary.append(atlas_labels.report(tier, names, evidence, before, samples))
+    coarse_labels, fine_labels = tier_names["coarse"], tier_names["fine"]
+    log("\n" + "\n".join(summary))
+    if step_summary := os.environ.get("GITHUB_STEP_SUMMARY"):
+        with open(step_summary, "a") as f:
+            f.write("\n".join(summary))
 
     fine_to_coarse = {}
     for fine_id in set(labels_fine):
