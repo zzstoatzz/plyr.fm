@@ -20,10 +20,12 @@ portal's published catalog work on the web client. The queue with its position
 and the account's settings are kept in Postgres for any signed-in account. The
 native apps build from the same code and have not been accepted on devices.
 Publishing parity, full album and playlist management, personalised discovery,
-private listening history and moderation preferences are not ported yet, and
-login discovery, legacy embeds and Radio still read production services.
+private listening history and moderation preferences are not ported yet.
+Nothing in next reads production services at runtime, and nothing may.
 
 At cutover this folder's contents move to the top level. The
+[cutover handoff](../docs/research/2026-11-24-next-cutover/README.md) is the
+current state of the migration. The older
 [handoff](../docs/research/2026-11-12-next-handoff.md) says where the work
 stands and what comes next, and the
 [inventory](../docs/research/2026-11-04-rewrite-progress-and-scope.md) lists

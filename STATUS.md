@@ -1,6 +1,8 @@
 # plyr.fm - status
 
-Start here for the next agent: [November 12 daily-driver checkpoint](docs/research/2026-11-12-next-daily-driver-checkpoint.md).
+Start here for the next agent: [next cutover handoff](docs/research/2026-11-24-next-cutover/README.md). The project's focus is next; legacy prod is being retired.
+
+Older: [November 12 daily-driver checkpoint](docs/research/2026-11-12-next-daily-driver-checkpoint.md).
 
 ## Next daily-driver work (2026-11-12)
 
