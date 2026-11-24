@@ -116,7 +116,9 @@ test "quota spends within the window's allowance and ceiling, by tier" {
     try std.testing.expect(!(try spend(a, conn, .scan_seconds, "did:plc:fresh", 1)).granted);
 
     // a released spend is room again
-    _ = try conn.exec("SELECT plyr_quota.release('scan_seconds', 'did:plc:op', 400)", .{});
+    _ = try conn.exec("SELECT plyr_quota.release('scan_seconds', 'did:plc:op', 400, $1)", .{grant.retry_at_us});
+    // a release names its spend's window, so one in a later window gives back nothing now
+    _ = try conn.exec("SELECT plyr_quota.release('scan_seconds', 'did:plc:op', 400, $1)", .{grant.retry_at_us + 86_400_000_000});
     try std.testing.expect((try spend(a, conn, .scan_seconds, "did:plc:fresh", 400)).granted);
 
     // meters are separate: reports are 30 an hour on every metered tier

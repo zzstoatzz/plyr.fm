@@ -29,6 +29,8 @@ class PostgresBudget:
     def __init__(self, dsn: str) -> None:
         self._dsn = dsn
         self._conn: psycopg2.extensions.connection | None = None
+        # the window each account's last spend landed in, so a release gives it back there
+        self._windows: dict[str, int] = {}
 
     def _connection(self) -> psycopg2.extensions.connection:
         if self._conn is None or self._conn.closed:
@@ -38,13 +40,19 @@ class PostgresBudget:
 
     def spend(self, owner_did: str, seconds: int) -> bool:
         with self._connection().cursor() as cur:
-            cur.execute('SELECT granted FROM plyr_quota.spend(%s, %s, %s)', (METER, owner_did, seconds))
+            cur.execute('SELECT granted, retry_at_us FROM plyr_quota.spend(%s, %s, %s)', (METER, owner_did, seconds))
             row = cur.fetchone()
-        return bool(row and row[0])
+        if not row or not row[0]:
+            return False
+        self._windows[owner_did] = int(row[1])
+        return True
 
     def release(self, owner_did: str, seconds: int) -> None:
+        window = self._windows.pop(owner_did, None)
+        if window is None:
+            return
         with self._connection().cursor() as cur:
-            cur.execute('SELECT plyr_quota.release(%s, %s, %s)', (METER, owner_did, seconds))
+            cur.execute('SELECT plyr_quota.release(%s, %s, %s, %s)', (METER, owner_did, seconds, window))
 
     def close(self) -> None:
         if self._conn is not None and not self._conn.closed:

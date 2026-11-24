@@ -66,7 +66,7 @@ SELECT r.record_uri, r.record_cid, r.owner_did, r.title, r.audio_url, r.ready_at
        coalesce(a.handle, ''), coalesce(a.display_name, ''),
        EXISTS (SELECT 1 FROM plyr_moderation.scans s
                WHERE s.record_uri = r.record_uri AND s.audio_url = r.audio_url),
-       coalesce(r.duration, 0)::int,
+       least(greatest(coalesce(r.duration, 0), 0), 86400)::int,
        (SELECT count(*) FROM plyr_index.track_records o
         WHERE o.owner_did = r.owner_did AND o.collection = %(collection)s AND NOT o.deleted
           AND o.indexed_at_us > r.indexed_at_us - 86400000000 AND o.indexed_at_us <= r.indexed_at_us)::int
@@ -101,6 +101,13 @@ ON CONFLICT (record_uri) DO UPDATE SET retry_at_us = EXCLUDED.retry_at_us
 """
 
 RELEASE_HOLD = 'DELETE FROM plyr_moderation.scan_holds WHERE record_uri = %s'
+
+# a held track that was deleted has nothing left to scan or to keep out of discovery
+DROP_GONE_HOLDS = """
+DELETE FROM plyr_moderation.scan_holds h
+WHERE NOT EXISTS (SELECT 1 FROM plyr_index.track_records t
+                  WHERE t.record_uri = h.record_uri AND t.collection = %(collection)s AND NOT t.deleted)
+"""
 
 COUNT_HOLD_ATTEMPT = """
 UPDATE plyr_moderation.scan_holds SET attempts = attempts + 1 WHERE record_uri = %s RETURNING attempts
@@ -315,6 +322,7 @@ class Store:
     def held_due(self, limit: int) -> list[IndexedTrack]:
         conn = self._connection()
         with conn, conn.cursor() as cur:
+            cur.execute(DROP_GONE_HOLDS, {'collection': self._collection})
             cur.execute(SELECT_HELD, {'collection': self._collection, 'now': time.time_ns() // 1000, 'limit': limit})
             rows = cur.fetchall()
         return [HeldTrack(*row) for row in rows]

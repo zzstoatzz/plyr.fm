@@ -30,7 +30,7 @@ from osprey.worker.sinks.utils.acking_contexts import BaseAckingContext
 from plyr_osprey import udfs
 from plyr_osprey.budget import PostgresBudget
 from plyr_osprey.entity_labels import PostgresEntityLabels
-from plyr_osprey.fingerprint import AudDFingerprinter
+from plyr_osprey.fingerprint import AudDFingerprinter, FfprobeProber
 from plyr_osprey.image_scan import ClaudeImageScanner
 from plyr_osprey.store import IndexedCover, Store, plain_dsn
 from plyr_osprey.tracks import CURSORS, ModerationLogSink, TrackInputStream, Walk
@@ -69,6 +69,7 @@ def register_input_stream(config: Config) -> BaseInputStream[BaseAckingContext[A
     if audd_token:
         udfs.fingerprinter = AudDFingerprinter(audd_token)
         udfs.budget = PostgresBudget(plain_dsn(config.expect_str('DATABASE_URL')))
+        udfs.prober = FfprobeProber()
         cursors = CURSORS
     else:
         log.warning('AUDD_API_TOKEN is not set: tracks wait unscanned, covers are still checked')

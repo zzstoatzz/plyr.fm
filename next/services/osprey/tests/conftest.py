@@ -57,6 +57,21 @@ class FakeBudget:
         self.released.append((owner_did, seconds))
 
 
+class FakeProber:
+    def __init__(self) -> None:
+        self.lengths: dict[str, int] = {}
+
+    def seconds(self, audio_url: str) -> int | None:
+        return self.lengths.get(audio_url)
+
+
+@pytest.fixture(autouse=True)
+def prober(monkeypatch: pytest.MonkeyPatch) -> FakeProber:
+    fake = FakeProber()
+    monkeypatch.setattr(udfs, 'prober', fake)
+    return fake
+
+
 @pytest.fixture(autouse=True)
 def budget(monkeypatch: pytest.MonkeyPatch) -> FakeBudget:
     fake = FakeBudget()
@@ -106,7 +121,7 @@ CREATE SCHEMA plyr_index;
 CREATE TABLE plyr_index.track_records (
     record_uri TEXT PRIMARY KEY, record_cid TEXT, owner_did TEXT NOT NULL, collection TEXT NOT NULL,
     title TEXT, audio_url TEXT, audio_blob_cid TEXT, image_url TEXT, deleted BOOLEAN NOT NULL DEFAULT false,
-    indexed_at_us BIGINT NOT NULL, duration_seconds INTEGER
+    indexed_at_us BIGINT NOT NULL, duration_seconds BIGINT
 );
 CREATE TABLE plyr_index.track_measured_durations (
     record_uri TEXT NOT NULL, record_cid TEXT NOT NULL, duration_seconds INTEGER NOT NULL,

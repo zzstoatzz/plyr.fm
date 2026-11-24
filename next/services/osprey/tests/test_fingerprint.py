@@ -1,9 +1,12 @@
+import shutil
+import wave
+
 import pytest
 import requests
 
-from plyr_osprey.fingerprint import AudDFingerprinter, ScanPlan, matches_from
+from plyr_osprey.fingerprint import AudDFingerprinter, FfprobeProber, ScanPlan, matches_from
 
-SHORT = ScanPlan.for_duration(180)
+SHORT = ScanPlan.for_length(180)
 
 
 class Response:
@@ -31,7 +34,7 @@ def test_scan_asks_audd_with_accurate_offsets(monkeypatch: pytest.MonkeyPatch) -
         'url': 'https://enterprise.audd.io/',
         'data': {'api_token': 'k', 'url': 'https://x/a.mp3', 'accurate_offsets': '1', 'limit': '15'},
     }
-    AudDFingerprinter('k').matches('https://x/a.mp3', ScanPlan.for_duration(1200))
+    AudDFingerprinter('k').matches('https://x/a.mp3', ScanPlan.for_length(1200))
     assert sent['data'] == {
         'api_token': 'k',
         'url': 'https://x/a.mp3',
@@ -43,20 +46,23 @@ def test_scan_asks_audd_with_accurate_offsets(monkeypatch: pytest.MonkeyPatch) -
 
 
 @pytest.mark.parametrize(
-    ('duration', 'stride', 'charge', 'chunks'),
+    ('measured', 'claimed', 'stride', 'charge', 'chunks'),
     [
-        (180, 1, 180, 15),
-        (600, 1, 600, 50),
-        (601, 2, 601, 26),
-        (1800, 2, 1800, 75),
-        (3600, 3, 3600, 100),
-        (6 * 3600, 3, 3 * 3600, 300),  # nothing is charged or heard past three hours
-        (None, 1, 600, 50),  # a length next doesn't know yet counts as ten minutes
-        (0, 1, 600, 50),
+        (180, 0, 1, 180, 15),
+        (600, 0, 1, 600, 50),
+        (601, 0, 2, 601, 26),
+        (1800, 0, 2, 1800, 75),
+        (3600, 0, 3, 3600, 100),
+        (6 * 3600, 0, 3, 3 * 3600, 300),  # nothing is charged or heard past three hours
+        (3600, 1, 3, 3600, 100),  # the measured length wins over what the record claims
+        # unmeasured: charged the claim or ten minutes, and heard to three hours whatever it claims
+        (None, 0, 1, 600, 900),
+        (None, 1, 1, 600, 900),
+        (None, 3600, 3, 3600, 300),
     ],
 )
-def test_long_files_are_sampled_and_never_heard_past_what_was_paid(duration, stride, charge, chunks) -> None:
-    plan = ScanPlan.for_duration(duration)
+def test_the_measured_length_decides_the_charge_and_what_is_heard(measured, claimed, stride, charge, chunks) -> None:
+    plan = ScanPlan.for_length(measured, claimed)
     assert (plan.stride, plan.charge_seconds, plan.max_chunks) == (stride, charge, chunks)
 
 
@@ -92,3 +98,17 @@ def test_a_failed_scan_raises(monkeypatch: pytest.MonkeyPatch, response: Respons
     monkeypatch.setattr(requests, 'post', lambda *a, **k: response)
     with pytest.raises((requests.HTTPError, RuntimeError, TypeError)):
         AudDFingerprinter('k').matches('https://x/a.mp3', SHORT)
+
+
+@pytest.mark.skipif(shutil.which('ffprobe') is None, reason='ffprobe not installed')
+def test_ffprobe_measures_the_file_not_the_record(tmp_path) -> None:
+    path = tmp_path / 'tone.wav'
+    with wave.open(str(path), 'wb') as out:
+        out.setnchannels(1)
+        out.setsampwidth(2)
+        out.setframerate(8000)
+        out.writeframes(b'\0\0' * 8000 * 25)
+    assert FfprobeProber().seconds(str(path)) == 25
+    junk = tmp_path / 'junk.mp3'
+    junk.write_bytes(b'not audio')
+    assert FfprobeProber().seconds(str(junk)) is None

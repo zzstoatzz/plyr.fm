@@ -90,10 +90,14 @@ def holds(result: ExecutionResult) -> list[HoldEffect]:
     return [e for e in result.effects.get(HoldEffect, []) if isinstance(e, HoldEffect)]
 
 
-def test_a_scan_spends_the_uploaders_budget_for_the_tracks_length(engine, fingerprinter, budget) -> None:
-    result = run(engine, NEXT_AUDIO, duration_seconds=240)
+def test_a_scan_spends_the_uploaders_budget_for_the_files_measured_length(
+    engine, fingerprinter, budget, prober
+) -> None:
+    prober.lengths[NEXT_AUDIO] = 240
+    result = run(engine, NEXT_AUDIO, duration_seconds=1)
     assert result.error_infos == []
     assert budget.spends == [('did:plc:uploader', 240)]
+    assert fingerprinter.plans[0].max_chunks == 20
     assert fingerprinter.scanned == [NEXT_AUDIO]
     assert holds(result) == []
 
@@ -108,20 +112,22 @@ def test_out_of_budget_a_track_is_held_not_scanned(engine, fingerprinter, budget
     assert flags(result) == []
 
 
-def test_a_failed_scan_gives_its_budget_back(engine, fingerprinter, budget) -> None:
+def test_a_failed_scan_gives_its_budget_back(engine, fingerprinter, budget, prober) -> None:
+    prober.lengths[NEXT_AUDIO] = 300
     fingerprinter.failing.add(NEXT_AUDIO)
-    assert run(engine, NEXT_AUDIO, duration_seconds=300).error_infos
+    assert run(engine, NEXT_AUDIO).error_infos
     assert budget.released == [('did:plc:uploader', 300)]
 
 
-def test_a_long_file_is_sampled_and_its_mix_still_flagged(engine, fingerprinter, budget) -> None:
+def test_a_long_file_is_sampled_and_its_mix_still_flagged(engine, fingerprinter, budget, prober) -> None:
+    prober.lengths[NEXT_AUDIO] = 3600
     # an hour-long mix, heard one chunk in three: a song playing through it
     # turns up in three samples 36 seconds apart
     fingerprinter.by_url[NEXT_AUDIO] = [
         {'artist': 'Beartooth', 'title': 'Hit', 'offset_ms': 36_000 * i, 'timecode': f'00:{10 + 36 * i:02d}'}
         for i in range(3)
     ]
-    result = run(engine, NEXT_AUDIO, duration_seconds=3600)
+    result = run(engine, NEXT_AUDIO, duration_seconds=60)
     [plan] = fingerprinter.plans
     assert (plan.stride, plan.charge_seconds, plan.max_chunks) == (3, 3600, 100)
     assert budget.spends == [('did:plc:uploader', 3600)]

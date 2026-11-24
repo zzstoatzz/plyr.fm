@@ -49,8 +49,9 @@ plyr_index.track_records ──▶ TrackInputStream ──▶ Osprey RulesSink �
 ## scan budget
 
 A scan spends the uploader's `scan_seconds` quota (`plyr_quota`, next/backend
-migration 0064; `src/plyr_osprey/budget.py`): the track's length, capped at
-three hours, from a daily allowance by tier (`new` an hour, `established` six
+migration 0064; `src/plyr_osprey/budget.py`): the file's length as ffprobe
+measures it (never the record's claim, which is the uploader's to write),
+capped at three hours, from a daily allowance by tier (`new` an hour, `established` six
 hours once five scans came back clean and none flagged, `unmetered` for an
 operator's grant), within a ceiling for everyone together (30 hours a day).
 Out of budget, the track is held (`plyr_moderation.scan_holds`): it plays from
@@ -60,8 +61,11 @@ it out until it is scanned. A failed scan gives its budget back.
 AuDD bills one request per 12 seconds it hears, so a long file is sampled
 (`fingerprint.ScanPlan`): up to 10 minutes every chunk, up to 30 minutes one in
 two, past that one in three, and never more chunks than were paid for. Sampled,
-three samples in step (48 seconds or more apart end to end) count as playing
-through, where four successive chunks do otherwise. Self-tagging a track `ai`
+three samples in step count as playing through, where four successive chunks
+do otherwise, so a recording has to play for about 60 seconds (one in two) or
+85 (one in three) to be flagged, against 48 unsampled. A file ffprobe can't
+measure is charged its claimed length or ten minutes, whichever is more, and
+heard in full up to three hours. Self-tagging a track `ai`
 changes none of this: it is a disclosure, never an exemption.
 
 Limits live in the tables (`plyr_quota.meters`, `allowances`,

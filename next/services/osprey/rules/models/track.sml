@@ -16,7 +16,8 @@ AudioHost: str = UrlHost(url=ResolveOptional(optional_value=AudioUrl, default_va
 
 # the rest are a `track` action's only
 
-# the track's length in seconds as next knows it (the record's, else measured); 0 unknown
+# the track's length in seconds as the record claims it (else as next measured it); 0 unknown.
+# never trusted for what a scan hears: fingerprint.ScanPlan measures the file
 KnownDuration: Optional[int] = JsonData(path='$.duration_seconds', required=False)
 DurationSeconds: int = ResolveOptional(optional_value=KnownDuration, default_value=0)
 

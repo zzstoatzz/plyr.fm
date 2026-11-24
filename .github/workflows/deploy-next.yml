@@ -163,7 +163,7 @@ jobs:
           GRANT SELECT, INSERT, UPDATE, DELETE ON plyr_moderation.scan_holds TO :"role";
           -- scans spend the uploader's budget (plyr_quota, migration 0064)
           GRANT USAGE ON SCHEMA plyr_quota TO :"role";
-          GRANT EXECUTE ON FUNCTION plyr_quota.spend(TEXT, TEXT, BIGINT), plyr_quota.release(TEXT, TEXT, BIGINT),
+          GRANT EXECUTE ON FUNCTION plyr_quota.spend(TEXT, TEXT, BIGINT), plyr_quota.release(TEXT, TEXT, BIGINT, BIGINT),
               plyr_quota.record_outcome(TEXT, BOOLEAN), plyr_quota.window_end_us(TEXT) TO :"role";
           SQL
 

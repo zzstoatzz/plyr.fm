@@ -148,14 +148,16 @@ BEGIN
 END
 $$;
 
--- give back a spend made earlier in the current window (the work it paid for
--- failed before it cost anything)
-CREATE OR REPLACE FUNCTION plyr_quota.release(p_meter TEXT, p_subject TEXT, p_amount BIGINT) RETURNS VOID
+-- give back a spend (the work it paid for failed before it cost anything),
+-- from the window it was spent in: p_window_end_us is the retry_at_us that
+-- spend returned
+CREATE OR REPLACE FUNCTION plyr_quota.release(p_meter TEXT, p_subject TEXT, p_amount BIGINT, p_window_end_us BIGINT)
+RETURNS VOID
 LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path = pg_catalog, pg_temp AS $$
     UPDATE plyr_quota.usage u SET used = greatest(u.used - p_amount, 0)
     FROM plyr_quota.meters m
     WHERE m.meter = p_meter AND u.meter = p_meter AND u.subject IN ('*', p_subject) AND p_amount > 0
-      AND u.window_start_us = floor(extract(epoch FROM clock_timestamp()) / m.window_seconds)::bigint * m.window_seconds * 1000000
+      AND u.window_start_us = p_window_end_us - m.window_seconds::bigint * 1000000
 $$;
 
 -- record how a subject's metered work turned out

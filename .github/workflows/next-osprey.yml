@@ -57,6 +57,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v7
+      - name: ffprobe, to measure what a scan will hear
+        run: command -v ffprobe || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends ffmpeg; }
       - run: uvx ruff check src tests && uvx ruff format --check src tests
       - run: scripts/test
         env:
@@ -78,6 +80,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v7
+      - name: ffprobe, to measure what a scan will hear
+        run: command -v ffprobe || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends ffmpeg; }
       - name: wait for this commit's next deploy
         if: github.event_name == 'push'
         env:
@@ -120,6 +124,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v7
+      - name: ffprobe, to measure what a scan will hear
+        run: command -v ffprobe || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends ffmpeg; }
       - name: write, wait, scan, check
         env:
           TEST_HANDLE: ${{ secrets.ZAT_TEST_HANDLE }}

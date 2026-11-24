@@ -15,13 +15,23 @@ from osprey.engine.utils.types import add_slots
 from plyr_osprey import budget as scan_budget
 from plyr_osprey import evidence, image_scan
 from plyr_osprey.budget import Budget
-from plyr_osprey.fingerprint import Fingerprinter, ScanPlan, Unconfigured
+from plyr_osprey.fingerprint import Fingerprinter, Prober, ScanPlan, Unconfigured, Unmeasured
 from plyr_osprey.image_scan import ImageScanner
 
 # set by register_plugins from the environment; tests swap in fakes
 fingerprinter: Fingerprinter = Unconfigured()
 image_scanner: ImageScanner = image_scan.Unconfigured()
 budget: Budget = scan_budget.Unconfigured()
+prober: Prober = Unmeasured()
+
+# the plan SpendScanBudget paid for, by audio URL, for the scan that follows it
+# in the same run (rules run one record at a time)
+_paid: dict[str, ScanPlan] = {}
+
+
+def _plan(audio_url: str, claimed_seconds: int) -> ScanPlan:
+    return ScanPlan.for_length(prober.seconds(audio_url), claimed_seconds)
+
 
 FLAG_SOURCES = ('scan', 'rule')
 
@@ -44,19 +54,25 @@ class UrlHost(UDFBase[HostArguments, str]):
 
 
 class BudgetArguments(ArgumentsBase):
+    audio_url: str
     owner_did: str
     duration_seconds: int
 
 
 class SpendScanBudget(UDFBase[BudgetArguments, bool]):
-    """spends the uploader's scan budget for this audio (budget.py), or returns
-    false when the account, or everyone together, is out of it for the day."""
+    """spends the uploader's scan budget for this audio's measured length
+    (budget.py, fingerprint.ScanPlan), or returns false when the account, or
+    everyone together, is out of it for the day."""
 
     category = UdfCategories.ENGINE
 
     def execute(self, execution_context: ExecutionContext, arguments: BudgetArguments) -> bool:
-        plan = ScanPlan.for_duration(arguments.duration_seconds)
-        return budget.spend(arguments.owner_did, plan.charge_seconds)
+        _paid.clear()
+        plan = _plan(arguments.audio_url, arguments.duration_seconds)
+        granted = budget.spend(arguments.owner_did, plan.charge_seconds)
+        if granted:
+            _paid[arguments.audio_url] = plan
+        return granted
 
 
 class RecordingsArguments(ArgumentsBase):
@@ -70,7 +86,7 @@ class RecordingsArguments(ArgumentsBase):
 class RecordingsPlayingThrough(UDFBase[RecordingsArguments, Lines]):
     """someone else's recordings that play through the audio, one line each.
 
-    fingerprints the audio with AuDD as far as the budget paid for (sampling a
+    fingerprints the audio with AuDD as the budget paid for it (sampling a
     long file, fingerprint.ScanPlan), keeps the recordings that play through
     for about 48 seconds or fill the upload (evidence.song_evidence), and
     drops the uploader's own catalog. a failed scan gives the budget back and
@@ -80,7 +96,7 @@ class RecordingsPlayingThrough(UDFBase[RecordingsArguments, Lines]):
     category = UdfCategories.ENGINE
 
     def execute(self, execution_context: ExecutionContext, arguments: RecordingsArguments) -> Lines:
-        plan = ScanPlan.for_duration(arguments.duration_seconds)
+        plan = _paid.pop(arguments.audio_url, None) or _plan(arguments.audio_url, arguments.duration_seconds)
         try:
             matches = fingerprinter.matches(arguments.audio_url, plan)
         except Exception:

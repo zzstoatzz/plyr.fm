@@ -237,20 +237,18 @@ def test_a_failing_cover_scan_is_retried_then_passed_over(db, engine, fingerprin
     assert rows(db, 'SELECT image_url FROM plyr_moderation.image_scans') == [('https://elsewhere.example/ok.jpg',)]
 
 
-def test_out_of_budget_tracks_are_held_then_scanned_the_next_day(db, engine, fingerprinter, monkeypatch) -> None:
+def test_out_of_budget_tracks_are_held_then_scanned_the_next_day(
+    db, engine, fingerprinter, prober, monkeypatch
+) -> None:
     """the real quotas: a new account's hour a day, here five minutes."""
+    prober.lengths.update({NEXT_AUDIO: 200, OTHER_AUDIO: 250})
     budget = PostgresBudget(TEST_DATABASE_URL)
     monkeypatch.setattr(udfs, 'budget', budget)
     with db.cursor() as cur:
         cur.execute("UPDATE plyr_quota.allowances SET amount = 300 WHERE tier = 'new' AND meter = 'scan_seconds'")
-    first = add_track(db, 1, NEXT_AUDIO, 10, duration=200)
-    second = add_track(db, 2, OTHER_AUDIO, 20)
-    with db.cursor() as cur:  # a length next measured, for a record that didn't say
-        cur.execute(
-            'INSERT INTO plyr_index.track_measured_durations SELECT record_uri, record_cid, 250'
-            ' FROM plyr_index.track_records WHERE record_uri = %s',
-            (second,),
-        )
+    # what the records claim doesn't decide the charge; the files' measured lengths do
+    first = add_track(db, 1, NEXT_AUDIO, 10, duration=1)
+    second = add_track(db, 2, OTHER_AUDIO, 20, duration=3_000_000_000)
 
     drain(engine)
 
@@ -303,3 +301,14 @@ def test_an_upload_burst_opens_one_review_of_the_account(db, engine, fingerprint
         ('did:plc:uploader', 'rule:volume', '20 tracks in a day')
     ]
     assert fingerprinter.scanned == []
+
+
+def test_a_held_track_that_was_deleted_loses_its_hold(db, engine, fingerprinter) -> None:
+    gone = add_track(db, 1, NEXT_AUDIO, 10, deleted=True)
+    with db.cursor() as cur:
+        cur.execute(
+            "INSERT INTO plyr_moderation.scan_holds (record_uri, owner_did, retry_at_us) VALUES (%s, 'did:plc:uploader', 9e18)",
+            (gone,),
+        )
+    drain(engine, start_at_us=100)
+    assert rows(db, 'SELECT count(*) FROM plyr_moderation.scan_holds') == [(0,)]
