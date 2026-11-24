@@ -8,13 +8,23 @@ name: next build atlas
 # legacy python api or its database. While TURBOPUFFER_API_KEY exists, each
 # run first copies any legacy vectors next doesn't have yet (matched by
 # legacy_id), so the legacy catalog isn't embedded twice.
+#
+# a pull request that changes the builder gets a dry run instead: the map is
+# built from the vectors already stored, nothing is written, and the job
+# summary shows each sound's name before and after, with its evidence.
 
 on:
   push:
     branches: [main]
     paths:
       - "next/scripts/build-atlas.py"
+      - "next/scripts/atlas_labels.py"
       - "next/backend/migrations/0061_add_atlas.sql"
+      - ".github/workflows/next-build-atlas.yml"
+  pull_request:
+    paths:
+      - "next/scripts/build-atlas.py"
+      - "next/scripts/atlas_labels.py"
       - ".github/workflows/next-build-atlas.yml"
   schedule:
     - cron: "37 9 * * *" # daily
@@ -30,7 +40,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     concurrency:
-      group: next-build-atlas
+      group: next-build-atlas-${{ github.event_name == 'pull_request' && github.head_ref || 'main' }}
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
@@ -57,6 +67,10 @@ jobs:
           TURBOPUFFER_API_KEY: ${{ secrets.TURBOPUFFER_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          seed=()
-          if [ -n "$TURBOPUFFER_API_KEY" ]; then seed=(--seed-turbopuffer); fi
-          uv run next/scripts/build-atlas.py "${seed[@]}"
+          flags=()
+          if [ "${{ github.event_name }}" = pull_request ]; then
+            flags=(--dry-run)
+          elif [ -n "$TURBOPUFFER_API_KEY" ]; then
+            flags=(--seed-turbopuffer)
+          fi
+          uv run next/scripts/build-atlas.py "${flags[@]}"
