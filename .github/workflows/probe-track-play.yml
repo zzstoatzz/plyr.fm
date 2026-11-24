@@ -13,7 +13,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
         working-directory: next
-      - run: bun run playwright install --with-deps --only-shell chromium
+      - run: bun run playwright install --with-deps webkit chromium
         working-directory: next/web
       - working-directory: next/web
         env:

@@ -1,5 +1,5 @@
 // throwaway probe: signed-in track-page play, play to end, press again, reload, press again
-import { chromium } from 'playwright';
+import { chromium, webkit, devices } from 'playwright';
 import { app, browserAccount } from './live-browser-account.mjs';
 const { ZAT_TEST_HANDLE: handle, ZAT_TEST_PASSWORD: password, ZAT_TEST_PDS: pdsUrl } = process.env;
 const TRACK = app + '/track/trk_YXQ6Ly9kaWQ6cGxjOmEzdnEzaGpsa3oybmJmNjdicHY1ejZxcy9mbS5wbHlyLnRyYWNrLzNuMnpxdDdxM3Y1MjI';
@@ -23,9 +23,9 @@ async function heard(page, step) {
     await page.screenshot({ path: `/tmp/probe/${step.replace(/\W+/g, '-')}.png` });
   }
 }
-const browser = await chromium.launch({ args: ['--autoplay-policy=user-gesture-required'] });
+const browser = await webkit.launch();
 for (const [width, height] of [[390, 844]]) {
-  const context = await browser.newContext({ viewport: { width, height }, hasTouch: width < 720, isMobile: width < 720, serviceWorkers: 'block' });
+  const context = await browser.newContext({ ...devices['iPhone 14'], serviceWorkers: 'block' });
   await context.addInitScript(recordMedia);
   const page = await context.newPage(); page.setDefaultTimeout(20000);
   page.on('console', m => { if (/queue|playback|audio|error/i.test(m.text())) console.log('  console', m.type(), m.text().slice(0, 200)); });
