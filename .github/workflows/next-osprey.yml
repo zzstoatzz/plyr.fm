@@ -58,7 +58,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v7
       - name: ffprobe, to measure what a scan will hear
-        run: command -v ffprobe || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends ffmpeg; }
+        # a slow apt mirror once held a run for 14 minutes; give each try 2 and retry once
+        timeout-minutes: 5
+        run: |
+          command -v ffprobe && exit 0
+          for try in 1 2; do
+            timeout 120 sh -c 'sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends ffmpeg' && exit 0
+          done
+          exit 1
       - run: uvx ruff check src tests && uvx ruff format --check src tests
       - run: scripts/test
         env:
@@ -81,7 +88,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v7
       - name: ffprobe, to measure what a scan will hear
-        run: command -v ffprobe || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends ffmpeg; }
+        # a slow apt mirror once held a run for 14 minutes; give each try 2 and retry once
+        timeout-minutes: 5
+        run: |
+          command -v ffprobe && exit 0
+          for try in 1 2; do
+            timeout 120 sh -c 'sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends ffmpeg' && exit 0
+          done
+          exit 1
       - name: wait for this commit's next deploy
         if: github.event_name == 'push'
         env:
@@ -125,7 +139,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v7
       - name: ffprobe, to measure what a scan will hear
-        run: command -v ffprobe || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends ffmpeg; }
+        # a slow apt mirror once held a run for 14 minutes; give each try 2 and retry once
+        timeout-minutes: 5
+        run: |
+          command -v ffprobe && exit 0
+          for try in 1 2; do
+            timeout 120 sh -c 'sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends ffmpeg' && exit 0
+          done
+          exit 1
       - name: write, wait, scan, check
         env:
           TEST_HANDLE: ${{ secrets.ZAT_TEST_HANDLE }}
