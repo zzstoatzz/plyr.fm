@@ -5,6 +5,7 @@ const pg = @import("pg");
 const composed = @import("postgres_composed_track_store.zig");
 const track_chart = @import("../domain/track_chart.zig");
 const store_module = @import("track_chart_store.zig");
+const tag_filter = @import("../domain/tag_filter.zig");
 
 const TrackChartStore = store_module.TrackChartStore;
 
@@ -29,6 +30,7 @@ pub const PostgresTrackChartStore = struct {
             request.like_collection,
             request.since_us,
             @as(i64, @intCast(request.limit)),
+            if (request.exclude_ai_artists) tag_filter.defaults else &[_][]const u8{},
         }) catch |err| {
             if (conn.err) |pg_err|
                 std.log.err("track chart query failed: {}: {s}", .{ err, pg_err.message })
@@ -60,6 +62,36 @@ pub const PostgresTrackChartStore = struct {
     }
 };
 
+/// With AI tags in $6, drops every artist who tagged any of their tracks with
+/// one (verified or legacy tags) or carries the operator `ai` account label.
+/// The sets are uncorrelated so Postgres builds each once per query.
+const ai_artist_filter =
+    \\  AND (cardinality($6::text[]) = 0 OR (
+    \\    v.owner_did NOT IN (
+    \\      SELECT own.owner_did FROM plyr_index.track_records AS own
+    \\      JOIN plyr_index.track_tag_records AS tags
+    \\        ON tags.record_uri = own.record_uri AND tags.record_cid = own.record_cid
+    \\      WHERE NOT own.deleted AND own.collection = $1
+    \\        AND tags.tags_present AND tags.tags && plyr_index.normalize_track_tags($6::text[])
+    \\    )
+    \\    AND v.owner_did NOT IN (
+    \\      SELECT own.owner_did FROM plyr_index.track_records AS own
+    \\      JOIN plyr_index.legacy_track_tags AS annotation
+    \\        ON annotation.record_uri = own.record_uri AND annotation.observed_record_cid = own.record_cid
+    \\      JOIN plyr_index.track_tag_records AS observed
+    \\        ON observed.record_uri = annotation.record_uri
+    \\        AND observed.record_cid = annotation.observed_record_cid AND NOT observed.tags_present
+    \\      WHERE NOT own.deleted AND own.collection = $1
+    \\        AND annotation.tag = ANY(plyr_index.normalize_track_tags($6::text[]))
+    \\    )
+    \\    AND v.owner_did NOT IN (
+    \\      SELECT owner_did FROM plyr_index.account_label_policies
+    \\      WHERE operator_labels ? 'ai'
+    \\        AND (expires_at_us IS NULL OR expires_at_us > (extract(epoch FROM statement_timestamp()) * 1000000)::bigint)
+    \\    )
+    \\  ))
+;
+
 const chart_query =
     \\WITH period_likes AS MATERIALIZED (
     \\  SELECT likes.subject_uri, likes.subject_cid,
@@ -88,7 +120,7 @@ const chart_query =
     \\JOIN ranked_likes ON ranked_likes.subject_uri = v.record_uri
     \\  AND ranked_likes.subject_cid = v.record_cid
     \\WHERE ranked_likes.period_like_count > 0
-++ "\n" ++ composed.discovery_policy ++ "\n" ++
+++ "\n" ++ composed.discovery_policy ++ "\n" ++ ai_artist_filter ++ "\n" ++
     \\ORDER BY ranked_likes.period_like_count DESC,
     \\  ranked_likes.all_time_like_count DESC, v.record_uri ASC
     \\LIMIT $5::bigint

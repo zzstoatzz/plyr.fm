@@ -7,6 +7,8 @@ pub const Request = struct {
     like_collection: []const u8,
     since_us: ?i64,
     limit: usize,
+    /// leave out artists with any AI-tagged track or the `ai` account label
+    exclude_ai_artists: bool = false,
 };
 
 pub const TrackChartStore = struct {

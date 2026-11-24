@@ -1516,11 +1516,39 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     try std.testing.expectEqualStrings("ai", shown.data[0].moderation.account_labels[0]);
     try std.testing.expectEqual(track.Source.moderation_service, shown.data[0].sources.account_labels);
     try std.testing.expect(list_api.execute(a, implementation.store(), "fm.plyr.dev.track", "/v1/tracks?artist_did=did:plc:artist").found.data.len > 0);
+    // the artist of the week never lands on an AI artist: labeled accounts and
+    // artists who tagged any track ai drop out of the filtered chart only
+    var chart_impl: @import("postgres_track_chart_store.zig").PostgresTrackChartStore = .{ .pool = pool };
+    const chart_request: @import("track_chart_store.zig").Request = .{
+        .track_collection = "fm.plyr.dev.track",
+        .profile_collection = "fm.plyr.dev.actor.profile",
+        .like_collection = "fm.plyr.dev.like",
+        .since_us = null,
+        .limit = 10,
+        .exclude_ai_artists = true,
+    };
+    var unfiltered_request = chart_request;
+    unfiltered_request.exclude_ai_artists = false;
+    try std.testing.expect((try chart_impl.store().list(a, unfiltered_request)).len > 0);
+    try std.testing.expectEqual(@as(usize, 0), (try chart_impl.store().list(a, chart_request)).len);
     const negative = try label_sync.parsePage(a, "{\"labels\":[{\"uri\":\"did:plc:artist\",\"val\":\"ai\",\"neg\":true}]}", "fm.plyr.dev.track", 0);
     const negative_conn = try pool.acquire();
     try label_sync.applyPage(negative_conn, negative, 101);
     pool.release(negative_conn);
     try std.testing.expect(list_api.execute(a, implementation.store(), "fm.plyr.dev.track", "/v1/tracks").found.data.len > 0);
+    try std.testing.expect((try chart_impl.store().list(a, chart_request)).len > 0);
+    _ = try pool.exec("CREATE TABLE plyr_index.saved_chart_tags AS SELECT * FROM plyr_index.track_tag_records WHERE record_uri=$1", .{record_uri});
+    _ = try pool.exec(
+        \\INSERT INTO plyr_index.track_tag_records(record_uri, record_cid, tags, tags_present)
+        \\SELECT record_uri, record_cid, ARRAY['ai'], true FROM plyr_index.track_records WHERE record_uri=$1
+        \\ON CONFLICT (record_uri) DO UPDATE SET record_cid=EXCLUDED.record_cid, tags=EXCLUDED.tags, tags_present=true
+    , .{record_uri});
+    try std.testing.expectEqual(@as(usize, 0), (try chart_impl.store().list(a, chart_request)).len);
+    try std.testing.expect((try chart_impl.store().list(a, unfiltered_request)).len > 0);
+    _ = try pool.exec("DELETE FROM plyr_index.track_tag_records WHERE record_uri=$1", .{record_uri});
+    _ = try pool.exec("INSERT INTO plyr_index.track_tag_records SELECT * FROM plyr_index.saved_chart_tags", .{});
+    _ = try pool.exec("DROP TABLE plyr_index.saved_chart_tags", .{});
+    try std.testing.expect((try chart_impl.store().list(a, chart_request)).len > 0);
 
     try std.testing.expectEqual(@as(i64, 1), catalog[0].sources.verified_repo);
     try std.testing.expectEqual(@as(i64, 0), catalog[0].sources.legacy_plyr);
