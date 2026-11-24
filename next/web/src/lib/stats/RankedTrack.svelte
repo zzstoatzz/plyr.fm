@@ -28,24 +28,23 @@
 	<div class="name">
 		<a class="truncate title" href={trackHref(track)}>{title}</a>
 		{#if showArtist}<a class="truncate sub" href={resolve('/(app)/u/[actor]', { actor: track.artist.did })}>{artistName(track)}</a>{/if}
-		{#if sound}<span class="chip">{sound}</span>{/if}
+		{#if sound}<span class="truncate sub">{sound}</span>{/if}
 		<span class="bar" aria-hidden="true"><i style:width="{max ? (100 * plays) / max : 0}%"></i></span>
 	</div>
 	<span class="count"><b>{plays.toLocaleString()}</b><small>{plays === 1 ? 'play' : 'plays'}</small></span>
 </li>
 
 <style>
-	.ranked { display: grid; grid-template-columns: 1.25rem 2.75rem minmax(0, 1fr) auto; align-items: center; gap: 0.75rem; padding-block: 0.35rem; }
+	.ranked { display: grid; grid-template-columns: 1.25rem 2.75rem minmax(0, 1fr) auto; align-items: center; gap: 0.75rem; padding-block: 0.45rem; }
 	.rank { color: var(--faint); font-size: var(--t-13-6); text-align: right; font-variant-numeric: tabular-nums; }
-	.cover { position: relative; display: block; padding: 0; border: 0; border-radius: 0.4rem; overflow: hidden; background: transparent; }
+	.cover { position: relative; display: block; padding: 0; border: 0; border-radius: 0.25rem; overflow: hidden; background: transparent; }
 	.play { position: absolute; inset: 0; display: grid; place-items: center; background: rgb(0 0 0 / 0.5); color: white; opacity: 0; }
 	.play.playing, .cover:hover .play, .cover:focus-visible .play { opacity: 1; }
 	.name { display: grid; gap: 0.2rem; min-width: 0; justify-items: start; }
 	.title { font-weight: 700; font-size: var(--t-15); max-width: 100%; }
-	.sub { color: var(--muted); font-size: var(--t-13-6); max-width: 100%; }
-	.chip { font-size: var(--t-12); padding: 0.05rem 0.5rem; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
-	.bar { justify-self: stretch; height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--text) 8%, transparent); overflow: hidden; }
-	.bar i { display: block; height: 100%; border-radius: 2px; background: var(--accent); }
+	.sub { color: var(--faint); font-size: var(--t-13-6); max-width: 100%; }
+	.bar { justify-self: stretch; height: 4px; background: color-mix(in srgb, var(--text) 8%, transparent); overflow: hidden; }
+	.bar i { display: block; height: 100%; background: var(--accent); }
 	.count { display: grid; justify-items: end; font-variant-numeric: tabular-nums; }
 	.count b { font-size: var(--t-15); }
 	.count small { color: var(--faint); font-size: var(--t-12); }
