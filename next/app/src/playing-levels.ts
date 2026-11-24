@@ -1,5 +1,5 @@
 import { useEffect, useSyncExternalStore } from 'react';
-import { Animated } from 'react-native';
+import { Animated, AppState, type NativeEventSubscription } from 'react-native';
 import { createWaveEasing, levelsAt, waveBars, waveFloor, type TrackWaveform } from '@plyr/next-core/track-waveform';
 import { api } from './api-client';
 
@@ -19,6 +19,7 @@ let live = false;
 let users = 0;
 let frame = 0;
 let last = 0;
+let appStateSubscription: NativeEventSubscription | undefined;
 
 function load(uri: string) {
   let pending = waveforms.get(uri);
@@ -40,6 +41,7 @@ function setLive(value: boolean) {
 
 function tick(now: number) {
   frame = 0;
+  if (AppState.currentState !== 'active') return;
   const playing = source.playing && !!waveform && waveform.uri === source.uri;
   if (playing) {
     // status arrives four times a second; between updates the clock runs on
@@ -53,7 +55,13 @@ function tick(now: number) {
 }
 
 function schedule() {
-  if (!frame && users > 0) frame = requestAnimationFrame(tick);
+  if (!frame && users > 0 && AppState.currentState === 'active') frame = requestAnimationFrame(tick);
+}
+
+function stopFrames() {
+  if (frame) cancelAnimationFrame(frame);
+  frame = 0;
+  last = 0;
 }
 
 /** The playback provider reports the track on air and where it is, each status update. */
@@ -71,12 +79,16 @@ export function usePlayingLevels(follows: boolean): boolean {
   useEffect(() => {
     if (!follows) return;
     users++;
+    appStateSubscription ??= AppState.addEventListener('change', state => {
+      if (state === 'active') schedule();
+      else stopFrames();
+    });
     schedule();
     return () => {
       if (--users > 0) return;
-      cancelAnimationFrame(frame);
-      frame = 0;
-      last = 0;
+      appStateSubscription?.remove();
+      appStateSubscription = undefined;
+      stopFrames();
       setLive(false);
     };
   }, [follows]);
