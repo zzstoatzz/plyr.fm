@@ -21,19 +21,35 @@ export function rangeSpan(range: StatsRange) {
 	}
 }
 
-const utc = (day: string) => new Date(`${day}T12:00:00Z`);
+/** What one bar covers, for the legend: "3 hours", "a day". */
+export const barSpan = (hours: number) => hours === 24 ? 'a day' : `${hours} hours`;
 
-/** A bar's axis label: "Nov 13" for a day, "Nov '25" for a month. */
-export function bucketLabel(day: string, bucket: 'day' | 'month') {
-	const date = utc(day);
-	if (bucket === 'day') return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
-	return `${date.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })} '${String(date.getUTCFullYear()).slice(2)}`;
+/** What the running-average line averages over, for the legend. */
+export const averageSpan = (hours: number) => hours === 24 ? '7-day average' : 'daily average';
+
+/** How many bars the running average spans: a week of days, or a day of shorter bars. */
+export const averageBars = (hours: number) => hours === 24 ? 7 : Math.max(1, Math.round(24 / hours));
+
+/** Axis labels: each bar that starts a new day (short bars, in the viewer's time) or a new month (daily bars, UTC) gets one. */
+export function barTicks(starts: string[], hours: number): (string | undefined)[] {
+	const daily = hours === 24;
+	let last = '';
+	return starts.map(start => {
+		const date = new Date(start);
+		const key = daily ? `${date.getUTCFullYear()}-${date.getUTCMonth()}` : date.toDateString();
+		if (key === last) return undefined;
+		const first = last === '';
+		last = key;
+		if (daily) return first && date.getUTCDate() > 7 ? undefined : date.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' });
+		return first && date.getHours() >= 12 ? undefined : date.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' });
+	});
 }
 
-/** A bar's tip: "Thu, Nov 13" for a day, "November 2025" for a month. */
-export function bucketDetail(day: string, bucket: 'day' | 'month') {
-	const date = utc(day);
-	return bucket === 'day'
-		? date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })
-		: date.toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+/** A bar's tip: "Tue, Jul 14" for a day, "Mon, Nov 16, 9 AM–noon" for a few hours (viewer's time). */
+export function barDetail(start: string, hours: number) {
+	const date = new Date(start);
+	if (hours === 24) return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+	const end = new Date(date.getTime() + hours * 3_600_000);
+	const hour = (value: Date) => value.getHours() === 12 && value.getMinutes() === 0 ? 'noon' : value.getHours() === 0 && value.getMinutes() === 0 ? 'midnight' : value.toLocaleTimeString('en-US', { hour: 'numeric', minute: value.getMinutes() ? '2-digit' : undefined });
+	return `${date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}, ${hour(date)}–${hour(end)}`;
 }

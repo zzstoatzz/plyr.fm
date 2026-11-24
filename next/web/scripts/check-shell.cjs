@@ -231,11 +231,13 @@ async function statsScreen(browser, phone, scheme) {
     await page.route(/^https:\/\/api\.next\.plyr\.fm\/xrpc\/fm\.plyr\.unspecced\.listTracks(?:\?|$)/, route => route.fulfill({
       json: { object: 'list', data: [{ ...tracks[0], legacy_id: 19 }, ...tracks.slice(1)], has_more: false } }));
     const artist = { object: 'artist', did, handle: 'sketches.test', display_name: 'replyomatic', bio: null, avatar_url: null, support_url: null };
-    const days = n => Array.from({ length: n }, (_, i) => ({ start: new Date(Date.UTC(2026, 10, 23 - n + 1 + i)).toISOString().slice(0, 10), plays: (i * 7) % 23 + (i === n - 3 ? 60 : 0), uploads: i % 4 === 0 ? 2 : 0 }));
+    const end = Date.UTC(2026, 10, 24);
+    const bars = (n, hours) => Array.from({ length: n }, (_, i) => ({ start: new Date(end - (n - i) * hours * 3_600_000).toISOString(), plays: (i * 7) % 23 + (i === n - 3 ? 60 : 0), uploads: i % 4 === 0 ? 2 : 0 }));
     const overview = range => {
-      const series = range === 'week' ? days(7) : days(30);
-      const plays = range === 'all' ? 19081 : series.reduce((sum, day) => sum + day.plays, 0);
-      return { object: 'stats_overview', range, bucket: 'day', start_day: series[0].start, end_day: series.at(-1).start, plays, dated_plays: plays,
+      const hours = range === 'week' ? 3 : range === 'month' ? 6 : 24;
+      const series = range === 'week' ? bars(56, 3) : range === 'month' ? bars(120, 6) : bars(365, 24);
+      const plays = range === 'all' ? 19081 : series.reduce((sum, bar) => sum + bar.plays, 0);
+      return { object: 'stats_overview', range, bucket_hours: hours, start: series[0].start, end: new Date(end).toISOString(), plays, dated_plays: plays,
         previous_plays: range === 'week' ? plays * 2 : Math.round(plays / 3), uploads: 9, likes: 357, series,
         tracks: tracks.slice(0, 5).map((track, i) => ({ uri: track.record.uri, plays: 50 - i * 7 })),
         artists: [{ did, plays: 2441, tracks: 12 }, { did: 'did:plc:other', plays: 900, tracks: 3 }] };
@@ -282,10 +284,12 @@ async function statsScreen(browser, phone, scheme) {
     const month = overview('month');
     await page.getByText(month.plays.toLocaleString('en-US'), { exact: true }).waitFor();
     await page.getByText('plays in the last 30 days', { exact: true }).waitFor();
-    await page.getByText('↑ 3.0× the 30 days before').waitFor();
+    await page.getByText(/^3\.0× the 30 days before, about [\d,]+ a day$/).waitFor();
     await page.getByLabel('totals').getByText('19,081', { exact: true }).waitFor();
-    await page.getByRole('group', { name: 'plays in the last 30 days, by day' }).waitFor();
-    await page.getByRole('heading', { name: 'what plyr.fm sounds like' }).waitFor();
+    await page.getByRole('group', { name: 'plays in the last 30 days, each bar 6 hours' }).waitFor();
+    await page.getByText('each bar is 6 hours', { exact: true }).waitFor();
+    await page.getByRole('heading', { name: 'sounds on plyr.fm' }).waitFor();
+    await page.getByRole('table', { name: 'sounds by plays' }).getByRole('row', { name: /field recordings/ }).waitFor();
     const top = page.getByRole('region', { name: 'most played' });
     await top.getByRole('link', { name: tracks[0].metadata.title, exact: true }).waitFor();
     assert.equal(await top.getByRole('button', { name: `Play ${tracks[0].metadata.title}` }).count(), 1, 'most played rows play from the shared control');
@@ -297,6 +301,7 @@ async function statsScreen(browser, phone, scheme) {
     await page.waitForURL('**/stats?range=week');
     await page.getByText('plays in the last 7 days', { exact: true }).waitFor();
     await page.getByText(/% fewer than the 7 days before/).waitFor();
+    await page.getByRole('group', { name: 'plays in the last 7 days, each bar 3 hours' }).waitFor();
 
     const field = page.locator('#stat-artist');
     await field.fill('nobody');
@@ -307,18 +312,19 @@ async function statsScreen(browser, phone, scheme) {
     await page.waitForURL('**/stats?artist=sketches.test');
     const hero = page.getByRole('region', { name: 'artist totals' });
     await hero.getByText('2,441', { exact: true }).waitFor();
-    await hero.getByText('#1 of 122 artists').waitFor();
-    await hero.getByText('13% of every play on plyr.fm').waitFor();
-    await page.getByRole('heading', { name: 'how replyomatic sounds' }).waitFor();
-    await page.getByText('8 of replyomatic’s 9 tracks aren’t on the sound map yet.').waitFor();
+    await hero.getByText('the most played artist on plyr.fm, 13% of every play').waitFor();
+    await page.getByRole('heading', { name: 'where replyomatic fits' }).waitFor();
+    await page.getByText(/most played artist here$/).first().waitFor();
+    await page.getByText('8 of replyomatic’s 9 tracks aren’t in a sound yet.').waitFor();
     await page.getByRole('region', { name: 'tracks' }).getByText('field recordings').waitFor();
     assert.equal(await page.getByRole('navigation', { name: 'time range' }).count(), 0, 'artist stats are all time only');
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'artist stats fit the window');
     await page.screenshot({ path: path.join(output, `${width}-${scheme}-artist-stats.png`), fullPage: true });
-    await page.getByRole('link', { name: 'back to stats for everyone' }).click();
+    await page.getByRole('link', { name: 'back to everyone' }).click();
     await page.waitForURL(url => url.pathname === '/stats' && !url.search);
     await page.getByText('plays in the last 30 days', { exact: true }).waitFor();
-    await page.getByRole('link', { name: /another artist/ }).click();
+    await page.getByRole('table', { name: 'sounds by plays' }).waitFor();
+    await page.getByRole('link', { name: /another artist/ }).press('Enter');
     await page.waitForURL('**/stats?artist=other.test');
     assert.deepEqual(errors, []);
   } finally { await context.close(); }

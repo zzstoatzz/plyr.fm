@@ -20,10 +20,9 @@
 		<ScopePicker artist={actor ? artist : undefined} />
 		<div class="controls">
 			{#if actor}
-				{#if artist}<a class="text-button" href={resolve('/(app)/u/[actor]', { actor: artist.did })}>artist page</a>{/if}
-				<span class="chips" aria-label="time range"><span class="on">all time</span></span>
+				<span class="aside">all time{#if artist}{' · '}<a href={resolve('/(app)/u/[actor]', { actor: artist.did })}>artist page</a>{/if}</span>
 			{:else}
-				<nav class="chips" aria-label="time range">
+				<nav class="ranges" aria-label="time range">
 					{#each ranges as option (option.value)}
 						<a href={resolve(option.value === 'month' ? '/stats' : `/stats?range=${option.value}`)} class:on={option.value === range}
 							aria-current={option.value === range ? 'page' : undefined} data-sveltekit-noscroll data-sveltekit-replacestate>{option.label}</a>
@@ -41,15 +40,17 @@
 
 <style>
 	.stats { position: relative; isolation: isolate; max-width: none; }
-	header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1rem 1.5rem; margin-bottom: 2rem; }
-	.controls { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
-	.chips { display: flex; gap: 0.25rem; padding: 0.2rem; border: 1px solid var(--line); border-radius: 999px; background: color-mix(in srgb, var(--surface) 70%, transparent); }
-	.chips a, .chips span { display: inline-flex; align-items: center; min-height: 2.25rem; padding: 0 0.85rem; border-radius: 999px; color: var(--muted); font-size: var(--t-14); white-space: nowrap; }
-	.chips a:hover { color: var(--text); }
-	.chips .on { background: var(--text); color: var(--bg); font-weight: 700; }
+	header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 1rem 1.5rem; margin-bottom: 2.25rem; }
+	.controls { display: flex; align-items: baseline; gap: 0.75rem; padding-bottom: 0.35rem; }
+	.ranges { display: flex; gap: 1.4rem; }
+	.ranges a { color: var(--faint); font-size: var(--t-16); white-space: nowrap; padding-block: 0.3rem; text-underline-offset: 0.45rem; text-decoration-thickness: 2px; }
+	.ranges a:hover { color: var(--text); }
+	.ranges a.on { color: var(--text); font-weight: 700; text-decoration-line: underline; text-decoration-color: var(--accent); }
+	.aside { color: var(--faint); font-size: var(--t-15); }
+	.aside a { color: var(--accent); }
 	@media (max-width: 720px) {
-		header { margin-bottom: 1.5rem; }
+		header { margin-bottom: 1.75rem; }
 		.controls { width: 100%; }
-		nav.chips { flex: 1; justify-content: space-between; }
+		.ranges { flex: 1; justify-content: space-between; }
 	}
 </style>

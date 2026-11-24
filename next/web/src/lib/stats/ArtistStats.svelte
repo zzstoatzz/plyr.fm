@@ -11,7 +11,7 @@
 	import Loading from '$lib/ui/Loading.svelte';
 	import RankedTrack from './RankedTrack.svelte';
 	import { catalogDuration } from './duration';
-	import { artistSounds } from './sounds';
+	import { artistSounds, typicalPlays } from './sounds';
 
 	let { actor, onartist }: { actor: string; onartist?: (artist: Artist | undefined) => void } = $props();
 
@@ -80,6 +80,8 @@
 	const perTrack = $derived(metrics?.totals.tracks ? plays / metrics.totals.tracks : 0);
 	const average = $derived(totals?.tracks ? totals.plays / totals.tracks : 0);
 	const pct = (share: number) => `${Math.round(share * 100)}%`;
+	const typical = $derived(atlas ? typicalPlays(atlas) : average);
+	const leads = $derived(mine?.sounds.filter(sound => sound.rank === 1).slice(0, 2) ?? []);
 	const top = $derived(tracks?.[0]);
 </script>
 
@@ -95,43 +97,44 @@
 	<Loading inline label="loading artist stats" />
 {:else}
 	<section class="hero" aria-label="artist totals">
-		<div class="headline">
-			<p class="big">{plays.toLocaleString()}</p>
-			<div class="line">
-				<span class="what">plays all time</span>
-				{#if rank && totals}<span class="chip-strong">#{rank} of {totals.artists.toLocaleString()} artists</span>{/if}
-				{#if everyone?.plays && plays}<span class="chip-strong">{pct(plays / everyone.plays)} of every play on plyr.fm</span>{/if}
-			</div>
-			<p class="insight">
-				{#if mine?.sounds.length && plays}
-					Most of {name}’s plays are <b>{mine.sounds[0].label}</b>, where they’re {pct(mine.sounds[0].share)} of everything played.
-				{/if}
-				{#if top && top.metrics.play_count}<b>{top.metadata.title}</b> is their most played track.{/if}
-			</p>
+		<p class="big">{plays.toLocaleString()}</p>
+		<div>
+			<p class="what">plays all time</p>
+			{#if plays && (rank || everyone?.plays)}
+				<p class="sub">
+					{#if rank === 1}the most played artist on plyr.fm{:else if rank && totals}#{rank} of {totals.artists.toLocaleString()} artists by plays{/if}{#if rank && everyone?.plays}{', '}{/if}{#if everyone?.plays}{pct(plays / everyone.plays)} of every play{/if}
+				</p>
+			{/if}
 		</div>
-		<dl class="tiles">
-			<div><dt>{metrics.totals.tracks === 1 ? 'track' : 'tracks'}</dt><dd>{metrics.totals.tracks.toLocaleString()}</dd></div>
-			<div><dt>of audio</dt><dd>{catalogDuration(metrics.totals.duration_seconds)}</dd></div>
-			<div><dt>likes</dt><dd>{(likes ?? 0).toLocaleString()}</dd></div>
-			<div><dt>plays per track</dt><dd>{Math.round(perTrack).toLocaleString()}</dd>
-				{#if average && perTrack >= average * 1.5}<small>{Math.round(perTrack / average)}× the plyr.fm average</small>{/if}</div>
-		</dl>
 	</section>
+	<p class="insight">
+		{#if leads.length === 2}{name} is the most played artist in <b>{leads[0].label}</b> and <b>{leads[1].label}</b>.
+		{:else if leads.length === 1}{name} is the most played artist in <b>{leads[0].label}</b>.
+		{:else if mine?.sounds.length && plays}Most of {name}’s plays are in <b>{mine.sounds[0].label}</b>.{/if}
+		{#if top && top.metrics.play_count}<b>{top.metadata.title}</b> is their most played track.{/if}
+	</p>
+	<dl class="figures" aria-label="totals">
+		<div><dd>{metrics.totals.tracks.toLocaleString()}</dd><dt>{metrics.totals.tracks === 1 ? 'track' : 'tracks'}</dt></div>
+		<div><dd>{catalogDuration(metrics.totals.duration_seconds)}</dd><dt>of audio</dt></div>
+		<div><dd>{(likes ?? 0).toLocaleString()}</dd><dt>likes</dt></div>
+		<div><dd>{Math.round(perTrack).toLocaleString()}</dd><dt>plays per track</dt></div>
+		{#if typical && metrics.totals.tracks}<div class="aside"><dt>a typical plyr.fm track gets {Math.round(typical).toLocaleString()}</dt></div>{/if}
+	</dl>
 
 	{#if mine?.sounds.length}
 		<section class="block" aria-labelledby="artist-sounds-title">
-			<div class="section-head"><h2 id="artist-sounds-title">how {name} sounds</h2><span>their plays in each sound, against everyone’s</span></div>
-			<ol class="shares">
+			<div class="section-head"><h2 id="artist-sounds-title">where {name} fits</h2><span>the sounds their tracks land in · <a href={resolve('/(app)/atlas')}>sound map</a></span></div>
+			<ol class="fits">
 				{#each mine.sounds as sound (sound.id)}
 					<li>
-						<div class="sound"><b class="truncate">{sound.label}</b><span>{sound.tracks} {sound.tracks === 1 ? 'track' : 'tracks'} · {sound.plays.toLocaleString()} plays</span></div>
-						<span class="meter" role="img" aria-label={`${pct(sound.share)} of the sound’s plays`}><i style:width="{Math.max(1, sound.share * 100)}%"></i></span>
-						<span class="share"><b>{pct(sound.share)}</b> of the sound’s {sound.soundPlays.toLocaleString()} plays</span>
+						<div class="sound"><b class="truncate">{sound.label}</b><span>{sound.tracks} {sound.tracks === 1 ? 'track' : 'tracks'} · {sound.plays.toLocaleString()} {sound.plays === 1 ? 'play' : 'plays'}</span></div>
+						<span class="meter" aria-hidden="true"><i style:width="{(100 * sound.plays) / Math.max(1, mine.sounds[0].plays)}%"></i></span>
+						<span class="standing" class:lead={sound.rank === 1}>{sound.rank === 1 ? 'the most played artist here' : `#${sound.rank} most played artist here`}</span>
 					</li>
 				{/each}
 			</ol>
 			{#if mine.mapped < tracks.length}
-				<p class="note">{(tracks.length - mine.mapped).toLocaleString()} of {name}’s {tracks.length.toLocaleString()} tracks {tracks.length - mine.mapped === 1 ? 'isn’t' : 'aren’t'} on the sound map yet.</p>
+				<p class="note">{(tracks.length - mine.mapped).toLocaleString()} of {name}’s {tracks.length.toLocaleString()} tracks {tracks.length - mine.mapped === 1 ? 'isn’t' : 'aren’t'} in a sound yet.</p>
 			{/if}
 		</section>
 	{/if}
@@ -153,38 +156,40 @@
 {/if}
 
 <style>
-	.hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 30rem); gap: 1.5rem 2.5rem; align-items: end; }
-	.big { margin: 0; font-size: clamp(4.25rem, 9vw, 6.5rem); font-weight: 800; line-height: 0.9; letter-spacing: -0.045em; font-variant-numeric: tabular-nums; }
-	.line { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.7rem; margin-top: 0.6rem; }
-	.what { font-size: clamp(1.2rem, 2.2vw, 1.65rem); font-weight: 700; margin-right: 0.2rem; }
-	.chip-strong { padding: 0.25rem 0.7rem; border-radius: 999px; font-size: var(--t-14); font-weight: 700; background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
-	.insight { margin: 1.3rem 0 0; max-width: 40rem; font-size: clamp(1.2rem, 1.8vw, 1.35rem); line-height: 1.4; }
+	.hero { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem 1.4rem; }
+	.big { margin: 0; font-size: clamp(4.25rem, 9vw, 6.9rem); font-weight: 800; line-height: 0.85; letter-spacing: -0.05em; font-variant-numeric: tabular-nums; }
+	.what { margin: 0; font-size: clamp(1.25rem, 2.2vw, 1.65rem); font-weight: 700; }
+	.sub { margin: 0.1rem 0 0; color: var(--muted); font-size: var(--t-16-8); }
+	.insight { margin: 1.25rem 0 0; max-width: 45rem; font-size: clamp(1.2rem, 1.8vw, 1.35rem); line-height: 1.45; }
 	.insight b { color: var(--accent); }
-	.tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; margin: 0; }
-	.tiles div { display: flex; flex-direction: column; padding: 0.8rem 1rem; border-radius: 1rem; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 70%, transparent); min-width: 0; }
-	.tiles dd { order: -1; margin: 0; font-size: 1.6rem; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
-	.tiles dt { color: var(--faint); font-size: var(--t-13-6); }
-	.tiles small { color: var(--accent); font-size: var(--t-12-8); margin-top: 0.2rem; }
-	.block { margin-top: 3rem; }
-	.section-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 0.25rem 1rem; margin-bottom: 0.75rem; }
-	.section-head h2 { font-size: 1.35rem; }
+	.figures { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.4rem 2.1rem; margin: 1.6rem 0 0; }
+	.figures div { display: flex; align-items: baseline; gap: 0.35rem; }
+	.figures dd { margin: 0; font-size: 1.4rem; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+	.figures dt { color: var(--faint); font-size: var(--t-16); }
+	.figures .aside dt { font-size: var(--t-14); }
+	.block { margin-top: 3.5rem; }
+	.section-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 0.25rem 1rem; padding-bottom: 0.6rem; border-bottom: 2px solid var(--text); }
+	.section-head h2 { font-size: 1.45rem; letter-spacing: -0.02em; }
 	.section-head span { color: var(--faint); font-size: var(--t-13-6); }
-	.shares { list-style: none; margin: 0; padding: 0; }
-	.shares li { display: grid; grid-template-columns: minmax(12rem, 18rem) minmax(0, 1fr) 14rem; gap: 1.25rem; align-items: center; padding-block: 0.75rem; border-top: 1px solid var(--line); }
+	.section-head a { color: var(--accent); }
+	.fits { list-style: none; margin: 0; padding: 0; }
+	.fits li { display: grid; grid-template-columns: minmax(12rem, 18rem) minmax(0, 1fr) 14rem; gap: 1.25rem; align-items: center; padding-block: 0.7rem; border-bottom: 1px solid var(--line); }
 	.sound { display: grid; min-width: 0; }
 	.sound b { font-size: var(--t-15-5); }
 	.sound span { color: var(--faint); font-size: var(--t-13-6); }
-	.meter { display: block; height: 12px; border-radius: 6px; background: color-mix(in srgb, var(--text) 8%, transparent); overflow: hidden; }
-	.meter i { display: block; height: 100%; border-radius: 6px; background: var(--accent); }
-	.share { color: var(--faint); font-size: var(--t-14); }
-	.share b { color: var(--accent); font-size: var(--t-18); }
-	.note { color: var(--faint); font-size: var(--t-13-6); margin: 0.6rem 0 0; padding-top: 0.6rem; border-top: 1px solid var(--line); }
+	.meter { display: block; height: 6px; background: color-mix(in srgb, var(--text) 8%, transparent); }
+	.meter i { display: block; height: 100%; background: var(--accent); }
+	.standing { color: var(--muted); font-size: var(--t-14); }
+	.standing.lead { color: var(--accent); font-weight: 700; }
+	.note { color: var(--faint); font-size: var(--t-13-6); margin: 0.75rem 0 0; }
 	.list { list-style: none; margin: 0; padding: 0; }
-	@media (max-width: 1100px) { .hero { grid-template-columns: minmax(0, 1fr); } }
+	.list > :global(li) { border-bottom: 1px solid var(--line); }
 	@media (max-width: 720px) {
-		.shares li { grid-template-columns: minmax(0, 1fr); gap: 0.4rem; }
-		.share { font-size: var(--t-13-6); }
-		.share b { font-size: var(--t-15); }
-		.tiles dd { font-size: 1.35rem; }
+		.figures { gap: 0.3rem 1.4rem; }
+		.figures dd { font-size: 1.2rem; }
+		.figures dt { font-size: var(--t-14); }
+		.fits li { grid-template-columns: minmax(0, 1fr); gap: 0.4rem; }
+		.standing { font-size: var(--t-13-6); }
+		.block { margin-top: 2.5rem; }
 	}
 </style>

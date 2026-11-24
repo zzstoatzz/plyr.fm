@@ -81,9 +81,11 @@ export type StatsRange = 'week' | 'month' | 'year' | 'all';
 export interface StatsOverview {
 	object: 'stats_overview';
 	range: StatsRange;
-	bucket: 'day' | 'month';
-	start_day: string;
-	end_day: string;
+	/** how many hours each bar of the series covers: 3, 6 or 24 */
+	bucket_hours: number;
+	/** when the first bar starts and the last one ends, ISO times aligned to UTC */
+	start: string;
+	end: string;
 	/** all time: every counted play; otherwise the dated plays in the range */
 	plays: number;
 	/** the plays in range that carry a date: all of them, except all time */
