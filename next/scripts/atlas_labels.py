@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import json
 import re
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 import httpx
@@ -129,28 +128,38 @@ class Evidence:
     allowed: set[str] = field(default_factory=set)
 
 
-def embed_vocab(embed_text_url: str, timeout: float = 120) -> np.ndarray | None:
-    """CLAP text vectors for SOUND_VOCAB (rows normalised), or None if unreachable."""
-
-    def one(text: str) -> list[float]:
-        with httpx.Client(timeout=timeout) as client:
-            resp = client.post(embed_text_url, json={"text": text})
-            resp.raise_for_status()
-            vector = resp.json().get("embedding")
-            if not vector:
-                raise ValueError("no embedding")
-            return vector
-
+def embed_vocab(embed_text_url: str) -> np.ndarray | None:
+    """CLAP text vectors for SOUND_VOCAB (rows normalised), or None if unreachable.
+    the first call waits out a cold start (the model loads for minutes); the rest
+    go one at a time so modal doesn't cold-start more containers for them."""
     texts = [p.format(term) for term in SOUND_VOCAB for p in TEXT_PROMPTS]
+    vectors = []
     try:
-        one(texts[0])  # wake the endpoint before fanning out
-        with ThreadPoolExecutor(8) as pool:
-            vectors = np.array(list(pool.map(one, texts)), dtype=np.float64)
+        with httpx.Client(timeout=60) as client:
+            for i, text in enumerate(texts):
+                for attempt in range(3 if i == 0 else 2):
+                    try:
+                        resp = client.post(
+                            embed_text_url,
+                            json={"text": text},
+                            timeout=600 if i == 0 else 60,
+                        )
+                        resp.raise_for_status()
+                        break
+                    except httpx.TransportError:
+                        if attempt == (2 if i == 0 else 1):
+                            raise
+                vector = resp.json().get("embedding")
+                if not vector:
+                    raise ValueError("no embedding")
+                vectors.append(vector)
     except (httpx.HTTPError, ValueError) as e:
-        log(f"  CLAP text endpoint failed ({type(e).__name__}); naming from tags only")
+        log(f"  CLAP text endpoint failed ({type(e).__name__})")
         return None
-    vectors = vectors.reshape(len(SOUND_VOCAB), len(TEXT_PROMPTS), -1).mean(axis=1)
-    return vectors / np.linalg.norm(vectors, axis=1, keepdims=True)
+    arr = np.array(vectors, dtype=np.float64)
+    arr = arr.reshape(len(SOUND_VOCAB), len(TEXT_PROMPTS), -1).mean(axis=1)
+    log(f"  embedded {len(SOUND_VOCAB)} sound descriptions")
+    return arr / np.linalg.norm(arr, axis=1, keepdims=True)
 
 
 def track_leanings(X: np.ndarray, vocab_vecs: np.ndarray) -> np.ndarray:

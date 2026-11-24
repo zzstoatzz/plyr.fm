@@ -457,9 +457,14 @@ def main() -> None:
     # plain sound descriptions in the same space (see atlas_labels.py)
     log("naming sounds from the audio...")
     vocab_vecs = atlas_labels.embed_vocab(settings.clap_embed_text_url)
-    lean = (
-        atlas_labels.track_leanings(X, vocab_vecs) if vocab_vecs is not None else None
-    )
+    if vocab_vecs is None:
+        # without the audio side, names would be guesses: keep the stored map
+        print(
+            "can't name sounds without CLAP text vectors; map not rebuilt",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    lean = atlas_labels.track_leanings(X, vocab_vecs)
     tags_per_track = [m["tags"] or [] for m in meta]
     previous = None if args.no_compare else load_snapshot(conn)
     summary = []
