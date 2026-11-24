@@ -33,43 +33,37 @@ import numpy as np
 SOUND_VOCAB = [
     # electronic
     "ambient", "ambient drone", "dark ambient", "drone", "house", "deep house",
-    "techno", "minimal techno", "trance", "drum and bass", "jungle",
-    "breakbeat", "dubstep", "uk garage", "electro", "idm", "glitch",
-    "synthwave", "synth pop", "electronic dance", "downtempo", "trip hop",
-    "chillout", "chiptune", "hyperpop", "vaporwave", "noise", "industrial",
+    "techno", "minimal techno", "drum and bass", "breakbeat", "glitch",
+    "synthwave", "electronic dance", "downtempo", "trip hop", "noise",
     "modular synth", "electronic beats",
     # hip hop and r&b
-    "hip hop", "rap", "trap", "boom bap", "lo-fi hip hop", "instrumental beats",
-    "r&b", "soul", "funk", "disco",
+    "hip hop", "rap", "lo-fi hip hop", "instrumental beats", "r&b", "soul",
+    "funk", "disco",
     # rock and guitar
-    "rock", "indie rock", "alternative rock", "punk", "post-punk", "shoegaze",
-    "post-rock", "metal", "heavy metal", "grunge", "garage rock",
-    "psychedelic rock", "math rock", "emo", "surf rock", "blues",
+    "rock", "indie rock", "psychedelic rock", "punk", "post-rock",
+    "shoegaze", "blues", "jam band",
     # acoustic and songs
-    "folk", "indie folk", "singer-songwriter", "acoustic guitar", "country",
-    "bluegrass", "americana", "pop", "indie pop", "bedroom pop", "dream pop",
-    "ballad",
+    "folk", "indie folk", "singer-songwriter", "country", "pop", "indie pop",
+    "dream pop",
     # jazz and classical
-    "jazz", "smooth jazz", "free jazz", "classical", "piano", "solo piano",
-    "orchestral", "string quartet", "cinematic score", "choir", "opera",
-    "chamber music",
-    # world
-    "reggae", "dub", "latin", "bossa nova", "afrobeat", "flamenco",
+    "jazz", "classical", "piano", "solo piano", "orchestral",
+    "string quartet", "chamber music", "cinematic score", "choir",
     # forms and recordings
     "dj mix", "live recording", "live band", "field recording",
-    "spoken word", "podcast", "talking", "a cappella", "poetry reading",
-    "sound effects", "nature sounds", "rain", "radio show", "demo recording",
+    "spoken word", "podcast", "talking", "demo recording",
     # instruments and voices
-    "electric guitar", "distorted guitar", "bass guitar", "synthesizer",
-    "drum machine", "drums", "percussion", "strings", "brass", "saxophone",
-    "violin", "cello", "organ", "harp", "flute", "female vocals",
-    "male vocals", "rapping", "singing", "humming",
+    "acoustic guitar", "electric guitar", "distorted guitar", "synthesizer",
+    "drum machine", "drums", "strings", "brass", "saxophone", "violin",
+    "fiddle", "banjo", "organ", "female vocals", "male vocals", "singing",
+    "rapping",
     # texture and feel
-    "calm", "dark", "bright", "upbeat", "slow", "fast", "heavy", "soft",
-    "lush", "sparse", "distorted", "dreamy", "melancholy", "energetic",
-    "warm", "lo-fi", "hazy", "eerie", "playful", "hypnotic", "groovy",
-    "noisy", "glitchy", "chill", "intense", "gentle",
+    "calm", "dark", "slow", "soft", "dreamy", "melancholy", "upbeat",
+    "energetic", "hazy", "eerie", "heavy", "lo-fi", "warm", "groovy",
+    "hypnotic",
 ]  # fmt: skip
+# CLAP's text side is weak on niche genre names (it heard dj mixes as
+# "afrobeat" and radiators as "metal"), so the vocabulary sticks to broad
+# genres, forms, instruments and feel it places reliably.
 
 TEXT_PROMPTS = ["{}", "the sound of {}"]
 
@@ -92,9 +86,9 @@ EMPTY_TAGS = {
 }  # fmt: skip
 JOINERS = {"and", "&", "with", "of", "the", "for"}
 
-MIN_SUPPORT = 0.3  # share of a cluster's tracks that must lean towards a description
+MIN_SUPPORT = 0.4  # share of a cluster's tracks that must lean towards a description
 MIN_TAG_SHARE = 0.3  # share of a cluster's tracks that must carry a tag
-TOP_PER_TRACK = 12  # descriptions each track "leans towards"
+TOP_PER_TRACK = 8  # descriptions each track "leans towards"
 
 
 def log(msg: str) -> None:
@@ -183,7 +177,20 @@ def gather_evidence(
     """per cluster: supported descriptions and widely shared sound tags.
     support is measured over the cluster's core tracks (HDBSCAN's own members)."""
     out: dict[int, Evidence] = {}
-    for cid in sorted({int(c) for c in labels}):
+    cids = sorted({int(c) for c in labels})
+    if lean is not None:
+        typical = np.median(
+            np.array(
+                [
+                    lean[(labels == c) & core].mean(axis=0)
+                    if ((labels == c) & core).sum() >= 3
+                    else lean[labels == c].mean(axis=0)
+                    for c in cids
+                ]
+            ),
+            axis=0,
+        )
+    for cid in cids:
         members = labels == cid
         core_members = members & core
         if core_members.sum() < 3:
@@ -192,12 +199,15 @@ def gather_evidence(
         descriptions: list[tuple[str, float]] = []
         if lean is not None:
             support = lean[core_members].mean(axis=0)
-            order = np.argsort(-support)
+            # rank by how much more this cluster leans towards a description
+            # than clusters usually do, so names say what sets it apart
+            distinct = support - typical
+            order = np.argsort(-distinct)
             descriptions = [
                 (SOUND_VOCAB[j], round(float(support[j]), 3))
-                for j in order[:10]
-                if support[j] >= MIN_SUPPORT
-            ]
+                for j in order
+                if support[j] >= MIN_SUPPORT and distinct[j] > 0
+            ][:6]
         tag_counts: dict[str, int] = {}
         for i in np.flatnonzero(core_members):
             for t in {sound_tag(t) for t in tags_per_track[i]} - {None}:
@@ -249,8 +259,9 @@ SYSTEM = (
     "Write a plain name of 1-3 lowercase words that says what the region sounds "
     "like, so a listener would nod. Rules:\n"
     "- use ONLY words that appear in that region's descriptions or tags\n"
-    "- prefer the best-supported evidence; combine two pieces only if both are well "
-    "supported (e.g. 'dark ambient drone', 'acoustic folk', 'dj mix')\n"
+    "- descriptions are listed most distinctive first: build the name from the first "
+    "one or two (e.g. 'dark ambient drone', 'acoustic folk', 'dj mix'), and only reach "
+    "further down to keep names apart\n"
     "- be neutral and descriptive: no judgement, no jokes, no puns, nothing about "
     "how tracks were made\n"
     "- every region's name must differ from the others\n\n"
