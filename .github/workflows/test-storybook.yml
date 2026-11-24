@@ -6,8 +6,21 @@ name: storybook a11y
 
 on:
   pull_request:
+    # what the stories and the tag-input harness can import: not routes, the
+    # page shell (app.html) or static files
     paths:
-      - "frontend/**"
+      - "frontend/src/**"
+      - "!frontend/src/app.html"
+      - "!frontend/src/routes/**"
+      - "frontend/.storybook/**"
+      - "frontend/e2e/tag-input.mjs"
+      - "frontend/vendor/**"
+      - "frontend/package.json"
+      - "frontend/bun.lock"
+      - "frontend/svelte.config.js"
+      - "frontend/vite.config.ts"
+      - "frontend/vitest.storybook.config.ts"
+      - "frontend/tsconfig.json"
       - ".github/workflows/test-storybook.yml"
   workflow_dispatch:
 
