@@ -292,9 +292,15 @@ async function accountingAndEmbeds(browser, origin) {
   const origin = await serve();
   const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
   try {
-    for (const width of [390, 1280]) for (const scheme of ['light', 'dark']) await stationFlow(browser, origin, width, scheme);
-    for (const width of [390, 1280]) await broadcastFlow(browser, origin, width);
-    for (const width of [390, 1280]) await linkedStationFlow(browser, origin, width);
-    await accountingAndEmbeds(browser, origin);
+    // the desktop broadcast flow sits through a 31s off-air read; the other flows run meanwhile, each in its own context
+    await Promise.all([
+      broadcastFlow(browser, origin, 1280),
+      (async () => {
+        for (const width of [390, 1280]) for (const scheme of ['light', 'dark']) await stationFlow(browser, origin, width, scheme);
+        await broadcastFlow(browser, origin, 390);
+        for (const width of [390, 1280]) await linkedStationFlow(browser, origin, width);
+        await accountingAndEmbeds(browser, origin);
+      })()
+    ]);
   } finally { await browser.close(); close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
