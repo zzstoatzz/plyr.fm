@@ -1,7 +1,7 @@
 {
   "name": "plyr.fm",
   "id": "fm.plyr",
-  "short_name": "Plyr",
+  "short_name": "plyr.fm",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0a0a0a",
