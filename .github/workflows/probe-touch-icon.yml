@@ -7,9 +7,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
+          set +e
           UA="Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1"
           for h in plyr.fm next.plyr.fm; do
-            echo "=== $h HTML headers"; curl -sD - -o /tmp/p.html -A "$UA" "https://$h/" | grep -viE "^(date|cf-ray|nel|report-to|alt-svc|set-cookie)"
+            echo "=== $h HTML headers"; curl -s -o /tmp/p.html -A "$UA" "https://$h/"
             grep -oiE '<meta[^>]*(http-equiv|csp)[^>]*>' /tmp/p.html
             echo "=== $h manifest"; curl -s -A "$UA" "https://$h/manifest.webmanifest"
             for p in /apple-touch-icon.png /apple-touch-icon.png?v=2 /icons/icon-192.png /icons/icon-512.png; do
