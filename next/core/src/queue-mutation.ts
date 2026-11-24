@@ -1,5 +1,6 @@
 import type { JamTrack, Pending } from './jam-connection.ts';
 import { MAX_QUEUE_TRACKS } from './queue-state.ts';
+import { canonicalId } from './record-ids.ts';
 
 type Reference = JamTrack & { key: string };
 export type DurableQueueEdit =
@@ -21,7 +22,7 @@ function reference(value: unknown): Reference | null {
   if (!object(value) || !key(value.key) || typeof value.id !== 'string' || value.id.length > 2048 || !/^trk_[A-Za-z0-9._~-]+$/.test(value.id)
     || typeof value.uri !== 'string' || !value.uri.startsWith('at://') || value.uri.length > 1024 || typeof value.cid !== 'string' || value.cid.length > 128
     || typeof value.durationMs !== 'number' || !Number.isSafeInteger(value.durationMs) || value.durationMs < 0 || value.durationMs > 86400000) return null;
-  return { id: value.id, uri: value.uri, cid: value.cid, durationMs: value.durationMs, key: value.key };
+  return { id: canonicalId(value.id), uri: value.uri, cid: value.cid, durationMs: value.durationMs, key: value.key };
 }
 export function durableQueueEdit(value: unknown): DurableQueueEdit | null {
   if (!object(value)) return null;

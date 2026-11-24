@@ -28,6 +28,7 @@ const query = @import("../internal/http/query.zig");
 const track_id = @import("../internal/identity/track_id.zig");
 const album_id = @import("../internal/identity/album_id.zig");
 const playlist_id = @import("../internal/identity/playlist_id.zig");
+const record_id = @import("../internal/identity/record_id.zig");
 
 pub const Method = enum {
     listTracks,
@@ -255,7 +256,19 @@ fn percentEncode(allocator: std.mem.Allocator, out: *std.ArrayList(u8), value: [
     }
 }
 
-fn encodeId(allocator: std.mem.Allocator, subject: Subject, uri: []const u8) ![]const u8 {
+fn encodeId(allocator: std.mem.Allocator, subject: Subject, subject_uri: []const u8) ![]const u8 {
+    // a client built before short ids passes a short id where the uri goes;
+    // any id (short or long) stands for its uri
+    const prefix: []const u8 = switch (subject) {
+        .track => track_id.prefix,
+        .album => album_id.prefix,
+        .playlist => playlist_id.prefix,
+        .none, .actor => unreachable,
+    };
+    const uri = if (std.mem.startsWith(u8, subject_uri, prefix))
+        try record_id.decodeAnyForm(prefix, try allocator.alloc(u8, record_id.decodedLength(subject_uri)), subject_uri)
+    else
+        subject_uri;
     return switch (subject) {
         .track => track_id.encode(try allocator.alloc(u8, track_id.encodedLength(uri)), uri),
         .album => album_id.encode(try allocator.alloc(u8, album_id.encodedLength(uri)), uri),
@@ -271,6 +284,17 @@ fn resolveBody(allocator: std.mem.Allocator, body: []const u8) ![]const u8 {
     const ids = try allocator.alloc([]const u8, parsed.uris.len);
     for (parsed.uris, ids) |uri, *id| id.* = try encodeId(allocator, .track, uri);
     return std.json.Stringify.valueAlloc(allocator, .{ .ids = ids }, .{});
+}
+
+test "an id in the uri parameter stands for its record" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const short = "trk_a3vq3hjlkz2nbf67bpv5z6qs.3n2zqt7q3v522";
+    try std.testing.expectEqualStrings(short, try encodeId(arena, .track, "at://did:plc:a3vq3hjlkz2nbf67bpv5z6qs/fm.plyr.track/3n2zqt7q3v522"));
+    try std.testing.expectEqualStrings(short, try encodeId(arena, .track, short));
+    try std.testing.expectEqualStrings(short, try encodeId(arena, .track, "trk_YXQ6Ly9kaWQ6cGxjOmEzdnEzaGpsa3oybmJmNjdicHY1ejZxcy9mbS5wbHlyLnRyYWNrLzNuMnpxdDdxM3Y1MjI"));
+    try std.testing.expectError(error.InvalidRecordId, encodeId(arena, .album, "alb_nonsense!"));
 }
 
 test "methods follow the track collection's namespace" {

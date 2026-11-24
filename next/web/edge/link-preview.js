@@ -191,43 +191,25 @@ export function createApi(origin, fetcher = fetch) {
   };
 }
 
-// ids are a type prefix + the record; a copy of core/src/record-ids.ts, which
-// must issue the same id (short `trk_<plc id>.<rkey>` or base64url of the uri)
+// ids: `trk_<plc id>.<rkey>` or prefix + base64url(uri); must match core/src/record-ids.ts
 const SHORT_COLLECTION = { trk_: 'fm.plyr.track', alb_: 'fm.plyr.list', pls_: 'fm.plyr.list' };
-const SHORT_URI = /^at:\/\/did:plc:([a-z2-7]{24})\/([a-z.]+)\/([A-Za-z0-9._~-]{1,512})$/;
-const SHORT_ID = /^(trk|alb|pls)_([a-z2-7]{24})\.([A-Za-z0-9._~-]{1,512})$/;
-
+const SHORT_URI = /^at:\/\/did:plc:([a-z2-7]{24})\/([a-z.]+)\/(?!\.\.?$)([A-Za-z0-9._~-]{1,512})$/;
+const SHORT_ID = /^(trk_|alb_|pls_)([a-z2-7]{24})\.(?!\.\.?$)([A-Za-z0-9._~-]{1,512})$/;
 export function idFromUri(prefix, uri) {
   const short = SHORT_URI.exec(uri);
-  if (short && short[2] === SHORT_COLLECTION[prefix] && short[3] !== '.' && short[3] !== '..') return `${prefix}${short[1]}.${short[3]}`;
-  const bytes = new TextEncoder().encode(uri);
-  let bin = '';
-  for (const b of bytes) bin += String.fromCharCode(b);
-  return prefix + btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  if (short && short[2] === SHORT_COLLECTION[prefix]) return `${prefix}${short[1]}.${short[3]}`;
+  return prefix + btoa(String.fromCharCode(...new TextEncoder().encode(uri))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
-
 export function uriFromId(id) {
   const short = SHORT_ID.exec(id);
-  if (short) return short[3] === '.' || short[3] === '..' ? id : `at://did:plc:${short[2]}/${SHORT_COLLECTION[`${short[1]}_`]}/${short[3]}`;
-  const match = /^(?:trk|alb|pls)_([A-Za-z0-9_-]+)$/.exec(id);
-  if (!match) return id;
+  if (short) return `at://did:plc:${short[2]}/${SHORT_COLLECTION[short[1]]}/${short[3]}`;
+  const payload = /^(?:trk|alb|pls)_([A-Za-z0-9_-]+)$/.exec(id)?.[1];
   try {
-    const payload = match[1].replace(/-/g, '+').replace(/_/g, '/');
-    const bin = atob(payload + '='.repeat((4 - (payload.length % 4)) % 4));
-    const uri = new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from(bin, (ch) => ch.charCodeAt(0)));
-    return uri.startsWith('at://') ? uri : id;
-  } catch {
-    return id;
-  }
+    const uri = payload && new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from(atob(payload.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (payload.length % 4)) % 4)), (ch) => ch.charCodeAt(0)));
+    return uri?.startsWith('at://') ? uri : id;
+  } catch { return id; }
 }
-
-/** the id the appview issues for an id, so an older long link moves to the short one */
-export function canonicalId(id) {
-  const prefix = /^(trk|alb|pls)_/.exec(id)?.[0];
-  const uri = uriFromId(id);
-  return prefix && uri !== id ? idFromUri(prefix, uri) : id;
-}
-
+export const canonicalId = (id) => (/^(trk|alb|pls)_/.test(id) && uriFromId(id) !== id ? idFromUri(id.slice(0, 4), uriFromId(id)) : id);
 const plyrImage = /^https:\/\/images(?:-stg)?\.plyr\.fm\/(?!cdn-cgi\/)[^?#]+$/;
 const legacyBucket = /^https:\/\/pub-7ea7ea9a6f224f4f8c0321a2bb008c5a\.r2\.dev\/images\//;
 
@@ -607,9 +589,8 @@ export default {
     if (moved) return Response.redirect(new URL(moved + url.search, url.origin).href, 301);
 
     const page = route(url.pathname);
-    if ((page?.kind === 'track' || page?.kind === 'album' || page?.kind === 'playlist') && canonicalId(page.id) !== page.id) {
-      return Response.redirect(new URL(`/${page.kind}/${canonicalId(page.id)}${url.search}`, url.origin).href, 301);
-    }
+    const short = ['track', 'album', 'playlist'].includes(page?.kind) && canonicalId(page.id);
+    if (short && short !== page.id) return Response.redirect(new URL(`/${page.kind}/${short}${url.search}`, url.origin).href, 301);
     if (page?.kind === 'og') return ogImage(page, url.origin, api);
     // old production album and playlist links move for everyone, not only unfurlers
     if (page?.kind === 'legacy-album' || page?.kind === 'legacy-playlist') {

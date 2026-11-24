@@ -1,4 +1,5 @@
 import type { QualifiedPlay } from './listening-session.ts';
+import { canonicalId } from './record-ids.ts';
 export type { QualifiedPlay } from './listening-session.ts';
 
 export interface PendingPlay extends QualifiedPlay {
@@ -35,7 +36,7 @@ export function pendingPlay(value: unknown): PendingPlay | null {
 	if (typeof value.trackId !== 'string' || !canonicalTrackId(value.trackId) || value.trackId.length > 2048 ||
 		typeof value.occurrenceId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value.occurrenceId) ||
 		typeof value.createdAt !== 'number' || !Number.isFinite(value.createdAt)) return null;
-	return { trackId: value.trackId, occurrenceId: value.occurrenceId, createdAt: value.createdAt };
+	return { trackId: canonicalId(value.trackId), occurrenceId: value.occurrenceId, createdAt: value.createdAt };
 }
 
 export class PlayDeliveryError extends Error {
@@ -161,7 +162,7 @@ export class PlayOutbox {
 					if (this.disposed) break;
 					console.info('[plays] submit', { occurrence: item.occurrenceId, track: item.trackId, attempt: item.attempts + 1 });
 					const receipt = await this.options.send(item);
-					if (receipt.occurrence !== item.occurrenceId || receipt.track_id !== item.trackId ||
+					if (receipt.occurrence !== item.occurrenceId || canonicalId(receipt.track_id) !== canonicalId(item.trackId) ||
 						!Number.isSafeInteger(receipt.play_count) || receipt.play_count < 0) {
 						throw new PlayDeliveryError('invalid play receipt', true);
 					}

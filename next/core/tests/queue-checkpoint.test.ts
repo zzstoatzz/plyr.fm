@@ -2,9 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { Track } from '../src/api.ts';
 import { applyQueueProgress, newerProgress, queueCheckpoint, type QueueCheckpoint } from '../src/queue-checkpoint.ts';
+import { trackIdFromUri } from '../src/record-ids.ts';
 
 const uri = 'at://did:plc:aaaaaaaaaaaaaaaaaaaaaaaa/fm.plyr.track/a';
-const track: Track = { object: 'track', id: 'trk_' + Buffer.from(uri).toString('base64url'), record: { uri, cid: 'bafyreie5737gdxlw5i64vzichcalba3z2v5n6icifvx5xytvske7mr3hpm', revision: 'rev', collection: 'fm.plyr.track', rkey: 'a' },
+const track: Track = { object: 'track', id: trackIdFromUri(uri), record: { uri, cid: 'bafyreie5737gdxlw5i64vzichcalba3z2v5n6icifvx5xytvske7mr3hpm', revision: 'rev', collection: 'fm.plyr.track', rkey: 'a' },
   metadata: { title: 'A song', description: null, album: null, duration_seconds: 60, created_at: '2026-11-06T00:00:00Z' },
   artist: { did: 'did:plc:aaaaaaaaaaaaaaaaaaaaaaaa', profile: { handle: 'artist.test', display_name: 'Artist', avatar_url: null } },
   media: { artwork: null }, access: { visibility: 'public' }, metrics: { play_count: 1, like_count: 0 } };

@@ -29,3 +29,14 @@ test('plyr.fm records from plc accounts get short ids, and long ids still decode
 	}
 	assert.ok(!albumIdFromUri(uri).includes('.'), 'a track uri is not an album');
 });
+
+test('long track ids saved before short ids come back short', async () => {
+	const { pendingPlay } = await import('../src/play-outbox.ts');
+	const { durableQueueEdit } = await import('../src/queue-mutation.ts');
+	const uri = 'at://did:plc:a3vq3hjlkz2nbf67bpv5z6qs/fm.plyr.track/3n2zqt7q3v522';
+	const long = 'trk_YXQ6Ly9kaWQ6cGxjOmEzdnEzaGpsa3oybmJmNjdicHY1ejZxcy9mbS5wbHlyLnRyYWNrLzNuMnpxdDdxM3Y1MjI';
+	const occurrenceId = '6f1c2a5e-3b4d-4e8f-9a0b-1c2d3e4f5a6b';
+	assert.equal(pendingPlay({ trackId: long, occurrenceId, createdAt: 1 })?.trackId, trackIdFromUri(uri));
+	const edit = durableQueueEdit({ action: 'enqueue', entry: { key: 'a', id: long, uri, cid: 'cid', durationMs: 1 } });
+	assert.equal(edit?.action === 'enqueue' && edit.entry.id, trackIdFromUri(uri));
+});

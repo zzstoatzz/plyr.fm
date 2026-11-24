@@ -71,6 +71,15 @@ nate first. Add an entry when a PR settles something.
   transform and is drawn again at rest; a tap picks a track into a card that
   plays it or opens its page.
 
+- Record ids name the record without a lookup. A plyr.fm track, album or
+  playlist from a did:plc account is `trk_<plc id>.<rkey>` (`alb_`/`pls_` for
+  `fm.plyr.list`); anything else is the prefix + base64url of its AT-URI. The
+  appview issues only that form. Older long ids still resolve: pages redirect,
+  XRPC `uri=` and the queue protocol accept them, and stored client state is
+  rewritten to the short id when it is read. The codec lives in three copies
+  (backend `record_id.zig`, core `record-ids.ts`, `web/edge/link-preview.js`)
+  that must issue the same id.
+
 ## known and open
 
 - The account picker's combobox (the only one, and it passes the APG combobox

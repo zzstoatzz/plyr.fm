@@ -1,6 +1,6 @@
 // Canonical records are read-only here; anonymous play metrics are app-owned.
 import { PlayDeliveryError, type PlayReceipt, type QualifiedPlay } from './play-outbox.ts';
-import { uriFromId } from './record-ids.ts';
+import { canonicalId, uriFromId } from './record-ids.ts';
 import { readableError } from './api-errors.ts';
 import { parseTrackWaveform, type TrackWaveformBody } from './track-waveform.ts';
 
@@ -300,7 +300,7 @@ function isPlayReceipt(value: unknown, play: QualifiedPlay): value is PlayReceip
 	if (typeof value !== 'object' || value === null) return false;
 	return 'object' in value && value.object === 'play_receipt' &&
 		'occurrence' in value && value.occurrence === play.occurrenceId &&
-		'track_id' in value && value.track_id === play.trackId &&
+		'track_id' in value && typeof value.track_id === 'string' && canonicalId(value.track_id) === canonicalId(play.trackId) &&
 		'play_count' in value && typeof value.play_count === 'number' && Number.isSafeInteger(value.play_count) && value.play_count >= 0 &&
 		'counted' in value && typeof value.counted === 'boolean' &&
 		'record' in value && typeof value.record === 'object' && value.record !== null &&

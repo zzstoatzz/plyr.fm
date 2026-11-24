@@ -1,6 +1,7 @@
 import type { Track } from './api.ts';
 import type { QueueMutation } from './queue-mutation.ts';
 import type { QueueState } from './queue-state.ts';
+import { canonicalId } from './record-ids.ts';
 
 export interface QueueCheckpoint {
   version: 1;
@@ -72,7 +73,8 @@ export function queueCheckpoint(value: unknown, owner: string): QueueCheckpoint 
   for (const entry of entries) {
     if (!object(entry) || typeof entry.key !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(entry.key) || keys.has(entry.key) || !track(entry.track)) return null;
     keys.add(entry.key);
-    parsed.push({ key: entry.key, track: cachedTrack(entry.track) });
+    // a checkpoint saved before short ids holds the long one
+    parsed.push({ key: entry.key, track: { ...cachedTrack(entry.track), id: canonicalId(entry.track.id) } });
   }
   let tail: QueueCheckpoint['state']['tail'];
   if (value.state.tail !== undefined) {
