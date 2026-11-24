@@ -473,7 +473,9 @@ def main() -> None:
         ("coarse", labels_coarse, core_coarse),
         ("fine", labels_fine, core_fine),
     ):
-        evidence = atlas_labels.gather_evidence(labels, core, tags_per_track, lean)
+        evidence = atlas_labels.gather_evidence(
+            labels, core, tags_per_track, lean, [m["title"] or "" for m in meta]
+        )
         names = atlas_labels.name_clusters(evidence, settings.anthropic_api_key, tier)
         tier_names[tier] = names
         key = "clusterCoarse" if tier == "coarse" else "clusterFine"

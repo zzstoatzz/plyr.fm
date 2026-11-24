@@ -119,7 +119,10 @@ class Evidence:
     count: int
     descriptions: list[tuple[str, float]]  # (description, support), best first
     tags: list[tuple[str, float]]  # (tag, share of tracks), most shared first
-    allowed: set[str] = field(default_factory=set)
+    titles: list[str] = field(default_factory=list)  # context only, never words
+
+    def phrases(self) -> list[str]:
+        return [d for d, _ in self.descriptions] + [t for t, _ in self.tags]
 
 
 def embed_vocab(embed_text_url: str) -> np.ndarray | None:
@@ -173,6 +176,7 @@ def gather_evidence(
     core: np.ndarray,
     tags_per_track: list[list[str]],
     lean: np.ndarray | None,
+    titles: list[str] | None = None,
 ) -> dict[int, Evidence]:
     """per cluster: supported descriptions and widely shared sound tags.
     support is measured over the cluster's core tracks (HDBSCAN's own members)."""
@@ -207,7 +211,17 @@ def gather_evidence(
                 (SOUND_VOCAB[j], round(float(support[j]), 3))
                 for j in order
                 if support[j] >= MIN_SUPPORT and distinct[j] > 0
-            ][:6]
+            ][:8]
+            # a broad cluster may stand out on little; its most shared sounds count too
+            if len(descriptions) < 4:
+                have = {d for d, _ in descriptions}
+                for j in np.argsort(-support):
+                    if len(descriptions) >= 6 or support[j] < MIN_SUPPORT:
+                        break
+                    if SOUND_VOCAB[j] not in have:
+                        descriptions.append(
+                            (SOUND_VOCAB[j], round(float(support[j]), 3))
+                        )
         tag_counts: dict[str, int] = {}
         for i in np.flatnonzero(core_members):
             for t in {sound_tag(t) for t in tags_per_track[i]} - {None}:
@@ -220,48 +234,58 @@ def gather_evidence(
             ),
             key=lambda tc: -tc[1],
         )[:6]
-        allowed = {w for d, _ in descriptions for w in words(d)}
-        allowed |= {w for t, _ in tags for w in words(t)}
-        out[cid] = Evidence(int(members.sum()), descriptions, tags, allowed)
+        sample = []
+        if titles:
+            idx = np.flatnonzero(core_members)
+            pick = np.random.default_rng(cid).choice(
+                idx, size=min(10, len(idx)), replace=False
+            )
+            sample = [titles[i] for i in sorted(pick)]
+        out[cid] = Evidence(int(members.sum()), descriptions, tags, sample)
     return out
 
 
 def fallback_name(ev: Evidence, taken: set[str]) -> str:
-    """the best-supported description (or tag), widened until it's unique."""
-    scored = sorted(ev.descriptions + ev.tags, key=lambda ds: -ds[1])
-    pool = [d for d, _ in scored]
+    """the most distinctive phrase, joined with the next ones until it's unique."""
+    pool = ev.phrases()
     if not pool:
         return "mixed sounds"
-    name = pool[0]
-    for extra in pool[1:]:
+    for name in [pool[0]] + [f"{pool[0]} {extra}" for extra in pool[1:]]:
         if name not in taken:
-            break
-        name = f"{pool[0]} {extra}" if len(words(pool[0] + " " + extra)) <= 4 else extra
-    return name
+            return name
+    return pool[0]
 
 
 def valid_name(name: str, ev: Evidence) -> bool:
-    ws = words(name)
-    return (
-        0 < len(ws) <= 4
-        and all(w in ev.allowed or w in JOINERS for w in ws)
-        and not any(w in PROCESS_WORDS or w in JUDGEMENT_WORDS for w in ws)
-        and any(w not in JOINERS for w in ws)
-    )
+    """one of the cluster's phrases, or two of them joined (in either order)."""
+    name = " ".join(words(name))
+    if any(w in PROCESS_WORDS or w in JUDGEMENT_WORDS for w in words(name)):
+        return False
+    phrases = [" ".join(words(p)) for p in ev.phrases()]
+    if name in phrases:
+        return True
+    for a in phrases:
+        for b in phrases:
+            if a != b and name in (f"{a} {b}", f"{a} and {b}", f"{a} & {b}"):
+                return True
+    # a shared word may merge: "acoustic guitar" + "blues" → "acoustic blues guitar"
+    pairs = {frozenset(words(f"{a} {b}")) for a in phrases for b in phrases if a != b}
+    return len(words(name)) <= 4 and frozenset(words(name)) in pairs
 
 
 SYSTEM = (
     "You name regions of a sound map. Each region is a group of audio tracks "
     "that sound alike (grouped by an audio model, not by text).\n\n"
-    "For each region you get descriptions an audio model matched to its tracks, "
-    "with support (the share of the region's tracks that lean towards it), and tags "
-    "many of its tracks share, with their share.\n\n"
-    "Write a plain name of 1-3 lowercase words that says what the region sounds "
-    "like, so a listener would nod. Rules:\n"
-    "- use ONLY words that appear in that region's descriptions or tags\n"
-    "- descriptions are listed most distinctive first: build the name from the first "
-    "one or two (e.g. 'dark ambient drone', 'acoustic folk', 'dj mix'), and only reach "
-    "further down to keep names apart\n"
+    "For each region you get candidate descriptions an audio model matched to its "
+    "tracks, most distinctive first, with support (the share of the region's tracks "
+    "that lean towards it); tags many of its tracks share; and some track titles. "
+    "The audio model is noisy, so use the titles and tags to judge which candidates "
+    "are true (a title like 'voice memo' or 'update' means speech; 'mix' or a venue "
+    "and date means a dj set or live recording).\n\n"
+    "Name each region with ONE candidate, or two candidates joined (e.g. 'dj mix', "
+    "'acoustic guitar', 'dark ambient drone'), copied exactly. Never use a word that "
+    "isn't in that region's candidates or tags: titles are context only. Rules:\n"
+    "- pick the candidate that is truest for most of the titles; prefer one over two\n"
     "- be neutral and descriptive: no judgement, no jokes, no puns, nothing about "
     "how tracks were made\n"
     "- every region's name must differ from the others\n\n"
@@ -277,8 +301,10 @@ def haiku_names(evidence: dict[int, Evidence], api_key: str) -> dict[int, str]:
     for cid, ev in evidence.items():
         desc = ", ".join(f"{d} ({s:.0%})" for d, s in ev.descriptions) or "none"
         tags = ", ".join(f"{t} ({s:.0%})" for t, s in ev.tags) or "none"
+        titles = "; ".join(ev.titles) or "none"
         parts.append(
-            f"Region {cid} ({ev.count} tracks)\n  sounds: {desc}\n  tags: {tags}"
+            f"Region {cid} ({ev.count} tracks)\n  candidates: {desc}\n"
+            f"  tags: {tags}\n  titles: {titles}"
         )
     resp = client.messages.create(
         model="claude-haiku-5-5",
