@@ -17,6 +17,7 @@
 	const plot = $derived(height - bottom - 8);
 	const ticks = $derived(niceTicks(max, quiet ? 1 : 3));
 	const top = $derived(Math.max(max, ticks.at(-1) ?? max));
+	let tipWidth = $state(0);
 	const shown = $derived(selected ?? (quiet ? undefined : peak >= 0 ? peak : undefined));
 	/** tick labels at least 44px apart, so a crowded axis drops some rather than overlapping */
 	const ticksShown = $derived.by(() => {
@@ -88,7 +89,7 @@
 		</svg>
 		{#if shown !== undefined && bars[shown] && !quiet}
 			{@const bar = bars[shown]}
-			<div class="tip" style:left="{Math.min(width - 150, Math.max(0, left + shown * step + step / 2 - 60))}px" style:top="{Math.max(0, y(bar.value) - 52)}px">
+			<div class="tip" bind:offsetWidth={tipWidth} style:left="{Math.max(0, Math.min(width - tipWidth, left + shown * step + step / 2 - tipWidth / 2))}px" style:top="{Math.max(0, y(bar.value) - 52)}px">
 				<b>{count(bar.value)}</b><span>{bar.detail}</span>
 			</div>
 		{/if}

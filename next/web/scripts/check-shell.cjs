@@ -294,7 +294,12 @@ async function statsScreen(browser, phone, scheme) {
     await top.getByRole('link', { name: tracks[0].metadata.title, exact: true }).waitFor();
     assert.equal(await top.getByRole('button', { name: `Play ${tracks[0].metadata.title}` }).count(), 1, 'most played rows play from the shared control');
     await page.getByRole('region', { name: 'tags' }).getByText('2,263').waitFor();
+    const chart = page.getByRole('group', { name: 'plays in the last 30 days, each bar 6 hours' });
+    await chart.press('End');
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'the last bar\'s tip stays in the window');
+    await chart.press('Home');
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'stats fit the window');
+    await chart.blur();
     await page.screenshot({ path: path.join(output, `${width}-${scheme}-stats.png`), fullPage: true });
 
     await page.getByRole('navigation', { name: 'time range' }).getByRole('link', { name: '7 days', exact: true }).click();
