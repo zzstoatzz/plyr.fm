@@ -142,8 +142,10 @@ jobs:
           - name: player-presentation
             run: bun run check:player-presentation && bun run check:likers && bun run check:playing-levels
           # the slowest checks, one job each so none of them sets the pace for the rest
-          - name: artist-catalog
-            run: bun run check:artist-catalog
+          - name: artist-catalog-phone
+            run: CATALOG_WIDTHS=390 bun run check:artist-catalog
+          - name: artist-catalog-desktop
+            run: CATALOG_WIDTHS=1280 bun run check:artist-catalog
           - name: atlas
             run: bun run check:atlas
           - name: paged-lists
@@ -381,10 +383,6 @@ jobs:
         if: "!cancelled() && github.event_name == 'push'"
         working-directory: next/web
         run: node scripts/check-live-artist-page.mjs
-      - name: verify radio station links and that the firehose stays on air
-        if: "!cancelled() && github.event_name == 'push'"
-        working-directory: next/web
-        run: node scripts/check-live-radio.mjs
       - name: verify the upload page opens its track and album forms signed in
         if: "!cancelled() && github.event_name == 'push'"
         working-directory: next/web
@@ -404,4 +402,43 @@ jobs:
         with:
           name: live-home-rail
           path: /tmp/plyr-live-home-rail
+          if-no-files-found: ignore
+
+  # the firehose soak listens for two minutes, so it runs beside the other live
+  # checks instead of after them; it is signed out and shares no account with them
+  verify-live-radio:
+    needs: deploy
+    if: always() && github.ref == 'refs/heads/main' && github.event_name == 'push' && needs.deploy.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    concurrency: next-live-radio
+    defaults:
+      run:
+        working-directory: next/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+        working-directory: next
+      - id: playwright
+        run: echo "version=$(node -p "require('playwright/package.json').version")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        id: browsers
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-shell-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+      - run: bun run playwright install --with-deps --only-shell chromium
+        if: steps.browsers.outputs.cache-hit != 'true'
+      - name: verify radio station links and that the firehose stays on air
+        env:
+          SCREENS_OUTPUT: /tmp/plyr-live-radio
+        run: node scripts/check-live-radio.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-radio
+          path: /tmp/plyr-live-radio
           if-no-files-found: ignore
