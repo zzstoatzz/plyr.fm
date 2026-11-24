@@ -4,7 +4,8 @@
 //!
 //! Plays over time come from two dated sources that never overlap: next's own
 //! counted play receipts and legacy production's dated plays
-//! (`legacy_play_days`). Legacy counted many early plays without a date, so
+//! (`legacy_play_hours`). Each range is drawn in bars of a few hours or a
+//! day, so a short range still has enough bars to show its shape. Legacy counted many early plays without a date, so
 //! the all-time range ranks by each track's full count instead, and reports
 //! how many of those plays carry a date.
 
@@ -38,10 +39,12 @@ pub const Range = enum {
         return range orelse .month;
     }
 
-    fn bucket(self: Range) []const u8 {
+    /// how many hours each bar of the series covers
+    fn bucketHours(self: Range) i32 {
         return switch (self) {
-            .week, .month => "day",
-            .year, .all => "month",
+            .week => 3,
+            .month => 6,
+            .year, .all => 24,
         };
     }
 };
@@ -69,7 +72,7 @@ pub const PostgresStatsOverviewStore = struct {
         if (slot.*) |value| {
             if (now - value.refreshed_ns < 60 * std.time.ns_per_s) return allocator.dupe(u8, value.json);
         }
-        var row = (self.pool.row(query, .{ self.collection, range.days(), range.bucket(), @tagName(range), self.like_collection }) catch |err| {
+        var row = (self.pool.row(query, .{ self.collection, range.days(), range.bucketHours(), @tagName(range), self.like_collection }) catch |err| {
             std.log.err("stats overview query failed: {}", .{err});
             return error.MetricsUnavailable;
         }) orelse return error.CorruptMetrics;
@@ -102,14 +105,15 @@ pub const PostgresStatsOverviewStore = struct {
 };
 
 // $1 track collection, $2 range length in days (NULL = all time),
-// $3 bucket ('day' or 'month'), $4 range name, $5 like collection.
-// The all-time series starts at the first dated play. Listed tracks are the
-// ones getStats counts: available, discoverable,
+// $3 hours per bar, $4 range name, $5 like collection.
+// Bars are aligned to UTC (midnight for daily bars) and the last one holds
+// the current hour. The all-time series starts at the first dated play.
+// Listed tracks are the ones getStats counts: available, discoverable,
 // not removed.
 const query =
     \\WITH listed AS (
     \\  SELECT v.record_uri, v.owner_did, COALESCE(m.play_count, 0)::bigint AS plays,
-    \\    (to_timestamp(v.record_created_at_us / 1000000.0) AT TIME ZONE 'UTC')::date AS created_day
+    \\    to_timestamp(v.record_created_at_us / 1000000.0) AS created_at
     \\  FROM plyr_index.track_records AS v
     \\  JOIN plyr_index.account_availability AS aa ON aa.repo_did = v.owner_did AND aa.available
     \\  LEFT JOIN plyr_index.track_policies AS pol ON pol.record_uri = v.record_uri
@@ -122,40 +126,51 @@ const query =
     \\      v.self_labels && ARRAY['copyright-violation']::text[]
     \\      OR COALESCE(pol.operator_labels, '[]'::jsonb) ?| ARRAY['copyright-violation']))
     \\),
+    \\bar AS (
+    \\  SELECT make_interval(hours => $3::int) AS width, timestamptz '2000-01-01 00:00+00' AS origin
+    \\),
     \\bounds AS (
-    \\  SELECT (now() AT TIME ZONE 'UTC')::date AS end_day,
-    \\    (now() AT TIME ZONE 'UTC')::date - ($2::int - 1) AS start_day,
-    \\    (now() AT TIME ZONE 'UTC')::date - (2 * $2::int - 1) AS previous_day
+    \\  SELECT e.end_at, e.end_at - make_interval(days => $2::int) AS start_at,
+    \\    e.end_at - make_interval(days => 2 * $2::int) AS previous_at
+    \\  FROM (SELECT date_bin(width, now(), origin) + width AS end_at FROM bar) AS e
     \\),
     \\dated AS (
-    \\  SELECT r.record_uri, (r.accepted_at AT TIME ZONE 'UTC')::date AS day, count(*)::bigint AS plays
+    \\  SELECT r.record_uri, date_trunc('hour', r.accepted_at, 'UTC') AS at, count(*)::bigint AS plays
     \\  FROM plyr_index.play_receipts AS r
     \\  JOIN listed AS l ON l.record_uri = r.record_uri
-    \\  WHERE r.counted AND ($2::int IS NULL OR r.accepted_at >= (SELECT previous_day FROM bounds))
+    \\  WHERE r.counted AND ($2::int IS NULL OR r.accepted_at >= (SELECT previous_at FROM bounds))
     \\  GROUP BY 1, 2
     \\  UNION ALL
-    \\  SELECT d.record_uri, d.day, d.plays
-    \\  FROM plyr_index.legacy_play_days AS d
-    \\  JOIN listed AS l ON l.record_uri = d.record_uri
-    \\  WHERE $2::int IS NULL OR d.day >= (SELECT previous_day FROM bounds)
+    \\  SELECT h.record_uri, h.hour, h.plays
+    \\  FROM plyr_index.legacy_play_hours AS h
+    \\  JOIN listed AS l ON l.record_uri = h.record_uri
+    \\  WHERE $2::int IS NULL OR h.hour >= (SELECT previous_at FROM bounds)
     \\),
     \\in_range AS (
-    \\  SELECT d.* FROM dated AS d WHERE $2::int IS NULL OR d.day >= (SELECT start_day FROM bounds)
+    \\  SELECT d.* FROM dated AS d WHERE $2::int IS NULL OR d.at >= (SELECT start_at FROM bounds)
     \\),
-    \\first_day AS (
-    \\  SELECT COALESCE((SELECT start_day FROM bounds), (SELECT min(day) FROM dated),
-    \\    (SELECT min(created_day) FROM listed), (SELECT end_day FROM bounds)) AS day
+    \\first_at AS (
+    \\  SELECT COALESCE((SELECT start_at FROM bounds),
+    \\    date_bin(width, (SELECT min(at) FROM dated), origin),
+    \\    date_bin(width, (SELECT min(created_at) FROM listed), origin),
+    \\    (SELECT end_at FROM bounds) - width) AS at
+    \\  FROM bar
     \\),
-    \\buckets AS (
-    \\  SELECT g::date AS start
-    \\  FROM generate_series(date_trunc($3, (SELECT day FROM first_day)), date_trunc($3, (SELECT end_day FROM bounds)), ('1 ' || $3)::interval) AS g
+    \\binned AS (
+    \\  SELECT date_bin(width, i.at, origin) AS start, sum(i.plays)::bigint AS plays
+    \\  FROM in_range AS i, bar GROUP BY 1
+    \\),
+    \\arrivals AS (
+    \\  SELECT date_bin(width, l.created_at, origin) AS start, count(*)::bigint AS uploads
+    \\  FROM listed AS l, bar
+    \\  WHERE l.created_at >= (SELECT at FROM first_at) AND l.created_at < (SELECT end_at FROM bounds)
+    \\  GROUP BY 1
     \\),
     \\series AS (
-    \\  SELECT b.start,
-    \\    COALESCE((SELECT sum(i.plays) FROM in_range AS i WHERE date_trunc($3, i.day)::date = b.start), 0)::bigint AS plays,
-    \\    (SELECT count(*) FROM listed AS l WHERE date_trunc($3, l.created_day)::date = b.start
-    \\      AND l.created_day >= (SELECT day FROM first_day))::bigint AS uploads
-    \\  FROM buckets AS b
+    \\  SELECT g.start, COALESCE(p.plays, 0)::bigint AS plays, COALESCE(u.uploads, 0)::bigint AS uploads
+    \\  FROM (SELECT generate_series((SELECT at FROM first_at), (SELECT end_at FROM bounds) - width, width) AS start FROM bar) AS g
+    \\  LEFT JOIN binned AS p ON p.start = g.start
+    \\  LEFT JOIN arrivals AS u ON u.start = g.start
     \\),
     \\track_plays AS (
     \\  SELECT record_uri, owner_did, plays FROM listed WHERE $2::int IS NULL
@@ -174,14 +189,14 @@ const query =
     \\SELECT json_build_object(
     \\  'object', 'stats_overview',
     \\  'range', $4::text,
-    \\  'bucket', $3::text,
-    \\  'start_day', (SELECT day FROM first_day),
-    \\  'end_day', (SELECT end_day FROM bounds),
+    \\  'bucket_hours', $3::int,
+    \\  'start', (SELECT at FROM first_at),
+    \\  'end', (SELECT end_at FROM bounds),
     \\  'plays', CASE WHEN $2::int IS NULL THEN (SELECT COALESCE(sum(plays), 0) FROM listed)
     \\    ELSE (SELECT COALESCE(sum(plays), 0) FROM in_range) END::bigint,
     \\  'dated_plays', (SELECT COALESCE(sum(plays), 0) FROM in_range)::bigint,
     \\  'previous_plays', CASE WHEN $2::int IS NULL THEN NULL
-    \\    ELSE (SELECT COALESCE(sum(plays), 0) FROM dated WHERE day < (SELECT start_day FROM bounds))::bigint END,
+    \\    ELSE (SELECT COALESCE(sum(plays), 0) FROM dated WHERE at < (SELECT start_at FROM bounds))::bigint END,
     \\  'uploads', CASE WHEN $2::int IS NULL THEN (SELECT count(*) FROM listed)
     \\    ELSE (SELECT COALESCE(sum(uploads), 0) FROM series) END::bigint,
     \\  'likes', (SELECT count(*) FROM plyr_index.like_records AS k JOIN listed AS l ON l.record_uri = k.subject_uri
@@ -228,7 +243,7 @@ test "stats overview counts dated plays by range and ranks tracks and artists" {
     _ = try pool.exec("CREATE TABLE plyr_index.track_policies (record_uri text PRIMARY KEY, visibility text, moderation_decision text, operator_labels jsonb DEFAULT '[]')", .{});
     _ = try pool.exec("CREATE TABLE plyr_index.track_metrics (record_uri text PRIMARY KEY, play_count bigint)", .{});
     _ = try pool.exec("CREATE TABLE plyr_index.play_receipts (occurrence uuid PRIMARY KEY DEFAULT gen_random_uuid(), record_uri text, accepted_at timestamptz, counted boolean)", .{});
-    _ = try pool.exec("CREATE TABLE plyr_index.legacy_play_days (record_uri text, day date, plays bigint, PRIMARY KEY (record_uri, day))", .{});
+    _ = try pool.exec("CREATE TABLE plyr_index.legacy_play_hours (record_uri text, hour timestamptz, plays bigint, PRIMARY KEY (record_uri, hour))", .{});
     _ = try pool.exec("CREATE TABLE plyr_index.like_records (record_uri text PRIMARY KEY, collection text, subject_uri text, deleted boolean)", .{});
     _ = try pool.exec("INSERT INTO plyr_index.account_availability VALUES ('a',true),('b',true),('c',false)", .{});
     // 'new' was created today, 'old' long ago; 'hidden' is private and 'gone' is offline
@@ -246,9 +261,9 @@ test "stats overview counts dated plays by range and ranks tracks and artists" {
         \\('hidden', now(), true),('gone', now(), true)
     , .{});
     _ = try pool.exec(
-        \\INSERT INTO plyr_index.legacy_play_days VALUES
-        \\('old', (now() AT TIME ZONE 'UTC')::date - 2, 2),('old', (now() AT TIME ZONE 'UTC')::date - 9, 4),
-        \\('old', (now() AT TIME ZONE 'UTC')::date - 400, 5),('hidden', (now() AT TIME ZONE 'UTC')::date, 7)
+        \\INSERT INTO plyr_index.legacy_play_hours VALUES
+        \\('old', date_trunc('hour', now() - interval '2 days'), 2),('old', date_trunc('hour', now() - interval '9 days'), 4),
+        \\('old', date_trunc('hour', now() - interval '400 days'), 5),('hidden', date_trunc('hour', now()), 7)
     , .{});
     _ = try pool.exec("INSERT INTO plyr_index.like_records VALUES ('l1','fm.plyr.like','old',false),('l2','fm.plyr.like','old',true),('l3','fm.plyr.like','hidden',false),('l4','fm.other.like','new',false)", .{});
 
@@ -260,7 +275,7 @@ test "stats overview counts dated plays by range and ranks tracks and artists" {
         previous_plays: ?i64,
         uploads: i64,
         likes: i64,
-        bucket: []const u8,
+        bucket_hours: i64,
         series: []const struct { start: []const u8, plays: i64, uploads: i64 },
         tracks: []const struct { uri: []const u8, plays: i64 },
         artists: []const struct { did: []const u8, plays: i64, tracks: i64 },
@@ -274,12 +289,13 @@ test "stats overview counts dated plays by range and ranks tracks and artists" {
     try std.testing.expectEqual(@as(?i64, 4), week.value.previous_plays);
     try std.testing.expectEqual(@as(i64, 1), week.value.uploads);
     try std.testing.expectEqual(@as(i64, 1), week.value.likes);
-    try std.testing.expectEqualStrings("day", week.value.bucket);
-    try std.testing.expectEqual(@as(usize, 7), week.value.series.len);
-    try std.testing.expectEqual(@as(i64, 2), week.value.series[6].plays);
-    try std.testing.expectEqual(@as(i64, 1), week.value.series[5].plays);
-    try std.testing.expectEqual(@as(i64, 2), week.value.series[4].plays);
-    try std.testing.expectEqual(@as(i64, 1), week.value.series[6].uploads);
+    // 56 bars of 3 hours; the last holds the current hour
+    try std.testing.expectEqual(@as(i64, 3), week.value.bucket_hours);
+    try std.testing.expectEqual(@as(usize, 56), week.value.series.len);
+    try std.testing.expectEqual(@as(i64, 2), week.value.series[55].plays);
+    try std.testing.expectEqual(@as(i64, 1), week.value.series[47].plays);
+    try std.testing.expectEqual(@as(i64, 2), week.value.series[39].plays);
+    try std.testing.expectEqual(@as(i64, 1), week.value.series[55].uploads);
     try std.testing.expectEqual(@as(usize, 2), week.value.tracks.len);
     try std.testing.expectEqualStrings("new", week.value.tracks[0].uri);
     try std.testing.expectEqual(@as(i64, 3), week.value.tracks[0].plays);
@@ -293,7 +309,7 @@ test "stats overview counts dated plays by range and ranks tracks and artists" {
     try std.testing.expectEqual(@as(i64, 53), all.value.plays);
     try std.testing.expectEqual(@as(i64, 14), all.value.dated_plays);
     try std.testing.expectEqual(@as(?i64, null), all.value.previous_plays);
-    try std.testing.expectEqualStrings("month", all.value.bucket);
+    try std.testing.expectEqual(@as(i64, 24), all.value.bucket_hours);
     try std.testing.expectEqualStrings("old", all.value.tracks[0].uri);
     try std.testing.expectEqual(@as(i64, 50), all.value.tracks[0].plays);
     try std.testing.expectEqualStrings("a", all.value.artists[0].did);

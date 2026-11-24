@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Brings legacy production play totals into next's track_metrics, and its
-# dated plays (public.track_plays, per track per UTC day) into
-# plyr_index.legacy_play_days for the stats page's plays over time.
+# dated plays (public.track_plays, per track per UTC hour) into
+# plyr_index.legacy_play_hours for the stats page's plays over time.
 #
 # Reads public.tracks on the legacy database in a read-only session, then in
 # one transaction on next: each track's count moves by (new legacy total -
@@ -23,7 +23,7 @@ set -euo pipefail
 plain() { local url="${1/postgresql+psycopg:/postgresql:}"; url="${url/postgresql+psycopg2:/postgresql:}"; echo "${url/postgresql+asyncpg:/postgresql:}"; }
 legacy="$(plain "$LEGACY_DATABASE_URL")"
 next="$(plain "$DATABASE_URL")"
-next_psql() { PGOPTIONS='-c client_min_messages=warning' psql "$next" -X -q -v ON_ERROR_STOP=1 "$@"; }
+next_psql() { PGOPTIONS='-c client_min_messages=warning -c timezone=UTC' psql "$next" -X -q -v ON_ERROR_STOP=1 "$@"; }
 
 marker="$(next_psql -At -c "SELECT coalesce(shobj_description(oid, 'pg_database'), '') FROM pg_database WHERE datname = current_database()")"
 case "$marker" in
@@ -34,8 +34,8 @@ esac
 # On main this runs beside the deploy that migrates the database, so a new
 # table may not exist yet: wait for it rather than fail.
 for _ in $(seq 1 40); do
-    [[ "$(next_psql -At -c "SELECT to_regclass('plyr_index.legacy_play_days') IS NOT NULL")" == t ]] && break
-    echo "waiting for the migration that adds plyr_index.legacy_play_days"
+    [[ "$(next_psql -At -c "SELECT to_regclass('plyr_index.legacy_play_hours') IS NOT NULL")" == t ]] && break
+    echo "waiting for the migration that adds plyr_index.legacy_play_hours"
     sleep 15
 done
 
@@ -55,15 +55,15 @@ COPY (
     GROUP BY atproto_record_uri
 ) TO STDOUT WITH (FORMAT csv)" > "$work/legacy.csv"
 
-PGOPTIONS='-c default_transaction_read_only=on' psql "$legacy" -X -q -v ON_ERROR_STOP=1 -c "
+PGOPTIONS='-c default_transaction_read_only=on -c timezone=UTC' psql "$legacy" -X -q -v ON_ERROR_STOP=1 -c "
 COPY (
-    SELECT t.atproto_record_uri, (p.played_at AT TIME ZONE 'UTC')::date, count(*)::bigint
+    SELECT t.atproto_record_uri, to_char(date_trunc('hour', p.played_at), 'YYYY-MM-DD HH24:00:00+00'), count(*)::bigint
     FROM public.track_plays AS p
     JOIN public.tracks AS t ON t.id = p.track_id
     WHERE t.atproto_record_uri ~ '^at://did:[^/]+/fm[.]plyr[.]track/[A-Za-z0-9._~:-]+\$'
       AND split_part(t.atproto_record_uri, '/', 3) = t.artist_did
     GROUP BY 1, 2
-) TO STDOUT WITH (FORMAT csv)" > "$work/days.csv"
+) TO STDOUT WITH (FORMAT csv)" > "$work/hours.csv"
 
 finish=COMMIT
 [[ "${DRY_RUN:-}" == 1 ]] && finish=ROLLBACK
@@ -101,12 +101,12 @@ SELECT record_uri, play_count, (extract(epoch FROM clock_timestamp()) * 1000000)
 ON CONFLICT (record_uri) DO UPDATE
     SET play_count = EXCLUDED.play_count, observed_at_us = EXCLUDED.observed_at_us;
 
-LOCK TABLE plyr_index.legacy_play_days IN EXCLUSIVE MODE;
-DELETE FROM plyr_index.legacy_play_days;
-\copy plyr_index.legacy_play_days (record_uri, day, plays) FROM '$work/days.csv' WITH (FORMAT csv)
+LOCK TABLE plyr_index.legacy_play_hours IN EXCLUSIVE MODE;
+DELETE FROM plyr_index.legacy_play_hours;
+\copy plyr_index.legacy_play_hours (record_uri, hour, plays) FROM '$work/hours.csv' WITH (FORMAT csv)
 \echo dated plays
-SELECT count(DISTINCT record_uri) AS tracks, count(*) AS track_days, coalesce(sum(plays), 0) AS plays, min(day) AS first_day, max(day) AS last_day
-FROM plyr_index.legacy_play_days;
+SELECT count(DISTINCT record_uri) AS tracks, count(*) AS track_hours, coalesce(sum(plays), 0) AS plays, min(hour) AS first_hour, max(hour) AS last_hour
+FROM plyr_index.legacy_play_hours;
 
 \echo after
 SELECT count(*) AS tracks_with_plays, coalesce(sum(play_count), 0) AS next_total FROM plyr_index.track_metrics;
