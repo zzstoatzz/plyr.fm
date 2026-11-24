@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { app, browserAccount } from './live-browser-account.mjs';
+import { idFromUri } from '../edge/link-preview.js';
 
 const api = 'https://api.next.plyr.fm';
 const uri = 'at://did:plc:siv7zbedip4vcet4v67piibr/fm.plyr.track/3mrttu6zg4k22';
-const id = 'trk_' + Buffer.from(uri).toString('base64url');
+const id = idFromUri('trk_', uri);
 const path = '/track/' + id;
 const collection = 'fm.plyr.like';
 const { ZAT_TEST_HANDLE: handle, ZAT_TEST_PASSWORD: password, ZAT_TEST_PDS: origin } = process.env;

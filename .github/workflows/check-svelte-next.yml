@@ -375,6 +375,10 @@ jobs:
         if: "!cancelled() && (github.event_name == 'push' || inputs.target == 'verify-live-not-found')"
         working-directory: next/web
         run: node scripts/check-live-not-found.mjs
+      - name: verify track pages open at short links and old long links move there
+        if: "!cancelled() && github.event_name == 'push'"
+        working-directory: next/web
+        run: node scripts/check-live-short-links.mjs
       - name: verify the home rail ends with radio and stays on screen
         if: "!cancelled() && github.event_name == 'push'"
         working-directory: next/web

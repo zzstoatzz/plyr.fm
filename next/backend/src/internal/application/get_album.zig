@@ -21,7 +21,7 @@ pub fn execute(
     profile_collection: []const u8,
     id: []const u8,
 ) Result {
-    const decoded = allocator.alloc(u8, id.len) catch return .unavailable;
+    const decoded = allocator.alloc(u8, album_id.decodedLength(id)) catch return .unavailable;
     const uri = album_id.decode(decoded, id) catch return .invalid_id;
     const parsed = zat.AtUri.parse(uri) orelse return .invalid_id;
     const collection = parsed.collection() orelse return .invalid_id;

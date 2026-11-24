@@ -318,3 +318,20 @@ test('the sitemap lists public tracks and their artists across pages', async () 
 	assert.equal(xml.match(/\/u\/a\.test/g)?.length, 1);
 	assert.match(xml, /<loc>https:\/\/plyr\.fm\/terms<\/loc>/);
 });
+
+test('an older long track, album or playlist link moves to its short id for everyone', async () => {
+  const env = { ASSETS: { fetch: async () => { throw new Error('a long link must not reach the static file'); } } };
+  const long = (prefix: string, value: string) => prefix + btoa(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const track = 'at://did:plc:a3vq3hjlkz2nbf67bpv5z6qs/fm.plyr.track/3n2zqt7q3v522';
+  const list = 'at://did:plc:a3vq3hjlkz2nbf67bpv5z6qs/fm.plyr.list/3n2zqt7q3v522';
+  for (const [path, to] of [
+    [`/track/${long('trk_', track)}?t=30`, '/track/trk_a3vq3hjlkz2nbf67bpv5z6qs.3n2zqt7q3v522?t=30'],
+    [`/album/${long('alb_', list)}`, '/album/alb_a3vq3hjlkz2nbf67bpv5z6qs.3n2zqt7q3v522'],
+    [`/playlist/${long('pls_', list)}`, '/playlist/pls_a3vq3hjlkz2nbf67bpv5z6qs.3n2zqt7q3v522']
+  ]) {
+    const moved = await worker.fetch(new Request('https://plyr.fm' + path, { headers: { 'sec-fetch-mode': 'navigate', 'user-agent': 'Mozilla/5.0' } }), env);
+    assert.equal(moved.status, 301, path);
+    assert.equal(moved.headers.get('location'), 'https://plyr.fm' + to);
+  }
+  assert.equal(edge.uriFromId('trk_a3vq3hjlkz2nbf67bpv5z6qs.3n2zqt7q3v522'), track);
+});

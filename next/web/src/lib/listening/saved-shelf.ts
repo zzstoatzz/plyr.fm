@@ -1,4 +1,4 @@
-import type { Track } from '@plyr/next-core/api';
+import { canonicalId, type Track } from '@plyr/next-core/api';
 
 export type SavedShelf = { did: string; at: number; tracks: Track[] };
 
@@ -19,7 +19,7 @@ export function savedShelf(): SavedShelf | null {
     const { did, at, tracks } = value as Partial<SavedShelf>;
     if (typeof did !== 'string' || typeof at !== 'number' || Date.now() - at > 7 * 86_400_000) return null;
     if (!Array.isArray(tracks) || !tracks.every(isTrack)) return null;
-    return { did, at, tracks };
+    return { did, at, tracks: tracks.map(track => ({ ...track, id: canonicalId(track.id) })) };
   } catch {
     return null;
   }

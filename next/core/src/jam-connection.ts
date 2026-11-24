@@ -1,4 +1,5 @@
 import type { DurableQueueEdit } from './queue-mutation.ts';
+import { canonicalId } from './record-ids.ts';
 export interface JamTrack {
   id: string;
   uri: string;
@@ -190,7 +191,8 @@ export class JamConnection {
           }
           if (typeof message.serverTimeMs === 'number') this.clock.observe(message.serverTimeMs);
           if (isJamState(message.state)) {
-            const next = message.state;
+            // a queue saved before short track ids still names tracks by the long form
+            const next = { ...message.state, queue: message.state.queue.map(track => ({ ...track, id: canonicalId(track.id) })) };
             const previous = this.state;
             if (!first && previous && next.epoch !== previous.epoch) { socket.close(); return; }
             if (first || !previous || next.revision >= previous.revision) {

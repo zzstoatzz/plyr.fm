@@ -1,6 +1,7 @@
 import type { Track } from './api.ts';
 import type { QueueMutation } from './queue-mutation.ts';
 import type { QueueState } from './queue-state.ts';
+import { canonicalId } from './record-ids.ts';
 
 export interface QueueCheckpoint {
   version: 1;
@@ -29,7 +30,7 @@ function count(value: unknown): value is number { return typeof value === 'numbe
 function seconds(value: unknown): value is number { return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 86400; }
 
 function track(value: unknown): value is Track {
-  if (!object(value) || value.object !== 'track' || !string(value.id) || !/^trk_[A-Za-z0-9_-]+$/.test(value.id)
+  if (!object(value) || value.object !== 'track' || !string(value.id) || !/^trk_[A-Za-z0-9._~-]+$/.test(value.id)
     || !object(value.record) || !object(value.metadata) || !object(value.artist) || !object(value.artist.profile)
     || !object(value.media) || !object(value.access) || !object(value.metrics)) return false;
   const { record, metadata, artist, media, access, metrics } = value;
@@ -72,7 +73,8 @@ export function queueCheckpoint(value: unknown, owner: string): QueueCheckpoint 
   for (const entry of entries) {
     if (!object(entry) || typeof entry.key !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(entry.key) || keys.has(entry.key) || !track(entry.track)) return null;
     keys.add(entry.key);
-    parsed.push({ key: entry.key, track: cachedTrack(entry.track) });
+    // a checkpoint saved before short ids holds the long one
+    parsed.push({ key: entry.key, track: { ...cachedTrack(entry.track), id: canonicalId(entry.track.id) } });
   }
   let tail: QueueCheckpoint['state']['tail'];
   if (value.state.tail !== undefined) {

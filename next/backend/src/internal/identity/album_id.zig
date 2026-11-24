@@ -8,6 +8,11 @@ pub fn encodedLength(at_uri: []const u8) usize {
     return record_id.encodedLength(prefix, at_uri);
 }
 
+/// Room `decode` needs; a short id expands to a longer AT-URI.
+pub fn decodedLength(id: []const u8) usize {
+    return record_id.decodedLength(id);
+}
+
 pub fn encode(destination: []u8, at_uri: []const u8) ![]const u8 {
     return record_id.encode(prefix, destination, at_uri);
 }

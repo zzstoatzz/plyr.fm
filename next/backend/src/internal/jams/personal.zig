@@ -107,7 +107,8 @@ pub fn transition(a: std.mem.Allocator, state: p.State, command: p.Command, clie
                     if (command.action == .progress) if (command.entry) |entry| {
                         const current = state.queue[state.index];
                         if (entry.durationMs == 0 or entry.durationMs > p.max_position_ms or !sameOptional(entry.key, current.key) or
-                            !std.mem.eql(u8, entry.id, current.id) or !std.mem.eql(u8, entry.uri, current.uri) or !std.mem.eql(u8, entry.cid, current.cid))
+                            // by uri: a queue saved before short ids still holds the long id
+                            !std.mem.eql(u8, entry.uri, current.uri) or !std.mem.eql(u8, entry.cid, current.cid))
                             return .{ .outcome = .invalid, .state = state };
                         const tracks = try a.dupe(p.Track, state.queue);
                         tracks[state.index].durationMs = entry.durationMs;
@@ -164,7 +165,7 @@ pub fn transition(a: std.mem.Allocator, state: p.State, command: p.Command, clie
             personal.explicitEnd = @intCast(entries.items.len);
             if (command.label) |_| for (queue[at + 1 ..]) |entry| {
                 var duplicate = false;
-                for (entries.items[1..personal.explicitEnd]) |pick| if (std.mem.eql(u8, pick.id, entry.id)) {
+                for (entries.items[1..personal.explicitEnd]) |pick| if (std.mem.eql(u8, pick.uri, entry.uri)) {
                     duplicate = true;
                     break;
                 };
@@ -217,7 +218,7 @@ pub fn transition(a: std.mem.Allocator, state: p.State, command: p.Command, clie
             try entries.appendSlice(a, state.queue);
             for (command.queue orelse return .{ .outcome = .invalid, .state = state }) |entry| {
                 var duplicate = false;
-                for (entries.items) |previous| if (std.mem.eql(u8, previous.id, entry.id)) {
+                for (entries.items) |previous| if (std.mem.eql(u8, previous.uri, entry.uri)) {
                     duplicate = true;
                     break;
                 };
@@ -481,4 +482,19 @@ test "dragging the first tail boundary promotes a pick when no explicit future p
     try std.testing.expectEqual(p.Outcome.applied, result.outcome);
     try std.testing.expectEqualStrings("tail-b", result.state.queue[1].key.?);
     try std.testing.expectEqual(@as(u32, 2), result.state.personal.?.explicitEnd);
+}
+
+test "a queue saved with a long track id accepts progress from a client holding the short id" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var state = try testState(a);
+    const saved: p.Track = .{ .id = "trk_YXQ6Ly9kaWQ6cGxjOmFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYS9mbS5wbHlyLnRyYWNrLzNrMg", .uri = "at://did:plc:aaaaaaaaaaaaaaaaaaaaaaaa/fm.plyr.track/3k2", .cid = state.queue[0].cid, .durationMs = 60_000, .key = "current" };
+    state.queue = try a.dupe(p.Track, &.{saved});
+    state.personal = .{ .explicitEnd = 1, .output = state.personal.?.output };
+    var progress = testCommand(state, .progress);
+    progress.entry = saved;
+    progress.entry.?.id = "trk_aaaaaaaaaaaaaaaaaaaaaaaa.3k2";
+    progress.positionMs = 400;
+    try std.testing.expectEqual(p.Outcome.applied, (try transition(a, state, progress, test_client, 300, "fm.plyr.track")).outcome);
 }
