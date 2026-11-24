@@ -293,7 +293,9 @@ SYSTEM = (
     "Give your three best names, best first. Each is ONE candidate, or two candidates "
     "joined (e.g. 'dj mix', 'acoustic guitar', 'dark ambient drone'), copied exactly. "
     "Never use a word that isn't in the candidates or tags: titles are context only. "
-    "Prefer one candidate over two; never repeat a word. Be neutral and descriptive: "
+    "Prefer one candidate over two; never repeat a word. For speech, prefer 'spoken "
+    "word', 'podcast' or 'talking'; name a region by voice ('male vocals', 'female "
+    "vocals') only when nothing else fits. Be neutral and descriptive: "
     "no judgement, no jokes, nothing about how tracks were made.\n\n"
     'Respond with ONLY a JSON array of three strings, like ["dj mix", "techno", '
     '"house dj mix"].'
