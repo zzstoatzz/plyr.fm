@@ -150,6 +150,17 @@ jobs:
           uv run ruff check ../next/backend/scripts
           uv run pytest -q ../next/backend/scripts/test_bench_http.py ../next/backend/scripts/test_bench_api_parity.py ../next/backend/scripts/test_canary_placement.py ../next/backend/scripts/test_canary_reconcile.py ../next/backend/scripts/test_canary_report.py ../next/backend/scripts/test_canary_smoke.py
 
+      # the cache keeps compiled tools and dependencies; this build's own
+      # binaries never match the next change's source, and left in they fill
+      # the 2 GiB limit within a few runs, which clears the whole cache and
+      # costs the next run ~100s rebuilding the build runner and translate-c
+      - name: drop this build's own binaries from the zig cache
+        if: always()
+        working-directory: .
+        run: |
+          find .zig-cache/o -mindepth 2 -maxdepth 2 -type f \( -name plyr-backend -o -name test -o -name fuzz -o -name 'bench-*' \) -printf '%h\0' | xargs -0r rm -rf
+          du -sh .zig-cache
+
   fuzz:
     name: zig property harnesses
     runs-on: ubuntu-latest
@@ -200,6 +211,17 @@ jobs:
           scripts/fetch-interop-fixtures && scripts/fetch-deps
           scripts/campaign run properties --out /tmp/plyr-properties || { tail -n 40 /tmp/plyr-properties/*.stderr.log; exit 1; }
 
+      # the cache keeps compiled tools and dependencies; this build's own
+      # binaries never match the next change's source, and left in they fill
+      # the 2 GiB limit within a few runs, which clears the whole cache and
+      # costs the next run ~100s rebuilding the build runner and translate-c
+      - name: drop this build's own binaries from the zig cache
+        if: always()
+        working-directory: .
+        run: |
+          find .zig-cache/o -mindepth 2 -maxdepth 2 -type f \( -name plyr-backend -o -name test -o -name fuzz -o -name 'bench-*' \) -printf '%h\0' | xargs -0r rm -rf
+          du -sh .zig-cache
+
   mutants:
     name: zig property harnesses catch every mutant
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
@@ -248,3 +270,14 @@ jobs:
         run: |
           scripts/fetch-interop-fixtures && scripts/fetch-deps
           scripts/campaign calibrate calibration --out /tmp/plyr-calibration || { grep -h '"outcome"' /tmp/plyr-calibration/run.json | sort | uniq -c; exit 1; }
+
+      # the cache keeps compiled tools and dependencies; this build's own
+      # binaries never match the next change's source, and left in they fill
+      # the 2 GiB limit within a few runs, which clears the whole cache and
+      # costs the next run ~100s rebuilding the build runner and translate-c
+      - name: drop this build's own binaries from the zig cache
+        if: always()
+        working-directory: .
+        run: |
+          find .zig-cache/o -mindepth 2 -maxdepth 2 -type f \( -name plyr-backend -o -name test -o -name fuzz -o -name 'bench-*' \) -printf '%h\0' | xargs -0r rm -rf
+          du -sh .zig-cache

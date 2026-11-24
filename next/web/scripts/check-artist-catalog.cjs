@@ -179,7 +179,9 @@ async function verify(browser, origin, width, scheme) {
   const origin = await serve();
   const browser = await chromium.launch();
   try {
-    for (const width of [390, 1280]) {
+    // CI runs each width as its own job; locally both run
+    const widths = process.env.CATALOG_WIDTHS ? process.env.CATALOG_WIDTHS.split(',').map(Number) : [390, 1280];
+    for (const width of widths) {
       for (const scheme of ['light', 'dark']) await verify(browser, origin, width, scheme);
     }
   } finally {
