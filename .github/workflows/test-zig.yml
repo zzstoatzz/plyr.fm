@@ -76,7 +76,8 @@ jobs:
           node-version: 22
 
       - name: install openssl headers
-        run: sudo apt-get update && sudo apt-get install -y libssl-dev
+        # the runner image already ships libssl-dev; apt-get update alone took 6-42s
+        run: dpkg -s libssl-dev > /dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y libssl-dev; }
 
       - name: fmt
         run: zig fmt --check build.zig src
@@ -194,7 +195,8 @@ jobs:
           version: 0.17.0
 
       - name: install openssl headers
-        run: sudo apt-get update && sudo apt-get install -y libssl-dev
+        # the runner image already ships libssl-dev; apt-get update alone took 6-42s
+        run: dpkg -s libssl-dev > /dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y libssl-dev; }
 
       # every dependency is a tangled.org archive; keep the fetched packages
       # so a tangled outage cannot fail a build whose deps have not changed
@@ -255,7 +257,8 @@ jobs:
           version: 0.17.0
 
       - name: install openssl headers
-        run: sudo apt-get update && sudo apt-get install -y libssl-dev
+        # the runner image already ships libssl-dev; apt-get update alone took 6-42s
+        run: dpkg -s libssl-dev > /dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y libssl-dev; }
 
       # every dependency is a tangled.org archive; keep the fetched packages
       # so a tangled outage cannot fail a build whose deps have not changed
