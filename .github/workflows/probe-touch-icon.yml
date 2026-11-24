@@ -1,0 +1,16 @@
+name: probe touch icon
+on:
+  push:
+    branches: [probe-touch-icon]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          for ua in "MobileSafari/8621.1.15.10.7 CFNetwork/3826.500.111.2.2 Darwin/24.4.0" "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1" "com.apple.WebKit.Networking/8621 CFNetwork/3826 Darwin/24.4.0"; do
+            for p in /apple-touch-icon.png /apple-touch-icon-precomposed.png /apple-touch-icon-180x180.png /icons/icon-192.png /manifest.webmanifest /; do
+              curl -s -o /tmp/o -A "$ua" -w "%{http_code} %{content_type} %{size_download} $p | $ua\n" "https://plyr.fm$p"
+            done
+          done
+          curl -sI https://plyr.fm/apple-touch-icon.png
+          curl -s -A "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1" https://plyr.fm/ | grep -oiE '<(link|meta)[^>]*(icon|manifest|apple)[^>]*>'
