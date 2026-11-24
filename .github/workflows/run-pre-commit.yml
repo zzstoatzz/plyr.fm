@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: read
+  # to list a PR's changed files
+  pull-requests: read
 
 jobs:
   pre_commit:
@@ -26,8 +28,11 @@ jobs:
           filters: |
             backend:
               - 'backend/**'
+            # code and config only: a change to app.html, static/ or docs needs no
+            # svelte-check, eslint or vitest
             frontend:
-              - 'frontend/**'
+              - 'frontend/**/*.{ts,js,mjs,cjs,svelte,json}'
+              - 'frontend/bun.lock'
             rust:
               - 'services/moderation/**'
               - 'services/transcoder/**'
@@ -81,8 +86,27 @@ jobs:
           fi
           echo "list=$SKIP_LIST" >> $GITHUB_OUTPUT
 
+      # a PR runs the hooks on the files it changes, as pre-commit does locally;
+      # main still runs every hook on every file after the merge
+      - name: list the files this PR changes
+        id: changed
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          files="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --paginate \
+            --jq '.[] | select(.status != "removed") | .filename' 2> /dev/null || true)"
+          count="$(printf '%s' "$files" | grep -c . || true)"
+          # the API lists at most 3000 files; past that, or on any failure, check everything
+          if [ "${count:-0}" -gt 0 ] && [ "$count" -lt 3000 ]; then
+            echo "args=--files $(printf '%s' "$files" | tr '\n' ' ')" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: run pre-commit
         uses: j178/prek-action@v1
+        with:
+          extra-args: ${{ steps.changed.outputs.args || '--all-files' }}
         env:
           SKIP: ${{ steps.skip.outputs.list }}
 

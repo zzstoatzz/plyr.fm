@@ -1,7 +1,16 @@
 name: interface contracts
 
 on:
+  # the legacy API contract and the docs the SDK checks its examples against;
+  # main still runs on every push, which also catches SDK-side drift
   pull_request:
+    paths:
+      - "backend/**"
+      - "scripts/check_client_contract.py"
+      - "docs/public/**"
+      - "docs/internal/contracts/**"
+      - "justfile"
+      - ".github/workflows/interface-contracts.yml"
   push:
     branches: [main]
   workflow_dispatch:

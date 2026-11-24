@@ -45,7 +45,7 @@ repos:
         name: svelte check
         entry: bash -c 'cd frontend && bun run check'
         language: system
-        files: ^frontend/
+        files: ^frontend/(.*\.(ts|js|mjs|cjs|svelte|json)|bun\.lock)$
         pass_filenames: false
 
       - id: eslint
