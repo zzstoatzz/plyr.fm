@@ -22,7 +22,7 @@ type Featured = { status: 'loading' } | { status: 'empty' } | { status: 'ready';
 let daily: { day: string; load: Promise<Track[]> } | undefined;
 
 async function loadFeatured(): Promise<Track[]> {
-  const liked = (await api.chart('all_time', 50, undefined, { excludeAiArtists: true })).data.map(({ track }) => track);
+  const liked = (await api.chart('all_time', 50)).data.map(({ track }) => track);
   const ranked = rankedArtists(liked);
   if (!ranked.length) return [];
   const start = weekNumber() % ranked.length;

@@ -13,6 +13,6 @@ export const load: PageLoad = ({ url, depends }) => {
 		discovery: api.tags().then(result => result.data, () => []),
 		latest: api.tracks({ limit: 24, tag: tags, hidden_tag: hidden }),
 		chart: tags.length ? Promise.resolve(null) : api.chart('month', 10).then(value => value.data, () => null),
-		featured: tags.length ? Promise.resolve([]) : api.chart('all_time', 24, undefined, { excludeAiArtists: true }).then(value => value.data.map(item => item.track), () => [])
+		featured: tags.length ? Promise.resolve([]) : api.chart('all_time', 24).then(value => value.data.map(item => item.track), () => [])
 	};
 };

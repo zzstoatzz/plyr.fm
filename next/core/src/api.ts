@@ -280,9 +280,9 @@ export function createApi(origin: string, playListenerId: () => string, nsidPref
 			get<Page<Track>>(xrpc('getActorLikes'), { actor: did, ...p }),
 		search: (q: string, options: { limit?: number; types?: SearchHit['type']; signal?: AbortSignal } = {}) =>
 			get<Page<SearchHit>>(xrpc('search'), { q, limit: options.limit, types: options.types }, options.signal),
-		/** up to 50 tracks; the server has no cursor past that. `excludeAiArtists` drops every artist with an ai-tagged track or the ai account label */
-		chart: (period: 'day' | 'week' | 'month' | 'all_time' = 'week', limit?: number, signal?: AbortSignal, options: { excludeAiArtists?: boolean } = {}) =>
-			get<{ period: string; data: ChartEntry[] }>(xrpc('getTrackChart'), { period, limit, excludeAiArtists: options.excludeAiArtists ? 'true' : undefined }, signal),
+		/** up to 50 tracks; the server has no cursor past that */
+		chart: (period: 'day' | 'week' | 'month' | 'all_time' = 'week', limit?: number, signal?: AbortSignal) =>
+			get<{ period: string; data: ChartEntry[] }>(xrpc('getTrackChart'), { period, limit }, signal),
 		/** tracks that go with the seeds (record URIs), best first; never returns a seed or an excluded URI */
 		suggestions: (seeds: string[], options: { exclude?: string[]; limit?: number; signal?: AbortSignal } = {}) =>
 			get<{ object: 'track_suggestions'; data: Track[] }>(xrpc('getTrackSuggestions'), { seed: seeds, exclude: options.exclude, limit: options.limit }, options.signal),
