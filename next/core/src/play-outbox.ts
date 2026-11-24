@@ -26,7 +26,7 @@ export const PLAY_OUTBOX_LIMIT = 64;
 export const PLAY_OUTBOX_TTL_MS = 24 * 60 * 60 * 1000;
 
 function canonicalTrackId(value: string): boolean {
-	return /^trk_[a-zA-Z0-9_-]+$/.test(value);
+	return /^trk_[A-Za-z0-9._~-]+$/.test(value);
 }
 
 export function pendingPlay(value: unknown): PendingPlay | null {

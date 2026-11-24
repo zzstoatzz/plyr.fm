@@ -17,7 +17,7 @@ pub fn execute(a: std.mem.Allocator, store: ?TrackStore, collection: []const u8,
     var uris: std.ArrayList([]const u8) = .empty;
     for (ids) |id| {
         if (id.len == 0 or id.len > 2048) return .invalid_request;
-        const buffer = a.alloc(u8, id.len) catch return .unavailable;
+        const buffer = a.alloc(u8, track_id.decodedLength(id)) catch return .unavailable;
         const uri = track_id.decode(buffer, id) catch return .invalid_request;
         const parsed = zat.AtUri.parse(uri) orelse return .invalid_request;
         var seen = false;

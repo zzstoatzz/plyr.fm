@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { chromium } from 'playwright';
 import { app, browserAccount } from './live-browser-account.mjs';
+import { idFromUri } from '../edge/link-preview.js';
 
 const api = 'https://api.next.plyr.fm';
 const audioOrigin = 'https://plyr-next-audio.n8-3e9.workers.dev';
@@ -76,7 +77,7 @@ try {
   assert.ok(playback.availability.delivery?.url.startsWith(audioOrigin + '/audio/'), 'expected the streaming origin');
 
   stage = 'playing it in the browser';
-  const id = 'trk_' + Buffer.from(created.uri).toString('base64url');
+  const id = idFromUri('trk_', created.uri);
   await page.goto(app + '/track/' + id);
   await page.getByRole('button', { name: 'Play', exact: true }).click();
   // the player's audio element is never attached to the document; its Pause state is the signal

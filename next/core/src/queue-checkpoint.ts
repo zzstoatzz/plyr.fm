@@ -29,7 +29,7 @@ function count(value: unknown): value is number { return typeof value === 'numbe
 function seconds(value: unknown): value is number { return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 86400; }
 
 function track(value: unknown): value is Track {
-  if (!object(value) || value.object !== 'track' || !string(value.id) || !/^trk_[A-Za-z0-9_-]+$/.test(value.id)
+  if (!object(value) || value.object !== 'track' || !string(value.id) || !/^trk_[A-Za-z0-9._~-]+$/.test(value.id)
     || !object(value.record) || !object(value.metadata) || !object(value.artist) || !object(value.artist.profile)
     || !object(value.media) || !object(value.access) || !object(value.metrics)) return false;
   const { record, metadata, artist, media, access, metrics } = value;

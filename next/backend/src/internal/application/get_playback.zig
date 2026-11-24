@@ -23,7 +23,7 @@ pub fn execute(
     expected_collection: []const u8,
     id: []const u8,
 ) Result {
-    const decoded = allocator.alloc(u8, id.len) catch return .unavailable;
+    const decoded = allocator.alloc(u8, track_id.decodedLength(id)) catch return .unavailable;
     const at_uri = track_id.decode(decoded, id) catch return .invalid_id;
     const parsed = zat.AtUri.parse(at_uri) orelse return .invalid_id;
     const collection = parsed.collection() orelse return .invalid_id;

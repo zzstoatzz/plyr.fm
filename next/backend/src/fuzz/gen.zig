@@ -97,7 +97,7 @@ pub fn atUri(case: *TestCase, allocator: std.mem.Allocator) ![]u8 {
         try out.appendSlice(allocator, "at://did:plc:");
         try fromAlphabet(case, allocator, &out, base32, 24, 24);
         try out.append(allocator, '/');
-        try out.appendSlice(allocator, try pick(case, []const u8, &.{ "fm.plyr.dev.track", "fm.plyr.dev.list" }));
+        try out.appendSlice(allocator, try pick(case, []const u8, &.{ "fm.plyr.dev.track", "fm.plyr.dev.list", "fm.plyr.track", "fm.plyr.list" }));
         try out.append(allocator, '/');
         try fromAlphabet(case, allocator, &out, rkey_chars, 1, 14);
         return out.toOwnedSlice(allocator);

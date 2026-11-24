@@ -313,4 +313,4 @@ function isPlayReceipt(value: unknown, play: QualifiedPlay): value is PlayReceip
 		'status' in value.dedup && (value.dedup.status === 'claimed' || value.dedup.status === 'duplicate' || value.dedup.status === 'suppressed');
 }
 
-export { albumIdFromUri, playlistIdFromUri, trackIdFromUri } from './record-ids.ts';
+export { albumIdFromUri, canonicalId, playlistIdFromUri, trackIdFromUri } from './record-ids.ts';

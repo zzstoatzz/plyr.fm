@@ -81,6 +81,26 @@ fn mutatedToken(case: *hegel.TestCase, a: std.mem.Allocator, prefix: []const u8,
     return token.toOwnedSlice(a);
 }
 
+/// an id the server issued (short or long form), then dropped, flipped, or
+/// appended characters, so short ids face the same canonical check
+fn mutatedIssued(case: *hegel.TestCase, a: std.mem.Allocator, prefix: []const u8, uri: []const u8) ![]u8 {
+    const buffer = try a.alloc(u8, record_id.encodedLength(prefix, uri));
+    const issued = record_id.encode(prefix, buffer, uri) catch return mutatedToken(case, a, prefix, uri);
+    var token: std.ArrayList(u8) = .empty;
+    try token.appendSlice(a, issued);
+    const alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.:~_-/";
+    switch (try case.int(u8, 0, 4)) {
+        0 => {},
+        1 => if (token.items.len > prefix.len) {
+            const at = prefix.len + try case.index(token.items.len - prefix.len);
+            token.items[at] = alphabet[try case.index(alphabet.len)];
+        },
+        2 => try gen.fromAlphabet(case, a, &token, alphabet, 1, 3),
+        else => token.shrinkRetainingCapacity(prefix.len + try case.int(usize, 0, token.items.len - prefix.len)),
+    }
+    return token.toOwnedSlice(a);
+}
+
 fn idCanonical(_: void, case: *hegel.TestCase) !void {
     var debug: gen.Debug = .init;
     defer gen.noLeaks(&debug);
@@ -89,10 +109,10 @@ fn idCanonical(_: void, case: *hegel.TestCase) !void {
     const a = arena.allocator();
     const prefix = try gen.pick(case, []const u8, &prefixes);
     const uri = try gen.atUri(case, a);
-    const token = try mutatedToken(case, a, prefix, uri);
+    const token = if (try case.boolean()) try mutatedToken(case, a, prefix, uri) else try mutatedIssued(case, a, prefix, uri);
     case.note("decode({s}) from {s}", .{ token, uri });
 
-    const out = try a.alloc(u8, token.len);
+    const out = try a.alloc(u8, record_id.decodedLength(token));
     const decoded = record_id.decode(prefix, out, token) catch return;
     case.event("token accepted");
     const again = try a.alloc(u8, record_id.encodedLength(prefix, decoded));

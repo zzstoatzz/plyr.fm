@@ -56,7 +56,7 @@ pub fn execute(
     for (inputs, subjects) |input, *subject| {
         const entry = seen.getOrPut(input.track_id) catch return .unavailable;
         if (entry.found_existing) return .invalid_request;
-        const decoded = allocator.alloc(u8, input.track_id.len) catch return .unavailable;
+        const decoded = allocator.alloc(u8, track_id.decodedLength(input.track_id)) catch return .unavailable;
         const uri = track_id.decode(decoded, input.track_id) catch return .invalid_request;
         const parsed_uri = zat.AtUri.parse(uri) orelse return .invalid_request;
         if (!std.mem.eql(

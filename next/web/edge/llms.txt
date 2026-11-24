@@ -48,6 +48,7 @@ The appview does not write. To publish a track, like, comment or list, write the
 ## Pages and embeds
 
 - Pages: `{origin}/track/{id}`, `/album/{id}`, `/playlist/{id}`, `/u/{handle}`, `/tag/{name}`, `/radio`.
+- Page ids name the record: `trk_{plc id}.{rkey}` is `at://did:plc:{plc id}/fm.plyr.track/{rkey}`, and `alb_`/`pls_` do the same for `fm.plyr.list`. Records from other DIDs use the prefix + base64url of the AT-URI. Older long links redirect to the short one.
 - Embeds: `{origin}/embed/track/{id}`, `/embed/album/{id}`, `/embed/playlist/{id}`, `/embed/u/{handle}`, `/embed/radio`.
 - oEmbed: `{origin}/oembed?url={page url}&format=json` for track, album, playlist and artist pages; honours `maxwidth` and `maxheight`. JSON only.
 

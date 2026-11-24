@@ -37,7 +37,7 @@ pub fn execute(
 ) Result {
     if (listener.len == 0) return .internal_error;
     if (!validOccurrence(occurrence)) return .invalid_request;
-    const decoded = allocator.alloc(u8, id.len) catch return .unavailable;
+    const decoded = allocator.alloc(u8, track_id.decodedLength(id)) catch return .unavailable;
     const record_uri = track_id.decode(decoded, id) catch return .invalid_id;
     const parsed = zat.AtUri.parse(record_uri) orelse return .invalid_id;
     if (!std.mem.eql(u8, parsed.collection() orelse return .invalid_id, expected_collection))

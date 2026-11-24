@@ -191,8 +191,15 @@ export function createApi(origin, fetcher = fetch) {
   };
 }
 
-// ids are a type prefix + base64url(at-uri); see core/src/record-ids.ts
+// ids are a type prefix + the record; a copy of core/src/record-ids.ts, which
+// must issue the same id (short `trk_<plc id>.<rkey>` or base64url of the uri)
+const SHORT_COLLECTION = { trk_: 'fm.plyr.track', alb_: 'fm.plyr.list', pls_: 'fm.plyr.list' };
+const SHORT_URI = /^at:\/\/did:plc:([a-z2-7]{24})\/([a-z.]+)\/([A-Za-z0-9._~-]{1,512})$/;
+const SHORT_ID = /^(trk|alb|pls)_([a-z2-7]{24})\.([A-Za-z0-9._~-]{1,512})$/;
+
 export function idFromUri(prefix, uri) {
+  const short = SHORT_URI.exec(uri);
+  if (short && short[2] === SHORT_COLLECTION[prefix] && short[3] !== '.' && short[3] !== '..') return `${prefix}${short[1]}.${short[3]}`;
   const bytes = new TextEncoder().encode(uri);
   let bin = '';
   for (const b of bytes) bin += String.fromCharCode(b);
@@ -200,6 +207,8 @@ export function idFromUri(prefix, uri) {
 }
 
 export function uriFromId(id) {
+  const short = SHORT_ID.exec(id);
+  if (short) return short[3] === '.' || short[3] === '..' ? id : `at://did:plc:${short[2]}/${SHORT_COLLECTION[`${short[1]}_`]}/${short[3]}`;
   const match = /^(?:trk|alb|pls)_([A-Za-z0-9_-]+)$/.exec(id);
   if (!match) return id;
   try {
@@ -210,6 +219,13 @@ export function uriFromId(id) {
   } catch {
     return id;
   }
+}
+
+/** the id the appview issues for an id, so an older long link moves to the short one */
+export function canonicalId(id) {
+  const prefix = /^(trk|alb|pls)_/.exec(id)?.[0];
+  const uri = uriFromId(id);
+  return prefix && uri !== id ? idFromUri(prefix, uri) : id;
 }
 
 const plyrImage = /^https:\/\/images(?:-stg)?\.plyr\.fm\/(?!cdn-cgi\/)[^?#]+$/;
@@ -591,6 +607,9 @@ export default {
     if (moved) return Response.redirect(new URL(moved + url.search, url.origin).href, 301);
 
     const page = route(url.pathname);
+    if ((page?.kind === 'track' || page?.kind === 'album' || page?.kind === 'playlist') && canonicalId(page.id) !== page.id) {
+      return Response.redirect(new URL(`/${page.kind}/${canonicalId(page.id)}${url.search}`, url.origin).href, 301);
+    }
     if (page?.kind === 'og') return ogImage(page, url.origin, api);
     // old production album and playlist links move for everyone, not only unfurlers
     if (page?.kind === 'legacy-album' || page?.kind === 'legacy-playlist') {

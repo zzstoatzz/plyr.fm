@@ -86,7 +86,7 @@ pub fn validateReferences(allocator: std.mem.Allocator, queue: []const Track, co
         if (track.id.len > 2048 or track.uri.len > 1024 or track.cid.len > 128 or
             (!allow_unknown_duration and track.durationMs == 0) or track.durationMs > max_position_ms) return false;
         var uri_buffer: [1024]u8 = undefined;
-        const uri = track_id.decode(&uri_buffer, track.id) catch return false;
+        const uri = track_id.decodeAnyForm(&uri_buffer, track.id) catch return false;
         if (!std.mem.eql(u8, uri, track.uri)) return false;
         const parsed = zat.AtUri.parse(uri) orelse return false;
         if (!std.mem.eql(u8, parsed.collection() orelse return false, collection)) return false;

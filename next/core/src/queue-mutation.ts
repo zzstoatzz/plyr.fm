@@ -18,7 +18,7 @@ export interface QueueMutation {
 function object(value: unknown): value is Record<string, unknown> { return !!value && typeof value === 'object' && !Array.isArray(value); }
 function key(value: unknown): value is string { return typeof value === 'string' && /^[a-zA-Z0-9_-]{1,64}$/.test(value); }
 function reference(value: unknown): Reference | null {
-  if (!object(value) || !key(value.key) || typeof value.id !== 'string' || value.id.length > 2048 || !/^trk_[A-Za-z0-9_-]+$/.test(value.id)
+  if (!object(value) || !key(value.key) || typeof value.id !== 'string' || value.id.length > 2048 || !/^trk_[A-Za-z0-9._~-]+$/.test(value.id)
     || typeof value.uri !== 'string' || !value.uri.startsWith('at://') || value.uri.length > 1024 || typeof value.cid !== 'string' || value.cid.length > 128
     || typeof value.durationMs !== 'number' || !Number.isSafeInteger(value.durationMs) || value.durationMs < 0 || value.durationMs > 86400000) return null;
   return { id: value.id, uri: value.uri, cid: value.cid, durationMs: value.durationMs, key: value.key };

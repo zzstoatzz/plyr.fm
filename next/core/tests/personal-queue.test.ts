@@ -6,9 +6,10 @@ import type { Track } from '../src/api.ts';
 import type { JamSocket, JamState } from '../src/jam-connection.ts';
 import { mergeQueueMutations, queueMutations, type QueueMutation } from '../src/queue-mutation.ts';
 import type { QueueStorage } from '../src/queue-checkpoint.ts';
+import { trackIdFromUri, uriFromId } from '../src/record-ids.ts';
 
 const uri = 'at://did:plc:aaaaaaaaaaaaaaaaaaaaaaaa/fm.plyr.track/a';
-const track: Track = { object: 'track', id: 'trk_' + Buffer.from(uri).toString('base64url'), record: { uri, cid: 'cid', revision: null, collection: 'fm.plyr.track', rkey: 'a' },
+const track: Track = { object: 'track', id: trackIdFromUri(uri), record: { uri, cid: 'cid', revision: null, collection: 'fm.plyr.track', rkey: 'a' },
   metadata: { title: 'A', description: null, album: null, duration_seconds: 60, created_at: '' },
   artist: { did: 'did:plc:aaaaaaaaaaaaaaaaaaaaaaaa', profile: { handle: 'artist.test', display_name: 'Artist', avatar_url: null } },
   media: {}, access: { visibility: 'public' }, metrics: { play_count: 0, like_count: 0 } };
@@ -38,7 +39,7 @@ function setup(journal: QueueMutation[] = [], id = () => 'edit') {
     saveMutations: async (_, entries, remove) => { persisted.push(entries.length); stored = structuredClone(mergeQueueMutations(stored, entries, remove)); return stored; },
     save: async () => {}, progress: async () => {} };
   const queue = new PersonalQueue({ owner: 'account', storage, id,
-    resolve: async ids => { calls.push(ids); return { data: ids.map(id => ({ ...track, id, record: { ...track.record, uri: Buffer.from(id.slice(4), 'base64url').toString() } })).reverse(), missing: [] }; },
+    resolve: async ids => { calls.push(ids); return { data: ids.map(id => ({ ...track, id, record: { ...track.record, uri: uriFromId(id) } })).reverse(), missing: [] }; },
     changed: state => changes.push(state), remote: () => {}, error: message => errors.push(message),
     connect: { admit: async () => ({ ticket: 'test', websocketUrl: 'wss://test' }), socket: () => socket } });
   return { queue, socket, calls, changes, errors, persisted, stored: () => stored };
@@ -89,7 +90,7 @@ test('collections waiting on admission stay ordered within the requesting accoun
   let releaseJoin!: () => void;
   let id = 0;
   const otherUri = track.record.uri + '-other';
-  const other = { ...track, id: 'trk_' + Buffer.from(otherUri).toString('base64url'), record: { ...track.record, uri: otherUri } };
+  const other = { ...track, id: trackIdFromUri(otherUri), record: { ...track.record, uri: otherUri } };
   const journal: { owner: string; ids: string[] }[] = [];
   const target: PersonalPlaybackTarget = {
     ready: false, suspended: false, repeat: 'off', keepPlaying: false, position: () => 0, duration: () => 60,
@@ -215,7 +216,7 @@ test('restoring 200 distinct occurrences performs two bounded metadata reads and
   try {
     const refs = Array.from({ length: 200 }, (_, at) => {
       const uri = `at://did:plc:aaaaaaaaaaaaaaaaaaaaaaaa/fm.plyr.track/queue-${at}`;
-      return { ...ref, key: `entry-${at}`, uri, id: 'trk_' + Buffer.from(uri).toString('base64url') };
+      return { ...ref, key: `entry-${at}`, uri, id: trackIdFromUri(uri) };
     });
     await queue.start();
     socket.receive({ type: 'state', state: { ...base, queue: refs, personal: { ...base.personal, explicitEnd: 200 } } });
