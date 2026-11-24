@@ -24,7 +24,7 @@ async function heard(page, step) {
   }
 }
 const browser = await chromium.launch({ args: ['--autoplay-policy=user-gesture-required'] });
-for (const [width, height] of [[390, 844], [1280, 860]]) {
+for (const [width, height] of [[390, 844]]) {
   const context = await browser.newContext({ viewport: { width, height }, hasTouch: width < 720, isMobile: width < 720, serviceWorkers: 'block' });
   await context.addInitScript(recordMedia);
   const page = await context.newPage(); page.setDefaultTimeout(20000);
@@ -34,23 +34,29 @@ for (const [width, height] of [[390, 844], [1280, 860]]) {
   await page.waitForURL(url => url.origin === app);
   const hero = () => page.locator('main article').getByRole('button', { name: /^(Play|Pause)$/ }).first();
   const L = `${width}`;
+  const dockText = async () => (await page.getByTestId('player-dock').innerText().catch(() => '?')).replace(/\n/g, ' | ');
   await page.goto(TRACK); await hero().waitFor();
   await hero().click(); await heard(page, `${L} first press`);
-  const slider = page.getByRole('slider', { name: 'Playback position' }).first();
-  await slider.focus(); await page.keyboard.press('End');
-  await page.waitForTimeout(4000);
-  console.log(`  after end: hero=${await hero().getAttribute('aria-label')} ${JSON.stringify((await state(page)).media)}`);
-  await hero().click(); await heard(page, `${L} press after it ended`);
-  await slider.focus(); await page.keyboard.press('End'); await page.waitForTimeout(4000);
-  await page.reload(); await hero().waitFor(); await page.waitForTimeout(2000);
-  console.log(`  after reload: hero=${await hero().getAttribute('aria-label')}`);
-  await hero().click(); await heard(page, `${L} press after ended + reload`);
-  await page.goto(app + '/'); await page.waitForTimeout(1500);
-  await page.goto(TRACK); await hero().waitFor(); await page.waitForTimeout(1500);
-  console.log(`  revisit: hero=${await hero().getAttribute('aria-label')}`);
-  await hero().click(); await page.waitForTimeout(500);
-  if ((await hero().getAttribute('aria-label')) === 'Play') await hero().click();
-  await heard(page, `${L} press on revisit`);
+  await page.waitForTimeout(3000);
+  await page.reload(); await hero().waitFor(); await page.waitForTimeout(2500);
+  console.log(`  reload while playing: hero=${await hero().getAttribute('aria-label')} dock=${await dockText()}`);
+  await hero().click(); await page.waitForTimeout(300);
+  console.log(`  after press: hero=${await hero().getAttribute('aria-label')} dock=${await dockText()}`);
+  await heard(page, `${L} press after reload while playing`);
+  await page.waitForTimeout(2000);
+  await page.goto(app + '/'); await page.waitForTimeout(2500);
+  console.log(`  home while playing: dock=${await dockText()}`);
+  await page.goto(TRACK); await hero().waitFor(); await page.waitForTimeout(2500);
+  console.log(`  open link while playing: hero=${await hero().getAttribute('aria-label')} dock=${await dockText()}`);
+  await hero().click(); await page.waitForTimeout(300);
+  console.log(`  after press: hero=${await hero().getAttribute('aria-label')} dock=${await dockText()}`);
+  await heard(page, `${L} press after opening link while playing`);
+  const page2 = await context.newPage();
+  await page2.goto(TRACK); const hero2 = page2.locator('main article').getByRole('button', { name: /^(Play|Pause)$/ }).first(); await hero2.waitFor(); await page2.waitForTimeout(2500);
+  console.log(`  second tab: hero=${await hero2.getAttribute('aria-label')} dock=${(await page2.getByTestId('player-dock').innerText().catch(() => '?')).replace(/\n/g, ' | ')}`);
+  await hero2.click(); await page2.waitForTimeout(300);
+  console.log(`  second tab after press: hero=${await hero2.getAttribute('aria-label')}`);
+  await heard(page2, `${L} second tab press`);
   await context.close();
 }
 await browser.close();
