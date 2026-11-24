@@ -8,9 +8,11 @@ jobs:
     steps:
       - run: |
           UA="Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1"
-          for i in $(seq 1 60); do
-            if curl -s -A "$UA" "https://plyr.fm/?cb=$RANDOM" | grep -q 'apple-touch-icon.png?v=2'; then echo "link live after $i tries"; break; fi
-            sleep 10
+          for h in plyr.fm next.plyr.fm; do
+            echo "=== $h HTML headers"; curl -sD - -o /tmp/p.html -A "$UA" "https://$h/" | grep -viE "^(date|cf-ray|nel|report-to|alt-svc|set-cookie)"
+            grep -oiE '<meta[^>]*(http-equiv|csp)[^>]*>' /tmp/p.html
+            echo "=== $h manifest"; curl -s -A "$UA" "https://$h/manifest.webmanifest"
+            for p in /apple-touch-icon.png /apple-touch-icon.png?v=2 /icons/icon-192.png /icons/icon-512.png; do
+              curl -s -o /tmp/i -A "$UA" -H "Accept: image/png,image/*;q=0.8" -H "Sec-Fetch-Dest: image" -H "Sec-Fetch-Mode: no-cors" -H "Sec-Fetch-Site: same-origin" -w "%{http_code} %{content_type} %{size_download} $h$p\n" "https://$h$p"; file /tmp/i
+            done
           done
-          curl -s -A "$UA" "https://plyr.fm/" | grep -oiE '<link[^>]*apple-touch-icon[^>]*>'
-          curl -s -o /dev/null -A "$UA" -w "%{http_code} %{content_type} %{size_download}\n" "https://plyr.fm/apple-touch-icon.png?v=2"
