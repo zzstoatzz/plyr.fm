@@ -134,3 +134,41 @@ const chart_query =
 ++ "\n" ++ composed.projected_joins ++ "\n" ++
     \\ORDER BY page.period_like_count DESC, page.all_time_like_count DESC, v.record_uri ASC
 ;
+
+/// Test helper for the composed PostgreSQL test, whose fixture has an artist
+/// with a liked public track: the artist of the week never lands on an AI
+/// artist, while the plain chart keeps them.
+pub fn expectAiArtistsLeftOut(pool: *pg.Pool, a: std.mem.Allocator, artist: []const u8, record_uri: []const u8) !void {
+    var chart: PostgresTrackChartStore = .{ .pool = pool };
+    const filtered: store_module.Request = .{
+        .track_collection = "fm.plyr.dev.track",
+        .profile_collection = "fm.plyr.dev.actor.profile",
+        .like_collection = "fm.plyr.dev.like",
+        .since_us = null,
+        .limit = 10,
+        .exclude_ai_artists = true,
+    };
+    var plain = filtered;
+    plain.exclude_ai_artists = false;
+    try std.testing.expect((try chart.store().list(a, filtered)).len > 0);
+
+    _ = try pool.exec("INSERT INTO plyr_index.account_label_policies VALUES ($1, '[\"ai\"]', 1, NULL)", .{artist});
+    try std.testing.expectEqual(@as(usize, 0), (try chart.store().list(a, filtered)).len);
+    try std.testing.expect((try chart.store().list(a, plain)).len > 0);
+    _ = try pool.exec("UPDATE plyr_index.account_label_policies SET expires_at_us = 1 WHERE owner_did = $1", .{artist});
+    try std.testing.expect((try chart.store().list(a, filtered)).len > 0);
+    _ = try pool.exec("DELETE FROM plyr_index.account_label_policies WHERE owner_did = $1", .{artist});
+
+    _ = try pool.exec("CREATE TABLE plyr_index.saved_chart_tags AS SELECT * FROM plyr_index.track_tag_records WHERE record_uri=$1", .{record_uri});
+    _ = try pool.exec(
+        \\INSERT INTO plyr_index.track_tag_records(record_uri, record_cid, tags, tags_present)
+        \\SELECT record_uri, record_cid, ARRAY['ai'], true FROM plyr_index.track_records WHERE record_uri=$1
+        \\ON CONFLICT (record_uri) DO UPDATE SET record_cid=EXCLUDED.record_cid, tags=EXCLUDED.tags, tags_present=true
+    , .{record_uri});
+    try std.testing.expectEqual(@as(usize, 0), (try chart.store().list(a, filtered)).len);
+    try std.testing.expect((try chart.store().list(a, plain)).len > 0);
+    _ = try pool.exec("DELETE FROM plyr_index.track_tag_records WHERE record_uri=$1", .{record_uri});
+    _ = try pool.exec("INSERT INTO plyr_index.track_tag_records SELECT * FROM plyr_index.saved_chart_tags", .{});
+    _ = try pool.exec("DROP TABLE plyr_index.saved_chart_tags", .{});
+    try std.testing.expect((try chart.store().list(a, filtered)).len > 0);
+}
