@@ -150,7 +150,12 @@ def load_corpus(client: httpx.Client, settings: Settings) -> dict[str, dict]:
     corpus: dict[str, dict] = {}
     cursor = None
     while True:
-        page = xrpc(client, settings, "listTracks", limit=100, cursor=cursor)
+        # hiddenTag= (empty) turns off listTracks' default discovery filter
+        # (ai, ai-slop, suno). the atlas maps the whole public catalog, as
+        # prod's did; hiding tags is a per-listener choice, not the map's.
+        page = xrpc(
+            client, settings, "listTracks", limit=100, cursor=cursor, hiddenTag=""
+        )
         for track in page.get("data", []):
             if not eligible(track):
                 continue
