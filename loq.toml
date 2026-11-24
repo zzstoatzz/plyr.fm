@@ -503,7 +503,7 @@ max_lines = 668
 
 [[rules]]
 path = "next/backend/src/internal/index/postgres_composed_track_store.zig"
-max_lines = 1823
+max_lines = 1841
 
 [[rules]]
 path = "next/backend/src/internal/ingest/projector.zig"
@@ -589,7 +589,7 @@ max_lines = 507
 
 [[rules]]
 path = "next/backend/src/main.zig"
-max_lines = 531
+max_lines = 532
 
 [[rules]]
 path = "next/web/src/lib/publishing/UploadForm.svelte"
@@ -597,7 +597,7 @@ max_lines = 688
 
 [[rules]]
 path = "next/backend/src/internal/moderation/postgres_log.zig"
-max_lines = 521
+max_lines = 527
 
 [[rules]]
 path = "next/web/edge/link-preview.js"

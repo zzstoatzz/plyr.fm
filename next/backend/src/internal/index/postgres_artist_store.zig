@@ -260,6 +260,7 @@ test "artist resolution returns ordered visible music and current profile artwor
     if (!safe) return error.UnsafeTestDatabase;
     _ = try postgres.pool.exec("DROP SCHEMA IF EXISTS plyr_index CASCADE", .{});
     _ = try postgres.pool.exec("CREATE SCHEMA plyr_index", .{});
+    try @import("../moderation/scan_holds.zig").createTestTable(postgres.pool);
     _ = try postgres.pool.exec("DROP SCHEMA IF EXISTS plyr_account CASCADE", .{});
     defer _ = postgres.pool.exec("DROP SCHEMA IF EXISTS plyr_account CASCADE", .{}) catch null;
     _ = try postgres.pool.exec(@embedFile("migration_0036_account_preferences"), .{});

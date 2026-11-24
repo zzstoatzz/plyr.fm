@@ -9,6 +9,7 @@ samples land at successive positions in the same reference. coincidental
 matches don't.
 """
 
+import math
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any
@@ -65,8 +66,15 @@ def _in_step(positions: set[tuple[int, int]]) -> set[int]:
     return best
 
 
-def song_evidence(matches: list[dict[str, Any]]) -> list[SongEvidence]:
-    """reference recordings the matches show to be present, strongest first."""
+def song_evidence(matches: list[dict[str, Any]], stride: int = 1) -> list[SongEvidence]:
+    """reference recordings the matches show to be present, strongest first.
+
+    `stride` is how sparsely the file was sampled (fingerprint.ScanPlan): one
+    chunk in every `stride`. sampled, three samples in step span the same
+    48 seconds (or more) that four successive chunks do.
+    """
+    min_in_step = MIN_IN_STEP_SEGMENTS if stride <= 1 else 3
+    min_repeated = MIN_REPEATED_SEGMENTS if stride <= 1 else max(3, math.ceil(MIN_REPEATED_SEGMENTS / stride))
     positions: dict[tuple[str, str], set[tuple[int, int]]] = defaultdict(set)
     names: dict[tuple[str, str], tuple[str, str]] = {}
     for match in matches:
@@ -85,8 +93,8 @@ def song_evidence(matches: list[dict[str, Any]]) -> list[SongEvidence]:
     for key, song in positions.items():
         offsets = {offset for offset, _ in song}
         in_step = _in_step(song)
-        played_through = len(in_step) >= MIN_IN_STEP_SEGMENTS
-        repeated = len(offsets) >= MIN_REPEATED_SEGMENTS and len(offsets) >= MIN_REPEATED_SHARE * len(scanned)
+        played_through = len(in_step) >= min_in_step
+        repeated = len(offsets) >= min_repeated and len(offsets) >= MIN_REPEATED_SHARE * len(scanned)
         if not (played_through or repeated):
             continue
         span = in_step if played_through else offsets
@@ -125,5 +133,7 @@ def is_self_match(match_artist: str, uploader_handle: str, uploader_name: str) -
     return False
 
 
-def others_playing_through(matches: list[dict[str, Any]], handle: str, name: str) -> list[SongEvidence]:
-    return [e for e in song_evidence(matches) if not is_self_match(e.artist, handle, name)]
+def others_playing_through(
+    matches: list[dict[str, Any]], handle: str, name: str, stride: int = 1
+) -> list[SongEvidence]:
+    return [e for e in song_evidence(matches, stride) if not is_self_match(e.artist, handle, name)]

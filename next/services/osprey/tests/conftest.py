@@ -10,6 +10,7 @@ from osprey.worker.lib.osprey_engine import OspreyEngine, bootstrap_engine_with_
 from osprey.worker.lib.singletons import CONFIG
 
 from plyr_osprey import udfs
+from plyr_osprey.fingerprint import ScanPlan
 from plyr_osprey.image_scan import Verdict
 
 HERE = Path(__file__).parent
@@ -28,12 +29,39 @@ class FakeFingerprinter:
         self.by_url: dict[str, list[dict[str, Any]]] = {}
         self.failing: set[str] = set()
         self.scanned: list[str] = []
+        self.plans: list[ScanPlan] = []
 
-    def matches(self, audio_url: str) -> list[dict[str, Any]]:
+    def matches(self, audio_url: str, plan: ScanPlan) -> list[dict[str, Any]]:
         self.scanned.append(audio_url)
+        self.plans.append(plan)
         if audio_url in self.failing:
             raise RuntimeError('scan failed')
         return self.by_url.get(audio_url, [])
+
+
+class FakeBudget:
+    """grants every spend unless an account is out (`spent`)."""
+
+    def __init__(self) -> None:
+        self.spent: set[str] = set()
+        self.spends: list[tuple[str, int]] = []
+        self.released: list[tuple[str, int]] = []
+
+    def spend(self, owner_did: str, seconds: int) -> bool:
+        if owner_did in self.spent:
+            return False
+        self.spends.append((owner_did, seconds))
+        return True
+
+    def release(self, owner_did: str, seconds: int) -> None:
+        self.released.append((owner_did, seconds))
+
+
+@pytest.fixture(autouse=True)
+def budget(monkeypatch: pytest.MonkeyPatch) -> FakeBudget:
+    fake = FakeBudget()
+    monkeypatch.setattr(udfs, 'budget', fake)
+    return fake
 
 
 class FakeImageScanner:
@@ -73,11 +101,16 @@ def fingerprinter(monkeypatch: pytest.MonkeyPatch) -> FakeFingerprinter:
 INDEX_SCHEMA = """
 DROP SCHEMA IF EXISTS plyr_index CASCADE;
 DROP SCHEMA IF EXISTS plyr_moderation CASCADE;
+DROP SCHEMA IF EXISTS plyr_quota CASCADE;
 CREATE SCHEMA plyr_index;
 CREATE TABLE plyr_index.track_records (
     record_uri TEXT PRIMARY KEY, record_cid TEXT, owner_did TEXT NOT NULL, collection TEXT NOT NULL,
     title TEXT, audio_url TEXT, audio_blob_cid TEXT, image_url TEXT, deleted BOOLEAN NOT NULL DEFAULT false,
-    indexed_at_us BIGINT NOT NULL
+    indexed_at_us BIGINT NOT NULL, duration_seconds INTEGER
+);
+CREATE TABLE plyr_index.track_measured_durations (
+    record_uri TEXT NOT NULL, record_cid TEXT NOT NULL, duration_seconds INTEGER NOT NULL,
+    PRIMARY KEY (record_uri, record_cid)
 );
 CREATE TABLE plyr_index.list_records (
     record_uri TEXT PRIMARY KEY, record_cid TEXT, owner_did TEXT NOT NULL, collection TEXT NOT NULL,
@@ -104,7 +137,13 @@ def db() -> Iterator[psycopg2.extensions.connection]:
     conn.autocommit = True
     with conn.cursor() as cur:
         cur.execute(INDEX_SCHEMA)
-        for name in ('0048_add_moderation_log.sql', '0050_add_moderation_rules_state.sql', '0056_add_image_scans.sql'):
+        for name in (
+            '0048_add_moderation_log.sql',
+            '0050_add_moderation_rules_state.sql',
+            '0056_add_image_scans.sql',
+            '0064_add_quota.sql',
+            '0065_add_scan_holds.sql',
+        ):
             cur.execute((MIGRATIONS / name).read_text())
     yield conn
     conn.close()

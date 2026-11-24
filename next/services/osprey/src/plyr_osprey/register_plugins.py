@@ -4,6 +4,7 @@ DATABASE_URL             next's Postgres (the writer login)
 TRACK_COLLECTION_NSID    default fm.plyr.track
 LIST_COLLECTION_NSID     default fm.plyr.list (albums and playlists, for their covers)
 AUDD_API_TOKEN           for fingerprinting; unset, tracks wait unscanned and only covers run
+                         (scans spend the uploader's budget, plyr_quota 'scan_seconds')
 ANTHROPIC_API_KEY        for the cover check
 OSPREY_DRAIN_ONCE        true: stop when caught up (a scheduled run)
 OSPREY_POLL_SECONDS      otherwise, how long to wait when caught up
@@ -27,10 +28,11 @@ from osprey.worker.sinks.sink.output_sink import BaseOutputSink
 from osprey.worker.sinks.utils.acking_contexts import BaseAckingContext
 
 from plyr_osprey import udfs
+from plyr_osprey.budget import PostgresBudget
 from plyr_osprey.entity_labels import PostgresEntityLabels
 from plyr_osprey.fingerprint import AudDFingerprinter
 from plyr_osprey.image_scan import ClaudeImageScanner
-from plyr_osprey.store import IndexedCover, Store
+from plyr_osprey.store import IndexedCover, Store, plain_dsn
 from plyr_osprey.tracks import CURSORS, ModerationLogSink, TrackInputStream, Walk
 
 log = logging.getLogger(__name__)
@@ -48,7 +50,14 @@ def _shared(config: Config) -> tuple[Store, Walk]:
 
 @hookimpl_osprey
 def register_udfs() -> Sequence[type[UDFBase[Any, Any]]]:
-    return [udfs.UrlHost, udfs.RecordingsPlayingThrough, udfs.ImagePolicyViolations, udfs.FlagForReview]
+    return [
+        udfs.UrlHost,
+        udfs.SpendScanBudget,
+        udfs.RecordingsPlayingThrough,
+        udfs.ImagePolicyViolations,
+        udfs.FlagForReview,
+        udfs.HoldForScan,
+    ]
 
 
 @hookimpl_osprey
@@ -59,6 +68,7 @@ def register_input_stream(config: Config) -> BaseInputStream[BaseAckingContext[A
     audd_token = config.get_optional_str('AUDD_API_TOKEN')
     if audd_token:
         udfs.fingerprinter = AudDFingerprinter(audd_token)
+        udfs.budget = PostgresBudget(plain_dsn(config.expect_str('DATABASE_URL')))
         cursors = CURSORS
     else:
         log.warning('AUDD_API_TOKEN is not set: tracks wait unscanned, covers are still checked')

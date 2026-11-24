@@ -139,8 +139,29 @@ def exercise(database_url: str) -> None:
                 ]
                 == 400
             )
+            # a track held for scan budget leaves discovery, not its artist's page or its link
+            db.execute(
+                "INSERT INTO plyr_moderation.scan_holds (record_uri, owner_did, retry_at_us) SELECT record_uri, owner_did, 1 FROM plyr_index.track_records WHERE record_uri LIKE '%/track-100'"
+            )
+            assert (
+                get("/xrpc/fm.plyr.dev.unspecced.listTracks?hiddenTag=&limit=1")[
+                    "data"
+                ][0]["record"]["rkey"]
+                != "track-100"
+            ), "held tracks stay out of discovery"
+            newest = get(
+                "/xrpc/fm.plyr.dev.unspecced.listTracks?artistDid=did:plc:bench&limit=1"
+            )["data"][0]
+            assert newest["record"]["rkey"] == "track-100"
+            assert (
+                get(
+                    f"/xrpc/fm.plyr.dev.unspecced.getTrack?uri={quote(newest['record']['uri'], safe='')}"
+                )["record"]["rkey"]
+                == "track-100"
+            )
+            db.execute("DELETE FROM plyr_moderation.scan_holds")
             print(
-                "account labels, tag defaults, show-all, artist/detail visibility and cursor filtering passed"
+                "account labels, tag defaults, show-all, artist/detail visibility, scan holds and cursor filtering passed"
             )
         finally:
             process.terminate()

@@ -17,13 +17,14 @@ from osprey.worker.sinks.sink.input_stream import BaseInputStream
 from osprey.worker.sinks.sink.output_sink import BaseOutputSink
 from osprey.worker.sinks.utils.acking_contexts import BaseAckingContext, NoopAckingContext
 
-from plyr_osprey.store import Flag, Indexed, IndexedCover, IndexedTrack, Store
-from plyr_osprey.udfs import FlagEffect
+from plyr_osprey.store import Flag, HeldTrack, Indexed, IndexedCover, IndexedTrack, Store
+from plyr_osprey.udfs import FlagEffect, HoldEffect
 
 log = logging.getLogger('plyr_osprey')
 
 ACTION_NAMES = (IndexedTrack.action_name, IndexedCover.action_name)
-CURSORS = (IndexedTrack.cursor, IndexedCover.cursor)
+# held tracks first: a day's budget goes to the oldest waiting before anything new
+CURSORS = (HeldTrack.cursor, IndexedTrack.cursor, IndexedCover.cursor)
 # what a scan found, as the rules extract it: a scan that ran leaves a list
 SCAN_FEATURES = {IndexedTrack.action_name: 'Recordings', IndexedCover.action_name: 'CoverViolations'}
 
@@ -66,7 +67,9 @@ class TrackInputStream(BaseInputStream[BaseAckingContext[Action]]):
             for cursor in self._cursors:
                 if cursor in drained:
                     continue
-                position = self._store.cursor_position(cursor, self._starts[cursor])
+                position = (
+                    (0, '') if cursor == HeldTrack.cursor else self._store.cursor_position(cursor, self._starts[cursor])
+                )
                 batch = self._store.after(cursor, position, self._batch_size)
                 interrupted = False
                 for item in batch:
@@ -125,11 +128,14 @@ class ModerationLogSink(BaseOutputSink):
             if isinstance(e, FlagEffect)
         ]
         found = result.extracted_features.get(SCAN_FEATURES[item.action_name])
-        self._store.finish(item, flags, found if isinstance(found, list) else None)
+        held = bool(result.effects.get(HoldEffect))
+        self._store.finish(item, flags, found if isinstance(found, list) else None, held=held)
         self._walk.settled = True
         if isinstance(found, list):
             scanned = item.audio_url if isinstance(item, IndexedTrack) else item.cover_url
             log.info('scanned %s %s (%s): %d found', item.action_name, item.uri, scanned, len(found))
+        if held:
+            log.info('held %s: out of scan budget for the day', item.uri)
         if flags:
             log.info('flagged %s: %s', item.uri, ', '.join(f.actor for f in flags))
 

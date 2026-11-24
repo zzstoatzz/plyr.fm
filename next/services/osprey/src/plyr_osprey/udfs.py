@@ -12,13 +12,16 @@ from osprey.engine.udf.arguments import ArgumentsBase
 from osprey.engine.udf.base import UDFBase
 from osprey.engine.utils.types import add_slots
 
+from plyr_osprey import budget as scan_budget
 from plyr_osprey import evidence, image_scan
-from plyr_osprey.fingerprint import Fingerprinter, Unconfigured
+from plyr_osprey.budget import Budget
+from plyr_osprey.fingerprint import Fingerprinter, ScanPlan, Unconfigured
 from plyr_osprey.image_scan import ImageScanner
 
 # set by register_plugins from the environment; tests swap in fakes
 fingerprinter: Fingerprinter = Unconfigured()
 image_scanner: ImageScanner = image_scan.Unconfigured()
+budget: Budget = scan_budget.Unconfigured()
 
 FLAG_SOURCES = ('scan', 'rule')
 
@@ -40,26 +43,50 @@ class UrlHost(UDFBase[HostArguments, str]):
         return (parts.hostname or '') if parts.scheme == 'https' else ''
 
 
+class BudgetArguments(ArgumentsBase):
+    owner_did: str
+    duration_seconds: int
+
+
+class SpendScanBudget(UDFBase[BudgetArguments, bool]):
+    """spends the uploader's scan budget for this audio (budget.py), or returns
+    false when the account, or everyone together, is out of it for the day."""
+
+    category = UdfCategories.ENGINE
+
+    def execute(self, execution_context: ExecutionContext, arguments: BudgetArguments) -> bool:
+        plan = ScanPlan.for_duration(arguments.duration_seconds)
+        return budget.spend(arguments.owner_did, plan.charge_seconds)
+
+
 class RecordingsArguments(ArgumentsBase):
     audio_url: str
+    owner_did: str
     owner_handle: str
     owner_name: str
+    duration_seconds: int
 
 
 class RecordingsPlayingThrough(UDFBase[RecordingsArguments, Lines]):
     """someone else's recordings that play through the audio, one line each.
 
-    fingerprints the audio with AuDD, keeps
-    the recordings that play through for about 48 seconds or fill the upload
-    (evidence.song_evidence), and drops the uploader's own catalog. a failed
-    scan raises, so nothing downstream reads it as clean.
+    fingerprints the audio with AuDD as far as the budget paid for (sampling a
+    long file, fingerprint.ScanPlan), keeps the recordings that play through
+    for about 48 seconds or fill the upload (evidence.song_evidence), and
+    drops the uploader's own catalog. a failed scan gives the budget back and
+    raises, so nothing downstream reads it as clean.
     """
 
     category = UdfCategories.ENGINE
 
     def execute(self, execution_context: ExecutionContext, arguments: RecordingsArguments) -> Lines:
-        matches = fingerprinter.matches(arguments.audio_url)
-        found = evidence.others_playing_through(matches, arguments.owner_handle, arguments.owner_name)
+        plan = ScanPlan.for_duration(arguments.duration_seconds)
+        try:
+            matches = fingerprinter.matches(arguments.audio_url, plan)
+        except Exception:
+            budget.release(arguments.owner_did, plan.charge_seconds)
+            raise
+        found = evidence.others_playing_through(matches, arguments.owner_handle, arguments.owner_name, plan.stride)
         return [e.describe() for e in found[:3]]
 
 
@@ -145,3 +172,44 @@ class FlagForReview(UDFBase[FlagArguments, EffectBase]):
             name=arguments.name,
             evidence=list(arguments.evidence),
         )
+
+
+class HoldArguments(ArgumentsBase):
+    subject: str
+
+
+@dataclass
+class HoldEffect(EffectToCustomExtractedFeatureBase[list[str]]):
+    """keep `subject` out of discovery until its scan can be paid for."""
+
+    subject: str
+
+    def to_str(self) -> str:
+        return self.subject
+
+    @classmethod
+    def build_custom_extracted_feature_from_list(cls, values: list[Self]) -> CustomExtractedFeature[list[str]]:
+        return HoldsExtractedFeature(effects=cast(list[HoldEffect], values))
+
+
+@add_slots
+@dataclass
+class HoldsExtractedFeature(CustomExtractedFeature[list[str]]):
+    effects: list[HoldEffect]
+
+    @classmethod
+    def feature_name(cls) -> str:
+        return 'holds'
+
+    def get_serializable_feature(self) -> list[str] | None:
+        return [effect.to_str() for effect in self.effects]
+
+
+class HoldForScan(UDFBase[HoldArguments, EffectBase]):
+    """holds a track out of discovery (feeds, search, radio) until it is scanned;
+    it still plays from its artist's page and its own link."""
+
+    category = UdfCategories.ENGINE
+
+    def execute(self, execution_context: ExecutionContext, arguments: HoldArguments) -> EffectBase:
+        return HoldEffect(subject=arguments.subject)

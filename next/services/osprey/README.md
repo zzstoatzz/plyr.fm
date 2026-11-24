@@ -27,9 +27,14 @@ plyr_index.track_records ──▶ TrackInputStream ──▶ Osprey RulesSink �
   art of tracks (`imageUrl`) and albums/playlists (`imageBlob`), however the
   record was written. A cover is checked where next shows it: a PDS blob at
   next's cover worker, which checks it against its CID.
+- **holds** (same file): tracks held for scan budget come round again, before
+  anything new, once their day has turned over.
 - **rules** (`rules/`): `rules/index.sml` decides what applies to a record;
-  `rules/copyright.sml` is prod's "plays through" copyright rule;
-  `rules/cover.sml` flags a cover that breaks plyr's image policy.
+  `rules/copyright.sml` pays for a scan from the uploader's budget, or holds
+  the track; `rules/fingerprint.sml` is prod's "plays through" copyright rule;
+  `rules/volume.sml` flags an account (once at 20, 100 and 500 tracks in a
+  day, not per track); `rules/cover.sml` flags a cover that breaks plyr's
+  image policy.
 - **UDFs** (`src/plyr_osprey/udfs.py`): `RecordingsPlayingThrough` fingerprints
   audio with AuDD and applies
   the evidence bar from prod (`evidence.py`); `ImagePolicyViolations` asks
@@ -40,6 +45,27 @@ plyr_index.track_records ──▶ TrackInputStream ──▶ Osprey RulesSink �
   retries that track next time, and passes over it after 3 failures.
 - **entity labels**: Osprey requires a labels service; `entity_labels.py` keeps
   them in `plyr_moderation.osprey_entity_labels`. No rule uses them yet.
+
+## scan budget
+
+A scan spends the uploader's `scan_seconds` quota (`plyr_quota`, next/backend
+migration 0064; `src/plyr_osprey/budget.py`): the track's length, capped at
+three hours, from a daily allowance by tier (`new` an hour, `established` six
+hours once five scans came back clean and none flagged, `unmetered` for an
+operator's grant), within a ceiling for everyone together (30 hours a day).
+Out of budget, the track is held (`plyr_moderation.scan_holds`): it plays from
+its artist's page and its own link, but feeds, search, radio and charts leave
+it out until it is scanned. A failed scan gives its budget back.
+
+AuDD bills one request per 12 seconds it hears, so a long file is sampled
+(`fingerprint.ScanPlan`): up to 10 minutes every chunk, up to 30 minutes one in
+two, past that one in three, and never more chunks than were paid for. Sampled,
+three samples in step (48 seconds or more apart end to end) count as playing
+through, where four successive chunks do otherwise. Self-tagging a track `ai`
+changes none of this: it is a disclosure, never an exemption.
+
+Limits live in the tables (`plyr_quota.meters`, `allowances`,
+`account_tiers`), not here.
 
 ## running it
 

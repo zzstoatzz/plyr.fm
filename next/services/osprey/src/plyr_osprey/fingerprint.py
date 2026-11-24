@@ -3,6 +3,8 @@ moderation service made (services/moderation/src/audd.rs). AuDD only says which
 recordings it hears where; what a match means is decided here and in the rules.
 """
 
+import math
+from dataclasses import dataclass
 from typing import Any, Protocol
 
 import requests
@@ -10,9 +12,45 @@ import requests
 AUDD_URL = 'https://enterprise.audd.io/'
 USER_AGENT = 'plyr.fm-next-osprey/0.1 (+https://plyr.fm)'
 
+# AuDD's enterprise endpoint hears a file in 12-second chunks and bills each
+# chunk it recognizes as one request (docs.audd.io/enterprise)
+CHUNK_SECONDS = 12
+# a track whose length next doesn't know yet is charged and scanned as this long
+UNKNOWN_DURATION_SECONDS = 600
+# no file is charged or scanned past this
+MAX_SCAN_SECONDS = 3 * 3600
+
+
+@dataclass(frozen=True)
+class ScanPlan:
+    """how much of a file AuDD hears, and what that costs the uploader's budget.
+
+    a file up to 10 minutes is heard chunk by chunk, as before. a longer one
+    (a mix, an hour of generated ambience) is sampled: one chunk in every
+    `stride`, which still hears anything that plays for a minute or more, at a
+    half or a third of the cost. `max_chunks` stops AuDD at what was paid for.
+    """
+
+    stride: int
+    charge_seconds: int
+    max_chunks: int
+
+    @classmethod
+    def for_duration(cls, duration_seconds: int | None) -> 'ScanPlan':
+        seconds = duration_seconds if duration_seconds and duration_seconds > 0 else UNKNOWN_DURATION_SECONDS
+        seconds = min(seconds, MAX_SCAN_SECONDS)
+        stride = 1 if seconds <= 600 else 2 if seconds <= 1800 else 3
+        return cls(stride=stride, charge_seconds=seconds, max_chunks=math.ceil(seconds / CHUNK_SECONDS / stride))
+
+    def params(self) -> dict[str, str]:
+        params = {'limit': str(self.max_chunks)}
+        if self.stride > 1:
+            params.update(every='1', skip=str(self.stride - 1))
+        return params
+
 
 class Fingerprinter(Protocol):
-    def matches(self, audio_url: str) -> list[dict[str, Any]]: ...
+    def matches(self, audio_url: str, plan: ScanPlan) -> list[dict[str, Any]]: ...
 
 
 class AudDFingerprinter:
@@ -21,10 +59,10 @@ class AudDFingerprinter:
         self._url = url
         self._timeout = timeout_seconds
 
-    def matches(self, audio_url: str) -> list[dict[str, Any]]:
+    def matches(self, audio_url: str, plan: ScanPlan) -> list[dict[str, Any]]:
         response = requests.post(
             self._url,
-            data={'api_token': self._token, 'url': audio_url, 'accurate_offsets': '1'},
+            data={'api_token': self._token, 'url': audio_url, 'accurate_offsets': '1', **plan.params()},
             headers={'User-Agent': USER_AGENT},
             timeout=self._timeout,
         )
@@ -88,5 +126,5 @@ def _offset_ms(offset: object) -> int | None:
 
 
 class Unconfigured:
-    def matches(self, audio_url: str) -> list[dict[str, Any]]:
+    def matches(self, audio_url: str, plan: ScanPlan) -> list[dict[str, Any]]:
         raise RuntimeError('no fingerprinter configured')

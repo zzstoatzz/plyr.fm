@@ -8,6 +8,7 @@ const pg = @import("pg");
 const log = @import("log.zig");
 const Labeler = @import("labeler.zig").Labeler;
 const labels = @import("postgres_labels.zig");
+const quota = @import("../quota/postgres_quota.zig");
 
 pub const StoredLabel = labels.StoredLabel;
 pub const LabelQuery = labels.LabelQuery;
@@ -54,10 +55,8 @@ pub const QueueItem = struct {
 };
 
 /// `unknown`: the subject is not a track, comment or account plyr has seen.
-/// `limited`: the reporter sent `max_reports_per_hour` already.
+/// `limited`: the reporter is out of their `reports` quota for the hour.
 pub const ReportOutcome = enum { recorded, duplicate, unknown, limited };
-
-pub const max_reports_per_hour = 30;
 
 pub const PostgresModerationLog = struct {
     pool: *pg.Pool,
@@ -80,7 +79,7 @@ pub const PostgresModerationLog = struct {
             .unknown
         else if (try exists(conn, recent_report_query, .{ entry.actor, entry.subject }))
             .duplicate
-        else if (try exists(conn, reporter_limit_query, .{ entry.actor, @as(i64, max_reports_per_hour) }))
+        else if (!try reportGranted(conn, entry.actor))
             .limited
         else
             null;
@@ -289,11 +288,17 @@ const subject_known_query =
     \\  OR EXISTS (SELECT 1 FROM plyr_index.track_records WHERE owner_did = $1 AND NOT deleted)
 ;
 
-const reporter_limit_query =
-    \\SELECT 1 FROM plyr_moderation.events
-    \\WHERE action = 'reported' AND actor = $1 AND created_at > clock_timestamp() - interval '1 hour'
-    \\HAVING count(*) >= $2
-;
+/// A report spends one of the reporter's `reports` quota (30 an hour, see
+/// migration 0064) in the report's transaction, so a dropped report costs nothing.
+fn reportGranted(conn: *pg.Conn, reporter: []const u8) Error!bool {
+    var buffer: [64]u8 = undefined;
+    var fixed = std.heap.FixedBufferAllocator.init(&buffer);
+    const grant = quota.spend(fixed.allocator(), conn, .reports, reporter, 1) catch |err| switch (err) {
+        error.Unavailable => return error.Unavailable,
+        error.Corrupt => return error.Corrupt,
+    };
+    return grant.granted;
+}
 
 const recent_report_query =
     \\SELECT 1 FROM plyr_moderation.events
@@ -415,7 +420,7 @@ test "the log derives the queue and projects decisions onto track policies" {
     try std.testing.expectEqual(ReportOutcome.unknown, try moderation.report(.{ .subject = "at://did:plc:x/fm.plyr.track/nope", .action = .reported, .actor = "did:plc:one", .reason_type = .spam }));
     try std.testing.expectEqual(ReportOutcome.recorded, try moderation.report(.{ .subject = "did:plc:artist", .action = .reported, .actor = "did:plc:one", .reason_type = .impersonation }));
     try std.testing.expectEqual(ReportOutcome.recorded, try moderation.report(.{ .subject = "did:plc:listener", .action = .reported, .actor = "did:plc:one", .reason_type = .harassment }));
-    _ = try pool.exec("INSERT INTO plyr_moderation.events (subject_uri, action, actor) SELECT 'did:plc:listener', 'reported', 'did:plc:spammy' FROM generate_series(1, 30)", .{});
+    _ = try pool.exec("SELECT plyr_quota.spend('reports', 'did:plc:spammy', 30)", .{});
     try std.testing.expectEqual(ReportOutcome.limited, try moderation.report(.{ .subject = cover, .action = .reported, .actor = "did:plc:spammy", .reason_type = .spam }));
     _ = try moderation.record(.{ .subject = "did:plc:artist", .action = .acknowledged, .actor = "did:plc:operator" }, 0);
     _ = try moderation.record(.{ .subject = "did:plc:listener", .action = .acknowledged, .actor = "did:plc:operator" }, 0);
@@ -518,4 +523,5 @@ pub fn resetTestSchema(pool: *pg.Pool) !void {
     _ = try pool.exec("CREATE TABLE plyr_index.account_label_policies (owner_did text PRIMARY KEY, operator_labels jsonb NOT NULL CHECK (operator_labels = '[\"ai\"]'::jsonb), observed_at_us bigint NOT NULL, expires_at_us bigint)", .{});
     _ = try pool.exec(@embedFile("migration_0048"), .{});
     _ = try pool.exec(@embedFile("migration_0049"), .{});
+    try quota.resetTestSchema(pool);
 }
