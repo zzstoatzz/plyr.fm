@@ -12,6 +12,17 @@ export async function browserAccount(handle, password, pdsUrl) {
   assert.ok(issuer === pds.origin && new URL(authorize).origin === issuer && new URL(revoke).origin === issuer, 'unexpected authorization server metadata');
 
   async function signIn(page, step, link = 'sign in') {
+    // pds.zat.dev paints its sign-in page with a WebGL scene (zds's garden skin,
+    // 2026-11-24). Headless CI renders it in software, which at desktop widths
+    // starves the page until clicks time out. Without a WebGL context the PDS
+    // serves its plain paper page; this applies to the PDS origin only.
+    await page.addInitScript((origin) => {
+      if (location.origin !== origin) return;
+      const getContext = HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = function (type, ...rest) {
+        return /webgl/i.test(type) ? null : getContext.call(this, type, ...rest);
+      };
+    }, issuer);
     step('opening sign-in');
     await page.locator('main').getByRole('link', { name: link, exact: true }).click();
     await page.getByLabel('atmosphere account').fill(handle);
