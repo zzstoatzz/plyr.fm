@@ -54,6 +54,9 @@ def _prepare(database_url: str, database: str) -> None:
         ):
             (migration,) = (ROOT / "migrations").glob(f"{prefix}_*.sql")
             connection.execute(migration.read_text())
+        # discovery leaves out tracks held for scan budget (0065)
+        connection.execute("CREATE SCHEMA IF NOT EXISTS plyr_moderation")
+        connection.execute((ROOT / "migrations/0065_add_scan_holds.sql").read_text())
         connection.execute(
             "INSERT INTO plyr_index.track_tag_records "
             "SELECT record_uri, record_cid, ARRAY['ambient'], true "
@@ -99,6 +102,12 @@ def main() -> None:
                     setup.execute(
                         sql.SQL(
                             "GRANT SELECT ON ALL TABLES IN SCHEMA plyr_index TO {}"
+                        ).format(sql.Identifier(role))
+                    )
+                    setup.execute(
+                        sql.SQL(
+                            "GRANT USAGE ON SCHEMA plyr_moderation TO {0}; "
+                            "GRANT SELECT ON plyr_moderation.scan_holds TO {0}"
                         ).format(sql.Identifier(role))
                     )
                 _exercise(admin, role, api_url)

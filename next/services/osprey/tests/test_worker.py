@@ -4,6 +4,8 @@ RulesSink and plyr's rules, out as review flags in the moderation log."""
 from osprey.worker.sinks.sink.output_sink import MultiOutputSink
 from osprey.worker.sinks.sink.rules_sink import RulesSink
 
+from plyr_osprey import udfs
+from plyr_osprey.budget import PostgresBudget
 from plyr_osprey.image_scan import Verdict
 from plyr_osprey.store import MAX_ATTEMPTS, IndexedCover, Store
 from plyr_osprey.tracks import CURSORS, ModerationLogSink, TrackInputStream, Walk
@@ -13,18 +15,26 @@ from tests.test_rules import NEXT_AUDIO, played_through
 OTHER_AUDIO = 'https://plyr-next-audio.n8-3e9.workers.dev/audio/other.mp3'
 
 
-def add_track(db, n: int, audio_url: str | None, at_us: int, deleted: bool = False, blob_cid: str | None = None) -> str:
+def add_track(
+    db,
+    n: int,
+    audio_url: str | None,
+    at_us: int,
+    deleted: bool = False,
+    blob_cid: str | None = None,
+    duration: int | None = None,
+) -> str:
     uri = f'at://did:plc:uploader/fm.plyr.track/{n}'
     with db.cursor() as cur:
         cur.execute(
             """INSERT INTO plyr_index.track_records
                (record_uri, record_cid, owner_did, collection, title, audio_url, audio_blob_cid, deleted,
-                indexed_at_us)
-               VALUES (%s, %s, 'did:plc:uploader', 'fm.plyr.track', %s, %s, %s, %s, %s)
+                indexed_at_us, duration_seconds)
+               VALUES (%s, %s, 'did:plc:uploader', 'fm.plyr.track', %s, %s, %s, %s, %s, %s)
                ON CONFLICT (record_uri) DO UPDATE SET indexed_at_us = EXCLUDED.indexed_at_us,
                    audio_url = EXCLUDED.audio_url, record_cid = EXCLUDED.record_cid,
                    audio_blob_cid = EXCLUDED.audio_blob_cid""",
-            (uri, f'cid{n}-{at_us}', f'song {n}', audio_url, blob_cid, deleted, at_us),
+            (uri, f'cid{n}-{at_us}', f'song {n}', audio_url, blob_cid, deleted, at_us, duration),
         )
     return uri
 
@@ -225,3 +235,80 @@ def test_a_failing_cover_scan_is_retried_then_passed_over(db, engine, fingerprin
     for _ in range(MAX_ATTEMPTS + 1):
         drain(engine)
     assert rows(db, 'SELECT image_url FROM plyr_moderation.image_scans') == [('https://elsewhere.example/ok.jpg',)]
+
+
+def test_out_of_budget_tracks_are_held_then_scanned_the_next_day(
+    db, engine, fingerprinter, prober, monkeypatch
+) -> None:
+    """the real quotas: a new account's hour a day, here five minutes."""
+    prober.lengths.update({NEXT_AUDIO: 200, OTHER_AUDIO: 250})
+    budget = PostgresBudget(TEST_DATABASE_URL)
+    monkeypatch.setattr(udfs, 'budget', budget)
+    with db.cursor() as cur:
+        cur.execute("UPDATE plyr_quota.allowances SET amount = 300 WHERE tier = 'new' AND meter = 'scan_seconds'")
+    # what the records claim doesn't decide the charge; the files' measured lengths do
+    first = add_track(db, 1, NEXT_AUDIO, 10, duration=1)
+    second = add_track(db, 2, OTHER_AUDIO, 20, duration=3_000_000_000)
+
+    drain(engine)
+
+    assert fingerprinter.scanned == [NEXT_AUDIO]
+    assert rows(db, 'SELECT record_uri FROM plyr_moderation.scans') == [(first,)]
+    assert rows(db, 'SELECT record_uri, owner_did, retry_at_us > 0 FROM plyr_moderation.scan_holds') == [
+        (second, 'did:plc:uploader', True)
+    ]
+    assert rows(db, "SELECT subject, used FROM plyr_quota.usage WHERE meter = 'scan_seconds' ORDER BY 1") == [
+        ('*', 200),
+        ('did:plc:uploader', 200),
+    ]
+    assert rows(db, 'SELECT subject, clean, flagged FROM plyr_quota.standing') == [('did:plc:uploader', 1, 0)]
+    assert rows(db, "SELECT indexed_at_us FROM plyr_moderation.rule_cursors WHERE name = 'tracks'") == [(20,)]
+
+    # not before its day turns over
+    drain(engine)
+    assert fingerprinter.scanned == [NEXT_AUDIO]
+
+    # the next day: the hold comes round first, is paid for, scanned and gone
+    with db.cursor() as cur:
+        cur.execute('UPDATE plyr_moderation.scan_holds SET retry_at_us = 0')
+        cur.execute('DELETE FROM plyr_quota.usage')
+    drain(engine)
+    assert fingerprinter.scanned == [NEXT_AUDIO, OTHER_AUDIO]
+    assert rows(db, 'SELECT count(*) FROM plyr_moderation.scan_holds') == [(0,)]
+    assert rows(db, "SELECT subject, used FROM plyr_quota.usage WHERE subject <> '*'") == [('did:plc:uploader', 250)]
+    assert rows(db, 'SELECT count(*) FROM plyr_moderation.events') == [(0,)]
+    budget.close()
+
+
+def test_a_held_track_that_keeps_failing_loses_its_hold(db, engine, fingerprinter) -> None:
+    held = add_track(db, 1, NEXT_AUDIO, 10)
+    with db.cursor() as cur:
+        cur.execute(
+            "INSERT INTO plyr_moderation.scan_holds (record_uri, owner_did, retry_at_us) VALUES (%s, 'did:plc:uploader', 0)",
+            (held,),
+        )
+    fingerprinter.failing.add(NEXT_AUDIO)
+    for _ in range(MAX_ATTEMPTS):
+        drain(engine, start_at_us=100)
+    assert rows(db, 'SELECT count(*) FROM plyr_moderation.scan_holds') == [(0,)]
+
+
+def test_an_upload_burst_opens_one_review_of_the_account(db, engine, fingerprinter) -> None:
+    for n in range(1, 26):
+        add_track(db, n, 'https://audio.plyr.fm/x.mp3', n * 1_000_000)
+    drain(engine)
+    assert rows(db, 'SELECT subject_uri, actor, reason FROM plyr_moderation.events') == [
+        ('did:plc:uploader', 'rule:volume', '20 tracks in a day')
+    ]
+    assert fingerprinter.scanned == []
+
+
+def test_a_held_track_that_was_deleted_loses_its_hold(db, engine, fingerprinter) -> None:
+    gone = add_track(db, 1, NEXT_AUDIO, 10, deleted=True)
+    with db.cursor() as cur:
+        cur.execute(
+            "INSERT INTO plyr_moderation.scan_holds (record_uri, owner_did, retry_at_us) VALUES (%s, 'did:plc:uploader', 9e18)",
+            (gone,),
+        )
+    drain(engine, start_at_us=100)
+    assert rows(db, 'SELECT count(*) FROM plyr_moderation.scan_holds') == [(0,)]

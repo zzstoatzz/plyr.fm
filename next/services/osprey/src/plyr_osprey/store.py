@@ -1,6 +1,7 @@
 """next's Postgres, as the worker sees it: indexed records in, review flags out.
 
-two walks, each with its own cursor in plyr_moderation.rule_cursors:
+two walks, each with its own cursor in plyr_moderation.rule_cursors, and the
+holds:
 
 - `tracks` walks plyr_index.track_records in (ready_at_us, record_uri) order,
   so an edited track comes round again. a track is ready when it was indexed
@@ -9,6 +10,9 @@ two walks, each with its own cursor in plyr_moderation.rule_cursors:
   next plays and what gets scanned, so such a track comes round again then.
 - `covers` walks the cover art of tracks and albums/playlists in
   (indexed_at_us, record_uri) order, however the record was written.
+- `holds` has no cursor: it comes back to tracks held for scan budget
+  (plyr_moderation.scan_holds) once their day has turned over, before the
+  walks take on anything new.
 
 the flags for a record, its scan and the cursor move in one transaction, so a
 crash re-runs a record rather than skipping it. a record that keeps failing is
@@ -40,27 +44,76 @@ VALUES (%s, %s, '') ON CONFLICT (name) DO NOTHING
 
 # the audio is the address next plays: its verified copy of the record's blob
 # (the blob mirror's origin, as playback picks it), else the record's audioUrl
-SELECT_TRACKS = """
+#
+# a track's length is the record's, else the one next measured (as
+# next/backend's duration_store.effectiveDuration reads it); recent_uploads is
+# how many of the uploader's tracks were indexed in the day up to this one
+READY_TRACKS = """
 WITH ready AS (
     SELECT t.record_uri, t.record_cid, t.owner_did, t.title,
            coalesce(d.origin_url, t.audio_url) AS audio_url,
-           greatest(t.indexed_at_us, coalesce(d.observed_at_us, 0)) AS ready_at_us
+           greatest(t.indexed_at_us, coalesce(d.observed_at_us, 0)) AS ready_at_us,
+           t.indexed_at_us,
+           coalesce(t.duration_seconds, (SELECT m.duration_seconds FROM plyr_index.track_measured_durations m
+                                         WHERE m.record_uri = t.record_uri AND m.record_cid = t.record_cid)) AS duration
     FROM plyr_index.track_records t
     LEFT JOIN plyr_index.track_delivery_origins d
       ON d.record_uri = t.record_uri AND d.artifact_cid = t.audio_blob_cid
      AND d.service = 'r2' AND d.verification = 'verified_blob_cid'
-    WHERE NOT t.deleted AND t.collection = %s
+    WHERE NOT t.deleted AND t.collection = %(collection)s
 )
 SELECT r.record_uri, r.record_cid, r.owner_did, r.title, r.audio_url, r.ready_at_us,
        coalesce(a.handle, ''), coalesce(a.display_name, ''),
        EXISTS (SELECT 1 FROM plyr_moderation.scans s
-               WHERE s.record_uri = r.record_uri AND s.audio_url = r.audio_url)
+               WHERE s.record_uri = r.record_uri AND s.audio_url = r.audio_url),
+       least(greatest(coalesce(r.duration, 0), 0), 86400)::int,
+       (SELECT count(*) FROM plyr_index.track_records o
+        WHERE o.owner_did = r.owner_did AND o.collection = %(collection)s AND NOT o.deleted
+          AND o.indexed_at_us > r.indexed_at_us - 86400000000 AND o.indexed_at_us <= r.indexed_at_us)::int
 FROM ready r
 LEFT JOIN plyr_index.actor_identities a ON a.did = r.owner_did
-WHERE (r.ready_at_us, r.record_uri) > (%s, %s)
-ORDER BY r.ready_at_us, r.record_uri
-LIMIT %s
 """
+
+SELECT_TRACKS = (
+    READY_TRACKS
+    + """
+WHERE (r.ready_at_us, r.record_uri) > (%(at)s, %(uri)s)
+ORDER BY r.ready_at_us, r.record_uri
+LIMIT %(limit)s
+"""
+)
+
+# held tracks whose day has turned over, oldest hold first
+SELECT_HELD = (
+    READY_TRACKS
+    + """
+JOIN plyr_moderation.scan_holds h ON h.record_uri = r.record_uri
+WHERE h.retry_at_us <= %(now)s
+ORDER BY h.held_at, r.record_uri
+LIMIT %(limit)s
+"""
+)
+
+HOLD = """
+INSERT INTO plyr_moderation.scan_holds (record_uri, owner_did, retry_at_us)
+VALUES (%s, %s, plyr_quota.window_end_us('scan_seconds'))
+ON CONFLICT (record_uri) DO UPDATE SET retry_at_us = EXCLUDED.retry_at_us
+"""
+
+RELEASE_HOLD = 'DELETE FROM plyr_moderation.scan_holds WHERE record_uri = %s'
+
+# a held track that was deleted has nothing left to scan or to keep out of discovery
+DROP_GONE_HOLDS = """
+DELETE FROM plyr_moderation.scan_holds h
+WHERE NOT EXISTS (SELECT 1 FROM plyr_index.track_records t
+                  WHERE t.record_uri = h.record_uri AND t.collection = %(collection)s AND NOT t.deleted)
+"""
+
+COUNT_HOLD_ATTEMPT = """
+UPDATE plyr_moderation.scan_holds SET attempts = attempts + 1 WHERE record_uri = %s RETURNING attempts
+"""
+
+RECORD_OUTCOME = 'SELECT plyr_quota.record_outcome(%s, %s)'
 
 # a track names its cover as imageUrl (next writes the cover's getBlob URL
 # there); an album or playlist names it as imageBlob
@@ -132,9 +185,13 @@ class IndexedTrack:
     display_name: str
     # this audio was fingerprinted on an earlier pass (the record was edited)
     scanned_before: bool
+    # 0 when next doesn't know it yet
+    duration_seconds: int = 0
+    recent_uploads: int = 1
 
     cursor = 'tracks'
     action_name = 'track'
+    held = False
 
     def action_data(self) -> dict[str, Any]:
         return {
@@ -146,7 +203,19 @@ class IndexedTrack:
             'handle': self.handle,
             'display_name': self.display_name,
             'scanned_before': self.scanned_before,
+            'duration_seconds': self.duration_seconds,
+            'recent_uploads': self.recent_uploads,
+            'held': self.held,
         }
+
+
+@dataclass(frozen=True)
+class HeldTrack(IndexedTrack):
+    """a track held for scan budget, come round again once its day turned over.
+    it has no cursor: the hold is what brings it back."""
+
+    cursor = 'holds'
+    held = True
 
 
 @dataclass(frozen=True)
@@ -244,9 +313,19 @@ class Store:
     def tracks_after(self, position: tuple[int, str], limit: int) -> list[IndexedTrack]:
         conn = self._connection()
         with conn, conn.cursor() as cur:
-            cur.execute(SELECT_TRACKS, (self._collection, position[0], position[1], limit))
+            cur.execute(
+                SELECT_TRACKS, {'collection': self._collection, 'at': position[0], 'uri': position[1], 'limit': limit}
+            )
             rows = cur.fetchall()
         return [IndexedTrack(*row) for row in rows]
+
+    def held_due(self, limit: int) -> list[IndexedTrack]:
+        conn = self._connection()
+        with conn, conn.cursor() as cur:
+            cur.execute(DROP_GONE_HOLDS, {'collection': self._collection})
+            cur.execute(SELECT_HELD, {'collection': self._collection, 'now': time.time_ns() // 1000, 'limit': limit})
+            rows = cur.fetchall()
+        return [HeldTrack(*row) for row in rows]
 
     def covers_after(self, position: tuple[int, str], limit: int) -> list[IndexedCover]:
         conn = self._connection()
@@ -265,12 +344,18 @@ class Store:
         return [IndexedCover(*row, (row[0], row[4]) in scanned) for row in found]
 
     def after(self, cursor: str, position: tuple[int, str], limit: int) -> Sequence[Indexed]:
+        if cursor == HeldTrack.cursor:
+            return self.held_due(limit)
         return (
             self.tracks_after(position, limit) if cursor == IndexedTrack.cursor else self.covers_after(position, limit)
         )
 
-    def finish(self, item: Indexed, flags: Sequence[Flag], scanned: list[str] | None) -> None:
-        """record what the rules found for one record and move its cursor past it."""
+    def finish(self, item: Indexed, flags: Sequence[Flag], scanned: list[str] | None, held: bool = False) -> None:
+        """record what the rules found for one record and move its cursor past it.
+
+        a track the rules held for scan budget is held (or held again) until the
+        day turns over; any other track's hold is gone, so it is back in discovery.
+        """
         conn = self._connection()
         with conn, conn.cursor() as cur:
             for flag in flags:
@@ -278,14 +363,31 @@ class Store:
             if scanned is not None:
                 if isinstance(item, IndexedTrack) and item.audio_url:
                     cur.execute(INSERT_SCAN, (item.uri, item.cid, item.audio_url, len(scanned)))
+                    cur.execute(RECORD_OUTCOME, (item.did, len(scanned) == 0))
                 elif isinstance(item, IndexedCover) and item.cover_url:
                     cur.execute(INSERT_IMAGE_SCAN, (item.uri, item.cid, item.cover_url, len(scanned)))
-            cur.execute(ADVANCE, (item.ready_at_us, item.uri, item.cursor))
+            if isinstance(item, IndexedTrack):
+                if held:
+                    cur.execute(HOLD, (item.uri, item.did))
+                else:
+                    cur.execute(RELEASE_HOLD, (item.uri,))
+            if not isinstance(item, HeldTrack):
+                cur.execute(ADVANCE, (item.ready_at_us, item.uri, item.cursor))
 
     def failed(self, item: Indexed) -> bool:
-        """count a failed run on the record at its cursor. returns whether it was passed over."""
+        """count a failed run on the record at its cursor. returns whether it was passed over.
+
+        a held track that keeps failing loses its hold, like a track passed over
+        on the walk: it isn't scanned, and discovery no longer waits for it."""
         conn = self._connection()
         with conn, conn.cursor() as cur:
+            if isinstance(item, HeldTrack):
+                cur.execute(COUNT_HOLD_ATTEMPT, (item.uri,))
+                row = cur.fetchone()
+                if row and int(row[0]) < MAX_ATTEMPTS:
+                    return False
+                cur.execute(RELEASE_HOLD, (item.uri,))
+                return True
             cur.execute(COUNT_ATTEMPT, (item.cursor,))
             row = cur.fetchone()
             attempts = int(row[0]) if row else 0

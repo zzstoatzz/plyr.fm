@@ -19,6 +19,8 @@ table has one writing module; everything else reads.
 | api | `internal/radio` | `plyr_playback.radio_rotations` (pinned loops; pruned as new periods are written) |
 | jams (coordinator) | `internal/jams` | `plyr_playback.queue_records`, `plyr_playback.jam_room_records` (Redis holds the live copy) |
 | jams (coordinator) | `internal/coordinator` | `plyr_account.preferences` |
+| api, Osprey worker | `internal/quota` (migration 0064's functions) | `plyr_quota.usage`, `standing` |
+| Osprey worker (`next/services/osprey`) | its store | `plyr_moderation.rule_cursors`, `scans`, `image_scans`, `scan_holds`, flag rows in `events` |
 
 `catalog_reconciler` and `repair` write through `internal/projection` like the
 ingester. A new writer for an existing table belongs in that table's module.
@@ -35,3 +37,11 @@ ingester. A new writer for an existing table belongs in that table's module.
 - `src/internal/atproto/`: record parsing, space addresses (`space_uri.zig`)
   and the one service-JWT verifier (`service_auth.zig`) both servers use.
 - `src/internal/space/`: the access core (Decider, policies, payment evidence).
+- `src/internal/quota/`: metered allowances. Meters (`scan_seconds` a day,
+  `reports` an hour), per-tier allowances, account tiers (earned from clean
+  scans, or set by an operator, later by a plan) and a global ceiling per
+  meter all live in `plyr_quota`. The rules are database functions
+  (`plyr_quota.spend`, `release`, `record_outcome`), so the api and the Python
+  Osprey worker get one answer in their own transactions; nothing reads or
+  writes the tables directly. A new limit is a meter row and a `spend` call,
+  not another counter in its caller.

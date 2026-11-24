@@ -153,12 +153,18 @@ jobs:
           psql "$(plain "$MIGRATOR_DATABASE_URL")" -X -q -v ON_ERROR_STOP=1 -v role="$role" <<'SQL'
           GRANT USAGE ON SCHEMA plyr_index TO :"role";
           GRANT SELECT ON plyr_index.track_records, plyr_index.actor_identities,
-              plyr_index.track_delivery_origins, plyr_index.list_records TO :"role";
+              plyr_index.track_delivery_origins, plyr_index.list_records,
+              plyr_index.track_measured_durations TO :"role";
           GRANT USAGE ON SCHEMA plyr_moderation TO :"role";
           GRANT INSERT ON plyr_moderation.events TO :"role";
           GRANT USAGE ON SEQUENCE plyr_moderation.events_id_seq TO :"role";
           GRANT SELECT, INSERT, UPDATE ON plyr_moderation.rule_cursors, plyr_moderation.scans,
               plyr_moderation.image_scans, plyr_moderation.osprey_entity_labels TO :"role";
+          GRANT SELECT, INSERT, UPDATE, DELETE ON plyr_moderation.scan_holds TO :"role";
+          -- scans spend the uploader's budget (plyr_quota, migration 0064)
+          GRANT USAGE ON SCHEMA plyr_quota TO :"role";
+          GRANT EXECUTE ON FUNCTION plyr_quota.spend(TEXT, TEXT, BIGINT), plyr_quota.release(TEXT, TEXT, BIGINT, BIGINT),
+              plyr_quota.record_outcome(TEXT, BOOLEAN), plyr_quota.window_end_us(TEXT) TO :"role";
           SQL
 
       # The atlas builder (next/scripts/build-atlas.py, next-build-atlas.yml)

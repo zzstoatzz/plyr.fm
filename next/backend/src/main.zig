@@ -456,6 +456,7 @@ test {
     _ = @import("internal/moderation/log.zig");
     _ = @import("internal/moderation/postgres_log.zig");
     _ = @import("internal/moderation/postgres_labels.zig");
+    _ = @import("internal/quota/postgres_quota.zig");
     _ = @import("api/moderation.zig");
     _ = @import("api/labels.zig");
     _ = @import("internal/moderation/labeler.zig");

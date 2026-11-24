@@ -8,6 +8,7 @@
 //! projections are replaced.
 
 const tag_cursor = @import("../identity/tag_cursor.zig");
+const scan_holds = @import("../moderation/scan_holds.zig");
 const std = @import("std");
 const public_media = @import("../delivery/public_media.zig");
 const duration_store = @import("../delivery/postgres_duration_store.zig");
@@ -661,7 +662,7 @@ pub const discovery_policy = common_policy ++ published_policy ++
     \\    v.self_labels && ARRAY['sexual', 'porn']::text[]
     \\    OR COALESCE(pol.operator_labels, '[]'::jsonb) ?| ARRAY['sexual', 'porn']
     \\  )
-;
+++ "\n" ++ scan_holds.not_held;
 
 const artist_policy = common_policy ++ published_policy ++
     \\  AND v.collection = $1
@@ -813,6 +814,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     defer _ = pool.exec("DROP SCHEMA IF EXISTS plyr_index CASCADE", .{}) catch null;
     _ = try pool.exec("CREATE SCHEMA plyr_index", .{});
     _ = try pool.exec("CREATE EXTENSION IF NOT EXISTS pg_trgm", .{});
+    try scan_holds.createTestTable(pool);
     try projected_tracks.createTestTable(pool);
     _ = try pool.exec(@embedFile("migration_0044_legacy_track_links"), .{});
     try projected_profiles.createTestTable(pool);
@@ -1325,6 +1327,22 @@ test "composed PostgreSQL reads use verified records and authoritative account s
         .limit = 2,
         .after = null,
     })).len);
+    // a track held for scan budget leaves discovery but keeps its artist's page and link
+    _ = try pool.exec("INSERT INTO plyr_moderation.scan_holds (record_uri, owner_did, retry_at_us) VALUES ($1, $2, 1)", .{ pds_only_uri, did });
+    try std.testing.expectEqual(@as(usize, 0), (try implementation.store().listPublic(a, .{
+        .collection = "fm.plyr.dev.track",
+        .scope = .discovery,
+        .limit = 2,
+        .after = null,
+    })).len);
+    try std.testing.expectEqual(@as(usize, 2), (try implementation.store().listPublic(a, .{
+        .collection = "fm.plyr.dev.track",
+        .scope = .{ .artist = did },
+        .limit = 2,
+        .after = null,
+    })).len);
+    try std.testing.expect((try implementation.store().getByUri(a, pds_only_uri)) != null);
+    _ = try pool.exec("DELETE FROM plyr_moderation.scan_holds", .{});
     // the newest track per artist is the first row of that artist's own listing
     const latest = try implementation.store().latestByArtists(a, "fm.plyr.dev.track", &.{ did, "did:plc:nobodyhere" }, 12);
     try std.testing.expectEqual(@as(usize, 1), latest.len);

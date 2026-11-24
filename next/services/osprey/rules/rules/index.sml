@@ -9,6 +9,10 @@ NextUpload = AudioHost == 'plyr-next-audio.n8-3e9.workers.dev'
 
 Require(rule='rules/copyright.sml', require_if=ActionName == 'track' and NextUpload and not ScannedBefore)
 
+# Every new track counts toward its account's uploads for the day, whoever
+# holds the audio; a track coming back from a scan hold was counted already.
+Require(rule='rules/volume.sml', require_if=ActionName == 'track' and not Held)
+
 # Every cover next shows is checked against plyr's image policy, from an upload
 # or a record written straight to a PDS; prod's bucket holds only covers prod
 # already checked when they were uploaded to it, so those have no CoverUrl.
