@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import re
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 import httpx
@@ -246,20 +247,26 @@ def gather_evidence(
 
 
 def fallback_name(ev: Evidence, taken: set[str]) -> str:
-    """the most distinctive phrase, joined with the next ones until it's unique."""
+    """the most distinctive phrase, joined with a later one until it's unique."""
     pool = ev.phrases()
     if not pool:
         return "mixed sounds"
-    for name in [pool[0]] + [f"{pool[0]} {extra}" for extra in pool[1:]]:
-        if name not in taken:
-            return name
-    return pool[0]
+    first = pool[0]
+    options = [first] + [
+        f"{first} {extra}"
+        for extra in pool[1:]
+        if not set(words(extra)) & set(words(first))
+    ]
+    return next((o for o in options if o not in taken), first)
 
 
 def valid_name(name: str, ev: Evidence) -> bool:
     """one of the cluster's phrases, or two of them joined (in either order)."""
     name = " ".join(words(name))
-    if any(w in PROCESS_WORDS or w in JUDGEMENT_WORDS for w in words(name)):
+    ws = words(name)
+    if len(set(ws)) < len(ws) or any(
+        w in PROCESS_WORDS or w in JUDGEMENT_WORDS for w in ws
+    ):
         return False
     phrases = [" ".join(words(p)) for p in ev.phrases()]
     if name in phrases:
@@ -274,77 +281,78 @@ def valid_name(name: str, ev: Evidence) -> bool:
 
 
 SYSTEM = (
-    "You name regions of a sound map. Each region is a group of audio tracks "
-    "that sound alike (grouped by an audio model, not by text).\n\n"
-    "For each region you get candidate descriptions an audio model matched to its "
-    "tracks, most distinctive first, with support (the share of the region's tracks "
-    "that lean towards it); tags many of its tracks share; and some track titles. "
-    "The audio model is noisy, so use the titles and tags to judge which candidates "
-    "are true (a title like 'voice memo' or 'update' means speech; 'mix' or a venue "
-    "and date means a dj set or live recording).\n\n"
-    "Name each region with ONE candidate, or two candidates joined (e.g. 'dj mix', "
-    "'acoustic guitar', 'dark ambient drone'), copied exactly. Never use a word that "
-    "isn't in that region's candidates or tags: titles are context only. Rules:\n"
-    "- pick the candidate that is truest for most of the titles; prefer one over two\n"
-    "- be neutral and descriptive: no judgement, no jokes, no puns, nothing about "
-    "how tracks were made\n"
-    "- every region's name must differ from the others\n\n"
-    "Respond with ONLY a JSON object mapping region id (as string) to name."
+    "You name a region of a sound map: a group of audio tracks that sound alike "
+    "(grouped by an audio model, not by text).\n\n"
+    "You get candidate descriptions an audio model matched to the region's tracks, "
+    "most distinctive first, with support (the share of its tracks that lean towards "
+    "it); tags many of its tracks share; and some track titles. The audio model is "
+    "noisy, so use the titles and tags to judge which candidates are true: a title "
+    "like 'voice memo', 'episode' or 'update' means speech, so 'dj mix' or 'modular "
+    "synth' would be wrong there; 'mix' or a venue and date means a dj set or a live "
+    "recording.\n\n"
+    "Give your three best names, best first. Each is ONE candidate, or two candidates "
+    "joined (e.g. 'dj mix', 'acoustic guitar', 'dark ambient drone'), copied exactly. "
+    "Never use a word that isn't in the candidates or tags: titles are context only. "
+    "Prefer one candidate over two; never repeat a word. Be neutral and descriptive: "
+    "no judgement, no jokes, nothing about how tracks were made.\n\n"
+    'Respond with ONLY a JSON array of three strings, like ["dj mix", "techno", '
+    '"house dj mix"].'
 )
 
 
-def haiku_names(evidence: dict[int, Evidence], api_key: str) -> dict[int, str]:
+def haiku_names(evidence: dict[int, Evidence], api_key: str) -> dict[int, list[str]]:
+    """haiku's ranked names per cluster, one request each (a long batch drifts)."""
     from anthropic import Anthropic
 
     client = Anthropic(api_key=api_key)
-    parts = []
-    for cid, ev in evidence.items():
+
+    def ask(cid: int) -> list[str]:
+        ev = evidence[cid]
         desc = ", ".join(f"{d} ({s:.0%})" for d, s in ev.descriptions) or "none"
         tags = ", ".join(f"{t} ({s:.0%})" for t, s in ev.tags) or "none"
         titles = "; ".join(ev.titles) or "none"
-        parts.append(
-            f"Region {cid} ({ev.count} tracks)\n  candidates: {desc}\n"
-            f"  tags: {tags}\n  titles: {titles}"
-        )
-    resp = client.messages.create(
-        model="claude-haiku-5-5",
-        max_tokens=4096,
-        system=SYSTEM,
-        messages=[{"role": "user", "content": "\n\n".join(parts)}],
-    )
-    text = "".join(b.text for b in resp.content if b.type == "text").strip()
-    if text.startswith("```"):
-        text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-    try:
-        return {int(k): str(v).strip().lower() for k, v in json.loads(text).items()}
-    except (json.JSONDecodeError, ValueError, AttributeError):
-        log("  warning: couldn't parse haiku's names; using descriptions")
-        return {}
+        prompt = f"candidates: {desc}\ntags: {tags}\ntitles: {titles}"
+        try:
+            resp = client.messages.create(
+                model="claude-haiku-5-5",
+                max_tokens=200,
+                system=SYSTEM,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            text = "".join(b.text for b in resp.content if b.type == "text")
+            found = re.search(r"\[.*?\]", text, re.DOTALL)
+            names = json.loads(found.group(0)) if found else []
+            return [str(n).strip().lower() for n in names if isinstance(n, str)]
+        except Exception as e:  # noqa: BLE001 - one cluster falls back alone
+            log(f"  haiku failed for {cid} ({type(e).__name__})")
+            return []
+
+    with ThreadPoolExecutor(6) as pool:
+        return dict(zip(evidence, pool.map(ask, evidence)))
 
 
 def name_clusters(
     evidence: dict[int, Evidence], api_key: str, tier: str
 ) -> dict[int, str]:
     """a checked, unique, neutral name per cluster."""
-    proposed: dict[int, str] = {}
-    if api_key and any(ev.descriptions or ev.tags for ev in evidence.values()):
-        try:
-            proposed = haiku_names(evidence, api_key)
-        except Exception as e:  # noqa: BLE001 - names fall back to descriptions
-            log(f"  haiku naming failed ({type(e).__name__}); using descriptions")
+    proposed: dict[int, list[str]] = {}
+    if api_key and any(ev.phrases() for ev in evidence.values()):
+        proposed = haiku_names(evidence, api_key)
     names: dict[int, str] = {}
     rejected = 0
     # best-evidenced clusters claim their names first
     for cid in sorted(evidence, key=lambda c: -evidence[c].count):
         ev = evidence[cid]
-        name = proposed.get(cid, "")
-        if not valid_name(name, ev) or name in names.values():
-            if name:
-                rejected += 1
-                log(f"  {tier} {cid}: rejected {name!r}")
-            name = fallback_name(ev, set(names.values()))
-        names[cid] = name
-    log(f"  {tier}: named {len(names)} sounds ({rejected} proposals rejected)")
+        taken = set(names.values())
+        name = ""
+        for option in proposed.get(cid, []):
+            if valid_name(option, ev) and option not in taken:
+                name = option
+                break
+            rejected += 1
+            log(f"  {tier} {cid}: passed over {option!r}")
+        names[cid] = name or fallback_name(ev, taken)
+    log(f"  {tier}: named {len(names)} sounds ({rejected} proposals passed over)")
     return names
 
 
