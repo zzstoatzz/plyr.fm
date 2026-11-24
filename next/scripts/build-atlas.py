@@ -150,7 +150,10 @@ def load_corpus(client: httpx.Client, settings: Settings) -> dict[str, dict]:
     corpus: dict[str, dict] = {}
     cursor = None
     while True:
-        page = xrpc(client, settings, "listTracks", limit=100, cursor=cursor)
+        # empty hiddenTag lifts the default ai/suno filter: the map shows everything
+        page = xrpc(
+            client, settings, "listTracks", limit=100, cursor=cursor, hiddenTag=""
+        )
         for track in page.get("data", []):
             if not eligible(track):
                 continue
