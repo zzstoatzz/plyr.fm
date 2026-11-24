@@ -56,12 +56,13 @@
 	.open { position: absolute; inset: 0; background: none; border: 0; padding: 0; border-radius: 0.5rem; }
 	.cover, .description { pointer-events: none; }
 	.cover { width: 2.75rem; flex: none; border-radius: 0.4rem; }
-	.description { display: grid; min-width: 0; }
+	/* the text column shrinks below its text's width so a long title or subtitle truncates before the heart instead of running under it */
+	.description { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; }
 	.artist, .like { position: relative; pointer-events: auto; }
 	.like { flex: none; color: var(--muted); }
 	/* a press that can't make sound says why where the press landed, instead of a dock that sits on play */
 	.description .error { color: var(--danger); }
-	.subtitle { display: flex; gap: 0.25rem; }
+	.subtitle { display: flex; gap: 0.25rem; min-width: 0; }
 	.mobile-time { display: none; flex-shrink: 0; font-variant-numeric: tabular-nums; }
 	.description span { color: var(--muted); font-size: var(--t-12-8); }
 	.controls { min-width: 0; display: flex; align-items: center; gap: 0.8rem; }
@@ -73,9 +74,16 @@
 	.volume input { flex: 1; min-width: 0; height: 2rem; }
 	@media (max-width: 720px) {
 		.mobile-time { display: inline; }
+		/* the heart keeps one slot beside play, whatever the text's length */
+		.description { flex: 1; }
 		.open { touch-action: pan-x; }
 		.artist { pointer-events: none; }
 		.dock { grid-template-columns: minmax(0, 1fr) auto auto; inset: auto 0.75rem var(--tabs); gap: 0.25rem; padding: 0.3rem 0.75rem; border: 1px solid color-mix(in srgb, var(--line) 80%, transparent); border-radius: 1.25rem; background: color-mix(in srgb, var(--surface) 78%, transparent); -webkit-backdrop-filter: blur(22px) saturate(1.7); backdrop-filter: blur(22px) saturate(1.7); box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 0.14); }
 		.volume, .desktop-progress { display: none; }
 	}
+	/* a narrow pill (a small phone, or larger text in settings) gives up the cover, then the heart, before the title gets too
+	   thin to read: the dock is the container, so these follow its width in rem whatever the text size */
+	.dock { container: dock / inline-size; }
+	@container dock (max-width: 21rem) { .cover { display: none; } }
+	@container dock (max-width: 18rem) { .like { display: none; } }
 </style>

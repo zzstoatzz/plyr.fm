@@ -6,6 +6,60 @@ const { method } = require('./xrpc-fixture.cjs');
 
 const output = process.env.SCREENS_OUTPUT || '/tmp/plyr-svelte-player-presentation';
 
+// Long titles and long subtitles (an artist name, or why a press can't play: "sign in to play this track") truncate before
+// the heart instead of running under it: the text column shrinks below its text's width, and a narrow pill (larger text in
+// settings) drops the cover, then the heart, so the title keeps room and nothing sits on play.
+async function dockKeepsTextBesideHeart(page, label) {
+  const dock = page.getByTestId('player-dock');
+  const subtitles = ['an artist whose name goes on for a really long while', 'sign in to play this track'];
+  for (const subtitle of subtitles) {
+    const boxes = await dock.evaluate((node, text) => {
+      const title = node.querySelector('.description strong');
+      const line = node.querySelector('.description .subtitle > .truncate');
+      // swap the text nodes in and back out, so the player's own nodes are what it keeps updating
+      const keep = [title, line].map(element => [element, [...element.childNodes]]);
+      title.replaceChildren('a title long enough to need truncating in any dock');
+      line.replaceChildren(text);
+      const rect = selector => { const element = node.querySelector(selector); if (!element || !element.offsetParent) return null; const { left, right, width } = element.getBoundingClientRect(); return { left, right, width }; };
+      const box = element => ({ ...element.getBoundingClientRect().toJSON(), clipped: element.scrollWidth > element.clientWidth });
+      const result = {
+        rem: parseFloat(getComputedStyle(document.documentElement).fontSize),
+        song: rect('.song'), cover: rect('.cover'), like: rect('.like'), controls: rect('.controls'), title: box(title), line: box(line)
+      };
+      window.restoreDockText = () => keep.forEach(([element, nodes]) => element.replaceChildren(...nodes));
+      return result;
+    }, subtitle);
+    const facts = JSON.stringify(boxes);
+    if (/^390 (light|dark)$/.test(label)) assert.ok(boxes.cover && boxes.like, `${label}: at the default text size a phone dock keeps its cover and heart: ${facts}`);
+    const end = boxes.like ? boxes.like.left : boxes.controls.left;
+    for (const [name, box] of [['title', boxes.title], ['subtitle', boxes.line]]) {
+      assert.ok(box.right <= end + 0.5, `${label}: the dock ${name} ends before the heart and the controls (${subtitle}): ${facts}`);
+    }
+    assert.ok(boxes.title.width >= 4 * boxes.rem, `${label}: the dock title keeps room to read: ${facts}`);
+    assert.ok(boxes.song.right <= boxes.controls.left + 0.5, `${label}: the dock's song side never runs under play: ${facts}`);
+    if (boxes.like) assert.ok(boxes.like.width >= 32 && boxes.like.right <= boxes.controls.left + 0.5, `${label}: the heart keeps a full tap target in its own slot: ${facts}`);
+    if (subtitle === subtitles.at(-1)) await page.screenshot({ path: path.join(output, `${label.replace(/ /g, '-')}-dock-long-text.png`) });
+    await page.evaluate(() => window.restoreDockText());
+  }
+}
+
+// every text size settings offers, at a phone's width
+async function dockAtTextSizes(browser, origin) {
+  for (const scale of [1.15, 1.3]) for (const scheme of ['light', 'dark']) {
+    const { context, page, errors } = await setup(browser, 390, 760, { phone: true, scheme, scale });
+    try {
+      await page.goto(origin);
+      await page.getByTestId('home-track-row').first().getByRole('button', { name: /^Play / }).click();
+      await page.getByTestId('player-dock').waitFor();
+      await dockKeepsTextBesideHeart(page, `390 ${scheme} text ${scale}`);
+      assert.deepEqual(errors, []);
+    } finally {
+      await context.close();
+    }
+  }
+  console.log('390px larger text sizes: the dock keeps its title readable beside the heart');
+}
+
 async function verify(browser, origin, width, scheme) {
   const phone = width === 390;
   const height = phone ? 760 : 900;
@@ -30,7 +84,9 @@ async function verify(browser, origin, width, scheme) {
     await page.evaluate(() => { window.playingAudio = window.createdAudio.find(audio => !audio.paused); });
     const dock = page.getByTestId('player-dock');
     const opener = dock.getByRole('button', { name: 'Open now playing' });
-    assert.ok(await dock.getByLabel(/^(like|unlike|sign in to like) /i).isVisible(), 'the dock has a like at every width, like the iOS player bar');
+    // at the default text size the dock has a like at every width, like the iOS player bar (a much larger text size gives it up for the title)
+    if (!(phone && scheme === 'dark')) assert.ok(await dock.getByLabel(/^(like|unlike|sign in to like) /i).isVisible(), 'the dock has a like at every width, like the iOS player bar');
+    await dockKeepsTextBesideHeart(page, `${width} ${scheme}${phone && scheme === 'dark' ? ' text 1.5' : ''}`);
     const dialog = page.getByRole('dialog', { name: 'Now playing' });
     const panel = page.getByTestId('now-playing-dismiss-region');
     const hero = page.getByTestId('now-playing-hero');
@@ -228,6 +284,7 @@ async function verify(browser, origin, width, scheme) {
   const origin = await serve();
   const browser = await chromium.launch();
   try {
+    await dockAtTextSizes(browser, origin);
     for (const width of [390, 1280]) for (const scheme of ['light', 'dark']) await verify(browser, origin, width, scheme);
   } finally {
     await browser.close();
