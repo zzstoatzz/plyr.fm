@@ -2,6 +2,7 @@ import type { AuthConfig } from './auth-config.ts';
 import type { Agent, Auth, Did } from './auth-state.ts';
 import { createGatedAudio, type SpaceAudioSdk, type SpaceAudioTransport } from './gated-audio.ts';
 import { didDocument, pdsEndpoint } from './identity.ts';
+import { spaceXrpcBody, spaceXrpcPath, toSpaceWire } from './space-address.ts';
 
 export interface InitialJam {
   queue: { id: string; uri: string; cid: string; durationMs: number }[];
@@ -46,7 +47,7 @@ export function createJamSpace<Key extends { did(): string }, Value extends Reco
       const response = await agent.handle(`/xrpc/com.atproto.${method}`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(body)
+        body: JSON.stringify(spaceXrpcBody(body))
       });
       if (response.ok) return true;
       if (method === 'space.createSpace' && response.status === 400) {
@@ -81,7 +82,7 @@ export function createJamSpace<Key extends { did(): string }, Value extends Reco
         ]);
         const response = await signedFetch(
           transport, credential,
-          `${endpoint}/xrpc/com.atproto.space.getRecord?${new URLSearchParams(record)}`, host,
+          `${endpoint}${spaceXrpcPath('com.atproto.space.getRecord', record)}`, host,
           { 'accept-signature': formatMacRequest(RECORD_MAC_PROFILE, keyShare) }
         );
         if (!response.ok) {
@@ -102,7 +103,7 @@ export function createJamSpace<Key extends { did(): string }, Value extends Reco
           throw new Error('could not verify this jam');
         }
         try {
-          await verifyRecord(value, { uri, keyShare, sharedSecret, headers: response.headers });
+          await verifyRecord(value, { uri: toSpaceWire(uri), keyShare, sharedSecret, headers: response.headers });
         } catch {
           throw new Error('could not verify this jam');
         }
@@ -120,7 +121,7 @@ export function createJamSpace<Key extends { did(): string }, Value extends Reco
       const space = `at://${host}/space/${JAM_SPACE.type}/${key}`;
       const [service, delegation] = await Promise.all([
         auth.agent.handle(`/xrpc/com.atproto.server.getServiceAuth?${new URLSearchParams({ aud: JAM_SERVICE_AUDIENCE, lxm: JAM_JOIN_METHOD })}`, { signal: controller.signal }),
-        auth.agent.handle(`/xrpc/com.atproto.space.getDelegationToken?${new URLSearchParams({ space })}`, { method: 'GET', signal: controller.signal })
+        auth.agent.handle(spaceXrpcPath('com.atproto.space.getDelegationToken', { space }), { method: 'GET', signal: controller.signal })
       ]);
       if (!service.ok) throw new Error('enable jams again to allow real-time playback');
       if (delegation.status === 403) throw new JamAccessDenied('your account cannot access this jam');

@@ -1,5 +1,6 @@
 import { ClientResponseError, ok } from '@atcute/client';
 import { TID } from '@atproto/common-web';
+import { fromSpaceWireDeep, spaceXrpcBody, spaceXrpcPath } from '@plyr/next-core/space-address';
 import type { Auth } from '../auth-state';
 import { getAuth } from '../auth-state';
 import { NSID } from '../auth-config';
@@ -28,10 +29,10 @@ export function trackAccess(auth: Auth) {
   }
   async function space(method: string, params?: Record<string, string>, body?: object) {
     const { agent } = session();
-    const response = await agent.handle(`/xrpc/${method}${params ? `?${new URLSearchParams(params)}` : ''}`, {
-      method: body ? 'POST' : 'GET', ...(body ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {}),
+    const response = await agent.handle(spaceXrpcPath(method, params), {
+      method: body ? 'POST' : 'GET', ...(body ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify(spaceXrpcBody(body)) } : {}),
     });
-    const value: unknown = await response.json().catch(() => ({}));
+    const value: unknown = fromSpaceWireDeep(await response.json().catch(() => ({})));
     session();
     if (!response.ok) throw new SpaceRequestError(object(value) && typeof value.error === 'string' ? value.error : 'Unavailable');
     return value;

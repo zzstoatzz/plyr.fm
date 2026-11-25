@@ -10,22 +10,42 @@ pub const SpaceUri = struct {
     space_type: []const u8,
     skey: []const u8,
 
-    /// `at://{authority-did}/space/{type-nsid}/{skey}`
+    /// `at://{authority-did}/space/{type-nsid}/{skey}`, as records name spaces, or
+    /// `at:space/{authority-did}/{type-nsid}/{skey}`, as space PDSes do since zds 0.18.3
     pub fn parse(text: []const u8) ?SpaceUri {
-        const rest = if (std.mem.startsWith(u8, text, "at://")) text["at://".len..] else return null;
+        const canonical = std.mem.startsWith(u8, text, "at:space/");
+        const rest = if (canonical) text["at:space/".len..] else if (std.mem.startsWith(u8, text, "at://")) text["at://".len..] else return null;
         var parts = std.mem.splitScalar(u8, rest, '/');
         const authority = parts.next() orelse return null;
-        const marker = parts.next() orelse return null;
+        if (!canonical and !std.mem.eql(u8, parts.next() orelse return null, "space")) return null;
         const space_type = parts.next() orelse return null;
         const skey = parts.next() orelse return null;
         if (parts.next() != null) return null;
-        if (!std.mem.eql(u8, marker, "space")) return null;
         if (zat.Did.parse(authority) == null) return null;
         if (zat.Nsid.parse(space_type) == null) return null;
         if (skey.len == 0 or skey.len > 512) return null;
         return .{ .authority = authority, .space_type = space_type, .skey = skey };
     }
+
+    /// the form a space PDS accepts
+    pub fn wire(self: SpaceUri, a: std.mem.Allocator) ![]const u8 {
+        return std.fmt.allocPrint(a, "at:space/{s}/{s}/{s}", .{ self.authority, self.space_type, self.skey });
+    }
 };
+
+test "spaces parse from either form and go to a PDS in its form" {
+    const stored = SpaceUri.parse("at://did:plc:artist/space/fm.plyr.next.audio/k").?;
+    const wire = SpaceUri.parse("at:space/did:plc:artist/fm.plyr.next.audio/k").?;
+    try std.testing.expectEqualStrings(stored.authority, wire.authority);
+    try std.testing.expectEqualStrings(stored.space_type, wire.space_type);
+    try std.testing.expectEqualStrings(stored.skey, wire.skey);
+    const sent = try stored.wire(std.testing.allocator);
+    defer std.testing.allocator.free(sent);
+    try std.testing.expectEqualStrings("at:space/did:plc:artist/fm.plyr.next.audio/k", sent);
+    try std.testing.expect(SpaceUri.parse("at:space/did:plc:artist/space/fm.plyr.next.audio/k") == null);
+    try std.testing.expect(SpaceUri.parse("at://did:plc:artist/fm.plyr.next.audio/k") == null);
+    try std.testing.expect(SpaceUri.parse("at:space/did:plc:artist/fm.plyr.next.audio") == null);
+}
 
 /// A record inside a space:
 /// `at://{authority}/space/{type}/{skey}/{repo}/{collection}/{rkey}`.
