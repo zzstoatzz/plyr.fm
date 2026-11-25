@@ -67,7 +67,8 @@ export async function browserAccount(handle, password, pdsUrl) {
       };
     }));
     await page.goto(app + destination, { waitUntil: 'domcontentloaded' });
-    await signedOut.waitFor();
+    // signed-out settings has no sign-in link in main, only the sidebar's
+    await page.getByRole('link', { name: 'sign in', exact: true }).first().waitFor();
   }
 
   return { pds, signIn, signOut };
