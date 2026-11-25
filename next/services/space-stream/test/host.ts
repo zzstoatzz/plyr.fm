@@ -10,7 +10,7 @@ import {
   verifyCredentialSig,
 } from "@atproto/space";
 import { z } from "zod";
-import { REPO_REMOVED, REPO_WRITE, spaceUri } from "../src/wire";
+import { REPO_REMOVED, REPO_WRITE, forSdk, spaceUri, wireSpace } from "../src/wire";
 
 // A space host and its writers' PDS, in memory, answering the way zds and the reference PDS do.
 // It runs outside the worker; tests drive it through https://control.test.
@@ -30,8 +30,9 @@ const control = z.discriminatedUnion("action", [
   z.object({ action: z.literal("registration"), space: spaceUri }),
 ]);
 export type Control = z.infer<typeof control>;
+// like zds since 0.18.3, the host takes only at:space/ addresses
 const authorizeBody = z.object({
-  space: spaceUri,
+  space: wireSpace,
   credentialKey: did,
   delegationToken: z.string().optional(),
   notify: z.object({ endpoint: z.string(), token: z.string() }).optional(),
@@ -64,7 +65,7 @@ async function drive(request: Request): Promise<Response> {
   if (command.action === "expel") state.expelled.add(command.did);
   if (command.action === "delete") state.deleted = true;
   if (command.action === "delegation") {
-    return Response.json({ token: await createDelegationToken({ iss: command.did, sub: command.space, aud: AUTHORITY, keypair: accountKey }) });
+    return Response.json({ token: await createDelegationToken({ iss: command.did, sub: forSdk(command.space), aud: AUTHORITY, keypair: accountKey }) });
   }
   return Response.json({ registration: state.registration ?? null });
 }
@@ -87,7 +88,7 @@ async function authorizeSpaceSync(request: Request): Promise<Response> {
     return refuse("SpaceNotFound", 400);
   }
   state.registration = body.notify;
-  return Response.json({ credential: await createSpaceCredential({ iss: AUTHORITY, sub: body.space, keyId: body.credentialKey, keypair: authorityKey }) });
+  return Response.json({ credential: await createSpaceCredential({ iss: AUTHORITY, sub: forSdk(body.space), keyId: body.credentialKey, keypair: authorityKey }) });
 }
 
 export async function testHost(request: Request): Promise<Response> {
@@ -112,8 +113,9 @@ export async function testHost(request: Request): Promise<Response> {
   } catch {
     return refuse("InvalidToken", 401);
   }
-  const space = spaceUri.parse(url.searchParams.get("space"));
-  const state = stateOf(space);
+  const space = wireSpace.safeParse(url.searchParams.get("space"));
+  if (!space.success) return refuse("InvalidRequest", 400);
+  const state = stateOf(space.data);
 
   if (url.pathname.endsWith("listWriters")) {
     if (headers["atproto-space-audience"] !== AUTHORITY) return refuse("InvalidToken", 401);
@@ -132,7 +134,7 @@ export async function testHost(request: Request): Promise<Response> {
     const since = url.searchParams.get("since") ?? "";
     const written = state.ops.filter((write) => write.repo === repo);
     const ops = written.filter((write) => write.rev > since).map(({ repo: _repo, ...rest }) => rest);
-    const commit = { ver: 1, repo, space, rev: written.at(-1)?.rev ?? since, data: new Uint8Array(3) };
+    const commit = { ver: 1, repo, space: forSdk(space.data), rev: written.at(-1)?.rev ?? since, data: new Uint8Array(3) };
     const signed = createCommitMacHeaders(commit, { ...mac, sharedSecret: decapsulate(kemKey, mac.keyShare) });
     return Response.json({ ops, commit: { ...commit, data: { $bytes: "AAAA" } } }, { headers: signed.headers });
   }

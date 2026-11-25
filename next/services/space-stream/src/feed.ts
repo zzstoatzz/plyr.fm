@@ -1,7 +1,7 @@
 import { COMMIT_MAC_PROFILE, encapsulate, formatMacRequest, verifyCommitMac } from "@atproto/space";
 import { DurableObject } from "cloudflare:workers";
 import { AuthorizeError, SpaceCredential, authorize, delegator, deleted, resolveIdentity } from "./credential";
-import { type Did, type Lent, REPO_WRITE, SPACE_DELETED, type SpaceUri, type StreamEvent, type Update, authorityOf, readSubscription, repoOps, spaceUri, writers } from "./wire";
+import { type Did, type Lent, REPO_WRITE, SPACE_DELETED, type SpaceUri, type StreamEvent, type Update, authorityOf, forSdk, readSubscription, repoOps, spaceUri, writers } from "./wire";
 
 export type Env = { FEED: DurableObjectNamespace<SpaceFeed>; SPACE_TYPES?: string };
 
@@ -229,7 +229,7 @@ export class SpaceFeed extends DurableObject<Env> {
       const page = repoOps.parse(await response.json());
       if (page.commit.repo !== repo || page.commit.space !== space) throw new Error("commit is for another repo or space");
       const data = Uint8Array.from(atob(page.commit.data.$bytes), (char) => char.charCodeAt(0));
-      verifyCommitMac({ ver: page.commit.ver, repo, space, rev: page.commit.rev, data }, { ...encapsulation, headers: response.headers });
+      verifyCommitMac({ ver: page.commit.ver, repo, space: forSdk(space), rev: page.commit.rev, data }, { ...encapsulation, headers: response.headers });
       for (const op of page.ops) {
         const operation = op.cid === null ? "delete" : op.prev === null ? "create" : "update";
         const commit = { rev: op.rev, operation, collection: op.collection, rkey: op.rkey } as const;
