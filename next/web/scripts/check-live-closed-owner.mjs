@@ -4,6 +4,7 @@
 // authorizeSpaceSync, signed getRecord, getBlob), so a PDS that changes how it names spaces fails
 // here instead of on an owner's own track. The track is deleted afterwards, whatever happened.
 import assert from 'node:assert/strict';
+import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright';
 import { app, browserAccount } from './live-browser-account.mjs';
 
@@ -44,7 +45,7 @@ try {
   await page.waitForURL('**/portal', { timeout: 90_000 });
   uploaded = true;
   const row = page.getByRole('list', { name: 'Your tracks' }).getByRole('listitem').filter({ hasText: title });
-  await row.getByText('only you', { exact: true }).waitFor({ timeout: 30_000 });
+  await row.getByText('only you', { exact: true }).first().waitFor({ timeout: 30_000 });
 
   stage = 'playing it as its owner';
   await row.getByRole('link', { name: title }).click();
@@ -65,7 +66,7 @@ try {
   console.log(`the owner played their only-you track "${title}" on the first try`);
 } catch (error) {
   errors.push(new Error(`live closed owner check failed at ${stage}: ${error.message.split('\n')[0]}`));
-  if (page) await page.screenshot({ path: '/tmp/plyr-live-playback/closed-owner-failure.png' }).catch(() => {});
+  if (page) await mkdir('/tmp/plyr-live-playback', { recursive: true }).then(() => page.screenshot({ path: '/tmp/plyr-live-playback/closed-owner-failure.png' })).catch(() => {});
 }
 finally {
   try {
@@ -79,7 +80,10 @@ finally {
     }
   } catch (error) { errors.push(new Error(`deleting the test track failed (${error.message.split('\n')[0]})`)); }
   try { if (consented) { await page.setViewportSize({ width: 1280, height: 900 }); await account.signOut(page, '/settings'); } }
-  catch (error) { errors.push(new Error(`browser sign-out failed: ${error.message.split('\n')[0]}`)); }
+  catch (error) {
+    errors.push(new Error(`browser sign-out failed: ${error.message.split('\n')[0]} (at ${page.url()})`));
+    await mkdir('/tmp/plyr-live-playback', { recursive: true }).then(() => page.screenshot({ path: '/tmp/plyr-live-playback/closed-owner-sign-out.png' })).catch(() => {});
+  }
   try { await browser.close(); }
   catch (error) { errors.push(new Error(`browser cleanup failed (${error.name})`)); }
 }
