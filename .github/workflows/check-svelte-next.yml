@@ -364,6 +364,15 @@ jobs:
           ZAT_TEST_PASSWORD: ${{ secrets.ZAT_TEST_PASSWORD }}
           ZAT_TEST_PDS: ${{ secrets.ZAT_TEST_PDS }}
         run: node scripts/check-live-playback.mjs
+      - name: verify an owner plays their own only-you track
+        # every live check runs even when an earlier one fails, so one failure never hides another
+        if: "!cancelled() && github.event_name == 'push'"
+        working-directory: next/web
+        env:
+          ZAT_TEST_HANDLE: ${{ secrets.ZAT_TEST_HANDLE }}
+          ZAT_TEST_PASSWORD: ${{ secrets.ZAT_TEST_PASSWORD }}
+          ZAT_TEST_PDS: ${{ secrets.ZAT_TEST_PDS }}
+        run: node scripts/check-live-closed-owner.mjs
       - uses: actions/upload-artifact@v4
         if: always() && (github.event_name == 'push' || inputs.target == 'verify-live-playback')
         with:
