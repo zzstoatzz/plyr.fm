@@ -80,3 +80,15 @@ test('a private create carrying a public image url is rejected', () => {
   const rkey = '3jzfcijpj2z2a';
   assert.throws(() => library.privateCreate({ owner, rkey, uri: `${space}/${owner}/fm.plyr.track/${rkey}`, record: { $type: 'fm.plyr.track', audioBlob: {}, imageUrl: 'https://x.invalid/a.jpg' } }, owner));
 });
+
+test('a private upload is labeled by its bytes, not its name', async () => {
+  const { records, blobs, auth, storage } = fixture();
+  const pds = library.privatePds(auth, () => auth, storage, () => '3jzfcijpj2z2a');
+  const wav = new Uint8Array(64);
+  wav.set(new TextEncoder().encode('RIFF'), 0);
+  wav.set(new TextEncoder().encode('WAVE'), 8);
+  const renamed = { name: 'merch shop.m4a', type: 'audio/mp4', size: wav.byteLength, arrayBuffer: async () => wav.buffer };
+  await pds.upload({ file: renamed, artwork: null, title: 'song', artist: 'me', description: '', tags: [] }, () => {});
+  assert.deepEqual(blobs, ['audio/wav']);
+  assert.equal((records.get('3jzfcijpj2z2a') as Record<string, unknown>).fileType, 'wav');
+});
