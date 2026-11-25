@@ -91,10 +91,7 @@ async function uploadBlob(rpc: RepoRpc, file: MediaFile, assertSession: () => vo
 	assertSession();
 	// audio is labelled as what its bytes are: a WAV named .m4a must not be served as audio/mp4
 	const format = audio ? sniffAudioFormat(new Uint8Array(bytes, 0, Math.min(bytes.byteLength, 64))) : undefined;
-	const uploaded = await ok(uploadRepoBlob(rpc, {
-		input: bytes,
-		headers: { 'content-type': format?.contentType ?? file.type }
-	}));
+	const uploaded = await ok(uploadRepoBlob(rpc, { input: bytes, headers: { 'content-type': format?.contentType ?? file.type } }));
 	return { ...uploaded, bytes, format };
 }
 
