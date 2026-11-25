@@ -5,6 +5,7 @@ import { isOpen } from '../access/policy';
 import type { MediaFile } from './private-music';
 import { normalizeTrackTags } from './track-tags';
 import { sameRecord } from './create-operation';
+import { sniffAudioFormat } from '../audio-sniff';
 import { replacedTrackAudio, validateReplacementAudio, TrackWriteUnconfirmed } from './track-audio';
 
 export class TrackRevisionConflict extends Error {
@@ -67,9 +68,10 @@ export function trackEditor({ session, assertSession, ownedRkey, uploadArtwork, 
 			const bytes = await edits.audio.file.arrayBuffer();
 			assertSession();
 			if (bytes.byteLength !== edits.audio.file.size) throw new Error('the selected audio changed. choose it again.');
-			const uploaded = await ok(uploadRepoBlob(rpc, { input: bytes, headers: { 'content-type': edits.audio.file.type } }));
+			const format = sniffAudioFormat(new Uint8Array(bytes, 0, Math.min(bytes.byteLength, 64)));
+			const uploaded = await ok(uploadRepoBlob(rpc, { input: bytes, headers: { 'content-type': format?.contentType ?? edits.audio.file.type } }));
 			assertSession();
-			record = replacedTrackAudio(record, edits.audio.file, uploaded.blob, edits.audio.duration);
+			record = replacedTrackAudio(record, edits.audio.file, uploaded.blob, edits.audio.duration, format?.fileType);
 			await requireOpenAudio(uri);
 		}
 		assertSession();

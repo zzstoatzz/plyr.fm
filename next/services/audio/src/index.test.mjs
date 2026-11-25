@@ -21,6 +21,7 @@ for (const [header, range, span, body] of [
             httpEtag: '"fixture"',
             range,
             body,
+            customMetadata: { sniffed: "unknown" },
             writeHttpMetadata(headers) { headers.set("content-type", "audio/x-flac"); },
           };
         },
@@ -42,6 +43,7 @@ test("reports the standard FLAC content type on HEAD requests", async () => {
         return {
           size: data.length,
           httpEtag: '"fixture"',
+          customMetadata: { sniffed: "unknown" },
           writeHttpMetadata(headers) { headers.set("content-type", "audio/x-flac"); },
         };
       },
@@ -111,4 +113,48 @@ test("preflight allows the client's audio PUT", async () => {
   const response = await worker.fetch(new Request(url, { method: "OPTIONS" }), {});
   assert.match(response.headers.get("access-control-allow-methods"), /PUT/);
   assert.match(response.headers.get("access-control-allow-headers"), /authorization/);
+});
+
+// a WAV someone named .m4a: the picker called it audio/mp4, the bytes say RIFF/WAVE
+const wav = new Uint8Array([..."RIFF"].map(c => c.charCodeAt(0)).concat([0, 0, 0, 0], [..."WAVEfmt "].map(c => c.charCodeAt(0))));
+
+test("audio is stored as what its bytes are, not what the upload claimed", async () => {
+  const AUDIO = bucket();
+  const request = new Request(url, { method: "PUT", body: wav, headers: { "content-type": "audio/mp4", "content-length": String(wav.length), "x-content-sha256": digest, authorization: `Bearer ${await capability({ sizeBytes: wav.length, contentType: "audio/mp4", fileType: "m4a" })}` } });
+  assert.equal((await worker.fetch(request, { AUDIO, UPLOAD_CAPABILITY_SECRET: capabilitySecret })).status, 201);
+  assert.equal(AUDIO.writes[0].options.httpMetadata.contentType, "audio/wav");
+  assert.deepEqual(AUDIO.writes[0].options.customMetadata, { sniffed: "audio/wav" });
+});
+
+test("bytes that name no container keep the claimed type", async () => {
+  const AUDIO = bucket();
+  assert.equal((await worker.fetch(put(await capability()), { AUDIO, UPLOAD_CAPABILITY_SECRET: capabilitySecret })).status, 201);
+  assert.equal(AUDIO.writes[0].options.httpMetadata.contentType, "audio/mpeg");
+  assert.deepEqual(AUDIO.writes[0].options.customMetadata, { sniffed: "unknown" });
+});
+
+test("audio stored before sniffing is served as what it is and rewritten once", async () => {
+  const pending = [];
+  const writes = [];
+  const legacy = (body) => ({
+    size: wav.length, etag: "fixture", httpEtag: '"fixture"', httpMetadata: { contentType: "audio/mp4" }, customMetadata: {},
+    body, arrayBuffer: async () => wav.slice(0, 12).buffer,
+    writeHttpMetadata(headers) { headers.set("content-type", "audio/mp4"); },
+  });
+  const AUDIO = {
+    async get(_key, options) { return legacy(options?.range instanceof Headers || !options ? new Response(wav).body : undefined); },
+    async head() { return legacy(); },
+    async put(key, body, options) { writes.push({ key, bytes: new Uint8Array(await new Response(body).arrayBuffer()), options }); },
+  };
+  for (const method of ["GET", "HEAD"]) {
+    const response = await worker.fetch(new Request(url, { method }), { AUDIO }, { waitUntil: work => pending.push(work) });
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("content-type"), "audio/wav");
+  }
+  await Promise.all(pending);
+  assert.ok(writes.length >= 1);
+  assert.deepEqual([...writes[0].bytes], [...wav]);
+  assert.equal(writes[0].options.httpMetadata.contentType, "audio/wav");
+  assert.deepEqual(writes[0].options.customMetadata, { sniffed: "audio/wav" });
+  assert.deepEqual(writes[0].options.onlyIf, { etagMatches: "fixture" });
 });

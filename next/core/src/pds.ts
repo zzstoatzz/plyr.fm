@@ -1,3 +1,4 @@
+import { sniffAudioFormat } from './audio-sniff';
 import { publicTrackReference, assertPublicCollection } from './publishing/track-reference';
 import { RepoResponseError, repoOk as ok, getRecord, listRecords, createRecord, putRecord, uploadRepoBlob, type RepoRpc } from './publishing/repo-rpc';
 import type { createApi, AwaitStatus, Track } from './api';
@@ -85,14 +86,13 @@ export interface UploadAccess {
 	addWaysIn(trackUri: string, rules: Rule[]): Promise<void>;
 }
 
-async function uploadBlob(rpc: RepoRpc, file: MediaFile, assertSession: () => void) {
+async function uploadBlob(rpc: RepoRpc, file: MediaFile, assertSession: () => void, audio = false) {
 	const bytes = await file.arrayBuffer();
 	assertSession();
-	const uploaded = await ok(uploadRepoBlob(rpc, {
-		input: bytes,
-		headers: { 'content-type': file.type }
-	}));
-	return { ...uploaded, bytes };
+	// audio is labelled as what its bytes are: a WAV named .m4a must not be served as audio/mp4
+	const format = audio ? sniffAudioFormat(new Uint8Array(bytes, 0, Math.min(bytes.byteLength, 64))) : undefined;
+	const uploaded = await ok(uploadRepoBlob(rpc, { input: bytes, headers: { 'content-type': format?.contentType ?? file.type } }));
+	return { ...uploaded, bytes, format };
 }
 
 type ViewerLikes = { did: string; promise: Promise<Map<string, LikeRef>> };
@@ -406,7 +406,7 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 		if (input.file.size > MAX_AUDIO_BYTES) throw new Error('audio files are limited to 100 MB');
 		const closed = !!input.waysIn?.length;
 		if (closed && !access) throw new Error('sign in again to allow closing your tracks');
-		const uploaded = await uploadBlob(rpc, input.file, assertSession);
+		const uploaded = await uploadBlob(rpc, input.file, assertSession, true);
 		assertSession();
 		const cid = (uploaded.blob as { ref: { $link: string } }).ref.$link;
 		// a closed track's audio never goes to the public streaming origin
@@ -414,7 +414,7 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 		assertSession();
 		const prepared = await prepareTrackRecord(input);
 		assertSession();
-		let record: Record<string, unknown> = { ...prepared, audioBlob: uploaded.blob };
+		let record: Record<string, unknown> = { ...prepared, ...(uploaded.format ? { fileType: uploaded.format.fileType } : {}), audioBlob: uploaded.blob };
 		// the audio lands in the space before the public record exists, so the track is never open, even briefly
 		// and its ways in are written before the record too: a crash after publishing can't leave it with none
 		if (closed) {

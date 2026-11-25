@@ -2,6 +2,7 @@ import { routeUpload } from "./upload-worker.ts";
 import { routeGenres } from "./genres.ts";
 import { routeImages, cidDigestHex } from "./images.ts";
 import { verifyCapability } from "./upload-capability.ts";
+import { SNIFF_BYTES, sniffAudioType } from "./audio-sniff.ts";
 export { OwnerUploads } from "./upload-worker.ts";
 
 // Content-addressed audio for next.plyr.fm (cover art: images.ts).
@@ -13,8 +14,13 @@ export { OwnerUploads } from "./upload-worker.ts";
 // The key's CID (v1, raw codec, sha2-256) fixes the digest, and R2 rejects the
 // write unless the streamed bytes match it, so even a leaked token can only
 // store bytes that some record already names.
+//
+// The served content type is what the bytes are (audio-sniff.ts), not what the
+// uploader claimed: objects written since record the sniff in customMetadata, and
+// older ones are sniffed on read and rewritten once with the corrected type.
 
 const MAX_BYTES = 104_857_600; // track lexicon audioBlob.maxSize
+const SNIFFED = "sniffed"; // customMetadata key: the sniffed type, or "unknown"
 const KEY = /^audio\/(b[a-z2-7]{58})$/;
 const IMMUTABLE = "public, max-age=31536000, immutable";
 const CORS = {
@@ -24,7 +30,7 @@ const CORS = {
 };
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const upload = await routeUpload(request, env) ?? await routeGenres(request, env) ?? await routeImages(request, env);
     if (upload) return upload;
     const key = new URL(request.url).pathname.slice(1);
@@ -43,7 +49,7 @@ export default {
         });
       case "GET":
       case "HEAD":
-        return read(request, env, key);
+        return read(request, env, key, match[1], ctx);
       case "PUT":
         return write(request, env, key, match[1]);
       default:
@@ -54,11 +60,11 @@ export default {
   },
 };
 
-async function read(request, env, key) {
+async function read(request, env, key, cid, ctx) {
   if (request.method === "HEAD") {
     const head = await env.AUDIO.head(key);
     if (!head) return text(404, "not found");
-    const headers = objectHeaders(head);
+    const headers = objectHeaders(head, await servedType(env, key, cid, head, ctx));
     headers.set("content-length", String(head.size));
     return new Response(null, { headers });
   }
@@ -72,7 +78,7 @@ async function read(request, env, key) {
     return text(416, "range not satisfiable");
   }
   if (!object) return text(404, "not found");
-  const headers = objectHeaders(object);
+  const headers = objectHeaders(object, await servedType(env, key, cid, object, ctx));
   if (!("body" in object)) return new Response(null, { status: 304, headers });
   if (!request.headers.has("range") || !object.range) {
     headers.set("content-length", String(object.size));
@@ -101,9 +107,12 @@ async function write(request, env, key, cid) {
     return text(403, "the upload capability names a different size or type");
   if (await env.AUDIO.head(key)) return text(200, "exists");
   try {
-    await env.AUDIO.put(key, request.body, {
+    const { first, body } = await peek(request.body, length);
+    const sniffed = sniffAudioType(first);
+    await env.AUDIO.put(key, body, {
       sha256: digest,
-      httpMetadata: { contentType, cacheControl: IMMUTABLE },
+      httpMetadata: { contentType: sniffed ?? contentType, cacheControl: IMMUTABLE },
+      customMetadata: { [SNIFFED]: sniffed ?? "unknown" },
     });
   } catch (error) {
     return text(422, `rejected: ${error?.message ?? "write failed"}`);
@@ -111,15 +120,77 @@ async function write(request, env, key, cid) {
   return text(201, "stored");
 }
 
-function objectHeaders(object) {
+function objectHeaders(object, type) {
   const headers = new Headers(CORS);
   object.writeHttpMetadata(headers);
+  if (type) headers.set("content-type", type);
   if (headers.get("content-type")?.toLowerCase() === "audio/x-flac")
     headers.set("content-type", "audio/flac");
   headers.set("etag", object.httpEtag);
   headers.set("accept-ranges", "bytes");
   headers.set("cache-control", IMMUTABLE);
   return headers;
+}
+
+/**
+ * The type to serve an object written before writes were sniffed: sniffed from its first
+ * bytes, with the object rewritten in the background so later reads skip this.
+ */
+async function servedType(env, key, cid, object, ctx) {
+  if (object.customMetadata?.[SNIFFED]) return undefined;
+  const start = await env.AUDIO.get(key, { range: { offset: 0, length: SNIFF_BYTES } });
+  if (!start) return undefined;
+  const sniffed = sniffAudioType(new Uint8Array(await start.arrayBuffer()));
+  ctx?.waitUntil(heal(env, key, cid, object, sniffed).catch((error) => console.error(`could not heal ${key}: ${error?.message ?? error}`)));
+  return sniffed;
+}
+
+async function heal(env, key, cid, object, sniffed) {
+  const digest = cidDigestHex(cid);
+  const current = await env.AUDIO.get(key);
+  if (!digest || !current || current.customMetadata?.[SNIFFED]) return;
+  const { readable, writable } = new FixedLengthStream(current.size);
+  const copied = current.body.pipeTo(writable);
+  const contentType = sniffed ?? current.httpMetadata?.contentType ?? object.httpMetadata?.contentType;
+  await env.AUDIO.put(key, readable, {
+    sha256: digest,
+    onlyIf: { etagMatches: current.etag },
+    httpMetadata: { ...current.httpMetadata, ...(contentType ? { contentType } : {}), cacheControl: IMMUTABLE },
+    customMetadata: { ...current.customMetadata, [SNIFFED]: sniffed ?? "unknown" },
+  });
+  await copied;
+}
+
+/** The body's first bytes to sniff, and the whole body again, still of its declared length. */
+async function peek(stream, length) {
+  const reader = stream.getReader();
+  const chunks = [];
+  let seen = 0;
+  while (seen < SNIFF_BYTES) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    seen += value.byteLength;
+  }
+  const first = new Uint8Array(seen);
+  let offset = 0;
+  for (const chunk of chunks) { first.set(chunk, offset); offset += chunk.byteLength; }
+  const { readable, writable } = new FixedLengthStream(length);
+  const writer = writable.getWriter();
+  (async () => {
+    try {
+      for (const chunk of chunks) await writer.write(chunk);
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        await writer.write(value);
+      }
+      await writer.close();
+    } catch (error) {
+      await writer.abort(error).catch(() => {});
+    }
+  })();
+  return { first: first.subarray(0, SNIFF_BYTES), body: readable };
 }
 
 function span(range, size) {

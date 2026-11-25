@@ -1,5 +1,6 @@
 import type { Auth } from '../auth-state.ts';
 import { audioOrigin } from '../downloads/manifest.ts';
+import { sniffAudioFormat } from '../audio-sniff.ts';
 import { audioFormat } from './upload-model.ts';
 import { admitUpload, type UploadConfig } from './upload-transport.ts';
 
@@ -33,7 +34,8 @@ export function audioDelivery(config: UploadConfig, getAuth: () => Pick<Auth<unk
     const digest = rawCidDigest(cid);
     if (!auth.agent || !auth.did || !auth.uploadStorage || !digest || !uri.startsWith(`at://${auth.did}/`)) return false;
     try {
-      const { fileType, contentType } = audioFormat(name, type);
+      // the bytes decide: the origin serves this type, and Safari and iOS won't play audio served as something else
+      const { fileType, contentType } = sniffAudioFormat(bytes.subarray(0, 64)) ?? audioFormat(name, type);
       const { capability } = await admitUpload(config, auth.agent, { uploadId: newId(), recordUri: uri, sizeBytes: bytes.byteLength, contentType, fileType }, undefined, fetcher);
       const stored = await fetcher(`${audioOrigin}/audio/${cid}`, { method: 'PUT', body: bytes, redirect: 'error',
         headers: { authorization: `Bearer ${capability}`, 'content-type': contentType, 'x-content-sha256': digest } });
