@@ -25,6 +25,15 @@ let page, consented = false, uploaded = false, deleted = false, stage = 'signing
 try {
   const context = await browser.newContext({ viewport: { width: 390, height: 850 }, hasTouch: true, serviceWorkers: 'block' });
   await context.route('https://jams.next.plyr.fm/v1/playback/join', route => route.abort());
+  // the player's audio element is never attached to the document, so record every element that plays
+  await context.addInitScript(() => {
+    window.__media = [];
+    const play = HTMLMediaElement.prototype.play;
+    HTMLMediaElement.prototype.play = function () {
+      if (!window.__media.includes(this)) window.__media.push(this);
+      return play.call(this);
+    };
+  });
   page = await context.newPage();
   page.setDefaultTimeout(20_000);
   page.on('dialog', dialog => dialog.accept());
@@ -55,7 +64,7 @@ try {
   const pause = page.getByRole('button', { name: 'Pause', exact: true }).first();
   await Promise.race([pause.waitFor({ timeout: 30_000 }), refused.first().waitFor({ timeout: 30_000 })]);
   if (await refused.count()) throw new Error(`the owner was refused: "${(await refused.first().innerText()).trim()}"`);
-  await page.waitForFunction(() => window.jamAudio?.some(media => !media.paused && media.currentTime > 1), null, { timeout: 20_000 });
+  await page.waitForFunction(() => window.__media.some(media => !media.paused && media.currentTime > 1), null, { timeout: 20_000 });
   await pause.click();
 
   stage = 'deleting the track';
@@ -65,7 +74,9 @@ try {
   deleted = true;
   console.log(`the owner played their only-you track "${title}" on the first try`);
 } catch (error) {
-  errors.push(new Error(`live closed owner check failed at ${stage}: ${error.message.split('\n')[0]}`));
+  const shown = await page?.locator('body').innerText().catch(() => '') ?? '';
+  const media = await page?.evaluate(() => window.__media.map(m => `paused=${m.paused} t=${m.currentTime.toFixed(1)} rs=${m.readyState} err=${m.error?.code ?? '-'}`).join(', ')).catch(() => '?');
+  errors.push(new Error(`live closed owner check failed at ${stage}: ${error.message.split('\n')[0]} (media: ${media || 'none'}; page reads: ${shown.replace(/\s+/g, ' ').slice(0, 400)})`));
   if (page) await mkdir('/tmp/plyr-live-playback', { recursive: true }).then(() => page.screenshot({ path: '/tmp/plyr-live-playback/closed-owner-failure.png' })).catch(() => {});
 }
 finally {
@@ -79,9 +90,11 @@ finally {
       await page.getByRole('heading', { name: title, exact: true }).waitFor({ state: 'detached' });
     }
   } catch (error) { errors.push(new Error(`deleting the test track failed (${error.message.split('\n')[0]})`)); }
+  await page?.evaluate(() => window.__media?.forEach(media => media.pause())).catch(() => {});
   try { if (consented) { await page.setViewportSize({ width: 1280, height: 900 }); await account.signOut(page, '/settings'); } }
   catch (error) {
-    errors.push(new Error(`browser sign-out failed: ${error.message.split('\n')[0]} (at ${page.url()})`));
+    const shown = await page.locator('body').innerText().catch(() => '');
+    errors.push(new Error(`browser sign-out failed: ${error.message.split('\n')[0]} (at ${page.url()}, page reads: ${shown.replace(/\s+/g, ' ').slice(0, 400)})`));
     await mkdir('/tmp/plyr-live-playback', { recursive: true }).then(() => page.screenshot({ path: '/tmp/plyr-live-playback/closed-owner-sign-out.png' })).catch(() => {});
   }
   try { await browser.close(); }
