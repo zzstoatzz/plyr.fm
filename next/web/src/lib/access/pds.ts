@@ -1,6 +1,7 @@
 import { RepoResponseError, repoOk as ok, createRecord, getRecord, putRecord, type RepoRpc } from '@plyr/next-core/publishing/repo-rpc';
 import { policyRecord, type Policy, type Rule } from '@plyr/next-core/access/policy';
 import { TID } from '@atproto/common-web';
+import { fromSpaceWireDeep, spaceXrpcBody, spaceXrpcPath } from '@plyr/next-core/space-address';
 import type { Auth } from '@plyr/next-core/auth-state';
 import { createClosing } from '@plyr/next-core/access/close';
 import { sameRule, spaceParts } from '@plyr/next-core/access/policy';
@@ -31,10 +32,10 @@ export function trackAccess(auth: Auth<RepoRpc>) {
   }
   async function space(method: string, params?: Record<string, string>, body?: object) {
     const { agent } = session();
-    const response = await agent.handle(`/xrpc/${method}${params ? `?${new URLSearchParams(params)}` : ''}`, {
-      method: body ? 'POST' : 'GET', ...(body ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {}),
+    const response = await agent.handle(spaceXrpcPath(method, params), {
+      method: body ? 'POST' : 'GET', ...(body ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify(spaceXrpcBody(body)) } : {}),
     });
-    const value: unknown = await response.json().catch(() => ({}));
+    const value: unknown = fromSpaceWireDeep(await response.json().catch(() => ({})));
     session();
     if (!response.ok) throw new SpaceRequestError(object(value) && typeof value.error === 'string' ? value.error : 'Unavailable');
     return value;

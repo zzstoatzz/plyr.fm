@@ -1,5 +1,6 @@
 import type { Agent, Auth, Did } from './auth-state.ts';
 import { didDocument, pdsEndpoint } from './identity.ts';
+import { fromSpaceWire, spaceXrpcPath, toSpaceWire } from './space-address.ts';
 
 const spaceCredentialPath = '/xrpc/com.atproto.space.';
 const credentialMethods = ['authorizeSpaceSync', 'getSpaceCredential'] as const;
@@ -54,8 +55,9 @@ export function createGatedAudio<Key extends SpaceKey, RecordValue extends Recor
 	const credentials = new WeakMap<Agent, Map<string, Promise<Credential>>>();
 
 	async function mint(agent: Agent, space: string, authorityPds: string, transport: SpaceAudioTransport<Key>): Promise<Credential> {
-		const delegation = await agent.handle(`/xrpc/com.atproto.space.getDelegationToken?${new URLSearchParams({ space })}`, { method: 'GET' });
-		if (!delegation.ok) throw new Error('your account cannot access this track');
+		const delegation = await agent.handle(spaceXrpcPath('com.atproto.space.getDelegationToken', { space }), { method: 'GET' });
+		// the listener's own PDS said no before the space was ever asked: nothing here says who may listen
+		if (!delegation.ok) throw new Error('your PDS would not ask for this track. try again, or sign in again.');
 		const { token: delegationToken } = await delegation.json();
 		if (typeof delegationToken !== 'string') throw new Error('invalid space delegation');
 
@@ -63,7 +65,7 @@ export function createGatedAudio<Key extends SpaceKey, RecordValue extends Recor
 		const request: RequestInit = {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ space, credentialKey: key.did(), delegationToken }),
+			body: JSON.stringify({ space: toSpaceWire(space), credentialKey: key.did(), delegationToken }),
 			redirect: 'error'
 		};
 		const address = authorityPds + spaceCredentialPath;
@@ -110,8 +112,9 @@ export function createGatedAudio<Key extends SpaceKey, RecordValue extends Recor
 		return /^did:(plc|web):[^/?#]+$/.test(value);
 	}
 
-	async function resolveGatedAudio(uri: string, auth: Pick<Auth<unknown>, 'agent'>, transport: SpaceAudioTransport<Key>, validate?: (record: RecordValue) => void): Promise<GatedAudioSource> {
+	async function resolveGatedAudio(address: string, auth: Pick<Auth<unknown>, 'agent'>, transport: SpaceAudioTransport<Key>, validate?: (record: RecordValue) => void): Promise<GatedAudioSource> {
 		if (!auth.agent) throw new Error('sign in to play this track');
+		const uri = fromSpaceWire(address);
 		const agent = auth.agent;
 		const parts = uri.slice('at://'.length).split('/');
 		if (!isSpaceAtUriString(uri) || parts.length !== 7 || parts[1] !== 'space' || parts.some(part => !part)) {
@@ -120,6 +123,7 @@ export function createGatedAudio<Key extends SpaceKey, RecordValue extends Recor
 		const [authority, , type, skey, repo, collection, rkey] = parts;
 		if (!isDid(authority) || !isDid(repo)) throw new Error('invalid space record did');
 		const space = `at://${authority}/space/${type}/${skey}`;
+		const wire = toSpaceWire(space);
 		const authorityPds = await pdsEndpoint(authority);
 		const repoPds = repo === authority ? authorityPds : await pdsEndpoint(repo);
 		const didDoc = await didDocument(repo);
@@ -129,7 +133,7 @@ export function createGatedAudio<Key extends SpaceKey, RecordValue extends Recor
 		const [{ keyShare, sharedSecret }, credential] = await Promise.all([
 			encapsulate(`did:key:${kem}`), credentialFor(agent, space, authorityPds, transport)
 		]);
-		const recordParams = new URLSearchParams({ space, repo, collection, rkey });
+		const recordParams = new URLSearchParams({ space: wire, repo, collection, rkey });
 		const record = await signedFetch(transport, credential, `${repoPds}/xrpc/com.atproto.space.getRecord?${recordParams}`, repo, {
 			'accept-signature': formatMacRequest(RECORD_MAC_PROFILE, keyShare)
 		});
@@ -143,7 +147,7 @@ export function createGatedAudio<Key extends SpaceKey, RecordValue extends Recor
 			throw new Error('could not verify this protected track');
 		}
 		try {
-			await verifyRecord(value, { uri, keyShare, sharedSecret, headers: record.headers });
+			await verifyRecord(value, { uri: toSpaceWire(uri), keyShare, sharedSecret, headers: record.headers });
 		} catch {
 			throw new Error('could not verify this protected track');
 		}
@@ -153,7 +157,7 @@ export function createGatedAudio<Key extends SpaceKey, RecordValue extends Recor
 			|| blob.size <= 0 || blob.size > 104_857_600 || typeof blob.mimeType !== 'string' || !playableBlobType(blob.mimeType)) {
 			throw new Error('this track has no playable audio');
 		}
-		const blobParams = new URLSearchParams({ space, repo, cid: blob.ref.toString() });
+		const blobParams = new URLSearchParams({ space: wire, repo, cid: blob.ref.toString() });
 		return {
 			url: `${repoPds}/xrpc/com.atproto.space.getBlob?${blobParams}`,
 			size: blob.size,
@@ -184,7 +188,7 @@ export function createGatedAudio<Key extends SpaceKey, RecordValue extends Recor
 		const repoPds = repo === authority ? authorityPds : await pdsEndpoint(repo);
 		transport.guard?.();
 		const credential = await credentialFor(auth.agent, space, authorityPds, transport);
-		const response = await signedFetch(transport, credential, `${repoPds}/xrpc/com.atproto.space.getBlob?${new URLSearchParams({ space, repo, cid })}`, repo);
+		const response = await signedFetch(transport, credential, `${repoPds}/xrpc/com.atproto.space.getBlob?${new URLSearchParams({ space: toSpaceWire(space), repo, cid })}`, repo);
 		if (!response.ok) throw new Error('could not load this cover');
 		return response;
 	}

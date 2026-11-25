@@ -12,6 +12,9 @@ async function fixture(context: test.TestContext, failure?: 'mac' | 'value' | 'm
   const did: Did = `did:plc:${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`;
   const space = `at://${did}/space/fm.plyr.privateMedia/self`;
   const uri = `${space}/${did}/fm.plyr.track/song`;
+  // the PDS takes and answers spaces only as at:space/… (zds 0.18.3)
+  const wireSpace = `at:space/${did}/fm.plyr.privateMedia/self`;
+  const wireUri = `${wireSpace}/${did}/fm.plyr.track/song`;
   const kem = await P256Keypair.create();
   const signer = await P256Keypair.create();
   const blob = await cidForRawBytes(new Uint8Array([1, 2, 3, 4]));
@@ -31,10 +34,12 @@ async function fixture(context: test.TestContext, failure?: 'mac' | 'value' | 'm
         if (method === 'authorizeSpaceSync' && authority === 'legacy') return Response.json({ error: 'UnknownMethod' }, { status: 404 });
         if (method === 'authorizeSpaceSync' && authority === 'denied') return Response.json({ error: 'SpaceNotFound' }, { status: 404 });
         mints++;
-        const input: { credentialKey: string } = JSON.parse(String(init.body));
-        return Response.json({ credential: await createSpaceCredential({ iss: did, sub: space, keyId: input.credentialKey, expiresInSec: 60, keypair: signer }) });
+        const input: { space: string; credentialKey: string } = JSON.parse(String(init.body));
+        assert.equal(input.space, wireSpace);
+        return Response.json({ credential: await createSpaceCredential({ iss: did, sub: wireSpace, keyId: input.credentialKey, expiresInSec: 60, keypair: signer }) });
       }
       if (url.includes('getRecord')) {
+        assert.equal(new URL(url).searchParams.get('space'), wireSpace);
         const headers = new Headers(init.headers);
         const token = headers.get('authorization')?.replace('Atproto-Space-Credential ', '');
         assert.ok(token);
@@ -42,13 +47,13 @@ async function fixture(context: test.TestContext, failure?: 'mac' | 'value' | 'm
         await verifyCredentialSig(Object.fromEntries(headers), credential.payload.cnf.kid);
         const request = parseMacRequest(headers.get('accept-signature') ?? undefined, RECORD_MAC_PROFILE);
         assert.ok(request);
-        const signed = createRecordMacHeaders(uri, cid, { ...request, sharedSecret: decapsulate(kem, request.keyShare) });
+        const signed = createRecordMacHeaders(wireUri, cid, { ...request, sharedSecret: decapsulate(kem, request.keyShare) });
         if (failure === 'mac') signed.headers.signature = 'mac=:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=:';
         if (failure === 'key') signed.headers['signature-input'] = signed.headers['signature-input'].replace(request.keyShare, kem.did());
         const returned = failure === 'value' ? { ...value, audioBlob: { ...value.audioBlob, size: 3 } } : value;
-        return new Response(lexStringify({ uri, cid: cid.toString(), value: returned }), { headers: failure === 'missing' ? {} : signed.headers });
+        return new Response(lexStringify({ uri: wireUri, cid: cid.toString(), value: returned }), { headers: failure === 'missing' ? {} : signed.headers });
       }
-      if (url.includes('getBlob')) { blobReads++; return new Response(new Uint8Array([1, 2, 3, 4])); }
+      if (url.includes('getBlob')) { assert.equal(new URL(url).searchParams.get('space'), wireSpace); blobReads++; return new Response(new Uint8Array([1, 2, 3, 4])); }
       throw new Error('Unexpected transport request');
     }
   };

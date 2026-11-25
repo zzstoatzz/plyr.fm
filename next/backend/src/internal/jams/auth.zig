@@ -54,7 +54,8 @@ pub fn admit(allocator: std.mem.Allocator, io: std.Io, config: Config, host: []c
     resolver.plc_url = config.plc_url;
     const member = try identify(allocator, io, config, service);
     const actor = member.issuer;
-    const space = try std.fmt.allocPrint(allocator, "at://{s}/space/{s}/{s}", .{ host, config.space_type, key });
+    // the PDS form (zds 0.18.3): the delegation names it and authorizeSpaceSync takes it
+    const space = try std.fmt.allocPrint(allocator, "at:space/{s}/{s}/{s}", .{ host, config.space_type, key });
     var delegated = zat.Jwt.parse(allocator, delegation) catch return error.InvalidDelegation;
     defer delegated.deinit();
     if (!std.mem.eql(u8, try tokenType(allocator, delegation), "atproto-space-delegation+jwt") or !std.mem.eql(u8, delegated.payload.iss, actor) or
@@ -101,7 +102,7 @@ pub fn admit(allocator: std.mem.Allocator, io: std.Io, config: Config, host: []c
         if (!std.mem.eql(u8, string(cnf, "kid") orelse "", kid)) return error.InvalidCredential;
         const exp = if (payload.object.get("exp")) |value| if (value == .integer) value.integer else return error.InvalidCredential else return error.InvalidCredential;
         if (exp <= now) return error.InvalidCredential;
-        return .{ .actor = try allocator.dupe(u8, actor), .host = try allocator.dupe(u8, host), .room = try allocator.dupe(u8, space), .expires_ms = @min(exp, now + 600) * 1000 };
+        return .{ .actor = try allocator.dupe(u8, actor), .host = try allocator.dupe(u8, host), .room = try std.fmt.allocPrint(allocator, "at://{s}/space/{s}/{s}", .{ host, config.space_type, key }), .expires_ms = @min(exp, now + 600) * 1000 };
     }
     unreachable;
 }

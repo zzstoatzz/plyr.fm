@@ -5,6 +5,7 @@ import * as queue from '../queue-state.ts';
 import { isPrivateTrack } from '../track-access.ts';
 import { sameRecord } from './create-operation.ts';
 import { normalizeTrackTags } from './track-tags.ts';
+import { fromSpaceWireDeep, spaceXrpcBody, spaceXrpcPath } from '../space-address.ts';
 import { ARTWORK_TYPES, MAX_ARTWORK_BYTES } from './artwork-model.ts';
 
 export interface MediaFile {
@@ -159,11 +160,11 @@ export function createPrivateLibrary({ NSID, PRIVATE_SPACE_TYPE }: Pick<AuthConf
       if (!agent) throw new Error('sign in to access this track.');
       const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 20_000);
       try {
-        const response = await agent.handle(`/xrpc/${method}${params ? '?' + new URLSearchParams(params) : ''}`, {
+        const response = await agent.handle(spaceXrpcPath(method, params), {
           method: body ? 'POST' : 'GET', signal: controller.signal,
-          ...(body ? { headers: { 'content-type': mimeType ?? 'application/json' }, body: body instanceof ArrayBuffer ? body : JSON.stringify(body) } : {}),
+          ...(body ? { headers: { 'content-type': mimeType ?? 'application/json' }, body: body instanceof ArrayBuffer ? body : JSON.stringify(spaceXrpcBody(body)) } : {}),
         });
-        const value: unknown = await response.json();
+        const value: unknown = fromSpaceWireDeep(await response.json());
         current();
         if (!response.ok) throw new PrivateRequestError(object(value) && typeof value.error === 'string' ? value.error : 'Unavailable');
         return value;

@@ -109,7 +109,7 @@ async function checkOwnerTrack(page, audio, previousSource, origin, appView, coo
   await rpc('com.atproto.space.createSpace', { spaceType: 'fm.plyr.next.audio', skey: key,
     policy: { $type: 'com.atproto.managedspace.policy', managingApp: 'did:web:api.next.plyr.fm#plyr_space', publishPolicy: false } }, session.accessJwt);
   const record = { $type: 'fm.plyr.track', title: 'Protected streaming fixture', artist: 'fixture artist', duration: 300, fileType: 'wav', createdAt: new Date().toISOString() };
-  const stored = await rpc('com.atproto.space.putRecord', { space, repo: did, collection: 'fm.plyr.track', rkey: key, validate: false, record: { ...record, audioBlob: blob } }, session.accessJwt);
+  const stored = await rpc('com.atproto.space.putRecord', { space: `at:space/${did}/fm.plyr.next.audio/${key}`, repo: did, collection: 'fm.plyr.track', rkey: key, validate: false, record: { ...record, audioBlob: blob } }, session.accessJwt);
   const canonical = await rpc('com.atproto.repo.putRecord', { repo: did, collection: 'fm.plyr.track', rkey: key, validate: false, record: { ...record, audioSpace: privateUri } }, session.accessJwt);
   const track = { object: 'track', id, record: { uri: canonicalUri, cid: canonical.cid, revision: null, collection: 'fm.plyr.track', rkey: key },
     metadata: { title: record.title, artist_name: record.artist, description: null, album: null, duration_seconds: 300, created_at: record.createdAt },

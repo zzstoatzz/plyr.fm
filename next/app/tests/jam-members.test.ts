@@ -33,7 +33,7 @@ test('Jam invitation sends a singleton read-only grant through putMembers', asyn
   assert.equal(new Headers(init?.headers).get('content-type'), 'application/json');
   assert.equal(typeof init?.body, 'string');
   assert.deepEqual(JSON.parse(String(init?.body)), {
-    space: `at://${host}/space/${JAM_SPACE.type}/party`,
+    space: `at:space/${host}/${JAM_SPACE.type}/party`,
     members: [{ did: member, read: true, write: false }]
   });
 });

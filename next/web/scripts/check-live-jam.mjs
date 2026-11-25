@@ -96,7 +96,7 @@ try {
       const current = new URL(currentPage);
       if (current.origin !== app || decodeURIComponent(current.pathname) !== `/jam/${session.did}~${body.skey}`) return false;
       if (body.policy?.$type !== 'com.atproto.memberspace.policy' || ['publicRead', 'publicWrite', 'publishPolicy', 'publishMembers'].some(field => body.policy[field] !== false)) return false;
-      const candidate = `at://${session.did}/space/${jamType}/${body.skey}`;
+      const candidate = `at:space/${session.did}/${jamType}/${body.skey}`; // the PDS form (zds 0.18.3)
       if (space && space !== candidate) return false;
       space = candidate;
       return true;
