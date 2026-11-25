@@ -1,4 +1,5 @@
 const std = @import("std");
+const audio_format = @import("src/internal/media/audio_format.zig");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -24,6 +25,10 @@ pub fn build(b: *std.Build) void {
     root_module.addAnonymousImport("upload_contract", .{
         .root_source_file = b.path(b.option([]const u8, "upload_contract", "Shared upload policy contract") orelse "../../backend/src/backend/upload_contract.json"),
     });
+    const audio_format_ts = "../core/src/audio-format.gen.ts";
+    const write_audio_format = b.addUpdateSourceFiles();
+    write_audio_format.addBytesToSource(audio_format.renderTypeScript(b.allocator) catch @panic("OOM"), audio_format_ts);
+    b.step("gen-audio-format", "Render next/core/src/audio-format.gen.ts from the zig audio format table").dependOn(&write_audio_format.step);
     root_module.addAnonymousImport("migration_0029_like_counts", .{
         .root_source_file = b.path("migrations/0029_add_track_like_counts.sql"),
     });
@@ -166,6 +171,24 @@ pub fn build(b: *std.Build) void {
     run_tests.has_side_effects = true;
     const test_step = b.step("test", "Run Zig backend tests");
     test_step.dependOn(&run_tests.step);
+
+    // One audio format table for zig and TS. Its tests read next/core (the
+    // rendered TS copy, which must not be stale, and the shared corpus), so
+    // they get their own module: the image build sees only next/backend.
+    const audio_format_module = b.createModule(.{
+        .root_source_file = b.path("src/internal/media/audio_format_conformance.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    audio_format_module.addAnonymousImport("audio_format_ts", .{ .root_source_file = b.path(audio_format_ts) });
+    const audio_corpus = b.addOptions();
+    audio_corpus.addOptionPathDirectory("path", b.path("../core/tests/fixtures/audio"));
+    audio_format_module.addOptions("audio_corpus", audio_corpus);
+    const audio_format_tests = b.addTest(.{
+        .root_module = audio_format_module,
+        .filters = if (test_filter) |filter| &.{filter} else &.{},
+    });
+    test_step.dependOn(&b.addRunArtifact(audio_format_tests).step);
 
     // declared before the lazy fetch, which reruns configure without it
     const cases = b.option(u64, "fuzz-cases", "cases per property (default: HEGEL_TEST_CASES, else 100)");

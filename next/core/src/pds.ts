@@ -1,4 +1,4 @@
-import { sniffAudioFormat } from './audio-sniff';
+import { sniffAudioLabel } from './audio-format.ts';
 import { publicTrackReference, assertPublicCollection } from './publishing/track-reference';
 import { RepoResponseError, repoOk as ok, getRecord, listRecords, createRecord, putRecord, uploadRepoBlob, type RepoRpc } from './publishing/repo-rpc';
 import type { createApi, AwaitStatus, Track } from './api';
@@ -90,7 +90,7 @@ async function uploadBlob(rpc: RepoRpc, file: MediaFile, assertSession: () => vo
 	const bytes = await file.arrayBuffer();
 	assertSession();
 	// audio is labelled as what its bytes are: a WAV named .m4a must not be served as audio/mp4
-	const format = audio ? sniffAudioFormat(new Uint8Array(bytes, 0, Math.min(bytes.byteLength, 64))) : undefined;
+	const format = audio ? sniffAudioLabel(new Uint8Array(bytes)) : undefined;
 	const uploaded = await ok(uploadRepoBlob(rpc, { input: bytes, headers: { 'content-type': format?.contentType ?? file.type } }));
 	return { ...uploaded, bytes, format };
 }
@@ -410,7 +410,7 @@ export function createPublicPds(auth: PdsSession, { NSID, api, createStorage, ge
 		assertSession();
 		const cid = (uploaded.blob as { ref: { $link: string } }).ref.$link;
 		// a closed track's audio never goes to the public streaming origin
-		if (!closed) await deliverAudio?.({ uri: reservation.uri, name: input.file.name, type: input.file.type, bytes: new Uint8Array(uploaded.bytes), cid });
+		if (!closed) await deliverAudio?.({ uri: reservation.uri, bytes: new Uint8Array(uploaded.bytes), cid });
 		assertSession();
 		const prepared = await prepareTrackRecord(input);
 		assertSession();

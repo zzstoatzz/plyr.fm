@@ -1,23 +1,24 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 import { canonicalAudioType, genreTags, jobLine, outputBudget, processingStep, transient, uploadRoute } from '@plyr/next-core/publishing/upload-queue-model';
-import { audioFormat, MAX_SERVICE_AUDIO_BYTES, UPLOAD_PART_BYTES, type UploadStatus } from '@plyr/next-core/publishing/upload-model';
+import { claimedContainer, MAX_SERVICE_AUDIO_BYTES, UPLOAD_PART_BYTES, type UploadStatus } from '@plyr/next-core/publishing/upload-model';
+import type { AudioFormat } from '@plyr/next-core/audio-format';
 
 const MIB = 1_048_576;
 
-test('small playable audio goes to the PDS; lossless and large go through plyr storage', () => {
-  assert.deepEqual(uploadRoute({ name: 'memo.m4a', type: 'audio/x-m4a', size: 2 * MIB }), { kind: 'pds' });
-  assert.deepEqual(uploadRoute({ name: 'song.mp3', type: 'audio/mpeg', size: 90 * MIB }), { kind: 'pds' });
-  assert.deepEqual(uploadRoute({ name: 'mix.mp3', type: 'audio/mpeg', size: 200 * MIB }), { kind: 'service' });
-  for (const [name, type] of [['take.wav', 'audio/wav'], ['take.FLAC', 'audio/flac'], ['take.aiff', 'audio/aiff'], ['take.aif', 'audio/x-aiff'], ['rec.webm', 'audio/webm']]) {
-    const route = uploadRoute({ name, type, size: 5 * MIB }, 30);
-    assert.equal(route.kind, 'service', name);
-    assert.equal(route.kind === 'service' && route.processing?.recipe, 'mp3-320k-44100-v1', name);
+const as = (container: AudioFormat['container'], codec: AudioFormat['codec']): AudioFormat => ({ container, codec });
+
+test('small playable audio goes to the PDS; lossless, ALAC and large go through plyr storage', () => {
+  assert.deepEqual(uploadRoute({ size: 2 * MIB }, as('mp4', 'aac')), { kind: 'pds' });
+  assert.deepEqual(uploadRoute({ size: 90 * MIB }, as('mp3', 'mp3')), { kind: 'pds' });
+  assert.deepEqual(uploadRoute({ size: 200 * MIB }, as('mp3', 'mp3')), { kind: 'service' });
+  for (const format of [as('wav', 'pcm'), as('flac', 'flac'), as('aiff', 'pcm'), as('webm', 'opus'), as('ogg', 'vorbis'), as('mp4', 'alac'), as('mp4', 'unknown')]) {
+    const route = uploadRoute({ size: 5 * MIB }, format, 30);
+    assert.equal(route.kind === 'service' && route.processing?.recipe, 'mp3-320k-44100-v1', `${format.container} ${format.codec}`);
   }
-  assert.throws(() => uploadRoute({ name: 'huge.wav', type: 'audio/wav', size: MAX_SERVICE_AUDIO_BYTES + 1 }), /1\.5 GiB/);
-  assert.throws(() => uploadRoute({ name: 'empty.mp3', type: 'audio/mpeg', size: 0 }), /nonempty/);
-  assert.throws(() => uploadRoute({ name: 'notes.txt', type: 'text/plain', size: 2 * MIB }), /choose an/, 'a non-audio file is refused at pick time, not in the queue');
-  assert.throws(() => uploadRoute({ name: 'clip.mp4', type: 'video/mp4', size: 2 * MIB }), /choose an/);
+  assert.throws(() => uploadRoute({ size: MAX_SERVICE_AUDIO_BYTES + 1 }, as('wav', 'pcm')), /1\.5 GiB/);
+  assert.throws(() => uploadRoute({ size: 0 }, as('mp3', 'mp3')), /nonempty/);
+  assert.throws(() => uploadRoute({ size: 2 * MIB }, undefined), /isn't audio/, 'bytes that are no audio are refused');
 });
 
 test('mp3 budget follows duration, falls back to source size, and stays inside the admission bound', () => {
@@ -56,13 +57,13 @@ test('one toast line per phase', () => {
   assert.equal(jobLine({ ...job, phase: 'failed', error: 'finish the earlier upload first' }), '"jimmy john’s 28" didn\'t upload: finish the earlier upload first');
 });
 
-test('iOS picker types for WAV and WebM are accepted and routed to mp3 processing', () => {
-  for (const [name, type] of [['Queue test – wav ’26.wav', 'audio/vnd.wave'], ['rec.webm', 'video/webm'], ['take.flac', 'audio/x-flac'], ['song.mp3', 'audio/mp3']]) {
-    const route = uploadRoute({ name, type, size: 5 * MIB }, 20);
-    assert.equal(route.kind, name.endsWith('.mp3') ? 'pds' : 'service', name);
-    if (!name.endsWith('.mp3')) assert.equal(audioFormat(name, type, true).contentType, name.endsWith('.webm') ? 'audio/webm' : name.endsWith('.flac') ? 'audio/flac' : 'audio/wav');
+test('iOS picker types and bare names are claims the picker takes', () => {
+  for (const [name, type, container] of [['Queue test – wav ’26.wav', 'audio/vnd.wave', 'wav'], ['rec.webm', 'video/webm', 'webm'], ['take.flac', 'audio/x-flac', 'flac'],
+    ['song.mp3', 'audio/mp3', 'mp3'], ['take.aif', 'audio/x-aiff', 'aiff'], ['memo', 'audio/x-m4a', 'mp4']]) {
+    assert.equal(claimedContainer({ name, type }), container, name);
   }
-  assert.throws(() => uploadRoute({ name: 'clip.wav', type: 'video/mp4', size: 5 * MIB }), /choose an/);
+  assert.throws(() => claimedContainer({ name: 'notes.txt', type: 'text/plain' }), /choose an/);
+  assert.throws(() => claimedContainer({ name: 'notes', type: 'application/octet-stream' }), /choose an/);
 });
 
 test('auto-tag adds genres within half the top score, at most five, after the artist\'s own tags', () => {
@@ -76,15 +77,9 @@ test('auto-tag adds genres within half the top score, at most five, after the ar
   assert.deepEqual(genreTags(['x'], []), ['x']);
 });
 
-test('files whose picker sends no real type, and Ogg or Opus voice notes, are taken and given a playable copy', () => {
-  assert.equal(canonicalAudioType({ name: 'demo.mp3', type: 'application/octet-stream', size: 3 * MIB }), 'audio/mpeg');
-  assert.equal(canonicalAudioType({ name: 'demo.MP3', type: '', size: 3 * MIB }), 'audio/mpeg');
-  assert.deepEqual(uploadRoute({ name: 'demo.mp3', type: 'application/octet-stream', size: 3 * MIB }), { kind: 'pds' });
-  for (const [name, type] of [['note.opus', 'audio/ogg'], ['note.opus', 'audio/opus'], ['note.opus', 'application/octet-stream'], ['take.ogg', 'audio/ogg']]) {
-    const route = uploadRoute({ name, type, size: 2 * MIB }, 60);
-    assert.equal(route.kind === 'service' && route.processing?.recipe, 'mp3-320k-44100-v1', `${name} ${type}`);
-  }
-  assert.equal(canonicalAudioType({ name: 'note.opus', type: 'audio/ogg', size: MIB }), 'audio/opus');
-  assert.equal(audioFormat('take.ogg', 'audio/ogg', true).contentType, 'audio/ogg');
-  assert.throws(() => uploadRoute({ name: 'demo.mp3', type: 'audio/wav', size: MIB }), /choose an/, 'a real but contradicting type still stops');
+test('files whose picker sends no real type are named by their extension, and Opus voice notes are Ogg', () => {
+  assert.equal(canonicalAudioType({ name: 'demo.mp3', type: 'application/octet-stream' }), 'audio/mpeg');
+  assert.equal(canonicalAudioType({ name: 'demo.MP3', type: '' }), 'audio/mpeg');
+  assert.equal(canonicalAudioType({ name: 'note.opus', type: 'audio/ogg' }), 'audio/ogg');
+  assert.equal(canonicalAudioType({ name: 'take.ogg', type: 'audio/ogg' }), 'audio/ogg');
 });

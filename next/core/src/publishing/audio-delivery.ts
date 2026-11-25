@@ -1,10 +1,9 @@
 import type { Auth } from '../auth-state.ts';
 import { audioOrigin } from '../downloads/manifest.ts';
-import { sniffAudioFormat } from '../audio-sniff.ts';
-import { audioFormat } from './upload-model.ts';
+import { sniffAudioLabel } from '../audio-format.ts';
 import { admitUpload, type UploadConfig } from './upload-transport.ts';
 
-export type DeliverAudio = (input: { uri: string; name: string; type: string; bytes: Uint8Array<ArrayBuffer>; cid: string }) => Promise<boolean>;
+export type DeliverAudio = (input: { uri: string; bytes: Uint8Array<ArrayBuffer>; cid: string }) => Promise<boolean>;
 
 /** The sha2-256 digest a raw CIDv1 (`bafkrei…`) names, as hex, or undefined for any other CID. */
 export function rawCidDigest(cid: string) {
@@ -29,13 +28,15 @@ export function rawCidDigest(cid: string) {
  */
 export function audioDelivery(config: UploadConfig, getAuth: () => Pick<Auth<unknown>, 'did' | 'agent' | 'uploadStorage'>, newId: () => string,
   fetcher: typeof fetch = fetch): DeliverAudio {
-  return async ({ uri, name, type, bytes, cid }) => {
+  return async ({ uri, bytes, cid }) => {
     const auth = getAuth();
     const digest = rawCidDigest(cid);
     if (!auth.agent || !auth.did || !auth.uploadStorage || !digest || !uri.startsWith(`at://${auth.did}/`)) return false;
     try {
       // the bytes decide: the origin serves this type, and Safari and iOS won't play audio served as something else
-      const { fileType, contentType } = sniffAudioFormat(bytes.subarray(0, 64)) ?? audioFormat(name, type);
+      const label = sniffAudioLabel(bytes);
+      if (!label) return false;
+      const { fileType, contentType } = label;
       const { capability } = await admitUpload(config, auth.agent, { uploadId: newId(), recordUri: uri, sizeBytes: bytes.byteLength, contentType, fileType }, undefined, fetcher);
       const stored = await fetcher(`${audioOrigin}/audio/${cid}`, { method: 'PUT', body: bytes, redirect: 'error',
         headers: { authorization: `Bearer ${capability}`, 'content-type': contentType, 'x-content-sha256': digest } });

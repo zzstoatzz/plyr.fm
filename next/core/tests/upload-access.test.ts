@@ -10,6 +10,7 @@ import { uploadRoute, needsPlyrStorage } from '../src/publishing/upload-queue-mo
 import { queuedUploadDraft, queuedUploadKey, readQueuedUploadDraft, type QueuedUploadDraft } from '../src/publishing/queued-upload-draft.ts';
 import { createUploadQueue } from '../src/publishing/upload-queue.ts';
 import { addBuyLink } from '../src/selling.ts';
+import { headReader } from './audio-heads.ts';
 
 const owner = 'did:plc:fixture';
 const resolve = async (handle: string) => `did:plc:${handle.split('.')[0]}`;
@@ -61,11 +62,11 @@ test('rules read back strictly and compare by meaning', () => {
 });
 
 test('closed audio goes to the PDS as is, never through plyr storage', () => {
-  const wav = { name: 'demo.wav', type: 'audio/wav', size: 50_000_000 };
-  assert.equal(uploadRoute(wav).kind, 'service');
-  assert.deepEqual(uploadRoute(wav, undefined, true), { kind: 'pds' });
+  const wav = { name: 'demo.wav', type: 'audio/wav', size: 50_000_000 }, format = { container: 'wav', codec: 'pcm' } as const;
+  assert.equal(uploadRoute(wav, format).kind, 'service');
+  assert.deepEqual(uploadRoute(wav, format, undefined, true), { kind: 'pds' });
   assert.equal(needsPlyrStorage(wav, true), false);
-  assert.throws(() => uploadRoute({ ...wav, size: 200_000_000 }, undefined, true), /100 MB/);
+  assert.throws(() => uploadRoute({ ...wav, size: 200_000_000 }, format, undefined, true), /100 MB/);
 });
 
 test('a queued closed upload keeps its ways in; an unreadable rule fails the draft rather than publishing open', () => {
@@ -96,7 +97,7 @@ function fixtureQueue(options: { saveBuyLink?: boolean; uploadStorage?: boolean;
     getAuth: () => ({ did: owner, rpc: {}, uploadStorage: !!options.uploadStorage }) as Auth<RepoRpc>,
     createPds: () => pds,
     measureAudioDuration: async () => 1,
-    openUploadReader: () => { throw new Error('not used'); },
+    openUploadReader: headReader,
     sendParts: async () => { throw new Error('not used'); },
     uploadStorage: { load: async () => [], put: async () => {}, delete: async () => {} },
     queuedDrafts: {

@@ -8,7 +8,9 @@
 //! prefers that URL, and anyone can re-check it against the signed record.
 //! A blob-backed version isn't listed or read back until that origin exists, so
 //! ingest wakes this worker for every new version; the uploading client has
-//! usually stored the object already, leaving only a HEAD.
+//! usually stored the object already, leaving only a read of its first bytes.
+//! The origin's media type is what those bytes are (`audio_format.sniff`), not
+//! the record's claim: a WAV uploaded as `audio/mp4` is recorded as audio/wav.
 //! Records whose `audioUrl` is audio plyr already stores (prod's CDN, next's
 //! uploads) aren't mirrored, so storage isn't paid twice. A blob beside any other
 //! `audioUrl` (a record written straight to a PDS) is: that URL is unverified,
@@ -23,6 +25,7 @@ const zat = @import("zat");
 const pinned_tls = @import("../net/pinned_tls.zig");
 const safe_endpoint = @import("../net/safe_endpoint.zig");
 const store_module = @import("postgres_mirror_store.zig");
+const audio_format = @import("../media/audio_format.zig");
 
 const log = std.log.scoped(.blob_mirror);
 
@@ -156,9 +159,9 @@ const Worker = struct {
         const now_us = try nowMicros(self.io);
         const items = try self.store.candidates(arena.allocator(), now_us, self.settings.batch_size);
         for (items) |candidate| {
-            if (self.mirror(candidate)) |origin_url| {
-                defer self.allocator.free(origin_url);
-                const current = try self.store.recordMirrored(candidate, origin_url, try nowMicros(self.io));
+            if (self.mirror(candidate)) |mirrored| {
+                defer self.allocator.free(mirrored.url);
+                const current = try self.store.recordMirrored(candidate, mirrored.url, mirrored.media_type, try nowMicros(self.io));
                 if (current)
                     log.info("mirrored {s} ({s})", .{ candidate.record_uri, candidate.blob_cid })
                 else
@@ -171,37 +174,60 @@ const Worker = struct {
         return items.len;
     }
 
-    /// Fetch, verify, upload. Returns the public URL (owned by self.allocator).
-    fn mirror(self: *Worker, candidate: store_module.Candidate) ![]u8 {
+    const Mirrored = struct {
+        /// owned by self.allocator
+        url: []u8,
+        /// what the bytes are; static
+        media_type: []const u8,
+    };
+
+    /// Fetch, verify, upload.
+    fn mirror(self: *Worker, candidate: store_module.Candidate) !Mirrored {
         if (candidate.byte_length) |size| if (size < 0 or size > max_blob_bytes) return error.BlobTooLarge;
         const key = try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ self.settings.key_prefix, candidate.blob_cid });
         defer self.allocator.free(key);
         // the uploading client usually stored it already; the key fixes the digest
-        if (!try self.stored(key)) {
+        const format = if (try self.storedHead(key)) |head| sniffed: {
+            defer self.bucket_transport.allocator.free(head);
+            break :sniffed audio_format.sniff(head);
+        } else fetched: {
             const blob = try self.fetchBlob(candidate);
             defer self.pds_transport.allocator.free(blob);
             try verifyBlob(self.allocator, candidate.blob_cid, blob);
-            try self.put(key, candidate.media_type, blob);
-        }
-        return std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ self.settings.base_url, key });
+            const format = audio_format.sniff(blob);
+            try self.put(key, if (format) |f| f.container.contentType() else candidate.media_type, blob);
+            break :fetched format;
+        };
+        return .{
+            .url = try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ self.settings.base_url, key }),
+            // bytes that name no container keep the record's claim, as before
+            .media_type = if (format) |f| f.container.contentType() else canonicalClaim(candidate.media_type),
+        };
     }
 
-    /// The worker only stores bytes that hash to the key's CID, so presence is proof.
-    fn stored(self: *Worker, key: []const u8) !bool {
+    /// The stored object's first bytes, or null when it isn't stored. The
+    /// worker only stores bytes that hash to the key's CID, so presence is proof.
+    fn storedHead(self: *Worker, key: []const u8) !?[]u8 {
         const url = try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ self.settings.base_url, key });
         defer self.allocator.free(url);
-        var result = self.bucket_transport.fetch(.{
+        var range_buffer: [32]u8 = undefined;
+        const range = try std.fmt.bufPrint(&range_buffer, "bytes=0-{d}", .{audio_format.head_bytes - 1});
+        const result = self.bucket_transport.fetch(.{
             .url = url,
-            .method = .HEAD,
-            .max_response_size = 1024,
+            .accept_encoding = "identity",
+            .extra_headers = &.{.{ .name = "range", .value = range }},
+            .max_response_size = max_blob_bytes,
             .on_redirect = .refuse,
             .deadline_ns = 30 * std.time.ns_per_s,
         }) catch |err| switch (err) {
             error.OutOfMemory => return error.OutOfMemory,
-            else => return false,
+            else => return null,
         };
-        defer result.deinit(self.bucket_transport.allocator);
-        return result.status == .ok;
+        if (result.status != .ok and result.status != .partial_content) {
+            self.bucket_transport.allocator.free(result.body);
+            return null;
+        }
+        return result.body;
     }
 
     fn fetchBlob(self: *Worker, candidate: store_module.Candidate) ![]u8 {
@@ -276,6 +302,12 @@ const Worker = struct {
 };
 
 /// The bytes must hash to the record's blob CID (raw codec, sha2-256).
+/// The record's claim, under its canonical name when it names a container
+/// (the playback store compares media types by container, not spelling).
+fn canonicalClaim(media_type: []const u8) []const u8 {
+    return if (audio_format.Container.fromContentType(media_type)) |container| container.contentType() else media_type;
+}
+
 pub fn verifyBlob(allocator: std.mem.Allocator, cid_text: []const u8, bytes: []const u8) !void {
     const cid = zat.Cid.fromString(allocator, cid_text) catch return error.InvalidBlobCid;
     defer allocator.free(cid.raw);
@@ -304,6 +336,11 @@ fn nowMicros(io: std.Io) !i64 {
 fn getenv(name: [*:0]const u8) ?[]const u8 {
     const value = std.c.getenv(name) orelse return null;
     return std.mem.span(value);
+}
+
+// audio_format's own tests run with the delivery code that depends on it
+test {
+    _ = audio_format;
 }
 
 test "blob bytes must match the record's raw sha256 CID" {

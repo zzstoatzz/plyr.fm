@@ -1,18 +1,19 @@
+import { AUDIO_CONTAINERS, containerFromContentType, containerFromFileType, type AudioContainer } from '../audio-format.ts';
 import { createOperation, type CreateOperation } from './create-operation.ts';
 import { MAX_AUDIO_BYTES } from './track-audio.ts';
 
 export const UPLOAD_PART_BYTES = 10_485_760;
 export const MAX_SERVICE_AUDIO_BYTES = 1_610_612_736;
-const formats: Record<string, string> = { mp3: 'audio/mpeg', wav: 'audio/wav', flac: 'audio/flac', ogg: 'audio/ogg', m4a: 'audio/mp4', aac: 'audio/aac' };
 export const PUBLIC_AUDIO_FORMATS = 'MP3, WAV, FLAC, AIFF, OGG, Opus, M4A, AAC or WebM';
-const processingFormats: Record<string, string> = { ...formats, aif: 'audio/aiff', aiff: 'audio/aiff', webm: 'audio/webm', opus: 'audio/opus' };
+const CONTAINERS = Object.keys(AUDIO_CONTAINERS) as AudioContainer[];
 /**
  * The `accept` value for an audio file input: every extension an upload takes, and no MIME wildcard.
- * iOS Safari reads `audio/*` as video, and WebM is typed as video on iOS and Android, so either one
- * makes a phone's picker offer the photo library and camera. Plain extensions open Files directly.
+ * iOS Safari reads `audio/*` as video, and WebM and .mp4 are typed as video on iOS and Android, so any
+ * of them makes a phone's picker offer the photo library and camera. Plain extensions open Files directly.
  */
 export function audioPickerAccept(touch: boolean): string {
-  return Object.keys(processingFormats).filter(extension => !touch || extension !== 'webm').map(extension => `.${extension}`).join(',');
+  return CONTAINERS.flatMap(container => [AUDIO_CONTAINERS[container].fileType, ...AUDIO_CONTAINERS[container].fileTypeAliases])
+    .filter(extension => !touch || (containerFromFileType(extension) !== 'webm' && extension !== 'mp4')).map(extension => `.${extension}`).join(',');
 }
 export type UploadProcessing = { recipe: 'mp3-320k-44100-v1'; outputBudget: number };
 export type UploadRendition = { duration: number; sizeBytes: number; contentType: 'audio/mpeg'; fileType: 'mp3' };
@@ -45,19 +46,19 @@ function originalBlob(value: unknown) {
     && typeof blob.size === 'number' && Number.isSafeInteger(blob.size) && blob.size > 0 && blob.size <= MAX_AUDIO_BYTES;
 }
 
-export function audioFormat(name: string, type: string, processing = false) {
-  const fileType = name.split('.').at(-1)?.toLowerCase() ?? '';
-  const contentType = (processing ? processingFormats : formats)[fileType];
-  // Pickers name the same format differently: iOS reports WAV as audio/vnd.wave and WebM as video/webm.
-  const normalized = ({ 'audio/x-wav': 'audio/wav', 'audio/wave': 'audio/wav', 'audio/vnd.wave': 'audio/wav', 'audio/x-pn-wav': 'audio/wav',
-    'audio/x-flac': 'audio/flac', 'audio/x-m4a': 'audio/mp4', 'audio/m4a': 'audio/mp4', 'audio/x-aiff': 'audio/aiff', 'audio/mp3': 'audio/mpeg',
-    'audio/x-mpeg': 'audio/mpeg', 'audio/x-aac': 'audio/aac', 'audio/vorbis': 'audio/ogg', 'video/webm': 'audio/webm',
-    // Some pickers and share sheets send no real type at all; the extension decides then.
-    'application/octet-stream': '', 'binary/octet-stream': '', 'application/x-unknown': '' } as Record<string, string>)[type.toLowerCase()] ?? type.toLowerCase();
-  // Opus usually travels in an Ogg container and is reported as such.
-  if (fileType === 'opus' && (normalized === 'audio/ogg' || normalized === 'audio/x-opus+ogg')) return { fileType, contentType };
-  if (!contentType || (normalized && normalized !== contentType)) throw new Error(processing ? `choose an ${PUBLIC_AUDIO_FORMATS} file.` : 'choose an MP3, WAV, FLAC, OGG, M4A or AAC file.');
-  return { fileType, contentType };
+// Pickers and share sheets that know nothing say so with these; the name speaks then.
+const GENERIC_TYPES = new Set(['', 'application/octet-stream', 'binary/octet-stream', 'application/x-unknown']);
+
+/**
+ * The container a picked file claims to be, from its name or its picker's type. Only a claim: it
+ * turns away what isn't audio at pick time, and the bytes decide everything after.
+ */
+export function claimedContainer(file: { name: string; type: string }): AudioContainer {
+  const extension = file.name.includes('.') ? file.name.split('.').pop() : undefined;
+  const type = file.type.split(';')[0].trim().toLowerCase();
+  const container = containerFromFileType(extension) ?? (GENERIC_TYPES.has(type) ? undefined : containerFromContentType(type));
+  if (!container) throw new Error(`choose an ${PUBLIC_AUDIO_FORMATS} file.`);
+  return container;
 }
 function processingRecipe(value: unknown, sourceBytes: number): UploadProcessing {
   if (!value || typeof value !== 'object' || !('recipe' in value) || value.recipe !== 'mp3-320k-44100-v1'
@@ -73,7 +74,9 @@ export function uploadOperation(value: unknown, owner: string): UploadOperation 
     || typeof value.name !== 'string' || typeof value.sizeBytes !== 'number' || !Number.isSafeInteger(value.sizeBytes) || value.sizeBytes <= 0 || value.sizeBytes > MAX_SERVICE_AUDIO_BYTES
     || typeof value.fileType !== 'string' || typeof value.contentType !== 'string') throw new Error('could not read upload recovery.');
   const processing = 'processing' in value && value.processing !== undefined ? processingRecipe(value.processing, value.sizeBytes) : undefined;
-  if ((processing ? processingFormats : formats)[value.fileType] !== value.contentType) throw new Error('could not read upload recovery.');
+  const container = containerFromFileType(value.fileType);
+  if (!container || AUDIO_CONTAINERS[container].fileType !== value.fileType || AUDIO_CONTAINERS[container].contentType !== value.contentType
+    || (AUDIO_CONTAINERS[container].rule === 'process' && !processing)) throw new Error('could not read upload recovery.');
   return { ...operation, uploadId: value.uploadId, name: value.name, sizeBytes: value.sizeBytes, contentType: value.contentType, fileType: value.fileType, ...(processing ? { processing } : {}) };
 }
 export function uploadStatus(value: unknown, operation: UploadOperation): UploadStatus {

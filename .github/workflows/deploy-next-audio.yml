@@ -4,13 +4,15 @@ on:
   pull_request:
     paths:
       - "next/services/audio/**"
-      - "next/core/src/audio-sniff.ts"
+      - "next/core/src/audio-format.ts"
+      - "next/core/src/audio-format.gen.ts"
       - ".github/workflows/deploy-next-audio.yml"
   push:
     branches: [main]
     paths:
       - "next/services/audio/**"
-      - "next/core/src/audio-sniff.ts"
+      - "next/core/src/audio-format.ts"
+      - "next/core/src/audio-format.gen.ts"
       - "!next/services/audio/scripts/**"
   workflow_dispatch:
     inputs:

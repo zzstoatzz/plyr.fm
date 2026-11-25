@@ -7,7 +7,7 @@ import { sameRecord } from './create-operation.ts';
 import { normalizeTrackTags } from './track-tags.ts';
 import { fromSpaceWireDeep, spaceXrpcBody, spaceXrpcPath } from '../space-address.ts';
 import { ARTWORK_TYPES, MAX_ARTWORK_BYTES } from './artwork-model.ts';
-import { sniffAudioFormat } from '../audio-sniff.ts';
+import { sniffAudioLabel } from '../audio-format.ts';
 
 export interface MediaFile {
   name: string;
@@ -233,7 +233,7 @@ export function createPrivateLibrary({ NSID, PRIVATE_SPACE_TYPE }: Pick<AuthConf
       current();
       if (bytes.byteLength !== input.file.size) throw new Error('the selected audio changed. choose it again.');
       // the name and picker type are claims; a WAV renamed .m4a must still be labeled WAV or Safari and iOS won't play it
-      const sniffed = sniffAudioFormat(new Uint8Array(bytes, 0, Math.min(bytes.byteLength, 64)));
+      const sniffed = sniffAudioLabel(new Uint8Array(bytes));
       const fileType = sniffed?.fileType ?? claimedType;
       const uploaded = await request('com.atproto.repo.uploadBlob', undefined, bytes, sniffed?.contentType ?? input.file.type);
       if (!object(uploaded) || !object(uploaded.blob)) throw new Error('could not confirm the audio upload.');

@@ -11,6 +11,7 @@ import { jobLine, uploadInProgress } from '../src/publishing/upload-queue-model.
 import { MAX_AUDIO_BYTES } from '../src/publishing/track-audio.ts';
 import { queuedUploadKey, readQueuedUploadDraft, type QueuedUploadDraft } from '../src/publishing/queued-upload-draft.ts';
 import type { UploadTransport } from '../src/publishing/upload-transport.ts';
+import { headReader } from './audio-heads.ts';
 
 const owner = 'did:plc:fixture';
 const collection = 'fm.plyr.track';
@@ -60,7 +61,7 @@ function fixture({ statusGate, reserve = async () => record, beforeSaveTransfer,
     getAuth: () => ({ did: owner, rpc, uploadStorage: true }) as Auth<RepoRpc>,
     createPds: () => pds,
     measureAudioDuration: async () => 1,
-    openUploadReader: () => { throw new Error('not used'); },
+    openUploadReader: headReader,
     sendParts: async () => { throw new Error('not used'); },
     uploadStorage: {
       load: async () => { beforeLoadTransfers?.(); return saved; },

@@ -2,6 +2,7 @@ const std = @import("std");
 const zat = @import("zat");
 const logfire = @import("logfire");
 const service_auth = @import("../atproto/service_auth.zig");
+const audio_format = @import("../media/audio_format.zig");
 
 pub const max_bytes = 1_610_612_736;
 pub const Processing = struct { recipe: []const u8, outputBudget: u64 };
@@ -63,17 +64,17 @@ pub fn validate(request: Request, owner: []const u8, collection: []const u8) !vo
     if (request.processing) |processing| {
         if (!std.mem.eql(u8, processing.recipe, "mp3-320k-44100-v1") or processing.outputBudget == 0 or processing.outputBudget > 2 * max_bytes - request.sizeBytes) return error.InvalidUpload;
     }
-    const formats = .{ .{ "mp3", "audio/mpeg" }, .{ "wav", "audio/wav" }, .{ "flac", "audio/flac" }, .{ "ogg", "audio/ogg" }, .{ "m4a", "audio/mp4" }, .{ "aac", "audio/aac" } };
-    inline for (formats) |format| {
-        if (std.mem.eql(u8, request.fileType, format[0]) and std.mem.eql(u8, request.contentType, format[1])) return;
-    }
-    if (request.processing != null) {
-        const processing_formats = .{ .{ "aif", "audio/aiff" }, .{ "aiff", "audio/aiff" }, .{ "webm", "audio/webm" }, .{ "opus", "audio/opus" } };
-        inline for (processing_formats) |format| {
-            if (std.mem.eql(u8, request.fileType, format[0]) and std.mem.eql(u8, request.contentType, format[1])) return;
-        }
-    }
-    return error.InvalidUpload;
+    _ = try admittedFormat(request);
+}
+
+/// The container a request claims, under its canonical names. The client
+/// names it from the file's bytes; the worker checks the first part against
+/// it. A container no browser plays everywhere as it is must be processed.
+pub fn admittedFormat(request: Request) !audio_format.Container {
+    const container = audio_format.Container.fromFileType(request.fileType) orelse return error.InvalidUpload;
+    if (audio_format.Container.fromContentType(request.contentType) != container) return error.InvalidUpload;
+    if (container.rule() == .process and request.processing == null) return error.InvalidUpload;
+    return container;
 }
 
 pub fn ownerHash(owner: []const u8) [64]u8 {
@@ -117,14 +118,15 @@ fn authorizeTraced(span: logfire.Span, a: std.mem.Allocator, io: std.Io, setting
     span.setAttribute("upload.owner_did", owner);
     try requireAllowed(a, owner);
     try validate(request, owner, settings.track_collection);
+    const container = try admittedFormat(request);
     const expiry = (std.Io.Timestamp.now(io, .real).toSeconds() + 300) * 1000;
     const claim: Claim = .{
         .owner = owner,
         .uploadId = request.uploadId,
         .recordUri = request.recordUri,
         .sizeBytes = request.sizeBytes,
-        .contentType = request.contentType,
-        .fileType = request.fileType,
+        .contentType = container.contentType(),
+        .fileType = container.fileType(),
         .visibility = request.visibility,
         .downloadPolicy = request.downloadPolicy,
         .expiresAt = expiry,
@@ -209,4 +211,23 @@ pub fn authorizedInternal(header: []const u8, secret: []const u8) bool {
 
 fn env(key: [:0]const u8) ?[]const u8 {
     return if (std.c.getenv(key)) |value| std.mem.span(value) else null;
+}
+
+test "the admitted format is one container under its canonical names, processed when browsers need it" {
+    const owner = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
+    var request: Request = .{ .serviceToken = "", .uploadId = "12345678-1234-4123-8123-123456789abc", .recordUri = "at://" ++ owner ++ "/fm.plyr.dev.track/3mtest", .sizeBytes = 1, .contentType = "audio/x-aiff", .fileType = "aif", .visibility = "public", .downloadPolicy = "open", .processing = .{ .recipe = "mp3-320k-44100-v1", .outputBudget = max_bytes } };
+    try std.testing.expectEqual(audio_format.Container.aiff, try admittedFormat(request));
+    // a WAV that calls itself M4A is two claims that disagree
+    request.fileType = "m4a";
+    request.contentType = "audio/wav";
+    try std.testing.expectError(error.InvalidUpload, admittedFormat(request));
+    // WAV plays unevenly across browsers, so it is only admitted for processing
+    request.fileType = "wav";
+    try std.testing.expectEqual(audio_format.Container.wav, try admittedFormat(request));
+    request.processing = null;
+    try std.testing.expectError(error.InvalidUpload, admittedFormat(request));
+    // M4A may hold ALAC, which the client routes to processing, or AAC, which plays as is
+    request.fileType = "m4a";
+    request.contentType = "audio/mp4";
+    try std.testing.expectEqual(audio_format.Container.mp4, try admittedFormat(request));
 }
