@@ -7,6 +7,7 @@ import { sameRecord } from './create-operation.ts';
 import { normalizeTrackTags } from './track-tags.ts';
 import { fromSpaceWireDeep, spaceXrpcBody, spaceXrpcPath } from '../space-address.ts';
 import { ARTWORK_TYPES, MAX_ARTWORK_BYTES } from './artwork-model.ts';
+import { sniffAudioFormat } from '../audio-sniff.ts';
 
 export interface MediaFile {
   name: string;
@@ -221,8 +222,8 @@ export function createPrivateLibrary({ NSID, PRIVATE_SPACE_TYPE }: Pick<AuthConf
         if (new TextEncoder().encode(value).length > limit) throw new Error('that text is too long. try a shorter version.');
       }
       if (!/^audio\/[a-z0-9.+-]+$/i.test(input.file.type) || !Number.isSafeInteger(input.file.size) || input.file.size <= 0 || input.file.size > 104_857_600) throw new Error('choose audio up to 100 MiB.');
-      const fileType = (input.file.name.includes('.') ? input.file.name.split('.').at(-1) : input.file.type.slice(6))?.toLowerCase();
-      if (!fileType || new TextEncoder().encode(fileType).length > 16) throw new Error('choose a file with a supported audio extension.');
+      const claimedType = (input.file.name.includes('.') ? input.file.name.split('.').at(-1) : input.file.type.slice(6))?.toLowerCase();
+      if (!claimedType || new TextEncoder().encode(claimedType).length > 16) throw new Error('choose a file with a supported audio extension.');
       const tags = normalizeTrackTags(input.tags);
       const artwork = input.artwork ?? undefined;
       if (artwork && (!(ARTWORK_TYPES as readonly string[]).includes(artwork.type) || !Number.isSafeInteger(artwork.size) || artwork.size <= 0 || artwork.size > MAX_ARTWORK_BYTES)) throw new Error('choose a PNG, JPEG, WebP, or GIF cover up to 10 MB.');
@@ -231,7 +232,10 @@ export function createPrivateLibrary({ NSID, PRIVATE_SPACE_TYPE }: Pick<AuthConf
       const bytes = await input.file.arrayBuffer();
       current();
       if (bytes.byteLength !== input.file.size) throw new Error('the selected audio changed. choose it again.');
-      const uploaded = await request('com.atproto.repo.uploadBlob', undefined, bytes, input.file.type);
+      // the name and picker type are claims; a WAV renamed .m4a must still be labeled WAV or Safari and iOS won't play it
+      const sniffed = sniffAudioFormat(new Uint8Array(bytes, 0, Math.min(bytes.byteLength, 64)));
+      const fileType = sniffed?.fileType ?? claimedType;
+      const uploaded = await request('com.atproto.repo.uploadBlob', undefined, bytes, sniffed?.contentType ?? input.file.type);
       if (!object(uploaded) || !object(uploaded.blob)) throw new Error('could not confirm the audio upload.');
       let imageBlob: Record<string, unknown> | undefined;
       if (artwork) {
