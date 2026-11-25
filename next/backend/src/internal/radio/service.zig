@@ -4,6 +4,7 @@
 //! plyr-radio syndication adapter read.
 
 const std = @import("std");
+const audio_format = @import("../media/audio_format.zig");
 const station_module = @import("station.zig");
 const sampler = @import("sampler.zig");
 const clock = @import("clock.zig");
@@ -258,15 +259,10 @@ pub fn stableId(uri: []const u8) i64 {
     return (@as(i64, 1) << 48) | @as(i64, low);
 }
 
-/// Records name a file type ("mp3"); verified copies carry a media type.
+/// Origins carry a media type ("audio/mpeg") or, from old records, a file type ("mp3").
 fn fileType(media_type: []const u8) []const u8 {
-    const slash = std.mem.indexOfScalar(u8, media_type, '/') orelse return media_type;
-    const subtype = media_type[slash + 1 ..];
-    if (std.mem.eql(u8, subtype, "mpeg") or std.mem.eql(u8, subtype, "mp3")) return "mp3";
-    if (std.mem.eql(u8, subtype, "mp4") or std.mem.eql(u8, subtype, "x-m4a") or std.mem.eql(u8, subtype, "aac")) return "m4a";
-    if (std.mem.eql(u8, subtype, "x-wav") or std.mem.eql(u8, subtype, "wave") or std.mem.eql(u8, subtype, "vnd.wave")) return "wav";
-    if (std.mem.eql(u8, subtype, "x-flac")) return "flac";
-    return subtype;
+    const container = audio_format.Container.fromContentType(media_type) orelse audio_format.Container.fromFileType(media_type);
+    return if (container) |known| known.fileType() else "audio";
 }
 
 /// plyr's image CDN resizes at the edge; anything else is used as is.
@@ -317,6 +313,8 @@ test "file types and thumbnails" {
     try std.testing.expectEqualStrings("mp3", fileType("audio/mpeg"));
     try std.testing.expectEqualStrings("m4a", fileType("audio/x-m4a"));
     try std.testing.expectEqualStrings("wav", fileType("wav"));
+    try std.testing.expectEqualStrings("wav", fileType("audio/vnd.wave"));
+    try std.testing.expectEqualStrings("audio", fileType("application/octet-stream"));
     try std.testing.expectEqualStrings(
         "https://images.plyr.fm/cdn-cgi/image/width=300,quality=82,format=auto/images/a.jpg",
         try thumbnail(arena.allocator(), "https://images.plyr.fm/images/a.jpg"),

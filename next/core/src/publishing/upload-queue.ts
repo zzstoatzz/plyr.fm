@@ -1,7 +1,8 @@
 import type { Auth, Did } from '../auth-state';
 import type { BuyLink, createPublicPds, MediaFile, NewTrack } from '../pds';
 import type { CreateReservation } from './create-operation';
-import { audioFormat, uploadPublication, type ChunkReader, type UploadOperation, type UploadStatus, type UploadStorage, type transferParts } from './upload-model.ts';
+import { audioLabel, sniffAudioSource } from '../audio-format.ts';
+import { uploadPublication, type ChunkReader, type UploadOperation, type UploadStatus, type UploadStorage, type transferParts } from './upload-model.ts';
 import { originalOnPds, processingStep, retryDelay, transient, uploadInProgress, uploadRoute, type UploadJobView } from './upload-queue-model.ts';
 import { repoOk, uploadRepoBlob, type RepoRpc } from './repo-rpc.ts';
 import type { UploadTransport } from './upload-transport';
@@ -169,6 +170,12 @@ export function createUploadQueue<Rpc extends RepoRpc>({
     await finishCreate(job, operation.uri, operation.autoTag, operation, operation.addTo);
   }
 
+  /** What the file's bytes are, read in ranges so a long file is never read whole. */
+  async function sniffFile(file: MediaFile) {
+    const reader = openUploadReader(file);
+    try { return await sniffAudioSource(reader); } finally { reader.close(); }
+  }
+
   async function draftAvailable(draft: QueuedUploadDraft) {
     const pds = createPds(session(draft));
     const [creates, uploads] = await Promise.all([pds.pendingCreates('track'), uploadStorage.load(draft.owner)]);
@@ -185,7 +192,8 @@ export function createUploadQueue<Rpc extends RepoRpc>({
     const auth = session(job), pds = createPds(auth);
     const duration = input.duration ?? await measureAudioDuration(input.file).catch(() => undefined);
     const ready = { ...input, duration };
-    const route = uploadRoute(input.file, duration, !!input.waysIn?.length);
+    const format = await sniffFile(input.file);
+    const route = uploadRoute(input.file, format, duration, !!input.waysIn?.length);
     if (route.kind === 'service' && !auth.uploadStorage) throw new Error('sign in again to allow plyr.fm storage');
     if (route.kind === 'service' && input.downloadPolicy && input.downloadPolicy !== 'open') throw new Error('downloads stay on for tracks in plyr.fm storage');
     if (input.buyLink && !saveBuyLink) throw new Error('sign in again to save buy links');
@@ -195,12 +203,12 @@ export function createUploadQueue<Rpc extends RepoRpc>({
     // saved before the track exists, so a crash after publishing can't lose it; taken back if the upload fails before that
     if (input.buyLink) { await withRetries(job, () => saveBuyLink!(() => session(job), reservation.uri, input.buyLink!)); job.buyLinkFor = reservation.uri; }
     if (route.kind === 'pds') return runPds(job, ready, reservation, draft);
-    const format = audioFormat(input.file.name, input.file.type, !!route.processing);
+    const label = audioLabel(format!);
     // the original stays the artist's: on their PDS whenever it fits a blob, beside plyr.fm's playable copy
-    const original = originalOnPds(input.file) ? await withRetries(job, () => uploadOriginal(session(job).rpc!, input.file, format.contentType)) : undefined;
+    const original = originalOnPds(input.file) ? await withRetries(job, () => uploadOriginal(session(job).rpc!, input.file, label.contentType)) : undefined;
     const record = await pds.prepareTrackRecord(ready);
-    const operation: UploadOperation = { ...reservation, draftId: draft.id, record: { ...record, fileType: format.fileType, ...(original ? { audioBlob: original } : {}) }, uploadId: randomUUID(),
-      name: input.file.name, sizeBytes: input.file.size, ...format, ...(route.processing ? { processing: route.processing } : {}), ...(input.autoTag ? { autoTag: true } : {}), ...(input.addTo ? { addTo: input.addTo } : {}) };
+    const operation: UploadOperation = { ...reservation, draftId: draft.id, record: { ...record, fileType: label.fileType, ...(original ? { audioBlob: original } : {}) }, uploadId: randomUUID(),
+      name: input.file.name, sizeBytes: input.file.size, ...label, ...(route.processing ? { processing: route.processing } : {}), ...(input.autoTag ? { autoTag: true } : {}), ...(input.addTo ? { addTo: input.addTo } : {}) };
     await uploadStorage.put(operation);
     job.handedOff = true;
     await queuedDrafts.take(draft);
@@ -259,7 +267,7 @@ export function createUploadQueue<Rpc extends RepoRpc>({
       const owner = getAuth().did;
       if (!owner) throw new Error('sign in first.');
       if (planned && planned.owner !== owner) throw new Error('sign in to the account that started it');
-      uploadRoute(input.file, undefined, !!input.waysIn?.length);
+      uploadRoute(input.file, await sniffFile(input.file), undefined, !!input.waysIn?.length);
       const draft = queuedUploadDraft(input, owner, planned?.id ?? randomUUID(), planned?.reservedRkey);
       await queuedDrafts.put(draft);
       if (getAuth().did === owner) enqueueDraft(draft, input);
@@ -290,10 +298,6 @@ export function createUploadQueue<Rpc extends RepoRpc>({
     /** Carry on with a saved upload; a transfer that stopped part way needs its original file. */
     continue(operation: UploadOperation, file?: MediaFile) {
       if (alreadyQueued(operation)) return;
-      if (file) {
-        const format = audioFormat(file.name, file.type, !!operation.processing);
-        if (format.fileType !== operation.fileType || format.contentType !== operation.contentType) throw new Error('select the original audio file.');
-      }
       enqueueSaved(operation, file);
       void drain();
     },

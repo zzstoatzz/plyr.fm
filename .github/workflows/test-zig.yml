@@ -6,12 +6,16 @@ on:
   pull_request:
     paths:
       - "next/backend/**"
+      - "next/core/src/audio-format.gen.ts"
+      - "next/core/tests/fixtures/audio/**"
       - "backend/src/backend/upload_contract.json"
       - ".github/workflows/test-zig.yml"
   push:
     branches: [main]
     paths:
       - "next/backend/**"
+      - "next/core/src/audio-format.gen.ts"
+      - "next/core/tests/fixtures/audio/**"
       - "backend/src/backend/upload_contract.json"
       - ".github/workflows/test-zig.yml"
   # nightly: the calibration campaign proves the property harnesses still

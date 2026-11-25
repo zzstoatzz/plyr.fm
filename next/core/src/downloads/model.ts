@@ -1,3 +1,4 @@
+import { AUDIO_CONTAINERS, containerFromContentType, containerFromFileType } from '../audio-format.ts';
 import type { Artist, ListSummary, Playback, Track } from '../api.ts';
 import { readDownloadManifest, serviceMediaUrl, type DownloadManifest } from './manifest.ts';
 import { albumNamed, offerFor, offerLabel, supportLink } from '../selling.ts';
@@ -17,14 +18,13 @@ export function downloadAllowed(track: Track): boolean {
     && (track.access.download_policy === 'open' || track.access.download_policy === 'ask');
 }
 
-const FILE_TYPES: Record<string, string> = { mp3: 'audio/mpeg', mpeg: 'audio/mpeg', wav: 'audio/wav', wave: 'audio/wav', flac: 'audio/flac', m4a: 'audio/mp4', mp4: 'audio/mp4', aac: 'audio/aac', ogg: 'audio/ogg', opus: 'audio/ogg', webm: 'audio/webm', aiff: 'audio/aiff', aif: 'audio/aiff' };
-
 /** Records uploaded by the legacy app carry a bare file type ("mp3") where a MIME type belongs. */
 export function audioMime(value: string | null | undefined): string | null {
   const type = value?.trim().toLowerCase();
   if (!type) return null;
   if (type.startsWith('audio/')) return type;
-  return FILE_TYPES[type.replace(/^\./, '')] ?? null;
+  const container = containerFromFileType(type);
+  return container ? AUDIO_CONTAINERS[container].contentType : null;
 }
 
 export function safeHttpUrl(value: string | null | undefined): string | null {
@@ -44,7 +44,7 @@ export function attachmentUrl(source: string): string | undefined {
 }
 
 export function downloadFilename(track: Track, mime: string): string {
-  const extensions: Record<string, string> = { 'audio/mpeg': 'mp3', 'audio/mp3': 'mp3', 'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/flac': 'flac', 'audio/x-flac': 'flac', 'audio/mp4': 'm4a', 'audio/aac': 'aac', 'audio/ogg': 'ogg', 'audio/webm': 'webm', 'audio/aiff': 'aiff', 'audio/x-aiff': 'aiff' };
+  const container = containerFromContentType(mime);
   const artist = track.metadata.artist_name || track.artist.profile.display_name || track.artist.profile.handle;
   const clean = `${artist} - ${track.metadata.title}`.replace(/[\\/:*?"<>|\u0000-\u001f\u007f]/g, '').trim();
   const encoder = new TextEncoder();
@@ -54,7 +54,7 @@ export function downloadFilename(track: Track, mime: string): string {
     stem += character;
   }
   stem = stem.replace(/[. ]+$/, '') || 'audio';
-  return `${stem}.${extensions[mime.toLowerCase()] || 'audio'}`;
+  return `${stem}.${container ? AUDIO_CONTAINERS[container].fileType : 'audio'}`;
 }
 
 export async function prepareDownload(id: string, uri: string, read: {

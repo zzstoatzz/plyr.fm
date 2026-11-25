@@ -1,0 +1,23 @@
+{
+  "about": "Tiny real files, several under a name that lies. Both sniffers (next/backend audio_format.zig and next/core audio-format.ts) must name each one as listed; null means not audio.",
+  "files": [
+    { "file": "mp3-id3.mp3", "container": "mp3", "codec": "mp3" },
+    { "file": "mp3-bare.mp3", "container": "mp3", "codec": "mp3" },
+    { "file": "aac.aac", "container": "adts", "codec": "aac" },
+    { "file": "aac-faststart.m4a", "container": "mp4", "codec": "aac" },
+    { "file": "aac-moov-last.m4a", "container": "mp4", "codec": "aac" },
+    { "file": "alac.m4a", "container": "mp4", "codec": "alac" },
+    { "file": "alac-named.mp3", "container": "mp4", "codec": "alac" },
+    { "file": "wav.wav", "container": "wav", "codec": "pcm" },
+    { "file": "wav-named.m4a", "container": "wav", "codec": "pcm" },
+    { "file": "flac.flac", "container": "flac", "codec": "flac" },
+    { "file": "flac-named.mp3", "container": "flac", "codec": "flac" },
+    { "file": "aiff.aiff", "container": "aiff", "codec": "pcm" },
+    { "file": "aiff-named.wav", "container": "aiff", "codec": "pcm" },
+    { "file": "opus.ogg", "container": "ogg", "codec": "opus" },
+    { "file": "vorbis.ogg", "container": "ogg", "codec": "vorbis" },
+    { "file": "opus.webm", "container": "webm", "codec": "opus" },
+    { "file": "random.mp3", "container": null, "codec": null },
+    { "file": "text-named.wav", "container": null, "codec": null }
+  ]
+}

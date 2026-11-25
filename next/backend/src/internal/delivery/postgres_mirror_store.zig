@@ -56,6 +56,8 @@ pub const PostgresMirrorStore = struct {
         self: PostgresMirrorStore,
         candidate: Candidate,
         origin_url: []const u8,
+        /// what the mirrored bytes are, which may differ from the record's claim
+        media_type: []const u8,
         now_us: i64,
     ) Error!bool {
         const conn = self.pool.acquire() catch return error.StoreUnavailable;
@@ -64,7 +66,7 @@ pub const PostgresMirrorStore = struct {
             candidate.record_uri,
             candidate.record_cid,
             origin_url,
-            candidate.media_type,
+            media_type,
             candidate.blob_cid,
             now_us,
         }) catch |err| {

@@ -3,29 +3,9 @@ import { getRandomBytesAsync, randomUUID } from 'expo-crypto';
 import { Directory, File, FileMode, Paths } from 'expo-file-system';
 import { fetch } from 'expo/fetch';
 import type { Auth } from './auth-state';
-import { sniffAudioExtension } from '@plyr/next-core/audio-sniff';
+import { AUDIO_CONTAINERS, containerFromContentType, sniffAudio } from '@plyr/next-core/audio-format';
 import { openGatedAudio } from './gated-audio-shared';
 import { MAX_AUDIO_BYTES } from './pds';
-
-const EXTENSIONS: Record<string, string> = {
-	'audio/mpeg': 'mp3',
-	'audio/mp3': 'mp3',
-	'audio/mp4': 'm4a',
-	'audio/aac': 'aac',
-	'audio/wav': 'wav',
-	'audio/x-wav': 'wav',
-	'audio/flac': 'flac',
-	'audio/ogg': 'ogg',
-	'audio/x-m4a': 'm4a',
-	'audio/m4a': 'm4a',
-	'audio/aiff': 'aiff',
-	'audio/x-aiff': 'aiff',
-	'audio/wave': 'wav',
-	'audio/vnd.wave': 'wav',
-	'audio/x-flac': 'flac',
-	'audio/webm': 'webm',
-	'video/mp4': 'm4a'
-};
 
 const active = new Map<string, File>();
 let cache: Directory | undefined;
@@ -72,7 +52,8 @@ export async function gatedAudioUrl(uri: string, auth: Auth): Promise<string> {
 	const first: ReadableStreamReadResult<Uint8Array> = { done: false, value: head };
 	// AVPlayer picks its decoder from the file extension, and a PDS may serve the blob as octet-stream.
 	const type = response.headers.get('content-type')?.split(';')[0].trim().toLowerCase() ?? '';
-	const extension = sniffAudioExtension(first.value) ?? EXTENSIONS[type] ?? 'mp3';
+	const container = sniffAudio(first.value)?.container ?? containerFromContentType(type);
+	const extension = container ? AUDIO_CONTAINERS[container].fileType : 'mp3';
 	const file = new File(audioCache(), `${randomUUID()}.${extension}`);
 
 	try {

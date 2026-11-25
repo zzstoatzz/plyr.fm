@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert';
 import { createHash } from 'node:crypto';
 import { test } from 'node:test';
 import { createUploadTransport, UploadRequestError } from '../src/publishing/upload-transport.ts';
-import { audioFormat, MAX_SERVICE_AUDIO_BYTES, UPLOAD_PART_BYTES, transferParts, uploadOperation, uploadStatus, uploadPublication, type UploadOperation } from '@plyr/next-core/publishing/upload-model';
+import { MAX_SERVICE_AUDIO_BYTES, UPLOAD_PART_BYTES, transferParts, uploadOperation, uploadStatus, uploadPublication, type UploadOperation } from '@plyr/next-core/publishing/upload-model';
 import { hasUploadGrant, UPLOAD_SCOPE, SYNC_SCOPE, SCOPE_PARTS, SYNC_SCOPE_PARTS } from '../src/auth-config.ts';
 
 const operation: UploadOperation = { owner: 'did:plc:fixture', collection: 'fm.plyr.track', rkey: '3jzfcijpj2z2a', uri: 'at://did:plc:fixture/fm.plyr.track/3jzfcijpj2z2a',
@@ -78,8 +78,8 @@ test('upload metadata validates limits and account without retaining credentials
   assert.equal(uploadOperation({ ...operation, sizeBytes: MAX_SERVICE_AUDIO_BYTES }, operation.owner).sizeBytes, MAX_SERVICE_AUDIO_BYTES);
   assert.throws(() => uploadOperation({ ...operation, sizeBytes: MAX_SERVICE_AUDIO_BYTES + 1 }, operation.owner));
   assert.throws(() => uploadOperation(operation, 'did:plc:other'));
-  assert.deepEqual(audioFormat('audio.WAV', 'audio/x-wav'), { fileType: 'wav', contentType: 'audio/wav' });
-  assert.throws(() => audioFormat('audio.mp3', 'audio/wav'));
+  assert.throws(() => uploadOperation({ ...operation, fileType: 'mp3', contentType: 'audio/wav' }, operation.owner), /recovery/);
+  assert.throws(() => uploadOperation({ ...operation, fileType: 'wav', contentType: 'audio/wav' }, operation.owner), /recovery/, 'a WAV is never stored without its mp3 copy');
 });
 test('persisted uploads never downgrade restricted policies or protected sources', () => {
   for (const fields of [
@@ -141,7 +141,6 @@ test('processing recovery preserves the recipe and original identity without rea
   const input: UploadOperation = { ...operation, name: 'original.aiff', fileType: 'aiff', contentType: 'audio/aiff',
     processing: { recipe: 'mp3-320k-44100-v1', outputBudget: 128 }, record: { ...operation.record, fileType: 'aiff', futureMetadata: true } };
   assert.deepEqual(uploadOperation(JSON.parse(JSON.stringify(input)), input.owner), input);
-  assert.deepEqual(audioFormat(input.name, 'audio/x-aiff', true), { fileType: 'aiff', contentType: 'audio/aiff' });
   const f = fixture(input), first = reader(input.sizeBytes);
   const processing = await transferParts(input, first.source, f.connect(), hash, new AbortController().signal, () => {});
   assert.equal(processing.state, 'processing'); assert.equal(processing.audioUrl, undefined);

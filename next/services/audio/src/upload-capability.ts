@@ -1,14 +1,22 @@
+import { AUDIO_CONTAINERS, containerFromFileType } from "../../../core/src/audio-format.ts";
+
 export type ProcessingRecipe = { recipe: "mp3-320k-44100-v1"; outputBudget: number };
 export type UploadClaim = { version: number; owner: string; uploadId: string; recordUri: string; sizeBytes: number; contentType: string; fileType: string; visibility: string; downloadPolicy: string; expiresAt: number; processing?: ProcessingRecipe | null };
 const encoder = new TextEncoder();
 export const MAX_UPLOAD_BYTES = 1610612736;
 export const PART_BYTES = 10485760;
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
-const formats = new Map([
-  ["mp3", "audio/mpeg"], ["wav", "audio/wav"], ["flac", "audio/flac"],
-  ["ogg", "audio/ogg"], ["m4a", "audio/mp4"], ["aac", "audio/aac"],
-]);
-const processingFormats = new Map([...formats, ["aif", "audio/aiff"], ["aiff", "audio/aiff"], ["webm", "audio/webm"], ["opus", "audio/opus"]]);
+
+/**
+ * Whether a claim names a container in its canonical spelling, as the coordinator signs it, and
+ * carries the processing a container no browser plays everywhere needs.
+ */
+function admittedType(fileType: string, contentType: string, processing: boolean) {
+  const container = containerFromFileType(fileType);
+  if (!container) return false;
+  const info = AUDIO_CONTAINERS[container];
+  return info.fileType === fileType && info.contentType === contentType && (processing || info.rule !== "process");
+}
 
 export function validProcessing(value: unknown, sourceBytes: number): value is ProcessingRecipe {
   return value !== null && typeof value === "object" && "recipe" in value && value.recipe === "mp3-320k-44100-v1"
@@ -32,7 +40,7 @@ export function validClaim(value: unknown, now = Date.now()): value is UploadCla
     claim.recordUri.split("/").length === 5 &&
     typeof claim.sizeBytes === "number" && Number.isSafeInteger(claim.sizeBytes) && claim.sizeBytes > 0 && claim.sizeBytes <= MAX_UPLOAD_BYTES &&
     (processing == null || validProcessing(processing, claim.sizeBytes)) &&
-    typeof claim.fileType === "string" && typeof claim.contentType === "string" && (processing ? processingFormats : formats).get(claim.fileType) === claim.contentType &&
+    typeof claim.fileType === "string" && typeof claim.contentType === "string" && admittedType(claim.fileType, claim.contentType, !!processing) &&
     claim.visibility === "public" && claim.downloadPolicy === "open" &&
     typeof claim.expiresAt === "number" && Number.isSafeInteger(claim.expiresAt) && claim.expiresAt > now && claim.expiresAt <= now + 600000;
 }

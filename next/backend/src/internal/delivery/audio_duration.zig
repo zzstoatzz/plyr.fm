@@ -9,6 +9,7 @@
 //! WAV (`data` over the byte rate) and FLAC (STREAMINFO).
 
 const std = @import("std");
+const audio_format = @import("../media/audio_format.zig");
 
 /// The longest running time accepted; anything longer is a misread header.
 pub const max_seconds: u64 = 48 * 3600;
@@ -34,10 +35,16 @@ pub fn step(format: Format, window: []const u8, offset: u64, total: u64) Step {
 
 fn detect(window: []const u8, offset: u64, total: u64) Step {
     if (offset != 0 or window.len < 12) return .unsupported;
-    if (std.mem.eql(u8, window[0..4], "RIFF") and std.mem.eql(u8, window[8..12], "WAVE")) return wav(window, total);
-    if (std.mem.eql(u8, window[0..4], "fLaC")) return flac(window);
-    if (std.mem.eql(u8, window[4..8], "ftyp")) return mp4(window, offset, total);
-    return mp3(window, offset, total);
+    // bytes that name no container may still be MP3 frames after junk, so
+    // they get the MP3 frame scan; a container read here is never guessed at
+    const format = audio_format.sniff(window) orelse return mp3(window, offset, total);
+    return switch (format.container) {
+        .mp3 => mp3(window, offset, total),
+        .wav => wav(window, total),
+        .flac => flac(window),
+        .mp4 => mp4(window, offset, total),
+        .adts, .aiff, .ogg, .webm => .unsupported,
+    };
 }
 
 fn seconds(numerator: u128, denominator: u128) Step {

@@ -1,9 +1,6 @@
+import { AUDIO_CONTAINERS, audioRoute, containerFromContentType, containerFromFileType, type AudioContainer, type AudioFormat } from '../audio-format.ts';
 import { MAX_AUDIO_BYTES } from './track-audio.ts';
-import { audioFormat, MAX_SERVICE_AUDIO_BYTES, type UploadProcessing, type UploadStatus } from './upload-model.ts';
-
-/** Lossless or browser-unfriendly sources get an MP3 playback copy, as production does; the original stays downloadable. */
-// Ogg and Opus too: iOS can't play either, so they get an MP3 copy like the lossless formats.
-const PROCESSED = new Set(['wav', 'flac', 'aif', 'aiff', 'webm', 'ogg', 'opus']);
+import { claimedContainer, MAX_SERVICE_AUDIO_BYTES, PUBLIC_AUDIO_FORMATS, type UploadProcessing, type UploadStatus } from './upload-model.ts';
 const MP3_BYTES_PER_SECOND = 40_000;
 const MIB = 1_048_576;
 
@@ -15,37 +12,43 @@ export function uploadInProgress(phase: UploadPhase) {
   return phase === 'waiting' || phase === 'uploading' || phase === 'processing' || phase === 'publishing' || phase === 'retrying';
 }
 
-export function fileType(name: string) {
-  return name.includes('.') ? name.split('.').pop()!.toLowerCase() : '';
-}
-
-export function outputBudget(sizeBytes: number, type: string, duration?: number) {
+export function outputBudget(sizeBytes: number, container: AudioContainer, duration?: number) {
   const ceiling = 2 * MAX_SERVICE_AUDIO_BYTES - sizeBytes;
   const estimate = duration && Number.isFinite(duration) && duration > 0
     ? Math.ceil(duration * MP3_BYTES_PER_SECOND * 1.1) + 4 * MIB
-    : type === 'webm' || type === 'ogg' || type === 'opus' ? sizeBytes * 4 : sizeBytes + 4 * MIB;
+    : container === 'webm' || container === 'ogg' ? sizeBytes * 4 : sizeBytes + 4 * MIB;
   return Math.max(MIB, Math.min(ceiling, estimate));
 }
 
-/** Where the bytes go: small playable audio to the account's PDS, the rest through plyr storage. */
-export function uploadRoute(file: { name: string; type: string; size: number }, duration?: number, closed = false): UploadRoute {
+/**
+ * Where the bytes go, decided by what they are (`format`, sniffed): audio every browser plays as it
+ * is goes to the account's PDS while it fits a blob, and the rest gets an MP3 playback copy through
+ * plyr.fm storage, the original kept. `format` is undefined when the bytes are no audio at all.
+ */
+export function uploadRoute(file: { size: number }, format: AudioFormat | undefined, duration?: number, closed = false): UploadRoute {
   if (!Number.isSafeInteger(file.size) || file.size <= 0) throw new Error('choose a nonempty audio file.');
   if (file.size > MAX_SERVICE_AUDIO_BYTES) throw new Error('audio files are limited to 1.5 GiB.');
+  if (!format) throw new Error(`this file isn't audio plyr.fm can read. choose an ${PUBLIC_AUDIO_FORMATS} file.`);
   // closed audio lives in a space on the artist's PDS, never in plyr storage, so it goes as is
   if (closed) {
     if (file.size > MAX_AUDIO_BYTES) throw new Error('closed tracks can be up to 100 MB for now.');
     return { kind: 'pds' };
   }
-  const type = fileType(file.name);
-  audioFormat(file.name, file.type, type !== '');
-  if (PROCESSED.has(type)) {
-    return { kind: 'service', processing: { recipe: 'mp3-320k-44100-v1', outputBudget: outputBudget(file.size, type, duration) } };
+  if (audioRoute(format) === 'process') {
+    return { kind: 'service', processing: { recipe: 'mp3-320k-44100-v1', outputBudget: outputBudget(file.size, format.container, duration) } };
   }
   return file.size > MAX_AUDIO_BYTES ? { kind: 'service' } : { kind: 'pds' };
 }
 
-export function needsPlyrStorage(file: { name: string; size: number }, closed = false) {
-  return !closed && PROCESSED.has(fileType(file.name)) || file.size > MAX_AUDIO_BYTES;
+/**
+ * Whether a picked file will need plyr.fm storage, judged from its name and type before its bytes
+ * are read, so a form can say so up front. An M4A is assumed to be AAC; the queue, which reads the
+ * bytes, has the last word and asks for storage when an ALAC one turns out to need it.
+ */
+export function needsPlyrStorage(file: { name: string; type?: string; size: number }, closed = false) {
+  if (closed) return file.size > MAX_AUDIO_BYTES;
+  const container = containerFromFileType(file.name.includes('.') ? file.name.split('.').pop() : undefined) ?? containerFromContentType(file.type);
+  return (container !== undefined && AUDIO_CONTAINERS[container].rule === 'process') || file.size > MAX_AUDIO_BYTES;
 }
 
 /**
@@ -99,8 +102,7 @@ export function jobLine(job: UploadJobView): string {
   }
 }
 
-/** The canonical audio type for a picked file, whatever its picker called it. */
-export function canonicalAudioType(file: { name: string; type: string; size: number }) {
-  const route = uploadRoute(file);
-  return audioFormat(file.name, file.type, route.kind === 'service' && !!route.processing).contentType;
+/** The content type a picked file claims, in its canonical spelling, whatever its picker called it. */
+export function canonicalAudioType(file: { name: string; type: string }) {
+  return AUDIO_CONTAINERS[claimedContainer(file)].contentType;
 }

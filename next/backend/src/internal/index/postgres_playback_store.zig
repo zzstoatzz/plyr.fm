@@ -118,8 +118,9 @@ fn decode(
         if (!supportedDeliveryUrl(url)) return error.CorruptDelivery;
         const cid = delivery_artifact_cid.?;
         try validateCid(allocator, cid, zat.cbor.Codec.raw);
-        if (blob_cid == null or !std.mem.eql(u8, blob_cid.?, cid) or
-            !std.mem.eql(u8, blob_media_type.?, delivery_media_type.?))
+        // the CID proves these are the record's bytes; the media type may
+        // differ, because the mirror records what the bytes are, not the claim
+        if (blob_cid == null or !std.mem.eql(u8, blob_cid.?, cid))
             return error.CorruptDelivery;
         break :blk .{
             .url = url,
