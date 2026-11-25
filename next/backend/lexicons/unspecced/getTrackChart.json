@@ -23,6 +23,11 @@
             "minimum": 1,
             "maximum": 50,
             "default": 10
+          },
+          "excludeAiArtists": {
+            "type": "boolean",
+            "description": "Leave out every artist with a track tagged ai, ai-slop or suno, or with the ai account label. The home page's artist of the week reads this.",
+            "default": false
           }
         }
       },

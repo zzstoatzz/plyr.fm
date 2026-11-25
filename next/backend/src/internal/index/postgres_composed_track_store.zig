@@ -1521,7 +1521,7 @@ test "composed PostgreSQL reads use verified records and authoritative account s
     try label_sync.applyPage(negative_conn, negative, 101);
     pool.release(negative_conn);
     try std.testing.expect(list_api.execute(a, implementation.store(), "fm.plyr.dev.track", "/v1/tracks").found.data.len > 0);
-
+    try @import("postgres_track_chart_store.zig").expectAiArtistsLeftOut(pool, a, "did:plc:artist", record_uri);
     try std.testing.expectEqual(@as(i64, 1), catalog[0].sources.verified_repo);
     try std.testing.expectEqual(@as(i64, 0), catalog[0].sources.legacy_plyr);
     _ = try pool.exec("INSERT INTO plyr_index.legacy_track_tags(record_uri,observed_record_cid,tag,source_track_id,source_observed_at) VALUES ($1,$3,'legacy-only',1,now()),($1,$3,'drone',1,now()),($2,$3,'legacy-only',2,now()),($2,$3,'drone',2,now())", .{ record_uri, pds_only_uri, record_cid });

@@ -114,6 +114,7 @@ fn spec(method: Method) Spec {
         .listAlbums => .{ .renames = &.{.{ .xrpc = "artistDid", .v1 = "artist_did" }} },
         .listPlaylists => .{ .renames = &.{.{ .xrpc = "ownerDid", .v1 = "owner_did" }} },
         .awaitRecord => .{ .renames = &.{.{ .xrpc = "timeoutMs", .v1 = "timeout_ms" }} },
+        .getTrackChart => .{ .renames = &.{.{ .xrpc = "excludeAiArtists", .v1 = "exclude_ai_artists" }} },
         else => .{},
     };
 }
