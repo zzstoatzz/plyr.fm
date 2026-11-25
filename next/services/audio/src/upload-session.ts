@@ -1,3 +1,4 @@
+import { sniffAudioType } from "./audio-sniff.ts";
 import { MAX_UPLOAD_BYTES, PART_BYTES, sameUpload, ownerHash, reservedBytes } from "./upload-capability.ts";
 
 import type { UploadClaim } from "./upload-capability.ts";
@@ -8,6 +9,8 @@ export type UploadSession = Omit<UploadClaim, "expiresAt"> & {
   starts: number; checks: number; multipartId?: string;
   rendition?: { duration: number; sizeBytes: number };
   processingFailure?: ProcessingFailure;
+  /** What the first part's bytes are, when they name a container; served over the claimed contentType. */
+  sniffedType?: string;
 };
 type Inspection = (session: UploadSession) => Promise<"published" | "absent" | "conflict">;
 type Process = (session: UploadSession, retry: boolean) => Promise<{ ready: boolean; nextCheck: number | null; artifact?: { duration: number; sizeBytes: number }; failure?: ProcessingFailure }>;
@@ -132,6 +135,7 @@ export class UploadSessions {
     if (old && old.sha256 !== sha256) throw new UploadFailure(409, "part differs from reserved bytes");
     if (old?.etag) return { number, sha256 };
     session.parts[number] = { sha256 };
+    if (number === 1) session.sniffedType = sniffAudioType(new Uint8Array(bytes));
     await this.save(session);
     const receipt = await this.bucket.resumeMultipartUpload(session.key, session.multipartId ?? "").uploadPart(number, bytes);
     session.parts[number] = { sha256, etag: receipt.etag };

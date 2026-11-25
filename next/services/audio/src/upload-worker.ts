@@ -105,11 +105,11 @@ export class OwnerUploads extends DurableObject<UploadEnv> {
     if (session.processing && job?.phase !== "ready") return new Response(null, { status: 404 });
     if (variant === "manifest") return request.method === "HEAD" ? new Response(null, { headers: { "content-type": "application/json" } }) : Response.json({
       processed: !!job,
-      original: { url: `${session.audioUrl}/original`, contentType: session.contentType, fileType: session.fileType, sizeBytes: session.sizeBytes },
-      playback: { url: session.audioUrl, contentType: job ? "audio/mpeg" : session.contentType, sizeBytes: job?.outputSize ?? session.sizeBytes, duration: job?.duration },
+      original: { url: `${session.audioUrl}/original`, contentType: session.sniffedType ?? session.contentType, fileType: session.fileType, sizeBytes: session.sizeBytes },
+      playback: { url: session.audioUrl, contentType: job ? "audio/mpeg" : session.sniffedType ?? session.contentType, sizeBytes: job?.outputSize ?? session.sizeBytes, duration: job?.duration },
     });
     const key = variant === "original" ? session.key : job?.key ?? session.key;
-    const contentType = variant === "original" || !job ? session.contentType : "audio/mpeg";
+    const contentType = variant === "original" || !job ? session.sniffedType ?? session.contentType : "audio/mpeg";
     let read: R2ObjectBody | null;
     try { read = request.method === "HEAD" ? null : await this.env.AUDIO.get(key, { range: request.headers }); }
     catch { return new Response(null, { status: 416 }); }

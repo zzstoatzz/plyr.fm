@@ -44,3 +44,14 @@ test('without upload permission, a foreign record or a refused write, publishing
   assert.equal(await audioDelivery(config, () => ({ did: owner, agent, uploadStorage: true }), () => uploadId, fixture().fetcher)({ ...input, uri: 'at://did:plc:other/fm.plyr.track/3t' }), false);
   assert.equal(await audioDelivery(config, () => ({ did: owner, agent, uploadStorage: true }), () => uploadId, fixture(403).fetcher)(input), false);
 });
+
+test('a WAV named .m4a is admitted and stored as the WAV it is', async () => {
+  const { calls, fetcher } = fixture();
+  const deliver = audioDelivery(config, () => ({ did: owner, agent, uploadStorage: true }), () => uploadId, fetcher);
+  const bytes = new Uint8Array([...'RIFF'].map(c => c.charCodeAt(0)).concat([1, 2, 3, 4], [...'WAVEfmt '].map(c => c.charCodeAt(0))));
+  assert.equal(await deliver({ uri: `at://${owner}/fm.plyr.track/3t`, name: 'merch shop.m4a', type: 'audio/x-m4a', bytes, cid }), true);
+  const admission = JSON.parse(String(calls[0].init?.body));
+  assert.equal(admission.contentType, 'audio/wav');
+  assert.equal(admission.fileType, 'wav');
+  assert.equal((calls[1].init?.headers as Record<string, string>)['content-type'], 'audio/wav');
+});

@@ -26,3 +26,14 @@ test('private audio accepts the video/mp4 label a sniffing PDS gives iPhone m4a 
   assert.equal(playableBlobType('video/webm'), false);
   assert.equal(playableBlobType('application/octet-stream'), false);
 });
+
+test('a WAV named .m4a is labelled as the WAV it is', async () => {
+  const { sniffAudioFormat } = await import('../src/audio-sniff.ts');
+  assert.deepEqual(sniffAudioFormat(bytes('RIFF', [1, 2, 3, 4], 'WAVEJUNK')), { fileType: 'wav', contentType: 'audio/wav' });
+  assert.deepEqual(sniffAudioFormat(bytes([0, 0, 0, 0x20], 'ftypM4A ')), { fileType: 'm4a', contentType: 'audio/mp4' });
+  assert.equal(sniffAudioFormat(bytes('<html>')), undefined);
+  const { replacedTrackAudio } = await import('../src/publishing/track-audio.ts');
+  const file = { name: 'merch shop.m4a', type: 'audio/x-m4a', size: 10, arrayBuffer: async () => new ArrayBuffer(10) };
+  assert.equal(replacedTrackAudio({ fileType: 'mp3' }, file, {}, undefined, 'wav').fileType, 'wav');
+  assert.equal(replacedTrackAudio({ fileType: 'mp3' }, file, {}).fileType, 'm4a');
+});

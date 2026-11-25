@@ -16,3 +16,18 @@ export function sniffAudioExtension(head: Uint8Array): string | undefined {
 	if (head[0] === 0x1a && head[1] === 0x45 && head[2] === 0xdf && head[3] === 0xa3) return 'webm';
 	return undefined;
 }
+
+/** The content type to serve or upload each sniffed container as. */
+export const SNIFFED_CONTENT_TYPES: Record<string, string> = {
+	mp3: 'audio/mpeg', aac: 'audio/aac', m4a: 'audio/mp4', wav: 'audio/wav', flac: 'audio/flac', aiff: 'audio/aiff', ogg: 'audio/ogg', webm: 'audio/webm'
+};
+
+/**
+ * What the bytes are, as { fileType, contentType }, when their first bytes name a container.
+ * A file's name and its picker's type are only claims: a WAV renamed to .m4a is typed audio/mp4,
+ * and Safari and iOS trust the served type over the bytes, so they won't play it.
+ */
+export function sniffAudioFormat(head: Uint8Array): { fileType: string; contentType: string } | undefined {
+	const fileType = sniffAudioExtension(head);
+	return fileType ? { fileType, contentType: SNIFFED_CONTENT_TYPES[fileType] } : undefined;
+}

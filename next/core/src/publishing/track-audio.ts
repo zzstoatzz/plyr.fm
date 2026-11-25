@@ -15,13 +15,14 @@ export function validateReplacementAudio(record: Record<string, unknown>, file: 
   if (file.size > MAX_AUDIO_BYTES) throw new Error('replacement audio is limited to 100 MiB.');
 }
 
-export function replacedTrackAudio(record: Record<string, unknown>, file: MediaFile, blob: unknown, duration?: number): Record<string, unknown> {
+/** `sniffedType` is the container the bytes turned out to be, which wins over the file's name. */
+export function replacedTrackAudio(record: Record<string, unknown>, file: MediaFile, blob: unknown, duration?: number, sniffedType?: string): Record<string, unknown> {
   validateReplacementAudio(record, file);
   const next = { ...record };
   for (const key of ['audioUrl', 'audioFileId', 'originalAudioBlob', 'originalFileId', 'originalFileType', 'duration']) delete next[key];
   next.audioBlob = blob;
   const extension = file.name.includes('.') ? file.name.split('.').pop()?.toLowerCase() : undefined;
-  next.fileType = (extension || file.type.slice('audio/'.length)).slice(0, 16);
+  next.fileType = (sniffedType || extension || file.type.slice('audio/'.length)).slice(0, 16);
   if (duration !== undefined && Number.isFinite(duration) && duration > 0) next.duration = Math.round(duration);
   return next;
 }
