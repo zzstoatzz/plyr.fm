@@ -39,7 +39,7 @@ try {
   page.on('dialog', dialog => dialog.accept());
 
   await page.goto(app + '/upload');
-  await page.locator('main').getByRole('link', { name: 'sign in', exact: true }).click();
+  // signIn presses /upload's own sign-in link; pressing it here too races the navigation
   await account.signIn(page, label => { stage = label; });
   consented = true;
   await page.waitForURL(app + '/upload');
