@@ -338,6 +338,11 @@ fn getenv(name: [*:0]const u8) ?[]const u8 {
     return std.mem.span(value);
 }
 
+// audio_format's own tests run with the delivery code that depends on it
+test {
+    _ = audio_format;
+}
+
 test "blob bytes must match the record's raw sha256 CID" {
     const allocator = std.testing.allocator;
     const bytes = "plyr.fm blob mirror";
