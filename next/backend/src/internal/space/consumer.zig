@@ -10,6 +10,7 @@ const pg = @import("pg");
 const websocket = @import("websocket");
 const zat = @import("zat");
 const sync = @import("sync.zig");
+const SpaceUri = @import("../atproto/space_uri.zig").SpaceUri;
 const postgres_sync_store = @import("postgres_sync_store.zig");
 
 const log = std.log.scoped(.space_consumer);
@@ -101,11 +102,13 @@ fn followOnce(io: std.Io, allocator: std.mem.Allocator, account: *Account, proje
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const a = arena.allocator();
-    const token = try account.delegation(a, space);
+    // plyr stores `at://…/space/…`; the PDS and the stream take only `at:space/…`
+    const wire = try (SpaceUri.parse(space) orelse return error.InvalidSpace).wire(a);
+    const token = try account.delegation(a, wire);
     const held = try projector.store.cursor(space);
     var path: std.Io.Writer.Allocating = .init(a);
     try path.writer.writeAll("/subscribe?space=");
-    try percentEncode(&path.writer, space);
+    try percentEncode(&path.writer, wire);
     try path.writer.writeAll("&delegation=");
     try percentEncode(&path.writer, token);
     if (held) |cursor| try path.writer.print("&cursor={d}", .{cursor});
@@ -269,7 +272,8 @@ test "a deleted-space close drops the copy once" {
     var fake: Fake = .{};
     const space = "at://did:plc:artist/space/fm.plyr.next.audio/3album";
     var handler: Handler = .{ .allocator = std.testing.allocator, .projector = .{ .store = fake.store() }, .space = space, .held = 3 };
-    var event = "{\"did\":\"did:plc:artist\",\"time_us\":4,\"kind\":\"space_deleted\",\"space\":\"at://did:plc:artist/space/fm.plyr.next.audio/3album\"}".*;
+    // the stream names the space in the at:space/ form plyr does not store
+    var event = "{\"did\":\"did:plc:artist\",\"time_us\":4,\"kind\":\"space_deleted\",\"space\":\"at:space/did:plc:artist/fm.plyr.next.audio/3album\"}".*;
     try handler.serverMessage(&event);
     var close = [_]u8{ 0x11, 0x34 } ++ "space deleted".*;
     try handler.serverClose(&close);

@@ -6,7 +6,7 @@ import { AUTHORITY, type Control, MEMBER, STRANGER, WRITER } from "./host";
 
 const ORIGIN = "https://space-stream.test";
 const COLLECTION = "tech.waow.ops.finding";
-const space = (id: string): SpaceUri => `at://${AUTHORITY}/space/tech.waow.ops.space/${id}`;
+const space = (id: string): SpaceUri => `at:space/${AUTHORITY}/tech.waow.ops.space/${id}`;
 const stub = (uri: SpaceUri) => env.FEED.get(env.FEED.idFromName(uri));
 
 const controlReply = z.object({
@@ -105,6 +105,22 @@ it("replays the backlog to a consumer the authority accepts, then streams a noti
   consumer.ws.close();
 });
 
+it("takes a space in the older at:// form and names it at:space/ to the host and in events", async () => {
+  const uri = space("older");
+  const older = `at://${AUTHORITY}/space/tech.waow.ops.space/older`;
+  await write(uri, "3aaaaaaaaaa22", "first");
+  const response = await SELF.fetch(`${ORIGIN}/subscribe?space=${encodeURIComponent(older)}&delegation=${encodeURIComponent(await delegation(uri))}`, { headers: { upgrade: "websocket" } });
+  const ws = response.webSocket;
+  if (!ws) throw new Error(`no socket: ${response.status}`);
+  ws.accept();
+  const seen: Message[] = [];
+  ws.addEventListener("message", (event) => seen.push(message.parse(JSON.parse(String(event.data)))));
+  const deadline = Date.now() + 5000;
+  while (seen.length < 2 && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 10));
+  expect(seen[1]).toMatchObject({ kind: "commit", space: uri, commit: { rkey: "first" } });
+  ws.close();
+});
+
 it("refuses to open a stream for tokens the authority rejects", async () => {
   const uri = space("refused");
   await write(uri, "3aaaaaaaaaa22", "secret");
@@ -116,7 +132,7 @@ it("refuses to open a stream for tokens the authority rejects", async () => {
 });
 
 it("serves only the space types it is deployed for", async () => {
-  const other: SpaceUri = `at://${AUTHORITY}/space/com.example.other/x`;
+  const other: SpaceUri = `at:space/${AUTHORITY}/com.example.other/x`;
   const refused = await subscribe(other, "any-token");
   expect([refused.status, await refused.json()]).toEqual([403, { error: "SpaceTypeNotServed" }]);
   const renewal = await SELF.fetch(`${ORIGIN}/renew`, { method: "POST", body: JSON.stringify({ space: other, delegationToken: "any-token" }) });

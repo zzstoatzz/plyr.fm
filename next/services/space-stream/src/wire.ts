@@ -6,13 +6,25 @@ const segment = z.string().regex(/^[^/\s]+$/);
 const did = z.templateLiteral(["did:", z.string().regex(/^[a-z]+$/), ":", z.string().regex(/^[A-Za-z0-9._:%-]+$/)]);
 const token = z.string().min(1).max(4096);
 const name = z.string().regex(/^[^./\s]+$/);
-// at://<authority>/space/<space type nsid>/<key>
-export const spaceUri = z.templateLiteral(["at://", did, "/space/", name, ".", name, ".", segment, "/", segment]);
+// at:space/<authority>/<space type nsid>/<key>, the only form space hosts accept since zds
+// 0.18.3. The older at://<authority>/space/<type>/<key> is still read, and becomes this form, so
+// a feed, its events and everything sent to a space host name the space one way.
+export const wireSpace = z.templateLiteral(["at:space/", did, "/", name, ".", name, ".", segment, "/", segment]);
+const olderSpace = z.templateLiteral(["at://", did, "/space/", name, ".", name, ".", segment, "/", segment]);
 export type Did = z.infer<typeof did>;
-export type SpaceUri = z.infer<typeof spaceUri>;
+export type SpaceUri = z.infer<typeof wireSpace>;
+export const spaceUri = z.union([wireSpace, olderSpace.transform((older): SpaceUri => `at:space/${older.slice("at://".length).replace("/space/", "/")}` as SpaceUri)]);
 
 export function authorityOf(space: SpaceUri): Did {
-  return did.parse(space.slice("at://".length, space.indexOf("/space/")));
+  return did.parse(space.split("/")[1]);
+}
+
+// The spaces SDK alpha still types a space as at://…/space/…, though it only compares the string;
+// zds signs and checks the at:space/ form, so that is the one handed to it.
+export const forSdk = (space: SpaceUri) => space as never;
+
+export function typeOf(space: SpaceUri): string {
+  return space.split("/")[2] ?? "";
 }
 
 // What a consumer lends: single-use bearer tokens addressed to the space authority. Whoever holds

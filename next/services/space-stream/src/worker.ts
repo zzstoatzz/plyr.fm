@@ -1,5 +1,5 @@
 import { type Env, SpaceFeed } from "./feed";
-import { type SpaceUri, confirmation, notification, readSubscription, renewal } from "./wire";
+import { type SpaceUri, confirmation, notification, readSubscription, renewal, typeOf } from "./wire";
 
 export { SpaceFeed };
 
@@ -9,7 +9,7 @@ const feed = (env: Env, space: string) => env.FEED.get(env.FEED.idFromName(space
 // A deployment can serve only the space types it is for, so it cannot be pointed at any space.
 const served = (env: Env, space: SpaceUri) => {
   const types = env.SPACE_TYPES?.split(",").map((type) => type.trim()).filter(Boolean) ?? [];
-  return types.length === 0 || types.includes(space.split("/")[4] ?? "");
+  return types.length === 0 || types.includes(typeOf(space));
 };
 const unserved = () => fail("SpaceTypeNotServed", 403);
 

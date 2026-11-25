@@ -6,6 +6,7 @@
 //! stored cursor rebuilds the copy.
 
 const std = @import("std");
+const SpaceUri = @import("../atproto/space_uri.zig").SpaceUri;
 
 pub const Op = union(enum) {
     put: struct { collection: []const u8, rkey: []const u8, cid: []const u8, value_json: []const u8 },
@@ -85,6 +86,13 @@ pub const Projector = struct {
 
 /// One space-stream event (src/wire.ts `StreamEvent`); null for kinds plyr
 /// does not project (`authorized`, `sync_error`) or a different space.
+/// the stream names spaces `at:space/…` (zds 0.18.3) while plyr stores `at://…/space/…`
+fn sameSpace(a: []const u8, b: []const u8) bool {
+    const x = SpaceUri.parse(a) orelse return false;
+    const y = SpaceUri.parse(b) orelse return false;
+    return std.mem.eql(u8, x.authority, y.authority) and std.mem.eql(u8, x.space_type, y.space_type) and std.mem.eql(u8, x.skey, y.skey);
+}
+
 pub fn parseEvent(a: std.mem.Allocator, space: []const u8, text: []const u8) !?Event {
     const value = std.json.parseFromSliceLeaky(std.json.Value, a, text, .{}) catch return error.InvalidEvent;
     const object = switch (value) {
@@ -93,7 +101,7 @@ pub fn parseEvent(a: std.mem.Allocator, space: []const u8, text: []const u8) !?E
     };
     const kind = string(object, "kind") orelse return error.InvalidEvent;
     const known = std.meta.stringToEnum(enum { commit, writer, space_deleted }, kind) orelse return null;
-    if (!std.mem.eql(u8, string(object, "space") orelse return error.InvalidEvent, space)) return null;
+    if (!sameSpace(string(object, "space") orelse return error.InvalidEvent, space)) return null;
     const time_us: u64 = switch (object.get("time_us") orelse return error.InvalidEvent) {
         .integer => |n| std.math.cast(u64, n) orelse return error.InvalidEvent,
         else => return error.InvalidEvent,
