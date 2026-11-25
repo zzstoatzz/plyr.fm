@@ -216,14 +216,20 @@ const Account = struct {
         defer result.deinit(transport.allocator);
         switch (result.status) {
             .ok => {},
-            .unauthorized, .bad_request => if (std.mem.indexOf(u8, result.body, "ExpiredToken") != null or result.status == .unauthorized) return error.SessionExpired else return error.DelegationRefused,
-            else => return error.DelegationRefused,
+            .unauthorized, .bad_request => if (std.mem.indexOf(u8, result.body, "ExpiredToken") != null or result.status == .unauthorized) return error.SessionExpired else return refused(result.status, result.body),
+            else => return refused(result.status, result.body),
         }
         const Token = struct { token: []const u8 };
         const parsed = try std.json.parseFromSliceLeaky(Token, a, result.body, .{ .ignore_unknown_fields = true, .allocate = .alloc_always });
         return parsed.token;
     }
 };
+
+/// says what the sync account's PDS answered, so a refusal names its cause
+fn refused(status: std.http.Status, body: []const u8) error{DelegationRefused} {
+    log.warn("getDelegationToken answered {d}: {s}", .{ @backingInt(status), body[0..@min(body.len, 300)] });
+    return error.DelegationRefused;
+}
 
 fn percentEncode(writer: *std.Io.Writer, raw: []const u8) !void {
     for (raw) |byte| switch (byte) {
