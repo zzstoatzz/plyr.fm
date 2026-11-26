@@ -122,6 +122,10 @@ async function verify(browser, origin, width, scheme) {
       const from = await artwork.boundingBox();
       const [bubble, first, below, queueBox] = await Promise.all([hint.boundingBox(), hero.boundingBox(), details.boundingBox(), queue.boundingBox()]);
       await capture('first-open');
+      const [shareBox, playBox] = await Promise.all([dialog.getByRole('button', { name: 'Share track', exact: true }).boundingBox(), dialog.locator('.commands .toggle').boundingBox()]);
+      const centerOf = box => box.x + box.width / 2;
+      // at 1.5x text, heart + count and comments + queue can't both fit half a phone row, so the grid gives the wider side room instead of overlapping share
+      if (scheme === 'light') assert.ok(Math.abs(centerOf(shareBox) - centerOf(playBox)) <= 1, `share sits under the play button: ${JSON.stringify({ shareBox, playBox })}`);
       assert.ok(below.y >= height - 1 && first.y + first.height >= height - 1, 'details start below the fold');
       assert.ok(bubble.y >= queueBox.y + queueBox.height && bubble.y + bubble.height <= height, `the more-below hint fits after the controls: ${JSON.stringify({ bubble, queueBox, height })}`);
       await hint.getByRole('button', { name: 'got it', exact: true }).click();

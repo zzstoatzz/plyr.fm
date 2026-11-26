@@ -112,8 +112,8 @@
 
 {#snippet trackActions()}
 	<button class="icon-button" type="button" aria-label="Share track" onclick={shareTrack}><Icon name="share" /></button>
-	{#if showComments}<button class="icon-button comment-toggle" type="button" data-testid="comments-toggle" aria-pressed={commentsOpen} aria-label={commentsOpen ? 'Show the cover' : `Show comments (${commentState.comments.length})`} onclick={() => { commentsOpen = !commentsOpen; }}><Icon name="chat" />{#if commentState.comments.length}<span>{commentState.comments.length}</span>{/if}</button>{/if}
-	<a href={resolve('/(app)/queue')} class="icon-button" aria-label="Open queue"><Icon name="queue" /></a>
+	<span class="end">{#if showComments}<button class="icon-button comment-toggle" type="button" data-testid="comments-toggle" aria-pressed={commentsOpen} aria-label={commentsOpen ? 'Show the cover' : `Show comments (${commentState.comments.length})`} onclick={() => { commentsOpen = !commentsOpen; }}><Icon name="chat" />{#if commentState.comments.length}<span>{commentState.comments.length}</span>{/if}</button>{/if}
+	<a href={resolve('/(app)/queue')} class="icon-button" aria-label="Open queue"><Icon name="queue" /></a></span>
 {/snippet}
 
 {#if player.current}
@@ -247,6 +247,10 @@
 	.commands :global(.transport) { width: 100%; justify-content: space-evenly; }
 	.commands :global(.toggle) { width: 4.5rem; height: 4.5rem; box-shadow: 0 0.45rem 1.4rem color-mix(in srgb, var(--accent) 24%, transparent); }
 	.commands.live { justify-content: center; }
+	/* like | share | comments + queue on a 1fr auto 1fr grid, so share sits under the play button whatever the like count's width */
+	.utilities :global(.actions.compact) { display: grid; grid-template-columns: 1fr auto 1fr; }
+	.utilities :global(.actions.compact > .like) { justify-self: start; }
+	.end { display: inline-flex; align-items: center; justify-self: end; }
 	.radio-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.6rem; }
 	.options { justify-content: center; }
 	.composer { margin-block: 0.75rem; }
@@ -290,6 +294,7 @@
 		.sheet .composer { margin-block: 0.25rem 0.75rem; }
 		.sheet .utilities { display: flex; gap: 0.5rem; align-items: center; }
 		.utilities :global(.actions) { flex: 1; justify-content: flex-start; }
+		.sheet .utilities :global(.actions.compact) { display: flex; }
 		.sheet .volume { display: flex; gap: 0.5rem; justify-content: center; align-items: center; color: var(--muted); margin-left: auto; }
 		.volume input { width: 8rem; }
 	}
