@@ -60,7 +60,7 @@ try {
   await row.getByRole('link', { name: title }).click();
   await page.getByRole('heading', { name: title, exact: true }).waitFor();
   await page.locator('article').getByRole('button', { name: 'Play', exact: true }).click();
-  const refused = page.getByText(/cannot access this track|hosting provider|sign in again to play/);
+  const refused = page.getByText(/cannot access this track|hosting provider|sign in again to play|sign in to play/);
   const pause = page.getByRole('button', { name: 'Pause', exact: true }).first();
   await Promise.race([pause.waitFor({ timeout: 30_000 }), refused.first().waitFor({ timeout: 30_000 })]);
   if (await refused.count()) throw new Error(`the owner was refused: "${(await refused.first().innerText()).trim()}"`);
