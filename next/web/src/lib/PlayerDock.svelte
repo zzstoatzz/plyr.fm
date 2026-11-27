@@ -9,6 +9,7 @@
 	import Scrub from './Scrub.svelte';
 	import MiniScrub from './MiniScrub.svelte';
 	import LikeButton from './listening/LikeButton.svelte';
+	import PlaybackProblem from './listening/PlaybackProblem.svelte';
 	import type { DockPull } from './dock-pull';
 
 	let { onQueue, queuePage, pull }: { onQueue: () => void; queuePage: boolean; pull: DockPull } = $props();
@@ -23,7 +24,7 @@
 			<span class="description">
 				<strong class="truncate">{player.current.metadata.title}</strong>
 				<span class="subtitle">
-					{#if player.error}<span class="error truncate" role="status">{player.error}</span>
+					{#if player.error}<span class="error truncate" role="status"><PlaybackProblem message={player.error} track={player.current} /></span>
 					{:else if player.liveStation}<span class="truncate">live · {player.liveStation.label} radio</span>
 					{:else if player.outputElsewhere}<span class="truncate">playing on another device</span>
 					{:else}<a class="artist truncate" href={resolve('/(app)/u/[actor]', { actor: player.current.artist.profile.handle || player.current.artist.did })}>{artistName(player.current)}</a>{/if}

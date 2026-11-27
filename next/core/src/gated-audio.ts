@@ -1,5 +1,6 @@
 import type { Agent, Auth, Did } from './auth-state.ts';
 import { didDocument, pdsEndpoint } from './identity.ts';
+import { delegationRefusal, ListenBlocked } from './listen-blocked.ts';
 import { fromSpaceWire, spaceXrpcPath, toSpaceWire } from './space-address.ts';
 
 const spaceCredentialPath = '/xrpc/com.atproto.space.';
@@ -57,7 +58,7 @@ export function createGatedAudio<Key extends SpaceKey, RecordValue extends Recor
 	async function mint(agent: Agent, space: string, authorityPds: string, transport: SpaceAudioTransport<Key>): Promise<Credential> {
 		const delegation = await agent.handle(spaceXrpcPath('com.atproto.space.getDelegationToken', { space }), { method: 'GET' });
 		// the listener's own PDS said no before the space was ever asked: nothing here says who may listen
-		if (!delegation.ok) throw new Error('your PDS would not ask for this track. try again, or sign in again.');
+		if (!delegation.ok) throw await delegationRefusal(delegation);
 		const { token: delegationToken } = await delegation.json();
 		if (typeof delegationToken !== 'string') throw new Error('invalid space delegation');
 
@@ -113,7 +114,7 @@ export function createGatedAudio<Key extends SpaceKey, RecordValue extends Recor
 	}
 
 	async function resolveGatedAudio(address: string, auth: Pick<Auth<unknown>, 'agent'>, transport: SpaceAudioTransport<Key>, validate?: (record: RecordValue) => void): Promise<GatedAudioSource> {
-		if (!auth.agent) throw new Error('sign in to play this track');
+		if (!auth.agent) throw new ListenBlocked('sign-in');
 		const uri = fromSpaceWire(address);
 		const agent = auth.agent;
 		const parts = uri.slice('at://'.length).split('/');
