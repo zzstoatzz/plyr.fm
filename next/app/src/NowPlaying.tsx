@@ -28,6 +28,7 @@ import { measure, playerSheet, setFlying, type Rect } from './player-sheet';
 import { artLeft, flightSteps, titleLeft } from './player-flight-path';
 import { CommentsView, CoverComments } from './TimedComments';
 import { CommentComposer } from './CommentComposer';
+import { listenBlock, signInLabel } from '@plyr/next-core/listen-blocked';
 import { useTrackComments } from './track-comments';
 
 const AnimatedSafeAreaView = Animated.createAnimatedComponent(SafeAreaView);
@@ -149,6 +150,9 @@ export function NowPlaying({ track, close: leave, navigate: go }: {
   }, [flights, width]);
   const titleStyle = { lineHeight: 30 * theme.scale, color: theme.text, fontFamily: theme.fontFamily, fontSize: 25 * theme.scale, fontWeight: '800', letterSpacing: -0.4 } as const;
   const error = player.error || player.status.error;
+  // a closed track the listener can't hear says exactly why, with the sign-in that fixes it when one does
+  const block = listenBlock(error);
+  const signIn = signInLabel(block);
   const caption = { color: theme.muted, fontFamily: theme.fontFamily, fontSize: 13 * theme.scale };
   const plays = usePlayCount(track.id, track.metrics.play_count);
 
@@ -245,9 +249,13 @@ export function NowPlaying({ track, close: leave, navigate: go }: {
                 <View testID="now-playing-time" style={styles.time}>
                   <Text style={[caption, styles.numeric]}>{time(position)}</Text>
                   {!error && chapterIndex >= 0 ? <ChapterWheel chapters={chapters} current={chapterIndex} seek={seek} onPreview={setWheelPreview} onActive={setWheelActive} guard={dismiss.protectSlider} blocks={wheelBlocks} outside={wheelOutside} />
-                    : <Text accessibilityLiveRegion="polite" style={[caption, styles.status]}>{error ? 'couldn’t play this track' : player.preparing ? 'preparing…' : ''}</Text>}
+                    : <Text accessibilityLiveRegion="polite" style={[caption, styles.status]}>{error && !block ? 'couldn’t play this track' : player.preparing ? 'preparing…' : ''}</Text>}
                   <Text style={[caption, styles.numeric]}>{time(duration)}</Text>
                 </View>
+                {block && (signIn ? <Pressable testID="now-playing-sign-in" accessibilityRole="link" hitSlop={8} style={styles.block}
+                  onPress={() => navigate({ pathname: '/login', params: { return_to: `/track/${track.id}` } })}>
+                  <Text style={[caption, styles.blockText]}><Text style={{ color: theme.accent, fontWeight: '700', textDecorationLine: 'underline' }}>{signIn}</Text>{error?.slice(signIn.length)}</Text>
+                </Pressable> : <Text accessibilityLiveRegion="polite" style={[caption, styles.block, styles.blockText]}>{error}</Text>)}
               </View>
               <View style={styles.transport}>
                 {!player.live && <View><PlayerControl large icon={SkipBack} label="Previous" onPress={player.previous} /></View>}
@@ -316,6 +324,8 @@ const styles = StyleSheet.create({
   artist: { alignSelf: 'flex-start', maxWidth: '100%', minHeight: 28, flexDirection: 'row', alignItems: 'center', gap: 8 },
   time: { minHeight: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 6 },
   status: { flex: 1, textAlign: 'center' },
+  block: { marginTop: 6, alignSelf: 'center', maxWidth: 360 },
+  blockText: { textAlign: 'center' },
   // Above the transport, so the chapter wheel opens over it.
   playhead: { zIndex: 2 },
   scrubber: { position: 'relative' },

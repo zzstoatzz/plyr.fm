@@ -29,6 +29,7 @@
 	import { isOpen } from '@plyr/next-core/access/policy';
 	import { offerFor, offerLabel, supportLink } from '@plyr/next-core/selling';
 	import type { Artist } from '@plyr/next-core/api';
+	import PlaybackProblem from '$lib/listening/PlaybackProblem.svelte';
 	let { track, ownerActions, playTrack = player.play.bind(player) }: { track: Track; ownerActions?: Snippet; playTrack?: (track: Track) => void } = $props();
 	const context = $derived(tracksContext([track]));
 	const playState = $derived(contextState(context));
@@ -185,7 +186,7 @@
 				{@render ownerActions()}
 			{/if}
 			{#if sharedTrack === track.id}<p role="status">link copied</p>{/if}
-			{#if active && player.error}<p class="state" role="status">{player.error}</p>{:else if active && player.preparing}<p class="state" role="status">preparing…</p>{/if}
+			{#if active && player.error}<p class="state" role="status"><PlaybackProblem message={player.error} {track} /></p>{:else if active && player.preparing}<p class="state" role="status">preparing…</p>{/if}
 		</section>
 
 		{#if (canDiscuss && likedBy.people.length) || track.metadata.description || (canDiscuss && commentsEnabled)}

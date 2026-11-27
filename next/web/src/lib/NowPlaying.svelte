@@ -27,6 +27,7 @@
 	import TrackBuy from './selling/TrackBuy.svelte';
 	import { trackTags } from './track-extras';
 	import { compactCount } from './listening/format';
+	import PlaybackProblem from './listening/PlaybackProblem.svelte';
 
 	let { close, pull }: { close?: () => void; pull?: DockPull } = $props();
 	let motion: ReturnType<typeof playerSheet>;
@@ -163,7 +164,7 @@
 					</label>
 				{/if}
 				</div>
-				{#if player.error}<p class="state" role="status">{player.error}</p>{:else if player.preparing}<p class="state" role="status">preparing…</p>{/if}
+				{#if player.error}<p class="state" role="status">{#if player.current}<PlaybackProblem message={player.error} track={player.current} />{:else}{player.error}{/if}</p>{:else if player.preparing}<p class="state" role="status">preparing…</p>{/if}
 				{#if player.liveStation}
 					<div class="radio-actions">
 						<button class="hero-pill" type="button" onclick={shareTrack}><Icon name="share" size={18} />{copied ? 'link copied' : 'share station'}</button>
